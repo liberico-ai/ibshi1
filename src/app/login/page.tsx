@@ -55,7 +55,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex" style={{ background: '#f0f4f8' }}>
 
       {/* ═══ LEFT — Hero with Factory Background (2/3 width) ═══ */}
-      <div className="hidden lg:flex flex-1 flex-col justify-between relative overflow-hidden">
+      <div className="hidden lg:flex flex-col justify-between relative overflow-hidden" style={{ flex: 2 }}>
         
         {/* Factory background image */}
         <Image
@@ -79,45 +79,46 @@ export default function LoginPage() {
         <div className="absolute top-0 right-0 w-1 h-full" style={{ background: '#e63946' }} />
 
         {/* Content — centered both vertically and horizontally */}
-        <div className="relative z-10 flex flex-col justify-center items-center flex-1 px-12 xl:px-16">
-          <div className="w-full max-w-[520px]">
+        <div className="relative z-10 flex flex-col justify-center items-center flex-1 px-12 xl:px-20">
+          <div className="w-full max-w-[560px]">
 
             {/* Logo — circular crop */}
-            <div className="flex items-center gap-5 mb-10">
+            <div className="flex items-center gap-4 mb-8">
               <div style={{
-                width: '96px', height: '96px', borderRadius: '50%',
-                overflow: 'hidden', border: '3px solid rgba(255,255,255,0.25)',
+                width: '72px', height: '72px', borderRadius: '50%',
+                overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)',
                 background: '#fff', flexShrink: 0,
-                boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <Image
                   src="/ibs-logo.jpeg"
                   alt="IBS Logo"
-                  width={96}
-                  height={96}
+                  width={72}
+                  height={72}
                   className="object-contain"
-                  style={{ padding: '10px' }}
+                  style={{ padding: '8px' }}
                 />
               </div>
               <div>
-                <span className="text-2xl font-extrabold text-white tracking-wide">IBS</span>
-                <span className="text-xs block text-white/40 font-semibold tracking-[0.15em] mt-0.5">HEAVY INDUSTRY</span>
+                <span className="text-xl font-extrabold text-white tracking-wide">IBS</span>
+                <span className="text-[10px] block text-white/40 font-semibold tracking-[0.15em] mt-0.5">HEAVY INDUSTRY</span>
               </div>
             </div>
 
-            {/* Hero headline — balanced typography */}
+            {/* Hero headline — single line */}
             <h1 style={{
-              fontSize: '40px', fontWeight: 800, lineHeight: 1.2,
-              color: 'white', marginBottom: '16px', letterSpacing: '-0.02em',
+              fontSize: '32px', fontWeight: 800, lineHeight: 1.3,
+              color: 'white', marginBottom: '14px', letterSpacing: '-0.02em',
+              whiteSpace: 'nowrap',
             }}>
               Quản lý{' '}
               <span style={{ color: '#e63946' }}>Chuỗi sản xuất</span>
-              <br />thông minh
+              {' '}thông minh
             </h1>
             <p style={{
-              fontSize: '15px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.8,
-              marginBottom: '40px', maxWidth: '440px',
+              fontSize: '14px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.7,
+              marginBottom: '32px', maxWidth: '440px',
             }}>
               Hệ thống ERP chuyên ngành công nghiệp nặng — tích hợp quản lý dự án, vật tư, sản xuất và kiểm soát chất lượng toàn diện.
             </p>
@@ -161,10 +162,10 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ═══ RIGHT — Login Form (1/3 width, max 480px) ═══ */}
+      {/* ═══ RIGHT — Login Form (1/3 width) ═══ */}
       <div className="flex items-center justify-center p-8 lg:p-12"
-        style={{ width: '100%', maxWidth: '480px', minWidth: '360px' }}>
-        <div className="w-full max-w-[340px] animate-fade-in-scale">
+        style={{ flex: 1, minWidth: '360px', maxWidth: '440px' }}>
+        <div className="w-full max-w-[320px] animate-fade-in-scale">
           
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
