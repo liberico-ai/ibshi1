@@ -10,11 +10,13 @@ function createPrismaClient() {
     throw new Error('FATAL: DATABASE_URL environment variable is required. Set it in .env file.')
   }
 
+  const isRemote = !connectionString.includes('@localhost') && !connectionString.includes('@127.0.0.1')
   const pool = new pg.Pool({
     connectionString,
     max: parseInt(process.env.DB_POOL_MAX || '10'),
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
+    ...(isRemote && { ssl: { rejectUnauthorized: false } }),
   })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- @types/pg version mismatch between pg and @prisma/adapter-pg
   const adapter = new PrismaPg(pool as any)
