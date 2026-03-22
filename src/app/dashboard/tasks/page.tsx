@@ -100,19 +100,18 @@ export default function TasksPage() {
       </div>
 
       {/* Search + Urgency filter tabs */}
-      <div className="flex gap-3 items-center flex-wrap">
-        <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Tìm step, mã DA, tên DA..." /></div>
+      <div className="flex gap-4 items-center flex-wrap">
+        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm step, mã DA, tên DA..." /></div>
         <div className="flex gap-2">
           {STATUS_TABS.map((tab) => (
             <button key={tab.value} onClick={() => setUrgencyFilter(tab.value)}
-              className="px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5" style={{
+              className="px-4 py-2 text-sm font-semibold transition-all cursor-pointer flex items-center gap-2 rounded-full" style={{
                 background: urgencyFilter === tab.value ? 'var(--primary)' : 'var(--bg-card)',
                 color: urgencyFilter === tab.value ? 'white' : 'var(--text-secondary)',
-                border: `1px solid ${urgencyFilter === tab.value ? 'var(--primary)' : 'var(--border)'}`,
-                borderRadius: 'var(--radius-pill)',
+                border: `1.5px solid ${urgencyFilter === tab.value ? 'var(--primary)' : 'var(--border)'}`,
                 boxShadow: urgencyFilter === tab.value ? 'var(--shadow-xs)' : 'none',
               }}>
-              {tab.dot && <span className="w-2 h-2 rounded-full inline-block" style={{ background: urgencyFilter === tab.value ? 'white' : tab.dot }} />} {tab.label}
+              {tab.dot && <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: urgencyFilter === tab.value ? 'white' : tab.dot }} />} {tab.label}
             </button>
           ))}
         </div>

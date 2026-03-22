@@ -43,12 +43,12 @@ export default function ContractsPage() {
             ) : contracts.map(c => (
               <tr key={c.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{c.contractCode}</span></td>
-                <td><div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{c.employee?.fullName || '—'}</div><div className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{c.employee?.employeeCode || ''}</div></td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${typeColor[c.type] || '#888'}20`, color: typeColor[c.type] || '#888' }}>{typeLabel[c.type] || c.type}</span></td>
+                <td><div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{c.employee?.fullName || '—'}</div><div className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{c.employee?.employeeCode || ''}</div></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${typeColor[c.type] || '#888'}20`, color: typeColor[c.type] || '#888' }}>{typeLabel[c.type] || c.type}</span></td>
                 <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{Number(c.baseSalary).toLocaleString('vi-VN')} ₫</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(c.startDate).toLocaleDateString('vi-VN')}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.endDate ? new Date(c.endDate).toLocaleDateString('vi-VN') : '—'}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[c.status] || '#888'}20`, color: statusColor[c.status] || '#888' }}>{statusLabel[c.status] || c.status}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[c.status] || '#888'}20`, color: statusColor[c.status] || '#888' }}>{statusLabel[c.status] || c.status}</span></td>
               </tr>
             ))}
           </tbody>

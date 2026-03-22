@@ -108,13 +108,13 @@ export default function VendorsPage() {
                     <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{v.name}</span>
                     <span className="text-xs">{COUNTRY_FLAG[v.country] || v.country}</span>
                     {!v.isActive && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                         style={{ background: '#fef2f2', color: '#dc2626' }}>Ngừng HĐ</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="font-mono text-[11px]" style={{ color: 'var(--accent)' }}>{v.vendorCode}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                       style={{ background: '#f0f9ff', color: cat.color }}>{cat.icon} {cat.label}</span>
                   </div>
 
@@ -133,7 +133,7 @@ export default function VendorsPage() {
                         style={{ color: star <= rating ? '#f59e0b' : '#e2e8f0' }}>★</span>
                     ))}
                   </div>
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {new Date(v.createdAt).toLocaleDateString('vi-VN')}
                   </p>
                 </div>

@@ -41,13 +41,13 @@ export default function NotificationsPage() {
           <div key={n.id} className="card p-4 flex items-start gap-3" style={{ borderLeft: `3px solid ${typeColor[n.type] || '#888'}`, opacity: n.isRead ? 0.6 : 1 }}>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${typeColor[n.type] || '#888'}20`, color: typeColor[n.type] || '#888' }}>{typeLabel[n.type] || n.type}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${typeColor[n.type] || '#888'}20`, color: typeColor[n.type] || '#888' }}>{typeLabel[n.type] || n.type}</span>
                 {!n.isRead && <span className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />}
               </div>
               <h3 className="text-sm font-bold mt-1" style={{ color: 'var(--text-primary)' }}>{n.title}</h3>
               <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{n.message}</p>
             </div>
-            <span className="text-[10px] whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{new Date(n.createdAt).toLocaleDateString('vi-VN')}</span>
+            <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{new Date(n.createdAt).toLocaleDateString('vi-VN')}</span>
           </div>
         ))}
       </div>

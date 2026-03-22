@@ -55,7 +55,7 @@ export default function AuditLogPage() {
 
       {/* Filters */}
       <div className="flex gap-3 items-center flex-wrap">
-        <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Tìm user, entity..." /></div>
+        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm user, entity..." /></div>
         <select className="input w-40" value={actionFilter} onChange={e => setActionFilter(e.target.value)}
           style={{ padding: '6px 10px', fontSize: '12px' }}>
           <option value="">Tất cả action</option>
@@ -90,26 +90,26 @@ export default function AuditLogPage() {
                 <>
                   <tr key={l.id} className="cursor-pointer" onClick={() => setExpandedId(expandedId === l.id ? null : l.id)}>
                     <td>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                         background: `${ACTION_COLORS[l.action] || '#888'}20`,
                         color: ACTION_COLORS[l.action] || '#888',
                       }}>{l.action}</span>
                     </td>
                     <td className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{l.entity}</td>
-                    <td className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{l.entityId ? l.entityId.slice(0, 12) + '…' : '—'}</td>
+                    <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{l.entityId ? l.entityId.slice(0, 12) + '…' : '—'}</td>
                     <td>
                       <span className="text-xs font-semibold" style={{ color: '#0ea5e9' }}>{l.username}</span>
-                      <span className="text-[10px] ml-1" style={{ color: 'var(--text-muted)' }}>({l.fullName})</span>
+                      <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>({l.fullName})</span>
                     </td>
-                    <td className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{l.ipAddress || '—'}</td>
-                    <td className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleString('vi-VN')}</td>
+                    <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{l.ipAddress || '—'}</td>
+                    <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleString('vi-VN')}</td>
                     <td className="text-center text-xs">{l.changes ? (expandedId === l.id ? '▲' : '▼') : ''}</td>
                   </tr>
                   {expandedId === l.id && l.changes && (
                     <tr key={l.id + '-detail'}>
                       <td colSpan={7} style={{ background: 'var(--surface-hover)', padding: '12px 16px' }}>
-                        <p className="text-[10px] font-bold mb-1" style={{ color: 'var(--text-muted)' }}>CHANGES (JSON):</p>
-                        <pre className="text-[10px] font-mono whitespace-pre-wrap break-all" style={{ color: 'var(--text-secondary)', maxHeight: 200, overflow: 'auto' }}>
+                        <p className="text-xs font-bold mb-1" style={{ color: 'var(--text-muted)' }}>CHANGES (JSON):</p>
+                        <pre className="text-xs font-mono whitespace-pre-wrap break-all" style={{ color: 'var(--text-secondary)', maxHeight: 200, overflow: 'auto' }}>
                           {JSON.stringify(l.changes, null, 2)}
                         </pre>
                       </td>

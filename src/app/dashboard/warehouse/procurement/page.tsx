@@ -150,7 +150,7 @@ export default function ProcurementPage() {
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
                         style={{ background: st.bg, color: st.color }}>{st.label}</span>
                       {pr.urgency !== 'NORMAL' && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold"
                           style={{ background: '#fef2f2', color: ug.color }}>⚡ {ug.label}</span>
                       )}
                     </div>
@@ -160,7 +160,7 @@ export default function ProcurementPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{pr.itemCount}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>vật tư</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>vật tư</p>
                   </div>
                 </div>
 
@@ -181,7 +181,7 @@ export default function ProcurementPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid var(--border-light)' }}>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {new Date(pr.createdAt).toLocaleDateString('vi-VN')}
                   </span>
                   <div className="flex-1" />
@@ -239,7 +239,7 @@ export default function ProcurementPage() {
                     <p className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
                       {formatCurrency(po.totalValue, po.currency)}
                     </p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{po.itemCount} vật tư</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.itemCount} vật tư</p>
                   </div>
                 </div>
 
@@ -258,7 +258,7 @@ export default function ProcurementPage() {
                       {po.items.map(item => (
                         <tr key={item.id} style={{ borderTop: '1px solid var(--border-light)' }}>
                           <td className="py-1.5" style={{ color: 'var(--text-primary)' }}>
-                            <span className="font-mono text-[10px] mr-1" style={{ color: 'var(--accent)' }}>{item.material.materialCode}</span>
+                            <span className="font-mono text-xs mr-1" style={{ color: 'var(--accent)' }}>{item.material.materialCode}</span>
                             {item.material.name}
                           </td>
                           <td className="text-right py-1.5">{Number(item.quantity)} {item.material.unit}</td>
@@ -275,7 +275,7 @@ export default function ProcurementPage() {
                 </div>
 
                 <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: '1px solid var(--border-light)' }}>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {po.orderDate ? new Date(po.orderDate).toLocaleDateString('vi-VN') : '—'}
                     {po.deliveryDate && ` → ${new Date(po.deliveryDate).toLocaleDateString('vi-VN')}`}
                   </span>

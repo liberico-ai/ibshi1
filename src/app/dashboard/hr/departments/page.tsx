@@ -58,13 +58,13 @@ export default function DepartmentsPage() {
         {depts.map(d => (
           <div key={d.id} className="card p-4 space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] px-2 py-0.5 rounded font-bold font-mono" style={{ background: 'var(--accent)', color: '#fff' }}>{d.code}</span>
+              <span className="text-xs px-2 py-0.5 rounded font-bold font-mono" style={{ background: 'var(--accent)', color: '#fff' }}>{d.code}</span>
             </div>
             <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{d.name}</h3>
-            {d.nameEn && <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{d.nameEn}</p>}
+            {d.nameEn && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.nameEn}</p>}
             <div className="flex gap-4 pt-1">
-              <div><span className="text-lg font-bold" style={{ color: '#0ea5e9' }}>{d._count.employees}</span><span className="text-[10px] ml-1" style={{ color: 'var(--text-muted)' }}>NV</span></div>
-              <div><span className="text-lg font-bold" style={{ color: '#f59e0b' }}>{d._count.users}</span><span className="text-[10px] ml-1" style={{ color: 'var(--text-muted)' }}>TK</span></div>
+              <div><span className="text-lg font-bold" style={{ color: '#0ea5e9' }}>{d._count.employees}</span><span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>NV</span></div>
+              <div><span className="text-lg font-bold" style={{ color: '#f59e0b' }}>{d._count.users}</span><span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>TK</span></div>
             </div>
           </div>
         ))}

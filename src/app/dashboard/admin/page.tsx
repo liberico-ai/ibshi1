@@ -64,13 +64,13 @@ export default function AdminDashboardPage() {
           <div className="space-y-2.5">
             {stats.usersByRole.map(r => (
               <div key={r.roleCode} className="flex items-center gap-3">
-                <span className="text-[10px] font-bold w-10 text-right" style={{ color: 'var(--text-muted)' }}>{r.roleCode}</span>
+                <span className="text-xs font-bold w-10 text-right" style={{ color: 'var(--text-muted)' }}>{r.roleCode}</span>
                 <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ background: 'var(--surface-hover)' }}>
                   <div className="h-full rounded-full transition-all duration-700"
                     style={{ width: `${(r.count / maxRoleCount) * 100}%`, background: 'linear-gradient(90deg, #0a2540, #1e6091)' }} />
                 </div>
                 <span className="text-xs font-bold w-8" style={{ color: 'var(--text-primary)' }}>{r.count}</span>
-                <span className="text-[10px] w-24 truncate" style={{ color: 'var(--text-muted)' }}>
+                <span className="text-xs w-24 truncate" style={{ color: 'var(--text-muted)' }}>
                   {ROLES[r.roleCode as keyof typeof ROLES]?.name || r.roleCode}
                 </span>
               </div>
@@ -84,13 +84,13 @@ export default function AdminDashboardPage() {
           <div className="space-y-2.5">
             {stats.usersByDept.map(d => (
               <div key={d.departmentCode} className="flex items-center gap-3">
-                <span className="text-[10px] font-bold w-10 text-right" style={{ color: 'var(--text-muted)' }}>{d.departmentCode}</span>
+                <span className="text-xs font-bold w-10 text-right" style={{ color: 'var(--text-muted)' }}>{d.departmentCode}</span>
                 <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ background: 'var(--surface-hover)' }}>
                   <div className="h-full rounded-full transition-all duration-700"
                     style={{ width: `${(d.count / maxDeptCount) * 100}%`, background: 'linear-gradient(90deg, #065f46, #10b981)' }} />
                 </div>
                 <span className="text-xs font-bold w-8" style={{ color: 'var(--text-primary)' }}>{d.count}</span>
-                <span className="text-[10px] w-28 truncate" style={{ color: 'var(--text-muted)' }}>{d.departmentName}</span>
+                <span className="text-xs w-28 truncate" style={{ color: 'var(--text-muted)' }}>{d.departmentName}</span>
               </div>
             ))}
           </div>
@@ -106,13 +106,13 @@ export default function AdminDashboardPage() {
           <div className="space-y-2">
             {stats.recentLogs.map(l => (
               <div key={l.id} className="flex items-center gap-3 py-2 px-3 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{
+                <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                   background: `${ACTION_COLORS[l.action] || '#888'}20`,
                   color: ACTION_COLORS[l.action] || '#888',
                 }}>{l.action}</span>
                 <span className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{l.entity}</span>
                 <span className="text-xs flex-1 truncate" style={{ color: 'var(--text-muted)' }}>bởi <strong>{l.fullName}</strong> ({l.username})</span>
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleString('vi-VN')}</span>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleString('vi-VN')}</span>
               </div>
             ))}
           </div>

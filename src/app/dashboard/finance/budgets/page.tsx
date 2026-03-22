@@ -75,15 +75,15 @@ export default function BudgetsPage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="card p-4" style={{ borderTop: '3px solid #0ea5e9' }}>
           <p className="text-lg font-extrabold" style={{ color: '#0ea5e9' }}>{fmt(totals.planned)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Dự toán (Planned)</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Dự toán (Planned)</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #f59e0b' }}>
           <p className="text-lg font-extrabold" style={{ color: '#f59e0b' }}>{fmt(totals.actual)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Thực tế (Actual)</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Thực tế (Actual)</p>
         </div>
         <div className="card p-4" style={{ borderTop: `3px solid ${totals.planned - totals.actual >= 0 ? '#16a34a' : '#dc2626'}` }}>
           <p className="text-lg font-extrabold" style={{ color: totals.planned - totals.actual >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(totals.planned - totals.actual)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Chênh lệch (Variance)</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Chênh lệch (Variance)</p>
         </div>
       </div>
 

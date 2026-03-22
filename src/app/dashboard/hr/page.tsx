@@ -69,19 +69,19 @@ export default function HRPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="card p-4" style={{ borderTop: '3px solid #0ea5e9' }}>
           <p className="text-2xl font-extrabold" style={{ color: '#0ea5e9' }}>{pagination.total}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Tổng nhân sự</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tổng nhân sự</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #16a34a' }}>
           <p className="text-2xl font-extrabold" style={{ color: '#16a34a' }}>{activeCount}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Đang làm</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Đang làm</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #f59e0b' }}>
           <p className="text-2xl font-extrabold" style={{ color: '#f59e0b' }}>{employees.filter(e => e.employmentType === 'PROBATION').length}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Thử việc</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Thử việc</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #64748b' }}>
           <p className="text-2xl font-extrabold" style={{ color: '#64748b' }}>{employees.filter(e => e.status === 'RESIGNED').length}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Đã nghỉ</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Đã nghỉ</p>
         </div>
       </div>
 
@@ -89,7 +89,7 @@ export default function HRPage() {
 
       {/* Search + Status filter */}
       <div className="flex gap-3 items-center">
-        <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã NV, tên..." /></div>
+        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã NV, tên..." /></div>
         <div className="flex gap-2">
           {[{ value: '', label: 'Tất cả' }, ...Object.entries(STATUS_MAP).map(([k, v]) => ({ value: k, label: v.label }))].map(f => (
             <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-3 py-1.5 text-xs rounded-full font-medium transition-colors" style={{

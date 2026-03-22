@@ -136,9 +136,9 @@ export default function NCRPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{ncr.ncrCode}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: sev.bg, color: sev.color }}>{sev.icon} {sev.label}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: st.bg, color: st.color }}>{st.label}</span>
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{CATEGORY_MAP[ncr.category] || ncr.category}</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: sev.bg, color: sev.color }}>{sev.icon} {sev.label}</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{CATEGORY_MAP[ncr.category] || ncr.category}</span>
                   </div>
                   <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{ncr.description}</p>
                   <div className="flex items-center gap-3 mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>

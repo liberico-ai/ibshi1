@@ -133,19 +133,19 @@ export default function MilestonePage() {
                   <td className="text-xs font-mono">{i + 1}</td>
                   <td>
                     <div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{m.name}</div>
-                    {m.description && <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.description}</div>}
+                    {m.description && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.description}</div>}
                   </td>
                   <td className="text-right font-mono text-xs font-bold" style={{ color: '#0ea5e9' }}>{Number(m.billingPercent)}%</td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.plannedDate ? new Date(m.plannedDate).toLocaleDateString('vi-VN') : '—'}</td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.actualDate ? new Date(m.actualDate).toLocaleDateString('vi-VN') : '—'}</td>
                   <td>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[m.status]}20`, color: statusColor[m.status] }}>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[m.status]}20`, color: statusColor[m.status] }}>
                       {statusLabel[m.status]}
                     </span>
                   </td>
                   <td>
                     {m.status !== 'COMPLETED' && (
-                      <button onClick={() => updateStatus(m.id, 'COMPLETED')} className="text-[10px] px-2 py-1 rounded font-medium" style={{ background: '#16a34a20', color: '#16a34a' }}>
+                      <button onClick={() => updateStatus(m.id, 'COMPLETED')} className="text-xs px-2 py-1 rounded font-medium" style={{ background: '#16a34a20', color: '#16a34a' }}>
                         ✓ Hoàn thành
                       </button>
                     )}

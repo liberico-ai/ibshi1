@@ -57,17 +57,17 @@ export default function WorkshopsPage() {
         {workshops.map(ws => (
           <div key={ws.id} className="card p-4 space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] px-2 py-0.5 rounded font-bold font-mono" style={{ background: '#f59e0b', color: '#fff' }}>{ws.code}</span>
+              <span className="text-xs px-2 py-0.5 rounded font-bold font-mono" style={{ background: '#f59e0b', color: '#fff' }}>{ws.code}</span>
             </div>
             <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{ws.name}</h3>
-            {ws.nameEn && <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{ws.nameEn}</p>}
+            {ws.nameEn && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{ws.nameEn}</p>}
             <div className="flex gap-4 pt-1">
-              <div><span className="text-lg font-bold" style={{ color: '#0ea5e9' }}>{ws._count.workOrders}</span><span className="text-[10px] ml-1" style={{ color: 'var(--text-muted)' }}>WO</span></div>
+              <div><span className="text-lg font-bold" style={{ color: '#0ea5e9' }}>{ws._count.workOrders}</span><span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>WO</span></div>
               <div className="flex items-center gap-1">
                 <div className="w-16 h-2 rounded-full" style={{ background: 'var(--surface-hover)' }}>
                   <div className="h-2 rounded-full" style={{ width: `${ws.capacity}%`, background: ws.capacity > 80 ? '#dc2626' : ws.capacity > 50 ? '#f59e0b' : '#16a34a' }} />
                 </div>
-                <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>{ws.capacity}%</span>
+                <span className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>{ws.capacity}%</span>
               </div>
             </div>
           </div>

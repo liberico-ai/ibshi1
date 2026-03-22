@@ -112,11 +112,11 @@ export default function UsersPage() {
       }} />}
 
       <div className="flex gap-3 items-center flex-wrap">
-        <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Tìm username, họ tên, email..." /></div>
+        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm username, họ tên, email..." /></div>
         <div className="flex gap-2 flex-wrap">
           {ROLE_FILTERS.map((f) => (
             <button key={f.value} onClick={() => setRoleFilter(f.value)}
-              className="px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer" style={{
+              className="px-4 py-2 text-sm font-semibold transition-all cursor-pointer" style={{
                 background: roleFilter === f.value ? 'var(--primary)' : 'var(--bg-card)',
                 color: roleFilter === f.value ? 'white' : 'var(--text-secondary)',
                 border: `1px solid ${roleFilter === f.value ? 'var(--primary)' : 'var(--border)'}`,

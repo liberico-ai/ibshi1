@@ -112,18 +112,18 @@ export default function LessonsPage() {
         <div key={l.id} className="card p-4 space-y-2" style={{ borderLeft: `3px solid ${catColor[l.category] || '#666'}` }}>
           <div className="flex justify-between items-start">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] font-bold" style={{ color: 'var(--accent)' }}>{l.project.projectCode}</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${catColor[l.category]}20`, color: catColor[l.category] }}>
+              <span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{l.project.projectCode}</span>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${catColor[l.category]}20`, color: catColor[l.category] }}>
                 {catLabel[l.category]}
               </span>
             </div>
-            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleDateString('vi-VN')}</span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleDateString('vi-VN')}</span>
           </div>
           <p className="text-xs" style={{ color: 'var(--text-primary)' }}>{l.description}</p>
           <div className="grid grid-cols-3 gap-2">
-            {l.rootCause && <div><span className="text-[10px] font-bold" style={{ color: '#dc2626' }}>Nguyên nhân:</span><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{l.rootCause}</p></div>}
-            {l.actionTaken && <div><span className="text-[10px] font-bold" style={{ color: '#16a34a' }}>Hành động:</span><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{l.actionTaken}</p></div>}
-            {l.recommendation && <div><span className="text-[10px] font-bold" style={{ color: '#0ea5e9' }}>Khuyến nghị:</span><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{l.recommendation}</p></div>}
+            {l.rootCause && <div><span className="text-xs font-bold" style={{ color: '#dc2626' }}>Nguyên nhân:</span><p className="text-xs" style={{ color: 'var(--text-muted)' }}>{l.rootCause}</p></div>}
+            {l.actionTaken && <div><span className="text-xs font-bold" style={{ color: '#16a34a' }}>Hành động:</span><p className="text-xs" style={{ color: 'var(--text-muted)' }}>{l.actionTaken}</p></div>}
+            {l.recommendation && <div><span className="text-xs font-bold" style={{ color: '#0ea5e9' }}>Khuyến nghị:</span><p className="text-xs" style={{ color: 'var(--text-muted)' }}>{l.recommendation}</p></div>}
           </div>
         </div>
       ))}

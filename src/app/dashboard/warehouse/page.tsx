@@ -101,7 +101,7 @@ export default function WarehousePage() {
                   <span className="text-sm font-bold" style={{ color: m.type === 'IN' ? '#16a34a' : '#dc2626' }}>
                     {m.type === 'IN' ? '+' : '-'}{m.quantity}
                   </span>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.reference}</span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.reference}</span>
                 </div>
               </div>
             ))}
@@ -113,10 +113,10 @@ export default function WarehousePage() {
 
       {/* Search + Category filter */}
       <div className="flex gap-3 items-center">
-        <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã VT, tên..." /></div>
+        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã VT, tên..." /></div>
         <div className="flex gap-2 flex-wrap">
           {CATEGORIES.map((c) => (
-            <button key={c.value} onClick={() => setCategoryFilter(c.value)} className="px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer" style={{
+            <button key={c.value} onClick={() => setCategoryFilter(c.value)} className="px-4 py-2 text-sm font-semibold transition-all cursor-pointer" style={{
               background: categoryFilter === c.value ? 'var(--primary)' : 'var(--bg-card)',
               color: categoryFilter === c.value ? 'white' : 'var(--text-secondary)',
               border: `1px solid ${categoryFilter === c.value ? 'var(--primary)' : 'var(--border)'}`,
@@ -223,10 +223,10 @@ function KpiCard({ label, value, icon, color, alert }: { label: string; value: n
     <div className={`card p-4 transition-all ${alert ? 'animate-pulse-glow' : ''}`} style={{ borderTop: `3px solid ${color}` }}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-lg">{icon}</span>
-        {alert && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fef2f2', color: '#dc2626' }}>⚠</span>}
+        {alert && <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fef2f2', color: '#dc2626' }}>⚠</span>}
       </div>
       <p className="text-2xl font-extrabold" style={{ color }}>{value}</p>
-      <p className="text-[10px] font-medium mt-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
     </div>
   )
 }

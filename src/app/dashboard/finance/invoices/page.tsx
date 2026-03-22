@@ -40,10 +40,10 @@ export default function InvoicesPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Phải thu</p><p className="text-lg font-bold" style={{ color: '#16a34a' }}>{fmt(totals.receivable)} ₫</p></div>
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Phải trả</p><p className="text-lg font-bold" style={{ color: '#dc2626' }}>{fmt(totals.payable)} ₫</p></div>
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Đã thanh toán</p><p className="text-lg font-bold" style={{ color: '#0ea5e9' }}>{fmt(totals.paid)} ₫</p></div>
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Còn lại</p><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{fmt(totals.outstanding)} ₫</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Phải thu</p><p className="text-lg font-bold" style={{ color: '#16a34a' }}>{fmt(totals.receivable)} ₫</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Phải trả</p><p className="text-lg font-bold" style={{ color: '#dc2626' }}>{fmt(totals.payable)} ₫</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Đã thanh toán</p><p className="text-lg font-bold" style={{ color: '#0ea5e9' }}>{fmt(totals.paid)} ₫</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Còn lại</p><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{fmt(totals.outstanding)} ₫</p></div>
       </div>
 
       <div className="flex gap-2">
@@ -64,13 +64,13 @@ export default function InvoicesPage() {
             ) : invoices.map(inv => (
               <tr key={inv.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{inv.invoiceCode}</span></td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: inv.type === 'RECEIVABLE' ? '#16a34a20' : '#dc262620', color: inv.type === 'RECEIVABLE' ? '#16a34a' : '#dc2626' }}>{inv.type === 'RECEIVABLE' ? 'Thu' : 'Trả'}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: inv.type === 'RECEIVABLE' ? '#16a34a20' : '#dc262620', color: inv.type === 'RECEIVABLE' ? '#16a34a' : '#dc2626' }}>{inv.type === 'RECEIVABLE' ? 'Thu' : 'Trả'}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{inv.clientName || '—'}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{inv.project?.projectCode || '—'}</td>
                 <td className="text-right text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(inv.totalAmount)} ₫</td>
                 <td className="text-right text-xs" style={{ color: '#16a34a' }}>{fmt(inv.paidAmount)} ₫</td>
-                <td className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('vi-VN') : '—'}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[inv.status] || '#888'}20`, color: statusColor[inv.status] || '#888' }}>{statusLabel[inv.status] || inv.status}</span></td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('vi-VN') : '—'}</td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[inv.status] || '#888'}20`, color: statusColor[inv.status] || '#888' }}>{statusLabel[inv.status] || inv.status}</span></td>
               </tr>
             ))}
           </tbody>

@@ -106,7 +106,7 @@ export default function CertificatePage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{cert.holderName}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold" style={{ background: cert.isExpired ? '#fef2f2' : cert.isExpiringSoon ? '#fef9c3' : '#f0fdf4', color: borderColor }}>
+                    <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{ background: cert.isExpired ? '#fef2f2' : cert.isExpiringSoon ? '#fef9c3' : '#f0fdf4', color: borderColor }}>
                       {cert.isExpired ? 'HẾT HẠN' : cert.isExpiringSoon ? `${cert.daysToExpiry} ngày` : `${cert.daysToExpiry} ngày`}
                     </span>
                   </div>

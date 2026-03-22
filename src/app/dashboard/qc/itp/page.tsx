@@ -89,7 +89,7 @@ export default function ITPPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{itp.itpCode}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: st.bg, color: st.color }}>{st.label}</span>
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Rev {itp.revision}</span>
                     </div>
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{itp.name}</p>
@@ -111,7 +111,7 @@ export default function ITPPage() {
                       const cpSt = STATUS_MAP[cp.status] || { label: cp.status, color: '#64748b', bg: '#f1f5f9' }
                       return (
                         <div key={cp.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
-                          <span className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold text-white" style={{ background: ins.color }}>{ins.label}</span>
+                          <span className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white" style={{ background: ins.color }}>{ins.label}</span>
                           <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>#{cp.checkpointNo}</span>
                           <span className="text-xs flex-1" style={{ color: 'var(--text-primary)' }}>{cp.description}</span>
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: cpSt.bg, color: cpSt.color }}>{cpSt.label}</span>

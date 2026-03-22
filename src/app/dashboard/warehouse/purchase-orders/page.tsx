@@ -60,7 +60,7 @@ export default function PurchaseOrdersPage() {
               <tr key={po.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{po.poCode}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.vendor?.name || '—'}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[po.status] || '#888'}20`, color: statusColor[po.status] || '#888' }}>{statusLabel[po.status] || po.status}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[po.status] || '#888'}20`, color: statusColor[po.status] || '#888' }}>{statusLabel[po.status] || po.status}</span></td>
                 <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{(po.totalAmount || 0).toLocaleString('vi-VN')} ₫</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString('vi-VN') : '—'}</td>
                 <td className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{po.items?.length || 0}</td>
@@ -71,7 +71,7 @@ export default function PurchaseOrdersPage() {
                         <button
                           onClick={() => handleApprove(po.id, 'APPROVE')}
                           disabled={actionLoading === po.id}
-                          className="text-[10px] px-2 py-1 rounded font-bold transition-colors"
+                          className="text-xs px-2 py-1 rounded font-bold transition-colors"
                           style={{ background: '#16a34a20', color: '#16a34a' }}
                         >
                           ✓ Duyệt
@@ -79,14 +79,14 @@ export default function PurchaseOrdersPage() {
                         <button
                           onClick={() => handleApprove(po.id, 'REJECT')}
                           disabled={actionLoading === po.id}
-                          className="text-[10px] px-2 py-1 rounded font-bold transition-colors"
+                          className="text-xs px-2 py-1 rounded font-bold transition-colors"
                           style={{ background: '#dc262620', color: '#dc2626' }}
                         >
                           ✗ Từ chối
                         </button>
                       </>
                     )}
-                    {actionLoading === po.id && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>⏳</span>}
+                    {actionLoading === po.id && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>⏳</span>}
                   </div>
                 </td>
               </tr>

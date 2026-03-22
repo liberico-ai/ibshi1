@@ -372,7 +372,7 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
               <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
                 {task.stepName}
                 {STEP_FIELDS[task.stepCode] && task.status === 'IN_PROGRESS' && (
-                  <span className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>📋 Cần dữ liệu</span>
+                  <span className="text-xs ml-1.5 px-1.5 py-0.5 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>📋 Cần dữ liệu</span>
                 )}
               </span>
 

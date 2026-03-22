@@ -75,7 +75,7 @@ export default function MRBPage() {
               <div key={i} className="card p-4 text-center">
                 <p className="text-2xl font-bold" style={{ color: c.color }}>{c.value}</p>
                 <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{c.label}</p>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{c.sub}</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.sub}</p>
               </div>
             ))}
           </div>
@@ -118,7 +118,7 @@ export default function MRBPage() {
                     <tr key={i.id}>
                       <td className="font-mono text-xs" style={{ color: 'var(--primary)' }}>{i.inspectionCode}</td>
                       <td className="text-xs">{i.type}</td>
-                      <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{
+                      <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                         background: i.status === 'PASSED' ? '#16a34a20' : i.status === 'FAILED' ? '#dc262620' : '#f59e0b20',
                         color: i.status === 'PASSED' ? '#16a34a' : i.status === 'FAILED' ? '#dc2626' : '#f59e0b',
                       }}>{i.status}</span></td>
@@ -139,7 +139,7 @@ export default function MRBPage() {
                     <tr key={n.id}>
                       <td className="font-mono text-xs" style={{ color: '#dc2626' }}>{n.ncrCode}</td>
                       <td className="text-xs font-bold" style={{ color: n.severity === 'CRITICAL' ? '#dc2626' : n.severity === 'MAJOR' ? '#f59e0b' : '#888' }}>{n.severity}</td>
-                      <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{
+                      <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                         background: n.status === 'CLOSED' ? '#16a34a20' : '#dc262620',
                         color: n.status === 'CLOSED' ? '#16a34a' : '#dc2626',
                       }}>{n.status}</span></td>

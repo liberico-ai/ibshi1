@@ -57,15 +57,15 @@ export default function CashflowPage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="card p-4" style={{ borderTop: '3px solid #16a34a' }}>
           <p className="text-xl font-extrabold" style={{ color: '#16a34a' }}>+{fmt(totals.inflow)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Thu vào (VNĐ)</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Thu vào (VNĐ)</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #dc2626' }}>
           <p className="text-xl font-extrabold" style={{ color: '#dc2626' }}>-{fmt(totals.outflow)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Chi ra</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Chi ra</p>
         </div>
         <div className="card p-4" style={{ borderTop: `3px solid ${totals.net >= 0 ? '#16a34a' : '#dc2626'}` }}>
           <p className="text-xl font-extrabold" style={{ color: totals.net >= 0 ? '#16a34a' : '#dc2626' }}>{totals.net >= 0 ? '+' : ''}{fmt(totals.net)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Chênh lệch ròng</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Chênh lệch ròng</p>
         </div>
       </div>
 

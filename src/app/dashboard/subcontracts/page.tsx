@@ -113,16 +113,16 @@ export default function SubcontractsPage() {
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.project.projectCode}</td>
                 <td>
                   <div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{c.vendor.name}</div>
-                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{c.vendor.vendorCode}</div>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.vendor.vendorCode}</div>
                 </td>
                 <td className="text-xs max-w-48 truncate" style={{ color: 'var(--text-muted)' }}>{c.description}</td>
                 <td className="text-right font-mono text-xs font-bold" style={{ color: '#0ea5e9' }}>{fmt(c.contractValue)}</td>
-                <td className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   {c.startDate ? new Date(c.startDate).toLocaleDateString('vi-VN') : '—'} →
                   {c.endDate ? new Date(c.endDate).toLocaleDateString('vi-VN') : '—'}
                 </td>
                 <td>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
                     style={{ background: `${statusColor[c.status]}20`, color: statusColor[c.status] }}>
                     {statusLabel[c.status]}
                   </span>

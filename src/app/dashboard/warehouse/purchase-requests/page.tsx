@@ -82,7 +82,7 @@ export default function PurchaseRequestsPage() {
               <tr key={pr.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{pr.prCode}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{pr.project?.projectCode || '—'}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[pr.status] || '#888'}20`, color: statusColor[pr.status] || '#888' }}>{statusLabel[pr.status] || pr.status}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[pr.status] || '#888'}20`, color: statusColor[pr.status] || '#888' }}>{statusLabel[pr.status] || pr.status}</span></td>
                 <td className="text-xs" style={{ color: pr.priority === 'HIGH' ? '#dc2626' : pr.priority === 'MEDIUM' ? '#f59e0b' : 'var(--text-muted)' }}>{pr.priority}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{pr.requiredDate ? new Date(pr.requiredDate).toLocaleDateString('vi-VN') : '—'}</td>
                 <td className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{pr.items?.length || 0}</td>
@@ -93,7 +93,7 @@ export default function PurchaseRequestsPage() {
                         <button
                           onClick={() => handleApprove(pr.id, 'approve')}
                           disabled={actionLoading === pr.id}
-                          className="text-[10px] px-2 py-1 rounded font-bold transition-colors"
+                          className="text-xs px-2 py-1 rounded font-bold transition-colors"
                           style={{ background: '#16a34a20', color: '#16a34a' }}
                         >
                           ✓ Duyệt
@@ -101,7 +101,7 @@ export default function PurchaseRequestsPage() {
                         <button
                           onClick={() => handleApprove(pr.id, 'reject')}
                           disabled={actionLoading === pr.id}
-                          className="text-[10px] px-2 py-1 rounded font-bold transition-colors"
+                          className="text-xs px-2 py-1 rounded font-bold transition-colors"
                           style={{ background: '#dc262620', color: '#dc2626' }}
                         >
                           ✗ Từ chối
@@ -112,13 +112,13 @@ export default function PurchaseRequestsPage() {
                       <button
                         onClick={() => handleConvert(pr.id)}
                         disabled={actionLoading === pr.id}
-                        className="text-[10px] px-2 py-1 rounded font-bold transition-colors"
+                        className="text-xs px-2 py-1 rounded font-bold transition-colors"
                         style={{ background: '#6366f120', color: '#6366f1' }}
                       >
                         ⇒ Chuyển PO
                       </button>
                     )}
-                    {actionLoading === pr.id && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>⏳</span>}
+                    {actionLoading === pr.id && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>⏳</span>}
                   </div>
                 </td>
               </tr>

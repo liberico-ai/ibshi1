@@ -109,7 +109,7 @@ export default function ProductionPage() {
 
       {/* Search + Status filter */}
       <div className="flex gap-3 items-center">
-        <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã WO, mô tả..." /></div>
+        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã WO, mô tả..." /></div>
         <div className="flex gap-2">
           {[{ value: '', label: 'Tất cả' }, ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ value: k, label: v.label }))].map((f) => (
             <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-3 py-1.5 text-xs rounded-full font-medium transition-colors" style={{

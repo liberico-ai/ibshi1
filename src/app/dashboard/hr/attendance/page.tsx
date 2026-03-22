@@ -57,12 +57,12 @@ export default function AttendancePage() {
               <tr><td colSpan={7} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có dữ liệu điểm danh</td></tr>
             ) : records.map(r => (
               <tr key={r.id}>
-                <td><div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{r.employee?.fullName || '—'}</div><div className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{r.employee?.employeeCode || '—'}</div></td>
+                <td><div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{r.employee?.fullName || '—'}</div><div className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{r.employee?.employeeCode || '—'}</div></td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(r.date).toLocaleDateString('vi-VN')}</td>
                 <td className="text-xs font-mono" style={{ color: '#16a34a' }}>{r.checkIn || '—'}</td>
                 <td className="text-xs font-mono" style={{ color: '#dc2626' }}>{r.checkOut || '—'}</td>
                 <td className="text-xs font-mono" style={{ color: '#f59e0b' }}>{Number(r.overtime) > 0 ? `${r.overtime}h` : '—'}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[r.status] || '#888'}20`, color: statusColor[r.status] || '#888' }}>{statusLabel[r.status] || r.status}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[r.status] || '#888'}20`, color: statusColor[r.status] || '#888' }}>{statusLabel[r.status] || r.status}</span></td>
                 <td className="text-xs max-w-32 truncate" style={{ color: 'var(--text-muted)' }}>{r.note || '—'}</td>
               </tr>
             ))}

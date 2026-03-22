@@ -66,19 +66,19 @@ export default function FinancePage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="card p-4" style={{ borderTop: '3px solid #16a34a' }}>
           <p className="text-xl font-extrabold" style={{ color: '#16a34a' }}>{fmt(totals.receivable)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Phải thu (VNĐ)</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Phải thu (VNĐ)</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #dc2626' }}>
           <p className="text-xl font-extrabold" style={{ color: '#dc2626' }}>{fmt(totals.payable)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Phải trả</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Phải trả</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #0ea5e9' }}>
           <p className="text-xl font-extrabold" style={{ color: '#0ea5e9' }}>{fmt(totals.paid)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Đã thanh toán</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Đã thanh toán</p>
         </div>
         <div className="card p-4" style={{ borderTop: `3px solid ${totals.outstanding > 0 ? '#f59e0b' : '#16a34a'}` }}>
           <p className="text-xl font-extrabold" style={{ color: totals.outstanding > 0 ? '#f59e0b' : '#16a34a' }}>{fmt(totals.outstanding)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Còn lại</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Còn lại</p>
         </div>
       </div>
 
@@ -89,7 +89,7 @@ export default function FinancePage() {
         <input className="input w-72" placeholder="Tìm mã HĐ, tên KH..." value={search} onChange={e => setSearch(e.target.value)} />
         <div className="flex gap-2">
           {[{ v: '', l: 'Tất cả' }, { v: 'RECEIVABLE', l: '📥 Phải thu' }, { v: 'PAYABLE', l: '📤 Phải trả' }].map(f => (
-            <button key={f.v} onClick={() => setTypeFilter(f.v)} className="px-3 py-1.5 text-xs rounded-full font-medium transition-colors" style={{
+            <button key={f.v} onClick={() => setTypeFilter(f.v)} className="px-4 py-2 text-sm rounded-full font-medium transition-colors" style={{
               background: typeFilter === f.v ? 'var(--primary)' : 'var(--bg-card)',
               color: typeFilter === f.v ? 'white' : 'var(--text-secondary)',
               border: `1px solid ${typeFilter === f.v ? 'var(--primary)' : 'var(--border)'}`,

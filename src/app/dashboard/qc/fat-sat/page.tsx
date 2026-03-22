@@ -58,7 +58,7 @@ export default function FATSATPage() {
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{i.project?.projectCode || '—'}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{i.stepCode || '—'}</td>
                 <td className="text-xs font-bold" style={{ color: i.result === 'PASS' ? '#16a34a' : i.result === 'FAIL' ? '#dc2626' : '#888' }}>{i.result || '—'}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                   background: i.status === 'PASSED' ? '#16a34a20' : i.status === 'FAILED' ? '#dc262620' : '#f59e0b20',
                   color: i.status === 'PASSED' ? '#16a34a' : i.status === 'FAILED' ? '#dc2626' : '#f59e0b',
                 }}>{i.status}</span></td>

@@ -115,12 +115,12 @@ export default function VendorPage() {
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{v.vendorCode}</span></td>
                 <td>
                   <div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{v.name}</div>
-                  {v.address && <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{v.address}</div>}
+                  {v.address && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{v.address}</div>}
                 </td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${catColor[v.category]}20`, color: catColor[v.category] }}>{catLabel[v.category] || v.category}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${catColor[v.category]}20`, color: catColor[v.category] }}>{catLabel[v.category] || v.category}</span></td>
                 <td>
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{v.contactName || '—'}</div>
-                  {v.phone && <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{v.phone}</div>}
+                  {v.phone && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{v.phone}</div>}
                 </td>
                 <td className="text-center"><span className="text-xs font-bold">{v._count.purchaseOrders}</span></td>
                 <td className="text-center"><span className="text-xs font-bold">{v._count.invoices}</span></td>

@@ -45,23 +45,23 @@ export default function ProfitabilityPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="card p-4" style={{ borderTop: '3px solid #0ea5e9' }}>
           <p className="text-lg font-extrabold" style={{ color: '#0ea5e9' }}>{fmt(totals.contractValue)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Giá trị HĐ</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Giá trị HĐ</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #16a34a' }}>
           <p className="text-lg font-extrabold" style={{ color: '#16a34a' }}>{fmt(totals.revenue)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Doanh thu</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Doanh thu</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #dc2626' }}>
           <p className="text-lg font-extrabold" style={{ color: '#dc2626' }}>{fmt(totals.costs)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Chi phí</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Chi phí</p>
         </div>
         <div className="card p-4" style={{ borderTop: `3px solid ${totals.grossProfit >= 0 ? '#16a34a' : '#dc2626'}` }}>
           <p className="text-lg font-extrabold" style={{ color: totals.grossProfit >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(totals.grossProfit)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Lợi nhuận gộp</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Lợi nhuận gộp</p>
         </div>
         <div className="card p-4" style={{ borderTop: `3px solid ${overallMargin >= 20 ? '#16a34a' : '#f59e0b'}` }}>
           <p className="text-lg font-extrabold" style={{ color: overallMargin >= 20 ? '#16a34a' : '#f59e0b' }}>{overallMargin}%</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Biên LN trung bình</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Biên LN trung bình</p>
         </div>
       </div>
 

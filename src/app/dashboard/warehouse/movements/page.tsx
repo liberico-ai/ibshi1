@@ -114,7 +114,7 @@ export default function StockMovementsPage() {
                     <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>
                       {m.material.materialCode}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                       style={{ background: t.bg, color: t.color }}>{t.label}</span>
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                       {REASON_MAP[m.reason] || m.reason}
@@ -122,21 +122,21 @@ export default function StockMovementsPage() {
                   </div>
                   <p className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
                     {m.material.name}
-                    {m.heatNumber && <span className="ml-2 text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>Heat: {m.heatNumber}</span>}
-                    {m.referenceNo && <span className="ml-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>Ref: {m.referenceNo}</span>}
+                    {m.heatNumber && <span className="ml-2 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Heat: {m.heatNumber}</span>}
+                    {m.referenceNo && <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>Ref: {m.referenceNo}</span>}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold" style={{ color: m.type === 'OUT' ? '#dc2626' : '#16a34a' }}>
                     {m.type === 'OUT' ? '-' : '+'}{Number(m.quantity)}
                   </p>
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.material.unit}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.material.unit}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {new Date(m.createdAt).toLocaleDateString('vi-VN')}
                   </p>
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>

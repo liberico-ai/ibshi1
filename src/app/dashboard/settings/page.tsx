@@ -107,7 +107,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Vai trò</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>{user?.roleCode || '—'}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>{user?.roleCode || '—'}</span>
           </div>
         </div>
       </div>
@@ -119,7 +119,7 @@ export default function SettingsPage() {
           <div className="flex justify-between items-center">
             <div>
               <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Ngôn ngữ</span>
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Chuyển đổi Việt ↔ English</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chuyển đổi Việt ↔ English</p>
             </div>
             <button onClick={toggleLocale} className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer" style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)' }}>
               {locale === 'vi' ? '🇻🇳 Tiếng Việt' : '🇬🇧 English'}
@@ -128,7 +128,7 @@ export default function SettingsPage() {
           <div className="flex justify-between items-center">
             <div>
               <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Giao diện</span>
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Dark / Light mode</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Dark / Light mode</p>
             </div>
             <button onClick={toggleTheme} className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer" style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)' }}>
               {theme === 'dark' ? '🌙 Dark' : '☀️ Light'}
@@ -168,7 +168,7 @@ export default function SettingsPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Email thông báo</span>
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Gửi notification qua email</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Gửi notification qua email</p>
                 </div>
                 <button onClick={() => setConfig({ ...config, email_notifications_enabled: config.email_notifications_enabled === 'true' ? 'false' : 'true' })}
                   className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer" style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)' }}>
@@ -178,7 +178,7 @@ export default function SettingsPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Chế độ bảo trì</span>
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Chặn truy cập hệ thống (trừ Admin)</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chặn truy cập hệ thống (trừ Admin)</p>
                 </div>
                 <button onClick={() => setConfig({ ...config, system_maintenance_mode: config.system_maintenance_mode === 'true' ? 'false' : 'true' })}
                   className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer" style={{
@@ -205,10 +205,10 @@ export default function SettingsPage() {
       <div className="card p-6">
         <h2 className="text-sm font-bold mb-4" style={{ color: 'var(--text-primary)' }}>Thông tin hệ thống</h2>
         <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Phiên bản</span><p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>v2.0.0</p></div>
-          <div><span className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Models</span><p className="text-sm font-bold" style={{ color: '#16a34a' }}>46</p></div>
-          <div><span className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>APIs</span><p className="text-sm font-bold" style={{ color: '#0ea5e9' }}>58</p></div>
-          <div><span className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Pages</span><p className="text-sm font-bold" style={{ color: '#f59e0b' }}>50+</p></div>
+          <div><span className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Phiên bản</span><p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>v2.0.0</p></div>
+          <div><span className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Models</span><p className="text-sm font-bold" style={{ color: '#16a34a' }}>46</p></div>
+          <div><span className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>APIs</span><p className="text-sm font-bold" style={{ color: '#0ea5e9' }}>58</p></div>
+          <div><span className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Pages</span><p className="text-sm font-bold" style={{ color: '#f59e0b' }}>50+</p></div>
         </div>
       </div>
     </div>

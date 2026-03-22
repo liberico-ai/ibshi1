@@ -59,8 +59,8 @@ export default function MillCertificatesPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Đã xác minh</p><p className="text-lg font-bold" style={{ color: '#16a34a' }}>{stats.verified}</p></div>
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Chưa xác minh</p><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{stats.unverified}</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Đã xác minh</p><p className="text-lg font-bold" style={{ color: '#16a34a' }}>{stats.verified}</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Chưa xác minh</p><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{stats.unverified}</p></div>
       </div>
 
       <div className="flex gap-2">
@@ -104,8 +104,8 @@ export default function MillCertificatesPage() {
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.vendor.companyName}</td>
                 <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{c.grade || '—'}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.thickness || '—'}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: c.isVerified ? '#16a34a20' : '#f59e0b20', color: c.isVerified ? '#16a34a' : '#f59e0b' }}>{c.isVerified ? '✓ Đã XM' : '⏳ Chờ'}</span></td>
-                <td className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString('vi-VN')}</td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: c.isVerified ? '#16a34a20' : '#f59e0b20', color: c.isVerified ? '#16a34a' : '#f59e0b' }}>{c.isVerified ? '✓ Đã XM' : '⏳ Chờ'}</span></td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString('vi-VN')}</td>
               </tr>
             ))}
           </tbody>

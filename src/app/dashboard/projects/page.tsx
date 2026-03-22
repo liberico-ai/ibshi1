@@ -100,10 +100,10 @@ export default function ProjectsPage() {
 
       {/* Search + Status filter */}
       <div className="flex gap-3 items-center flex-wrap">
-        <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã DA, tên, khách hàng..." /></div>
+        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã DA, tên, khách hàng..." /></div>
         <div className="flex gap-2">
           {STATUS_FILTERS.map((f) => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer" style={{
+            <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-4 py-2 text-sm font-semibold transition-all cursor-pointer" style={{
               background: statusFilter === f.value ? 'var(--primary)' : 'var(--bg-card)',
               color: statusFilter === f.value ? 'white' : 'var(--text-secondary)',
               border: `1px solid ${statusFilter === f.value ? 'var(--primary)' : 'var(--border)'}`,

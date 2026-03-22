@@ -49,10 +49,10 @@ export default function InspectionsPage() {
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{i.inspectionCode}</span></td>
                 <td className="text-xs font-mono" style={{ color: '#0ea5e9' }}>{i.workOrder?.woCode || '—'}</td>
                 <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{typeLabel[i.type] || i.type}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[i.status] || '#888'}20`, color: statusColor[i.status] || '#888' }}>{statusLabel[i.status] || i.status}</span></td>
-                <td>{i.result ? <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${resultColor[i.result] || '#888'}20`, color: resultColor[i.result] || '#888' }}>{i.result}</span> : <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[i.status] || '#888'}20`, color: statusColor[i.status] || '#888' }}>{statusLabel[i.status] || i.status}</span></td>
+                <td>{i.result ? <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${resultColor[i.result] || '#888'}20`, color: resultColor[i.result] || '#888' }}>{i.result}</span> : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                 <td className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{i.items?.length || 0}</td>
-                <td className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{i.inspectionDate ? new Date(i.inspectionDate).toLocaleDateString('vi-VN') : '—'}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{i.inspectionDate ? new Date(i.inspectionDate).toLocaleDateString('vi-VN') : '—'}</td>
               </tr>
             ))}
           </tbody>

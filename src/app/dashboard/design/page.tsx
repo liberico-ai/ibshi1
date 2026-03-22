@@ -124,8 +124,8 @@ export default function DrawingPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{dwg.drawingCode}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: st.bg, color: st.color }}>{st.label}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Rev {dwg.currentRev}</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Rev {dwg.currentRev}</span>
                   </div>
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{dwg.title}</p>
                   <div className="flex items-center gap-3 text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>

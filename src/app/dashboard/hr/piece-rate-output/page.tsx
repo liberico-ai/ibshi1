@@ -75,7 +75,7 @@ export default function PieceRateOutputPage() {
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{o.contract.unit}</td>
                   <td className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>{Number(o.unitPrice).toLocaleString('vi-VN')}₫</td>
                   <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{Number(o.totalAmount).toLocaleString('vi-VN')}₫</td>
-                  <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{
+                  <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                     background: o.status === 'VERIFIED' ? '#16a34a20' : '#f59e0b20',
                     color: o.status === 'VERIFIED' ? '#16a34a' : '#f59e0b',
                   }}>{o.status === 'DRAFT' ? 'Nháp' : o.status === 'VERIFIED' ? 'Xác nhận' : o.status}</span></td>

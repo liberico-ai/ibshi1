@@ -99,23 +99,23 @@ export default function QCPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="card p-4" style={{ borderTop: '3px solid var(--primary)' }}>
           <p className="text-2xl font-extrabold" style={{ color: 'var(--primary)' }}>{pagination.total}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Tổng biên bản</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tổng biên bản</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #16a34a' }}>
           <p className="text-2xl font-extrabold" style={{ color: '#16a34a' }}>{passCount}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Đạt ✓</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Đạt ✓</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #dc2626' }}>
           <p className="text-2xl font-extrabold" style={{ color: '#dc2626' }}>{failCount}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Không đạt ✗</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Không đạt ✗</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #f59e0b' }}>
           <p className="text-2xl font-extrabold" style={{ color: '#f59e0b' }}>{pendCount + condCount}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Chờ / ĐK</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Chờ / ĐK</p>
         </div>
         <div className="card p-4" style={{ borderTop: `3px solid ${passRate >= 80 ? '#16a34a' : passRate >= 50 ? '#f59e0b' : '#dc2626'}` }}>
           <p className="text-2xl font-extrabold" style={{ color: passRate >= 80 ? '#16a34a' : passRate >= 50 ? '#f59e0b' : '#dc2626' }}>{passRate}%</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Tỷ lệ đạt</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tỷ lệ đạt</p>
         </div>
       </div>
 
@@ -123,10 +123,10 @@ export default function QCPage() {
 
       {/* Search + Status filter */}
       <div className="flex gap-3 items-center">
-        <div className="w-72"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã biên bản..." /></div>
+        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã biên bản..." /></div>
         <div className="flex gap-2">
           {[{ value: '', label: 'Tất cả' }, ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ value: k, label: v.label }))].map((f) => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-3 py-1.5 text-xs rounded-full font-medium transition-colors" style={{
+            <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-4 py-2 text-sm rounded-full font-medium transition-colors" style={{
               background: statusFilter === f.value ? 'var(--primary)' : 'var(--bg-card)',
               color: statusFilter === f.value ? 'white' : 'var(--text-secondary)',
               border: `1px solid ${statusFilter === f.value ? 'var(--primary)' : 'var(--border)'}`,

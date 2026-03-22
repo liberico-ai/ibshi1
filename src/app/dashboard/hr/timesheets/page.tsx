@@ -59,9 +59,9 @@ export default function TimesheetPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Giờ hành chính</p><p className="text-lg font-bold" style={{ color: '#0ea5e9' }}>{summary.regular}h</p></div>
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Giờ tăng ca</p><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{summary.ot}h</p></div>
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Tổng cộng</p><p className="text-lg font-bold" style={{ color: '#16a34a' }}>{summary.total}h</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Giờ hành chính</p><p className="text-lg font-bold" style={{ color: '#0ea5e9' }}>{summary.regular}h</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Giờ tăng ca</p><p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{summary.ot}h</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Tổng cộng</p><p className="text-lg font-bold" style={{ color: '#16a34a' }}>{summary.total}h</p></div>
       </div>
 
       {showForm && (
@@ -90,13 +90,13 @@ export default function TimesheetPage() {
               <tr><td colSpan={7} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có chấm công</td></tr>
             ) : timesheets.map(t => (
               <tr key={t.id}>
-                <td><div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{t.employee.fullName}</div><div className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{t.employee.employeeCode}</div></td>
+                <td><div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{t.employee.fullName}</div><div className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{t.employee.employeeCode}</div></td>
                 <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{t.project.projectCode}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(t.workDate).toLocaleDateString('vi-VN')}</td>
                 <td className="text-right text-xs font-bold" style={{ color: '#0ea5e9' }}>{Number(t.hoursRegular)}h</td>
                 <td className="text-right text-xs font-bold" style={{ color: Number(t.hoursOT) > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{Number(t.hoursOT)}h</td>
                 <td className="text-xs max-w-32 truncate" style={{ color: 'var(--text-muted)' }}>{t.taskDescription || '—'}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: t.status === 'APPROVED' ? '#16a34a20' : '#f59e0b20', color: t.status === 'APPROVED' ? '#16a34a' : '#f59e0b' }}>{t.status}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: t.status === 'APPROVED' ? '#16a34a20' : '#f59e0b20', color: t.status === 'APPROVED' ? '#16a34a' : '#f59e0b' }}>{t.status}</span></td>
               </tr>
             ))}
           </tbody>

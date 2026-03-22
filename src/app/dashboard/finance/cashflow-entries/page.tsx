@@ -70,9 +70,9 @@ export default function CashflowEntriesPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Thu vào</p><p className="text-lg font-bold" style={{ color: '#16a34a' }}>{fmt(summary.inflow)} ₫</p></div>
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Chi ra</p><p className="text-lg font-bold" style={{ color: '#dc2626' }}>{fmt(summary.outflow)} ₫</p></div>
-        <div className="card p-4"><p className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Ròng</p><p className="text-lg font-bold" style={{ color: summary.net >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(summary.net)} ₫</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Thu vào</p><p className="text-lg font-bold" style={{ color: '#16a34a' }}>{fmt(summary.inflow)} ₫</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Chi ra</p><p className="text-lg font-bold" style={{ color: '#dc2626' }}>{fmt(summary.outflow)} ₫</p></div>
+        <div className="card p-4"><p className="text-xs uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Ròng</p><p className="text-lg font-bold" style={{ color: summary.net >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(summary.net)} ₫</p></div>
       </div>
 
       {/* Filter */}
@@ -123,7 +123,7 @@ export default function CashflowEntriesPage() {
             ) : entries.map(e => (
               <tr key={e.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{e.entryCode}</span></td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: e.type === 'INFLOW' ? '#16a34a20' : '#dc262620', color: e.type === 'INFLOW' ? '#16a34a' : '#dc2626' }}>{e.type === 'INFLOW' ? '↑ Thu' : '↓ Chi'}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: e.type === 'INFLOW' ? '#16a34a20' : '#dc262620', color: e.type === 'INFLOW' ? '#16a34a' : '#dc2626' }}>{e.type === 'INFLOW' ? '↑ Thu' : '↓ Chi'}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{catLabel[e.category] || e.category}</td>
                 <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{e.project?.projectCode || '—'}</td>
                 <td className="text-right font-mono text-xs font-bold" style={{ color: e.type === 'INFLOW' ? '#16a34a' : '#dc2626' }}>{e.type === 'INFLOW' ? '+' : '-'}{fmt(e.amount)}</td>

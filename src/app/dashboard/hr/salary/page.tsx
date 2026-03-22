@@ -69,15 +69,15 @@ export default function SalaryPage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="card p-4" style={{ borderTop: '3px solid #16a34a' }}>
           <p className="text-xl font-extrabold" style={{ color: '#16a34a' }}>{fmt(totals.grossPay)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Tổng thu nhập (VNĐ)</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tổng thu nhập (VNĐ)</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #dc2626' }}>
           <p className="text-xl font-extrabold" style={{ color: '#dc2626' }}>{fmt(totals.deductions)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Tổng khấu trừ</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tổng khấu trừ</p>
         </div>
         <div className="card p-4" style={{ borderTop: '3px solid #0ea5e9' }}>
           <p className="text-xl font-extrabold" style={{ color: '#0ea5e9' }}>{fmt(totals.netPay)}</p>
-          <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Thực lĩnh</p>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Thực lĩnh</p>
         </div>
       </div>
 

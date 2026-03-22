@@ -100,7 +100,7 @@ export default function PieceRatePage() {
                 <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{c.workType}</td>
                 <td className="text-xs font-bold text-right" style={{ color: '#16a34a' }}>{Number(c.unitPrice).toLocaleString('vi-VN')}₫</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.unit}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                   background: c.status === 'ACTIVE' ? '#16a34a20' : '#f59e0b20',
                   color: c.status === 'ACTIVE' ? '#16a34a' : '#f59e0b',
                 }}>{c.status}</span></td>

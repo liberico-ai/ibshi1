@@ -137,9 +137,9 @@ export default function JobCardsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{jc.jobCode}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                       style={{ background: st.bg, color: st.color }}>{st.label}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                       style={{ background: '#f8fafc', color: wt.color }}>{wt.label}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -159,12 +159,12 @@ export default function JobCardsPage() {
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#e2e8f0', width: '80px', marginLeft: 'auto' }}>
                         <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: progress >= 100 ? '#16a34a' : '#f59e0b' }} />
                       </div>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{progress}% kế hoạch</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{progress}% kế hoạch</p>
                     </div>
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {new Date(jc.workDate).toLocaleDateString('vi-VN')}
                   </p>
                 </div>

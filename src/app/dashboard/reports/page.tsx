@@ -83,7 +83,7 @@ function KPI({ emoji, label, value, sub, color }: { emoji: string; label: string
       <div className="text-2xl mb-1">{emoji}</div>
       <p className="text-2xl font-bold" style={{ color }}>{value}</p>
       <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{label}</p>
-      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>
+      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>
     </div>
   )
 }
@@ -127,7 +127,7 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
             <div>
               <span className="text-xs font-mono font-bold" style={{ color: 'var(--accent)' }}>{p.projectCode}</span>
               <span className="text-sm font-medium ml-2" style={{ color: 'var(--text-primary)' }}>{p.projectName}</span>
-              {p.overdueTasks > 0 && <span className="text-[10px] ml-2 px-1.5 py-0.5 rounded-full font-bold" style={{ background: '#dc262620', color: '#dc2626' }}>⚠ {p.overdueTasks} quá hạn</span>}
+              {p.overdueTasks > 0 && <span className="text-xs ml-2 px-1.5 py-0.5 rounded-full font-bold" style={{ background: '#dc262620', color: '#dc2626' }}>⚠ {p.overdueTasks} quá hạn</span>}
             </div>
             <span className="text-lg font-bold" style={{ color: p.percentage >= 80 ? '#16a34a' : p.percentage >= 50 ? '#f59e0b' : 'var(--text-muted)' }}>{p.percentage}%</span>
           </div>
@@ -157,7 +157,7 @@ function FinancialReport({ data }: { data: Record<string, unknown> }) {
               <td className="text-right text-xs" style={{ color: '#0ea5e9' }}>{f.budgetPlanned.toLocaleString('vi-VN')} ₫</td>
               <td className="text-right text-xs" style={{ color: '#f59e0b' }}>{f.budgetActual.toLocaleString('vi-VN')} ₫</td>
               <td className="text-right text-xs font-bold" style={{ color: f.variance >= 0 ? '#16a34a' : '#dc2626' }}>{f.variance.toLocaleString('vi-VN')} ₫</td>
-              <td className="text-right"><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: f.variancePct >= 0 ? '#16a34a20' : '#dc262620', color: f.variancePct >= 0 ? '#16a34a' : '#dc2626' }}>{f.variancePct}%</span></td>
+              <td className="text-right"><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: f.variancePct >= 0 ? '#16a34a20' : '#dc262620', color: f.variancePct >= 0 ? '#16a34a' : '#dc2626' }}>{f.variancePct}%</span></td>
             </tr>
           ))}
         </tbody>
@@ -200,7 +200,7 @@ function ProductionReport({ data }: { data: Record<string, unknown> }) {
             {p.byTeam.map(t => (
               <div key={t.teamCode} className="text-center p-3 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
                 <p className="text-lg font-bold" style={{ color: 'var(--primary)' }}>{t._count}</p>
-                <p className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{t.teamCode}</p>
+                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{t.teamCode}</p>
               </div>
             ))}
           </div>
@@ -310,7 +310,7 @@ function HRReport({ data }: { data: Record<string, unknown> }) {
             {hr.departments.map(d => (
               <div key={d.code} className="text-center p-3 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
                 <p className="text-lg font-bold" style={{ color: 'var(--primary)' }}>{d.count}</p>
-                <p className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{d.name}</p>
+                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{d.name}</p>
               </div>
             ))}
           </div>

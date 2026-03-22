@@ -132,11 +132,11 @@ export default function DrawingRegisterPage() {
               <tr key={d.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{d.drawingCode}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{d.title}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${discColor[d.discipline]}20`, color: discColor[d.discipline] }}>{discLabel[d.discipline] || d.discipline}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${discColor[d.discipline]}20`, color: discColor[d.discipline] }}>{discLabel[d.discipline] || d.discipline}</span></td>
                 <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{d.project.projectCode}</td>
                 <td className="text-xs font-mono font-bold" style={{ color: '#0ea5e9' }}>{d.currentRev}</td>
-                <td><span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[d.status]}20`, color: statusColor[d.status] }}>{statusLabel[d.status]}</span></td>
-                <td className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[d.status]}20`, color: statusColor[d.status] }}>{statusLabel[d.status]}</span></td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   {d.revisions[0] ? `${d.revisions[0].revision} — ${new Date(d.revisions[0].issuedDate).toLocaleDateString('vi-VN')}` : '—'}
                 </td>
                 <td>
@@ -146,13 +146,13 @@ export default function DrawingRegisterPage() {
                         key={t.next}
                         onClick={() => handleTransition(d.id, t.next)}
                         disabled={actionLoading === d.id}
-                        className="text-[10px] px-2 py-1 rounded font-bold transition-colors"
+                        className="text-xs px-2 py-1 rounded font-bold transition-colors"
                         style={{ background: `${t.color}20`, color: t.color }}
                       >
                         {t.label}
                       </button>
                     ))}
-                    {actionLoading === d.id && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>⏳</span>}
+                    {actionLoading === d.id && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>⏳</span>}
                   </div>
                 </td>
               </tr>

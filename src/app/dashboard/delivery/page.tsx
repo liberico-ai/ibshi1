@@ -99,7 +99,7 @@ export default function DeliveryPage() {
                   <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{d.deliveryCode}</span></td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.project?.projectCode || '—'}</td>
                   <td className="text-xs" style={{ color: 'var(--primary)' }}>{d.workOrder?.woCode || '—'}</td>
-                  <td><span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${cfg.color}20`, color: cfg.color }}>{cfg.label}</span></td>
+                  <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${cfg.color}20`, color: cfg.color }}>{cfg.label}</span></td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.shippingMethod || '—'}</td>
                   <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{d.trackingNo || '—'}</td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.shippedAt ? new Date(d.shippedAt).toLocaleDateString('vi-VN') : '—'}</td>
@@ -108,13 +108,13 @@ export default function DeliveryPage() {
                       <button
                         onClick={() => handleTransition(d.id, action.next)}
                         disabled={actionLoading === d.id}
-                        className="text-[10px] px-2 py-1 rounded font-bold"
+                        className="text-xs px-2 py-1 rounded font-bold"
                         style={{ background: `${statusCfg[action.next]?.color || '#888'}20`, color: statusCfg[action.next]?.color || '#888' }}
                       >
                         {action.label}
                       </button>
                     )}
-                    {actionLoading === d.id && <span className="text-[10px] ml-1">⏳</span>}
+                    {actionLoading === d.id && <span className="text-xs ml-1">⏳</span>}
                   </td>
                 </tr>
               )
