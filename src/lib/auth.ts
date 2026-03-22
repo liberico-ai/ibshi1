@@ -3,12 +3,19 @@ import jwt, { type SignOptions } from 'jsonwebtoken'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from './db'
 
-const _jwtSecret = process.env.JWT_SECRET
-if (!_jwtSecret) {
-  throw new Error('FATAL: JWT_SECRET environment variable is required. Set it in .env file.')
-}
-const JWT_SECRET: string = _jwtSecret
 const JWT_EXPIRES_SECONDS = 28800 // 8 hours
+
+let _cachedJwtSecret: string | undefined
+function getJwtSecret(): string {
+  if (!_cachedJwtSecret) {
+    const secret = process.env.JWT_SECRET
+    if (!secret) {
+      throw new Error('FATAL: JWT_SECRET environment variable is required. Set it in .env file.')
+    }
+    _cachedJwtSecret = secret
+  }
+  return _cachedJwtSecret
+}
 
 // ── Password Hashing ──
 
@@ -32,12 +39,12 @@ export interface TokenPayload {
 
 export function generateToken(payload: TokenPayload): string {
   const options: SignOptions = { expiresIn: JWT_EXPIRES_SECONDS }
-  return jwt.sign(payload as object, JWT_SECRET, options)
+  return jwt.sign(payload as object, getJwtSecret(), options)
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as TokenPayload
+    return jwt.verify(token, getJwtSecret()) as TokenPayload
   } catch {
     return null
   }
