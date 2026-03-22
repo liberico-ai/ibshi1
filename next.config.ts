@@ -12,6 +12,7 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   // TODO: Remove after properly typing previousStepData in tasks/[id]/page.tsx
   typescript: { ignoreBuildErrors: true },
   async headers() {

@@ -1,0 +1,134 @@
+name: Deploy IBS ERP
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ════════════════════════════════════════════════════════════════════════════
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      deployments: write
+
+    outputs:
+      deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Tạo GitHub Deployment & mark in_progress ────────────────────────
+      - name: Create GitHub Deployment
+        id: deployment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Use -s (silent) but NOT -f so we can capture and inspect the response body on error
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments" \
+            -d '{
+              "ref": "${{ github.sha }}",
+              "environment": "production",
+              "auto_merge": false,
+              "required_contexts": [],
+              "description": "Triggered by push to main"
+            }')
+
+          echo "── GitHub API response ──"
+          echo "$RESPONSE"
+
+          DEP_ID=$(echo "$RESPONSE" | grep -o '"id":[ ]*[0-9]*' | head -1 | grep -o '[0-9]*')
+
+          if [ -z "$DEP_ID" ]; then
+            echo "❌ Failed to create deployment. See API response above."
+            exit 1
+          fi
+
+          echo "deployment_id=$DEP_ID" >> "$GITHUB_OUTPUT"
+          echo "🚀 GitHub deployment_id=$DEP_ID"
+
+          curl -s -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments/$DEP_ID/statuses" \
+            -d '{"state":"in_progress","description":"Building Docker image..."}' > /dev/null
+
+      # ── 3. Setup Buildx ────────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 4. Login ghcr.io ───────────────────────────────────────────────────
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 5. Metadata ────────────────────────────────────────────────────────
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=main
+            type=sha,format=short
+
+      # ── 6. Build & push ────────────────────────────────────────────────────
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ════════════════════════════════════════════════════════════════════════════
+  notify:
+    name: Trigger Deploy Webhook
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Send webhook to server
+        env:
+          WEBHOOK_SECRET: ${{ secrets.LAB_WEBHOOK_SECRET }}
+          WEBHOOK_URL: ${{ vars.LAB_WEBHOOK_URL }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          REF: ${{ github.ref }}
+          DEPLOYMENT_ID: ${{ needs.build.outputs.deployment_id }}
+        run: |
+          PAYLOAD=$(printf '{"ref":"%s","repository":{"name":"%s"},"deployment_id":"%s"}' "$REF" "$REPO_NAME" "$DEPLOYMENT_ID")
+          SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | sed 's/.* //')
+
+          HTTP_STATUS=$(curl -s -o /tmp/wh.txt -w "%{http_code}" \
+            -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: sha256=$SIG" \
+            -d "$PAYLOAD")
+
+          echo "── Webhook response (HTTP $HTTP_STATUS) ──"
+          cat /tmp/wh.txt
+
+          [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]] \
+            && echo "✅ Deploy triggered (deployment_id=$DEPLOYMENT_ID)" \
+            || { echo "❌ Webhook failed ($HTTP_STATUS)"; exit 1; }
