@@ -162,10 +162,30 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ═══ RIGHT — Login Form (1/3 width) ═══ */}
-      <div className="flex items-center justify-center p-8 lg:p-12"
+      {/* ═══ RIGHT — Login Form (1/3 width) with blurred IBS building background ═══ */}
+      <div className="relative flex items-center justify-center p-8 lg:p-12 overflow-hidden"
         style={{ flex: 1, minWidth: '360px', maxWidth: '440px' }}>
-        <div className="w-full max-w-[320px] animate-fade-in-scale">
+        {/* Blurred background image */}
+        <Image
+          src="/images/ibs-building.jpg"
+          alt=""
+          fill
+          className="object-cover"
+          style={{ filter: 'blur(12px)', transform: 'scale(1.15)' }}
+          quality={75}
+          priority
+        />
+        {/* Semi-transparent overlay for readability */}
+        <div className="absolute inset-0" style={{ background: 'rgba(255,255,255,0.45)' }} />
+
+        <div className="relative z-10 w-full max-w-[340px] animate-fade-in-scale" style={{
+          background: 'rgba(255,255,255,0.88)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '16px',
+          padding: '32px 28px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+          border: '1px solid rgba(255,255,255,0.6)',
+        }}>
           
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
@@ -208,7 +228,7 @@ export default function LoginPage() {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </span>
                 <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-                  className="input" style={{ paddingLeft: '2.5rem' }}
+                  className="input" style={{ paddingLeft: '2.5rem', background: 'rgba(255,255,255,0.9)' }}
                   placeholder="Nhập username" required autoFocus />
               </div>
             </div>
@@ -222,7 +242,7 @@ export default function LoginPage() {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 </span>
                 <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-                  className="input" style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem' }}
+                  className="input" style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem', background: 'rgba(255,255,255,0.9)' }}
                   placeholder="••••••••" required />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer" style={{ color: '#94a3b8', background: 'none', border: 'none' }}>
