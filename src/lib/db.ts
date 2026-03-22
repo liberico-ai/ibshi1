@@ -2,14 +2,14 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 
-const connectionString = process.env.DATABASE_URL
-if (!connectionString) {
-  throw new Error('FATAL: DATABASE_URL environment variable is required. Set it in .env file.')
-}
-
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
 
 function createPrismaClient() {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    throw new Error('FATAL: DATABASE_URL environment variable is required. Set it in .env file.')
+  }
+
   const pool = new pg.Pool({
     connectionString,
     max: parseInt(process.env.DB_POOL_MAX || '10'),
@@ -21,8 +21,20 @@ function createPrismaClient() {
   return new PrismaClient({ adapter })
 }
 
-export const prisma = globalForPrisma.prisma || createPrismaClient()
+function getPrismaClient(): PrismaClient {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createPrismaClient()
+  }
+  return globalForPrisma.prisma
+}
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+// Lazy proxy: DATABASE_URL is only checked on first actual usage, not at import time.
+// This allows Next.js to build without a database connection.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Proxy needs generic target
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop: string | symbol) {
+    return (getPrismaClient() as any)[prop]
+  },
+})
 
 export default prisma
