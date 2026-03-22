@@ -16,7 +16,7 @@ export interface WorkflowStep {
   syncOnReject?: string[]     // Reverse hooks to run
 }
 
-// ── 32-Step Workflow Rules (BRD Specification) ──
+// ── 36-Step Workflow Rules (BRD Specification) ──
 
 export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   // ── Phase 1: Khởi tạo Dự án ──
@@ -142,13 +142,29 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P5.5': {
     code: 'P5.5', name: 'Tổng hợp và tính lương khoán', nameEn: 'Piece-rate Salary Calculation',
-    role: 'R03', next: ['P6.1'], phase: 5,
+    role: 'R03', next: ['P6.1', 'P6.4'], phase: 5,
   },
 
-  // ── Phase 6: Đóng Dự án (BRD#32) ──
+  // ── Phase 6: Đóng Dự án (BRD P6.1-P6.5) ──
   'P6.1': {
-    code: 'P6.1', name: 'KTKH tổ chức Lesson Learn và đóng dự án', nameEn: 'Lessons Learned & Project Closure',
-    role: 'R03', next: [], deadlineDays: 10, phase: 6,
+    code: 'P6.1', name: 'QC tổng hợp hồ sơ chất lượng (Dossier)', nameEn: 'QC Dossier Compilation',
+    role: 'R09', next: ['P6.5'], deadlineDays: 10, phase: 6,
+  },
+  'P6.2': {
+    code: 'P6.2', name: 'Quyết toán chi phí trực tiếp', nameEn: 'Direct Cost Settlement',
+    role: 'R08', next: ['P6.3'], deadlineDays: 7, phase: 6,
+  },
+  'P6.3': {
+    code: 'P6.3', name: 'Quyết toán tổng hợp (P&L)', nameEn: 'Consolidated P&L Settlement',
+    role: 'R03', next: ['P6.5'], deadlineDays: 7, phase: 6,
+  },
+  'P6.4': {
+    code: 'P6.4', name: 'Tổ chức Lesson Learned', nameEn: 'Lessons Learned Review',
+    role: 'R02', next: ['P6.2', 'P6.5'], deadlineDays: 5, phase: 6,
+  },
+  'P6.5': {
+    code: 'P6.5', name: 'BGĐ phê duyệt đóng dự án', nameEn: 'Board Project Closure Approval',
+    role: 'R01', gate: ['P6.1', 'P6.2', 'P6.3', 'P6.4'], next: [], deadlineDays: 3, phase: 6,
   },
 }
 

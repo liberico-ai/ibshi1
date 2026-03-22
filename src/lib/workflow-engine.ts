@@ -2,6 +2,7 @@ import prisma from './db'
 import { TASK_STATUS } from './constants'
 import { WORKFLOW_RULES } from './workflow-constants'
 import { syncBOMtoBudget, syncPOtoBudget, syncGRNtoBudget, logChangeEvent, runReverseHooks } from './sync-engine'
+import { runValidationRules } from './validation-rules'
 
 // Re-export client-safe items for backward compatibility
 export { WORKFLOW_RULES, PHASE_LABELS, getWorkflowProgress } from './workflow-constants'
@@ -39,6 +40,17 @@ export async function completeTask(
   if (!task) throw new Error('Task not found')
   if (task.status === TASK_STATUS.DONE) throw new Error('Task already completed')
 
+  // Run TC validation rules before marking as done
+  const validation = await runValidationRules(task.stepCode, resultData, task.projectId)
+  if (!validation.valid) {
+    throw new Error(`Validation failed: ${validation.errors.join('; ')}`)
+  }
+  // Append warnings to notes (non-blocking)
+  let finalNotes = notes || ''
+  if (validation.warnings.length > 0) {
+    finalNotes = finalNotes + (finalNotes ? '\n' : '') + validation.warnings.map(w => `⚠️ ${w}`).join('\n')
+  }
+
   // Mark as done
   await prisma.workflowTask.update({
     where: { id: taskId },
@@ -47,7 +59,7 @@ export async function completeTask(
       completedAt: new Date(),
       completedBy: userId,
       resultData: resultData ? JSON.parse(JSON.stringify(resultData)) : undefined,
-      notes,
+      notes: finalNotes || undefined,
     },
   })
 

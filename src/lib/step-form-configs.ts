@@ -543,12 +543,23 @@ const P5_1: StepFormConfig = {
   description: 'R06b cập nhật trạng thái job card: bắt đầu, hoàn thành từng công đoạn, vấn đề phát sinh. Scan QR xem bản vẽ mới nhất.',
   fields: [
     { key: 'jobCardStatus', label: 'Trạng thái job card', labelEn: 'Job Card Status', type: 'select', options: [{ value: 'in_progress', label: 'Đang thực hiện' }, { value: 'done', label: 'Hoàn thành' }, { value: 'paused', label: 'Tạm dừng' }, { value: 'issue', label: 'Vấn đề phát sinh' }], required: true },
+    { key: 'fabricationProgress', label: 'Tiến độ sản xuất (%)', labelEn: 'Fabrication Progress %', type: 'number', min: 0, max: 100 },
     { key: 'completedTasks', label: 'Công đoạn đã hoàn thành', labelEn: 'Completed Tasks', type: 'textarea', fullWidth: true },
     { key: 'issues', label: 'Vấn đề phát sinh', labelEn: 'Issues', type: 'textarea', fullWidth: true },
   ],
   checklist: [
     { key: 'job_card_updated', label: 'Đã cập nhật job card', required: true },
     { key: 'vt_confirmed', label: 'Đã xác nhận VT đã dùng' },
+    // 9 fabrication sub-steps (BRD P4.3-P4.11)
+    { key: 'fab_CUT', label: '🔹 CUT — Pha cắt hoàn thành' },
+    { key: 'fab_FIT', label: '🔹 FIT — Gá lắp hoàn thành' },
+    { key: 'fab_WLD', label: '🔹 WLD — Hàn hoàn thành' },
+    { key: 'fab_MCH', label: '🔹 MCH — Gia công cơ khí hoàn thành' },
+    { key: 'fab_TRF', label: '🔹 TRF — Xử lý bề mặt hoàn thành' },
+    { key: 'fab_FAT', label: '⭐ FAT — Factory Acceptance Test hoàn thành' },
+    { key: 'fab_BLS', label: '🔹 BLS — Bắn bi / Làm sạch hoàn thành' },
+    { key: 'fab_FPC', label: '🔹 FPC — Sơn phủ hoàn thành' },
+    { key: 'fab_PCK', label: '🔹 PCK — Đóng kiện (Ready to Ship) hoàn thành' },
   ],
   attachments: [],
 }
@@ -630,28 +641,125 @@ const P5_5: StepFormConfig = {
   ],
 }
 
-// ── Phase 6: Đóng Dự án (BRD#32) ──
+// ── Phase 6: Đóng Dự án (BRD P6.1-P6.5) ──
 
 const P6_1: StepFormConfig = {
   stepCode: 'P6.1',
   formType: 'input',
-  title: 'KTKH tổ chức Lesson Learn và đóng dự án',
-  description: 'Điều kiện đóng: 100% KL + MRB phát hành + Thanh toán cuối. Lesson Learn gồm: task quá deadline, rework, variance chi phí.',
+  title: 'QC tổng hợp hồ sơ chất lượng (Dossier)',
+  description: 'QC tổng hợp toàn bộ hồ sơ chất lượng: ITP, biên bản inspection, NDT report, mill certificates, NCR/MRB closure, welding log.',
+  fields: [
+    { key: 'itpStatus', label: 'ITP trạng thái', labelEn: 'ITP Status', type: 'select', required: true, options: [
+      { value: 'all_passed', label: 'Tất cả checkpoint đã PASS' },
+      { value: 'partial', label: 'Một số conditional/waived' },
+    ]},
+    { key: 'ncrSummary', label: 'Tổng hợp NCR', labelEn: 'NCR Summary', type: 'textarea', fullWidth: true },
+    { key: 'totalInspections', label: 'Tổng số biên bản nghiệm thu', labelEn: 'Total Inspections', type: 'number' },
+    { key: 'qcNotes', label: 'Ghi chú QC', labelEn: 'QC Notes', type: 'textarea', fullWidth: true },
+  ],
+  checklist: [
+    { key: 'itp_complete', label: 'ITP đã hoàn thành tất cả checkpoint', required: true },
+    { key: 'ncr_closed', label: 'Tất cả NCR đã đóng', required: true },
+    { key: 'mill_certs_filed', label: 'Mill certificates đã lưu đầy đủ' },
+    { key: 'welding_log_complete', label: 'Welding log đầy đủ' },
+    { key: 'ndt_reports_filed', label: 'NDT reports đã lưu' },
+    { key: 'pressure_test_passed', label: 'Pressure test đã pass (nếu có)' },
+  ],
+  attachments: [
+    { key: 'qcDossier', label: 'File QC Dossier tổng hợp', accept: '.pdf,.zip', required: true },
+  ],
+}
+
+const P6_2: StepFormConfig = {
+  stepCode: 'P6.2',
+  formType: 'input',
+  title: 'Quyết toán chi phí trực tiếp',
+  description: 'Kế toán quyết toán chi phí trực tiếp: vật tư thực tế, nhân công, dịch vụ thuê ngoài. So sánh với dự toán ban đầu.',
+  fields: [
+    { key: 'actualMaterialCost', label: 'Chi phí vật tư thực tế', labelEn: 'Actual Material Cost', type: 'currency', required: true },
+    { key: 'actualLaborCost', label: 'Chi phí nhân công thực tế', labelEn: 'Actual Labor Cost', type: 'currency', required: true },
+    { key: 'actualOutsourceCost', label: 'Chi phí thuê ngoài thực tế', labelEn: 'Actual Outsource Cost', type: 'currency', required: true },
+    { key: 'actualOverhead', label: 'Chi phí chung thực tế', labelEn: 'Actual Overhead', type: 'currency', required: true },
+    { key: 'totalActualCost', label: 'TỔNG CHI PHÍ THỰC TẾ', labelEn: 'Total Actual Cost', type: 'readonly', fullWidth: true },
+    { key: 'costVariance', label: 'Chênh lệch so với dự toán (%)', labelEn: 'Cost Variance %', type: 'number' },
+    { key: 'settlementNotes', label: 'Ghi chú quyết toán', labelEn: 'Settlement Notes', type: 'textarea', fullWidth: true },
+  ],
+  checklist: [
+    { key: 'all_po_settled', label: 'Tất cả PO đã thanh toán xong', required: true },
+    { key: 'payroll_final', label: 'Lương khoán đã quyết toán tháng cuối', required: true },
+    { key: 'subcon_settled', label: 'Thầu phụ đã quyết toán' },
+  ],
+  attachments: [
+    { key: 'costReport', label: 'Báo cáo quyết toán chi phí (Excel)', accept: '.xlsx,.xls' },
+  ],
+}
+
+const P6_3: StepFormConfig = {
+  stepCode: 'P6.3',
+  formType: 'input',
+  title: 'Quyết toán tổng hợp (P&L)',
+  description: 'KTKH tổng hợp báo cáo lãi/lỗ dự án: doanh thu, chi phí, biên lợi nhuận. So sánh với KPI ban đầu.',
+  fields: [
+    { key: 'totalRevenue', label: 'Tổng doanh thu', labelEn: 'Total Revenue', type: 'currency', required: true },
+    { key: 'totalCost', label: 'Tổng chi phí', labelEn: 'Total Cost', type: 'currency', required: true },
+    { key: 'grossProfit', label: 'Lợi nhuận gộp', labelEn: 'Gross Profit', type: 'readonly' },
+    { key: 'profitMargin', label: 'Biên lợi nhuận (%)', labelEn: 'Profit Margin %', type: 'number' },
+    { key: 'kpiComparison', label: 'So sánh KPI (dự kiến vs thực tế)', labelEn: 'KPI Comparison', type: 'textarea', fullWidth: true },
+    { key: 'plNotes', label: 'Ghi chú P&L', labelEn: 'P&L Notes', type: 'textarea', fullWidth: true },
+  ],
+  checklist: [
+    { key: 'revenue_confirmed', label: 'Doanh thu đã đối chiếu với HĐ', required: true },
+    { key: 'cost_p62_matched', label: 'Chi phí khớp với P6.2', required: true },
+    { key: 'variance_analyzed', label: 'Đã phân tích chênh lệch' },
+  ],
+  attachments: [
+    { key: 'plReport', label: 'Báo cáo P&L tổng hợp', accept: '.xlsx,.xls,.pdf' },
+  ],
+}
+
+const P6_4: StepFormConfig = {
+  stepCode: 'P6.4',
+  formType: 'input',
+  title: 'Tổ chức Lesson Learned',
+  description: 'PM tổ chức meeting rút kinh nghiệm: task trễ deadline, công đoạn rework nhiều, variance chi phí, cải tiến cho dự án sau.',
   fields: [
     { key: 'overdueTaskSummary', label: 'Tổng hợp task quá deadline', labelEn: 'Overdue Tasks Summary', type: 'textarea', fullWidth: true },
     { key: 'reworkSummary', label: 'Công đoạn rework nhiều nhất', labelEn: 'Rework Summary', type: 'textarea', fullWidth: true },
-    { key: 'costVariance', label: 'Variance chi phí từng khoản mục', labelEn: 'Cost Variance', type: 'textarea', fullWidth: true },
+    { key: 'costVarianceLL', label: 'Variance chi phí từng khoản mục', labelEn: 'Cost Variance by Category', type: 'textarea', fullWidth: true },
+    { key: 'improvementActions', label: 'Hành động cải tiến cho DA sau', labelEn: 'Improvement Actions', type: 'textarea', fullWidth: true, required: true },
     { key: 'lessonsLearned', label: 'Bài học kinh nghiệm', labelEn: 'Lessons Learned', type: 'textarea', fullWidth: true, required: true },
   ],
   checklist: [
-    { key: 'kl_100', label: '100% KL hoàn thành', required: true },
-    { key: 'mrb_published', label: 'MRB đã phát hành' },
-    { key: 'final_payment', label: 'Thanh toán cuối từ client' },
-    { key: 'lesson_learn_done', label: 'Đã tổ chức Lesson Learn', required: true },
+    { key: 'meeting_held', label: 'Đã tổ chức meeting Lesson Learned', required: true },
+    { key: 'all_depts_attended', label: 'Các phòng ban đã tham gia' },
+    { key: 'actions_assigned', label: 'Đã giao hành động cải tiến' },
   ],
   attachments: [
-    { key: 'lessonLearnFile', label: 'File Lesson Learn', accept: '.pdf,.docx,.xlsx' },
+    { key: 'lessonLearnFile', label: 'File Lesson Learned', accept: '.pdf,.docx,.xlsx,.pptx' },
+    { key: 'meetingMinutes', label: 'Biên bản họp', accept: '.pdf,.docx' },
   ],
+}
+
+const P6_5: StepFormConfig = {
+  stepCode: 'P6.5',
+  formType: 'approval',
+  title: 'BGĐ phê duyệt đóng dự án',
+  description: 'Ban Giám đốc xem xét toàn bộ hồ sơ đóng DA: QC Dossier, Quyết toán, P&L, Lesson Learned. Phê duyệt → Dự án FINISHED.',
+  fields: [
+    { key: 'qcDossierStatus', label: 'QC Dossier (P6.1)', labelEn: 'QC Dossier Status', type: 'readonly' },
+    { key: 'costSettlement', label: 'Quyết toán chi phí (P6.2)', labelEn: 'Cost Settlement', type: 'readonly' },
+    { key: 'plSummary', label: 'P&L tổng hợp (P6.3)', labelEn: 'P&L Summary', type: 'readonly' },
+    { key: 'lessonLearnStatus', label: 'Lesson Learned (P6.4)', labelEn: 'Lesson Learned', type: 'readonly' },
+    { key: 'finalApprovalNotes', label: 'Ghi chú phê duyệt', labelEn: 'Approval Notes', type: 'textarea', fullWidth: true },
+  ],
+  checklist: [
+    { key: 'p61_reviewed', label: 'Đã xem xét QC Dossier', required: true },
+    { key: 'p62_reviewed', label: 'Đã xem xét quyết toán chi phí', required: true },
+    { key: 'p63_reviewed', label: 'Đã xem xét P&L', required: true },
+    { key: 'p64_reviewed', label: 'Đã xem xét Lesson Learned', required: true },
+    { key: 'closure_approved', label: 'Phê duyệt đóng dự án', required: true },
+  ],
+  attachments: [],
 }
 
 // ── Registry ──
@@ -663,7 +771,7 @@ export const STEP_FORM_CONFIGS: Record<string, StepFormConfig> = {
   'P3.5': P3_5, 'P3.6': P3_6, 'P3.7': P3_7,
   'P4.1': P4_1, 'P4.2': P4_2, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,
   'P5.1': P5_1, 'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
-  'P6.1': P6_1,
+  'P6.1': P6_1, 'P6.2': P6_2, 'P6.3': P6_3, 'P6.4': P6_4, 'P6.5': P6_5,
 }
 
 export function getStepFormConfig(stepCode: string): StepFormConfig | undefined {
