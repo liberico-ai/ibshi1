@@ -48,11 +48,26 @@ export default function TaskDetailPage() {
   const [bomItems, setBomItems] = useState<{ name: string; code: string; spec: string; quantity: string; unit: string }[]>([{ ...emptyBomItem }, { ...emptyBomItem }, { ...emptyBomItem }])
   const emptyWoItem = { costCode: '', content: '', jobCode: '', typeCode: '', unit: '', qty1: '', qty2: '', totalQty: '', startDate: '', endDate: '' }
   const [woItems, setWoItems] = useState<{ costCode: string; content: string; jobCode: string; typeCode: string; unit: string; qty1: string; qty2: string; totalQty: string; startDate: string; endDate: string }[]>([{ ...emptyWoItem }])
+  // P3.5 supplier entries
+  type SupplierQuote = { material: string; price: string }
+  type SupplierEntry = { name: string; quotes: SupplierQuote[] }
+  const emptyQuote: SupplierQuote = { material: '', price: '' }
+  const emptySupplier: SupplierEntry = { name: '', quotes: [{ ...emptyQuote }] }
+  const [suppliers, setSuppliers] = useState<SupplierEntry[]>([{ ...emptySupplier, quotes: [{ ...emptyQuote }] }, { ...emptySupplier, quotes: [{ ...emptyQuote }] }, { ...emptySupplier, quotes: [{ ...emptyQuote }] }])
+  // P3.7 payment & delivery state
+  const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full')
+  const [paymentMilestones, setPaymentMilestones] = useState<{ label: string; percent: string; date: string }[]>([{ label: 'Đợt 1', percent: '', date: '' }])
+  const [deliveryType, setDeliveryType] = useState<'full' | 'batch'>('full')
+  const [deliveryBatches, setDeliveryBatches] = useState<{ material: string; qty: string; date: string }[]>([{ material: '', qty: '', date: '' }])
   const [userList, setUserList] = useState<{ id: string; fullName: string; roleCode: string }[]>([])
   const [inventoryMaterials, setInventoryMaterials] = useState<{ id: string; materialCode: string; name: string; unit: string; category: string; specification: string | null; currentStock: number }[]>([])
   const [inventoryLoading, setInventoryLoading] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any } | null>(null)
+  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any } | null>(null)
+  // P4.1 payment confirmations per milestone
+  const [paymentConfirmations, setPaymentConfirmations] = useState<{ confirmed: boolean; method: string }[]>([])
+  // P4.4 warehouse items per material
+  const [warehouseItems, setWarehouseItems] = useState<{ material: string; ncc: string; price: string; receivedQty: string; storageLocation: string }[]>([])
   const [planDecision, setPlanDecision] = useState<'pending' | 'approved' | 'rejected'>('pending')
   const [estimateDecision, setEstimateDecision] = useState<'pending' | 'approved' | 'rejected'>('pending')
   const [planRejectReason, setPlanRejectReason] = useState('')
@@ -97,6 +112,19 @@ export default function TaskDetailPage() {
         if (rd.woItems && Array.isArray(rd.woItems)) {
           setWoItems(rd.woItems as typeof woItems)
         }
+        // Restore suppliers for P3.5
+        if (rd.suppliers && Array.isArray(rd.suppliers)) {
+          setSuppliers(rd.suppliers as SupplierEntry[])
+        }
+        // Restore P3.7 payment & delivery
+        if (rd.paymentType) setPaymentType(rd.paymentType as 'full' | 'partial')
+        if (rd.paymentMilestones && Array.isArray(rd.paymentMilestones)) setPaymentMilestones(rd.paymentMilestones as typeof paymentMilestones)
+        if (rd.deliveryType) setDeliveryType(rd.deliveryType as 'full' | 'batch')
+        if (rd.deliveryBatches && Array.isArray(rd.deliveryBatches)) setDeliveryBatches(rd.deliveryBatches as typeof deliveryBatches)
+        // Restore P4.1 payment confirmations
+        if (rd.paymentConfirmations && Array.isArray(rd.paymentConfirmations)) setPaymentConfirmations(rd.paymentConfirmations as typeof paymentConfirmations)
+        // Restore P4.4 warehouse items
+        if (rd.warehouseItems && Array.isArray(rd.warehouseItems)) setWarehouseItems(rd.warehouseItems as typeof warehouseItems)
         // Restore milestones for P1.2A reopened tasks
         if (rd.milestones && Array.isArray(rd.milestones)) {
           setMilestones(rd.milestones as { name: string; startDate: string; endDate: string; assigneeId: string }[])
@@ -309,6 +337,13 @@ export default function TaskDetailPage() {
           ...(milestones.length > 0 ? { milestones } : {}),
           ...(bomItems.filter(b => b.name.trim()).length > 0 ? { bomItems: bomItems.filter(b => b.name.trim()) } : {}),
           ...(woItems.filter(w => w.content.trim()).length > 0 ? { woItems: woItems.filter(w => w.content.trim()) } : {}),
+          ...(suppliers.filter(s => s.name.trim()).length > 0 ? { suppliers: suppliers.filter(s => s.name.trim()) } : {}),
+          paymentType,
+          ...(paymentType === 'partial' ? { paymentMilestones } : {}),
+          deliveryType,
+          ...(deliveryType === 'batch' ? { deliveryBatches: deliveryBatches.filter(d => d.material.trim()) } : {}),
+          ...(paymentConfirmations.length > 0 ? { paymentConfirmations } : {}),
+          ...(warehouseItems.length > 0 ? { warehouseItems } : {}),
         },
         notes: submitNotes || `Completed: ${task.stepName}`,
       }),
@@ -371,15 +406,24 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      {/* Rejection reason banner for P1.1 reopened */}
-      {rejectionInfo && (
+      {/* Rejection reason banner — generic for any step rejection */}
+      {rejectionInfo && (() => {
+        const fromStep = (rejectionInfo as { fromStep?: string }).fromStep
+        const isQC = fromStep === 'P4.3' || fromStep === 'P5.3'
+        const title = fromStep === 'P5.3' ? 'QC đã từ chối nghiệm thu sản phẩm SX'
+          : fromStep === 'P4.3' ? 'QC đã từ chối nghiệm thu nhập kho'
+          : 'BGĐ đã từ chối phê duyệt dự án này'
+        const hint = isQC
+          ? '📝 Vui lòng kiểm tra lại và hoàn thành lại bước này.'
+          : '📝 Vui lòng chỉnh sửa thông tin dự án theo yêu cầu và hoàn thành lại bước này.'
+        return (
         <div style={{
           background: '#fef2f2', border: '2px solid #fecaca', borderRadius: 10, padding: '1.25rem',
           marginBottom: '1rem', color: '#991b1b',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-            <strong style={{ fontSize: '1rem' }}>BGĐ đã từ chối phê duyệt dự án này</strong>
+            <strong style={{ fontSize: '1rem' }}>{title}</strong>
           </div>
           <div style={{ fontSize: '0.9rem', marginBottom: 6 }}>
             <strong>Lý do:</strong> {rejectionInfo.reason}
@@ -389,10 +433,11 @@ export default function TaskDetailPage() {
             {rejectionInfo.rejectedAt && ` — ${new Date(rejectionInfo.rejectedAt).toLocaleString('vi-VN')}`}
           </div>
           <div style={{ marginTop: 10, fontSize: '0.85rem', color: '#dc2626', fontWeight: 500 }}>
-            📝 Vui lòng chỉnh sửa thông tin dự án theo yêu cầu và hoàn thành lại bước này.
+            {hint}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {error && (
         <div style={{ background: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: 8, padding: '1rem', marginBottom: '1rem', color: '#721c24' }}>
@@ -781,6 +826,726 @@ export default function TaskDetailPage() {
               </>
             )}
 
+            {/* P3.2: Stock Check — auto compare PR items vs inventory */}
+            {task.stepCode === 'P3.2' && previousStepData && (
+              <>
+                {/* Summary bar */}
+                <div className="card" style={{ padding: '1rem 1.5rem', marginTop: '1rem', display: 'flex', gap: 24, alignItems: 'center', background: 'linear-gradient(135deg, #f0fdf4, #ecfdf5)' }}>
+                  <div style={{ fontSize: '0.85rem' }}>
+                    📊 Tổng PR: <strong>{(previousStepData.prItems as unknown[])?.length || 0}</strong> mục
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#16a34a' }}>
+                    ✅ Xuất kho: <strong>{(previousStepData.fromStock as unknown[])?.length || 0}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#dc2626' }}>
+                    🛒 Cần mua: <strong>{(previousStepData.toPurchase as unknown[])?.length || 0}</strong>
+                  </div>
+                </div>
+
+                {/* From Stock — items that can be issued from warehouse */}
+                <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #16a34a' }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#16a34a' }}>✅ Xuất từ kho (Tồn đủ + Quy chuẩn OK)</h3>
+                  {(previousStepData.fromStock as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; matchedMaterial: { code: string; name: string; spec: string | null; stock: number } | null }[])?.length > 0 ? (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.6fr 0.6fr 0.5fr', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 2 }}>
+                        {['#', 'Tên VT', 'Mã VT', 'Quy chuẩn', 'Yêu cầu', 'Tồn kho', 'ĐVT', 'Nguồn'].map(h => (
+                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                        ))}
+                      </div>
+                      {(previousStepData.fromStock as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number }[]).map((item, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.6fr 0.6fr 0.5fr', gap: 4, padding: '4px 2px', background: idx % 2 === 0 ? '#f0fdf4' : 'transparent', borderRadius: 4, fontSize: '0.8rem' }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>{idx + 1}</span>
+                          <span style={{ fontWeight: 600 }}>{item.name}</span>
+                          <span style={{ color: 'var(--accent)' }}>{item.code}</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>{item.spec || '—'}</span>
+                          <span style={{ fontWeight: 700 }}>{item.requestedQty}</span>
+                          <span style={{ color: '#16a34a', fontWeight: 700 }}>{item.inStock}</span>
+                          <span>{item.unit}</span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.source}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border)', borderRadius: 8 }}>
+                      Không có mục nào đủ điều kiện xuất kho
+                    </div>
+                  )}
+                </div>
+
+                {/* To Purchase — items that need to be bought */}
+                <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #dc2626' }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#dc2626' }}>🛒 Cần mua (Không đủ tồn / Quy chuẩn không đạt)</h3>
+                  {(previousStepData.toPurchase as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; shortfall: number; specMatch: boolean; matchedMaterial: { code: string; name: string; spec: string | null } | null }[])?.length > 0 ? (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.5fr 0.5fr 0.5fr 0.5fr 0.5fr', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 2 }}>
+                        {['#', 'Tên VT', 'Mã VT', 'Quy chuẩn', 'Yêu cầu', 'Tồn kho', 'Thiếu', 'Spec', 'Nguồn'].map(h => (
+                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                        ))}
+                      </div>
+                      {(previousStepData.toPurchase as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; shortfall: number; specMatch: boolean; matchedMaterial: { code: string; name: string; spec: string | null } | null }[]).map((item, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.5fr 0.5fr 0.5fr 0.5fr 0.5fr', gap: 4, padding: '4px 2px', background: idx % 2 === 0 ? '#fef2f2' : 'transparent', borderRadius: 4, fontSize: '0.8rem' }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>{idx + 1}</span>
+                          <span style={{ fontWeight: 600 }}>{item.name}</span>
+                          <span style={{ color: 'var(--accent)' }}>{item.code}</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>{item.spec || '—'}</span>
+                          <span style={{ fontWeight: 700 }}>{item.requestedQty}</span>
+                          <span style={{ color: item.inStock > 0 ? '#f59e0b' : '#dc2626', fontWeight: 700 }}>{item.inStock}</span>
+                          <span style={{ color: '#dc2626', fontWeight: 700 }}>{item.shortfall > 0 ? `−${item.shortfall}` : '—'}</span>
+                          <span style={{ fontSize: '0.7rem' }}>{item.matchedMaterial ? (item.specMatch ? '✅' : '❌ Sai') : '⚠️ N/A'}</span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.source}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', border: '2px dashed #bbf7d0', borderRadius: 8, fontWeight: 600 }}>
+                      🎉 Tất cả vật tư đều sẵn có trong kho!
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* P3.5: Supplier Entries + Auto Price Comparison */}
+            {task.stepCode === 'P3.5' && (
+              <>
+                {/* Supplier Cards */}
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid #8b5cf6', paddingBottom: 8, flex: 1 }}>
+                      🏭 Nhà cung cấp đề xuất <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 NCC)</span>
+                    </h3>
+                    {isActive && (
+                      <button type="button" onClick={() => setSuppliers(prev => [...prev, { name: '', quotes: [{ material: '', price: '' }] }])}
+                        style={{ background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+                        ➕ Thêm NCC
+                      </button>
+                    )}
+                  </div>
+                  {suppliers.length < 3 && (
+                    <div style={{ padding: '6px 12px', background: '#fef2f2', borderRadius: 8, fontSize: '0.8rem', color: '#dc2626', marginBottom: 12 }}>
+                      ⚠️ Cần tối thiểu 3 NCC. Hiện có: {suppliers.length}
+                    </div>
+                  )}
+                  {suppliers.map((supplier, sIdx) => (
+                    <div key={sIdx} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '1rem', marginBottom: 12, borderLeft: `4px solid hsl(${sIdx * 60 + 200}, 60%, 50%)` }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)`, minWidth: 60 }}>NCC {sIdx + 1}</span>
+                        <input className="input" placeholder="Tên nhà cung cấp *" value={supplier.name} disabled={!isActive}
+                          onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, name: e.target.value } : s))}
+                          style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }} />
+                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', whiteSpace: 'nowrap' }}>
+                          📎 Năng lực NCC
+                          <input type="file" accept=".pdf,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={!isActive} />
+                        </label>
+                        {isActive && suppliers.length > 3 && (
+                          <button type="button" onClick={() => setSuppliers(prev => prev.filter((_, i) => i !== sIdx))}
+                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 700 }} title="Xóa NCC">×</button>
+                        )}
+                      </div>
+                      {/* Quote items per supplier */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr 30px', gap: 4, padding: '2px 0', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+                        {['#', 'Vật tư', 'Giá (VND)', ''].map(h => (
+                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                        ))}
+                      </div>
+                      {supplier.quotes.map((q, qIdx) => (
+                        <div key={qIdx} style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr 30px', gap: 4, padding: '3px 0', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{qIdx + 1}</span>
+                          <input className="input" placeholder="Tên vật tư" value={q.material} disabled={!isActive}
+                            onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.map((qq, j) => j === qIdx ? { ...qq, material: e.target.value } : qq) } : s))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                          <input className="input" type="number" placeholder="0" value={q.price} disabled={!isActive}
+                            onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.map((qq, j) => j === qIdx ? { ...qq, price: e.target.value } : qq) } : s))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px', textAlign: 'right' }} />
+                          {isActive && (
+                            <button type="button" onClick={() => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.filter((_, j) => j !== qIdx) } : s))}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700, padding: 0 }} title="Xóa dòng">−</button>
+                          )}
+                        </div>
+                      ))}
+                      {isActive && (
+                        <button type="button" onClick={() => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: [...s.quotes, { material: '', price: '' }] } : s))}
+                          style={{ marginTop: 4, fontSize: '0.75rem', color: '#8b5cf6', background: 'none', border: '1px dashed #8b5cf6', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                          + Thêm vật tư
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Auto Price Comparison Table */}
+                {(() => {
+                  const namedSuppliers = suppliers.filter(s => s.name.trim())
+                  const allMaterials = [...new Set(namedSuppliers.flatMap(s => s.quotes.filter(q => q.material.trim()).map(q => q.material.trim().toLowerCase())))]
+                  if (namedSuppliers.length < 2 || allMaterials.length === 0) return null
+                  return (
+                    <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
+                      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>📊 So sánh báo giá NCC</h3>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 700 }}>Vật tư</th>
+                              {namedSuppliers.map((s, i) => (
+                                <th key={i} style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 700, color: `hsl(${i * 60 + 200}, 60%, 40%)` }}>{s.name}</th>
+                              ))}
+                              <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 700 }}>Kết quả</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allMaterials.map((mat, mIdx) => {
+                              const prices = namedSuppliers.map(s => {
+                                const q = s.quotes.find(q => q.material.trim().toLowerCase() === mat)
+                                return q ? Number(q.price) || 0 : 0
+                              })
+                              const validPrices = prices.filter(p => p > 0)
+                              const minP = validPrices.length > 0 ? Math.min(...validPrices) : 0
+                              const maxP = validPrices.length > 0 ? Math.max(...validPrices) : 0
+                              const cheapestIdx = prices.indexOf(minP)
+                              return (
+                                <tr key={mIdx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{mat}</td>
+                                  {prices.map((p, pIdx) => (
+                                    <td key={pIdx} style={{
+                                      textAlign: 'right', padding: '6px 8px',
+                                      fontWeight: 700,
+                                      color: p === 0 ? 'var(--text-muted)' : p === minP ? '#16a34a' : p === maxP ? '#dc2626' : 'var(--text-primary)',
+                                      background: p === minP && p > 0 ? '#f0fdf4' : p === maxP && p > 0 ? '#fef2f2' : 'transparent',
+                                    }}>
+                                      {p > 0 ? p.toLocaleString('vi-VN') : '—'}
+                                      {p === minP && p > 0 && ' ✅'}
+                                      {p === maxP && p > 0 && validPrices.length > 1 && ' ⬆️'}
+                                    </td>
+                                  ))}
+                                  <td style={{ textAlign: 'center', padding: '6px 8px', fontSize: '0.75rem' }}>
+                                    {validPrices.length > 1 ? (
+                                      <span style={{ color: '#16a34a', fontWeight: 700 }}>🏆 {namedSuppliers[cheapestIdx]?.name}</span>
+                                    ) : validPrices.length === 1 ? '1 giá' : '—'}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        ✅ = Giá thấp nhất &nbsp; ⬆️ = Giá cao nhất &nbsp; 🏆 = NCC đề xuất
+                      </div>
+                    </div>
+                  )
+                })()}
+              </>
+            )}
+
+            {/* P3.6: BGĐ review supplier data from P3.5 */}
+            {task.stepCode === 'P3.6' && previousStepData?.supplierData && (() => {
+              const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[]; [key: string]: unknown }
+              const supplierList = sd?.suppliers || []
+              if (supplierList.length === 0) return null
+              // Build comparison
+              const namedS = supplierList.filter(s => s.name?.trim())
+              const allMats = [...new Set(namedS.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim().toLowerCase())))]
+              return (
+                <>
+                  {/* Supplier list read-only */}
+                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
+                    <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#8b5cf6' }}>🏭 Danh sách NCC đề xuất từ Thương mại ({namedS.length} NCC)</h3>
+                    {namedS.map((s, sIdx) => (
+                      <div key={sIdx} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '0.75rem', marginBottom: 8, borderLeft: `3px solid hsl(${sIdx * 60 + 200}, 60%, 50%)` }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 6, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)` }}>NCC {sIdx + 1}: {s.name}</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr', gap: 4, padding: '2px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+                          {['#', 'Vật tư', 'Giá (VND)'].map(h => (
+                            <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                          ))}
+                        </div>
+                        {(s.quotes || []).filter(q => q.material?.trim()).map((q, qIdx) => (
+                          <div key={qIdx} style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr', gap: 4, padding: '2px', fontSize: '0.8rem' }}>
+                            <span style={{ color: 'var(--text-secondary)' }}>{qIdx + 1}</span>
+                            <span>{q.material}</span>
+                            <span style={{ textAlign: 'right', fontWeight: 600 }}>{Number(q.price).toLocaleString('vi-VN')} ₫</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Auto comparison table */}
+                  {namedS.length >= 2 && allMats.length > 0 && (
+                    <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
+                      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>📊 So sánh báo giá NCC</h3>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 700 }}>Vật tư</th>
+                              {namedS.map((s, i) => (
+                                <th key={i} style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 700, color: `hsl(${i * 60 + 200}, 60%, 40%)` }}>{s.name}</th>
+                              ))}
+                              <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 700 }}>Kết quả</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allMats.map((mat, mIdx) => {
+                              const prices = namedS.map(s => {
+                                const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat)
+                                return q ? Number(q.price) || 0 : 0
+                              })
+                              const validP = prices.filter(p => p > 0)
+                              const minP = validP.length > 0 ? Math.min(...validP) : 0
+                              const maxP = validP.length > 0 ? Math.max(...validP) : 0
+                              const cheapIdx = prices.indexOf(minP)
+                              return (
+                                <tr key={mIdx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{mat}</td>
+                                  {prices.map((p, pIdx) => (
+                                    <td key={pIdx} style={{
+                                      textAlign: 'right', padding: '6px 8px', fontWeight: 700,
+                                      color: p === 0 ? 'var(--text-muted)' : p === minP ? '#16a34a' : p === maxP ? '#dc2626' : 'var(--text-primary)',
+                                      background: p === minP && p > 0 ? '#f0fdf4' : p === maxP && p > 0 ? '#fef2f2' : 'transparent',
+                                    }}>
+                                      {p > 0 ? `${p.toLocaleString('vi-VN')} ₫` : '—'}
+                                      {p === minP && p > 0 && ' ✅'}
+                                      {p === maxP && p > 0 && validP.length > 1 && ' ⬆️'}
+                                    </td>
+                                  ))}
+                                  <td style={{ textAlign: 'center', padding: '6px 8px', fontSize: '0.75rem' }}>
+                                    {validP.length > 1 ? (
+                                      <span style={{ color: '#16a34a', fontWeight: 700 }}>🏆 {namedS[cheapIdx]?.name}</span>
+                                    ) : validP.length === 1 ? '1 giá' : '—'}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        ✅ = Giá thấp nhất &nbsp; ⬆️ = Giá cao nhất &nbsp; 🏆 = NCC được đề xuất
+                      </div>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+
+            {/* P3.7: PO Finalization — Payment Terms + Delivery Plan */}
+            {task.stepCode === 'P3.7' && (
+              <>
+                {/* PO List from approved NCC */}
+                {previousStepData?.supplierData && (() => {
+                  const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] }
+                  const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
+                  if (nccList.length === 0) return null
+                  return (
+                    <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
+                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>📋 Danh sách PO đã chốt</h3>
+                      {nccList.map((s, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: i < nccList.length - 1 ? '1px solid var(--border)' : 'none', fontSize: '0.85rem' }}>
+                          <span style={{ fontWeight: 700, color: `hsl(${i * 60 + 200}, 60%, 40%)`, minWidth: 100 }}>{s.name}</span>
+                          <div style={{ flex: 1 }}>
+                            {(s.quotes || []).filter(q => q.material?.trim()).map((q, j) => (
+                              <span key={j} style={{ marginRight: 16, fontSize: '0.8rem' }}>
+                                {q.material}: <strong>{Number(q.price).toLocaleString('vi-VN')} ₫</strong>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+
+                {/* Payment Terms Dropdown */}
+                <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #f59e0b' }}>
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#f59e0b' }}>💰 Điều kiện thanh toán</h3>
+                  <select className="input" value={paymentType} disabled={!isActive}
+                    onChange={e => setPaymentType(e.target.value as 'full' | 'partial')}
+                    style={{ fontSize: '0.9rem', fontWeight: 600, padding: '8px 12px', width: '100%', maxWidth: 350, cursor: 'pointer' }}>
+                    <option value="full">💵 Thanh toán hết (100%)</option>
+                    <option value="partial">📊 Thanh toán 1 phần (theo đợt)</option>
+                  </select>
+
+                  {paymentType === 'partial' && (
+                    <div style={{ marginTop: 12, padding: '12px', borderRadius: 8, border: '1px dashed #f59e0b', background: '#fffbeb' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Mốc thanh toán</span>
+                        {isActive && (
+                          <button type="button" onClick={() => setPaymentMilestones(prev => [...prev, { label: `Đợt ${prev.length + 1}`, percent: '', date: '' }])}
+                            style={{ fontSize: '0.75rem', color: '#f59e0b', background: 'none', border: '1px dashed #f59e0b', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                            + Thêm đợt
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 0.5fr 1fr 30px', gap: 6, padding: '2px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+                        {['Đợt', '% thanh toán', 'Ngày dự kiến', ''].map(h => (
+                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                        ))}
+                      </div>
+                      {paymentMilestones.map((pm, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '0.8fr 0.5fr 1fr 30px', gap: 6, padding: '3px 0', alignItems: 'center' }}>
+                          <input className="input" value={pm.label} disabled={!isActive}
+                            onChange={e => setPaymentMilestones(prev => prev.map((p, i) => i === idx ? { ...p, label: e.target.value } : p))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                          <input className="input" type="number" placeholder="%" value={pm.percent} disabled={!isActive}
+                            onChange={e => setPaymentMilestones(prev => prev.map((p, i) => i === idx ? { ...p, percent: e.target.value } : p))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px', textAlign: 'right' }} />
+                          <input className="input" type="date" value={pm.date} disabled={!isActive}
+                            onChange={e => setPaymentMilestones(prev => prev.map((p, i) => i === idx ? { ...p, date: e.target.value } : p))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                          {isActive && paymentMilestones.length > 1 && (
+                            <button type="button" onClick={() => setPaymentMilestones(prev => prev.filter((_, i) => i !== idx))}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700 }}>−</button>
+                          )}
+                        </div>
+                      ))}
+                      {paymentMilestones.filter(p => Number(p.percent) > 0).length > 0 && (
+                        <div style={{ marginTop: 6, fontSize: '0.75rem', color: paymentMilestones.reduce((s, p) => s + (Number(p.percent) || 0), 0) === 100 ? '#16a34a' : '#dc2626' }}>
+                          Tổng: <strong>{paymentMilestones.reduce((s, p) => s + (Number(p.percent) || 0), 0)}%</strong>
+                          {paymentMilestones.reduce((s, p) => s + (Number(p.percent) || 0), 0) !== 100 && ' ⚠️ Cần đúng 100%'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Delivery Plan Dropdown */}
+                <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>🚚 Kế hoạch giao hàng</h3>
+                  <select className="input" value={deliveryType} disabled={!isActive}
+                    onChange={e => setDeliveryType(e.target.value as 'full' | 'batch')}
+                    style={{ fontSize: '0.9rem', fontWeight: 600, padding: '8px 12px', width: '100%', maxWidth: 350, cursor: 'pointer' }}>
+                    <option value="full">📦 Giao hàng toàn bộ (1 lần)</option>
+                    <option value="batch">📋 Giao từng lần (nhiều đợt)</option>
+                  </select>
+
+                  {deliveryType === 'batch' && (
+                    <div style={{ marginTop: 12, padding: '12px', borderRadius: 8, border: '1px dashed #0ea5e9', background: '#f0f9ff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Chi tiết giao hàng từng lần</span>
+                        {isActive && (
+                          <button type="button" onClick={() => setDeliveryBatches(prev => [...prev, { material: '', qty: '', date: '' }])}
+                            style={{ fontSize: '0.75rem', color: '#0ea5e9', background: 'none', border: '1px dashed #0ea5e9', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                            + Thêm lần giao
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.6fr 1fr 30px', gap: 6, padding: '2px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+                        {['#', 'Vật tư giao', 'Khối lượng', 'Ngày giao', ''].map(h => (
+                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                        ))}
+                      </div>
+                      {deliveryBatches.map((db, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.6fr 1fr 30px', gap: 6, padding: '3px 0', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>L{idx + 1}</span>
+                          <input className="input" placeholder="Tên vật tư" value={db.material} disabled={!isActive}
+                            onChange={e => setDeliveryBatches(prev => prev.map((d, i) => i === idx ? { ...d, material: e.target.value } : d))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                          <input className="input" type="number" placeholder="0" value={db.qty} disabled={!isActive}
+                            onChange={e => setDeliveryBatches(prev => prev.map((d, i) => i === idx ? { ...d, qty: e.target.value } : d))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px', textAlign: 'right' }} />
+                          <input className="input" type="date" value={db.date} disabled={!isActive}
+                            onChange={e => setDeliveryBatches(prev => prev.map((d, i) => i === idx ? { ...d, date: e.target.value } : d))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                          {isActive && deliveryBatches.length > 1 && (
+                            <button type="button" onClick={() => setDeliveryBatches(prev => prev.filter((_, i) => i !== idx))}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700 }}>−</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* P4.1: Kế toán — Payment milestone confirmation */}
+            {task.stepCode === 'P4.1' && previousStepData?.poData && (() => {
+              const pd = previousStepData.poData as { paymentType?: string; paymentMilestones?: { label: string; percent: string; date: string }[]; poNumber?: string; totalAmount?: string; [k: string]: unknown }
+              const pType = pd?.paymentType || 'full'
+              const milestonesList = pType === 'partial' && pd?.paymentMilestones ? pd.paymentMilestones : [{ label: 'Thanh toán toàn bộ', percent: '100', date: '' }]
+              // Initialize paymentConfirmations if empty
+              if (paymentConfirmations.length === 0 && milestonesList.length > 0) {
+                setTimeout(() => setPaymentConfirmations(milestonesList.map(() => ({ confirmed: false, method: '' }))), 0)
+              }
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: '#f59e0b' }}>💰 Các đợt thanh toán từ Thương mại</h3>
+                  {pd?.poNumber && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                      PO: <strong>{pd.poNumber as string}</strong>{pd?.totalAmount ? ` — Tổng: ${Number(pd.totalAmount).toLocaleString('vi-VN')} ₫` : ''}
+                    </div>
+                  )}
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                    {/* Header */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 0.5fr 0.8fr 1fr 30px', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                      {['', 'Đợt', '%', 'Ngày', 'PT thanh toán', '✓'].map(h => (
+                        <span key={h} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                      ))}
+                    </div>
+                    {/* Rows */}
+                    {milestonesList.map((ms, idx) => {
+                      const conf = paymentConfirmations[idx] || { confirmed: false, method: '' }
+                      return (
+                        <div key={idx} style={{
+                          display: 'grid', gridTemplateColumns: '30px 1fr 0.5fr 0.8fr 1fr 30px', gap: 6, padding: '8px 10px',
+                          alignItems: 'center', borderBottom: idx < milestonesList.length - 1 ? '1px solid var(--border)' : 'none',
+                          background: conf.confirmed ? '#f0fdf4' : 'transparent'
+                        }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</span>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{ms.label}</span>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f59e0b' }}>{ms.percent}%</span>
+                          <span style={{ fontSize: '0.8rem' }}>{ms.date || '—'}</span>
+                          <select className="input" value={conf.method} disabled={!isActive}
+                            onChange={e => setPaymentConfirmations(prev => prev.map((c, i) => i === idx ? { ...c, method: e.target.value } : c))}
+                            style={{ fontSize: '0.8rem', padding: '4px 6px', cursor: 'pointer' }}>
+                            <option value="">-- Chọn --</option>
+                            <option value="transfer">Chuyển khoản</option>
+                            <option value="cash">Tiền mặt</option>
+                            <option value="lc">LC</option>
+                          </select>
+                          <input type="checkbox" checked={conf.confirmed} disabled={!isActive}
+                            onChange={e => setPaymentConfirmations(prev => prev.map((c, i) => i === idx ? { ...c, confirmed: e.target.checked } : c))}
+                            style={{ width: 18, height: 18, cursor: isActive ? 'pointer' : 'default' }} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* Summary */}
+                  <div style={{ marginTop: 8, fontSize: '0.8rem', display: 'flex', gap: 16 }}>
+                    <span>Đã xác nhận: <strong style={{ color: '#16a34a' }}>{paymentConfirmations.filter(c => c.confirmed).length}/{milestonesList.length}</strong> đợt</span>
+                    <span>Tổng %: <strong>{milestonesList.filter((_, i) => paymentConfirmations[i]?.confirmed).reduce((s, m) => s + (Number(m.percent) || 0), 0)}%</strong></span>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* P4.2: Show PO info from P3.7 + supplier data from P3.5 */}
+            {task.stepCode === 'P4.2' && previousStepData && (() => {
+              const pd = previousStepData.poData as { poNumber?: string; totalAmount?: string; paymentType?: string; deliveryType?: string; deliveryBatches?: { material: string; qty: string; date: string }[]; [k: string]: unknown } | null
+              const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
+              const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
+              if (!pd && nccList.length === 0) return null
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>📦 Thông tin PO & Lô hàng</h3>
+                  {/* PO Summary */}
+                  {pd && (
+                    <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                      {pd.poNumber && <span style={{ fontSize: '0.85rem' }}>📋 Số PO: <strong>{pd.poNumber as string}</strong></span>}
+                      {pd.totalAmount && <span style={{ fontSize: '0.85rem' }}>💰 Tổng: <strong>{Number(pd.totalAmount).toLocaleString('vi-VN')} ₫</strong></span>}
+                      <span style={{ fontSize: '0.85rem' }}>💳 Thanh toán: <strong>{pd.paymentType === 'partial' ? 'Theo đợt' : 'Toàn bộ'}</strong></span>
+                      <span style={{ fontSize: '0.85rem' }}>🚚 Giao hàng: <strong>{pd.deliveryType === 'batch' ? 'Từng lần' : 'Toàn bộ'}</strong></span>
+                    </div>
+                  )}
+                  {/* NCC List */}
+                  {nccList.length > 0 && (
+                    <>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>Nhà cung cấp:</div>
+                      {nccList.map((s, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 10, padding: '4px 0', borderBottom: i < nccList.length - 1 ? '1px solid var(--border)' : 'none', fontSize: '0.8rem' }}>
+                          <span style={{ fontWeight: 700, color: `hsl(${i * 60 + 200}, 60%, 40%)`, minWidth: 90 }}>{s.name}</span>
+                          <div style={{ flex: 1 }}>
+                            {(s.quotes || []).filter(q => q.material?.trim()).map((q, j) => (
+                              <span key={j} style={{ marginRight: 14 }}>{q.material}: <strong>{Number(q.price).toLocaleString('vi-VN')} ₫</strong></span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {/* Delivery Batches if batch delivery */}
+                  {pd?.deliveryType === 'batch' && pd?.deliveryBatches && (pd.deliveryBatches as { material: string; qty: string; date: string }[]).length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>Kế hoạch giao từng lần:</div>
+                      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.6fr 1fr', gap: 6, padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                          {['#', 'Vật tư', 'KL', 'Ngày giao'].map(h => (
+                            <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                          ))}
+                        </div>
+                        {(pd.deliveryBatches as { material: string; qty: string; date: string }[]).map((db, idx) => (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.6fr 1fr', gap: 6, padding: '6px 10px', fontSize: '0.8rem', borderBottom: idx < (pd.deliveryBatches as unknown[]).length - 1 ? '1px solid var(--border)' : 'none' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>L{idx + 1}</span>
+                            <span style={{ fontWeight: 600 }}>{db.material}</span>
+                            <span>{db.qty}</span>
+                            <span>{db.date}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* P4.3: Show PO + materials for QC inspection */}
+            {task.stepCode === 'P4.3' && previousStepData && (() => {
+              const pd = previousStepData.poData as { poNumber?: string; totalAmount?: string; deliveryType?: string; deliveryBatches?: { material: string; qty: string; date: string }[]; [k: string]: unknown } | null
+              const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
+              const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
+              if (!pd && nccList.length === 0) return null
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#0ea5e9' }}>📦 Thông tin mặt hàng cần nghiệm thu</h3>
+                  {pd?.poNumber && (
+                    <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '8px 14px', marginBottom: 10, fontSize: '0.85rem' }}>
+                      📋 PO: <strong>{pd.poNumber as string}</strong>
+                      {pd?.totalAmount && <> — 💰 Tổng: <strong>{Number(pd.totalAmount).toLocaleString('vi-VN')} ₫</strong></>}
+                    </div>
+                  )}
+                  {nccList.length > 0 && (
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 1.5fr 0.8fr', gap: 6, padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        {['#', 'NCC', 'Vật tư', 'Giá'].map(h => (
+                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                        ))}
+                      </div>
+                      {nccList.flatMap((s, sIdx) =>
+                        (s.quotes || []).filter(q => q.material?.trim()).map((q, qIdx) => (
+                          <div key={`${sIdx}-${qIdx}`} style={{ display: 'grid', gridTemplateColumns: '30px 1fr 1.5fr 0.8fr', gap: 6, padding: '6px 10px', fontSize: '0.8rem', borderBottom: '1px solid var(--border)' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>{sIdx * 10 + qIdx + 1}</span>
+                            <span style={{ fontWeight: 600, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)` }}>{s.name}</span>
+                            <span style={{ fontWeight: 600 }}>{q.material}</span>
+                            <span style={{ textAlign: 'right' }}>{Number(q.price).toLocaleString('vi-VN')} ₫</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  {/* Delivery batches */}
+                  {pd?.deliveryType === 'batch' && pd?.deliveryBatches && (pd.deliveryBatches as { material: string; qty: string; date: string }[]).length > 0 && (
+                    <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      🚚 Giao từng lần: {(pd.deliveryBatches as { material: string; qty: string; date: string }[]).map((d, i) => (
+                        <span key={i} style={{ marginRight: 12 }}>L{i + 1}: {d.material} ({d.qty}) — {d.date}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* P4.4: Warehouse receipt — per-material qty + storage location */}
+            {task.stepCode === 'P4.4' && previousStepData && (() => {
+              const qd = previousStepData.qcData as { inspectionResult?: string; [k: string]: unknown } | null
+              const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
+              const qcResult = qd?.inspectionResult || 'N/A'
+              const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
+              // Build material list from all suppliers
+              const materials = nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => ({ material: q.material, ncc: s.name, price: q.price })))
+              // Init warehouseItems if empty
+              if (warehouseItems.length === 0 && materials.length > 0) {
+                setTimeout(() => setWarehouseItems(materials.map(m => ({ ...m, receivedQty: '', storageLocation: '' }))), 0)
+              }
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${qcResult === 'PASS' ? '#16a34a' : qcResult === 'CONDITIONAL' ? '#f59e0b' : '#dc2626'}` }}>
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: qcResult === 'PASS' ? '#16a34a' : '#f59e0b' }}>
+                    📦 Vật tư QC đã nghiệm thu — <span style={{ background: qcResult === 'PASS' ? '#dcfce7' : '#fef3c7', padding: '2px 10px', borderRadius: 6, fontSize: '0.8rem' }}>{qcResult}</span>
+                  </h3>
+                  {materials.length === 0 ? (
+                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>Chưa có dữ liệu vật tư từ NCC.</div>
+                  ) : (
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginTop: 8 }}>
+                      {/* Header */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 0.8fr 0.6fr 0.7fr 1fr', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        {['#', 'Vật tư', 'NCC', 'Giá', 'SL thực nhận', 'Vị trí lưu trữ'].map(h => (
+                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                        ))}
+                      </div>
+                      {/* Rows */}
+                      {materials.map((m, idx) => {
+                        const wi = warehouseItems[idx] || { receivedQty: '', storageLocation: '' }
+                        return (
+                          <div key={idx} style={{
+                            display: 'grid', gridTemplateColumns: '30px 1fr 0.8fr 0.6fr 0.7fr 1fr', gap: 6, padding: '8px 10px',
+                            alignItems: 'center', borderBottom: idx < materials.length - 1 ? '1px solid var(--border)' : 'none',
+                            background: wi.receivedQty && wi.storageLocation ? '#f0fdf4' : 'transparent'
+                          }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</span>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{m.material}</span>
+                            <span style={{ fontSize: '0.8rem', color: `hsl(${idx * 60 + 200}, 60%, 40%)` }}>{m.ncc}</span>
+                            <span style={{ fontSize: '0.8rem', textAlign: 'right' }}>{Number(m.price).toLocaleString('vi-VN')} ₫</span>
+                            <input className="input" type="number" placeholder="SL" disabled={!isActive}
+                              value={wi.receivedQty}
+                              onChange={e => setWarehouseItems(prev => prev.map((w, i) => i === idx ? { ...w, receivedQty: e.target.value } : w))}
+                              style={{ fontSize: '0.8rem', padding: '4px 6px', width: '100%' }} />
+                            <input className="input" type="text" placeholder="Vị trí..." disabled={!isActive}
+                              value={wi.storageLocation}
+                              onChange={e => setWarehouseItems(prev => prev.map((w, i) => i === idx ? { ...w, storageLocation: e.target.value } : w))}
+                              style={{ fontSize: '0.8rem', padding: '4px 6px', width: '100%' }} />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {/* Summary */}
+                  <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Đã nhập: <strong style={{ color: '#16a34a' }}>{warehouseItems.filter(w => w.receivedQty && w.storageLocation).length}/{materials.length}</strong> vật tư
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* P5.3: Show work items for QC inspection */}
+            {task.stepCode === 'P5.3' && previousStepData && (() => {
+              const jd = previousStepData.jobCardData as { jobCardStatus?: string; completedTasks?: string; [k: string]: unknown } | null
+              const vd = previousStepData.volumeData as { hangMuc?: string; jobCardCode?: string; completedVolume?: string; volumeUnit?: string; weekNumber?: string; [k: string]: unknown } | null
+              if (!jd && !vd) return null
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>📋 Hạng mục nghiệm thu</h3>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 0.6fr', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                      {['Hạng mục', 'Mã Job Card', 'KL hoàn thành', 'Đơn vị'].map(h => (
+                        <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                      ))}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 0.6fr', gap: 6, padding: '8px 10px', fontSize: '0.85rem' }}>
+                      <span style={{ fontWeight: 600 }}>{vd?.hangMuc || jd?.completedTasks || '—'}</span>
+                      <span style={{ color: '#8b5cf6', fontWeight: 600 }}>{vd?.jobCardCode || '—'}</span>
+                      <span>{vd?.completedVolume || '—'}</span>
+                      <span>{vd?.volumeUnit || '—'}</span>
+                    </div>
+                  </div>
+                  {jd?.jobCardStatus && (
+                    <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Trạng thái Job Card: <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, background: jd.jobCardStatus === 'done' ? '#dcfce7' : '#fef3c7', color: jd.jobCardStatus === 'done' ? '#16a34a' : '#f59e0b' }}>{jd.jobCardStatus === 'done' ? 'Hoàn thành' : jd.jobCardStatus === 'in_progress' ? 'Đang thực hiện' : String(jd.jobCardStatus)}</span>
+                      {vd?.weekNumber && <> — Tuần báo cáo: <strong>{vd.weekNumber as string}</strong></>}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* P5.4: Show SX volume report for PM review */}
+            {task.stepCode === 'P5.4' && previousStepData && (() => {
+              const vd = previousStepData.volumeData as { hangMuc?: string; jobCardCode?: string; completedVolume?: string; volumeUnit?: string; weekNumber?: string; [k: string]: unknown } | null
+              const jd = previousStepData.jobCardData as { jobCardStatus?: string; completedTasks?: string; [k: string]: unknown } | null
+              if (!vd && !jd) return null
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>📊 Báo cáo khối lượng SX (tuần {vd?.weekNumber || '—'})</h3>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr 0.6fr', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                      {['Hạng mục', 'Mã Job Card', 'KL hoàn thành', 'Đơn vị'].map(h => (
+                        <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                      ))}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr 0.6fr', gap: 6, padding: '10px', fontSize: '0.85rem' }}>
+                      <span style={{ fontWeight: 600 }}>{vd?.hangMuc || jd?.completedTasks || '—'}</span>
+                      <span style={{ color: '#8b5cf6', fontWeight: 600 }}>{vd?.jobCardCode || '—'}</span>
+                      <span style={{ fontWeight: 600, fontSize: '1rem' }}>{vd?.completedVolume || '—'}</span>
+                      <span>{vd?.volumeUnit || '—'}</span>
+                    </div>
+                  </div>
+                  {jd?.jobCardStatus && (
+                    <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Trạng thái Job Card: <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, background: jd.jobCardStatus === 'done' ? '#dcfce7' : '#fef3c7', color: jd.jobCardStatus === 'done' ? '#16a34a' : '#f59e0b' }}>{jd.jobCardStatus === 'done' ? 'Hoàn thành' : jd.jobCardStatus === 'in_progress' ? 'Đang thực hiện' : String(jd.jobCardStatus)}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             {task.stepCode === 'P2.3' && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8 }}>
@@ -821,11 +1586,11 @@ export default function TaskDetailPage() {
             )}
 
             {/* BOM Table — Editable for P2.1 (VT chính), P2.2 (VT hàn & sơn), P2.3 (VT phụ) */}
-            {(task.stepCode === 'P2.1' || task.stepCode === 'P2.2' || task.stepCode === 'P2.3') && (
+            {(task.stepCode === 'P2.1' || task.stepCode === 'P2.2' || task.stepCode === 'P2.3' || task.stepCode === 'P3.3') && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, flex: 1 }}>
-                    📦 {task.stepCode === 'P2.3' ? 'Đề xuất vật tư phụ' : `Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: `2px solid ${task.stepCode === 'P3.3' ? '#f59e0b' : 'var(--accent)'}`, paddingBottom: 8, flex: 1 }}>
+                    {task.stepCode === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư phụ' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
                   </h3>
                   {isActive && (
                     <button type="button" onClick={addBomItem}
@@ -1382,6 +2147,8 @@ export default function TaskDetailPage() {
             {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && (
               <div className="card" style={{ padding: '1.25rem' }}>
                 <h3 style={{ marginTop: 0, fontSize: '1rem' }}>🚀 Hành động</h3>
+                {/* P4.3 + P5.3: Conditional buttons based on inspection result */}
+                {(task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !formData.itpResult || formData.itpResult === 'PASS' || formData.itpResult === 'HOLD') && (
                 <button
                   className="btn-accent"
                   onClick={() => handleSubmit('complete')}
@@ -1390,7 +2157,8 @@ export default function TaskDetailPage() {
                 >
                   {submitting ? '⏳ Đang xử lý...' : '✅ Hoàn thành bước này'}
                 </button>
-                {rule?.rejectTo && (
+                )}
+                {rule?.rejectTo && (task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'FAIL' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !formData.itpResult || formData.itpResult === 'FAIL' || formData.itpResult === 'HOLD') && (
                   <div>
                     <button
                       onClick={() => setShowRejectForm(!showRejectForm)}

@@ -330,11 +330,10 @@ const P3_2: StepFormConfig = {
   stepCode: 'P3.2',
   formType: 'input',
   title: 'Kho kiểm tra tồn kho và phê duyệt từng item PR',
-  description: 'Với mỗi item trong PR: (a) Tồn đủ + chất lượng OK → from_stock; (b) Tồn không đảm bảo → to_purchase; (c) Không đủ → to_purchase. Tạo consolidated PR.',
+  description: 'Hệ thống tự động so sánh danh sách vật tư PR (từ P2.1/P2.2/P2.3) với tồn kho. Vật tư đủ + quy chuẩn OK → Xuất kho. Không đạt → Cần mua.',
   fields: [
-    { key: 'fromStockItems', label: 'Items xuất từ kho (from_stock)', labelEn: 'From Stock Items', type: 'textarea', fullWidth: true },
-    { key: 'toPurchaseItems', label: 'Items cần mua (to_purchase)', labelEn: 'To Purchase Items', type: 'textarea', fullWidth: true },
-    { key: 'consolidatedPR', label: 'Tổng hợp PR cần mua', labelEn: 'Consolidated PR', type: 'textarea', fullWidth: true, required: true },
+    // Stock check tables rendered dynamically in page.tsx from previousStepData
+    { key: 'stockCheckNotes', label: 'Ghi chú kiểm tra tồn kho', labelEn: 'Stock Check Notes', type: 'textarea', fullWidth: true },
   ],
   checklist: [
     { key: 'stock_checked', label: 'Đã kiểm tra tồn kho từng item', required: true },
@@ -350,11 +349,15 @@ const P3_3: StepFormConfig = {
   stepCode: 'P3.3',
   formType: 'input',
   title: 'PM lập lệnh SX cho thầu phụ và đề nghị cấp VT',
-  description: 'PM tạo lệnh SX cho thầu phụ với scope công việc, deadline, WBS node. Đồng thời tạo PR cấp VT cho thầu phụ.',
+  description: 'PM tạo lệnh SX cho tổ thầu phụ với thông tin công việc, khối lượng và tiến độ. Đồng thời lập đề nghị cấp VT.',
   fields: [
-    { key: 'subconScope', label: 'Scope công việc thầu phụ', labelEn: 'Subcontractor Scope', type: 'textarea', fullWidth: true, required: true },
-    { key: 'subconDeadline', label: 'Deadline thầu phụ', labelEn: 'Deadline', type: 'date', required: true },
-    { key: 'materialRequest', label: 'Đề nghị cấp VT cho thầu phụ', labelEn: 'Material Request', type: 'textarea', fullWidth: true },
+    { key: 'subconTeam', label: 'Tên tổ thầu phụ', labelEn: 'Subcontractor Team', type: 'text', required: true },
+    { key: 'jobName', label: 'Tên công việc', labelEn: 'Job Name', type: 'text', required: true },
+    { key: 'jobCode', label: 'Mã công việc', labelEn: 'Job Code', type: 'text', required: true },
+    { key: 'assignedQty', label: 'Khối lượng giao', labelEn: 'Assigned Quantity', type: 'number', required: true },
+    { key: 'startDate', label: 'Ngày bắt đầu', labelEn: 'Start Date', type: 'date', required: true },
+    { key: 'endDate', label: 'Ngày kết thúc', labelEn: 'End Date', type: 'date', required: true },
+    // Subcontractor material request items table rendered dynamically in page.tsx
   ],
   checklist: [
     { key: 'wo_created', label: 'Đã tạo lệnh SX cho thầu phụ', required: true },
@@ -389,20 +392,17 @@ const P3_5: StepFormConfig = {
   stepCode: 'P3.5',
   formType: 'input',
   title: 'Thương mại tìm nhà cung cấp',
-  description: 'R07 nhận consolidated PR, gửi RFQ đến NCC, so sánh báo giá. Long-lead items có cờ red flag.',
+  description: 'Nhập thông tin ít nhất 3 NCC với báo giá cho từng vật tư. Hệ thống tự động so sánh giá để xác định NCC tốt nhất.',
   fields: [
     { key: 'rfqCount', label: 'Số RFQ đã gửi', labelEn: 'RFQ Count', type: 'number' },
-    { key: 'supplierComparison', label: 'So sánh báo giá NCC', labelEn: 'Supplier Comparison', type: 'textarea', fullWidth: true, required: true },
-    { key: 'recommendedSupplier', label: 'NCC đề xuất', labelEn: 'Recommended Supplier', type: 'text', required: true },
     { key: 'longLeadFlags', label: 'Cảnh báo long-lead items', labelEn: 'Long-lead Flags', type: 'textarea', fullWidth: true },
+    // Supplier entries + comparison table rendered dynamically in page.tsx
   ],
   checklist: [
     { key: 'min_3_quotes', label: 'Đã có tối thiểu 3 báo giá', required: true },
     { key: 'comparison_done', label: 'Đã so sánh báo giá', required: true },
   ],
-  attachments: [
-    { key: 'quotesFile', label: 'File báo giá NCC', accept: '.pdf,.xlsx' },
-  ],
+  attachments: [],
 }
 
 const P3_6: StepFormConfig = {
@@ -422,12 +422,11 @@ const P3_7: StepFormConfig = {
   stepCode: 'P3.7',
   formType: 'input',
   title: 'Thương mại chốt hàng, ĐK thanh toán, kế hoạch về',
-  description: 'R07 phát hành PO. Nhập điều kiện thanh toán: trả trước/sau, % mỗi đợt. Ghi ngày giao hàng dự kiến.',
+  description: 'Phát hành PO dựa trên NCC đã duyệt. Chọn điều kiện thanh toán và kế hoạch giao hàng.',
   fields: [
     { key: 'poNumber', label: 'Số PO', labelEn: 'PO Number', type: 'text', required: true },
-    { key: 'paymentTerms', label: 'Điều kiện thanh toán', labelEn: 'Payment Terms', type: 'textarea', fullWidth: true, required: true },
-    { key: 'deliveryDate', label: 'Ngày giao hàng dự kiến', labelEn: 'Expected Delivery', type: 'date', required: true },
     { key: 'totalAmount', label: 'Tổng giá trị PO', labelEn: 'PO Total', type: 'currency', required: true },
+    // Payment terms dropdown + delivery plan dropdown rendered dynamically in page.tsx
   ],
   checklist: [
     { key: 'po_issued', label: 'Đã phát hành PO', required: true },
@@ -444,12 +443,10 @@ const P4_1: StepFormConfig = {
   stepCode: 'P4.1',
   formType: 'input',
   title: 'Kế toán nhận yêu cầu và thực hiện thanh toán',
-  description: 'R08 nhận task từ R07 với đầy đủ thông tin PO, số tiền, tài khoản NCC. Thực hiện thanh toán và ghi nhận vào A/P.',
+  description: 'Xem các đợt thanh toán từ TM, xác nhận và chọn phương thức thanh toán cho từng đợt.',
   fields: [
-    { key: 'paymentAmount', label: 'Số tiền thanh toán', labelEn: 'Payment Amount', type: 'currency', required: true },
-    { key: 'paymentMethod', label: 'Phương thức thanh toán', labelEn: 'Payment Method', type: 'select', options: [{ value: 'transfer', label: 'Chuyển khoản' }, { value: 'cash', label: 'Tiền mặt' }, { value: 'lc', label: 'LC' }], required: true },
-    { key: 'transactionRef', label: 'Mã giao dịch', labelEn: 'Transaction Ref', type: 'text', required: true },
     { key: 'paymentNotes', label: 'Ghi chú thanh toán', labelEn: 'Payment Notes', type: 'textarea', fullWidth: true },
+    // Payment milestones from P3.7 rendered dynamically in page.tsx
   ],
   checklist: [
     { key: 'payment_done', label: 'Đã thực hiện thanh toán', required: true },
@@ -503,16 +500,14 @@ const P4_4: StepFormConfig = {
   stepCode: 'P4.4',
   formType: 'input',
   title: 'Kho nghiệm thu số lượng và nhập kho',
-  description: 'R05 kiểm tra SL thực nhận so với PO. Nhập hệ thống với heat number, mill certificate, vị trí lưu trữ.',
+  description: 'Xem danh sách vật tư QC đã nghiệm thu PASS. Nhập số lượng thực nhận và vị trí lưu trữ cho từng vật tư.',
   fields: [
-    { key: 'receivedQty', label: 'Số lượng thực nhận', labelEn: 'Received Qty', type: 'number', required: true },
     { key: 'heatNumber', label: 'Heat Number / Batch No', labelEn: 'Heat Number', type: 'text', required: true },
     { key: 'millCertNo', label: 'Số Mill Certificate', labelEn: 'Mill Cert No', type: 'text' },
-    { key: 'storageLocation', label: 'Vị trí lưu trữ', labelEn: 'Storage Location', type: 'text', required: true },
+    // Per-material receivedQty + storageLocation rendered dynamically in page.tsx
   ],
   checklist: [
     { key: 'qty_verified', label: 'Đã kiểm tra số lượng', required: true },
-    { key: 'heat_recorded', label: 'Đã ghi heat number', required: true },
     { key: 'reserved_project', label: 'Đã reserved cho dự án', required: true },
   ],
   attachments: [
@@ -565,8 +560,10 @@ const P5_2: StepFormConfig = {
   description: 'Mỗi tuần, R06b nhập KL hoàn thành: hạng mục, số lượng, đơn vị, job card. Dữ liệu là cơ sở tính lương khoán.',
   fields: [
     { key: 'weekNumber', label: 'Tuần báo cáo', labelEn: 'Report Week', type: 'number', required: true },
+    { key: 'hangMuc', label: 'Hạng mục', labelEn: 'Work Item', type: 'text', required: true },
+    { key: 'jobCardCode', label: 'Mã Job Card', labelEn: 'Job Card Code', type: 'text', required: true },
     { key: 'completedVolume', label: 'Khối lượng hoàn thành', labelEn: 'Completed Volume', type: 'textarea', fullWidth: true, required: true },
-    { key: 'volumeUnit', label: 'Đơn vị', labelEn: 'Unit', type: 'text' },
+    { key: 'volumeUnit', label: 'Đơn vị', labelEn: 'Unit', type: 'text', required: true },
   ],
   checklist: [
     { key: 'volume_reported', label: 'Đã báo cáo KL hoàn thành tuần', required: true },
@@ -605,6 +602,7 @@ const P5_4: StepFormConfig = {
     { key: 'acceptanceNotes', label: 'Ghi chú nghiệm thu', labelEn: 'Acceptance Notes', type: 'textarea', fullWidth: true },
   ],
   checklist: [
+    { key: 'volume_confirmed', label: 'Xác nhận đã hoàn thành đủ khối lượng', required: true },
     { key: 'volume_verified', label: 'Đã xác nhận KL hoàn thành', required: true },
     { key: 'wbs_updated', label: 'Đã cập nhật WBS progress' },
   ],

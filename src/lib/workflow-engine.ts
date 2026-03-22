@@ -73,6 +73,36 @@ export async function completeTask(
 
     await activateTask(task.projectId, nextCode)
     activatedSteps.push(nextCode)
+
+    // Auto-propagate: if the next step's own next step is REJECTED (was the step that rejected),
+    // auto-complete the intermediate step and re-activate the REJECTED step.
+    // This handles: P5.3 reject → P5.1 → P5.2 auto-skip → P5.3 re-activate
+    if (nextRule.next && nextRule.next.length > 0) {
+      for (const downstreamCode of nextRule.next) {
+        const downstreamTask = await prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: downstreamCode, status: TASK_STATUS.REJECTED },
+        })
+        if (downstreamTask) {
+          // The downstream step was the one that rejected — auto-complete the intermediate step
+          const intermediateTask = await prisma.workflowTask.findFirst({
+            where: { projectId: task.projectId, stepCode: nextCode, status: TASK_STATUS.IN_PROGRESS },
+          })
+          if (intermediateTask) {
+            await prisma.workflowTask.update({
+              where: { id: intermediateTask.id },
+              data: {
+                status: TASK_STATUS.DONE,
+                completedAt: new Date(),
+                completedBy: userId,
+                notes: 'Auto-completed (re-submission after rejection)',
+              },
+            })
+            await activateTask(task.projectId, downstreamCode)
+            activatedSteps.push(downstreamCode)
+          }
+        }
+      }
+    }
   }
 
   return { nextSteps: activatedSteps }
