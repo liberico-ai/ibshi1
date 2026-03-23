@@ -6,14 +6,14 @@ import { useAuthStore } from '@/hooks/useAuth'
 import Image from 'next/image'
 
 const FEATURES = [
-  { title: 'Quản lý Dự án', desc: '32 bước quy trình tự động', icon: 'folder' },
-  { title: 'Sản xuất', desc: 'Lệnh SX, theo dõi tiến độ', icon: 'factory' },
-  { title: 'Quản lý Kho', desc: 'Nhập xuất chính xác 100%', icon: 'package' },
-  { title: 'Kiểm soát CL', desc: 'QC 5 tầng, truy vết đầy đủ', icon: 'shield' },
+  { title: 'Quản lý Dự án', desc: '32 bước quy trình', icon: 'folder' },
+  { title: 'Sản xuất', desc: 'Theo dõi tiến độ', icon: 'factory' },
+  { title: 'Quản lý Kho', desc: 'Nhập xuất 100%', icon: 'package' },
+  { title: 'Kiểm soát CL', desc: 'QC 5 tầng', icon: 'shield' },
 ]
 
 function FeatureIcon({ name }: { name: string }) {
-  const p = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  const p = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
   switch (name) {
     case 'folder': return <svg {...p}><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" /></svg>
     case 'factory': return <svg {...p}><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>
@@ -52,142 +52,161 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen relative flex items-center justify-end overflow-hidden">
+    <div className="min-h-screen flex" style={{ background: '#060d18' }}>
 
-      {/* ═══ FULL-SCREEN Factory Background ═══ */}
-      <Image
-        src="/images/factory-bg.png"
-        alt="IBS Heavy Industry Shipyard"
-        fill
-        className="object-cover"
-        style={{ objectPosition: 'center 25%' }}
-        priority
-        quality={95}
-      />
+      {/* ═══ LEFT — Dark Factory Hero (70%) ═══ */}
+      <div className="hidden lg:flex flex-col relative overflow-hidden" style={{ flex: 7 }}>
+        
+        {/* Factory background image — dark industrial */}
+        <Image
+          src="/images/factory-dark.png"
+          alt="IBS Heavy Industry Factory"
+          fill
+          className="object-cover"
+          style={{ objectPosition: 'center center' }}
+          priority
+          quality={95}
+        />
 
-      {/* Subtle gradient — mostly transparent, only darkens edges for contrast */}
-      <div className="absolute inset-0" style={{
-        background: `
-          linear-gradient(to right, rgba(10,37,64,0.3) 0%, rgba(10,37,64,0.1) 40%, rgba(10,37,64,0.45) 75%, rgba(10,37,64,0.7) 100%),
-          linear-gradient(to bottom, transparent 0%, rgba(10,37,64,0.2) 60%, rgba(10,37,64,0.5) 100%)
-        `,
-      }} />
+        {/* Dark overlay for content readability */}
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(to bottom, rgba(6,13,24,0.6) 0%, rgba(6,13,24,0.45) 40%, rgba(6,13,24,0.7) 70%, rgba(6,13,24,0.88) 100%)',
+        }} />
 
-      {/* ═══ TOP-LEFT — Brand & Features (floating over image) ═══ */}
-      <div className="hidden lg:block absolute top-0 left-0 z-10 p-8 xl:p-12">
-        {/* Logo */}
-        <div className="flex items-center gap-3 mb-6">
-          <div style={{
-            width: '56px', height: '56px', borderRadius: '50%',
-            overflow: 'hidden', border: '2px solid rgba(255,255,255,0.3)',
-            background: '#fff', flexShrink: 0,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Image
-              src="/ibs-logo.jpeg"
-              alt="IBS Logo"
-              width={56}
-              height={56}
-              className="object-contain"
-              style={{ padding: '6px' }}
-            />
-          </div>
-          <div>
-            <span className="text-xl font-extrabold text-white tracking-wide drop-shadow-lg">IBS</span>
-            <span className="text-[10px] block text-white/60 font-semibold tracking-[0.15em] mt-0.5 drop-shadow">HEAVY INDUSTRY</span>
-          </div>
-        </div>
-      </div>
+        {/* Red accent edge */}
+        <div className="absolute top-0 right-0 w-[2px] h-full" style={{
+          background: 'linear-gradient(to bottom, transparent, #e63946 20%, #e63946 80%, transparent)',
+        }} />
 
-      {/* ═══ BOTTOM-LEFT — Hero text + features (over image) ═══ */}
-      <div className="hidden lg:block absolute bottom-0 left-0 z-10 p-8 xl:p-12 max-w-[600px]">
-        <h1 style={{
-          fontSize: '30px', fontWeight: 800, lineHeight: 1.3,
-          color: 'white', marginBottom: '12px', letterSpacing: '-0.02em',
-          textShadow: '0 2px 12px rgba(0,0,0,0.5)',
-        }}>
-          Quản lý{' '}
-          <span style={{ color: '#ff6b6b' }}>Chuỗi sản xuất</span>
-          {' '}thông minh
-        </h1>
-        <p style={{
-          fontSize: '13px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.7,
-          marginBottom: '20px', maxWidth: '420px',
-          textShadow: '0 1px 4px rgba(0,0,0,0.4)',
-        }}>
-          Hệ thống ERP chuyên ngành công nghiệp nặng — tích hợp quản lý dự án, vật tư, sản xuất và kiểm soát chất lượng toàn diện.
-        </p>
+        {/* ── Content layout: top logo, center headline, bottom features ── */}
+        <div className="relative z-10 flex flex-col justify-between flex-1 px-10 xl:px-16 2xl:px-20 py-8">
 
-        {/* Feature chips — horizontal row */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {FEATURES.map((f) => (
-            <div key={f.title} style={{
-              borderRadius: '10px', padding: '10px 14px',
-              background: 'rgba(0,0,0,0.35)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(12px)',
-              display: 'flex', alignItems: 'center', gap: '8px',
+          {/* TOP — Logo circular, professional position */}
+          <div className="flex items-center gap-4">
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '50%',
+              overflow: 'hidden', border: '2px solid rgba(255,255,255,0.15)',
+              background: '#fff', flexShrink: 0,
+              boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <div style={{
-                width: '28px', height: '28px', borderRadius: '6px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(255, 107, 107, 0.25)', color: '#ff8a8a',
-              }}>
-                <FeatureIcon name={f.icon} />
-              </div>
-              <div>
-                <p style={{ fontSize: '12px', fontWeight: 600, color: 'white' }}>{f.title}</p>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '1px' }}>{f.desc}</p>
-              </div>
+              <Image
+                src="/ibs-logo.jpeg"
+                alt="IBS Logo"
+                width={64}
+                height={64}
+                className="object-contain"
+                style={{ padding: '8px' }}
+              />
             </div>
-          ))}
-        </div>
+            <div>
+              <span className="text-2xl font-extrabold text-white tracking-wide">IBS</span>
+              <span className="text-[10px] block text-white/40 font-semibold tracking-[0.2em] mt-0.5">HEAVY INDUSTRY</span>
+            </div>
+          </div>
 
-        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
-          © 2026 IBS Heavy Industry JSC · Global Standards, Local Expertise
-        </p>
+          {/* CENTER — Headline on single line */}
+          <div className="flex-1 flex flex-col justify-center">
+            <h1 style={{
+              fontSize: 'clamp(28px, 3vw, 38px)', fontWeight: 800, lineHeight: 1.3,
+              color: 'white', marginBottom: '14px', letterSpacing: '-0.02em',
+              whiteSpace: 'nowrap',
+            }}>
+              Quản lý <span style={{ color: '#e63946' }}>Chuỗi sản xuất</span> thông minh
+            </h1>
+            <p style={{
+              fontSize: '14px', color: 'rgba(255,255,255,0.45)', lineHeight: 1.8,
+              maxWidth: '520px',
+            }}>
+              Hệ thống ERP chuyên ngành công nghiệp nặng — tích hợp quản lý dự án, vật tư, sản xuất và kiểm soát chất lượng toàn diện.
+            </p>
+          </div>
+
+          {/* BOTTOM — 4 Features in a single row, fitted to screen */}
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+              {FEATURES.map((f) => (
+                <div key={f.title} style={{
+                  borderRadius: '12px', padding: '16px 14px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  transition: 'all 0.25s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+                >
+                  <div style={{
+                    width: '40px', height: '40px', borderRadius: '10px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    marginBottom: '10px', background: 'rgba(230, 57, 70, 0.15)', color: '#f06876',
+                  }}>
+                    <FeatureIcon name={f.icon} />
+                  </div>
+                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>{f.title}</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginTop: '3px' }}>{f.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between mt-6 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)' }}>© 2026 IBS Heavy Industry JSC</p>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.15)', fontStyle: 'italic' }}>Global Standards, Local Expertise</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ═══ RIGHT — Floating Glass Login Form ═══ */}
-      <div className="relative z-20 flex items-center justify-center p-6 sm:p-8 lg:p-12 w-full lg:w-auto lg:min-w-[420px] lg:max-w-[440px] min-h-screen"
-        style={{
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          borderLeft: '1px solid rgba(255,255,255,0.15)',
-        }}
+      {/* ═══ RIGHT — Login Form with IBS Building Background (30%) ═══ */}
+      <div className="relative flex items-center justify-center p-6 sm:p-8 lg:p-10 overflow-hidden"
+        style={{ flex: 3, minWidth: '340px' }}
       >
+        {/* IBS Building Background — bright */}
+        <Image
+          src="/images/ibs-building.jpg"
+          alt="IBS Heavy Industry Building"
+          fill
+          className="object-cover"
+          style={{ objectPosition: 'center 20%' }}
+          quality={90}
+          priority
+        />
 
-        <div className="w-full max-w-[340px] animate-fade-in-scale">
+        {/* Light overlay */}
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(to bottom, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.65) 40%, rgba(255,255,255,0.72) 100%)',
+        }} />
+
+        {/* Content */}
+        <div className="relative z-10 w-full max-w-[360px] animate-fade-in-scale">
 
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
             <div style={{
-              width: '64px', height: '64px', borderRadius: '50%',
-              overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)',
+              width: '72px', height: '72px', borderRadius: '50%',
+              overflow: 'hidden', border: '2px solid #e2e8f0',
               background: '#fff', margin: '0 auto 12px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
             }}>
-              <Image src="/ibs-logo.jpeg" alt="IBS Logo" width={64} height={64}
-                className="object-contain" style={{ padding: '6px' }} />
+              <Image src="/ibs-logo.jpeg" alt="IBS Logo" width={72} height={72}
+                className="object-contain" style={{ padding: '8px' }} />
             </div>
-            <h1 className="text-lg font-extrabold text-white">IBS-ERP</h1>
+            <h1 className="text-xl font-extrabold" style={{ color: '#0a2540' }}>IBS-ERP</h1>
+            <p className="text-xs mt-1" style={{ color: '#64748b' }}>Heavy Industry Management</p>
           </div>
 
           {/* Form card */}
           <div style={{
             background: 'rgba(255,255,255,0.92)',
-            backdropFilter: 'blur(20px)',
-            borderRadius: '16px',
-            padding: '32px 28px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.3)',
-            border: '1px solid rgba(255,255,255,0.5)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: '18px',
+            padding: '36px 28px',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.6)',
           }}>
 
             {/* Form header */}
             <div style={{ marginBottom: '28px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#0a2540' }}>Đăng nhập</h2>
+              <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#0a2540' }}>Đăng nhập</h2>
               <p style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
                 Nhập thông tin tài khoản để truy cập hệ thống
               </p>
@@ -213,7 +232,7 @@ export default function LoginPage() {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   </span>
                   <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-                    className="input" style={{ paddingLeft: '2.5rem', background: 'rgba(255,255,255,0.9)' }}
+                    className="input" style={{ paddingLeft: '2.5rem', background: 'rgba(255,255,255,0.95)' }}
                     placeholder="Nhập username" required autoFocus />
                 </div>
               </div>
@@ -227,7 +246,7 @@ export default function LoginPage() {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                   </span>
                   <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-                    className="input" style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem', background: 'rgba(255,255,255,0.9)' }}
+                    className="input" style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem', background: 'rgba(255,255,255,0.95)' }}
                     placeholder="••••••••" required />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer" style={{ color: '#94a3b8', background: 'none', border: 'none' }}>
@@ -242,11 +261,11 @@ export default function LoginPage() {
 
               <button type="submit" disabled={loading}
                 style={{
-                  width: '100%', padding: '12px', fontSize: '14px', fontWeight: 700,
+                  width: '100%', padding: '13px', fontSize: '14px', fontWeight: 700,
                   cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
                   background: loading ? '#94a3b8' : '#e63946',
                   color: 'white', border: 'none', borderRadius: '10px',
-                  boxShadow: loading ? 'none' : '0 4px 14px rgba(230, 57, 70, 0.4)', transition: 'all 0.2s ease',
+                  boxShadow: loading ? 'none' : '0 4px 14px rgba(230, 57, 70, 0.35)', transition: 'all 0.2s ease',
                 }}>
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
