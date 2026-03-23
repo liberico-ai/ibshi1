@@ -62,7 +62,7 @@ export default function TaskDetailPage() {
   const [userList, setUserList] = useState<{ id: string; fullName: string; roleCode: string }[]>([])
   const [inventoryMaterials, setInventoryMaterials] = useState<{ id: string; materialCode: string; name: string; unit: string; category: string; specification: string | null; currentStock: number }[]>([])
   const [inventoryLoading, setInventoryLoading] = useState(false)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
   const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any } | null>(null)
   // P4.1 payment confirmations per milestone
   const [paymentConfirmations, setPaymentConfirmations] = useState<{ confirmed: boolean; method: string }[]>([])
@@ -538,7 +538,7 @@ export default function TaskDetailPage() {
                     </div>
                   )}
                   {/* Plan pre-approved from previous round */}
-                  {planDecision === 'approved' && task?.resultData && (task.resultData as Record<string, unknown>).planApproved && (
+                  {planDecision === 'approved' && task?.resultData && Boolean((task.resultData as Record<string, unknown>).planApproved) && (
                     <div style={{ marginTop: 12, padding: '8px 16px', background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600 }}>
                       ✅ Đã được phê duyệt từ lần xét duyệt trước
                     </div>
