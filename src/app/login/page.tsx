@@ -81,32 +81,33 @@ export default function LoginPage() {
         {/* ── Content layout: top logo, center headline, bottom features ── */}
         <div className="relative z-10 flex flex-col justify-between flex-1 px-12 xl:px-20 2xl:px-28 py-10">
 
-          {/* TOP — Logo circular, large, professional margin */}
-          <div className="flex items-center gap-5">
-            <div style={{
-              width: '80px', height: '80px', borderRadius: '50%',
-              overflow: 'hidden', border: '3px solid rgba(255,255,255,0.18)',
-              background: '#fff', flexShrink: 0,
-              boxShadow: '0 6px 28px rgba(0,0,0,0.45)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Image
-                src="/ibs-logo.jpeg"
-                alt="IBS Logo"
-                width={80}
-                height={80}
-                className="object-contain"
-                style={{ padding: '10px' }}
-              />
+          {/* CENTER — Logo + Headline centered in frame */}
+          <div className="flex-1 flex flex-col items-center justify-center text-center">
+            {/* Logo circular */}
+            <div className="flex items-center gap-5 mb-8">
+              <div style={{
+                width: '80px', height: '80px', borderRadius: '50%',
+                overflow: 'hidden', border: '3px solid rgba(255,255,255,0.18)',
+                background: '#fff', flexShrink: 0,
+                boxShadow: '0 6px 28px rgba(0,0,0,0.45)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Image
+                  src="/ibs-logo.jpeg"
+                  alt="IBS Logo"
+                  width={80}
+                  height={80}
+                  className="object-contain"
+                  style={{ padding: '10px' }}
+                />
+              </div>
+              <div className="text-left">
+                <span className="text-3xl font-extrabold text-white tracking-wide">IBS</span>
+                <span className="text-[11px] block text-white/45 font-semibold tracking-[0.2em] mt-1">HEAVY INDUSTRY</span>
+              </div>
             </div>
-            <div>
-              <span className="text-3xl font-extrabold text-white tracking-wide">IBS</span>
-              <span className="text-[11px] block text-white/45 font-semibold tracking-[0.2em] mt-1">HEAVY INDUSTRY</span>
-            </div>
-          </div>
 
-          {/* CENTER — Headline on single line */}
-          <div className="flex-1 flex flex-col justify-center">
+            {/* Headline on single line */}
             <h1 style={{
               fontSize: 'clamp(28px, 3vw, 38px)', fontWeight: 800, lineHeight: 1.3,
               color: 'white', marginBottom: '14px', letterSpacing: '-0.02em',
