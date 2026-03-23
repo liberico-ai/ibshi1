@@ -79,29 +79,29 @@ export default function LoginPage() {
         }} />
 
         {/* ── Content layout: top logo, center headline, bottom features ── */}
-        <div className="relative z-10 flex flex-col justify-between flex-1 px-10 xl:px-16 2xl:px-20 py-8">
+        <div className="relative z-10 flex flex-col justify-between flex-1 px-12 xl:px-20 2xl:px-28 py-10">
 
-          {/* TOP — Logo circular, professional position */}
-          <div className="flex items-center gap-4">
+          {/* TOP — Logo circular, large, professional margin */}
+          <div className="flex items-center gap-5">
             <div style={{
-              width: '64px', height: '64px', borderRadius: '50%',
-              overflow: 'hidden', border: '2px solid rgba(255,255,255,0.15)',
+              width: '80px', height: '80px', borderRadius: '50%',
+              overflow: 'hidden', border: '3px solid rgba(255,255,255,0.18)',
               background: '#fff', flexShrink: 0,
-              boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+              boxShadow: '0 6px 28px rgba(0,0,0,0.45)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <Image
                 src="/ibs-logo.jpeg"
                 alt="IBS Logo"
-                width={64}
-                height={64}
+                width={80}
+                height={80}
                 className="object-contain"
-                style={{ padding: '8px' }}
+                style={{ padding: '10px' }}
               />
             </div>
             <div>
-              <span className="text-2xl font-extrabold text-white tracking-wide">IBS</span>
-              <span className="text-[10px] block text-white/40 font-semibold tracking-[0.2em] mt-0.5">HEAVY INDUSTRY</span>
+              <span className="text-3xl font-extrabold text-white tracking-wide">IBS</span>
+              <span className="text-[11px] block text-white/45 font-semibold tracking-[0.2em] mt-1">HEAVY INDUSTRY</span>
             </div>
           </div>
 
