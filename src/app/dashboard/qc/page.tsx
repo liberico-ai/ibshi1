@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
+import { PageHeader, StatCard, Button } from '@/components/ui'
+import { ChevronRight } from 'lucide-react'
 
 interface Inspection {
   id: string; projectId: string; inspectionCode: string;
@@ -87,50 +89,29 @@ export default function QCPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quản lý Chất lượng (QC)</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Enhanced Inspection Form v2</p>
-        </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-accent">+ Tạo biên bản</button>
-      </div>
+      <PageHeader
+        title="Quản lý Chất lượng (QC)"
+        subtitle="Enhanced Inspection Form v2"
+        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Tạo biên bản</Button>}
+      />
 
       {/* ═══ QC KPI Summary ═══ */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="card p-4" style={{ borderTop: '3px solid var(--primary)' }}>
-          <p className="text-2xl font-extrabold" style={{ color: 'var(--primary)' }}>{pagination.total}</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tổng biên bản</p>
-        </div>
-        <div className="card p-4" style={{ borderTop: '3px solid #16a34a' }}>
-          <p className="text-2xl font-extrabold" style={{ color: '#16a34a' }}>{passCount}</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Đạt ✓</p>
-        </div>
-        <div className="card p-4" style={{ borderTop: '3px solid #dc2626' }}>
-          <p className="text-2xl font-extrabold" style={{ color: '#dc2626' }}>{failCount}</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Không đạt ✗</p>
-        </div>
-        <div className="card p-4" style={{ borderTop: '3px solid #f59e0b' }}>
-          <p className="text-2xl font-extrabold" style={{ color: '#f59e0b' }}>{pendCount + condCount}</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Chờ / ĐK</p>
-        </div>
-        <div className="card p-4" style={{ borderTop: `3px solid ${passRate >= 80 ? '#16a34a' : passRate >= 50 ? '#f59e0b' : '#dc2626'}` }}>
-          <p className="text-2xl font-extrabold" style={{ color: passRate >= 80 ? '#16a34a' : passRate >= 50 ? '#f59e0b' : '#dc2626' }}>{passRate}%</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tỷ lệ đạt</p>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 stagger-children">
+        <StatCard label="Tổng biên bản" value={pagination.total} color="var(--primary)" />
+        <StatCard label="Đạt ✓" value={passCount} color="#16a34a" />
+        <StatCard label="Không đạt ✗" value={failCount} color="#dc2626" />
+        <StatCard label="Chờ / ĐK" value={pendCount + condCount} color="#f59e0b" />
+        <StatCard label="Tỷ lệ đạt" value={`${passRate}%`} color={passRate >= 80 ? '#16a34a' : passRate >= 50 ? '#f59e0b' : '#dc2626'} />
       </div>
 
       {showCreate && <CreateInspectionForm projects={projects} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); loadData() }} />}
 
-      {/* Search + Status filter */}
       <div className="flex gap-3 items-center">
         <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã biên bản..." /></div>
         <div className="flex gap-2">
           {[{ value: '', label: 'Tất cả' }, ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ value: k, label: v.label }))].map((f) => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-4 py-2 text-sm rounded-full font-medium transition-colors" style={{
-              background: statusFilter === f.value ? 'var(--primary)' : 'var(--bg-card)',
-              color: statusFilter === f.value ? 'white' : 'var(--text-secondary)',
-              border: `1px solid ${statusFilter === f.value ? 'var(--primary)' : 'var(--border)'}`,
-            }}>{f.label}</button>
+            <button key={f.value} onClick={() => setStatusFilter(f.value)}
+              className={`filter-pill ${statusFilter === f.value ? 'active' : ''}`}>{f.label}</button>
           ))}
         </div>
       </div>
@@ -174,7 +155,7 @@ export default function QCPage() {
                         <button onClick={(e) => handleVerdict(e, insp.id, 'FAILED')} className="text-xs px-2 py-1 rounded" style={{ background: '#fef2f2', color: '#dc2626' }}>Lỗi</button>
                       </div>
                     ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+                      <ChevronRight size={16} stroke="var(--text-muted)" />
                     )}
                   </td>
                 </tr>
@@ -259,8 +240,8 @@ function CreateInspectionForm({ projects, onClose, onCreated }: { projects: Proj
           </div>
         </div>
         <div className="flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="btn-primary" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Hủy</button>
-          <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">{submitting ? 'Đang tạo...' : 'Tạo'}</button>
+          <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
+          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo'}</Button>
         </div>
       </form>
     </div>

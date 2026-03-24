@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
+import { PageHeader, StatCard, Button } from '@/components/ui'
+import { Clock } from 'lucide-react'
 
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
@@ -76,47 +78,28 @@ export default function ProductionPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quản lý Sản xuất</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{pagination.total} lệnh sản xuất</p>
-        </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-accent">+ Tạo WO</button>
-      </div>
+      <PageHeader
+        title="Quản lý Sản xuất"
+        subtitle={`${pagination.total} lệnh sản xuất`}
+        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Tạo WO</Button>}
+      />
 
-      {/* Stats Overview — Dashboard style */}
+      {/* Stats Overview */}
       <div className="grid grid-cols-4 gap-4 stagger-children">
-        {[
-          { label: 'Tổng WO', value: pagination.total, color: '#0a2540', icon: '🏭' },
-          { label: 'Chờ bắt đầu', value: openCount, color: '#f59e0b', icon: '⏳' },
-          { label: 'Đang chạy', value: inProgressCount, color: '#2563eb', icon: '⚡' },
-          { label: 'Hoàn thành', value: completedCount, color: '#16a34a', icon: '✅' },
-        ].map(s => (
-          <div key={s.label} className="card p-6 relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: s.color, borderRadius: '16px 16px 0 0' }} />
-            <div className="flex items-center justify-between mb-4 pt-1">
-              <div style={{ width: '44px', height: '44px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${s.color}10`, fontSize: '20px' }}>
-                {s.icon}
-              </div>
-            </div>
-            <p style={{ fontSize: '32px', fontWeight: 800, color: s.color, letterSpacing: '-0.03em', lineHeight: 1 }}>{s.value}</p>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginTop: '8px' }}>{s.label}</p>
-          </div>
-        ))}
+        <StatCard label="Tổng WO" value={pagination.total} color="#0a2540" icon={<span style={{ fontSize: 20 }}>🏭</span>} />
+        <StatCard label="Chờ bắt đầu" value={openCount} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>⏳</span>} />
+        <StatCard label="Đang chạy" value={inProgressCount} color="#2563eb" icon={<span style={{ fontSize: 20 }}>⚡</span>} />
+        <StatCard label="Hoàn thành" value={completedCount} color="#16a34a" icon={<span style={{ fontSize: 20 }}>✅</span>} />
       </div>
 
       {showCreate && <CreateWOForm projects={projects} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); loadData() }} />}
 
-      {/* Search + Status filter */}
       <div className="flex gap-3 items-center">
         <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã WO, mô tả..." /></div>
         <div className="flex gap-2">
           {[{ value: '', label: 'Tất cả' }, ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ value: k, label: v.label }))].map((f) => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-3 py-1.5 text-xs rounded-full font-medium transition-colors" style={{
-              background: statusFilter === f.value ? 'var(--primary)' : 'var(--bg-card)',
-              color: statusFilter === f.value ? 'white' : 'var(--text-secondary)',
-              border: `1px solid ${statusFilter === f.value ? 'var(--primary)' : 'var(--border)'}`,
-            }}>{f.label}</button>
+            <button key={f.value} onClick={() => setStatusFilter(f.value)}
+              className={`filter-pill ${statusFilter === f.value ? 'active' : ''}`}>{f.label}</button>
           ))}
         </div>
       </div>
@@ -139,15 +122,15 @@ export default function ProductionPage() {
                 {project && <div>Dự án: <span style={{ color: 'var(--text-secondary)' }}>{project.projectCode}</span></div>}
                 <div>Tổ SX: <span style={{ color: 'var(--text-secondary)' }}>{wo.teamCode}</span></div>
                 {wo.plannedStart && <div className="flex items-center gap-1">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                  <Clock size={10} />
                   {formatDate(wo.plannedStart)} → {wo.plannedEnd ? formatDate(wo.plannedEnd) : '?'}
                 </div>}
                 <div>Vật tư: <span className="font-semibold" style={{ color: 'var(--primary)' }}>{wo.materialIssueCount}</span> lượt</div>
               </div>
               <div className="flex gap-2 mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-                {wo.status === 'OPEN' && <button onClick={(e) => handleAction(e, wo.id, 'start')} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>Bắt đầu</button>}
-                {wo.status === 'IN_PROGRESS' && <button onClick={(e) => handleAction(e, wo.id, 'complete')} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>Hoàn thành</button>}
-                {wo.status !== 'COMPLETED' && wo.status !== 'CANCELLED' && <button onClick={(e) => handleAction(e, wo.id, 'cancel')} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>Hủy</button>}
+                {wo.status === 'OPEN' && <Button variant="outline" size="sm" onClick={(e) => handleAction(e, wo.id, 'start')}>Bắt đầu</Button>}
+                {wo.status === 'IN_PROGRESS' && <Button variant="accent" size="sm" onClick={(e) => handleAction(e, wo.id, 'complete')}>Hoàn thành</Button>}
+                {wo.status !== 'COMPLETED' && wo.status !== 'CANCELLED' && <Button variant="danger" size="sm" onClick={(e) => handleAction(e, wo.id, 'cancel')}>Hủy</Button>}
               </div>
             </div>
           )
@@ -199,8 +182,8 @@ function CreateWOForm({ projects, onClose, onCreated }: { projects: ProjectOptio
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Ngày kết thúc</label>
           <input className="input" type="date" value={form.plannedEnd} onChange={(e) => setForm({ ...form, plannedEnd: e.target.value })} /></div>
         <div className="flex items-end gap-3 justify-end">
-          <button type="button" onClick={onClose} className="btn-primary" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Hủy</button>
-          <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">{submitting ? 'Đang tạo...' : 'Tạo WO'}</button>
+          <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
+          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo WO'}</Button>
         </div>
       </form>
     </div>

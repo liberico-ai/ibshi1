@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { getStatusBg, getUrgencyLabel, formatDate } from '@/lib/utils'
 import { SearchBar } from '@/components/SearchPagination'
+import { PageHeader, Card, Badge, Button } from '@/components/ui'
+import { Clock, CheckCircle } from 'lucide-react'
 
 interface Task {
   id: string; stepCode: string; stepName: string; assignedRole: string; status: string;
@@ -45,7 +47,6 @@ export default function TasksPage() {
     setCompleting(null)
   }
 
-  // Client-side filter
   const filtered = allTasks.filter((t) => {
     if (urgencyFilter && t.urgency !== urgencyFilter) return false
     if (search) {
@@ -58,7 +59,6 @@ export default function TasksPage() {
     return true
   })
 
-  // Group by urgency
   const grouped = {
     overdue: filtered.filter(t => t.urgency === 'overdue'),
     today: filtered.filter(t => t.urgency === 'today'),
@@ -79,39 +79,33 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Công việc của tôi</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{allTasks.length} task cần xử lý</p>
-        </div>
-        {/* Quick stats */}
-        <div className="flex gap-2 stagger-children">
-        {allTasks.filter(t => t.urgency === 'overdue').length > 0 && (
-            <div className="px-3.5 py-1.5 rounded-full text-xs font-bold" style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid #fecaca' }}>
-              ⚠️ {allTasks.filter(t => t.urgency === 'overdue').length} quá hạn
-            </div>
-          )}
-          {allTasks.filter(t => t.urgency === 'today').length > 0 && (
-            <div className="px-3.5 py-1.5 rounded-full text-xs font-bold" style={{ background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid #fef08a' }}>
-              📅 {allTasks.filter(t => t.urgency === 'today').length} hôm nay
-            </div>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Công việc của tôi"
+        subtitle={`${allTasks.length} task cần xử lý`}
+        actions={
+          <div className="flex gap-2 stagger-children">
+            {allTasks.filter(t => t.urgency === 'overdue').length > 0 && (
+              <Badge variant="danger">⚠️ {allTasks.filter(t => t.urgency === 'overdue').length} quá hạn</Badge>
+            )}
+            {allTasks.filter(t => t.urgency === 'today').length > 0 && (
+              <Badge variant="warning">📅 {allTasks.filter(t => t.urgency === 'today').length} hôm nay</Badge>
+            )}
+          </div>
+        }
+      />
 
       {/* Search + Urgency filter tabs */}
       <div className="flex gap-4 items-center flex-wrap">
         <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm step, mã DA, tên DA..." /></div>
         <div className="flex gap-2">
           {STATUS_TABS.map((tab) => (
-            <button key={tab.value} onClick={() => setUrgencyFilter(tab.value)}
-              className="px-4 py-2 text-sm font-semibold transition-all cursor-pointer flex items-center gap-2 rounded-full" style={{
-                background: urgencyFilter === tab.value ? 'var(--primary)' : 'var(--bg-card)',
-                color: urgencyFilter === tab.value ? 'white' : 'var(--text-secondary)',
-                border: `1.5px solid ${urgencyFilter === tab.value ? 'var(--primary)' : 'var(--border)'}`,
-                boxShadow: urgencyFilter === tab.value ? 'var(--shadow-xs)' : 'none',
-              }}>
-              {tab.dot && <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: urgencyFilter === tab.value ? 'white' : tab.dot }} />} {tab.label}
+            <button
+              key={tab.value}
+              onClick={() => setUrgencyFilter(tab.value)}
+              className={`filter-pill ${urgencyFilter === tab.value ? 'active' : ''}`}
+            >
+              {tab.dot && <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: urgencyFilter === tab.value ? 'white' : tab.dot }} />}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -130,15 +124,15 @@ export default function TasksPage() {
       )}
 
       {filtered.length === 0 && (
-        <div className="card p-12 text-center">
-          <svg className="mx-auto mb-3" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-          <p className="text-base font-medium" style={{ color: 'var(--text-primary)' }}>
+        <Card padding="spacious" className="text-center">
+          <CheckCircle size={48} className="mx-auto mb-3" stroke="#16a34a" strokeWidth={1.5} />
+          <p style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-primary)' }}>
             {search || urgencyFilter ? 'Không tìm thấy task phù hợp' : 'Không có task nào!'}
           </p>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
             {search || urgencyFilter ? 'Thử tìm kiếm với từ khóa khác' : 'Bạn đã hoàn thành tất cả công việc'}
           </p>
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -149,7 +143,7 @@ function TaskSection({ title, tasks, onComplete, completing, dotColor }: {
 }) {
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+      <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-sm)', display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', color: 'var(--text-secondary)' }}>
         <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: dotColor }} />
         {title} ({tasks.length})
       </h3>
@@ -166,11 +160,12 @@ function TaskList({ tasks, onComplete, completing }: {
       {tasks.map((task) => {
         const urgencyInfo = getUrgencyLabel(task.urgency)
         return (
-          <div key={task.id} className="card p-4 flex items-center gap-4"
+          <Card
+            key={task.id}
+            padding="compact"
+            hoverable
+            className="flex items-center gap-4"
             onClick={() => window.location.href = `/dashboard/tasks/${task.id}`}
-            style={{ cursor: 'pointer', transition: 'box-shadow 0.15s' }}
-            onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)')}
-            onMouseLeave={e => (e.currentTarget.style.boxShadow = '')}
           >
             <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
               task.urgency === 'overdue' ? 'bg-red-500 animate-pulse' :
@@ -179,26 +174,30 @@ function TaskList({ tasks, onComplete, completing }: {
             }`} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-mono" style={{ color: 'var(--accent)' }}>{task.stepCode}</span>
-                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{task.stepName}</span>
+                <span className="mono-label" style={{ color: 'var(--accent)' }}>{task.stepCode}</span>
+                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-primary)' }}>{task.stepName}</span>
                 {urgencyInfo.label && <span className={`badge ${urgencyInfo.color}`}>{urgencyInfo.label}</span>}
               </div>
-              <div className="flex items-center gap-3 text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                <span className="font-mono" style={{ color: 'var(--primary-light)' }}>{task.project.projectCode}</span>
+              <div className="flex items-center gap-3 mt-1" style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                <span className="mono-label" style={{ color: 'var(--primary-light)' }}>{task.project.projectCode}</span>
                 <span>{task.project.projectName}</span>
-                {task.deadline && <span className="flex items-center gap-0.5"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> {formatDate(task.deadline)}</span>}
+                {task.deadline && <span className="flex items-center gap-0.5"><Clock size={10} /> {formatDate(task.deadline)}</span>}
               </div>
             </div>
-            <span className={`badge ${getStatusBg(task.status)}`} style={{ borderWidth: '1px' }}>
+            <Badge variant={task.status === 'IN_PROGRESS' ? 'info' : 'default'}>
               {task.status === 'IN_PROGRESS' ? 'Đang xử lý' : 'Chờ'}
-            </span>
+            </Badge>
             {task.status === 'IN_PROGRESS' && (
-              <button onClick={(e) => { e.stopPropagation(); onComplete(task.id) }} disabled={completing === task.id}
-                className="btn-accent text-xs px-3 py-1.5 disabled:opacity-50">
-                {completing === task.id ? '...' : '✓ Xong'}
-              </button>
+              <Button
+                variant="accent"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); onComplete(task.id) }}
+                loading={completing === task.id}
+              >
+                ✓ Xong
+              </Button>
             )}
-          </div>
+          </Card>
         )
       })}
     </div>

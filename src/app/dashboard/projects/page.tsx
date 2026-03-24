@@ -6,6 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { PRODUCT_TYPES } from '@/lib/constants'
 import { formatCurrency, getProgressColor } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
+import { PageHeader, StatCard, Card, Badge, Button } from '@/components/ui'
 
 interface Project {
   id: string; projectCode: string; projectName: string; clientName: string;
@@ -64,33 +65,18 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quản lý Dự án</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{pagination.total} dự án</p>
-        </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-accent">+ Tạo dự án</button>
-      </div>
+      <PageHeader
+        title="Quản lý Dự án"
+        subtitle={`${pagination.total} dự án`}
+        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Tạo dự án</Button>}
+      />
 
-      {/* Stats Overview — Dashboard style */}
-      <div className="grid grid-cols-4 gap-4 stagger-children">
-        {[
-          { label: 'Tổng dự án', value: pagination.total, color: '#0a2540', icon: '📋' },
-          { label: 'Đang hoạt động', value: activeCount, color: '#0ea5e9', icon: '⚡' },
-          { label: 'Hoàn thành', value: completedCountP, color: '#16a34a', icon: '✅' },
-          { label: 'Tạm ngưng', value: onHoldCount, color: '#f59e0b', icon: '⏸️' },
-        ].map(s => (
-          <div key={s.label} className="card p-6 relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: s.color, borderRadius: '16px 16px 0 0' }} />
-            <div className="flex items-center justify-between mb-4 pt-1">
-              <div style={{ width: '44px', height: '44px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${s.color}10`, fontSize: '20px' }}>
-                {s.icon}
-              </div>
-            </div>
-            <p style={{ fontSize: '32px', fontWeight: 800, color: s.color, letterSpacing: '-0.03em', lineHeight: 1 }}>{s.value}</p>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginTop: '8px' }}>{s.label}</p>
-          </div>
-        ))}
+      {/* Stats Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
+        <StatCard label="Tổng dự án" value={pagination.total} color="#0a2540" icon={<span style={{ fontSize: 20 }}>📋</span>} />
+        <StatCard label="Đang hoạt động" value={activeCount} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>⚡</span>} />
+        <StatCard label="Hoàn thành" value={completedCountP} color="#16a34a" icon={<span style={{ fontSize: 20 }}>✅</span>} />
+        <StatCard label="Tạm ngưng" value={onHoldCount} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>⏸️</span>} />
       </div>
 
       {showCreate && <CreateProjectForm onClose={() => setShowCreate(false)} onCreated={(p) => {
@@ -103,13 +89,13 @@ export default function ProjectsPage() {
         <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã DA, tên, khách hàng..." /></div>
         <div className="flex gap-2">
           {STATUS_FILTERS.map((f) => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-4 py-2 text-sm font-semibold transition-all cursor-pointer" style={{
-              background: statusFilter === f.value ? 'var(--primary)' : 'var(--bg-card)',
-              color: statusFilter === f.value ? 'white' : 'var(--text-secondary)',
-              border: `1px solid ${statusFilter === f.value ? 'var(--primary)' : 'var(--border)'}`,
-              borderRadius: 'var(--radius-pill)',
-              boxShadow: statusFilter === f.value ? 'var(--shadow-xs)' : 'none',
-            }}>{f.label}</button>
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={`filter-pill ${statusFilter === f.value ? 'active' : ''}`}
+            >
+              {f.label}
+            </button>
           ))}
         </div>
       </div>
@@ -117,29 +103,23 @@ export default function ProjectsPage() {
       {/* Project Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 stagger-children">
         {projects.map((p) => (
-          <Link href={`/dashboard/projects/${p.id}`} key={p.id} className="card p-5 block cursor-pointer hover:shadow-md transition-shadow">
+          <Link href={`/dashboard/projects/${p.id}`} key={p.id} className="card card-default block cursor-pointer hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-3">
               <div>
-                <span className="text-xs font-mono font-semibold" style={{ color: 'var(--accent)' }}>{p.projectCode}</span>
-                <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>{p.projectName}</h3>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{p.clientName}</p>
+                <span className="mono-label" style={{ color: 'var(--accent)' }}>{p.projectCode}</span>
+                <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginTop: 4, color: 'var(--text-primary)' }}>{p.projectName}</h3>
+                <p style={{ fontSize: 'var(--text-sm)', marginTop: 2, color: 'var(--text-secondary)' }}>{p.clientName}</p>
               </div>
-              <span className="badge" style={{
-                background: p.status === 'ACTIVE' ? '#f0fdf4' : p.status === 'COMPLETED' ? '#eff6ff' : '#f1f5f9',
-                color: p.status === 'ACTIVE' ? '#16a34a' : p.status === 'COMPLETED' ? '#2563eb' : '#64748b',
-                borderColor: p.status === 'ACTIVE' ? '#bbf7d0' : p.status === 'COMPLETED' ? '#bfdbfe' : '#e2e8f0',
-                borderWidth: '1px',
-              }}>
+              <Badge variant={p.status === 'ACTIVE' ? 'success' : p.status === 'COMPLETED' ? 'info' : 'default'}>
                 {STATUS_FILTERS.find(f => f.value === p.status)?.label || p.status}
-              </span>
+              </Badge>
             </div>
 
             <div className="flex items-center gap-4 text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
               <span>{PRODUCT_TYPES.find((t) => t.value === p.productType)?.label || p.productType}</span>
               {p.contractValue && (
                 <span className="flex items-center gap-1">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
-                  {formatCurrency(p.contractValue, p.currency)}
+                  💰 {formatCurrency(p.contractValue, p.currency)}
                 </span>
               )}
             </div>
@@ -148,15 +128,15 @@ export default function ProjectsPage() {
               <div className="flex-1 progress-bar">
                 <div className={`progress-bar-fill ${getProgressColor(p.progress)}`} style={{ width: `${p.progress}%` }} />
               </div>
-              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{p.progress}%</span>
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>({p.completedTasks}/{p.totalTasks})</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{p.progress}%</span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>({p.completedTasks}/{p.totalTasks})</span>
             </div>
           </Link>
         ))}
         {projects.length === 0 && (
-          <div className="col-span-2 card p-12 text-center">
-            <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Chưa có dự án nào</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Nhấn &quot;Tạo dự án&quot; để bắt đầu</p>
+          <div className="col-span-2 card card-spacious text-center">
+            <p style={{ fontWeight: 500, color: 'var(--text-primary)' }}>Chưa có dự án nào</p>
+            <p style={{ fontSize: 'var(--text-sm)', marginTop: 4, color: 'var(--text-muted)' }}>Nhấn &quot;Tạo dự án&quot; để bắt đầu</p>
           </div>
         )}
       </div>
@@ -184,7 +164,6 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
     e.preventDefault()
     setError(''); setSubmitting(true)
 
-    // Build FormData if files exist, otherwise JSON
     const hasFiles = Object.values(files).some(f => f !== null)
 
     if (hasFiles) {
@@ -216,81 +195,72 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
   ]
 
   return (
-    <div className="card p-6 animate-fade-in" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
-      <h3 className="text-base font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Tạo dự án mới</h3>
-      {error && <div className="mb-3 p-2 rounded text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>{error}</div>}
+    <Card padding="default" className="animate-fade-in" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+      <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 'var(--space-md)', color: 'var(--text-primary)' }}>Tạo dự án mới</h3>
+      {error && <div className="mb-3 p-2 rounded" style={{ fontSize: 'var(--text-sm)', background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }}>{error}</div>}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Basic info */}
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Mã dự án *</label>
+        <div className="input-field"><label className="input-label">Mã dự án *</label>
           <input className="input" placeholder="DA-26-003" value={form.projectCode} onChange={(e) => setForm({ ...form, projectCode: e.target.value })} required /></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Tên dự án *</label>
+        <div className="input-field"><label className="input-label">Tên dự án *</label>
           <input className="input" placeholder="Tên dự án" value={form.projectName} onChange={(e) => setForm({ ...form, projectName: e.target.value })} required /></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Khách hàng *</label>
+        <div className="input-field"><label className="input-label">Khách hàng *</label>
           <input className="input" placeholder="Tên khách hàng" value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} required /></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Loại sản phẩm *</label>
+        <div className="input-field"><label className="input-label">Loại sản phẩm *</label>
           <select className="input" value={form.productType} onChange={(e) => setForm({ ...form, productType: e.target.value })}>
             {PRODUCT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Giá trị hợp đồng</label>
+        <div className="input-field"><label className="input-label">Giá trị hợp đồng</label>
           <input className="input" type="number" placeholder="0" value={form.contractValue} onChange={(e) => setForm({ ...form, contractValue: e.target.value })} /></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Tiền tệ</label>
+        <div className="input-field"><label className="input-label">Tiền tệ</label>
           <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             <option value="VND">VND</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="JPY">JPY</option>
           </select></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Ngày bắt đầu</label>
+        <div className="input-field"><label className="input-label">Ngày bắt đầu</label>
           <input className="input" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Ngày kết thúc (dự kiến)</label>
+        <div className="input-field"><label className="input-label">Ngày kết thúc (dự kiến)</label>
           <input className="input" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
-        <div className="md:col-span-2"><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Mô tả</label>
+        <div className="md:col-span-2 input-field"><label className="input-label">Mô tả</label>
           <textarea className="input" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
 
         {/* Document attachments */}
-        <div className="md:col-span-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
-          <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+        <div className="md:col-span-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)', marginTop: 4 }}>
+          <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-sm)', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)' }}>
             📎 Tài liệu đính kèm
-            <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>(tuỳ chọn)</span>
+            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400, color: 'var(--text-muted)' }}>(tuỳ chọn)</span>
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {FILE_SLOTS.map(slot => (
               <div key={slot.key} style={{
                 border: `1px dashed ${files[slot.key] ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 10, padding: '12px 14px',
-                background: files[slot.key] ? 'rgba(var(--accent-rgb, 37,99,235), 0.04)' : 'var(--bg-secondary)',
+                borderRadius: 'var(--radius)', padding: 'var(--space-sm) var(--space-sm)',
+                background: files[slot.key] ? 'var(--ibs-navy-50)' : 'var(--bg-secondary)',
                 transition: 'all 0.2s',
               }}>
                 <div className="flex items-center gap-2 mb-2">
                   <span>{slot.icon}</span>
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{slot.label}</span>
+                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--text-primary)' }}>{slot.label}</span>
                 </div>
                 {files[slot.key] ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs truncate flex-1" style={{ color: 'var(--accent)' }}>
-                      ✓ {files[slot.key]!.name}
-                    </span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)' }} className="truncate flex-1">✓ {files[slot.key]!.name}</span>
                     <button type="button" onClick={() => handleFileChange(slot.key, null)}
-                      className="text-xs px-2 py-0.5" style={{ color: '#dc2626', cursor: 'pointer', background: 'none', border: 'none' }}>
-                      ✕
-                    </button>
+                      style={{ fontSize: 'var(--text-xs)', color: 'var(--danger)', cursor: 'pointer', background: 'none', border: 'none' }}>✕</button>
                   </div>
                 ) : (
-                  <input
-                    type="file"
-                    accept={slot.accept}
+                  <input type="file" accept={slot.accept}
                     onChange={(e) => handleFileChange(slot.key, e.target.files?.[0] || null)}
-                    className="text-xs w-full"
-                    style={{ color: 'var(--text-muted)' }}
-                  />
+                    style={{ fontSize: 'var(--text-xs)', width: '100%', color: 'var(--text-muted)' }} />
                 )}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="md:col-span-2 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-          <button type="button" onClick={onClose} className="btn-primary" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Hủy</button>
-          <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">{submitting ? 'Đang tạo...' : 'Tạo dự án'}</button>
+        <div className="md:col-span-2 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)' }}>
+          <Button variant="outline" onClick={onClose} type="button">Hủy</Button>
+          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo dự án'}</Button>
         </div>
       </form>
-    </div>
+    </Card>
   )
 }

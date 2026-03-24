@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
+import { PageHeader, StatCard, Button } from '@/components/ui'
 
 interface Employee {
   id: string; employeeCode: string; fullName: string; phone: string | null;
@@ -57,32 +58,18 @@ export default function HRPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quản lý Nhân sự</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{pagination.total} nhân viên • {activeCount} đang làm việc</p>
-        </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-accent">+ Thêm NV</button>
-      </div>
+      <PageHeader
+        title="Quản lý Nhân sự"
+        subtitle={`${pagination.total} nhân viên • ${activeCount} đang làm việc`}
+        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Thêm NV</Button>}
+      />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="card p-4" style={{ borderTop: '3px solid #0ea5e9' }}>
-          <p className="text-2xl font-extrabold" style={{ color: '#0ea5e9' }}>{pagination.total}</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tổng nhân sự</p>
-        </div>
-        <div className="card p-4" style={{ borderTop: '3px solid #16a34a' }}>
-          <p className="text-2xl font-extrabold" style={{ color: '#16a34a' }}>{activeCount}</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Đang làm</p>
-        </div>
-        <div className="card p-4" style={{ borderTop: '3px solid #f59e0b' }}>
-          <p className="text-2xl font-extrabold" style={{ color: '#f59e0b' }}>{employees.filter(e => e.employmentType === 'PROBATION').length}</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Thử việc</p>
-        </div>
-        <div className="card p-4" style={{ borderTop: '3px solid #64748b' }}>
-          <p className="text-2xl font-extrabold" style={{ color: '#64748b' }}>{employees.filter(e => e.status === 'RESIGNED').length}</p>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Đã nghỉ</p>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
+        <StatCard label="Tổng nhân sự" value={pagination.total} color="#0ea5e9" />
+        <StatCard label="Đang làm" value={activeCount} color="#16a34a" />
+        <StatCard label="Thử việc" value={employees.filter(e => e.employmentType === 'PROBATION').length} color="#f59e0b" />
+        <StatCard label="Đã nghỉ" value={employees.filter(e => e.status === 'RESIGNED').length} color="#64748b" />
       </div>
 
       {showCreate && <CreateEmployeeForm onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); loadEmployees() }} />}
@@ -92,11 +79,8 @@ export default function HRPage() {
         <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã NV, tên..." /></div>
         <div className="flex gap-2">
           {[{ value: '', label: 'Tất cả' }, ...Object.entries(STATUS_MAP).map(([k, v]) => ({ value: k, label: v.label }))].map(f => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)} className="px-3 py-1.5 text-xs rounded-full font-medium transition-colors" style={{
-              background: statusFilter === f.value ? 'var(--primary)' : 'var(--bg-card)',
-              color: statusFilter === f.value ? 'white' : 'var(--text-secondary)',
-              border: `1px solid ${statusFilter === f.value ? 'var(--primary)' : 'var(--border)'}`,
-            }}>{f.label}</button>
+            <button key={f.value} onClick={() => setStatusFilter(f.value)}
+              className={`filter-pill ${statusFilter === f.value ? 'active' : ''}`}>{f.label}</button>
           ))}
         </div>
       </div>
@@ -174,8 +158,8 @@ function CreateEmployeeForm({ onClose, onCreated }: { onClose: () => void; onCre
             <option value="PROBATION">Thử việc</option>
           </select></div>
         <div className="col-span-3 flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="btn-primary" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Hủy</button>
-          <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">{submitting ? 'Đang tạo...' : 'Thêm'}</button>
+          <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
+          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Thêm'}</Button>
         </div>
       </form>
     </div>

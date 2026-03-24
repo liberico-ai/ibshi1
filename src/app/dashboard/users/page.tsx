@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { ROLES, DEPARTMENTS } from '@/lib/constants'
 import { SearchBar } from '@/components/SearchPagination'
+import { PageHeader, Button } from '@/components/ui'
 
 interface UserItem {
   id: string; username: string; fullName: string; roleCode: string;
@@ -85,17 +86,11 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quản lý Người dùng</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            {filtered.length}/{allUsers.length} người dùng
-            {' · '}{allUsers.filter(u => u.isActive).length} active
-            {' · '}{allUsers.filter(u => !u.isActive).length} inactive
-          </p>
-        </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-accent">+ Thêm người dùng</button>
-      </div>
+      <PageHeader
+        title="Quản lý Người dùng"
+        subtitle={`${filtered.length}/${allUsers.length} người dùng · ${allUsers.filter(u => u.isActive).length} active · ${allUsers.filter(u => !u.isActive).length} inactive`}
+        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Thêm người dùng</Button>}
+      />
 
       {showCreate && <CreateUserForm onClose={() => setShowCreate(false)} onCreated={(u) => {
         setAllUsers([...allUsers, u as UserItem])
@@ -116,13 +111,7 @@ export default function UsersPage() {
         <div className="flex gap-2 flex-wrap">
           {ROLE_FILTERS.map((f) => (
             <button key={f.value} onClick={() => setRoleFilter(f.value)}
-              className="px-4 py-2 text-sm font-semibold transition-all cursor-pointer" style={{
-                background: roleFilter === f.value ? 'var(--primary)' : 'var(--bg-card)',
-                color: roleFilter === f.value ? 'white' : 'var(--text-secondary)',
-                border: `1px solid ${roleFilter === f.value ? 'var(--primary)' : 'var(--border)'}`,
-                borderRadius: 'var(--radius-pill)',
-                boxShadow: roleFilter === f.value ? 'var(--shadow-xs)' : 'none',
-              }}>
+              className={`filter-pill ${roleFilter === f.value ? 'active' : ''}`}>
               {f.label}
             </button>
           ))}
@@ -248,10 +237,10 @@ function EditUserModal({ user, onClose, onSaved }: { user: UserItem; onClose: ()
               {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
             </select></div>
           <div className="col-span-2 flex gap-3 justify-end">
-            <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
-            <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">
+            <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
+            <Button variant="accent" type="submit" loading={submitting}>
               {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -287,10 +276,10 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: UserItem; onClose
             <input className="input" type="password" placeholder="Nhập mật khẩu mới..." value={newPassword}
               onChange={e => setNewPassword(e.target.value)} required minLength={4} /></div>
           <div className="flex gap-3 justify-end">
-            <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
-            <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">
+            <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
+            <Button variant="accent" type="submit" loading={submitting}>
               {submitting ? 'Đang xử lý...' : 'Reset mật khẩu'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -341,10 +330,10 @@ function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated
             {DEPARTMENTS.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
           </select></div>
         <div className="col-span-2 flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
-          <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">
+          <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
+          <Button variant="accent" type="submit" loading={submitting}>
             {submitting ? 'Đang tạo...' : 'Thêm người dùng'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

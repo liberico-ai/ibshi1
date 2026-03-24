@@ -225,8 +225,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NotificationBell />
             <button
               onClick={() => { logout(); router.push('/login') }}
-              className="p-2.5 rounded-lg cursor-pointer transition-colors hover:bg-slate-100"
-              style={{ color: 'var(--text-muted)' }}
+              className="btn-ghost btn-icon"
               title="Đăng xuất"
             >
               <LogOut size={18} strokeWidth={2} />

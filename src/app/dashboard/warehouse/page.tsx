@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatCurrency } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
+import { PageHeader, StatCard, Card, Button } from '@/components/ui'
+import { ChevronRight } from 'lucide-react'
 
 interface Material {
   id: string; materialCode: string; name: string; nameEn: string; unit: string;
@@ -66,29 +68,27 @@ export default function WarehousePage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quản lý Kho</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{pagination.total} vật tư • {materials.filter(m => m.lowStock).length} dưới mức tối thiểu</p>
-        </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-accent">+ Thêm vật tư</button>
-      </div>
+      <PageHeader
+        title="Quản lý Kho"
+        subtitle={`${pagination.total} vật tư • ${materials.filter(m => m.lowStock).length} dưới mức tối thiểu`}
+        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Thêm vật tư</Button>}
+      />
 
       {/* ═══ KPI Dashboard v2 ═══ */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <KpiCard label="Tổng vật tư" value={stats.totalMaterials} icon="📦" color="#0ea5e9" />
-          <KpiCard label="Thiếu hàng" value={stats.lowStockCount} icon="⚠️" color={stats.lowStockCount > 0 ? '#dc2626' : '#16a34a'} alert={stats.lowStockCount > 0} />
-          <KpiCard label="Giá trị tồn" value={`${(stats.totalValue / 1e6).toFixed(1)}M`} icon="💰" color="#f59e0b" />
-          <KpiCard label="PR chờ duyệt" value={stats.prPending} icon="📋" color="#8b5cf6" />
-          <KpiCard label="PO đang xử lý" value={stats.poActive} icon="🚚" color="#0ea5e9" />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 stagger-children">
+          <StatCard label="Tổng vật tư" value={stats.totalMaterials} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>📦</span>} />
+          <StatCard label="Thiếu hàng" value={stats.lowStockCount} color={stats.lowStockCount > 0 ? '#dc2626' : '#16a34a'} icon={<span style={{ fontSize: 20 }}>⚠️</span>} accent={stats.lowStockCount > 0} />
+          <StatCard label="Giá trị tồn" value={`${(stats.totalValue / 1e6).toFixed(1)}M`} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>💰</span>} />
+          <StatCard label="PR chờ duyệt" value={stats.prPending} color="#8b5cf6" icon={<span style={{ fontSize: 20 }}>📋</span>} />
+          <StatCard label="PO đang xử lý" value={stats.poActive} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>🚚</span>} />
         </div>
       )}
 
       {/* Recent Movements */}
       {stats && stats.recentMovements.length > 0 && (
-        <div className="card p-4">
-          <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>📊 Biến động gần đây</h3>
+        <Card padding="compact">
+          <h3 className="section-title" style={{ fontSize: 'var(--text-sm)', marginBottom: 'var(--space-sm)' }}>📊 Biến động gần đây</h3>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {stats.recentMovements.slice(0, 6).map(m => (
               <div key={m.id} className="flex-shrink-0 p-3 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-light)', minWidth: '180px' }}>
@@ -106,7 +106,7 @@ export default function WarehousePage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {showCreate && <CreateMaterialForm onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); loadMaterials() }} />}
@@ -116,13 +116,8 @@ export default function WarehousePage() {
         <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã VT, tên..." /></div>
         <div className="flex gap-2 flex-wrap">
           {CATEGORIES.map((c) => (
-            <button key={c.value} onClick={() => setCategoryFilter(c.value)} className="px-4 py-2 text-sm font-semibold transition-all cursor-pointer" style={{
-              background: categoryFilter === c.value ? 'var(--primary)' : 'var(--bg-card)',
-              color: categoryFilter === c.value ? 'white' : 'var(--text-secondary)',
-              border: `1px solid ${categoryFilter === c.value ? 'var(--primary)' : 'var(--border)'}`,
-              borderRadius: 'var(--radius-pill)',
-              boxShadow: categoryFilter === c.value ? 'var(--shadow-xs)' : 'none',
-            }}>{c.label}</button>
+            <button key={c.value} onClick={() => setCategoryFilter(c.value)}
+              className={`filter-pill ${categoryFilter === c.value ? 'active' : ''}`}>{c.label}</button>
           ))}
         </div>
       </div>
@@ -156,7 +151,7 @@ export default function WarehousePage() {
                   }}>{m.lowStock ? '⚠ Thiếu hàng' : '✓ Đủ'}</span>
                 </td>
                 <td>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+                  <ChevronRight size={16} stroke="var(--text-muted)" />
                 </td>
               </tr>
             ))}
@@ -210,23 +205,11 @@ function CreateMaterialForm({ onClose, onCreated }: { onClose: () => void; onCre
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Đơn giá</label>
           <input className="input" type="number" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })} /></div>
         <div className="col-span-3 flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="btn-primary" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Hủy</button>
-          <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">{submitting ? 'Đang tạo...' : 'Thêm'}</button>
+          <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
+          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Thêm'}</Button>
         </div>
       </form>
     </div>
   )
 }
 
-function KpiCard({ label, value, icon, color, alert }: { label: string; value: number | string; icon: string; color: string; alert?: boolean }) {
-  return (
-    <div className={`card p-4 transition-all ${alert ? 'animate-pulse-glow' : ''}`} style={{ borderTop: `3px solid ${color}` }}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-lg">{icon}</span>
-        {alert && <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fef2f2', color: '#dc2626' }}>⚠</span>}
-      </div>
-      <p className="text-2xl font-extrabold" style={{ color }}>{value}</p>
-      <p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
-    </div>
-  )
-}
