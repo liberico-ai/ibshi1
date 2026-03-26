@@ -117,6 +117,21 @@ export async function completeTask(
     }
   }
 
+  // Auto-check gate-based steps: if no next steps were activated,
+  // check if any gated step now has all prerequisites met
+  if (activatedSteps.length === 0) {
+    for (const [code, r] of Object.entries(WORKFLOW_RULES)) {
+      if (!r.gate || r.gate.length === 0) continue
+      if (!r.gate.includes(task.stepCode)) continue
+      // This gated step depends on the step we just completed
+      const gatePass = await checkGate(task.projectId, r.gate)
+      if (gatePass) {
+        await activateTask(task.projectId, code)
+        activatedSteps.push(code)
+      }
+    }
+  }
+
   return { nextSteps: activatedSteps }
 }
 
@@ -243,6 +258,76 @@ async function runWorkflowHooks(
     const projCode = project?.projectCode || 'UNKNOWN'
 
     // ── Forward Sync Hooks ──
+
+    // P1.2: Push estimate data to P2.1A (TCKT), P2.1B (TM), P2.1C (SX)
+    if (stepCode === 'P1.2' && resultData) {
+      const dt02Summary = resultData.formData as Record<string, unknown> | undefined
+      const dt03Items = dt02Summary?.dt03Items as string | undefined
+      const dt04Items = dt02Summary?.dt04Items as string | undefined
+      const dt05Items = dt02Summary?.dt05Items as string | undefined
+      const dt06Items = dt02Summary?.dt06Items as string | undefined
+      const dt07Items = dt02Summary?.dt07Items as string | undefined
+
+      // Push to P2.1A (TCKT): DT02 summary fields + DT07 items
+      const p21aTask = await prisma.workflowTask.findFirst({
+        where: { projectId, stepCode: 'P2.1A' },
+        select: { id: true },
+      })
+      if (p21aTask) {
+        await prisma.workflowTask.update({
+          where: { id: p21aTask.id },
+          data: { resultData: JSON.parse(JSON.stringify({ dt02Summary: dt02Summary || {}, dt07Items: dt07Items || '[]', source: 'P1.2' })) },
+        })
+      }
+
+      // Push to P2.1B (TM): DT03 + DT04 + DT05 items
+      const p21bTask = await prisma.workflowTask.findFirst({
+        where: { projectId, stepCode: 'P2.1B' },
+        select: { id: true },
+      })
+      if (p21bTask) {
+        await prisma.workflowTask.update({
+          where: { id: p21bTask.id },
+          data: { resultData: { dt03Items: dt03Items || '[]', dt04Items: dt04Items || '[]', dt05Items: dt05Items || '[]', source: 'P1.2' } },
+        })
+      }
+
+      // Push to P2.1C (SX): DT06 items
+      const p21cTask = await prisma.workflowTask.findFirst({
+        where: { projectId, stepCode: 'P2.1C' },
+        select: { id: true },
+      })
+      if (p21cTask) {
+        await prisma.workflowTask.update({
+          where: { id: p21cTask.id },
+          data: { resultData: { dt06Items: dt06Items || '[]', source: 'P1.2' } },
+        })
+      }
+    }
+
+    // P2.1A/B/C: Push department estimate data to P2.4
+    if (['P2.1A', 'P2.1B', 'P2.1C'].includes(stepCode)) {
+      const p24Task = await prisma.workflowTask.findFirst({
+        where: { projectId, stepCode: 'P2.4' },
+        select: { id: true, resultData: true },
+      })
+      if (p24Task) {
+        const existingRD = (p24Task.resultData as Record<string, unknown>) || {}
+        const srcRD = (resultData as Record<string, unknown>) || {}
+        let mergeData: Record<string, unknown> = {}
+        if (stepCode === 'P2.1A') {
+          mergeData = { dt02Items: srcRD.dt02Items || '[]', dt07Items: srcRD.dt07Items || '[]', source_P21A: 'done' }
+        } else if (stepCode === 'P2.1B') {
+          mergeData = { dt03Items: srcRD.dt03Items || '[]', dt04Items: srcRD.dt04Items || '[]', dt05Items: srcRD.dt05Items || '[]', source_P21B: 'done' }
+        } else if (stepCode === 'P2.1C') {
+          mergeData = { dt06Items: srcRD.dt06Items || '[]', source_P21C: 'done' }
+        }
+        await prisma.workflowTask.update({
+          where: { id: p24Task.id },
+          data: { resultData: JSON.parse(JSON.stringify({ ...existingRD, ...mergeData })) },
+        })
+      }
+    }
 
     // P2.2/P2.3: BOM complete → sync budget.planned
     if (['P2.2', 'P2.3'].includes(stepCode)) {

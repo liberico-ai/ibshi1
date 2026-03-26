@@ -151,8 +151,9 @@ async function validateLSXBOMLink(
 ): Promise<ValidationResult> {
   const bomId = resultData?.bomId as string | undefined
   const bomLinked = resultData?.bomLinked as boolean | undefined
+  const checklist = resultData?.checklist as Record<string, boolean> | undefined
 
-  if (!bomId && !bomLinked) {
+  if (!bomId && !bomLinked && !checklist?.bom_linked) {
     return {
       valid: false,
       errors: ['TC-04-02: Lệnh SX phải gắn liên kết với BOM dự án. Xác nhận bomId hoặc tick "Đã liên kết BOM".'],
@@ -227,8 +228,8 @@ const STEP_VALIDATION_MAP: Record<string, (projectId: string, resultData?: Recor
     }
   },
   'P3.4': validateLSXBOMLink,       // TC-04-02
-  'P5.5': validateShippingSignoff,  // TC-05-01 (at production completion)
-  'P6.1': validateProofOfDelivery,  // TC-05-02 (at QC dossier)
+  // 'P5.5': validateShippingSignoff,  // TC-05-01 removed — P5.5 is salary calculation, not shipping
+  // 'P6.1': validateProofOfDelivery,  // TC-05-02 removed — P6.1 is QC dossier, not delivery proof
 }
 
 // ── Main Entry Point ──

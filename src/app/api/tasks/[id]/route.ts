@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { getTaskById, assignTask } from '@/lib/task-engine'
-import { completeTask } from '@/lib/workflow-engine'
+import { completeTask, WORKFLOW_RULES } from '@/lib/workflow-engine'
 import prisma from '@/lib/db'
 
 // GET /api/tasks/[id]
@@ -53,33 +53,124 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       // For P1.1: load its own attached files (from previous completion)
       const rd = task.resultData as Record<string, unknown> | null
       siblingFiles = resolveFiles(rd, task.project?.description || null)
+    }
 
-      // Fetch P1.1B rejection info
-      const p1bTask = await prisma.workflowTask.findFirst({
-        where: { projectId: task.projectId, stepCode: 'P1.1B', status: 'REJECTED' },
-        select: { notes: true, completedBy: true, completedAt: true },
+    // Generic rejection info lookup: find any step that rejects TO the current step
+    const rejectingStepCodes = Object.entries(WORKFLOW_RULES)
+      .filter(([, rule]) => rule.rejectTo === task.stepCode)
+      .map(([code]) => code)
+
+    if (rejectingStepCodes.length > 0) {
+      const rejectedTask = await prisma.workflowTask.findFirst({
+        where: { projectId: task.projectId, stepCode: { in: rejectingStepCodes }, status: 'REJECTED' },
+        select: { stepCode: true, notes: true, completedBy: true, completedAt: true, resultData: true },
         orderBy: { completedAt: 'desc' },
       })
-      if (p1bTask?.notes) {
-        const reason = p1bTask.notes.replace(/^REJECTED:\s*/, '')
+      if (rejectedTask?.notes) {
+        const reason = rejectedTask.notes.replace(/^REJECTED:\s*/, '')
         let rejectedByName = 'BGĐ'
-        if (p1bTask.completedBy) {
+        if (rejectedTask.completedBy) {
           const user = await prisma.user.findUnique({
-            where: { id: p1bTask.completedBy },
+            where: { id: rejectedTask.completedBy },
             select: { fullName: true },
           })
           if (user) rejectedByName = user.fullName
         }
+        const rd = rejectedTask.resultData as Record<string, unknown> | null
         rejectionInfo = {
           reason,
           rejectedBy: rejectedByName,
-          rejectedAt: p1bTask.completedAt?.toISOString() || '',
-        }
+          rejectedAt: rejectedTask.completedAt?.toISOString() || '',
+          fromStep: rejectedTask.stepCode,
+          ...(rd?.qcItems ? { qcItems: rd.qcItems } : {}),
+        } as typeof rejectionInfo & { fromStep: string; qcItems?: unknown }
       }
     }
 
-    // For P1.3: fetch both P1.2A (plan) and P1.2 (estimate) data
+    // For P3.2: fetch BOM items from P2.1/P2.2/P2.3 and compare with Materials stock
     let previousStepData: Record<string, unknown> | null = null
+    if (task.stepCode === 'P3.2') {
+      const [p21Task, p22Task, p23Task] = await Promise.all([
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.1' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.2' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.3' },
+          select: { resultData: true, status: true },
+        }),
+      ])
+
+      // Collect all BOM items from P2.1/P2.2/P2.3
+      type BomEntry = { name: string; code: string; spec: string; quantity: string; unit: string }
+      const allPrItems: (BomEntry & { source: string })[] = []
+      const sources = [
+        { data: p21Task?.resultData as Record<string, unknown> | null, label: 'P2.1' },
+        { data: p22Task?.resultData as Record<string, unknown> | null, label: 'P2.2' },
+        { data: p23Task?.resultData as Record<string, unknown> | null, label: 'P2.3' },
+      ]
+      for (const src of sources) {
+        const items = (src.data?.bomItems as BomEntry[]) || []
+        for (const item of items) {
+          if (item.name?.trim()) {
+            allPrItems.push({ ...item, source: src.label })
+          }
+        }
+      }
+
+      // Fetch all materials for stock comparison
+      const materials = await prisma.material.findMany({
+        select: { materialCode: true, name: true, specification: true, currentStock: true, unit: true },
+      })
+
+      // Compare each PR item with stock
+      const fromStock: unknown[] = []
+      const toPurchase: unknown[] = []
+
+      for (const pr of allPrItems) {
+        const requestedQty = Number(pr.quantity) || 0
+        // Match by material code (case-insensitive) or name similarity
+        const matched = materials.find(m =>
+          m.materialCode.toLowerCase() === (pr.code || '').toLowerCase() ||
+          m.name.toLowerCase() === (pr.name || '').toLowerCase()
+        )
+
+        if (matched) {
+          const inStock = Number(matched.currentStock)
+          const specMatch = !pr.spec || !matched.specification ||
+            matched.specification.toLowerCase().includes(pr.spec.toLowerCase()) ||
+            pr.spec.toLowerCase().includes(matched.specification.toLowerCase())
+
+          if (inStock >= requestedQty && specMatch) {
+            fromStock.push({
+              ...pr, requestedQty, inStock,
+              matchedMaterial: { code: matched.materialCode, name: matched.name, spec: matched.specification, stock: inStock },
+            })
+          } else {
+            toPurchase.push({
+              ...pr, requestedQty, inStock,
+              shortfall: Math.max(0, requestedQty - inStock),
+              specMatch,
+              matchedMaterial: { code: matched.materialCode, name: matched.name, spec: matched.specification },
+            })
+          }
+        } else {
+          // No material match found — needs purchasing
+          toPurchase.push({
+            ...pr, requestedQty, inStock: 0, shortfall: requestedQty,
+            specMatch: false, matchedMaterial: null,
+          })
+        }
+      }
+
+      previousStepData = { prItems: allPrItems, fromStock, toPurchase }
+    }
+
+    // For P1.3: fetch both P1.2A (plan) and P1.2 (estimate) data
     if (task.stepCode === 'P1.3') {
       const [p12aTask, p12Task] = await Promise.all([
         prisma.workflowTask.findFirst({
@@ -116,8 +207,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // For P2.4: fetch BOM data from P2.1 (VT chính), P2.2 (VT hàn/sơn), P2.3 (VT phụ) + P1.2 estimate
+    // + P2.1A/B/C department estimate data
     if (task.stepCode === 'P2.4') {
-      const [p21Task, p22Task, p23Task, p12Task] = await Promise.all([
+      const [p21Task, p22Task, p23Task, p12Task, p21aTask, p21bTask, p21cTask] = await Promise.all([
         prisma.workflowTask.findFirst({
           where: { projectId: task.projectId, stepCode: 'P2.1' },
           select: { resultData: true, status: true },
@@ -134,7 +226,43 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           where: { projectId: task.projectId, stepCode: 'P1.2' },
           select: { resultData: true, status: true },
         }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.1A' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.1B' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.1C' },
+          select: { resultData: true, status: true },
+        }),
       ])
+
+      // Merge DT table data from P2.1A/B/C into P2.4's resultData if not already populated
+      const currentRD = (task.resultData as Record<string, unknown>) || {}
+      const p21aRD = (p21aTask?.resultData as Record<string, unknown>) || {}
+      const p21bRD = (p21bTask?.resultData as Record<string, unknown>) || {}
+      const p21cRD = (p21cTask?.resultData as Record<string, unknown>) || {}
+      const dtMerge: Record<string, unknown> = {}
+      // Only merge if P2.4 doesn't have data yet
+      if (!currentRD.dt02Items && p21aRD.dt02Items) dtMerge.dt02Items = p21aRD.dt02Items
+      if (!currentRD.dt07Items && p21aRD.dt07Items) dtMerge.dt07Items = p21aRD.dt07Items
+      if (!currentRD.dt03Items && p21bRD.dt03Items) dtMerge.dt03Items = p21bRD.dt03Items
+      if (!currentRD.dt04Items && p21bRD.dt04Items) dtMerge.dt04Items = p21bRD.dt04Items
+      if (!currentRD.dt05Items && p21bRD.dt05Items) dtMerge.dt05Items = p21bRD.dt05Items
+      if (!currentRD.dt06Items && p21cRD.dt06Items) dtMerge.dt06Items = p21cRD.dt06Items
+      if (Object.keys(dtMerge).length > 0) {
+        const merged = { ...currentRD, ...dtMerge }
+        await prisma.workflowTask.update({
+          where: { id: task.id },
+          data: { resultData: JSON.parse(JSON.stringify(merged)) },
+        })
+        // Update the task object so response reflects the merge
+        ;(task as Record<string, unknown>).resultData = merged
+      }
+
       previousStepData = {
         bomMain: p21Task?.resultData || null,       // VT chính from Thiết kế
         bomWeldPaint: p22Task?.resultData || null,   // VT hàn/sơn from PM
@@ -143,9 +271,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    // For P2.5: fetch P2.4 (KH SX + dự toán điều chỉnh) + P1.2 estimate + BOM from P2.1/P2.2/P2.3
+    // For P2.5: fetch P2.4 (KH SX + dự toán điều chỉnh) + P1.2 estimate + P2.1A/B/C department data
     if (task.stepCode === 'P2.5') {
-      const [p24Task, p21Task, p22Task, p23Task, p12Task] = await Promise.all([
+      const [p24Task, p21Task, p22Task, p23Task, p12Task, p21aTask, p21bTask, p21cTask] = await Promise.all([
         prisma.workflowTask.findFirst({
           where: { projectId: task.projectId, stepCode: 'P2.4' },
           select: { resultData: true, status: true },
@@ -166,13 +294,147 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           where: { projectId: task.projectId, stepCode: 'P1.2' },
           select: { resultData: true, status: true },
         }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.1A' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.1B' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.1C' },
+          select: { resultData: true, status: true },
+        }),
       ])
+      // Build department estimates from P2.4 (if merged) or directly from P2.1A/B/C
+      const p24RD = (p24Task?.resultData as Record<string, unknown>) || {}
+      const p21aRD = (p21aTask?.resultData as Record<string, unknown>) || {}
+      const p21bRD = (p21bTask?.resultData as Record<string, unknown>) || {}
+      const p21cRD = (p21cTask?.resultData as Record<string, unknown>) || {}
+      const departmentEstimates = {
+        dt02Items: p24RD.dt02Items || p21aRD.dt02Items || null,
+        dt03Items: p24RD.dt03Items || p21bRD.dt03Items || null,
+        dt04Items: p24RD.dt04Items || p21bRD.dt04Items || null,
+        dt05Items: p24RD.dt05Items || p21bRD.dt05Items || null,
+        dt06Items: p24RD.dt06Items || p21cRD.dt06Items || null,
+        dt07Items: p24RD.dt07Items || p21aRD.dt07Items || null,
+      }
       previousStepData = {
-        plan: p24Task?.resultData || null,           // KH SX + dự toán điều chỉnh from KTKH
-        estimate: p12Task?.resultData || null,       // Dự toán gốc from P1.2
+        plan: p24Task?.resultData || null,
+        estimate: p12Task?.resultData || null,
         bomMain: p21Task?.resultData || null,
         bomWeldPaint: p22Task?.resultData || null,
         bomSupply: p23Task?.resultData || null,
+        departmentEstimates,
+      }
+    }
+
+    // For P3.6: fetch P3.5 (supplier quotes) + P1.2 (estimate for budget comparison)
+    if (task.stepCode === 'P3.6') {
+      const [p35Task, p12Task] = await Promise.all([
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P3.5' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P1.2' },
+          select: { resultData: true, status: true },
+        }),
+      ])
+      previousStepData = {
+        supplierData: p35Task?.resultData || null,
+        estimate: p12Task?.resultData || null,
+      }
+    }
+
+    // For P4.1: fetch P3.7 (PO + payment terms + delivery plan) for Kế toán
+    if (task.stepCode === 'P4.1') {
+      const p37Task = await prisma.workflowTask.findFirst({
+        where: { projectId: task.projectId, stepCode: 'P3.7' },
+        select: { resultData: true, status: true },
+      })
+      previousStepData = {
+        poData: p37Task?.resultData || null,
+      }
+    }
+
+    // For P4.3: fetch P3.7 (PO + delivery data) + P3.5 (supplier quotes) for QC to see incoming goods
+    if (task.stepCode === 'P4.3') {
+      const [p37Task, p35Task] = await Promise.all([
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P3.7' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P3.5' },
+          select: { resultData: true, status: true },
+        }),
+      ])
+      previousStepData = {
+        poData: p37Task?.resultData || null,
+        supplierData: p35Task?.resultData || null,
+      }
+    }
+
+    // For P4.4: fetch P4.3 (QC result) + P3.5 (supplier materials) for Kho to enter quantities
+    if (task.stepCode === 'P4.4') {
+      const [p43Task, p35Task] = await Promise.all([
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P4.3' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P3.5' },
+          select: { resultData: true, status: true },
+        }),
+      ])
+      previousStepData = {
+        qcData: p43Task?.resultData || null,
+        supplierData: p35Task?.resultData || null,
+      }
+    }
+
+    // For P4.5: fetch P3.4 WO items + Materials inventory for material issue
+    if (task.stepCode === 'P4.5') {
+      const [p34Task, materials] = await Promise.all([
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P3.4' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.material.findMany({
+          select: { materialCode: true, name: true, specification: true, currentStock: true, unit: true, category: true },
+          orderBy: { category: 'asc' },
+        }),
+      ])
+      previousStepData = {
+        woData: p34Task?.resultData || null,
+        inventory: materials.map(m => ({
+          code: m.materialCode,
+          name: m.name,
+          spec: m.specification,
+          stock: Number(m.currentStock),
+          unit: m.unit,
+          category: m.category,
+        })),
+      }
+    }
+
+    // For P5.4: fetch P5.1 (job card data) + P5.2 (volume report with job cards) for PM review
+    if (task.stepCode === 'P5.4') {
+      const [p51Task, p52Task] = await Promise.all([
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P5.1' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P5.2' },
+          select: { resultData: true, status: true },
+        }),
+      ])
+      previousStepData = {
+        jobCardData: p51Task?.resultData || null,
+        volumeData: p52Task?.resultData || null,
       }
     }
 
