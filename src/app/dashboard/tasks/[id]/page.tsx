@@ -63,7 +63,7 @@ export default function TaskDetailPage() {
   const [inventoryMaterials, setInventoryMaterials] = useState<{ id: string; materialCode: string; name: string; unit: string; category: string; specification: string | null; currentStock: number }[]>([])
   const [inventoryLoading, setInventoryLoading] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
-  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any } | null>(null)
+  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; departmentEstimates?: any } | null>(null)
   // P4.1 payment confirmations per milestone
   const [paymentConfirmations, setPaymentConfirmations] = useState<{ confirmed: boolean; method: string }[]>([])
   // P4.4 warehouse items per material
@@ -432,6 +432,35 @@ export default function TaskDetailPage() {
             Người từ chối: {rejectionInfo.rejectedBy}
             {rejectionInfo.rejectedAt && ` — ${new Date(rejectionInfo.rejectedAt).toLocaleString('vi-VN')}`}
           </div>
+          {/* QC items from P5.3 rejection */}
+          {fromStep === 'P5.3' && (() => {
+            const qcItems = (rejectionInfo as { qcItems?: { task: string; result: string }[] }).qcItems
+            if (!qcItems || !Array.isArray(qcItems) || qcItems.length === 0) return null
+            const resultStyle: Record<string, { bg: string; color: string }> = {
+              PASS: { bg: '#dcfce7', color: '#16a34a' },
+              FAIL: { bg: '#fef2f2', color: '#dc2626' },
+              CONDITIONAL: { bg: '#fef3c7', color: '#d97706' },
+            }
+            return (
+              <div style={{ marginTop: 10, background: '#fff', borderRadius: 8, border: '1px solid #fecaca', overflow: 'hidden' }}>
+                <div style={{ background: '#fef2f2', padding: '6px 10px', fontSize: '0.75rem', fontWeight: 700, color: '#991b1b' }}>
+                  📋 Kết quả nghiệm thu QC ({qcItems.length} hạng mục)
+                </div>
+                {qcItems.map((item, idx) => {
+                  const rs = resultStyle[item.result] || { bg: '#f3f4f6', color: '#6b7280' }
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderBottom: '1px solid #fef2f2' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#9ca3af', width: 20 }}>{idx + 1}</span>
+                      <span style={{ flex: 1, fontSize: '0.8rem', color: '#374151' }}>{item.task || '—'}</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: rs.bg, color: rs.color }}>
+                        {item.result || '—'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
           <div style={{ marginTop: 10, fontSize: '0.85rem', color: '#dc2626', fontWeight: 500 }}>
             {hint}
           </div>
@@ -544,99 +573,11 @@ export default function TaskDetailPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Section 2: KTKH Estimate */}
-                <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', border: estimateDecision === 'approved' ? '2px solid #16a34a' : estimateDecision === 'rejected' ? '2px solid #dc2626' : undefined }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8 }}>
-                      💰 Dự toán thi công <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>(KTKH - P1.2)</span>
-                    </h3>
-                    {estimateDecision !== 'pending' && (
-                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: estimateDecision === 'approved' ? '#16a34a' : '#dc2626' }}>
-                        {estimateDecision === 'approved' ? '✅ Đã duyệt' : '❌ Đã từ chối'}
-                      </span>
-                    )}
-                  </div>
-                  {previousStepData.estimate ? (() => {
-                    const est = previousStepData.estimate
-                    const costGroups = [
-                      { title: '1. Chi phí vật tư', keys: ['mat_main','mat_accessory','mat_packing','mat_method','mat_consumable','mat_paint','mat_reserve'] },
-                      { title: '2. Chi phí nhân công', keys: ['lab_cutting','lab_machining','lab_fabrication','lab_framing','lab_assembly_product','lab_erection','lab_cleaning_alloy','lab_surface_paint','lab_insulation','lab_equip_install','lab_packing','lab_delivery','lab_reserve'] },
-                      { title: '3. Dịch vụ thuê ngoài', keys: ['out_transport','out_ndt','out_galvanize','out_other','out_reserve'] },
-                      { title: '4. Chi phí chung', keys: ['ovh_production','ovh_financial','ovh_management'] },
-                    ]
-                    const labelMap: Record<string,string> = {
-                      mat_main:'Vật tư chính', mat_accessory:'Phụ kiện, bu lông', mat_packing:'Đóng kiện', mat_method:'Biện pháp',
-                      mat_consumable:'Tiêu hao', mat_paint:'Sơn', mat_reserve:'VT dự phòng',
-                      lab_cutting:'Pha cắt', lab_machining:'Gia công', lab_fabrication:'Chế tạo', lab_framing:'Khung kiện',
-                      lab_assembly_product:'Tổ hợp SP', lab_erection:'Lắp dựng+NT', lab_cleaning_alloy:'Vệ sinh hợp kim',
-                      lab_surface_paint:'Làm sạch, Sơn', lab_insulation:'Bảo ôn', lab_equip_install:'Lắp TB trước đóng kiện',
-                      lab_packing:'Đóng kiện', lab_delivery:'Giao hàng', lab_reserve:'NC dự phòng',
-                      out_transport:'Vận tải', out_ndt:'NDT/Thí nghiệm', out_galvanize:'Mạ kẽm', out_other:'Khác', out_reserve:'DV dự phòng',
-                      ovh_production:'Phục vụ SX', ovh_financial:'Tài chính', ovh_management:'Quản lý',
-                    }
-                    return (
-                      <div>
-                        {costGroups.map(g => {
-                          const groupTotal = g.keys.reduce((s, k) => s + (Number(est[k]) || 0), 0)
-                          if (groupTotal === 0) return null
-                          return (
-                            <div key={g.title} style={{ marginBottom: 12 }}>
-                              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--accent)', marginBottom: 6, borderBottom: '1px solid var(--border)', paddingBottom: 4 }}>{g.title}</div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', paddingLeft: 12 }}>
-                                {g.keys.filter(k => Number(est[k]) > 0).map(k => (
-                                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '2px 0' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>{labelMap[k] || k}</span>
-                                    <span style={{ fontWeight: 500 }}>{Number(est[k]).toLocaleString('vi-VN')}</span>
-                                  </div>
-                                ))}
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'flex-end', fontWeight: 600, fontSize: '0.85rem', marginTop: 4, color: 'var(--accent)' }}>Subtotal: {groupTotal.toLocaleString('vi-VN')}</div>
-                            </div>
-                          )
-                        })}
-                        {est.totalEstimate && (
-                          <div style={{ marginTop: 8, padding: '10px 12px', background: 'var(--accent)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-                            <span>TỔNG CHI PHÍ DỰ TOÁN</span>
-                            <span>{Number(est.totalEstimate).toLocaleString('vi-VN')} VND</span>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })() : (
-                    <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu dự toán</div>
-                  )}
-                  {/* Estimate approve/reject buttons */}
-                  {isActive && estimateDecision === 'pending' && (
-                    <div style={{ marginTop: 16 }}>
-                      <div style={{ display: 'flex', gap: 10 }}>
-                        <button onClick={() => { setShowEstimateReject(false); setEstimateDecision('approved') }}
-                          style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          ✅ Duyệt dự toán
-                        </button>
-                        <button onClick={() => setShowEstimateReject(!showEstimateReject)}
-                          style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          ❌ Từ chối / Yêu cầu chỉnh sửa
-                        </button>
-                      </div>
-                      {showEstimateReject && (
-                        <div style={{ marginTop: 10 }}>
-                          <textarea value={estimateRejectReason} onChange={e => setEstimateRejectReason(e.target.value)}
-                            placeholder="Nhập lý do từ chối dự toán..." rows={2}
-                            style={{ width: '100%', borderRadius: 8, border: '1px solid #dc2626', padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical', background: 'var(--bg-secondary)' }} />
-                          <button onClick={() => { if (!estimateRejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return; } setEstimateDecision('rejected') }}
-                            style={{ marginTop: 6, padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                            ⚠️ Xác nhận từ chối dự toán
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
               </>
             ) : (
               <>
-            {/* Form Fields */}
+            {/* Form Fields — skip for steps with dynamic tables */}
+            {!['P5.4', 'P1.2', 'P2.1A', 'P2.1B', 'P2.1C', 'P2.4'].includes(task.stepCode) && (
             <div className="card" style={{ padding: '1.5rem' }}>
               <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
                 📝 Thông tin nhập liệu
@@ -663,7 +604,577 @@ export default function TaskDetailPage() {
                 ))}
               </div>
             </div>
+            )}
 
+            {/* P1.2: Dynamic Estimate Tables (DT03-DT07) */}
+            {task.stepCode === 'P1.2' && (() => {
+              // Generic table renderer for estimate forms
+              type EstRow = Record<string, string>
+              const renderEstTable = (
+                title: string, code: string, dataKey: string,
+                columns: { key: string; label: string; type?: string; width?: string }[],
+                defaultRows: EstRow[]
+              ) => {
+                let rows: EstRow[] = []
+                try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+                const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+                const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+                const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+                const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+                return (
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({code})</span></h3>
+                      {isActive && (
+                        <button type="button" onClick={addRow}
+                          style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          + Thêm
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+                        {columns.map(c => (
+                          <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>
+                        ))}
+                        {isActive && <span />}
+                      </div>
+                      {rows.map((row, ri) => (
+                        <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
+                          {columns.map(c => (
+                            <input key={c.key} className="input" value={row[c.key] || ''} disabled={!isActive}
+                              onChange={e => update(ri, c.key, e.target.value)}
+                              placeholder={c.label}
+                              style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: c.type === 'number' ? 'right' : 'left' }} />
+                          ))}
+                          {isActive && rows.length > 1 && (
+                            <button type="button" onClick={() => removeRow(ri)}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
+                  </div>
+                )
+              }
+
+              return (
+                <>
+                  {/* ── TM: DT03 - Dự toán VT tổng hợp ── */}
+                  {renderEstTable('📦 DT03 — Dự toán chi phí VT (Thương mại)', 'QT30-DT03', 'dt03Items',
+                    [
+                      { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
+                      { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.6fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.8fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.8fr' },
+                    ],
+                    [
+                      { nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTP', danhMuc: 'Vật tư phụ kiện, bu lông…', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTDK', danhMuc: 'Vật tư đóng kiện', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTBP', danhMuc: 'Vật tư làm biện pháp', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH', danhMuc: 'Vật tư tiêu hao', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS', danhMuc: 'Vật tư sơn', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTDP', danhMuc: 'Vật tư dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+
+                  {/* ── TM: DT04 - Dự toán VT chi tiết ── */}
+                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT (Thương mại)', 'QT30-DT04', 'dt04Items',
+                    [
+                      { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
+                      { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
+                      { key: 'macVL', label: 'Mác VL', width: '0.6fr' },
+                      { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.4fr' },
+                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+
+                  {/* ── TM: DT05 - Dự toán dịch vụ ── */}
+                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ (Thương mại)', 'QT30-DT05', 'dt05Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [
+                      { maCP: 'VT', noiDung: 'Vận tải', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'NDT', noiDung: 'NDT, quy trình và thí nghiệm', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'MK', noiDung: 'Mạ kẽm', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPK', noiDung: 'Các chi phí khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+
+                  {/* ── SX: DT06 - Dự toán nhân công ── */}
+                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công (Sản xuất)', 'QT30-DT06', 'dt06Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [
+                      { maCP: 'PC', noiDung: 'Pha cắt', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'GC', noiDung: 'Gia công', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CT', noiDung: 'Chế tạo - Lan can', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CT', noiDung: 'Chế tạo - Giá đỡ', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CT', noiDung: 'Chế tạo - Ống', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CT', noiDung: 'Chế tạo - Hộp', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'KK', noiDung: 'Khung kiện', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'TH', noiDung: 'Tổ hợp sản phẩm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'LD', noiDung: 'Lắp dựng + Nghiệm thu', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'VS', noiDung: 'Vệ sinh vật liệu hợp kim', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'SON', noiDung: 'Làm sạch, Sơn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'BO', noiDung: 'Bảo ôn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'LTB', noiDung: 'Lắp thiết bị phụ kiện trước đóng kiện', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'DK', noiDung: 'Đóng kiện', dvt: 'Kiện', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'GH', noiDung: 'Giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'DP', noiDung: 'Nhân công dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+
+                  {/* ── TCKT: DT07 - Chi phí chung, tài chính ── */}
+                  {renderEstTable('🏢 DT07 — Dự toán chi phí chung, tài chính (TCKT)', 'QT30-DT07', 'dt07Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá BQ', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [
+                      { maCP: 'CPC', danhMuc: 'Chi phí chung phục vụ sản xuất', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC', danhMuc: 'Chi phí tài chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL', danhMuc: 'Chi phí Quản Lý', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                </>
+              )
+            })()}
+
+            {/* P2.1A/B/C/P2.4: Dynamic Estimate Tables */}
+            {['P2.1A', 'P2.1B', 'P2.1C', 'P2.4'].includes(task.stepCode) && (() => {
+              type EstRow = Record<string, string>
+              const renderEstTable = (
+                title: string, code: string, dataKey: string,
+                columns: { key: string; label: string; type?: string; width?: string }[],
+                defaultRows: EstRow[]
+              ) => {
+                let rows: EstRow[] = []
+                try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+                const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+                const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+                const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+                const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+                return (
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({code})</span></h3>
+                      {isActive && (
+                        <button type="button" onClick={addRow}
+                          style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          + Thêm
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+                        {columns.map(c => (
+                          <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>
+                        ))}
+                        {isActive && <span />}
+                      </div>
+                      {rows.map((row, ri) => (
+                        <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
+                          {columns.map(c => (
+                            <input key={c.key} className="input" value={row[c.key] || ''} disabled={!isActive}
+                              onChange={e => update(ri, c.key, e.target.value)}
+                              placeholder={c.label}
+                              style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: c.type === 'number' ? 'right' : 'left' }} />
+                          ))}
+                          {isActive && rows.length > 1 && (
+                            <button type="button" onClick={() => removeRow(ri)}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
+                  </div>
+                )
+              }
+
+              const colsVTTH = [
+                { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
+                { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
+                { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                { key: 'kl', label: 'KL/SL', type: 'number', width: '0.6fr' },
+                { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.8fr' },
+                { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.8fr' },
+              ]
+              const colsVTCT = [
+                { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
+                { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
+                { key: 'macVL', label: 'Mác VL', width: '0.6fr' },
+                { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
+                { key: 'dvt', label: 'ĐVT', width: '0.4fr' },
+                { key: 'kl', label: 'KL/SL', type: 'number', width: '0.5fr' },
+                { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+              ]
+              const colsDV = [
+                { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+              ]
+              const colsNC = colsDV // Same columns for nhân công
+              const colsCPChung = [
+                { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
+                { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                { key: 'donGia', label: 'Đơn giá BQ', type: 'number', width: '0.7fr' },
+                { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+              ]
+
+              // ── P2.1A: TCKT (DT02 + DT07) ──
+              if (task.stepCode === 'P2.1A') return (
+                <>
+                  {renderEstTable('📊 DT02 — Tổng hợp chi phí dự toán thi công', 'QT30-DT02', 'dt02Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung chi phí', width: '1.5fr' },
+                      { key: 'giaTri', label: 'Giá trị', type: 'number', width: '0.8fr' },
+                      { key: 'tyLe', label: 'Tỷ lệ %', type: 'number', width: '0.5fr' },
+                    ],
+                    [
+                      { maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: '', tyLe: '' },
+                      { maCP: 'I-1', noiDung: 'Vật tư chính', giaTri: '', tyLe: '' },
+                      { maCP: 'I-2', noiDung: 'Vật tư phụ kiện, bu lông…', giaTri: '', tyLe: '' },
+                      { maCP: 'I-3', noiDung: 'Vật tư đóng kiện', giaTri: '', tyLe: '' },
+                      { maCP: 'I-4', noiDung: 'Vật tư làm biện pháp', giaTri: '', tyLe: '' },
+                      { maCP: 'I-5', noiDung: 'Vật tư tiêu hao', giaTri: '', tyLe: '' },
+                      { maCP: 'I-6', noiDung: 'Vật tư sơn', giaTri: '', tyLe: '' },
+                      { maCP: 'I-7', noiDung: 'Vật tư dự phòng', giaTri: '', tyLe: '' },
+                      { maCP: 'II', noiDung: 'Chi phí nhân công trực tiếp', giaTri: '', tyLe: '' },
+                      { maCP: 'II-1', noiDung: 'Pha cắt', giaTri: '', tyLe: '' },
+                      { maCP: 'II-2', noiDung: 'Gia công', giaTri: '', tyLe: '' },
+                      { maCP: 'II-3', noiDung: 'Chế tạo', giaTri: '', tyLe: '' },
+                      { maCP: 'II-4', noiDung: 'Khung kiện', giaTri: '', tyLe: '' },
+                      { maCP: 'II-5', noiDung: 'Tổ hợp sản phẩm', giaTri: '', tyLe: '' },
+                      { maCP: 'II-6', noiDung: 'Lắp dựng + Nghiệm thu', giaTri: '', tyLe: '' },
+                      { maCP: 'II-7', noiDung: 'Làm sạch, Sơn', giaTri: '', tyLe: '' },
+                      { maCP: 'II-8', noiDung: 'Đóng kiện / Giao hàng', giaTri: '', tyLe: '' },
+                      { maCP: 'II-9', noiDung: 'Nhân công dự phòng', giaTri: '', tyLe: '' },
+                      { maCP: 'III', noiDung: 'Chi phí dịch vụ thuê ngoài', giaTri: '', tyLe: '' },
+                      { maCP: 'III-1', noiDung: 'Vận tải', giaTri: '', tyLe: '' },
+                      { maCP: 'III-2', noiDung: 'NDT, quy trình và thí nghiệm', giaTri: '', tyLe: '' },
+                      { maCP: 'III-3', noiDung: 'Mạ kẽm', giaTri: '', tyLe: '' },
+                      { maCP: 'III-4', noiDung: 'Chi phí khác', giaTri: '', tyLe: '' },
+                      { maCP: 'III-5', noiDung: 'Dự phòng dịch vụ', giaTri: '', tyLe: '' },
+                      { maCP: 'IV', noiDung: 'Chi phí chung', giaTri: '', tyLe: '' },
+                      { maCP: 'IV-1', noiDung: 'Chi phí chung phục vụ SX', giaTri: '', tyLe: '' },
+                      { maCP: 'IV-2', noiDung: 'Chi phí tài chính', giaTri: '', tyLe: '' },
+                      { maCP: 'IV-3', noiDung: 'Chi phí quản lý', giaTri: '', tyLe: '' },
+                    ]
+                  )}
+                  {renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items', colsCPChung,
+                    [
+                      { maCP: 'CPC', danhMuc: 'I. Chi phí chung phục vụ sản xuất', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-01', danhMuc: 'Nhân công (ngoài khoán)', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-02', danhMuc: 'Thuê công nhân thời vụ', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-03', danhMuc: 'Khấu hao TSCĐ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-04', danhMuc: 'Sửa chữa máy móc thiết bị', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-05', danhMuc: 'Điện sản xuất', dvt: 'kWh', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-06', danhMuc: 'Nước sản xuất', dvt: 'm³', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-07', danhMuc: 'Khí nén (Oxy, Acetylen…)', dvt: 'Chai', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-08', danhMuc: 'Nhiên liệu (dầu, xăng)', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-09', danhMuc: 'Chi phí an toàn lao động', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-10', danhMuc: 'Chi phí SX khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC', danhMuc: 'II. Chi phí tài chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-01', danhMuc: 'Phí bảo lãnh thực hiện HĐ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-02', danhMuc: 'Phí bảo lãnh tạm ứng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-03', danhMuc: 'Phí bảo lãnh bảo hành', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-04', danhMuc: 'Lãi vay ngân hàng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-05', danhMuc: 'Bảo hiểm dự án', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL', danhMuc: 'III. Chi phí Quản Lý', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-01', danhMuc: 'Lương nhân viên gián tiếp', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-02', danhMuc: 'Văn phòng phẩm', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-03', danhMuc: 'Bảo vệ, an ninh', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-04', danhMuc: 'Chi phí tiếp khách', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-05', danhMuc: 'Chi phí quản lý khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                </>
+              )
+
+              // ── P2.1B: TM (DT03 + DT04 + DT05) ──
+              if (task.stepCode === 'P2.1B') return (
+                <>
+                  {renderEstTable('📦 DT03 — Dự toán chi phí VT tổng hợp', 'QT30-DT03', 'dt03Items', colsVTTH,
+                    [
+                      { nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTC-01', danhMuc: 'Thép đen các loại', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTC-02', danhMuc: 'Inox các loại', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTC-03', danhMuc: 'Grating', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTP', danhMuc: 'Vật tư phụ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTPCK', danhMuc: 'Vật tư phụ kiện, bu lông…', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTDK', danhMuc: 'Vật tư đóng kiện', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTBP', danhMuc: 'Vật tư làm biện pháp', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTBP-01', danhMuc: 'Thép đen các loại (biện pháp)', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTBP-TH', danhMuc: 'Thu hồi lại vật tư biện pháp (75% giá trị)', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH', danhMuc: 'Vật tư tiêu hao', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH-01', danhMuc: 'Que hàn các loại', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH-02', danhMuc: 'Dây hàn', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH-03', danhMuc: 'Khí hàn (Argon, CO2…)', dvt: 'Chai', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH-04', danhMuc: 'Đá cắt, đá mài', dvt: 'Viên', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS', danhMuc: 'Vật tư sơn', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS-01', danhMuc: 'Sơn lót', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS-02', danhMuc: 'Sơn phủ', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS-03', danhMuc: 'Dung môi, phụ gia sơn', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTDP', danhMuc: 'Vật tư dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items', colsVTCT,
+                    [
+                      { maVT: 'A', tenVT: 'VTC — Vật tư chính', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'A2', tenVT: 'Vật tư còn lại (chưa có chi tiết)', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'B', tenVT: 'VT04 — Vật tư phụ kiện, bu lông…', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'C', tenVT: 'VTDK — Vật tư đóng kiện', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'D', tenVT: 'VTBP — Vật tư làm biện pháp', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'E', tenVT: 'VTTH — Vật tư tiêu hao', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'F', tenVT: 'VTDP — Vật tư dự phòng', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items', colsDV,
+                    [
+                      { maCP: 'A', noiDung: 'VẬN TẢI', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-01', noiDung: 'Vận chuyển nội bộ', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-02', noiDung: 'Vận chuyển giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B', noiDung: 'NDT, QUY TRÌNH VÀ THÍ NGHIỆM', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-01', noiDung: 'Chụp phim RT', dvt: 'Phim', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-02', noiDung: 'Siêu âm UT', dvt: 'Mối', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-03', noiDung: 'Kiểm tra PT/MT', dvt: 'Mối', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-04', noiDung: 'Thử áp lực (Hydro test)', dvt: 'Lần', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C', noiDung: 'MẠ KẼM', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-01', noiDung: 'Mạ kẽm nhúng nóng', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'D', noiDung: 'CÁC CHI PHÍ KHÁC', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'D-01', noiDung: 'Chi phí dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                </>
+              )
+
+              // ── P2.1C: SX (DT06) ──
+              if (task.stepCode === 'P2.1C') return (
+                <>
+                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công trực tiếp', 'QT30-DT06', 'dt06Items', colsNC,
+                    [
+                      { maCP: 'A', noiDung: 'PC — PHA CẮT', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-01', noiDung: 'Pha cắt thép tấm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-02', noiDung: 'Pha cắt thép hình', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-03', noiDung: 'Pha cắt ống', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B', noiDung: 'GC — GIA CÔNG', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-01', noiDung: 'Gia công CNC / Plasma', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-02', noiDung: 'Uốn, dập, khoan, tiện', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-03', noiDung: 'Vát mép, chuẩn bị mối hàn', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C', noiDung: 'CT — CHẾ TẠO', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-01', noiDung: 'Chế tạo - Roller frame', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-02', noiDung: 'Chế tạo - Slewing frame', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-03', noiDung: 'Chế tạo - Platform / Sàn', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-04', noiDung: 'Chế tạo - Lan can', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-05', noiDung: 'Chế tạo - Giá đỡ', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-06', noiDung: 'Chế tạo - Ống', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-07', noiDung: 'Chế tạo - Hộp', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-08', noiDung: 'Chế tạo - Cầu thang', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-09', noiDung: 'Chế tạo - Khác', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'D', noiDung: 'KK — KHUNG KIỆN', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'D-01', noiDung: 'Khung kiện', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'E', noiDung: 'TH — TỔ HỢP SẢN PHẨM', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'E-01', noiDung: 'Tổ hợp sản phẩm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'F', noiDung: 'LD — LẮP DỰNG + NGHIỆM THU', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'F-01', noiDung: 'Lắp dựng + Nghiệm thu', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'G', noiDung: 'VS — VỆ SINH HỢP KIM', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'G-01', noiDung: 'Vệ sinh VL hợp kim bằng dung dịch', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'H', noiDung: 'SON — LÀM SẠCH, SƠN', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'H-01', noiDung: 'Làm sạch bề mặt (bi, cát)', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'H-02', noiDung: 'Sơn (lót + phủ)', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'I', noiDung: 'BO — BẢO ÔN', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'I-01', noiDung: 'Bảo ôn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'J', noiDung: 'LTB — LẮP THIẾT BỊ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'J-01', noiDung: 'Lắp thiết bị phụ kiện trước đóng kiện', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'K', noiDung: 'DK — ĐÓNG KIỆN', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'K-01', noiDung: 'Đóng kiện', dvt: 'Kiện', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'L', noiDung: 'GH — GIAO HÀNG', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'L-01', noiDung: 'Giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'M', noiDung: 'DP — NHÂN CÔNG DỰ PHÒNG', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'M-01', noiDung: 'Nhân công dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                </>
+              )
+
+              return null
+            })()}
+
+            {/* P2.4 also renders DT02-DT07: aggregated from all departments */}
+            {task.stepCode === 'P2.4' && (() => {
+              // P2.4 shows ALL 6 DT tables for full review
+              // Reuse same renderEstTable and column definitions
+              type EstRow = Record<string, string>
+              const renderEstTable = (
+                title: string, code: string, dataKey: string,
+                columns: { key: string; label: string; type?: string; width?: string }[],
+                defaultRows: EstRow[]
+              ) => {
+                let rows: EstRow[] = []
+                try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+                const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+                const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+                const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+                const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+                return (
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({code})</span></h3>
+                      {isActive && (
+                        <button type="button" onClick={addRow}
+                          style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          + Thêm
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+                        {columns.map(c => (
+                          <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>
+                        ))}
+                        {isActive && <span />}
+                      </div>
+                      {rows.map((row, ri) => (
+                        <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
+                          {columns.map(c => (
+                            <input key={c.key} className="input" value={row[c.key] || ''} disabled={!isActive}
+                              onChange={e => update(ri, c.key, e.target.value)}
+                              placeholder={c.label}
+                              style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: c.type === 'number' ? 'right' : 'left' }} />
+                          ))}
+                          {isActive && rows.length > 1 && (
+                            <button type="button" onClick={() => removeRow(ri)}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
+                  </div>
+                )
+              }
+
+              return (
+                <>
+                  <div className="card" style={{ padding: '1rem', marginTop: '1rem', background: 'var(--bg-secondary)', borderLeft: '4px solid #f59e0b' }}>
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#f59e0b' }}>📋 Tổng hợp dự toán từ các phòng ban</h3>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Dữ liệu được tổng hợp từ P2.1A (TCKT), P2.1B (TM), P2.1C (SX). KTKH có thể điều chỉnh trước khi trình duyệt.</p>
+                  </div>
+
+                  {renderEstTable('📊 DT02 — Tổng hợp chi phí dự toán thi công (TCKT)', 'QT30-DT02', 'dt02Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung chi phí', width: '1.5fr' },
+                      { key: 'giaTri', label: 'Giá trị', type: 'number', width: '0.8fr' },
+                      { key: 'tyLe', label: 'Tỷ lệ %', type: 'number', width: '0.5fr' },
+                    ],
+                    [{ maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: '', tyLe: '' }]
+                  )}
+                  {renderEstTable('📦 DT03 — Dự toán chi phí VT tổng hợp (TM)', 'QT30-DT03', 'dt03Items',
+                    [
+                      { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
+                      { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.6fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.8fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.8fr' },
+                    ],
+                    [{ nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT (TM)', 'QT30-DT04', 'dt04Items',
+                    [
+                      { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
+                      { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
+                      { key: 'macVL', label: 'Mác VL', width: '0.6fr' },
+                      { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.4fr' },
+                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ (TM)', 'QT30-DT05', 'dt05Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maCP: '', noiDung: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công trực tiếp (SX)', 'QT30-DT06', 'dt06Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maCP: '', noiDung: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                  {renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính (TCKT)', 'QT30-DT07', 'dt07Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá BQ', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maCP: '', danhMuc: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                </>
+              )
+            })()}
             {/* P2.4: Aggregated BOM + Estimate from previous steps */}
             {task.stepCode === 'P2.4' && previousStepData && (
               <>
@@ -775,23 +1286,125 @@ export default function TaskDetailPage() {
                   </div>
                 )}
 
+                {/* Department Estimates DT02-DT07 from P2.1A/B/C */}
+                {previousStepData.departmentEstimates && (() => {
+                  const de = previousStepData.departmentEstimates
+                  type DtRow = Record<string, string>
+                  const renderReadonlyTable = (title: string, code: string, dataStr: string | null, columns: { key: string; label: string; width?: string }[]) => {
+                    let rows: DtRow[] = []
+                    try { rows = dataStr ? JSON.parse(dataStr as string) : [] } catch { rows = [] }
+                    if (!rows || rows.length === 0) return (
+                      <div className="card" style={{ padding: '1rem', marginTop: '0.75rem', borderLeft: '4px solid var(--border)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{title} <span style={{ fontSize: '0.65rem' }}>({code})</span> — Chưa có dữ liệu</h4>
+                      </div>
+                    )
+                    return (
+                      <div className="card" style={{ padding: '1rem', marginTop: '0.75rem', borderLeft: '4px solid var(--accent)' }}>
+                        <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>({code})</span></h4>
+                        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')}`, gap: 4, padding: '5px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                            <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+                            {columns.map(c => <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>)}
+                          </div>
+                          {rows.map((row, ri) => (
+                            <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
+                              {columns.map(c => <span key={c.key} style={{ fontSize: '0.75rem' }}>{row[c.key] || '—'}</span>)}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div className="card" style={{ padding: '0.75rem 1rem', background: 'var(--bg-secondary)', borderLeft: '4px solid #059669' }}>
+                        <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#059669' }}>📊 Dự toán chi tiết từ các phòng ban</h3>
+                      </div>
+                      {renderReadonlyTable('DT02 — Tổng hợp chi phí (TCKT)', 'QT30-DT02', de.dt02Items, [
+                        { key: 'maCP', label: 'Mã CP', width: '0.6fr' }, { key: 'noiDung', label: 'Nội dung chi phí', width: '1.5fr' },
+                        { key: 'giaTri', label: 'Giá trị', width: '0.8fr' }, { key: 'tyLe', label: 'Tỷ lệ %', width: '0.5fr' },
+                      ])}
+                      {renderReadonlyTable('DT03 — VT tổng hợp (TM)', 'QT30-DT03', de.dt03Items, [
+                        { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' }, { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
+                        { key: 'dvt', label: 'ĐVT', width: '0.5fr' }, { key: 'kl', label: 'KL/SL', width: '0.6fr' },
+                        { key: 'donGia', label: 'Đơn giá', width: '0.7fr' }, { key: 'thanhTien', label: 'Thành tiền', width: '0.7fr' },
+                      ])}
+                      {renderReadonlyTable('DT04 — VT chi tiết (TM)', 'QT30-DT04', de.dt04Items, [
+                        { key: 'maVT', label: 'Mã VT', width: '0.7fr' }, { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
+                        { key: 'macVL', label: 'Mác VL', width: '0.6fr' }, { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
+                        { key: 'dvt', label: 'ĐVT', width: '0.4fr' }, { key: 'kl', label: 'KL/SL', width: '0.5fr' },
+                        { key: 'donGia', label: 'Đơn giá', width: '0.7fr' }, { key: 'thanhTien', label: 'Thành tiền', width: '0.7fr' },
+                      ])}
+                      {renderReadonlyTable('DT05 — Dịch vụ thuê ngoài (TM)', 'QT30-DT05', de.dt05Items, [
+                        { key: 'maCP', label: 'Mã CP', width: '0.6fr' }, { key: 'noiDung', label: 'Nội dung', width: '1.5fr' },
+                        { key: 'dvt', label: 'ĐVT', width: '0.5fr' }, { key: 'kl', label: 'KL', width: '0.5fr' },
+                        { key: 'donGia', label: 'Đơn giá', width: '0.7fr' }, { key: 'thanhTien', label: 'Thành tiền', width: '0.7fr' },
+                      ])}
+                      {renderReadonlyTable('DT06 — Nhân công trực tiếp (SX)', 'QT30-DT06', de.dt06Items, [
+                        { key: 'maCP', label: 'Mã CP', width: '0.6fr' }, { key: 'noiDung', label: 'Nội dung', width: '1.5fr' },
+                        { key: 'dvt', label: 'ĐVT', width: '0.5fr' }, { key: 'kl', label: 'KL', width: '0.5fr' },
+                        { key: 'donGia', label: 'Đơn giá', width: '0.7fr' }, { key: 'thanhTien', label: 'Thành tiền', width: '0.7fr' },
+                      ])}
+                      {renderReadonlyTable('DT07 — CP chung, tài chính (TCKT)', 'QT30-DT07', de.dt07Items, [
+                        { key: 'maCP', label: 'Mã CP', width: '0.6fr' }, { key: 'danhMuc', label: 'Danh mục', width: '1.5fr' },
+                        { key: 'dvt', label: 'ĐVT', width: '0.5fr' }, { key: 'kl', label: 'KL', width: '0.5fr' },
+                        { key: 'donGia', label: 'Đơn giá BQ', width: '0.7fr' }, { key: 'thanhTien', label: 'Thành tiền', width: '0.7fr' },
+                      ])}
+                    </div>
+                  )
+                })()}
+
                 {/* Dự toán gốc from P1.2 for comparison */}
-                {previousStepData.estimate && (
-                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
-                    <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem' }}>💰 Dự toán gốc (từ P1.2 — tham khảo)</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: '0.9rem' }}>
-                      {previousStepData.estimate.estimatedBudget && (
-                        <div><span style={{ color: 'var(--text-secondary)' }}>Ngân sách dự kiến:</span> <strong>{Number(previousStepData.estimate.estimatedBudget).toLocaleString()} {previousStepData.estimate.currency || 'VND'}</strong></div>
-                      )}
-                      {previousStepData.estimate.materialCost && (
-                        <div><span style={{ color: 'var(--text-secondary)' }}>Chi phí vật tư:</span> <strong>{Number(previousStepData.estimate.materialCost).toLocaleString()}</strong></div>
-                      )}
-                      {previousStepData.estimate.laborCost && (
-                        <div><span style={{ color: 'var(--text-secondary)' }}>Chi phí nhân công:</span> <strong>{Number(previousStepData.estimate.laborCost).toLocaleString()}</strong></div>
+                {previousStepData.estimate && (() => {
+                  const est = previousStepData.estimate
+                  const costGroups = [
+                    { title: '1. Chi phí vật tư', keys: ['mat_main','mat_accessory','mat_packing','mat_method','mat_consumable','mat_paint','mat_reserve'] },
+                    { title: '2. Chi phí nhân công', keys: ['lab_cutting','lab_machining','lab_fabrication','lab_framing','lab_assembly_product','lab_erection','lab_cleaning_alloy','lab_surface_paint','lab_insulation','lab_equip_install','lab_packing','lab_delivery','lab_reserve'] },
+                    { title: '3. Dịch vụ thuê ngoài', keys: ['out_transport','out_ndt','out_galvanize','out_other','out_reserve'] },
+                    { title: '4. Chi phí chung', keys: ['ovh_production','ovh_financial','ovh_management'] },
+                  ]
+                  const labelMap: Record<string,string> = {
+                    mat_main:'Vật tư chính', mat_accessory:'Phụ kiện, bu lông', mat_packing:'Đóng kiện', mat_method:'Biện pháp',
+                    mat_consumable:'Tiêu hao', mat_paint:'Sơn', mat_reserve:'VT dự phòng',
+                    lab_cutting:'Pha cắt', lab_machining:'Gia công', lab_fabrication:'Chế tạo', lab_framing:'Khung kiện',
+                    lab_assembly_product:'Tổ hợp SP', lab_erection:'Lắp dựng+NT', lab_cleaning_alloy:'Vệ sinh hợp kim',
+                    lab_surface_paint:'Làm sạch, Sơn', lab_insulation:'Bảo ôn', lab_equip_install:'Lắp TB trước đóng kiện',
+                    lab_packing:'Đóng kiện', lab_delivery:'Giao hàng', lab_reserve:'NC dự phòng',
+                    out_transport:'Vận tải', out_ndt:'NDT/Thí nghiệm', out_galvanize:'Mạ kẽm', out_other:'Khác', out_reserve:'DV dự phòng',
+                    ovh_production:'Phục vụ SX', ovh_financial:'Tài chính', ovh_management:'Quản lý',
+                  }
+                  return (
+                    <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
+                      <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem' }}>💰 Dự toán gốc (từ P1.2 — tham khảo)</h3>
+                      {costGroups.map(g => {
+                        const groupTotal = g.keys.reduce((s, k) => s + (Number(est[k]) || 0), 0)
+                        if (groupTotal === 0) return null
+                        return (
+                          <div key={g.title} style={{ marginBottom: 12 }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#f59e0b', marginBottom: 6, borderBottom: '1px solid var(--border)', paddingBottom: 4 }}>{g.title}</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', paddingLeft: 12 }}>
+                              {g.keys.filter(k => Number(est[k]) > 0).map(k => (
+                                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '2px 0' }}>
+                                  <span style={{ color: 'var(--text-secondary)' }}>{labelMap[k] || k}</span>
+                                  <span style={{ fontWeight: 500 }}>{Number(est[k]).toLocaleString('vi-VN')}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', fontWeight: 600, fontSize: '0.85rem', marginTop: 4, color: '#f59e0b' }}>Subtotal: {groupTotal.toLocaleString('vi-VN')}</div>
+                          </div>
+                        )
+                      })}
+                      {est.totalEstimate && (
+                        <div style={{ marginTop: 8, padding: '10px 12px', background: '#f59e0b', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: '1rem', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>TỔNG CHI PHÍ DỰ TOÁN</span>
+                          <span>{Number(est.totalEstimate).toLocaleString('vi-VN')} VND</span>
+                        </div>
                       )}
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
 
                 {/* BOM summary from P2.1/P2.2/P2.3 */}
                 {[{ key: 'bomMain', label: '📦 VT chính — Thiết kế (P2.1)', color: '#3b82f6' },
@@ -933,10 +1546,29 @@ export default function TaskDetailPage() {
                         <input className="input" placeholder="Tên nhà cung cấp *" value={supplier.name} disabled={!isActive}
                           onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, name: e.target.value } : s))}
                           style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }} />
-                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', whiteSpace: 'nowrap' }}>
+                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           📎 Năng lực NCC
-                          <input type="file" accept=".pdf,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={!isActive} />
+                          <input type="file" accept=".pdf,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={!isActive}
+                            onChange={e => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                const reader = new FileReader()
+                                reader.onload = () => {
+                                  setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, capabilityFile: file.name, capabilityFileData: reader.result as string } : s))
+                                }
+                                reader.readAsDataURL(file)
+                              }
+                            }} />
                         </label>
+                        {(supplier as unknown as { capabilityFile?: string; capabilityFileData?: string }).capabilityFile && (
+                          <a
+                            href={(supplier as unknown as { capabilityFileData?: string }).capabilityFileData || '#'}
+                            download={(supplier as unknown as { capabilityFile?: string }).capabilityFile}
+                            style={{ fontSize: '0.7rem', color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 6px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', textDecoration: 'none', cursor: 'pointer' }}
+                            title={`Tải về: ${(supplier as unknown as { capabilityFile?: string }).capabilityFile}`}>
+                            ✅ {(supplier as unknown as { capabilityFile?: string }).capabilityFile}
+                          </a>
+                        )}
                         {isActive && suppliers.length > 3 && (
                           <button type="button" onClick={() => setSuppliers(prev => prev.filter((_, i) => i !== sIdx))}
                             style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 700 }} title="Xóa NCC">×</button>
@@ -1052,7 +1684,18 @@ export default function TaskDetailPage() {
                     <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#8b5cf6' }}>🏭 Danh sách NCC đề xuất từ Thương mại ({namedS.length} NCC)</h3>
                     {namedS.map((s, sIdx) => (
                       <div key={sIdx} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '0.75rem', marginBottom: 8, borderLeft: `3px solid hsl(${sIdx * 60 + 200}, 60%, 50%)` }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 6, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)` }}>NCC {sIdx + 1}: {s.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '0.9rem', marginBottom: 6, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)` }}>
+                          NCC {sIdx + 1}: {s.name}
+                          {(s as unknown as { capabilityFile?: string; capabilityFileData?: string }).capabilityFile && (
+                            <a
+                              href={(s as unknown as { capabilityFileData?: string }).capabilityFileData || '#'}
+                              download={(s as unknown as { capabilityFile?: string }).capabilityFile}
+                              style={{ fontSize: '0.7rem', fontWeight: 500, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 6px', textDecoration: 'none', cursor: 'pointer' }}
+                              title={`Tải về: ${(s as unknown as { capabilityFile?: string }).capabilityFile}`}>
+                              📎 {(s as unknown as { capabilityFile?: string }).capabilityFile}
+                            </a>
+                          )}
+                        </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr', gap: 4, padding: '2px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
                           {['#', 'Vật tư', 'Giá (VND)'].map(h => (
                             <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
@@ -1277,17 +1920,17 @@ export default function TaskDetailPage() {
                   )}
                   <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                     {/* Header */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 0.5fr 0.8fr 1fr 30px', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                      {['', 'Đợt', '%', 'Ngày', 'PT thanh toán', '✓'].map(h => (
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 0.5fr 0.8fr 1fr 0.8fr 30px', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                      {['', 'Đợt', '%', 'Ngày DK', 'PT thanh toán', 'Ngày TT', '✓'].map(h => (
                         <span key={h} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
                       ))}
                     </div>
                     {/* Rows */}
                     {milestonesList.map((ms, idx) => {
-                      const conf = paymentConfirmations[idx] || { confirmed: false, method: '' }
+                      const conf = paymentConfirmations[idx] || { confirmed: false, method: '', paidDate: '' }
                       return (
                         <div key={idx} style={{
-                          display: 'grid', gridTemplateColumns: '30px 1fr 0.5fr 0.8fr 1fr 30px', gap: 6, padding: '8px 10px',
+                          display: 'grid', gridTemplateColumns: '30px 1fr 0.5fr 0.8fr 1fr 0.8fr 30px', gap: 6, padding: '8px 10px',
                           alignItems: 'center', borderBottom: idx < milestonesList.length - 1 ? '1px solid var(--border)' : 'none',
                           background: conf.confirmed ? '#f0fdf4' : 'transparent'
                         }}>
@@ -1303,6 +1946,9 @@ export default function TaskDetailPage() {
                             <option value="cash">Tiền mặt</option>
                             <option value="lc">LC</option>
                           </select>
+                          <input className="input" type="date" value={(conf as unknown as { paidDate?: string }).paidDate || ''} disabled={!isActive}
+                            onChange={e => setPaymentConfirmations(prev => prev.map((c, i) => i === idx ? { ...c, paidDate: e.target.value } : c))}
+                            style={{ fontSize: '0.75rem', padding: '4px 4px' }} />
                           <input type="checkbox" checked={conf.confirmed} disabled={!isActive}
                             onChange={e => setPaymentConfirmations(prev => prev.map((c, i) => i === idx ? { ...c, confirmed: e.target.checked } : c))}
                             style={{ width: 18, height: 18, cursor: isActive ? 'pointer' : 'default' }} />
@@ -1485,66 +2131,469 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {/* P5.3: Show work items for QC inspection */}
-            {task.stepCode === 'P5.3' && previousStepData && (() => {
-              const jd = previousStepData.jobCardData as { jobCardStatus?: string; completedTasks?: string; [k: string]: unknown } | null
-              const vd = previousStepData.volumeData as { hangMuc?: string; jobCardCode?: string; completedVolume?: string; volumeUnit?: string; weekNumber?: string; [k: string]: unknown } | null
-              if (!jd && !vd) return null
+            {/* P4.5: Material Issue — WO items from P3.4 + inventory */}
+            {task.stepCode === 'P4.5' && previousStepData && (() => {
+              const wd = previousStepData.woData as { woItems?: { costCode: string; content: string; jobCode: string; typeCode: string; unit: string; qty1: string; qty2: string; totalQty: string; startDate: string; endDate: string }[]; [k: string]: unknown } | null
+              const inv = (previousStepData.inventory as { code: string; name: string; spec: string | null; stock: number; unit: string; category: string }[]) || []
+              const woItems = wd?.woItems?.filter((w: { content?: string }) => w.content?.trim()) || []
+              // Parse issueItems from formData
+              const issueItemsRaw = formData.issueItems as string | undefined
+              let issueItems: { name: string; code: string; spec: string; qty: string; unit: string }[] = []
+              try { issueItems = issueItemsRaw ? JSON.parse(issueItemsRaw as string) : [] } catch { issueItems = [] }
+              if (issueItems.length === 0) issueItems = [{ name: '', code: '', spec: '', qty: '', unit: '' }]
+              const updateIssueItems = (items: typeof issueItems) => {
+                handleFieldChange('issueItems', JSON.stringify(items))
+              }
               return (
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>📋 Hạng mục nghiệm thu</h3>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 0.6fr', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                      {['Hạng mục', 'Mã Job Card', 'KL hoàn thành', 'Đơn vị'].map(h => (
+                <>
+                  {/* Inventory overview — collapsible */}
+                  <details className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #16a34a' }}>
+                    <summary style={{ cursor: 'pointer', fontSize: '1rem', fontWeight: 700, color: '#16a34a', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ transition: 'transform 0.2s' }}>▶</span> 📦 Tồn kho hiện tại ({inv.length} vật tư)
+                      <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 'auto' }}>Nhấn để xem</span>
+                    </summary>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', marginTop: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '30px 0.7fr 1.2fr 0.8fr 0.6fr 0.5fr', gap: 4, padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        {['#', 'Mã VT', 'Tên', 'Quy chuẩn', 'Tồn kho', 'ĐVT'].map(h => (
+                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                        ))}
+                      </div>
+                      {inv.map((m, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 0.7fr 1.2fr 0.8fr 0.6fr 0.5fr', gap: 4, padding: '5px 10px', fontSize: '0.8rem', borderBottom: idx < inv.length - 1 ? '1px solid var(--border)' : 'none', background: idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{idx + 1}</span>
+                          <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{m.code}</span>
+                          <span style={{ fontWeight: 600 }}>{m.name}</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>{m.spec || '—'}</span>
+                          <span style={{ fontWeight: 700, color: m.stock > 0 ? '#16a34a' : '#dc2626' }}>{m.stock.toLocaleString('vi-VN')}</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>{m.unit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+
+                  {/* WO Items from P3.4 */}
+                  {woItems.length > 0 && (
+                    <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #f59e0b' }}>
+                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>📋 Lệnh Sản Xuất (P3.4)</h3>
+                      {woItems.map((wo: { costCode: string; content: string; jobCode: string; typeCode: string; unit: string; totalQty: string }, wIdx: number) => (
+                        <div key={wIdx} className="card" style={{ padding: '0.75rem', marginBottom: 8, borderLeft: `3px solid hsl(${wIdx * 40 + 30}, 70%, 50%)` }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 6 }}>
+                            Công việc {wIdx + 1}: {wo.content}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            <span>Mã CP: <strong style={{ color: 'var(--text-primary)' }}>{wo.costCode || '—'}</strong></span>
+                            <span>Mã CV: <strong style={{ color: 'var(--text-primary)' }}>{wo.jobCode || '—'}</strong></span>
+                            <span>Tổng KL: <strong style={{ color: 'var(--text-primary)' }}>{wo.totalQty || '—'} {wo.unit}</strong></span>
+                            <span>Mã CL: <strong style={{ color: 'var(--text-primary)' }}>{wo.typeCode || '—'}</strong></span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Vật tư xuất ra — editable form */}
+                  <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <h3 style={{ margin: 0, fontSize: '1rem', color: '#0ea5e9' }}>📤 Vật tư xuất ra</h3>
+                      {isActive && (
+                        <button type="button" onClick={() => updateIssueItems([...issueItems, { name: '', code: '', spec: '', qty: '', unit: '' }])}
+                          style={{ fontSize: '0.75rem', color: '#0ea5e9', background: 'none', border: '1px dashed #0ea5e9', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                          + Thêm dòng
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12, padding: '10px 12px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+                      <div>
+                        <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Ngày xuất *</label>
+                        <input className="input" type="date" value={formData.issueDate as string || ''} disabled={!isActive}
+                          onChange={e => handleFieldChange('issueDate', e.target.value)}
+                          style={{ fontSize: '0.85rem', padding: '6px 8px', width: '100%' }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>WBS Node *</label>
+                        <input className="input" placeholder="Nhập WBS Node" value={formData.wbsNode as string || ''} disabled={!isActive}
+                          onChange={e => handleFieldChange('wbsNode', e.target.value)}
+                          style={{ fontSize: '0.85rem', padding: '6px 8px', width: '100%' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.5fr 30px', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+                      {['#', 'Tên VT', 'Mã VT', 'Quy chuẩn', 'Khối lượng', 'ĐVT', ''].map(h => (
                         <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
                       ))}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 0.6fr', gap: 6, padding: '8px 10px', fontSize: '0.85rem' }}>
-                      <span style={{ fontWeight: 600 }}>{vd?.hangMuc || jd?.completedTasks || '—'}</span>
-                      <span style={{ color: '#8b5cf6', fontWeight: 600 }}>{vd?.jobCardCode || '—'}</span>
-                      <span>{vd?.completedVolume || '—'}</span>
-                      <span>{vd?.volumeUnit || '—'}</span>
-                    </div>
+                    {issueItems.map((item, idx) => (
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.5fr 30px', gap: 4, padding: '3px 2px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{idx + 1}</span>
+                        <input className="input" placeholder="Tên vật tư" value={item.name} disabled={!isActive}
+                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], name: e.target.value }; updateIssueItems(next) }}
+                          style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                        <input className="input" placeholder="Mã VT" value={item.code} disabled={!isActive}
+                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], code: e.target.value }; updateIssueItems(next) }}
+                          style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                        <input className="input" placeholder="Quy chuẩn" value={item.spec} disabled={!isActive}
+                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], spec: e.target.value }; updateIssueItems(next) }}
+                          style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                        <input className="input" type="number" placeholder="0" value={item.qty} disabled={!isActive}
+                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], qty: e.target.value }; updateIssueItems(next) }}
+                          style={{ fontSize: '0.8rem', padding: '4px 6px', textAlign: 'right' }} />
+                        <input className="input" placeholder="ĐVT" value={item.unit} disabled={!isActive}
+                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], unit: e.target.value }; updateIssueItems(next) }}
+                          style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                        {isActive && issueItems.length > 1 && (
+                          <button type="button" onClick={() => updateIssueItems(issueItems.filter((_, i) => i !== idx))}
+                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700, padding: 0 }}>−</button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {jd?.jobCardStatus && (
-                    <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      Trạng thái Job Card: <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, background: jd.jobCardStatus === 'done' ? '#dcfce7' : '#fef3c7', color: jd.jobCardStatus === 'done' ? '#16a34a' : '#f59e0b' }}>{jd.jobCardStatus === 'done' ? 'Hoàn thành' : jd.jobCardStatus === 'in_progress' ? 'Đang thực hiện' : String(jd.jobCardStatus)}</span>
-                      {vd?.weekNumber && <> — Tuần báo cáo: <strong>{vd.weekNumber as string}</strong></>}
+                </>
+              )
+            })()}
+
+            {/* P5.1: QR Scan section for viewing latest drawing */}
+            {task.stepCode === 'P5.1' && (() => {
+              const jcCode = formData.jobCardCode as string || ''
+              const projectCode = task.project.projectCode || ''
+              const qrContent = jcCode ? `https://erp.ibshi.com/drawing/${projectCode}/${jcCode}` : ''
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#8b5cf6' }}>📱 Scan QR — Xem bản vẽ mới nhất</h3>
+                  {jcCode ? (
+                    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                      <div style={{ background: '#fff', border: '2px solid var(--border)', borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrContent)}`}
+                          alt={`QR Code for ${jcCode}`}
+                          width={160} height={160}
+                          style={{ borderRadius: 8 }}
+                        />
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>{jcCode}</span>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                          Quét mã QR bằng điện thoại để xem bản vẽ sản xuất mới nhất cho Job Card <strong style={{ color: 'var(--text-primary)' }}>{jcCode}</strong>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', marginBottom: 6 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Dự án:</span> <strong>{projectCode}</strong>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                          🔗 <a href={qrContent} target="_blank" rel="noopener noreferrer" style={{ color: '#8b5cf6' }}>{qrContent}</a>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '1.5rem', textAlign: 'center', border: '2px dashed var(--border)', borderRadius: 10, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      ⬆️ Nhập <strong>Mã Job Card</strong> ở trên để tạo mã QR
                     </div>
                   )}
                 </div>
               )
             })()}
 
-            {/* P5.4: Show SX volume report for PM review */}
-            {task.stepCode === 'P5.4' && previousStepData && (() => {
-              const vd = previousStepData.volumeData as { hangMuc?: string; jobCardCode?: string; completedVolume?: string; volumeUnit?: string; weekNumber?: string; [k: string]: unknown } | null
-              const jd = previousStepData.jobCardData as { jobCardStatus?: string; completedTasks?: string; [k: string]: unknown } | null
-              if (!vd && !jd) return null
+            {/* P5.2: Multi Job Card form with nested stages */}
+            {task.stepCode === 'P5.2' && (() => {
+              const SX_TEAMS = [
+                { value: 'TSX-01', label: 'Tổ 01 — Pha cắt' },
+                { value: 'TSX-02', label: 'Tổ 02 — Gá lắp' },
+                { value: 'TSX-03', label: 'Tổ 03 — Hàn' },
+                { value: 'TSX-04', label: 'Tổ 04 — Gia công CK' },
+                { value: 'TSX-05', label: 'Tổ 05 — Xử lý bề mặt' },
+                { value: 'TSX-06', label: 'Tổ 06 — Sơn phủ' },
+                { value: 'TSX-07', label: 'Tổ 07 — Đóng kiện' },
+              ]
+              type Stage = { hangMuc: string; volume: string; unit: string; team: string }
+              type JobCard = { code: string; stages: Stage[] }
+              const raw = formData.jobCards as string | undefined
+              let jobCards: JobCard[] = []
+              try { jobCards = raw ? JSON.parse(raw) : [] } catch { jobCards = [] }
+              if (jobCards.length === 0) jobCards = [{ code: '', stages: [{ hangMuc: '', volume: '', unit: '', team: '' }] }]
+              const save = (cards: JobCard[]) => handleFieldChange('jobCards', JSON.stringify(cards))
+              const updateCard = (ci: number, field: string, val: string) => {
+                const next = jobCards.map((c, i) => i === ci ? { ...c, [field]: val } : c)
+                save(next)
+              }
+              const addStage = (ci: number) => {
+                const next = jobCards.map((c, i) => i === ci ? { ...c, stages: [...c.stages, { hangMuc: '', volume: '', unit: '', team: '' }] } : c)
+                save(next)
+              }
+              const removeStage = (ci: number, si: number) => {
+                const next = jobCards.map((c, i) => i === ci ? { ...c, stages: c.stages.filter((_, j) => j !== si) } : c)
+                save(next)
+              }
+              const updateStage = (ci: number, si: number, field: string, val: string) => {
+                const next = jobCards.map((c, i) => i === ci ? { ...c, stages: c.stages.map((s, j) => j === si ? { ...s, [field]: val } : s) } : c)
+                save(next)
+              }
+              const addCard = () => save([...jobCards, { code: '', stages: [{ hangMuc: '', volume: '', unit: '', team: '' }] }])
+              const removeCard = (ci: number) => save(jobCards.filter((_, i) => i !== ci))
+              const cardColors = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899']
               return (
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>📊 Báo cáo khối lượng SX (tuần {vd?.weekNumber || '—'})</h3>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr 0.6fr', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                      {['Hạng mục', 'Mã Job Card', 'KL hoàn thành', 'Đơn vị'].map(h => (
-                        <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                      ))}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr 0.6fr', gap: 6, padding: '10px', fontSize: '0.85rem' }}>
-                      <span style={{ fontWeight: 600 }}>{vd?.hangMuc || jd?.completedTasks || '—'}</span>
-                      <span style={{ color: '#8b5cf6', fontWeight: 600 }}>{vd?.jobCardCode || '—'}</span>
-                      <span style={{ fontWeight: 600, fontSize: '1rem' }}>{vd?.completedVolume || '—'}</span>
-                      <span>{vd?.volumeUnit || '—'}</span>
-                    </div>
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #3b82f6' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#3b82f6' }}>📋 Danh sách Job Card ({jobCards.length})</h3>
+                    {isActive && (
+                      <button type="button" onClick={addCard}
+                        style={{ fontSize: '0.75rem', color: '#3b82f6', background: 'none', border: '1px dashed #3b82f6', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontWeight: 600 }}>
+                        + Thêm Job Card
+                      </button>
+                    )}
                   </div>
-                  {jd?.jobCardStatus && (
-                    <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      Trạng thái Job Card: <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, background: jd.jobCardStatus === 'done' ? '#dcfce7' : '#fef3c7', color: jd.jobCardStatus === 'done' ? '#16a34a' : '#f59e0b' }}>{jd.jobCardStatus === 'done' ? 'Hoàn thành' : jd.jobCardStatus === 'in_progress' ? 'Đang thực hiện' : String(jd.jobCardStatus)}</span>
+                  {jobCards.map((card, ci) => (
+                    <div key={ci} style={{ border: `2px solid ${cardColors[ci % cardColors.length]}25`, borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
+                      {/* Card header — just JC code */}
+                      <div style={{ background: `${cardColors[ci % cardColors.length]}10`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${cardColors[ci % cardColors.length]}25` }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: cardColors[ci % cardColors.length] }}>JC #{ci + 1}</span>
+                        <input className="input" placeholder="Mã Job Card *" value={card.code} disabled={!isActive}
+                          onChange={e => updateCard(ci, 'code', e.target.value)}
+                          style={{ fontSize: '0.85rem', padding: '5px 8px', flex: 1, maxWidth: 200, fontWeight: 600 }} />
+                        <div style={{ flex: 1 }} />
+                        {isActive && jobCards.length > 1 && (
+                          <button type="button" onClick={() => removeCard(ci)}
+                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>✕ Xóa</button>
+                        )}
+                      </div>
+                      {/* Stages table with Tổ SX per row */}
+                      <div style={{ padding: '8px 14px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Công đoạn ({card.stages.length})</span>
+                          {isActive && (
+                            <button type="button" onClick={() => addStage(ci)}
+                              style={{ fontSize: '0.7rem', color: cardColors[ci % cardColors.length], background: 'none', border: `1px dashed ${cardColors[ci % cardColors.length]}`, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}>
+                              + Thêm
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '28px 1.2fr 1fr 0.8fr 0.7fr 28px', gap: 4, padding: '3px 0', borderBottom: '1px solid var(--border)', marginBottom: 3 }}>
+                          {['#', 'Hạng mục', 'Tổ SX', 'KL hoàn thành', 'ĐVT', ''].map(h => (
+                            <span key={h} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{h}</span>
+                          ))}
+                        </div>
+                        {card.stages.map((stage, si) => (
+                          <div key={si} style={{ display: 'grid', gridTemplateColumns: '28px 1.2fr 1fr 0.8fr 0.7fr 28px', gap: 4, padding: '2px 0', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{si + 1}</span>
+                            <input className="input" placeholder="Hạng mục" value={stage.hangMuc} disabled={!isActive}
+                              onChange={e => updateStage(ci, si, 'hangMuc', e.target.value)}
+                              style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                            <select className="input" value={stage.team || ''} disabled={!isActive}
+                              onChange={e => updateStage(ci, si, 'team', e.target.value)}
+                              style={{ fontSize: '0.78rem', padding: '4px 6px' }}>
+                              <option value="">-- Tổ SX --</option>
+                              {SX_TEAMS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                            <input className="input" type="number" placeholder="0" value={stage.volume} disabled={!isActive}
+                              onChange={e => updateStage(ci, si, 'volume', e.target.value)}
+                              style={{ fontSize: '0.8rem', padding: '4px 6px', textAlign: 'right' }} />
+                            <input className="input" placeholder="ĐVT" value={stage.unit} disabled={!isActive}
+                              onChange={e => updateStage(ci, si, 'unit', e.target.value)}
+                              style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
+                            {isActive && card.stages.length > 1 && (
+                              <button type="button" onClick={() => removeStage(ci, si)}
+                                style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, padding: 0 }}>−</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )}
+                  ))}
                 </div>
               )
             })()}
+
+            {/* P5.3: Multi-item QC inspection form */}
+            {task.stepCode === 'P5.3' && (() => {
+              type QcItem = { task: string; result: string }
+              const raw = formData.qcItems as string | undefined
+              let qcItems: QcItem[] = []
+              try { qcItems = raw ? JSON.parse(raw) : [] } catch { qcItems = [] }
+              if (qcItems.length === 0) qcItems = [{ task: '', result: '' }]
+              const saveQc = (items: QcItem[]) => handleFieldChange('qcItems', JSON.stringify(items))
+              const hasFail = qcItems.some(q => q.result === 'FAIL')
+              const resultColors: Record<string, { bg: string; color: string; border: string }> = {
+                PASS: { bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' },
+                FAIL: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+                CONDITIONAL: { bg: '#fef3c7', color: '#d97706', border: '#fde68a' },
+              }
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${hasFail ? '#dc2626' : '#8b5cf6'}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: hasFail ? '#dc2626' : '#8b5cf6' }}>
+                      🔍 Danh sách công việc nghiệm thu ({qcItems.length})
+                    </h3>
+                    {isActive && (
+                      <button type="button" onClick={() => saveQc([...qcItems, { task: '', result: '' }])}
+                        style={{ fontSize: '0.75rem', color: '#8b5cf6', background: 'none', border: '1px dashed #8b5cf6', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}>
+                        + Thêm
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr 30px', gap: 6, padding: '4px 0', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+                    {['#', 'Công việc kiểm tra', 'Kết quả', ''].map(h => (
+                      <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                    ))}
+                  </div>
+                  {qcItems.map((item, idx) => {
+                    const rc = resultColors[item.result]
+                    return (
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr 30px', gap: 6, padding: '4px 0', alignItems: 'center', background: rc?.bg || 'transparent', borderRadius: 6, marginBottom: 2, paddingLeft: 4, paddingRight: 4 }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{idx + 1}</span>
+                        <input className="input" placeholder="Mô tả công việc cần kiểm tra" value={item.task} disabled={!isActive}
+                          onChange={e => { const next = [...qcItems]; next[idx] = { ...next[idx], task: e.target.value }; saveQc(next) }}
+                          style={{ fontSize: '0.8rem', padding: '5px 8px' }} />
+                        <select className="input" value={item.result} disabled={!isActive}
+                          onChange={e => { const next = [...qcItems]; next[idx] = { ...next[idx], result: e.target.value }; saveQc(next) }}
+                          style={{ fontSize: '0.8rem', padding: '5px 8px', fontWeight: 700, color: rc?.color, background: rc?.bg, border: rc ? `1px solid ${rc.border}` : undefined }}>
+                          <option value="">-- Chọn --</option>
+                          <option value="PASS">✅ PASS</option>
+                          <option value="FAIL">❌ FAIL</option>
+                          <option value="CONDITIONAL">⚠️ CONDITIONAL</option>
+                        </select>
+                        {isActive && qcItems.length > 1 && (
+                          <button type="button" onClick={() => saveQc(qcItems.filter((_, i) => i !== idx))}
+                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700, padding: 0 }}>−</button>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {/* Summary */}
+                  <div style={{ marginTop: 10, padding: '8px 12px', background: hasFail ? '#fef2f2' : '#f0fdf4', borderRadius: 8, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {hasFail ? (
+                      <>
+                        <span style={{ color: '#dc2626', fontWeight: 700 }}>⚠️ Có {qcItems.filter(q => q.result === 'FAIL').length} hạng mục FAIL</span>
+                        <span style={{ color: '#dc2626' }}>— Chỉ có thể Từ chối → trả về P5.1</span>
+                      </>
+                    ) : (
+                      <span style={{ color: '#16a34a', fontWeight: 600 }}>✅ {qcItems.filter(q => q.result === 'PASS').length} PASS, {qcItems.filter(q => q.result === 'CONDITIONAL').length} CONDITIONAL</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* P5.4: Show SX report from P5.1 + P5.2 for PM review */}
+            {task.stepCode === 'P5.4' && previousStepData && (() => {
+              const jd = previousStepData.jobCardData as Record<string, unknown> | null
+              const vd = previousStepData.volumeData as Record<string, unknown> | null
+              if (!jd && !vd) return null
+
+              // P5.1 data
+              const jobCardCode = jd?.jobCardCode as string || ''
+              const jobCardStatus = jd?.jobCardStatus as string || ''
+              const fabricationProgress = jd?.fabricationProgress as number || 0
+              const completedTasks = jd?.completedTasks as string || ''
+              const issues = jd?.issues as string || ''
+
+              // P5.2 data — multi job cards
+              const weekNumber = vd?.weekNumber as string || ''
+              type Stage = { hangMuc: string; volume: string; unit: string; team: string }
+              type JobCard = { code: string; stages: Stage[] }
+              let jobCards: JobCard[] = []
+              try { jobCards = vd?.jobCards ? JSON.parse(vd.jobCards as string) : [] } catch { jobCards = [] }
+              const cardColors = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444']
+              const statusLabel: Record<string, { label: string; bg: string; color: string }> = {
+                in_progress: { label: 'Đang thực hiện', bg: '#fef3c7', color: '#d97706' },
+                done: { label: 'Hoàn thành', bg: '#dcfce7', color: '#16a34a' },
+                paused: { label: 'Tạm dừng', bg: '#fee2e2', color: '#dc2626' },
+                issue: { label: 'Vấn đề phát sinh', bg: '#fef2f2', color: '#dc2626' },
+              }
+              const st = statusLabel[jobCardStatus]
+              return (
+                <>
+                  {/* P5.1: Job Card Status */}
+                  {jd && (
+                    <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #10b981' }}>
+                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#10b981' }}>🔧 Trạng thái SX (P5.1)</h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: '0.85rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>Mã Job Card</span>
+                          <div style={{ fontWeight: 700, color: '#10b981' }}>{jobCardCode || '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>Trạng thái</span>
+                          <div>{st ? <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, background: st.bg, color: st.color }}>{st.label}</span> : '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>Tiến độ SX</span>
+                          <div style={{ fontWeight: 700 }}>{fabricationProgress}%</div>
+                        </div>
+                      </div>
+                      {completedTasks && (
+                        <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          <strong>Công đoạn đã hoàn thành:</strong> {completedTasks}
+                        </div>
+                      )}
+                      {issues && (
+                        <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#dc2626' }}>
+                          <strong>⚠️ Vấn đề:</strong> {issues}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* P5.2: Volume Report — Job Cards */}
+                  {vd && (
+                    <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
+                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>📊 Báo cáo khối lượng SX — Tuần {weekNumber || '—'} (P5.2)</h3>
+                      {jobCards.length === 0 ? (
+                        <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border)', borderRadius: 8, fontSize: '0.85rem' }}>
+                          Chưa có dữ liệu báo cáo
+                        </div>
+                      ) : (
+                        jobCards.map((card, ci) => (
+                          <div key={ci} style={{ border: `1px solid ${cardColors[ci % cardColors.length]}30`, borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
+                            <div style={{ background: `${cardColors[ci % cardColors.length]}10`, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${cardColors[ci % cardColors.length]}25` }}>
+                              <span style={{ fontWeight: 700, fontSize: '0.85rem', color: cardColors[ci % cardColors.length] }}>JC #{ci + 1}</span>
+                              <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{card.code || '—'}</span>
+                            </div>
+                            <div style={{ padding: '6px 12px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '30px 2fr 1.2fr 100px 80px', gap: 8, padding: '3px 0', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
+                                {['#', 'Hạng mục', 'Tổ SX', 'KL', 'ĐVT'].map(h => (
+                                  <span key={h} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{h}</span>
+                                ))}
+                              </div>
+                              {card.stages.map((stage, si) => (
+                                <div key={si} style={{ display: 'grid', gridTemplateColumns: '30px 2fr 1.2fr 100px 80px', gap: 8, padding: '3px 0', fontSize: '0.8rem' }}>
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{si + 1}</span>
+                                  <span style={{ fontWeight: 600 }}>{stage.hangMuc || '—'}</span>
+                                  <span style={{ color: 'var(--text-secondary)' }}>{stage.team || '—'}</span>
+                                  <span style={{ fontWeight: 700 }}>{stage.volume || '—'}</span>
+                                  <span style={{ color: 'var(--text-muted)' }}>{stage.unit || '—'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+
+            {/* P5.4: Form Fields rendered AFTER report cards */}
+            {task.stepCode === 'P5.4' && (
+              <div className="card" style={{ padding: '1.5rem' }}>
+                <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
+                  📝 Thông tin nhập liệu
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                  {config.fields.map(field => (
+                    field.type === 'section' ? (
+                      <div key={field.key} style={{ gridColumn: '1 / -1', marginTop: 12, paddingBottom: 6, borderBottom: '2px solid var(--accent-light, #c7d2fe)' }}>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent)' }}>{field.label}</span>
+                      </div>
+                    ) : (
+                      <div key={field.key} style={{ gridColumn: field.fullWidth ? '1 / -1' : undefined }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
+                          {field.label} {field.required && <span style={{ color: '#e74c3c' }}>*</span>}
+                        </label>
+                        {renderField(field, formData[field.key] ?? '', (v) => handleFieldChange(field.key, v), isActive)}
+                      </div>
+                    )
+                  ))}
+                </div>
+              </div>
+            )}
 
             {task.stepCode === 'P2.3' && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
@@ -1590,7 +2639,7 @@ export default function TaskDetailPage() {
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: `2px solid ${task.stepCode === 'P3.3' ? '#f59e0b' : 'var(--accent)'}`, paddingBottom: 8, flex: 1 }}>
-                    {task.stepCode === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư phụ' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
+                    {task.stepCode === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
                   </h3>
                   {isActive && (
                     <button type="button" onClick={addBomItem}
@@ -1686,7 +2735,7 @@ export default function TaskDetailPage() {
               </div>
             )}
 
-            {/* P3.4: Production Order Items Table */}
+            {/* P3.4: Production Order Items — Card Layout */}
             {task.stepCode === 'P3.4' && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -1703,58 +2752,95 @@ export default function TaskDetailPage() {
                     </button>
                   )}
                 </div>
-                {/* Table Header */}
-                <div style={{ display: 'grid', gridTemplateColumns: '30px 0.7fr 1.5fr 0.6fr 0.6fr 0.5fr 0.6fr 0.6fr 0.6fr 0.8fr 0.8fr 30px', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
-                  {['#', 'Mã CP', 'Nội dung CV', 'Mã CV', 'Mã CL', 'ĐVT', 'KL lần 1', 'KL lần 2', 'Tổng KL', 'Ngày BĐ', 'Ngày KT', ''].map(h => (
-                    <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {woItems.map((item, idx) => (
+                    <div key={idx} style={{
+                      border: '1px solid var(--border)', borderRadius: 10, padding: '1rem',
+                      background: idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent', position: 'relative',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#f59e0b' }}>Công việc #{idx + 1}</span>
+                        {isActive && (
+                          <button type="button" onClick={() => setWoItems(prev => prev.filter((_, i) => i !== idx))}
+                            style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', borderRadius: 6, padding: '4px 10px', fontWeight: 600 }}
+                            title="Xóa dòng">✕ Xóa</button>
+                        )}
+                      </div>
+                      {/* Row 1: Nội dung CV (full width) */}
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Nội dung công việc</label>
+                        <input className="input" placeholder="Mô tả chi tiết nội dung công việc..." value={item.content} disabled={!isActive}
+                          onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, content: e.target.value } : it))}
+                          style={{ fontSize: '0.85rem', padding: '8px 10px', width: '100%' }} />
+                      </div>
+                      {/* Row 2: Codes */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Mã CP</label>
+                          <input className="input" placeholder="Mã CP" value={item.costCode} disabled={!isActive}
+                            onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, costCode: e.target.value } : it))}
+                            style={{ fontSize: '0.85rem', padding: '6px 8px' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Mã CV</label>
+                          <input className="input" placeholder="Mã CV" value={item.jobCode} disabled={!isActive}
+                            onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, jobCode: e.target.value } : it))}
+                            style={{ fontSize: '0.85rem', padding: '6px 8px' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Mã CL</label>
+                          <input className="input" placeholder="Mã CL" value={item.typeCode} disabled={!isActive}
+                            onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, typeCode: e.target.value } : it))}
+                            style={{ fontSize: '0.85rem', padding: '6px 8px' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>ĐVT</label>
+                          <input className="input" placeholder="ĐVT" value={item.unit} disabled={!isActive}
+                            onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, unit: e.target.value } : it))}
+                            style={{ fontSize: '0.85rem', padding: '6px 8px' }} />
+                        </div>
+                      </div>
+                      {/* Row 3: Quantities + Dates */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>KL lần 1</label>
+                          <input className="input" type="number" placeholder="0" value={item.qty1} disabled={!isActive}
+                            onChange={e => {
+                              const qty1 = e.target.value
+                              setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, qty1, totalQty: String(Number(qty1 || 0) + Number(it.qty2 || 0)) } : it))
+                            }}
+                            style={{ fontSize: '0.85rem', padding: '6px 8px' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>KL lần 2</label>
+                          <input className="input" type="number" placeholder="0" value={item.qty2} disabled={!isActive}
+                            onChange={e => {
+                              const qty2 = e.target.value
+                              setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, qty2, totalQty: String(Number(it.qty1 || 0) + Number(qty2 || 0)) } : it))
+                            }}
+                            style={{ fontSize: '0.85rem', padding: '6px 8px' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tổng KL</label>
+                          <input className="input" type="number" value={item.totalQty} disabled
+                            style={{ fontSize: '0.85rem', padding: '6px 8px', fontWeight: 700, background: 'var(--bg-secondary)' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Ngày BĐ</label>
+                          <input className="input" type="date" value={item.startDate} disabled={!isActive}
+                            onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, startDate: e.target.value } : it))}
+                            style={{ fontSize: '0.85rem', padding: '6px 8px' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Ngày KT</label>
+                          <input className="input" type="date" value={item.endDate} disabled={!isActive}
+                            onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, endDate: e.target.value } : it))}
+                            style={{ fontSize: '0.85rem', padding: '6px 8px' }} />
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
-                {/* Table Rows */}
-                {woItems.map((item, idx) => (
-                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 0.7fr 1.5fr 0.6fr 0.6fr 0.5fr 0.6fr 0.6fr 0.6fr 0.8fr 0.8fr 30px', gap: 4, padding: '3px 2px', background: idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent', borderRadius: 4, alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{idx + 1}</span>
-                    <input className="input" placeholder="Mã CP" value={item.costCode} disabled={!isActive}
-                      onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, costCode: e.target.value } : it))}
-                      style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                    <input className="input" placeholder="Nội dung công việc" value={item.content} disabled={!isActive}
-                      onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, content: e.target.value } : it))}
-                      style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                    <input className="input" placeholder="Mã CV" value={item.jobCode} disabled={!isActive}
-                      onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, jobCode: e.target.value } : it))}
-                      style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                    <input className="input" placeholder="Mã CL" value={item.typeCode} disabled={!isActive}
-                      onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, typeCode: e.target.value } : it))}
-                      style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                    <input className="input" placeholder="ĐVT" value={item.unit} disabled={!isActive}
-                      onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, unit: e.target.value } : it))}
-                      style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                    <input className="input" type="number" placeholder="0" value={item.qty1} disabled={!isActive}
-                      onChange={e => {
-                        const qty1 = e.target.value
-                        setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, qty1, totalQty: String(Number(qty1 || 0) + Number(it.qty2 || 0)) } : it))
-                      }}
-                      style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                    <input className="input" type="number" placeholder="0" value={item.qty2} disabled={!isActive}
-                      onChange={e => {
-                        const qty2 = e.target.value
-                        setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, qty2, totalQty: String(Number(it.qty1 || 0) + Number(qty2 || 0)) } : it))
-                      }}
-                      style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                    <input className="input" type="number" value={item.totalQty} disabled
-                      style={{ fontSize: '0.8rem', padding: '4px 6px', fontWeight: 700, background: 'var(--bg-secondary)' }} />
-                    <input className="input" type="date" value={item.startDate} disabled={!isActive}
-                      onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, startDate: e.target.value } : it))}
-                      style={{ fontSize: '0.75rem', padding: '4px 4px' }} />
-                    <input className="input" type="date" value={item.endDate} disabled={!isActive}
-                      onChange={e => setWoItems(prev => prev.map((it, i) => i === idx ? { ...it, endDate: e.target.value } : it))}
-                      style={{ fontSize: '0.75rem', padding: '4px 4px' }} />
-                    {isActive && (
-                      <button type="button" onClick={() => setWoItems(prev => prev.filter((_, i) => i !== idx))}
-                        style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '1rem', fontWeight: 700, padding: 0 }}
-                        title="Xóa dòng">−</button>
-                    )}
-                  </div>
-                ))}
                 <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 6 }}>
                   Tổng: <strong>{woItems.filter(w => w.content.trim()).length}</strong> nội dung công việc
                 </div>
@@ -1857,69 +2943,51 @@ export default function TaskDetailPage() {
             </>
             )}
 
-            {/* P1.3: Custom action buttons for selective reject */}
+            {/* P1.3: Simple approve/reject for plan */}
             {task.stepCode === 'P1.3' && isActive && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <h3 style={{ marginTop: 0, fontSize: '1rem' }}>🚀 Hành động</h3>
-                {(planDecision === 'pending' || estimateDecision === 'pending') ? (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                    Vui lòng duyệt hoặc từ chối {planDecision === 'pending' && estimateDecision === 'pending' ? 'cả 2 mục' : planDecision === 'pending' ? 'kế hoạch' : 'dự toán'} trên trước khi hoàn thành.
-                  </p>
-                ) : planDecision === 'rejected' || estimateDecision === 'rejected' ? (
-                  <button
-                    className="btn-accent"
-                    disabled={submitting}
-                    onClick={async () => {
-                      setSubmitting(true)
-                      setError('')
-                      try {
-                        // Save partial approval state to resultData BEFORE rejecting
-                        await apiFetch(`/api/tasks/${taskId}`, {
-                          method: 'PUT',
-                          body: JSON.stringify({
-                            action: 'save',
-                            resultData: {
-                              planApproved: planDecision === 'approved',
-                              estimateApproved: estimateDecision === 'approved',
-                              planRejectReason: planDecision === 'rejected' ? planRejectReason : null,
-                              estimateRejectReason: estimateDecision === 'rejected' ? estimateRejectReason : null,
-                            },
-                          }),
-                        })
-                        // Reject plan → P1.2A
-                        if (planDecision === 'rejected') {
-                          await apiFetch(`/api/tasks/${taskId}/reject`, {
-                            method: 'POST',
-                            body: JSON.stringify({ reason: planRejectReason, overrideRejectTo: 'P1.2A' }),
-                          })
-                        }
-                        // Reject estimate → P1.2
-                        if (estimateDecision === 'rejected') {
-                          await apiFetch(`/api/tasks/${taskId}/reject`, {
-                            method: 'POST',
-                            body: JSON.stringify({ reason: estimateRejectReason, overrideRejectTo: 'P1.2' }),
-                          })
-                        }
-                        setSuccessMsg('✅ Đã từ chối và đẩy lại task về bước trước')
-                        setTimeout(() => router.push('/dashboard/tasks'), 2000)
-                      } catch {
-                        setError('Lỗi khi từ chối')
-                      }
-                      setSubmitting(false)
-                    }}
-                    style={{ width: '100%', padding: '10px', fontSize: '0.95rem', background: '#dc2626' }}
-                  >
-                    {submitting ? '⏳ Đang xử lý...' : `⚠️ Xác nhận từ chối ${planDecision === 'rejected' ? 'Kế hoạch → PM' : ''}${planDecision === 'rejected' && estimateDecision === 'rejected' ? ' + ' : ''}${estimateDecision === 'rejected' ? 'Dự toán → KTKH' : ''}`}
-                  </button>
-                ) : (
+                <div style={{ display: 'flex', gap: 12, marginBottom: showRejectForm ? 16 : 0 }}>
                   <button
                     className="btn-accent"
                     onClick={() => handleSubmit('complete')}
                     disabled={submitting}
-                    style={{ width: '100%', padding: '10px', fontSize: '0.95rem' }}
+                    style={{ flex: 1, padding: '12px 20px', fontSize: '1rem' }}
                   >
-                    {submitting ? '⏳ Đang xử lý...' : planDecision === 'approved' && estimateDecision === 'approved' ? '✅ Phê duyệt hoàn thành' : '✅ Phê duyệt'}
+                    {submitting ? '⏳ Đang xử lý...' : '✅ Phê duyệt kế hoạch'}
                   </button>
+                  <button
+                    onClick={() => setShowRejectForm(!showRejectForm)}
+                    disabled={submitting}
+                    style={{ padding: '12px 20px', fontSize: '1rem', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    ❌ Từ chối
+                  </button>
+                </div>
+                {showRejectForm && (
+                  <div>
+                    <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                      placeholder="Nhập lý do từ chối kế hoạch..." rows={2}
+                      style={{ width: '100%', borderRadius: 8, border: '1px solid #dc2626', padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical', background: 'var(--bg-secondary)' }} />
+                    <button
+                      disabled={submitting}
+                      onClick={async () => {
+                        if (!rejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return }
+                        setSubmitting(true)
+                        try {
+                          await apiFetch(`/api/tasks/${taskId}/reject`, {
+                            method: 'POST',
+                            body: JSON.stringify({ reason: rejectReason, overrideRejectTo: 'P1.2A' }),
+                          })
+                          setSuccessMsg('✅ Đã từ chối và đẩy lại task về PM')
+                          setTimeout(() => router.push('/dashboard/tasks'), 2000)
+                        } catch { setError('Lỗi khi từ chối') }
+                        setSubmitting(false)
+                      }}
+                      style={{ marginTop: 6, padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                      ⚠️ Xác nhận từ chối → PM (P1.2A)
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -2148,7 +3216,7 @@ export default function TaskDetailPage() {
               <div className="card" style={{ padding: '1.25rem' }}>
                 <h3 style={{ marginTop: 0, fontSize: '1rem' }}>🚀 Hành động</h3>
                 {/* P4.3 + P5.3: Conditional buttons based on inspection result */}
-                {(task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !formData.itpResult || formData.itpResult === 'PASS' || formData.itpResult === 'HOLD') && (
+                {(task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !(() => { try { const items = JSON.parse(formData.qcItems as string || '[]'); return items.some((q: {result: string}) => q.result === 'FAIL') } catch { return false } })()) && (
                 <button
                   className="btn-accent"
                   onClick={() => handleSubmit('complete')}
@@ -2158,7 +3226,7 @@ export default function TaskDetailPage() {
                   {submitting ? '⏳ Đang xử lý...' : '✅ Hoàn thành bước này'}
                 </button>
                 )}
-                {rule?.rejectTo && (task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'FAIL' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !formData.itpResult || formData.itpResult === 'FAIL' || formData.itpResult === 'HOLD') && (
+                {rule?.rejectTo && (task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'FAIL' || formData.inspectionResult === 'CONDITIONAL') && (
                   <div>
                     <button
                       onClick={() => setShowRejectForm(!showRejectForm)}
@@ -2190,6 +3258,13 @@ export default function TaskDetailPage() {
                             if (!rejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return }
                             setSubmitting(true)
                             setError('')
+                            // P5.3: Save QC items result data before rejecting
+                            if (task.stepCode === 'P5.3' && formData.qcItems) {
+                              await apiFetch(`/api/tasks/${taskId}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ action: 'save', resultData: { ...formData, checklist: checklistState } }),
+                              })
+                            }
                             const res = await apiFetch(`/api/tasks/${taskId}/reject`, {
                               method: 'POST',
                               body: JSON.stringify({ reason: rejectReason }),
@@ -2325,8 +3400,8 @@ function renderField(
       return (
         <input
           type="number"
-          value={value}
-          onChange={e => onChange(Number(e.target.value))}
+          value={value === 0 ? '0' : (value || '')}
+          onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
           disabled={!enabled}
           min={field.min}
           max={field.max}

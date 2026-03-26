@@ -38,28 +38,40 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
     role: 'R03', next: ['P1.3'], deadlineDays: 5, phase: 1,
   },
   'P1.3': {
-    code: 'P1.3', name: 'Phê duyệt kế hoạch và ngân sách', nameEn: 'Plan & Budget Approval',
-    role: 'R01', gate: ['P1.2A', 'P1.2'], next: ['P2.1', 'P2.2', 'P2.3'], deadlineDays: 3, phase: 1,
-    rejectTo: 'P1.2', // default fallback; UI overrides for selective reject to P1.2A or P1.2
+    code: 'P1.3', name: 'Phê duyệt kế hoạch kickoff, WBS, milestones', nameEn: 'Plan Approval',
+    role: 'R01', gate: ['P1.2A'], next: ['P1.2', 'P2.1', 'P2.2', 'P2.3', 'P2.1A', 'P2.1B', 'P2.1C'], deadlineDays: 3, phase: 1,
+    rejectTo: 'P1.2A',
   },
 
   // ── Phase 2: Thiết kế & Kế hoạch SX (BRD#6-10) ──
-  // Steps 6,7,8 run in PARALLEL after step 5 (P1.3)
+  // P2.1, P2.2, P2.3, P2.1A, P2.1B, P2.1C run in PARALLEL after P1.3
   'P2.1': {
     code: 'P2.1', name: 'Thiết kế xây dựng bản vẽ và đề xuất VT chính', nameEn: 'Design Drawing & Main Material BOM',
-    role: 'R04', next: ['P2.4'], deadlineDays: 15, phase: 2,
+    role: 'R04', next: [], deadlineDays: 15, phase: 2,
   },
   'P2.2': {
     code: 'P2.2', name: 'PM đề xuất vật tư hàn và sơn', nameEn: 'PM Welding & Paint Material Request',
-    role: 'R02', next: ['P2.4'], deadlineDays: 5, phase: 2,
+    role: 'R02', next: [], deadlineDays: 5, phase: 2,
   },
   'P2.3': {
-    code: 'P2.3', name: 'Kho đề xuất vật tư phụ từ tồn kho', nameEn: 'Warehouse Supplementary Material from Stock',
-    role: 'R05', next: ['P2.4'], deadlineDays: 5, phase: 2,
+    code: 'P2.3', name: 'Kho đề xuất vật tư', nameEn: 'Warehouse Material Proposal',
+    role: 'R05', next: [], deadlineDays: 5, phase: 2,
+  },
+  'P2.1A': {
+    code: 'P2.1A', name: 'Tập hợp thông tin dự toán của Tài chính kế toán', nameEn: 'Finance Estimate Info Compilation',
+    role: 'R08', next: [], deadlineDays: 7, phase: 2,
+  },
+  'P2.1B': {
+    code: 'P2.1B', name: 'Tập hợp thông tin dự toán của Thương mại', nameEn: 'Commercial Estimate Info Compilation',
+    role: 'R07', next: [], deadlineDays: 7, phase: 2,
+  },
+  'P2.1C': {
+    code: 'P2.1C', name: 'Tập hợp thông tin dự toán của Sản xuất', nameEn: 'Production Estimate Info Compilation',
+    role: 'R06', next: [], deadlineDays: 7, phase: 2,
   },
   'P2.4': {
     code: 'P2.4', name: 'KTKH lập kế hoạch SX và điều chỉnh dự toán', nameEn: 'Production Plan & Budget Adjustment',
-    role: 'R03', gate: ['P2.1', 'P2.2', 'P2.3'], next: ['P2.5'], deadlineDays: 7, phase: 2,
+    role: 'R03', gate: ['P2.1', 'P2.2', 'P2.3', 'P2.1A', 'P2.1B', 'P2.1C'], next: ['P2.5'], deadlineDays: 7, phase: 2,
   },
   'P2.5': {
     code: 'P2.5', name: 'BGĐ phê duyệt KH SX và dự toán chính thức', nameEn: 'Approve Production Plan & Final Budget',
@@ -142,25 +154,25 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P5.5': {
     code: 'P5.5', name: 'Tổng hợp và tính lương khoán', nameEn: 'Piece-rate Salary Calculation',
-    role: 'R03', next: ['P6.1', 'P6.4'], phase: 5,
+    role: 'R03', next: ['P6.1', 'P6.2', 'P6.3', 'P6.4'], phase: 5,
   },
 
   // ── Phase 6: Đóng Dự án (BRD P6.1-P6.5) ──
   'P6.1': {
     code: 'P6.1', name: 'QC tổng hợp hồ sơ chất lượng (Dossier)', nameEn: 'QC Dossier Compilation',
-    role: 'R09', next: ['P6.5'], deadlineDays: 10, phase: 6,
+    role: 'R09', next: [], deadlineDays: 10, phase: 6,
   },
   'P6.2': {
     code: 'P6.2', name: 'Quyết toán chi phí trực tiếp', nameEn: 'Direct Cost Settlement',
-    role: 'R08', next: ['P6.3'], deadlineDays: 7, phase: 6,
+    role: 'R08', next: [], deadlineDays: 7, phase: 6,
   },
   'P6.3': {
     code: 'P6.3', name: 'Quyết toán tổng hợp (P&L)', nameEn: 'Consolidated P&L Settlement',
-    role: 'R03', next: ['P6.5'], deadlineDays: 7, phase: 6,
+    role: 'R03', next: [], deadlineDays: 7, phase: 6,
   },
   'P6.4': {
     code: 'P6.4', name: 'Tổ chức Lesson Learned', nameEn: 'Lessons Learned Review',
-    role: 'R02', next: ['P6.2', 'P6.5'], deadlineDays: 5, phase: 6,
+    role: 'R02', next: [], deadlineDays: 5, phase: 6,
   },
   'P6.5': {
     code: 'P6.5', name: 'BGĐ phê duyệt đóng dự án', nameEn: 'Board Project Closure Approval',

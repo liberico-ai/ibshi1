@@ -200,12 +200,11 @@ const P1_2: StepFormConfig = {
 const P1_3: StepFormConfig = {
   stepCode: 'P1.3',
   formType: 'approval',
-  title: 'Phê duyệt kế hoạch và ngân sách',
-  description: 'BGĐ phê duyệt kế hoạch kickoff/WBS/milestones của PM và dự toán thi công của KTKH',
+  title: 'Phê duyệt kế hoạch kickoff, WBS, milestones',
+  description: 'BGĐ phê duyệt kế hoạch kickoff, WBS, milestones của PM',
   fields: [],
   checklist: [
     { key: 'plan_reviewed', label: 'Đã review kế hoạch kickoff, WBS, milestones', required: true },
-    { key: 'estimate_reviewed', label: 'Đã review dự toán thi công', required: true },
   ],
   attachments: [],
 }
@@ -255,8 +254,8 @@ const P2_2: StepFormConfig = {
 const P2_3: StepFormConfig = {
   stepCode: 'P2.3',
   formType: 'input',
-  title: 'Kho đề xuất vật tư phụ từ tồn kho',
-  description: 'Kho review tồn kho hiện có và đề xuất vật tư phụ có thể dùng cho dự án (tận dụng surplus từ dự án trước). Song song bước Thiết kế và PM đề xuất VT.',
+  title: 'Kho đề xuất vật tư',
+  description: 'Kho review tồn kho hiện có và đề xuất vật tư có thể dùng cho dự án (tận dụng surplus từ dự án trước).',
   fields: [
     // Inventory table + BOM form for supplementary materials are rendered dynamically in page.tsx
     { key: 'stockNotes', label: 'Ghi chú tồn kho', labelEn: 'Stock Notes', type: 'textarea', fullWidth: true },
@@ -271,21 +270,61 @@ const P2_3: StepFormConfig = {
   validationRules: [],
 }
 
+const P2_1A: StepFormConfig = {
+  stepCode: 'P2.1A',
+  formType: 'input',
+  title: 'Tập hợp thông tin dự toán của Tài chính kế toán',
+  description: 'R08 (Kế toán) tập hợp chi phí chung, chi phí tài chính, chi phí quản lý cho dự toán dự án.',
+  fields: [],
+  checklist: [
+    { key: 'cost_items_verified', label: 'Đã xác minh các hạng mục chi phí' },
+    { key: 'tax_calculated', label: 'Đã tính toán thuế phí' },
+  ],
+  attachments: [
+    { key: 'financeReport', label: 'Báo cáo chi phí tài chính', accept: '.xlsx,.xls,.pdf' },
+  ],
+}
+
+const P2_1B: StepFormConfig = {
+  stepCode: 'P2.1B',
+  formType: 'input',
+  title: 'Tập hợp thông tin dự toán của Thương mại',
+  description: 'R07 (Thương mại) tập hợp giá vật tư, chi phí vận chuyển, phí dịch vụ thuê ngoài cho dự toán.',
+  fields: [],
+  checklist: [
+    { key: 'supplier_prices_confirmed', label: 'Đã xác nhận giá NCC' },
+    { key: 'transport_quoted', label: 'Đã có báo giá vận chuyển' },
+  ],
+  attachments: [
+    { key: 'commercialReport', label: 'Báo giá NCC / Thương mại', accept: '.xlsx,.xls,.pdf' },
+  ],
+}
+
+const P2_1C: StepFormConfig = {
+  stepCode: 'P2.1C',
+  formType: 'input',
+  title: 'Tập hợp thông tin dự toán của Sản xuất',
+  description: 'R06 (Sản xuất) tập hợp thông tin nhân công, định mức lao động, năng lực phân xưởng cho dự toán.',
+  fields: [],
+  checklist: [
+    { key: 'labor_norm_checked', label: 'Đã kiểm tra định mức lao động' },
+    { key: 'workshop_available', label: 'Đã xác nhận năng lực phân xưởng' },
+  ],
+  attachments: [
+    { key: 'productionReport', label: 'Báo cáo năng lực SX', accept: '.xlsx,.xls,.pdf' },
+  ],
+}
+
 const P2_4: StepFormConfig = {
   stepCode: 'P2.4',
   formType: 'input',
   title: 'KTKH lập kế hoạch SX và điều chỉnh dự toán',
-  description: 'Sau khi nhận thông tin từ Thiết kế, PM (VT hàn/sơn), và Kho (VT phụ), R03 điều chỉnh dự toán chính thức theo BOM thực tế và lập kế hoạch sản xuất tổng thể.',
-  fields: [
-    { key: 'productionPlan', label: 'Kế hoạch sản xuất tổng thể', labelEn: 'Production Plan', type: 'textarea', fullWidth: true, required: true },
-    { key: 'adjustedBudget', label: 'Dự toán điều chỉnh', labelEn: 'Adjusted Budget', type: 'currency', required: true },
-    { key: 'budgetImpact', label: 'Tác động lên WBS budget', labelEn: 'WBS Budget Impact', type: 'textarea', fullWidth: true },
-    { key: 'workshopTimeline', label: 'Timeline phân xưởng, tổ', labelEn: 'Workshop Timeline', type: 'textarea', fullWidth: true },
-  ],
+  description: 'Tổng hợp dữ liệu dự toán từ TCKT, Thương mại, Sản xuất. KTKH điều chỉnh và lập kế hoạch SX tổng thể.',
+  fields: [],
   checklist: [
-    { key: 'bom_reconciled', label: 'Đã đối chiếu BOM thực tế với dự toán', required: true },
-    { key: 'sx_plan_complete', label: 'Kế hoạch SX đã hoàn chỉnh', required: true },
-    { key: 'wbs_updated', label: 'WBS budget đã cập nhật', required: true },
+    { key: 'bom_reconciled', label: 'Đã đối chiếu BOM thực tế với dự toán' },
+    { key: 'sx_plan_complete', label: 'Kế hoạch SX đã hoàn chỉnh' },
+    { key: 'wbs_updated', label: 'WBS budget đã cập nhật' },
   ],
   attachments: [
     { key: 'planFile', label: 'File KH sản xuất', accept: '.xlsx,.xls,.pdf' },
@@ -381,6 +420,7 @@ const P3_4: StepFormConfig = {
   ],
   checklist: [
     { key: 'wo_issued', label: 'Đã phát lệnh SX cho các tổ', required: true },
+    { key: 'bom_linked', label: 'Đã liên kết BOM', required: true },
     { key: 'material_status_checked', label: 'Đã kiểm tra trạng thái VT' },
   ],
   attachments: [
@@ -483,7 +523,6 @@ const P4_3: StepFormConfig = {
   description: 'R09 kiểm tra theo tiêu chí (visual, dimensional, material cert). Pass → nhập kho. Fail → trả hàng NCC.',
   fields: [
     { key: 'inspectionResult', label: 'Kết quả nghiệm thu', labelEn: 'Inspection Result', type: 'select', options: [{ value: 'PASS', label: 'PASS' }, { value: 'FAIL', label: 'FAIL' }, { value: 'CONDITIONAL', label: 'CONDITIONAL' }], required: true },
-    { key: 'failReason', label: 'Lý do từ chối (nếu Fail)', labelEn: 'Fail Reason', type: 'textarea', fullWidth: true },
     { key: 'certVerified', label: 'MTR/Cert đã xác minh', labelEn: 'Cert Verified', type: 'select', options: [{ value: 'yes', label: 'Có' }, { value: 'no', label: 'Không' }, { value: 'na', label: 'Không áp dụng' }] },
   ],
   checklist: [
@@ -521,9 +560,7 @@ const P4_5: StepFormConfig = {
   title: 'Kho đề nghị cấp vật tư cho PM và QLSX',
   description: 'R05 xử lý yêu cầu xuất kho từ Work Order, chuẩn bị VT theo heat number, lập phiếu xuất kho gắn WBS node.',
   fields: [
-    { key: 'issuedItems', label: 'Danh sách VT xuất kho', labelEn: 'Issued Items', type: 'textarea', fullWidth: true, required: true },
-    { key: 'issueDate', label: 'Ngày xuất kho', labelEn: 'Issue Date', type: 'date', required: true },
-    { key: 'wbsNode', label: 'WBS Node', labelEn: 'WBS Node', type: 'text' },
+    // All fields rendered dynamically in page.tsx (Vật tư xuất ra table + Ngày xuất + WBS Node)
   ],
   checklist: [
     { key: 'vt_prepared', label: 'Đã chuẩn bị VT theo heat number', required: true },
@@ -542,10 +579,12 @@ const P5_1: StepFormConfig = {
   title: 'Tổ SX thực hiện SX và theo dõi job card',
   description: 'R06b cập nhật trạng thái job card: bắt đầu, hoàn thành từng công đoạn, vấn đề phát sinh. Scan QR xem bản vẽ mới nhất.',
   fields: [
+    { key: 'jobCardCode', label: 'Mã Job Card', labelEn: 'Job Card Code', type: 'text', required: true },
     { key: 'jobCardStatus', label: 'Trạng thái job card', labelEn: 'Job Card Status', type: 'select', options: [{ value: 'in_progress', label: 'Đang thực hiện' }, { value: 'done', label: 'Hoàn thành' }, { value: 'paused', label: 'Tạm dừng' }, { value: 'issue', label: 'Vấn đề phát sinh' }], required: true },
     { key: 'fabricationProgress', label: 'Tiến độ sản xuất (%)', labelEn: 'Fabrication Progress %', type: 'number', min: 0, max: 100 },
     { key: 'completedTasks', label: 'Công đoạn đã hoàn thành', labelEn: 'Completed Tasks', type: 'textarea', fullWidth: true },
     { key: 'issues', label: 'Vấn đề phát sinh', labelEn: 'Issues', type: 'textarea', fullWidth: true },
+    // QR scan section rendered dynamically in page.tsx
   ],
   checklist: [
     { key: 'job_card_updated', label: 'Đã cập nhật job card', required: true },
@@ -571,10 +610,7 @@ const P5_2: StepFormConfig = {
   description: 'Mỗi tuần, R06b nhập KL hoàn thành: hạng mục, số lượng, đơn vị, job card. Dữ liệu là cơ sở tính lương khoán.',
   fields: [
     { key: 'weekNumber', label: 'Tuần báo cáo', labelEn: 'Report Week', type: 'number', required: true },
-    { key: 'hangMuc', label: 'Hạng mục', labelEn: 'Work Item', type: 'text', required: true },
-    { key: 'jobCardCode', label: 'Mã Job Card', labelEn: 'Job Card Code', type: 'text', required: true },
-    { key: 'completedVolume', label: 'Khối lượng hoàn thành', labelEn: 'Completed Volume', type: 'textarea', fullWidth: true, required: true },
-    { key: 'volumeUnit', label: 'Đơn vị', labelEn: 'Unit', type: 'text', required: true },
+    // Multi job card form with nested stages rendered dynamically in page.tsx
   ],
   checklist: [
     { key: 'volume_reported', label: 'Đã báo cáo KL hoàn thành tuần', required: true },
@@ -589,8 +625,8 @@ const P5_3: StepFormConfig = {
   title: 'QC nghiệm thu sản phẩm trong quá trình SX',
   description: 'QC kiểm tra theo ITP tại Hold Point và Witness Point. Pass → tiếp, Fail → NCR, gắn WBS và job card.',
   fields: [
-    { key: 'itpResult', label: 'Kết quả ITP', labelEn: 'ITP Result', type: 'select', options: [{ value: 'PASS', label: 'PASS' }, { value: 'FAIL', label: 'FAIL' }, { value: 'HOLD', label: 'HOLD' }], required: true },
-    { key: 'ncrNumber', label: 'Số NCR (nếu Fail)', labelEn: 'NCR Number', type: 'text' },
+    { key: 'itpCode', label: 'Kế hoạch kiểm tra và nghiệm thu (ITP)', labelEn: 'ITP Code', type: 'text', required: true },
+    // Multi QC inspection items form rendered dynamically in page.tsx
     { key: 'inspectionNotes', label: 'Ghi chú nghiệm thu', labelEn: 'Inspection Notes', type: 'textarea', fullWidth: true },
   ],
   checklist: [
@@ -766,7 +802,7 @@ const P6_5: StepFormConfig = {
 
 export const STEP_FORM_CONFIGS: Record<string, StepFormConfig> = {
   'P1.1': P1_1, 'P1.1B': P1_1B, 'P1.2A': P1_2A, 'P1.2': P1_2, 'P1.3': P1_3,
-  'P2.1': P2_1, 'P2.2': P2_2, 'P2.3': P2_3, 'P2.4': P2_4, 'P2.5': P2_5,
+  'P2.1': P2_1, 'P2.2': P2_2, 'P2.3': P2_3, 'P2.1A': P2_1A, 'P2.1B': P2_1B, 'P2.1C': P2_1C, 'P2.4': P2_4, 'P2.5': P2_5,
   'P3.1': P3_1, 'P3.2': P3_2, 'P3.3': P3_3, 'P3.4': P3_4,
   'P3.5': P3_5, 'P3.6': P3_6, 'P3.7': P3_7,
   'P4.1': P4_1, 'P4.2': P4_2, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,
