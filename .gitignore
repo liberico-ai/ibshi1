@@ -58,3 +58,9 @@ schema-expansion.md
 /.gemini/
 /public/uploads/
 ibs-erp-20260322
+
+# Debug scripts
+*-output.txt
+test-db.js
+reopen-task.js
+list-materials.js

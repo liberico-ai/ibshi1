@@ -228,8 +228,8 @@ const STEP_VALIDATION_MAP: Record<string, (projectId: string, resultData?: Recor
     }
   },
   'P3.4': validateLSXBOMLink,       // TC-04-02
-  // 'P5.5': validateShippingSignoff,  // TC-05-01 removed — P5.5 is salary calculation, not shipping
-  // 'P6.1': validateProofOfDelivery,  // TC-05-02 removed — P6.1 is QC dossier, not delivery proof
+  'P5.4': validateShippingSignoff,  // TC-05-01: 3-way shipping sign-off at PM volume acceptance
+  'P6.1': validateProofOfDelivery,  // TC-05-02: proof of delivery at QC dossier compilation
 }
 
 // ── Main Entry Point ──

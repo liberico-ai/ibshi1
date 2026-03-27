@@ -403,8 +403,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           select: { resultData: true, status: true },
         }),
         prisma.material.findMany({
+          where: { currentStock: { gt: 0 } },
           select: { materialCode: true, name: true, specification: true, currentStock: true, unit: true, category: true },
           orderBy: { category: 'asc' },
+          take: 200,
         }),
       ])
       previousStepData = {
