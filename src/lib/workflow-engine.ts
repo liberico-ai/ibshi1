@@ -419,6 +419,41 @@ async function runWorkflowHooks(
       }
     }
 
+    // P4.5: Kho xuất vật tư → auto deduct stock for each issued item
+    if (stepCode === 'P4.5' && resultData) {
+      const issueItemsRaw = resultData.issueItems as string | undefined
+      let issueItems: { name: string; code: string; spec: string; qty: string; unit: string }[] = []
+      try { issueItems = issueItemsRaw ? JSON.parse(issueItemsRaw) : [] } catch { issueItems = [] }
+      const validItems = issueItems.filter(item => item.code?.trim() && Number(item.qty) > 0)
+      for (const item of validItems) {
+        const material = await prisma.material.findFirst({
+          where: { materialCode: item.code.trim() },
+          select: { id: true, currentStock: true },
+        })
+        if (material) {
+          const qty = Number(item.qty)
+          await prisma.$transaction([
+            prisma.stockMovement.create({
+              data: {
+                materialId: material.id,
+                projectId,
+                type: 'OUT',
+                quantity: qty,
+                reason: 'production_issue',
+                referenceNo: `${projCode}-P4.5`,
+                performedBy: userId,
+                notes: `Xuất VT: ${item.name} (${item.code}) x ${qty} ${item.unit}`,
+              },
+            }),
+            prisma.material.update({
+              where: { id: material.id },
+              data: { currentStock: { decrement: qty } },
+            }),
+          ])
+        }
+      }
+    }
+
     // QC steps → auto Inspection
     const qcType = QC_STEP_TYPE_MAP[stepCode]
     if (qcType) {
