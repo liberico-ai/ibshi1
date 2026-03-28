@@ -372,6 +372,49 @@ async function runWorkflowHooks(
       }
     }
 
+    // P4.4: Kho nghiệm thu nhập kho → auto StockMovement (IN) for each warehouse item
+    if (stepCode === 'P4.4' && resultData) {
+      const warehouseItems = resultData.warehouseItems as { material: string; receivedQty: string; storageLocation: string }[] | undefined
+      if (warehouseItems && Array.isArray(warehouseItems)) {
+        const validItems = warehouseItems.filter(w => w.material?.trim() && Number(w.receivedQty) > 0)
+        for (const item of validItems) {
+          const qty = Number(item.receivedQty)
+          const matName = item.material.trim().toLowerCase()
+          // Find material by name (fuzzy: exact, then includes)
+          let material = await prisma.material.findFirst({
+            where: { name: { equals: item.material.trim(), mode: 'insensitive' } },
+            select: { id: true },
+          })
+          if (!material) {
+            material = await prisma.material.findFirst({
+              where: { name: { contains: item.material.trim(), mode: 'insensitive' } },
+              select: { id: true },
+            })
+          }
+          if (material) {
+            await prisma.$transaction([
+              prisma.stockMovement.create({
+                data: {
+                  materialId: material.id,
+                  projectId,
+                  type: 'IN',
+                  quantity: qty,
+                  reason: 'warehouse_receipt',
+                  referenceNo: `${projCode}-P4.4`,
+                  performedBy: userId,
+                  notes: `Nhập kho: ${item.material} x ${qty}, vị trí: ${item.storageLocation || '—'}`,
+                },
+              }),
+              prisma.material.update({
+                where: { id: material!.id },
+                data: { currentStock: { increment: qty } },
+              }),
+            ])
+          }
+        }
+      }
+    }
+
     // P4.1: Issue WO → auto WorkOrder
     if (stepCode === 'P4.1') {
       const woCode = (resultData?.woCode as string) || `WO-${projCode}-${Date.now()}`

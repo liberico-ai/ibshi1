@@ -18,6 +18,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     let siblingFiles: Record<string, string> | null = null
     let rejectionInfo: { reason: string; rejectedBy: string; rejectedAt: string } | null = null
 
+    // Check for recent rejection targeting this step
+    const rejectEvent = await prisma.changeEvent.findFirst({
+      where: {
+        projectId: task.projectId,
+        targetId: task.stepCode,
+        eventType: 'REJECT',
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (rejectEvent) {
+      const rejector = await prisma.user.findUnique({
+        where: { id: rejectEvent.triggeredBy },
+        select: { fullName: true },
+      })
+      rejectionInfo = {
+        reason: rejectEvent.reason || '',
+        rejectedBy: rejector?.fullName || 'Hệ thống',
+        rejectedAt: rejectEvent.createdAt.toISOString(),
+      }
+    }
+
     // Helper: resolve attached files from resultData or legacy description metadata
     function resolveFiles(
       resultData: Record<string, unknown> | null,
@@ -519,6 +540,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    // For P5.2: fetch P5.1 job card data to auto-display completed stages
+    if (task.stepCode === 'P5.2') {
+      const p51Task = await prisma.workflowTask.findFirst({
+        where: { projectId: task.projectId, stepCode: 'P5.1' },
+        select: { resultData: true, status: true },
+      })
+      previousStepData = {
+        jobCardData: p51Task?.resultData || null,
+      }
+    }
+
     // For P5.4: fetch P5.1 (job card data) + P5.2 (volume report with job cards) for PM review
     if (task.stepCode === 'P5.4') {
       const [p51Task, p52Task] = await Promise.all([
@@ -534,6 +566,54 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       previousStepData = {
         jobCardData: p51Task?.resultData || null,
         volumeData: p52Task?.resultData || null,
+      }
+    }
+
+    // P6.2: Fetch P1.2 estimate data to compute budget total
+    if (task.stepCode === 'P6.2') {
+      const p12Task = await prisma.workflowTask.findFirst({
+        where: { projectId: task.projectId, stepCode: 'P1.2' },
+        select: { resultData: true },
+      })
+      const rd = p12Task?.resultData as Record<string, unknown> | null
+      if (rd) {
+        const tableKeys = ['dt03Items', 'dt04Items', 'dt05Items', 'dt06Items', 'dt07Items']
+        let budgetTotal = 0
+        for (const tk of tableKeys) {
+          try {
+            const items = typeof rd[tk] === 'string' ? JSON.parse(rd[tk] as string) : rd[tk]
+            if (Array.isArray(items)) {
+              for (const row of items) {
+                budgetTotal += Number(String(row.thanhTien || '0').replace(/[,.]/g, '')) || 0
+              }
+            }
+          } catch { /* ignore parse errors */ }
+        }
+        previousStepData = { ...previousStepData, budgetTotal }
+      }
+    }
+
+    // P6.5: Fetch P6.1-P6.4 status for BGĐ review
+    if (task.stepCode === 'P6.5') {
+      const [p61, p62, p63, p64] = await Promise.all([
+        prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P6.1' }, select: { status: true, resultData: true } }),
+        prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P6.2' }, select: { status: true, resultData: true } }),
+        prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P6.3' }, select: { status: true, resultData: true } }),
+        prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P6.4' }, select: { status: true, resultData: true } }),
+      ])
+      const statusLabel = (s: string | undefined) => s === 'DONE' ? '✅ Hoàn thành' : s === 'IN_PROGRESS' ? '🔄 Đang thực hiện' : '⏳ Chưa bắt đầu'
+      const rd62 = p62?.resultData as Record<string, string> | null
+      const rd63 = p63?.resultData as Record<string, string> | null
+      previousStepData = {
+        ...previousStepData,
+        p61Status: statusLabel(p61?.status),
+        p62Status: statusLabel(p62?.status),
+        p62Total: rd62?.totalActualCost || null,
+        p62Variance: rd62?.costVariance || null,
+        p63Status: statusLabel(p63?.status),
+        p63Profit: rd63?.grossProfit || null,
+        p63Margin: rd63?.profitMargin || null,
+        p64Status: statusLabel(p64?.status),
       }
     }
 
