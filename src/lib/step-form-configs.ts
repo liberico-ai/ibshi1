@@ -116,17 +116,15 @@ const P1_2A: StepFormConfig = {
   stepCode: 'P1.2A',
   formType: 'input',
   title: 'Lập kế hoạch kickoff, WBS, milestones',
-  description: 'PM tạo WBS, định nghĩa milestone với ngày dự kiến và % billing, lập kế hoạch kickoff meeting',
+  description: 'PM lập WBS theo biểu mẫu BCTH-IBSHI-QLDA-095, phân bổ khối lượng, phạm vi, tiến độ, thầu phụ.',
   fields: [
-    { key: 'wbsStructure', label: 'Cấu trúc WBS (4-5 cấp)', labelEn: 'WBS Structure', type: 'textarea', required: true, fullWidth: true },
     { key: 'kickoffDate', label: 'Ngày Kickoff Meeting', labelEn: 'Kickoff Date', type: 'date', required: true },
     { key: 'kickoffAgenda', label: 'Nội dung Kickoff', labelEn: 'Kickoff Agenda', type: 'textarea', fullWidth: true },
-    { key: 'budgetAllocation', label: 'Phân bổ ngân sách theo WBS', labelEn: 'Budget Allocation', type: 'textarea', fullWidth: true },
   ],
   checklist: [
-    { key: 'wbs_created', label: 'Đã tạo WBS 4-5 cấp', required: true },
+    { key: 'wbs_created', label: 'Đã tạo WBS theo biểu mẫu BCTH-IBSHI-QLDA-095' },
     { key: 'kickoff_planned', label: 'Đã lên kế hoạch kickoff meeting' },
-    { key: 'budget_distributed', label: 'Đã phân bổ budget theo WBS node' },
+    { key: 'budget_distributed', label: 'Đã phân bổ theo WBS node' },
   ],
   attachments: [
     { key: 'wbs_file', label: 'File WBS (Excel/PDF)', accept: '.xlsx,.xls,.pdf' },
@@ -352,14 +350,12 @@ const P3_1: StepFormConfig = {
   stepCode: 'P3.1',
   formType: 'input',
   title: 'PM điều chỉnh kế hoạch và đẩy tiến độ cấp hàng',
-  description: 'PM cập nhật timeline chi tiết, xác định các vật tư long-lead cần đặt gấp, ưu tiên xử lý PR.',
+  description: 'PM xem lại WBS đã duyệt, xác định vật tư long-lead cần ưu tiên, cập nhật timeline cấp hàng.',
   fields: [
-    { key: 'adjustedTimeline', label: 'Timeline điều chỉnh', labelEn: 'Adjusted Timeline', type: 'textarea', fullWidth: true, required: true },
-    { key: 'longLeadItems', label: 'Vật tư long-lead cần ưu tiên', labelEn: 'Long-lead Items', type: 'textarea', fullWidth: true },
-    { key: 'priorityNotes', label: 'Ghi chú ưu tiên', labelEn: 'Priority Notes', type: 'textarea', fullWidth: true },
+    { key: 'timelineNotes', label: 'Ghi chú điều chỉnh timeline', labelEn: 'Timeline Adjustment Notes', type: 'textarea', fullWidth: true },
   ],
   checklist: [
-    { key: 'timeline_updated', label: 'Đã cập nhật timeline chi tiết', required: true },
+    { key: 'wbs_reviewed', label: 'Đã xem xét WBS và tiến độ' },
     { key: 'long_lead_identified', label: 'Đã xác định VT long-lead', required: true },
   ],
   attachments: [],

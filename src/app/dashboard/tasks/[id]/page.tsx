@@ -6,8 +6,6 @@ import { apiFetch } from '@/hooks/useAuth'
 import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
-import P12EstimateForms from '@/components/tasks/P12EstimateForms'
-import DepartmentEstimateForms from '@/components/tasks/DepartmentEstimateForms'
 
 interface TaskData {
   id: string
@@ -65,7 +63,9 @@ export default function TaskDetailPage() {
   const [inventoryMaterials, setInventoryMaterials] = useState<{ id: string; materialCode: string; name: string; unit: string; category: string; specification: string | null; currentStock: number }[]>([])
   const [inventoryLoading, setInventoryLoading] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
-  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; departmentEstimates?: any } | null>(null)
+  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; departmentEstimates?: any } | null>(null)
+  // P1.2A WBS expanded rows
+  const [wbsExpandedRows, setWbsExpandedRows] = useState<Set<number>>(new Set())
   // P4.1 payment confirmations per milestone
   const [paymentConfirmations, setPaymentConfirmations] = useState<{ confirmed: boolean; method: string }[]>([])
   // P4.4 warehouse items per material
@@ -144,6 +144,18 @@ export default function TaskDetailPage() {
       }
       if (res.previousStepData) {
         setPreviousStepData(res.previousStepData)
+        // P3.5: auto-fill default suppliers with PR items if no saved supplier data
+        if (res.task.stepCode === 'P3.5' && !(res.task.resultData as Record<string, unknown> | null)?.suppliers) {
+          const prRaw = (res.previousStepData as Record<string, unknown>)?.prItems
+          if (Array.isArray(prRaw) && prRaw.length > 0) {
+            const prQuotes = prRaw.filter((p: Record<string, string>) => p.name?.trim()).map((p: Record<string, string>) => ({ material: p.name, price: '' }))
+            setSuppliers([
+              { name: '', quotes: [...prQuotes] },
+              { name: '', quotes: [...prQuotes] },
+              { name: '', quotes: [...prQuotes] },
+            ])
+          }
+        }
       }
       // For P1.3: restore previous approval decisions
       if (res.task.stepCode === 'P1.3' && res.task.resultData) {
@@ -609,14 +621,934 @@ export default function TaskDetailPage() {
             )}
 
             {/* P1.2: Dynamic Estimate Tables (DT03-DT07) */}
-            {task.stepCode === 'P1.2' && (
-              <P12EstimateForms formData={formData} onFieldChange={(k, v) => handleFieldChange(k, v)} isActive={isActive} />
-            )}
+            {task.stepCode === 'P1.2' && (() => {
+              // Generic table renderer for estimate forms
+              type EstRow = Record<string, string>
+              const renderEstTable = (
+                title: string, code: string, dataKey: string,
+                columns: { key: string; label: string; type?: string; width?: string }[],
+                defaultRows: EstRow[]
+              ) => {
+                let rows: EstRow[] = []
+                try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+                const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+                const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+                const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+                const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+                return (
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({code})</span></h3>
+                      {isActive && (
+                        <button type="button" onClick={addRow}
+                          style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          + Thêm
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+                        {columns.map(c => (
+                          <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>
+                        ))}
+                        {isActive && <span />}
+                      </div>
+                      {rows.map((row, ri) => (
+                        <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
+                          {columns.map(c => (
+                            <input key={c.key} className="input" value={row[c.key] || ''} disabled={!isActive}
+                              onChange={e => update(ri, c.key, e.target.value)}
+                              placeholder={c.label}
+                              style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: c.type === 'number' ? 'right' : 'left' }} />
+                          ))}
+                          {isActive && rows.length > 1 && (
+                            <button type="button" onClick={() => removeRow(ri)}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
+                  </div>
+                )
+              }
 
-            {/* P2.1A/B/C/P2.4: Department Estimate Tables */}
-            {['P2.1A', 'P2.1B', 'P2.1C', 'P2.4'].includes(task.stepCode) && (
-              <DepartmentEstimateForms stepCode={task.stepCode} formData={formData} onFieldChange={(k, v) => handleFieldChange(k, v)} isActive={isActive} />
-            )}
+              return (
+                <>
+                  {/* ── TM: DT03 - Dự toán VT tổng hợp ── */}
+                  {renderEstTable('📦 DT03 — Dự toán chi phí VT (Thương mại)', 'QT30-DT03', 'dt03Items',
+                    [
+                      { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
+                      { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.6fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.8fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.8fr' },
+                    ],
+                    [
+                      { nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTP', danhMuc: 'Vật tư phụ kiện, bu lông…', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTDK', danhMuc: 'Vật tư đóng kiện', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTBP', danhMuc: 'Vật tư làm biện pháp', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH', danhMuc: 'Vật tư tiêu hao', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS', danhMuc: 'Vật tư sơn', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTDP', danhMuc: 'Vật tư dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+
+                  {/* ── TM: DT04 - Dự toán VT chi tiết ── */}
+                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT (Thương mại)', 'QT30-DT04', 'dt04Items',
+                    [
+                      { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
+                      { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
+                      { key: 'macVL', label: 'Mác VL', width: '0.6fr' },
+                      { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.4fr' },
+                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+
+                  {/* ── TM: DT05 - Dự toán dịch vụ ── */}
+                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ (Thương mại)', 'QT30-DT05', 'dt05Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [
+                      { maCP: 'VT', noiDung: 'Vận tải', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'NDT', noiDung: 'NDT, quy trình và thí nghiệm', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'MK', noiDung: 'Mạ kẽm', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPK', noiDung: 'Các chi phí khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+
+                  {/* ── SX: DT06 - Dự toán nhân công ── */}
+                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công (Sản xuất)', 'QT30-DT06', 'dt06Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [
+                      { maCP: 'PC', noiDung: 'Pha cắt', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'GC', noiDung: 'Gia công', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CT', noiDung: 'Chế tạo - Lan can', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CT', noiDung: 'Chế tạo - Giá đỡ', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CT', noiDung: 'Chế tạo - Ống', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CT', noiDung: 'Chế tạo - Hộp', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'KK', noiDung: 'Khung kiện', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'TH', noiDung: 'Tổ hợp sản phẩm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'LD', noiDung: 'Lắp dựng + Nghiệm thu', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'VS', noiDung: 'Vệ sinh vật liệu hợp kim', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'SON', noiDung: 'Làm sạch, Sơn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'BO', noiDung: 'Bảo ôn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'LTB', noiDung: 'Lắp thiết bị phụ kiện trước đóng kiện', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'DK', noiDung: 'Đóng kiện', dvt: 'Kiện', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'GH', noiDung: 'Giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'DP', noiDung: 'Nhân công dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+
+                  {/* ── TCKT: DT07 - Chi phí chung, tài chính ── */}
+                  {renderEstTable('🏢 DT07 — Dự toán chi phí chung, tài chính (TCKT)', 'QT30-DT07', 'dt07Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá BQ', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [
+                      { maCP: 'CPC', danhMuc: 'Chi phí chung phục vụ sản xuất', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC', danhMuc: 'Chi phí tài chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL', danhMuc: 'Chi phí Quản Lý', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                </>
+              )
+            })()}
+
+            {/* P1.2A: Dynamic WBS Table — based on BCTH-IBSHI-QLDA-095 */}
+            {task.stepCode === 'P1.2A' && (() => {
+              type WbsRow = Record<string, string>
+              const dataKey = 'wbsItems'
+              const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' })
+              let rows: WbsRow[] = []
+              try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : [{ ...emptyRow(), stt: '1' }] } catch { rows = [{ ...emptyRow(), stt: '1' }] }
+              const save = (next: WbsRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+              const addRow = () => save([...rows, { ...emptyRow(), stt: String(rows.length + 1) }])
+              const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+              const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+
+              // Track which rows are expanded
+              const toggleExpand = (i: number) => setWbsExpandedRows(prev => {
+                const next = new Set(prev); next.has(i) ? next.delete(i) : next.add(i); return next
+              })
+
+              const subCols = [
+                { key: 'cutting', label: 'Cắt' }, { key: 'machining', label: 'GCCK' },
+                { key: 'fitup', label: 'Gá' }, { key: 'welding', label: 'Hàn' },
+                { key: 'tryAssembly', label: 'Tổ hợp' }, { key: 'dismantle', label: 'Tháo dỡ' },
+                { key: 'blasting', label: 'Làm sạch' }, { key: 'painting', label: 'Sơn' },
+                { key: 'insulation', label: 'Bảo ôn' }, { key: 'commissioning', label: 'Chạy thử' },
+                { key: 'packing', label: 'Đóng kiện' }, { key: 'delivery', label: 'Giao hàng' },
+              ]
+              const activeSubCount = (row: WbsRow) => subCols.filter(c => row[c.key] === 'X').length
+
+              // Excel Export
+              const exportExcel = () => {
+                const headers = ['STT', 'Tên hạng mục', 'ĐVT', 'Khối lượng', 'Phạm vi', 'Thầu phụ', 'Bắt đầu', 'Kết thúc', 'Trạng thái',
+                  ...subCols.map(c => c.label), 'Khu vực TC', 'Ghi chú']
+                const data = rows.map(r => [
+                  r.stt, r.hangMuc, r.dvt, r.khoiLuong, r.phamVi, r.thauPhu, r.batDau, r.ketThuc, r.trangThai,
+                  ...subCols.map(c => r[c.key] || ''), r.khuVuc, r.ghiChu
+                ])
+                const ws = XLSX.utils.aoa_to_sheet([headers, ...data])
+                ws['!cols'] = [{ wch: 5 }, { wch: 35 }, { wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+                  ...subCols.map(() => ({ wch: 8 })), { wch: 15 }, { wch: 20 }]
+                const wb = XLSX.utils.book_new()
+                XLSX.utils.book_append_sheet(wb, ws, 'WBS')
+                XLSX.writeFile(wb, `WBS_${task.project?.projectCode || 'export'}.xlsx`)
+              }
+
+              // Excel Import
+              const importExcel = () => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.accept = '.xlsx,.xls,.csv'
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = (evt) => {
+                    const wb = XLSX.read(evt.target?.result, { type: 'binary' })
+                    const ws = wb.Sheets[wb.SheetNames[0]]
+                    const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })
+                    if (jsonData.length < 2) return
+                    const headerRow = jsonData[0].map(h => String(h || '').trim().toLowerCase())
+                    // Map header to keys
+                    const keyMap: Record<string, string> = {
+                      'stt': 'stt', 'no': 'stt', 'no.': 'stt',
+                      'tên hạng mục': 'hangMuc', 'tên công trình, hạng mục': 'hangMuc', 'hạng mục': 'hangMuc', 'item': 'hangMuc', 'description': 'hangMuc', 'project name': 'hangMuc',
+                      'đvt': 'dvt', 'unit': 'dvt',
+                      'khối lượng': 'khoiLuong', 'kl': 'khoiLuong', 'volume': 'khoiLuong', 'kl/sl': 'khoiLuong',
+                      'phạm vi': 'phamVi', 'pv': 'phamVi', 'scope': 'phamVi',
+                      'thầu phụ': 'thauPhu', 'sub-contractor': 'thauPhu', 'sub': 'thauPhu',
+                      'bắt đầu': 'batDau', 'start': 'batDau',
+                      'kết thúc': 'ketThuc', 'finish': 'ketThuc', 'end': 'ketThuc',
+                      'trạng thái': 'trangThai', 'tt': 'trangThai', 'status': 'trangThai',
+                      'cắt': 'cutting', 'cutting': 'cutting',
+                      'gcck': 'machining', 'machining': 'machining',
+                      'gá': 'fitup', 'fitup': 'fitup',
+                      'hàn': 'welding', 'welding': 'welding',
+                      'tổ hợp': 'tryAssembly', 'try-assembly': 'tryAssembly',
+                      'tháo dỡ': 'dismantle', 'dismantle': 'dismantle',
+                      'làm sạch': 'blasting', 'blasting': 'blasting',
+                      'sơn': 'painting', 'painting': 'painting',
+                      'bảo ôn': 'insulation', 'insulation': 'insulation',
+                      'chạy thử': 'commissioning', 'commissioning': 'commissioning',
+                      'đóng kiện': 'packing', 'packing': 'packing',
+                      'giao hàng': 'delivery', 'delivery': 'delivery',
+                      'khu vực tc': 'khuVuc', 'khu vực': 'khuVuc', 'area': 'khuVuc',
+                      'ghi chú': 'ghiChu', 'remarks': 'ghiChu', 'note': 'ghiChu',
+                    }
+                    const colMapping = headerRow.map(h => keyMap[h] || '')
+                    const imported: WbsRow[] = []
+                    for (let i = 1; i < jsonData.length; i++) {
+                      const rowData = jsonData[i]
+                      if (!rowData || rowData.every(c => !c)) continue
+                      const newRow = emptyRow()
+                      colMapping.forEach((key, ci) => { if (key && rowData[ci] != null) newRow[key] = String(rowData[ci]) })
+                      if (!newRow.stt) newRow.stt = String(imported.length + 1)
+                      imported.push(newRow)
+                    }
+                    if (imported.length > 0) save(imported)
+                  }
+                  reader.readAsBinaryString(file)
+                }
+                input.click()
+              }
+
+              return (
+                <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1rem', color: '#8b5cf6' }}>📋 Bảng kế hoạch tổng thể triển khai (WBS)</h3>
+                      <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Biểu mẫu BCTH-IBSHI-QLDA-095 — Bấm ▶ để mở phạm vi thầu phụ</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" onClick={exportExcel}
+                        style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                        📥 Export Excel
+                      </button>
+                      {isActive && (
+                        <>
+                          <button type="button" onClick={importExcel}
+                            style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                            📤 Import Excel
+                          </button>
+                          <button type="button" onClick={addRow}
+                            style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                            + Thêm
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                    {/* Header */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '28px 36px 1.8fr 50px 70px 55px 80px 90px 90px 70px' + (isActive ? ' 28px' : ''), gap: 0, background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)', padding: '6px 4px' }}>
+                      <span />
+                      {['STT', 'Tên hạng mục', 'ĐVT', 'KL', 'PV', 'Thầu phụ', 'Bắt đầu', 'Kết thúc', 'TT'].map(h => (
+                        <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap', textAlign: 'center' }}>{h}</span>
+                      ))}
+                      {isActive && <span />}
+                    </div>
+
+                    {/* Rows */}
+                    {rows.map((row, ri) => {
+                      const isExpanded = wbsExpandedRows.has(ri)
+                      const subCount = activeSubCount(row)
+                      return (
+                        <div key={ri}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '28px 36px 1.8fr 50px 70px 55px 80px 90px 90px 70px' + (isActive ? ' 28px' : ''), gap: 0, padding: '3px 4px', borderBottom: isExpanded ? 'none' : '1px solid var(--border)', alignItems: 'center', background: isExpanded ? 'rgba(139,92,246,0.04)' : 'transparent' }}>
+                            {/* Expand toggle */}
+                            <button type="button" onClick={() => toggleExpand(ri)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', padding: 0, color: isExpanded ? '#8b5cf6' : 'var(--text-muted)', transition: 'transform 0.15s', transform: isExpanded ? 'rotate(90deg)' : 'none' }}>
+                              ▶{subCount > 0 && <span style={{ fontSize: '0.55rem', color: '#ef4444', marginLeft: 1 }}>{subCount}</span>}
+                            </button>
+                            {/* STT */}
+                            <input className="input" value={row.stt || ''} disabled={!isActive}
+                              onChange={e => update(ri, 'stt', e.target.value)}
+                              style={{ fontSize: '0.72rem', padding: '2px', width: '100%', textAlign: 'center' }} />
+                            {/* Tên hạng mục */}
+                            <input className="input" value={row.hangMuc || ''} disabled={!isActive}
+                              onChange={e => update(ri, 'hangMuc', e.target.value)} placeholder="Tên hạng mục"
+                              style={{ fontSize: '0.72rem', padding: '2px 4px', width: '100%' }} />
+                            {/* ĐVT */}
+                            <input className="input" value={row.dvt || ''} disabled={!isActive}
+                              onChange={e => update(ri, 'dvt', e.target.value)}
+                              style={{ fontSize: '0.7rem', padding: '2px', width: '100%', textAlign: 'center' }} />
+                            {/* KL */}
+                            <input className="input" value={row.khoiLuong || ''} disabled={!isActive}
+                              onChange={e => update(ri, 'khoiLuong', e.target.value)} placeholder="KL"
+                              style={{ fontSize: '0.7rem', padding: '2px 3px', width: '100%', textAlign: 'right' }} />
+                            {/* Phạm vi */}
+                            <select className="input" value={row.phamVi || 'IBS'} disabled={!isActive}
+                              onChange={e => update(ri, 'phamVi', e.target.value)}
+                              style={{ fontSize: '0.65rem', padding: '1px', width: '100%' }}>
+                              <option value="IBS">IBS</option>
+                              <option value="TP">TP</option>
+                              <option value="Chưa giao">Chưa</option>
+                            </select>
+                            {/* Thầu phụ */}
+                            <input className="input" value={row.thauPhu || ''} disabled={!isActive}
+                              onChange={e => update(ri, 'thauPhu', e.target.value)} placeholder="Thầu phụ"
+                              style={{ fontSize: '0.68rem', padding: '2px 3px', width: '100%' }} />
+                            {/* Bắt đầu */}
+                            <input type="date" className="input" value={row.batDau || ''} disabled={!isActive}
+                              onChange={e => update(ri, 'batDau', e.target.value)}
+                              style={{ fontSize: '0.65rem', padding: '1px 2px', width: '100%' }} />
+                            {/* Kết thúc */}
+                            <input type="date" className="input" value={row.ketThuc || ''} disabled={!isActive}
+                              onChange={e => update(ri, 'ketThuc', e.target.value)}
+                              style={{ fontSize: '0.65rem', padding: '1px 2px', width: '100%' }} />
+                            {/* Trạng thái */}
+                            <input className="input" value={row.trangThai || ''} disabled={!isActive}
+                              onChange={e => update(ri, 'trangThai', e.target.value)} placeholder="TT"
+                              style={{ fontSize: '0.68rem', padding: '2px 3px', width: '100%', textAlign: 'center' }} />
+                            {/* Delete */}
+                            {isActive && (
+                              <button type="button" onClick={() => removeRow(ri)}
+                                style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, padding: 0 }}>×</button>
+                            )}
+                          </div>
+                          {/* Expanded detail: sub-contractor scope + khu vực + ghi chú */}
+                          {isExpanded && (
+                            <div style={{ padding: '6px 12px 10px 36px', borderBottom: '1px solid var(--border)', background: 'rgba(139,92,246,0.04)' }}>
+                              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#ef4444', marginBottom: 6 }}>Phạm vi công việc chi tiết thầu phụ:</div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, auto)', gap: '4px 16px', marginBottom: 8 }}>
+                                {subCols.map(c => (
+                                  <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', cursor: isActive ? 'pointer' : 'default' }}>
+                                    <input type="checkbox" checked={row[c.key] === 'X'} disabled={!isActive}
+                                      onChange={e => update(ri, c.key, e.target.checked ? 'X' : '')}
+                                      style={{ width: 14, height: 14 }} />
+                                    {c.label}
+                                  </label>
+                                ))}
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                <div>
+                                  <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)' }}>Khu vực thi công dự kiến</label>
+                                  <input className="input" value={row.khuVuc || ''} disabled={!isActive}
+                                    onChange={e => update(ri, 'khuVuc', e.target.value)} placeholder="VD: Xưởng 1, ngoài bãi..."
+                                    style={{ fontSize: '0.75rem', padding: '4px 8px', width: '100%', marginTop: 2 }} />
+                                </div>
+                                <div>
+                                  <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)' }}>Ghi chú</label>
+                                  <input className="input" value={row.ghiChu || ''} disabled={!isActive}
+                                    onChange={e => update(ri, 'ghiChu', e.target.value)} placeholder="Ghi chú..."
+                                    style={{ fontSize: '0.75rem', padding: '4px 8px', width: '100%', marginTop: 2 }} />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{rows.length} hạng mục</div>
+                </div>
+              )
+            })()}
+
+            {/* P3.1: Readonly WBS from P1.2A + Long-lead items form */}
+            {task.stepCode === 'P3.1' && (() => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const planData = (previousStepData as any)?.plan || {}
+              type WbsRow = Record<string, string>
+              let wbsRows: WbsRow[] = []
+              try {
+                const raw = planData.wbsItems
+                const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+                if (Array.isArray(parsed)) wbsRows = parsed
+              } catch { /* ignore */ }
+
+              // Long-lead items dynamic form
+              type LlItem = { material: string; dateNeeded: string; priority: string; note: string }
+              const llKey = 'longLeadItems'
+              const defaultLl: LlItem[] = [{ material: '', dateNeeded: '', priority: 'Cao', note: '' }]
+              let llItems: LlItem[] = []
+              try { const p = formData[llKey] ? JSON.parse(formData[llKey] as string) : null; llItems = (Array.isArray(p) && p.length > 0) ? p : defaultLl } catch { llItems = defaultLl }
+              const saveLl = (next: LlItem[]) => handleFieldChange(llKey, JSON.stringify(next))
+              const addLl = () => saveLl([...llItems, { material: '', dateNeeded: '', priority: 'Cao', note: '' }])
+              const removeLl = (i: number) => saveLl(llItems.filter((_, idx) => idx !== i))
+              const updateLl = (i: number, key: string, val: string) => { const n = [...llItems]; n[i] = { ...n[i], [key]: val } as LlItem; saveLl(n) }
+
+              const priorityColors: Record<string, string> = { 'Cao': '#dc2626', 'Trung bình': '#f59e0b', 'Thấp': '#10b981' }
+
+              return (
+                <>
+                  {/* WBS Readonly */}
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #6366f1' }}>
+                    <h3 style={{ margin: '0 0 4px', fontSize: '1rem', color: '#6366f1' }}>📋 WBS đã duyệt (P1.2A)</h3>
+                    <p style={{ margin: '0 0 10px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Dữ liệu chỉ đọc — PM xem xét để xác định vật tư long-lead</p>
+                    {wbsRows.length === 0 ? (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu WBS từ bước P1.2A</p>
+                    ) : (
+                      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+                            <thead>
+                              <tr style={{ background: 'var(--bg-secondary)' }}>
+                                {['STT', 'Tên hạng mục', 'ĐVT', 'KL', 'PV', 'Thầu phụ', 'Bắt đầu', 'Kết thúc', 'TT'].map(h => (
+                                  <th key={h} style={{ padding: '6px 8px', fontWeight: 700, color: 'var(--text-muted)', borderBottom: '2px solid var(--border)', textAlign: h === 'KL' ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {wbsRows.map((r, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                                  <td style={{ padding: '4px 8px', textAlign: 'center', color: 'var(--text-muted)' }}>{r.stt}</td>
+                                  <td style={{ padding: '4px 8px', fontWeight: 500 }}>{r.hangMuc || '—'}</td>
+                                  <td style={{ padding: '4px 8px', textAlign: 'center' }}>{r.dvt}</td>
+                                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>{r.khoiLuong}</td>
+                                  <td style={{ padding: '4px 8px' }}>
+                                    <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: '0.65rem', fontWeight: 600, background: r.phamVi === 'IBS' ? '#dbeafe' : r.phamVi === 'TP' ? '#fef3c7' : '#f3f4f6', color: r.phamVi === 'IBS' ? '#1d4ed8' : r.phamVi === 'TP' ? '#b45309' : '#6b7280' }}>
+                                      {r.phamVi}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '4px 8px' }}>{r.thauPhu}</td>
+                                  <td style={{ padding: '4px 8px', fontSize: '0.68rem' }}>{r.batDau}</td>
+                                  <td style={{ padding: '4px 8px', fontSize: '0.68rem' }}>{r.ketThuc}</td>
+                                  <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                                    {r.trangThai && <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: '0.6rem', fontWeight: 600, background: r.trangThai.toLowerCase().includes('done') ? '#d1fae5' : '#fef3c7', color: r.trangThai.toLowerCase().includes('done') ? '#065f46' : '#92400e' }}>{r.trangThai}</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div style={{ padding: '6px 12px', fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--bg-secondary)' }}>{wbsRows.length} hạng mục</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Long-lead items form */}
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #dc2626' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1rem', color: '#dc2626' }}>🔴 Danh sách vật tư Long-Lead cần ưu tiên</h3>
+                        <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Xác định vật tư cần đặt gấp, ngày cần có, mức ưu tiên</p>
+                      </div>
+                      {isActive && (
+                        <button type="button" onClick={addLl}
+                          style={{ padding: '5px 14px', fontSize: '0.78rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          + Thêm
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      {/* Header */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 120px 100px 1.5fr' + (isActive ? ' 28px' : ''), gap: 0, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)' }}>
+                        {['Tên vật tư / Hạng mục', 'Ngày cần có', 'Ưu tiên', 'Ghi chú'].map(h => (
+                          <span key={h} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)' }}>{h}</span>
+                        ))}
+                        {isActive && <span />}
+                      </div>
+                      {/* Rows */}
+                      {llItems.map((item, i) => (
+                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 120px 100px 1.5fr' + (isActive ? ' 28px' : ''), gap: 0, padding: '4px 8px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                          <input className="input" value={item.material} disabled={!isActive}
+                            onChange={e => updateLl(i, 'material', e.target.value)} placeholder="VD: Thép tấm SS400, Q345B..."
+                            style={{ fontSize: '0.78rem', padding: '4px 8px', width: '100%' }} />
+                          <input type="date" className="input" value={item.dateNeeded} disabled={!isActive}
+                            onChange={e => updateLl(i, 'dateNeeded', e.target.value)}
+                            style={{ fontSize: '0.72rem', padding: '3px 4px', width: '100%' }} />
+                          <select className="input" value={item.priority} disabled={!isActive}
+                            onChange={e => updateLl(i, 'priority', e.target.value)}
+                            style={{ fontSize: '0.72rem', padding: '3px 4px', width: '100%', color: priorityColors[item.priority] || '#333', fontWeight: 600 }}>
+                            <option value="Cao">🔴 Cao</option>
+                            <option value="Trung bình">🟡 TB</option>
+                            <option value="Thấp">🟢 Thấp</option>
+                          </select>
+                          <input className="input" value={item.note} disabled={!isActive}
+                            onChange={e => updateLl(i, 'note', e.target.value)} placeholder="Ghi chú..."
+                            style={{ fontSize: '0.75rem', padding: '4px 8px', width: '100%' }} />
+                          {isActive && (
+                            <button type="button" onClick={() => removeLl(i)}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, padding: 0 }}>×</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: '0.72rem', color: 'var(--text-muted)' }}>{llItems.length} vật tư long-lead</div>
+                  </div>
+                </>
+              )
+            })()}
+
+            {/* P2.1A/B/C/P2.4: Dynamic Estimate Tables */}
+            {['P2.1A', 'P2.1B', 'P2.1C', 'P2.4'].includes(task.stepCode) && (() => {
+              type EstRow = Record<string, string>
+              const renderEstTable = (
+                title: string, code: string, dataKey: string,
+                columns: { key: string; label: string; type?: string; width?: string }[],
+                defaultRows: EstRow[]
+              ) => {
+                let rows: EstRow[] = []
+                try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+                const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+                const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+                const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+                const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+                return (
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({code})</span></h3>
+                      {isActive && (
+                        <button type="button" onClick={addRow}
+                          style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          + Thêm
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+                        {columns.map(c => (
+                          <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>
+                        ))}
+                        {isActive && <span />}
+                      </div>
+                      {rows.map((row, ri) => (
+                        <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
+                          {columns.map(c => (
+                            <input key={c.key} className="input" value={row[c.key] || ''} disabled={!isActive}
+                              onChange={e => update(ri, c.key, e.target.value)}
+                              placeholder={c.label}
+                              style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: c.type === 'number' ? 'right' : 'left' }} />
+                          ))}
+                          {isActive && rows.length > 1 && (
+                            <button type="button" onClick={() => removeRow(ri)}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
+                  </div>
+                )
+              }
+
+              const colsVTTH = [
+                { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
+                { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
+                { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                { key: 'kl', label: 'KL/SL', type: 'number', width: '0.6fr' },
+                { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.8fr' },
+                { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.8fr' },
+              ]
+              const colsVTCT = [
+                { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
+                { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
+                { key: 'macVL', label: 'Mác VL', width: '0.6fr' },
+                { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
+                { key: 'dvt', label: 'ĐVT', width: '0.4fr' },
+                { key: 'kl', label: 'KL/SL', type: 'number', width: '0.5fr' },
+                { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+              ]
+              const colsDV = [
+                { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+              ]
+              const colsNC = colsDV // Same columns for nhân công
+              const colsCPChung = [
+                { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
+                { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                { key: 'donGia', label: 'Đơn giá BQ', type: 'number', width: '0.7fr' },
+                { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+              ]
+
+              // ── P2.1A: TCKT (DT02 + DT07) ──
+              if (task.stepCode === 'P2.1A') return (
+                <>
+                  {renderEstTable('📊 DT02 — Tổng hợp chi phí dự toán thi công', 'QT30-DT02', 'dt02Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung chi phí', width: '1.5fr' },
+                      { key: 'giaTri', label: 'Giá trị', type: 'number', width: '0.8fr' },
+                      { key: 'tyLe', label: 'Tỷ lệ %', type: 'number', width: '0.5fr' },
+                    ],
+                    [
+                      { maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: '', tyLe: '' },
+                      { maCP: 'I-1', noiDung: 'Vật tư chính', giaTri: '', tyLe: '' },
+                      { maCP: 'I-2', noiDung: 'Vật tư phụ kiện, bu lông…', giaTri: '', tyLe: '' },
+                      { maCP: 'I-3', noiDung: 'Vật tư đóng kiện', giaTri: '', tyLe: '' },
+                      { maCP: 'I-4', noiDung: 'Vật tư làm biện pháp', giaTri: '', tyLe: '' },
+                      { maCP: 'I-5', noiDung: 'Vật tư tiêu hao', giaTri: '', tyLe: '' },
+                      { maCP: 'I-6', noiDung: 'Vật tư sơn', giaTri: '', tyLe: '' },
+                      { maCP: 'I-7', noiDung: 'Vật tư dự phòng', giaTri: '', tyLe: '' },
+                      { maCP: 'II', noiDung: 'Chi phí nhân công trực tiếp', giaTri: '', tyLe: '' },
+                      { maCP: 'II-1', noiDung: 'Pha cắt', giaTri: '', tyLe: '' },
+                      { maCP: 'II-2', noiDung: 'Gia công', giaTri: '', tyLe: '' },
+                      { maCP: 'II-3', noiDung: 'Chế tạo', giaTri: '', tyLe: '' },
+                      { maCP: 'II-4', noiDung: 'Khung kiện', giaTri: '', tyLe: '' },
+                      { maCP: 'II-5', noiDung: 'Tổ hợp sản phẩm', giaTri: '', tyLe: '' },
+                      { maCP: 'II-6', noiDung: 'Lắp dựng + Nghiệm thu', giaTri: '', tyLe: '' },
+                      { maCP: 'II-7', noiDung: 'Làm sạch, Sơn', giaTri: '', tyLe: '' },
+                      { maCP: 'II-8', noiDung: 'Đóng kiện / Giao hàng', giaTri: '', tyLe: '' },
+                      { maCP: 'II-9', noiDung: 'Nhân công dự phòng', giaTri: '', tyLe: '' },
+                      { maCP: 'III', noiDung: 'Chi phí dịch vụ thuê ngoài', giaTri: '', tyLe: '' },
+                      { maCP: 'III-1', noiDung: 'Vận tải', giaTri: '', tyLe: '' },
+                      { maCP: 'III-2', noiDung: 'NDT, quy trình và thí nghiệm', giaTri: '', tyLe: '' },
+                      { maCP: 'III-3', noiDung: 'Mạ kẽm', giaTri: '', tyLe: '' },
+                      { maCP: 'III-4', noiDung: 'Chi phí khác', giaTri: '', tyLe: '' },
+                      { maCP: 'III-5', noiDung: 'Dự phòng dịch vụ', giaTri: '', tyLe: '' },
+                      { maCP: 'IV', noiDung: 'Chi phí chung', giaTri: '', tyLe: '' },
+                      { maCP: 'IV-1', noiDung: 'Chi phí chung phục vụ SX', giaTri: '', tyLe: '' },
+                      { maCP: 'IV-2', noiDung: 'Chi phí tài chính', giaTri: '', tyLe: '' },
+                      { maCP: 'IV-3', noiDung: 'Chi phí quản lý', giaTri: '', tyLe: '' },
+                    ]
+                  )}
+                  {renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items', colsCPChung,
+                    [
+                      { maCP: 'CPC', danhMuc: 'I. Chi phí chung phục vụ sản xuất', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-01', danhMuc: 'Nhân công (ngoài khoán)', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-02', danhMuc: 'Thuê công nhân thời vụ', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-03', danhMuc: 'Khấu hao TSCĐ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-04', danhMuc: 'Sửa chữa máy móc thiết bị', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-05', danhMuc: 'Điện sản xuất', dvt: 'kWh', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-06', danhMuc: 'Nước sản xuất', dvt: 'm³', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-07', danhMuc: 'Khí nén (Oxy, Acetylen…)', dvt: 'Chai', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-08', danhMuc: 'Nhiên liệu (dầu, xăng)', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-09', danhMuc: 'Chi phí an toàn lao động', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-10', danhMuc: 'Chi phí SX khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC', danhMuc: 'II. Chi phí tài chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-01', danhMuc: 'Phí bảo lãnh thực hiện HĐ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-02', danhMuc: 'Phí bảo lãnh tạm ứng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-03', danhMuc: 'Phí bảo lãnh bảo hành', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-04', danhMuc: 'Lãi vay ngân hàng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-05', danhMuc: 'Bảo hiểm dự án', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL', danhMuc: 'III. Chi phí Quản Lý', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-01', danhMuc: 'Lương nhân viên gián tiếp', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-02', danhMuc: 'Văn phòng phẩm', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-03', danhMuc: 'Bảo vệ, an ninh', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-04', danhMuc: 'Chi phí tiếp khách', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-05', danhMuc: 'Chi phí quản lý khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                </>
+              )
+
+              // ── P2.1B: TM (DT03 + DT04 + DT05) ──
+              if (task.stepCode === 'P2.1B') return (
+                <>
+                  {renderEstTable('📦 DT03 — Dự toán chi phí VT tổng hợp', 'QT30-DT03', 'dt03Items', colsVTTH,
+                    [
+                      { nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTC-01', danhMuc: 'Thép đen các loại', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTC-02', danhMuc: 'Inox các loại', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTC-03', danhMuc: 'Grating', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTP', danhMuc: 'Vật tư phụ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTPCK', danhMuc: 'Vật tư phụ kiện, bu lông…', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTDK', danhMuc: 'Vật tư đóng kiện', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTBP', danhMuc: 'Vật tư làm biện pháp', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTBP-01', danhMuc: 'Thép đen các loại (biện pháp)', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTBP-TH', danhMuc: 'Thu hồi lại vật tư biện pháp (75% giá trị)', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH', danhMuc: 'Vật tư tiêu hao', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH-01', danhMuc: 'Que hàn các loại', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH-02', danhMuc: 'Dây hàn', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH-03', danhMuc: 'Khí hàn (Argon, CO2…)', dvt: 'Chai', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTTH-04', danhMuc: 'Đá cắt, đá mài', dvt: 'Viên', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS', danhMuc: 'Vật tư sơn', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS-01', danhMuc: 'Sơn lót', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS-02', danhMuc: 'Sơn phủ', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTS-03', danhMuc: 'Dung môi, phụ gia sơn', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { nhomVT: 'VTDP', danhMuc: 'Vật tư dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items', colsVTCT,
+                    [
+                      { maVT: 'A', tenVT: 'VTC — Vật tư chính', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'A2', tenVT: 'Vật tư còn lại (chưa có chi tiết)', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'B', tenVT: 'VT04 — Vật tư phụ kiện, bu lông…', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'C', tenVT: 'VTDK — Vật tư đóng kiện', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'D', tenVT: 'VTBP — Vật tư làm biện pháp', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'E', tenVT: 'VTTH — Vật tư tiêu hao', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: 'F', tenVT: 'VTDP — Vật tư dự phòng', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items', colsDV,
+                    [
+                      { maCP: 'A', noiDung: 'VẬN TẢI', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-01', noiDung: 'Vận chuyển nội bộ', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-02', noiDung: 'Vận chuyển giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B', noiDung: 'NDT, QUY TRÌNH VÀ THÍ NGHIỆM', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-01', noiDung: 'Chụp phim RT', dvt: 'Phim', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-02', noiDung: 'Siêu âm UT', dvt: 'Mối', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-03', noiDung: 'Kiểm tra PT/MT', dvt: 'Mối', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-04', noiDung: 'Thử áp lực (Hydro test)', dvt: 'Lần', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C', noiDung: 'MẠ KẼM', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-01', noiDung: 'Mạ kẽm nhúng nóng', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'D', noiDung: 'CÁC CHI PHÍ KHÁC', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'D-01', noiDung: 'Chi phí dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                </>
+              )
+
+              // ── P2.1C: SX (DT06) ──
+              if (task.stepCode === 'P2.1C') return (
+                <>
+                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công trực tiếp', 'QT30-DT06', 'dt06Items', colsNC,
+                    [
+                      { maCP: 'A', noiDung: 'PC — PHA CẮT', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-01', noiDung: 'Pha cắt thép tấm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-02', noiDung: 'Pha cắt thép hình', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'A-03', noiDung: 'Pha cắt ống', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B', noiDung: 'GC — GIA CÔNG', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-01', noiDung: 'Gia công CNC / Plasma', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-02', noiDung: 'Uốn, dập, khoan, tiện', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'B-03', noiDung: 'Vát mép, chuẩn bị mối hàn', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C', noiDung: 'CT — CHẾ TẠO', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-01', noiDung: 'Chế tạo - Roller frame', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-02', noiDung: 'Chế tạo - Slewing frame', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-03', noiDung: 'Chế tạo - Platform / Sàn', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-04', noiDung: 'Chế tạo - Lan can', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-05', noiDung: 'Chế tạo - Giá đỡ', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-06', noiDung: 'Chế tạo - Ống', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-07', noiDung: 'Chế tạo - Hộp', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-08', noiDung: 'Chế tạo - Cầu thang', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'C-09', noiDung: 'Chế tạo - Khác', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'D', noiDung: 'KK — KHUNG KIỆN', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'D-01', noiDung: 'Khung kiện', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'E', noiDung: 'TH — TỔ HỢP SẢN PHẨM', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'E-01', noiDung: 'Tổ hợp sản phẩm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'F', noiDung: 'LD — LẮP DỰNG + NGHIỆM THU', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'F-01', noiDung: 'Lắp dựng + Nghiệm thu', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'G', noiDung: 'VS — VỆ SINH HỢP KIM', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'G-01', noiDung: 'Vệ sinh VL hợp kim bằng dung dịch', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'H', noiDung: 'SON — LÀM SẠCH, SƠN', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'H-01', noiDung: 'Làm sạch bề mặt (bi, cát)', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'H-02', noiDung: 'Sơn (lót + phủ)', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'I', noiDung: 'BO — BẢO ÔN', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'I-01', noiDung: 'Bảo ôn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'J', noiDung: 'LTB — LẮP THIẾT BỊ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'J-01', noiDung: 'Lắp thiết bị phụ kiện trước đóng kiện', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'K', noiDung: 'DK — ĐÓNG KIỆN', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'K-01', noiDung: 'Đóng kiện', dvt: 'Kiện', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'L', noiDung: 'GH — GIAO HÀNG', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'L-01', noiDung: 'Giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'M', noiDung: 'DP — NHÂN CÔNG DỰ PHÒNG', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'M-01', noiDung: 'Nhân công dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+                </>
+              )
+
+              return null
+            })()}
+
+            {/* P2.4 also renders DT02-DT07: aggregated from all departments */}
+            {task.stepCode === 'P2.4' && (() => {
+              // P2.4 shows ALL 6 DT tables for full review
+              // Reuse same renderEstTable and column definitions
+              type EstRow = Record<string, string>
+              const renderEstTable = (
+                title: string, code: string, dataKey: string,
+                columns: { key: string; label: string; type?: string; width?: string }[],
+                defaultRows: EstRow[]
+              ) => {
+                let rows: EstRow[] = []
+                try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+                const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+                const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+                const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+                const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+                return (
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({code})</span></h3>
+                      {isActive && (
+                        <button type="button" onClick={addRow}
+                          style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          + Thêm
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+                        {columns.map(c => (
+                          <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>
+                        ))}
+                        {isActive && <span />}
+                      </div>
+                      {rows.map((row, ri) => (
+                        <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
+                          {columns.map(c => (
+                            <input key={c.key} className="input" value={row[c.key] || ''} disabled={!isActive}
+                              onChange={e => update(ri, c.key, e.target.value)}
+                              placeholder={c.label}
+                              style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: c.type === 'number' ? 'right' : 'left' }} />
+                          ))}
+                          {isActive && rows.length > 1 && (
+                            <button type="button" onClick={() => removeRow(ri)}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
+                  </div>
+                )
+              }
+
+              return (
+                <>
+                  <div className="card" style={{ padding: '1rem', marginTop: '1rem', background: 'var(--bg-secondary)', borderLeft: '4px solid #f59e0b' }}>
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#f59e0b' }}>📋 Tổng hợp dự toán từ các phòng ban</h3>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Dữ liệu được tổng hợp từ P2.1A (TCKT), P2.1B (TM), P2.1C (SX). KTKH có thể điều chỉnh trước khi trình duyệt.</p>
+                  </div>
+
+                  {renderEstTable('📊 DT02 — Tổng hợp chi phí dự toán thi công (TCKT)', 'QT30-DT02', 'dt02Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung chi phí', width: '1.5fr' },
+                      { key: 'giaTri', label: 'Giá trị', type: 'number', width: '0.8fr' },
+                      { key: 'tyLe', label: 'Tỷ lệ %', type: 'number', width: '0.5fr' },
+                    ],
+                    [{ maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: '', tyLe: '' }]
+                  )}
+                  {renderEstTable('📦 DT03 — Dự toán chi phí VT tổng hợp (TM)', 'QT30-DT03', 'dt03Items',
+                    [
+                      { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
+                      { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.6fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.8fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.8fr' },
+                    ],
+                    [{ nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT (TM)', 'QT30-DT04', 'dt04Items',
+                    [
+                      { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
+                      { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
+                      { key: 'macVL', label: 'Mác VL', width: '0.6fr' },
+                      { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.4fr' },
+                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ (TM)', 'QT30-DT05', 'dt05Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maCP: '', noiDung: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công trực tiếp (SX)', 'QT30-DT06', 'dt06Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maCP: '', noiDung: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                  {renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính (TCKT)', 'QT30-DT07', 'dt07Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá BQ', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [{ maCP: '', danhMuc: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
+                  )}
+                </>
+              )
+            })()}
             {/* P2.4: Aggregated BOM + Estimate from previous steps */}
             {task.stepCode === 'P2.4' && previousStepData && (
               <>
@@ -961,91 +1893,142 @@ export default function TaskDetailPage() {
             )}
 
             {/* P3.5: Supplier Entries + Auto Price Comparison */}
-            {task.stepCode === 'P3.5' && (
-              <>
-                {/* Supplier Cards */}
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid #8b5cf6', paddingBottom: 8, flex: 1 }}>
-                      🏭 Nhà cung cấp đề xuất <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 NCC)</span>
-                    </h3>
-                    {isActive && (
-                      <button type="button" onClick={() => setSuppliers(prev => [...prev, { name: '', quotes: [{ material: '', price: '' }] }])}
-                        style={{ background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                        ➕ Thêm NCC
-                      </button>
-                    )}
-                  </div>
-                  {suppliers.length < 3 && (
-                    <div style={{ padding: '6px 12px', background: '#fef2f2', borderRadius: 8, fontSize: '0.8rem', color: '#dc2626', marginBottom: 12 }}>
-                      ⚠️ Cần tối thiểu 3 NCC. Hiện có: {suppliers.length}
-                    </div>
-                  )}
-                  {suppliers.map((supplier, sIdx) => (
-                    <div key={sIdx} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '1rem', marginBottom: 12, borderLeft: `4px solid hsl(${sIdx * 60 + 200}, 60%, 50%)` }}>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)`, minWidth: 60 }}>NCC {sIdx + 1}</span>
-                        <input className="input" placeholder="Tên nhà cung cấp *" value={supplier.name} disabled={!isActive}
-                          onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, name: e.target.value } : s))}
-                          style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }} />
-                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          📎 Năng lực NCC
-                          <input type="file" accept=".pdf,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={!isActive}
-                            onChange={e => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                const reader = new FileReader()
-                                reader.onload = () => {
-                                  setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, capabilityFile: file.name, capabilityFileData: reader.result as string } : s))
-                                }
-                                reader.readAsDataURL(file)
-                              }
-                            }} />
-                        </label>
-                        {(supplier as unknown as { capabilityFile?: string; capabilityFileData?: string }).capabilityFile && (
-                          <a
-                            href={(supplier as unknown as { capabilityFileData?: string }).capabilityFileData || '#'}
-                            download={(supplier as unknown as { capabilityFile?: string }).capabilityFile}
-                            style={{ fontSize: '0.7rem', color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 6px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', textDecoration: 'none', cursor: 'pointer' }}
-                            title={`Tải về: ${(supplier as unknown as { capabilityFile?: string }).capabilityFile}`}>
-                            ✅ {(supplier as unknown as { capabilityFile?: string }).capabilityFile}
-                          </a>
-                        )}
-                        {isActive && suppliers.length > 3 && (
-                          <button type="button" onClick={() => setSuppliers(prev => prev.filter((_, i) => i !== sIdx))}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 700 }} title="Xóa NCC">×</button>
-                        )}
+            {task.stepCode === 'P3.5' && (() => {
+              // Get PR materials from P2.1/P2.2/P2.3
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const prItemsRaw = (previousStepData as any)?.prItems
+              type PrItem = { name: string; code: string; spec: string; quantity: string; unit: string; source: string }
+              const prItems: PrItem[] = Array.isArray(prItemsRaw) ? prItemsRaw.filter((p: PrItem) => p.name?.trim()) : []
+
+              return (
+                <>
+                  {/* Merged: NCC Cards with PR materials table inside */}
+                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid #8b5cf6', paddingBottom: 8 }}>
+                          🏭 Nhà cung cấp đề xuất <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 NCC)</span>
+                        </h3>
+                        <p style={{ margin: '6px 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          {prItems.length > 0 ? `${prItems.length} vật tư PR từ BOM (P2.1/P2.2/P2.3) — TM chỉ điền giá cho từng NCC` : 'Chưa có vật tư PR — TM tự nhập vật tư'}
+                        </p>
                       </div>
-                      {/* Quote items per supplier */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr 30px', gap: 4, padding: '2px 0', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-                        {['#', 'Vật tư', 'Giá (VND)', ''].map(h => (
-                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                        ))}
-                      </div>
-                      {supplier.quotes.map((q, qIdx) => (
-                        <div key={qIdx} style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr 30px', gap: 4, padding: '3px 0', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{qIdx + 1}</span>
-                          <input className="input" placeholder="Tên vật tư" value={q.material} disabled={!isActive}
-                            onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.map((qq, j) => j === qIdx ? { ...qq, material: e.target.value } : qq) } : s))}
-                            style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                          <input className="input" type="number" placeholder="0" value={q.price} disabled={!isActive}
-                            onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.map((qq, j) => j === qIdx ? { ...qq, price: e.target.value } : qq) } : s))}
-                            style={{ fontSize: '0.8rem', padding: '4px 6px', textAlign: 'right' }} />
-                          {isActive && (
-                            <button type="button" onClick={() => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.filter((_, j) => j !== qIdx) } : s))}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700, padding: 0 }} title="Xóa dòng">−</button>
-                          )}
-                        </div>
-                      ))}
                       {isActive && (
-                        <button type="button" onClick={() => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: [...s.quotes, { material: '', price: '' }] } : s))}
-                          style={{ marginTop: 4, fontSize: '0.75rem', color: '#8b5cf6', background: 'none', border: '1px dashed #8b5cf6', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-                          + Thêm vật tư
+                        <button type="button" onClick={() => setSuppliers(prev => [...prev, { name: '', quotes: prItems.length > 0 ? prItems.map(m => ({ material: m.name, price: '' })) : [{ material: '', price: '' }] }])}
+                          style={{ background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+                          ➕ Thêm NCC
                         </button>
                       )}
                     </div>
-                  ))}
-                </div>
+                    {suppliers.length < 3 && (
+                      <div style={{ padding: '6px 12px', background: '#fef2f2', borderRadius: 8, fontSize: '0.8rem', color: '#dc2626', marginBottom: 12 }}>
+                        ⚠️ Cần tối thiểu 3 NCC. Hiện có: {suppliers.length}
+                      </div>
+                    )}
+                    {suppliers.map((supplier, sIdx) => (
+                      <div key={sIdx} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '1rem', marginBottom: 16, borderLeft: `4px solid hsl(${sIdx * 60 + 200}, 60%, 50%)` }}>
+                        {/* NCC header: name + capability file + delete */}
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)`, minWidth: 60 }}>NCC {sIdx + 1}</span>
+                          <input className="input" placeholder="Tên nhà cung cấp *" value={supplier.name} disabled={!isActive}
+                            onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, name: e.target.value } : s))}
+                            style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }} />
+                          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            📎 Năng lực NCC
+                            <input type="file" accept=".pdf,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={!isActive}
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file) {
+                                  const reader = new FileReader()
+                                  reader.onload = () => {
+                                    setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, capabilityFile: file.name, capabilityFileData: reader.result as string } : s))
+                                  }
+                                  reader.readAsDataURL(file)
+                                }
+                              }} />
+                          </label>
+                          {(supplier as unknown as { capabilityFile?: string; capabilityFileData?: string }).capabilityFile && (
+                            <a
+                              href={(supplier as unknown as { capabilityFileData?: string }).capabilityFileData || '#'}
+                              download={(supplier as unknown as { capabilityFile?: string }).capabilityFile}
+                              style={{ fontSize: '0.7rem', color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 6px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', textDecoration: 'none', cursor: 'pointer' }}
+                              title={`Tải về: ${(supplier as unknown as { capabilityFile?: string }).capabilityFile}`}>
+                              ✅ {(supplier as unknown as { capabilityFile?: string }).capabilityFile}
+                            </a>
+                          )}
+                          {isActive && suppliers.length > 3 && (
+                            <button type="button" onClick={() => setSuppliers(prev => prev.filter((_, i) => i !== sIdx))}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 700 }} title="Xóa NCC">×</button>
+                          )}
+                        </div>
+                        {/* Material quotes table — PR items with price column */}
+                        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+                            <thead>
+                              <tr style={{ background: 'var(--bg-secondary)' }}>
+                                {['#', 'Tên vật tư', 'Mã VT', 'Quy cách', 'SL', 'ĐVT', 'Nguồn', 'Giá (VND)'].map(h => (
+                                  <th key={h} style={{ padding: '5px 6px', fontWeight: 700, color: h === 'Giá (VND)' ? '#dc2626' : 'var(--text-muted)', borderBottom: '2px solid var(--border)', textAlign: h === 'SL' || h === 'Giá (VND)' ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                                ))}
+                                {isActive && <th style={{ width: 24, borderBottom: '2px solid var(--border)' }} />}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {supplier.quotes.map((q, qIdx) => {
+                                // Try to match quote with PR item for readonly info
+                                const prMatch = prItems.find(p => p.name.toLowerCase() === q.material.toLowerCase())
+                                return (
+                                  <tr key={qIdx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                    <td style={{ padding: '3px 6px', color: 'var(--text-muted)', textAlign: 'center' }}>{qIdx + 1}</td>
+                                    <td style={{ padding: '3px 6px', fontWeight: 500 }}>
+                                      {prMatch ? (
+                                        <span>{q.material}</span>
+                                      ) : (
+                                        <input className="input" value={q.material} disabled={!isActive}
+                                          onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.map((qq, j) => j === qIdx ? { ...qq, material: e.target.value } : qq) } : s))}
+                                          placeholder="Tên vật tư" style={{ fontSize: '0.72rem', padding: '2px 4px', width: '100%' }} />
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '3px 6px', fontSize: '0.65rem', color: 'var(--text-muted)' }}>{prMatch?.code || ''}</td>
+                                    <td style={{ padding: '3px 6px', fontSize: '0.65rem' }}>{prMatch?.spec || ''}</td>
+                                    <td style={{ padding: '3px 6px', textAlign: 'right', fontSize: '0.68rem' }}>{prMatch?.quantity || ''}</td>
+                                    <td style={{ padding: '3px 6px', fontSize: '0.68rem' }}>{prMatch?.unit || ''}</td>
+                                    <td style={{ padding: '3px 6px' }}>
+                                      {prMatch?.source && <span style={{ padding: '1px 4px', borderRadius: 3, fontSize: '0.58rem', fontWeight: 600, background: '#dbeafe', color: '#1d4ed8' }}>{prMatch.source}</span>}
+                                    </td>
+                                    <td style={{ padding: '3px 6px' }}>
+                                      <input className="input" type="number" value={q.price} disabled={!isActive}
+                                        onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.map((qq, j) => j === qIdx ? { ...qq, price: e.target.value } : qq) } : s))}
+                                        placeholder="0" style={{ fontSize: '0.75rem', padding: '3px 6px', width: '100%', textAlign: 'right', fontWeight: 600, color: '#dc2626' }} />
+                                    </td>
+                                    {isActive && (
+                                      <td style={{ textAlign: 'center', padding: '2px' }}>
+                                        <button type="button" onClick={() => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.filter((_, j) => j !== qIdx) } : s))}
+                                          style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
+                                      </td>
+                                    )}
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        {isActive && (
+                          <button type="button" onClick={() => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: [...s.quotes, { material: '', price: '' }] } : s))}
+                            style={{ marginTop: 6, fontSize: '0.72rem', color: '#8b5cf6', background: 'none', border: '1px dashed #8b5cf6', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                            + Thêm vật tư
+                          </button>
+                        )}
+                        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                            {supplier.quotes.filter(q => q.price && Number(q.price) > 0).length}/{supplier.quotes.length} vật tư đã có giá
+                          </span>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1d4ed8' }}>
+                            Tổng: {supplier.quotes.reduce((sum, q) => sum + (Number(q.price) || 0), 0).toLocaleString('vi-VN')} ₫
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
                 {/* Auto Price Comparison Table */}
                 {(() => {
@@ -1099,6 +2082,37 @@ export default function TaskDetailPage() {
                                 </tr>
                               )
                             })}
+                            {/* Total row */}
+                            <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                              <td style={{ padding: '6px 8px', fontWeight: 700, fontSize: '0.85rem' }}>TỔNG</td>
+                              {namedSuppliers.map((s, sIdx) => {
+                                const total = s.quotes.reduce((sum, q) => sum + (Number(q.price) || 0), 0)
+                                const allTotals = namedSuppliers.map(ns => ns.quotes.reduce((sm, q) => sm + (Number(q.price) || 0), 0)).filter(t => t > 0)
+                                const minTotal = allTotals.length > 0 ? Math.min(...allTotals) : 0
+                                const maxTotal = allTotals.length > 0 ? Math.max(...allTotals) : 0
+                                return (
+                                  <td key={sIdx} style={{
+                                    textAlign: 'right', padding: '6px 8px', fontWeight: 700, fontSize: '0.85rem',
+                                    color: total === 0 ? 'var(--text-muted)' : total === minTotal ? '#16a34a' : total === maxTotal ? '#dc2626' : '#1d4ed8',
+                                    background: total === minTotal && total > 0 ? '#f0fdf4' : total === maxTotal && total > 0 ? '#fef2f2' : 'transparent',
+                                  }}>
+                                    {total > 0 ? total.toLocaleString('vi-VN') : '—'}
+                                    {total === minTotal && total > 0 && ' ✅'}
+                                    {total === maxTotal && total > 0 && allTotals.length > 1 && ' ⬆️'}
+                                  </td>
+                                )
+                              })}
+                              <td style={{ textAlign: 'center', padding: '6px 8px', fontSize: '0.75rem' }}>
+                                {(() => {
+                                  const totals = namedSuppliers.map(s => s.quotes.reduce((sm, q) => sm + (Number(q.price) || 0), 0))
+                                  const validT = totals.filter(t => t > 0)
+                                  if (validT.length < 2) return '—'
+                                  const minT = Math.min(...validT)
+                                  const cheapI = totals.indexOf(minT)
+                                  return <span style={{ color: '#16a34a', fontWeight: 700 }}>🏆 {namedSuppliers[cheapI]?.name}</span>
+                                })()}
+                              </td>
+                            </tr>
                           </tbody>
                         </table>
                       </div>
@@ -1109,7 +2123,8 @@ export default function TaskDetailPage() {
                   )
                 })()}
               </>
-            )}
+              )
+            })()}
 
             {/* P3.6: BGĐ review supplier data from P3.5 */}
             {task.stepCode === 'P3.6' && previousStepData?.supplierData && (() => {
@@ -1150,6 +2165,11 @@ export default function TaskDetailPage() {
                             <span style={{ textAlign: 'right', fontWeight: 600 }}>{Number(q.price).toLocaleString('vi-VN')} ₫</span>
                           </div>
                         ))}
+                        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end', padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1d4ed8' }}>
+                            Tổng: {(s.quotes || []).reduce((sum, q) => sum + (Number(q.price) || 0), 0).toLocaleString('vi-VN')} ₫
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1201,6 +2221,37 @@ export default function TaskDetailPage() {
                                 </tr>
                               )
                             })}
+                            {/* Total row */}
+                            <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                              <td style={{ padding: '6px 8px', fontWeight: 700, fontSize: '0.85rem' }}>TỔNG HÓA ĐƠN</td>
+                              {namedS.map((s, sIdx) => {
+                                const total = (s.quotes || []).reduce((sum, q) => sum + (Number(q.price) || 0), 0)
+                                const allTotals = namedS.map(ns => (ns.quotes || []).reduce((sm, q) => sm + (Number(q.price) || 0), 0)).filter(t => t > 0)
+                                const minTotal = allTotals.length > 0 ? Math.min(...allTotals) : 0
+                                const maxTotal = allTotals.length > 0 ? Math.max(...allTotals) : 0
+                                return (
+                                  <td key={sIdx} style={{
+                                    textAlign: 'right', padding: '6px 8px', fontWeight: 700, fontSize: '0.9rem',
+                                    color: total === 0 ? 'var(--text-muted)' : total === minTotal ? '#16a34a' : total === maxTotal ? '#dc2626' : '#1d4ed8',
+                                    background: total === minTotal && total > 0 ? '#dcfce7' : total === maxTotal && total > 0 ? '#fee2e2' : 'transparent',
+                                  }}>
+                                    {total > 0 ? `${total.toLocaleString('vi-VN')} ₫` : '—'}
+                                    {total === minTotal && total > 0 && ' ✅'}
+                                    {total === maxTotal && total > 0 && allTotals.length > 1 && ' ⬆️'}
+                                  </td>
+                                )
+                              })}
+                              <td style={{ textAlign: 'center', padding: '6px 8px', fontSize: '0.78rem' }}>
+                                {(() => {
+                                  const totals = namedS.map(s => (s.quotes || []).reduce((sm, q) => sm + (Number(q.price) || 0), 0))
+                                  const validT = totals.filter(t => t > 0)
+                                  if (validT.length < 2) return '—'
+                                  const minT = Math.min(...validT)
+                                  const cheapI = totals.indexOf(minT)
+                                  return <span style={{ color: '#16a34a', fontWeight: 700 }}>🏆 {namedS[cheapI]?.name}</span>
+                                })()}
+                              </td>
+                            </tr>
                           </tbody>
                         </table>
                       </div>
@@ -1216,26 +2267,69 @@ export default function TaskDetailPage() {
             {/* P3.7: PO Finalization — Payment Terms + Delivery Plan */}
             {task.stepCode === 'P3.7' && (
               <>
-                {/* PO List from approved NCC */}
+                {/* Best Price Summary from NCC comparison */}
                 {previousStepData?.supplierData && (() => {
                   const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] }
                   const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
                   if (nccList.length === 0) return null
+                  // Build best price per material
+                  const allMats = [...new Set(nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim())))]
+                  type BestItem = { material: string; bestPrice: number; bestNCC: string; prices: { ncc: string; price: number }[] }
+                  const bestItems: BestItem[] = allMats.map(mat => {
+                    const prices = nccList.map(s => {
+                      const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat.toLowerCase())
+                      return { ncc: s.name, price: q ? Number(q.price) || 0 : 0 }
+                    }).filter(p => p.price > 0)
+                    const best = prices.length > 0 ? prices.reduce((a, b) => a.price <= b.price ? a : b) : { ncc: '—', price: 0 }
+                    return { material: mat, bestPrice: best.price, bestNCC: best.ncc, prices }
+                  })
+                  const grandTotal = bestItems.reduce((sum, item) => sum + item.bestPrice, 0)
                   return (
-                    <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
-                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>📋 Danh sách PO đã chốt</h3>
-                      {nccList.map((s, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: i < nccList.length - 1 ? '1px solid var(--border)' : 'none', fontSize: '0.85rem' }}>
-                          <span style={{ fontWeight: 700, color: `hsl(${i * 60 + 200}, 60%, 40%)`, minWidth: 100 }}>{s.name}</span>
-                          <div style={{ flex: 1 }}>
-                            {(s.quotes || []).filter(q => q.material?.trim()).map((q, j) => (
-                              <span key={j} style={{ marginRight: 16, fontSize: '0.8rem' }}>
-                                {q.material}: <strong>{Number(q.price).toLocaleString('vi-VN')} ₫</strong>
-                              </span>
+                    <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #16a34a' }}>
+                      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#16a34a' }}>🏆 Tổng hợp giá tốt nhất</h3>
+                      <p style={{ margin: '0 0 10px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Giá tốt nhất cho từng vật tư đã so sánh từ {nccList.length} NCC</p>
+                      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-secondary)' }}>
+                              <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>#</th>
+                              <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Vật tư</th>
+                              <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid var(--border)', color: '#16a34a' }}>Giá tốt nhất (VND)</th>
+                              <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>NCC</th>
+                              <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Số NCC báo giá</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bestItems.map((item, idx) => (
+                              <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{idx + 1}</td>
+                                <td style={{ padding: '6px 8px', fontWeight: 500 }}>{item.material}</td>
+                                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: '#16a34a', fontSize: '0.85rem' }}>
+                                  {item.bestPrice > 0 ? `${item.bestPrice.toLocaleString('vi-VN')} ₫` : '—'}
+                                </td>
+                                <td style={{ padding: '6px 8px' }}>
+                                  <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: '#dcfce7', color: '#16a34a' }}>
+                                    {item.bestNCC}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '6px 8px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                  {item.prices.length}/{nccList.length}
+                                </td>
+                              </tr>
                             ))}
-                          </div>
-                        </div>
-                      ))}
+                            {/* Grand total row */}
+                            <tr style={{ borderTop: '2px solid var(--border)', background: '#f0fdf4' }}>
+                              <td colSpan={2} style={{ padding: '8px', fontWeight: 700, fontSize: '0.9rem', color: '#15803d' }}>TỔNG HÓA ĐƠN (giá tốt nhất)</td>
+                              <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, fontSize: '1rem', color: '#15803d' }}>
+                                {grandTotal.toLocaleString('vi-VN')} ₫
+                              </td>
+                              <td colSpan={2} style={{ padding: '8px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                Tổng hợp giá tốt nhất từ tất cả NCC
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )
                 })()}
@@ -1407,105 +2501,117 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {/* P4.2: Show PO info from P3.7 + supplier data from P3.5 */}
+            {/* P4.2: Delivery tracking — materials + NCC + received qty */}
             {task.stepCode === 'P4.2' && previousStepData && (() => {
-              const pd = previousStepData.poData as { poNumber?: string; totalAmount?: string; paymentType?: string; deliveryType?: string; deliveryBatches?: { material: string; qty: string; date: string }[]; [k: string]: unknown } | null
               const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
               const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
-              if (!pd && nccList.length === 0) return null
+              if (nccList.length === 0) return null
+              // Build materials list with best NCC
+              const allMats = [...new Set(nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim())))]
+              const matItems = allMats.map(mat => {
+                const prices = nccList.map(s => {
+                  const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat.toLowerCase())
+                  return { ncc: s.name, price: q ? Number(q.price) || 0 : 0 }
+                }).filter(p => p.price > 0)
+                const best = prices.length > 0 ? prices.reduce((a, b) => a.price <= b.price ? a : b) : { ncc: '—', price: 0 }
+                return { material: mat, ncc: best.ncc }
+              })
+              // receivedQty stored in formData as receivedQty_0, receivedQty_1, etc.
               return (
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>📦 Thông tin PO & Lô hàng</h3>
-                  {/* PO Summary */}
-                  {pd && (
-                    <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-                      {pd.poNumber && <span style={{ fontSize: '0.85rem' }}>📋 Số PO: <strong>{pd.poNumber as string}</strong></span>}
-                      {pd.totalAmount && <span style={{ fontSize: '0.85rem' }}>💰 Tổng: <strong>{Number(pd.totalAmount).toLocaleString('vi-VN')} ₫</strong></span>}
-                      <span style={{ fontSize: '0.85rem' }}>💳 Thanh toán: <strong>{pd.paymentType === 'partial' ? 'Theo đợt' : 'Toàn bộ'}</strong></span>
-                      <span style={{ fontSize: '0.85rem' }}>🚚 Giao hàng: <strong>{pd.deliveryType === 'batch' ? 'Từng lần' : 'Toàn bộ'}</strong></span>
-                    </div>
-                  )}
-                  {/* NCC List */}
-                  {nccList.length > 0 && (
-                    <>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>Nhà cung cấp:</div>
-                      {nccList.map((s, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 10, padding: '4px 0', borderBottom: i < nccList.length - 1 ? '1px solid var(--border)' : 'none', fontSize: '0.8rem' }}>
-                          <span style={{ fontWeight: 700, color: `hsl(${i * 60 + 200}, 60%, 40%)`, minWidth: 90 }}>{s.name}</span>
-                          <div style={{ flex: 1 }}>
-                            {(s.quotes || []).filter(q => q.material?.trim()).map((q, j) => (
-                              <span key={j} style={{ marginRight: 14 }}>{q.material}: <strong>{Number(q.price).toLocaleString('vi-VN')} ₫</strong></span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  {/* Delivery Batches if batch delivery */}
-                  {pd?.deliveryType === 'batch' && pd?.deliveryBatches && (pd.deliveryBatches as { material: string; qty: string; date: string }[]).length > 0 && (
-                    <div style={{ marginTop: 10 }}>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>Kế hoạch giao từng lần:</div>
-                      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.6fr 1fr', gap: 6, padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                          {['#', 'Vật tư', 'KL', 'Ngày giao'].map(h => (
-                            <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                          ))}
-                        </div>
-                        {(pd.deliveryBatches as { material: string; qty: string; date: string }[]).map((db, idx) => (
-                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.6fr 1fr', gap: 6, padding: '6px 10px', fontSize: '0.8rem', borderBottom: idx < (pd.deliveryBatches as unknown[]).length - 1 ? '1px solid var(--border)' : 'none' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>L{idx + 1}</span>
-                            <span style={{ fontWeight: 600 }}>{db.material}</span>
-                            <span>{db.qty}</span>
-                            <span>{db.date}</span>
-                          </div>
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #16a34a' }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#16a34a' }}>📦 Danh sách vật tư theo dõi giao hàng</h3>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg-secondary)' }}>
+                          <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)', width: 30 }}>#</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Vật tư</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>NCC cung cấp</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, borderBottom: '2px solid var(--border)', color: '#f59e0b' }}>SL thực nhận</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {matItems.map((item, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{idx + 1}</td>
+                            <td style={{ padding: '6px 8px', fontWeight: 500 }}>{item.material}</td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: '#dbeafe', color: '#1d4ed8' }}>{item.ncc}</span>
+                            </td>
+                            <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                              <input
+                                className="input"
+                                type="text"
+                                placeholder="Nhập SL"
+                                disabled={!isActive}
+                                value={(formData[`receivedQty_${idx}`] as string) || ''}
+                                onChange={e => setFormData(prev => ({ ...prev, [`receivedQty_${idx}`]: e.target.value }))}
+                                style={{ width: 90, fontSize: '0.8rem', padding: '4px 6px', textAlign: 'center' }}
+                              />
+                            </td>
+                          </tr>
                         ))}
-                      </div>
-                    </div>
-                  )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )
             })()}
 
-            {/* P4.3: Show PO + materials for QC inspection */}
+            {/* P4.3: QC inspection — show approved PO (best price per material) */}
             {task.stepCode === 'P4.3' && previousStepData && (() => {
-              const pd = previousStepData.poData as { poNumber?: string; totalAmount?: string; deliveryType?: string; deliveryBatches?: { material: string; qty: string; date: string }[]; [k: string]: unknown } | null
+              const pd = previousStepData.poData as { poNumber?: string; totalAmount?: string; [k: string]: unknown } | null
               const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
               const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
               if (!pd && nccList.length === 0) return null
+              // Build best-price materials (approved PO)
+              const allMats = [...new Set(nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim())))]
+              const bestItems = allMats.map(mat => {
+                const prices = nccList.map(s => {
+                  const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat.toLowerCase())
+                  return { ncc: s.name, price: q ? Number(q.price) || 0 : 0 }
+                }).filter(p => p.price > 0)
+                const best = prices.length > 0 ? prices.reduce((a, b) => a.price <= b.price ? a : b) : { ncc: '—', price: 0 }
+                return { material: mat, bestPrice: best.price, bestNCC: best.ncc }
+              })
+              const grandTotal = bestItems.reduce((sum, item) => sum + item.bestPrice, 0)
               return (
                 <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#0ea5e9' }}>📦 Thông tin mặt hàng cần nghiệm thu</h3>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#0ea5e9' }}>📦 Vật tư cần nghiệm thu</h3>
                   {pd?.poNumber && (
                     <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '8px 14px', marginBottom: 10, fontSize: '0.85rem' }}>
                       📋 PO: <strong>{pd.poNumber as string}</strong>
-                      {pd?.totalAmount && <> — 💰 Tổng: <strong>{Number(pd.totalAmount).toLocaleString('vi-VN')} ₫</strong></>}
+                      {pd?.totalAmount && <> — 💰 Tổng PO: <strong>{Number(pd.totalAmount).toLocaleString('vi-VN')} ₫</strong></>}
                     </div>
                   )}
-                  {nccList.length > 0 && (
+                  {bestItems.length > 0 && (
                     <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 1.5fr 0.8fr', gap: 6, padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                        {['#', 'NCC', 'Vật tư', 'Giá'].map(h => (
-                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                        ))}
-                      </div>
-                      {nccList.flatMap((s, sIdx) =>
-                        (s.quotes || []).filter(q => q.material?.trim()).map((q, qIdx) => (
-                          <div key={`${sIdx}-${qIdx}`} style={{ display: 'grid', gridTemplateColumns: '30px 1fr 1.5fr 0.8fr', gap: 6, padding: '6px 10px', fontSize: '0.8rem', borderBottom: '1px solid var(--border)' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>{sIdx * 10 + qIdx + 1}</span>
-                            <span style={{ fontWeight: 600, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)` }}>{s.name}</span>
-                            <span style={{ fontWeight: 600 }}>{q.material}</span>
-                            <span style={{ textAlign: 'right' }}>{Number(q.price).toLocaleString('vi-VN')} ₫</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                  {/* Delivery batches */}
-                  {pd?.deliveryType === 'batch' && pd?.deliveryBatches && (pd.deliveryBatches as { material: string; qty: string; date: string }[]).length > 0 && (
-                    <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      🚚 Giao từng lần: {(pd.deliveryBatches as { material: string; qty: string; date: string }[]).map((d, i) => (
-                        <span key={i} style={{ marginRight: 12 }}>L{i + 1}: {d.material} ({d.qty}) — {d.date}</span>
-                      ))}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)' }}>
+                            <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)', width: 30 }}>#</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Vật tư</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>NCC</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Giá (VND)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bestItems.map((item, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                              <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{idx + 1}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 500 }}>{item.material}</td>
+                              <td style={{ padding: '6px 8px' }}>
+                                <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: '#dbeafe', color: '#1d4ed8' }}>{item.bestNCC}</span>
+                              </td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{item.bestPrice > 0 ? `${item.bestPrice.toLocaleString('vi-VN')} ₫` : '—'}</td>
+                            </tr>
+                          ))}
+                          <tr style={{ borderTop: '2px solid var(--border)', background: '#f0f9ff' }}>
+                            <td colSpan={3} style={{ padding: '8px', fontWeight: 700, fontSize: '0.85rem', color: '#0369a1' }}>TỔNG GIÁ TRỊ PO</td>
+                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, fontSize: '0.9rem', color: '#0369a1' }}>{grandTotal.toLocaleString('vi-VN')} ₫</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
@@ -1516,10 +2622,24 @@ export default function TaskDetailPage() {
             {task.stepCode === 'P4.4' && previousStepData && (() => {
               const qd = previousStepData.qcData as { inspectionResult?: string; [k: string]: unknown } | null
               const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
+              const prItems = (previousStepData.prItems as { name: string; quantity: string; unit: string }[]) || []
               const qcResult = qd?.inspectionResult || 'N/A'
               const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
-              // Build material list from all suppliers
-              const materials = nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => ({ material: q.material, ncc: s.name, price: q.price })))
+              // Build best-price materials (QAQC approved)
+              const allMats = [...new Set(nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim())))]
+              const materials = allMats.map(mat => {
+                const prices = nccList.map(s => {
+                  const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat.toLowerCase())
+                  return { ncc: s.name, price: q ? Number(q.price) || 0 : 0 }
+                }).filter(p => p.price > 0)
+                const best = prices.length > 0 ? prices.reduce((a, b) => a.price <= b.price ? a : b) : { ncc: '—', price: 0 }
+                // Find PR qty for this material (fuzzy match: exact, then includes)
+                const matLower = mat.toLowerCase()
+                const prItem = prItems.find(p => p.name?.trim().toLowerCase() === matLower)
+                  || prItems.find(p => p.name?.trim().toLowerCase().includes(matLower) || matLower.includes(p.name?.trim().toLowerCase()))
+                const prQty = prItem ? Number(prItem.quantity) || 0 : 0
+                return { material: mat, ncc: best.ncc, price: String(best.price), prQty }
+              })
               // Init warehouseItems if empty
               if (warehouseItems.length === 0 && materials.length > 0) {
                 setTimeout(() => setWarehouseItems(materials.map(m => ({ ...m, receivedQty: '', storageLocation: '' }))), 0)
@@ -1527,10 +2647,10 @@ export default function TaskDetailPage() {
               return (
                 <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${qcResult === 'PASS' ? '#16a34a' : qcResult === 'CONDITIONAL' ? '#f59e0b' : '#dc2626'}` }}>
                   <h3 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: qcResult === 'PASS' ? '#16a34a' : '#f59e0b' }}>
-                    📦 Vật tư QC đã nghiệm thu — <span style={{ background: qcResult === 'PASS' ? '#dcfce7' : '#fef3c7', padding: '2px 10px', borderRadius: 6, fontSize: '0.8rem' }}>{qcResult}</span>
+                    📦 Vật tư cần nghiệm thu — <span style={{ background: qcResult === 'PASS' ? '#dcfce7' : '#fef3c7', padding: '2px 10px', borderRadius: 6, fontSize: '0.8rem' }}>{qcResult}</span>
                   </h3>
                   {materials.length === 0 ? (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>Chưa có dữ liệu vật tư từ NCC.</div>
+                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>Chưa có dữ liệu vật tư.</div>
                   ) : (
                     <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginTop: 8 }}>
                       {/* Header */}
@@ -1542,24 +2662,36 @@ export default function TaskDetailPage() {
                       {/* Rows */}
                       {materials.map((m, idx) => {
                         const wi = warehouseItems[idx] || { receivedQty: '', storageLocation: '' }
+                        const receivedNum = Number(wi.receivedQty) || 0
+                        const isOverQty = m.prQty > 0 && receivedNum > m.prQty
                         return (
-                          <div key={idx} style={{
-                            display: 'grid', gridTemplateColumns: '30px 1fr 0.8fr 0.6fr 0.7fr 1fr', gap: 6, padding: '8px 10px',
-                            alignItems: 'center', borderBottom: idx < materials.length - 1 ? '1px solid var(--border)' : 'none',
-                            background: wi.receivedQty && wi.storageLocation ? '#f0fdf4' : 'transparent'
-                          }}>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</span>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{m.material}</span>
-                            <span style={{ fontSize: '0.8rem', color: `hsl(${idx * 60 + 200}, 60%, 40%)` }}>{m.ncc}</span>
-                            <span style={{ fontSize: '0.8rem', textAlign: 'right' }}>{Number(m.price).toLocaleString('vi-VN')} ₫</span>
-                            <input className="input" type="number" placeholder="SL" disabled={!isActive}
-                              value={wi.receivedQty}
-                              onChange={e => setWarehouseItems(prev => prev.map((w, i) => i === idx ? { ...w, receivedQty: e.target.value } : w))}
-                              style={{ fontSize: '0.8rem', padding: '4px 6px', width: '100%' }} />
-                            <input className="input" type="text" placeholder="Vị trí..." disabled={!isActive}
-                              value={wi.storageLocation}
-                              onChange={e => setWarehouseItems(prev => prev.map((w, i) => i === idx ? { ...w, storageLocation: e.target.value } : w))}
-                              style={{ fontSize: '0.8rem', padding: '4px 6px', width: '100%' }} />
+                          <div key={idx}>
+                            <div style={{
+                              display: 'grid', gridTemplateColumns: '30px 1fr 0.8fr 0.6fr 0.7fr 1fr', gap: 6, padding: '8px 10px',
+                              alignItems: 'center', borderBottom: isOverQty ? 'none' : (idx < materials.length - 1 ? '1px solid var(--border)' : 'none'),
+                              background: isOverQty ? '#fef2f2' : (wi.receivedQty && wi.storageLocation ? '#f0fdf4' : 'transparent')
+                            }}>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</span>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{m.material}</span>
+                              <span style={{ fontSize: '0.8rem' }}>
+                                <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: '#dbeafe', color: '#1d4ed8' }}>{m.ncc}</span>
+                              </span>
+                              <span style={{ fontSize: '0.8rem', textAlign: 'right' }}>{Number(m.price).toLocaleString('vi-VN')} ₫</span>
+
+                              <input className="input" type="number" placeholder="SL" disabled={!isActive}
+                                value={wi.receivedQty}
+                                onChange={e => setWarehouseItems(prev => prev.map((w, i) => i === idx ? { ...w, receivedQty: e.target.value } : w))}
+                                style={{ fontSize: '0.8rem', padding: '4px 6px', width: '100%', borderColor: isOverQty ? '#dc2626' : undefined }} />
+                              <input className="input" type="text" placeholder="Vị trí..." disabled={!isActive}
+                                value={wi.storageLocation}
+                                onChange={e => setWarehouseItems(prev => prev.map((w, i) => i === idx ? { ...w, storageLocation: e.target.value } : w))}
+                                style={{ fontSize: '0.8rem', padding: '4px 6px', width: '100%' }} />
+                            </div>
+                            {isOverQty && (
+                              <div style={{ padding: '2px 10px 6px 36px', fontSize: '0.72rem', color: '#dc2626', fontWeight: 600, background: '#fef2f2', borderBottom: idx < materials.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                                ⚠️ SL thực nhận ({receivedNum}) vượt quá SL PR đã chốt ({m.prQty})
+                              </div>
+                            )}
                           </div>
                         )
                       })}
@@ -1586,6 +2718,7 @@ export default function TaskDetailPage() {
               const updateIssueItems = (items: typeof issueItems) => {
                 handleFieldChange('issueItems', JSON.stringify(items))
               }
+              const ld = previousStepData.lsxData as { subconTeam?: string; jobName?: string; jobCode?: string; assignedQty?: string; startDate?: string; endDate?: string; [k: string]: unknown } | null
               return (
                 <>
                   {/* Inventory overview — collapsible */}
@@ -1613,15 +2746,30 @@ export default function TaskDetailPage() {
                     </div>
                   </details>
 
-                  {/* WO Items from P3.4 */}
+                  {/* P3.3 LSX thầu phụ */}
+                  {ld && (ld.subconTeam || ld.jobName) && (
+                    <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #8b5cf6' }}>
+                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>📑 Lệnh Sản Xuất — Thầu phụ (P3.3)</h3>
+                      <div className="card" style={{ padding: '0.75rem', borderLeft: '3px solid #8b5cf6' }}>
+                        {ld.subconTeam && <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 6 }}>🏗️ Tổ thầu phụ: {ld.subconTeam}</div>}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          {ld.jobName && <span>Công việc: <strong style={{ color: 'var(--text-primary)' }}>{ld.jobName}</strong></span>}
+                          {ld.jobCode && <span>Mã CV: <strong style={{ color: 'var(--text-primary)' }}>{ld.jobCode}</strong></span>}
+                          {ld.assignedQty && <span>KL giao: <strong style={{ color: 'var(--text-primary)' }}>{ld.assignedQty}</strong></span>}
+                          {ld.startDate && <span>Bắt đầu: <strong style={{ color: 'var(--text-primary)' }}>{ld.startDate}</strong></span>}
+                          {ld.endDate && <span>Kết thúc: <strong style={{ color: 'var(--text-primary)' }}>{ld.endDate}</strong></span>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* P3.4 LSX nội bộ */}
                   {woItems.length > 0 && (
                     <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #f59e0b' }}>
                       <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>📋 Lệnh Sản Xuất (P3.4)</h3>
                       {woItems.map((wo: { costCode: string; content: string; jobCode: string; typeCode: string; unit: string; totalQty: string }, wIdx: number) => (
                         <div key={wIdx} className="card" style={{ padding: '0.75rem', marginBottom: 8, borderLeft: `3px solid hsl(${wIdx * 40 + 30}, 70%, 50%)` }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 6 }}>
-                            Công việc {wIdx + 1}: {wo.content}
-                          </div>
+                          <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 6 }}>Công việc {wIdx + 1}: {wo.content}</div>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                             <span>Mã CP: <strong style={{ color: 'var(--text-primary)' }}>{wo.costCode || '—'}</strong></span>
                             <span>Mã CV: <strong style={{ color: 'var(--text-primary)' }}>{wo.jobCode || '—'}</strong></span>

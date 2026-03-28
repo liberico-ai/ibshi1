@@ -63,4 +63,8 @@ ibs-erp-20260322
 *-output.txt
 test-db.js
 reopen-task.js
+reopen-p12a.js
+reopen.sql
+tmp-query.js
 list-materials.js
+test-results/

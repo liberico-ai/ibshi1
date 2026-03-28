@@ -419,6 +419,57 @@ async function runWorkflowHooks(
       }
     }
 
+    // P4.5: Kho xuất vật tư → auto deduct stock for each issued item
+    if (stepCode === 'P4.5' && resultData) {
+      const issueItemsRaw = resultData.issueItems as string | undefined
+      let issueItems: { name: string; code: string; spec: string; qty: string; unit: string }[] = []
+      try { issueItems = issueItemsRaw ? JSON.parse(issueItemsRaw) : [] } catch { issueItems = [] }
+      const validItems = issueItems.filter(item => item.code?.trim() && Number(item.qty) > 0)
+
+      // Pre-validate stock sufficiency
+      const insufficientItems: string[] = []
+      const materialOps: { materialId: string; qty: number; item: typeof validItems[0] }[] = []
+      for (const item of validItems) {
+        const material = await prisma.material.findFirst({
+          where: { materialCode: item.code.trim() },
+          select: { id: true, currentStock: true },
+        })
+        if (material) {
+          const qty = Number(item.qty)
+          if (Number(material.currentStock) < qty) {
+            insufficientItems.push(`${item.name} (${item.code}): cần ${qty}, tồn ${Number(material.currentStock)}`)
+          }
+          materialOps.push({ materialId: material.id, qty, item })
+        }
+      }
+
+      if (insufficientItems.length > 0) {
+        console.warn(`[P4.5] Insufficient stock warnings: ${insufficientItems.join('; ')}`)
+      }
+
+      // Execute deductions in individual transactions (each item atomic)
+      for (const op of materialOps) {
+        await prisma.$transaction([
+          prisma.stockMovement.create({
+            data: {
+              materialId: op.materialId,
+              projectId,
+              type: 'OUT',
+              quantity: op.qty,
+              reason: 'production_issue',
+              referenceNo: `${projCode}-P4.5`,
+              performedBy: userId,
+              notes: `Xuất VT: ${op.item.name} (${op.item.code}) x ${op.qty} ${op.item.unit}`,
+            },
+          }),
+          prisma.material.update({
+            where: { id: op.materialId },
+            data: { currentStock: { decrement: op.qty } },
+          }),
+        ])
+      }
+    }
+
     // QC steps → auto Inspection
     const qcType = QC_STEP_TYPE_MAP[stepCode]
     if (qcType) {
