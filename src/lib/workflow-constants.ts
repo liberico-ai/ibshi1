@@ -151,6 +151,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   'P5.4': {
     code: 'P5.4', name: 'PM nghiệm thu khối lượng thực hiện', nameEn: 'PM Volume Acceptance',
     role: 'R02', next: ['P5.5'], phase: 5,
+    rejectTo: 'P5.2', // PM fail → tổ SX báo cáo lại
   },
   'P5.5': {
     code: 'P5.5', name: 'Tổng hợp và tính lương khoán', nameEn: 'Piece-rate Salary Calculation',

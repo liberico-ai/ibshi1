@@ -220,7 +220,21 @@ export default function TaskDetailPage() {
         }
         setFormData(prev => ({ ...prev, bomSummary, budgetComparison }))
       }
-    }
+      // For P6.5: auto-fill readonly fields from P6.1-P6.4 status
+      if (res.task.stepCode === 'P6.5' && res.previousStepData) {
+        const pd = res.previousStepData as Record<string, unknown>
+        const totalCost = pd.p62Total ? `${Number(pd.p62Total).toLocaleString('vi-VN')} đ` : ''
+        const variance = pd.p62Variance ? ` (chênh lệch: ${Number(pd.p62Variance) > 0 ? '+' : ''}${pd.p62Variance}%)` : ''
+        const profit = pd.p63Profit ? `LN: ${Number(pd.p63Profit).toLocaleString('vi-VN')} đ` : ''
+        const margin = pd.p63Margin ? ` — Biên LN: ${pd.p63Margin}%` : ''
+        setFormData(prev => ({
+          ...prev,
+          qcDossierStatus: pd.p61Status as string || '⏳ Chưa bắt đầu',
+          costSettlement: pd.p62Status ? `${pd.p62Status}${totalCost ? ` — ${totalCost}${variance}` : ''}` : '⏳ Chưa bắt đầu',
+          plSummary: pd.p63Status ? `${pd.p63Status}${profit ? ` — ${profit}${margin}` : ''}` : '⏳ Chưa bắt đầu',
+          lessonLearnStatus: pd.p64Status as string || '⏳ Chưa bắt đầu',
+        }))
+      }    }
     setLoading(false)
   }
 
@@ -590,15 +604,200 @@ export default function TaskDetailPage() {
               </>
             ) : (
               <>
+            {/* P5.1: Fabrication Stages — interactive progress cards (ABOVE the form) */}
+            {task.stepCode === 'P5.1' && (() => {
+              const FAB_STAGES = [
+                { key: 'CUT', label: 'Pha cắt', icon: '🔹' },
+                { key: 'FIT', label: 'Gá lắp', icon: '🔹' },
+                { key: 'WLD', label: 'Hàn', icon: '🔹' },
+                { key: 'MCH', label: 'Gia công cơ khí', icon: '🔹' },
+                { key: 'TRF', label: 'Xử lý bề mặt', icon: '🔹' },
+                { key: 'FAT', label: 'Factory Acceptance Test', icon: '⭐' },
+                { key: 'BLS', label: 'Bắn bi / Làm sạch', icon: '🔹' },
+                { key: 'FPC', label: 'Sơn phủ', icon: '🔹' },
+                { key: 'PCK', label: 'Đóng kiện (Ready to Ship)', icon: '🔹' },
+              ]
+              const calcTotal = (overrideKey?: string, overrideVal?: number) => {
+                const total = FAB_STAGES.reduce((sum, s) => {
+                  if (overrideKey && s.key === overrideKey) return sum + (overrideVal ?? 0)
+                  const d = !!formData[`fab_${s.key}_done`]
+                  return sum + (d ? 100 : Number(formData[`fab_${s.key}_progress`] || 0))
+                }, 0)
+                return Math.round(total / FAB_STAGES.length)
+              }
+              return (
+                <div className="card" style={{ padding: '1.5rem' }}>
+                  <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid #f59e0b', paddingBottom: 8, marginBottom: 16, color: '#f59e0b' }}>
+                    🏭 Các công đoạn sản xuất
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {FAB_STAGES.map((stage, idx) => {
+                      const isDone = !!formData[`fab_${stage.key}_done`]
+                      const progress = isDone ? 100 : Number(formData[`fab_${stage.key}_progress`] || 0)
+                      const progressColor = progress >= 100 ? '#16a34a' : progress > 0 ? '#f59e0b' : 'var(--text-muted)'
+                      return (
+                        <div key={stage.key} style={{
+                          padding: '12px 16px', borderRadius: 10,
+                          border: `1px solid ${isDone ? '#bbf7d0' : 'var(--border)'}`,
+                          background: isDone ? '#f0fdf4' : 'var(--bg-secondary)',
+                          transition: 'all 0.2s',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, width: 24 }}>{idx + 1}</span>
+                            <span style={{ fontSize: '1rem' }}>{stage.icon}</span>
+                            <span style={{ fontWeight: 700, fontSize: '0.9rem', flex: 1 }}>
+                              {stage.key} — {stage.label}
+                            </span>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: isActive ? 'pointer' : 'default', fontSize: '0.8rem', fontWeight: 600, color: isDone ? '#16a34a' : 'var(--text-secondary)' }}>
+                              <input type="checkbox" checked={isDone} disabled={!isActive}
+                                onChange={() => {
+                                  const newDone = !isDone
+                                  handleFieldChange(`fab_${stage.key}_done`, newDone ? '1' : '')
+                                  if (newDone) {
+                                    handleFieldChange(`fab_${stage.key}_progress`, '100')
+                                    if (!checklistState[`fab_${stage.key}`]) handleChecklistToggle(`fab_${stage.key}`)
+                                  }
+                                  handleFieldChange('fabricationProgress', String(calcTotal(stage.key, newDone ? 100 : 0)))
+                                }}
+                                style={{ accentColor: '#16a34a', width: 16, height: 16 }}
+                              />
+                              Hoàn thành
+                            </label>
+                          </div>
+                          {!isDone && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10, paddingLeft: 34 }}>
+                              <div>
+                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tiến độ (%)</label>
+                                <input className="input" type="number" min="0" max="100"
+                                  value={formData[`fab_${stage.key}_progress`] as string || ''}
+                                  disabled={!isActive}
+                                  onChange={e => {
+                                    handleFieldChange(`fab_${stage.key}_progress`, e.target.value)
+                                    handleFieldChange('fabricationProgress', String(calcTotal(stage.key, Number(e.target.value) || 0)))
+                                  }}
+                                  placeholder="0"
+                                  style={{ fontSize: '0.85rem', padding: '6px 8px', width: '100%' }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>KL hoàn thành</label>
+                                <input className="input" type="text"
+                                  value={formData[`fab_${stage.key}_qty`] as string || ''}
+                                  disabled={!isActive}
+                                  onChange={e => handleFieldChange(`fab_${stage.key}_qty`, e.target.value)}
+                                  placeholder="VD: 500 kg"
+                                  style={{ fontSize: '0.85rem', padding: '6px 8px', width: '100%' }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {isDone && (
+                            <div style={{ marginTop: 6, paddingLeft: 34, fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>
+                              ✅ 100% — Hoàn thành {formData[`fab_${stage.key}_qty`] ? `(KL: ${formData[`fab_${stage.key}_qty`]})` : ''}
+                            </div>
+                          )}
+                          <div style={{ marginTop: 6, paddingLeft: 34 }}>
+                            <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.min(progress, 100)}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s' }} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* P6.2: Budget from P1.2 estimates */}
+            {task.stepCode === 'P6.2' && previousStepData?.budgetTotal != null && (() => {
+              const budget = Number(previousStepData.budgetTotal || 0)
+              return (
+                <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #3b82f6', display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Tổng dự toán từ P1.2 (DT03-DT07)</div>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#3b82f6', marginTop: 4 }}>{budget > 0 ? `${budget.toLocaleString('vi-VN')} đ` : 'Chưa có dữ liệu dự toán'}</div>
+                  </div>
+                  <div style={{ fontSize: '2rem' }}>💰</div>
+                </div>
+              )
+            })()}
+
             {/* Form Fields — skip for steps with dynamic tables */}
             {!['P5.4', 'P1.2', 'P2.1A', 'P2.1B', 'P2.1C', 'P2.4'].includes(task.stepCode) && (
-            <div className="card" style={{ padding: '1.5rem' }}>
+            <div className="card" style={{ padding: '1.5rem', marginTop: task.stepCode === 'P5.1' ? '1rem' : undefined }}>
               <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
                 📝 Thông tin nhập liệu
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                {config.fields.map(field => (
-                  field.type === 'section' ? (
+                {config.fields.map(field => {
+                  const isAutoCalc = task.stepCode === 'P5.1' && field.key === 'fabricationProgress'
+                  // P6.2: auto-calc fields
+                  const isP62Total = task.stepCode === 'P6.2' && field.key === 'totalActualCost'
+                  const isP62Variance = task.stepCode === 'P6.2' && field.key === 'costVariance'
+                  const isP62CostField = task.stepCode === 'P6.2' && ['actualMaterialCost', 'actualLaborCost', 'actualOutsourceCost', 'actualOverhead'].includes(field.key)
+                  // P6.3: auto-calc fields
+                  const isP63Profit = task.stepCode === 'P6.3' && field.key === 'grossProfit'
+                  const isP63Margin = task.stepCode === 'P6.3' && field.key === 'profitMargin'
+                  const isReadonlyCalc = isAutoCalc || isP62Total || isP62Variance || isP63Profit || isP63Margin
+
+                  // P6.2 auto-calc helper
+                  const calcP62 = (overrideKey?: string, overrideVal?: string) => {
+                    const keys = ['actualMaterialCost', 'actualLaborCost', 'actualOutsourceCost', 'actualOverhead']
+                    const total = keys.reduce((sum, k) => {
+                      const v = k === overrideKey ? overrideVal : formData[k] as string
+                      return sum + (Number(String(v || '0').replace(/[,.]/g, '')) || 0)
+                    }, 0)
+                    handleFieldChange('totalActualCost', String(total))
+                    const budget = Number(previousStepData?.budgetTotal || 0)
+                    if (budget > 0) {
+                      const variance = ((total - budget) / budget * 100).toFixed(1)
+                      handleFieldChange('costVariance', variance)
+                    }
+                  }
+                  // P6.3 auto-calc helper
+                  const calcP63 = (overrideKey?: string, overrideVal?: string) => {
+                    const rev = Number(String((overrideKey === 'totalRevenue' ? overrideVal : formData.totalRevenue) || '0').replace(/[,.]/g, '')) || 0
+                    const cost = Number(String((overrideKey === 'totalCost' ? overrideVal : formData.totalCost) || '0').replace(/[,.]/g, '')) || 0
+                    const profit = rev - cost
+                    handleFieldChange('grossProfit', String(profit))
+                    if (rev > 0) handleFieldChange('profitMargin', ((profit / rev) * 100).toFixed(1))
+                  }
+
+                  // Display value for auto-calc fields
+                  const getCalcDisplay = () => {
+                    if (isP62Total) {
+                      const v = Number(formData.totalActualCost || 0)
+                      return v ? `${v.toLocaleString('vi-VN')} đ` : '—'
+                    }
+                    if (isP62Variance) {
+                      const v = Number(formData.costVariance || 0)
+                      return v ? `${v > 0 ? '+' : ''}${v}%` : '—'
+                    }
+                    if (isP63Profit) {
+                      const v = Number(formData.grossProfit || 0)
+                      return v ? `${v.toLocaleString('vi-VN')} đ` : '—'
+                    }
+                    if (isP63Margin) {
+                      const v = Number(formData.profitMargin || 0)
+                      return v ? `${v}%` : '—'
+                    }
+                    return `${formData.fabricationProgress || 0}%`
+                  }
+                  const getCalcColor = () => {
+                    if (isP62Variance) {
+                      const v = Number(formData.costVariance || 0)
+                      return v > 5 ? '#dc2626' : v > 0 ? '#f59e0b' : '#16a34a'
+                    }
+                    if (isP63Margin) {
+                      const v = Number(formData.profitMargin || 0)
+                      return v >= 10 ? '#16a34a' : v >= 0 ? '#f59e0b' : '#dc2626'
+                    }
+                    if (isAutoCalc) return Number(formData.fabricationProgress || 0) >= 100 ? '#16a34a' : '#f59e0b'
+                    return 'var(--text-primary)'
+                  }
+
+                  return field.type === 'section' ? (
                     <div key={field.key} style={{
                       gridColumn: '1 / -1', marginTop: 12, paddingBottom: 6,
                       borderBottom: '2px solid var(--accent-light, #c7d2fe)',
@@ -611,14 +810,64 @@ export default function TaskDetailPage() {
                     <div key={field.key} style={{ gridColumn: field.fullWidth ? '1 / -1' : undefined }}>
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
                         {field.label} {field.required && <span style={{ color: '#e74c3c' }}>*</span>}
+                        {isReadonlyCalc && <span style={{ fontSize: '0.7rem', color: '#f59e0b', marginLeft: 6 }}>(tự động tính)</span>}
                       </label>
-                      {renderField(field, formData[field.key] ?? '', (v) => handleFieldChange(field.key, v), isActive)}
+                      {isReadonlyCalc ? (
+                        <div style={{ padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)', fontSize: '1.1rem', fontWeight: 700, color: getCalcColor() }}>
+                          {getCalcDisplay()}
+                        </div>
+                      ) : isP62CostField ? (
+                        renderField(field, formData[field.key] ?? '', (v) => {
+                          handleFieldChange(field.key, v)
+                          setTimeout(() => calcP62(field.key, v as string), 50)
+                        }, isActive)
+                      ) : (task.stepCode === 'P6.3' && (field.key === 'totalRevenue' || field.key === 'totalCost')) ? (
+                        renderField(field, formData[field.key] ?? '', (v) => {
+                          handleFieldChange(field.key, v)
+                          setTimeout(() => calcP63(field.key, v as string), 50)
+                        }, isActive)
+                      ) : (
+                        renderField(field, formData[field.key] ?? '', (v) => handleFieldChange(field.key, v), isActive)
+                      )}
                     </div>
                   )
-                ))}
+                })}
               </div>
             </div>
             )}
+
+            {/* P5.2: Auto-display P5.1 job card total progress */}
+            {task.stepCode === 'P5.2' && previousStepData?.jobCardData && (() => {
+              const jc = previousStepData.jobCardData as Record<string, string>
+              const totalProgress = Number(jc.fabricationProgress || 0)
+              const jobCode = jc.jobCardCode || '—'
+              const FAB_KEYS = ['CUT','FIT','WLD','MCH','TRF','FAT','BLS','FPC','PCK']
+              const allQty = FAB_KEYS.map(k => jc[`fab_${k}_qty`] || '').filter(Boolean)
+              const totalQty = allQty.join(', ')
+              return (
+                <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Job Card từ P5.1</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: 2 }}>📋 {jobCode}</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: totalProgress >= 100 ? '#16a34a' : '#f59e0b' }}>{totalProgress}%</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Tiến độ SX</div>
+                  </div>
+                  {totalQty && (
+                    <div style={{ textAlign: 'center', borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>{totalQty}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>KL tổng</div>
+                    </div>
+                  )}
+                  <div style={{ width: 80 }}>
+                    <div style={{ height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(totalProgress, 100)}%`, background: totalProgress >= 100 ? '#16a34a' : '#f59e0b', borderRadius: 3 }} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* P1.2: Dynamic Estimate Tables (DT03-DT07) */}
             {task.stepCode === 'P1.2' && (() => {
@@ -3160,30 +3409,81 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {/* P5.4: Form Fields rendered AFTER report cards */}
-            {task.stepCode === 'P5.4' && (
-              <div className="card" style={{ padding: '1.5rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
-                  📝 Thông tin nhập liệu
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                  {config.fields.map(field => (
-                    field.type === 'section' ? (
-                      <div key={field.key} style={{ gridColumn: '1 / -1', marginTop: 12, paddingBottom: 6, borderBottom: '2px solid var(--accent-light, #c7d2fe)' }}>
-                        <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent)' }}>{field.label}</span>
+            {/* P5.4: Job Card summary + Pass/Fail + Form Fields */}
+            {task.stepCode === 'P5.4' && (() => {
+              const jd = previousStepData?.jobCardData as Record<string, string> | null
+              const FAB_KEYS = ['CUT','FIT','WLD','MCH','TRF','FAT','BLS','FPC','PCK']
+              const FAB_LABELS: Record<string, string> = { CUT:'Pha cắt', FIT:'Gá lắp', WLD:'Hàn', MCH:'Gia công CK', TRF:'Xử lý BM', FAT:'FAT', BLS:'Bắn bi', FPC:'Sơn phủ', PCK:'Đóng kiện' }
+              const totalProgress = Number(jd?.fabricationProgress || 0)
+              const allQty = jd ? FAB_KEYS.map(k => jd[`fab_${k}_qty`] || '').filter(Boolean) : []
+              const acceptResult = (formData.acceptanceResult as string) || ''
+              const resultColors: Record<string, { bg: string; border: string }> = {
+                PASS: { bg: '#f0fdf4', border: '#bbf7d0' },
+                FAIL: { bg: '#fef2f2', border: '#fecaca' },
+                CONDITIONAL: { bg: '#fffbeb', border: '#fde68a' },
+              }
+              const rc = resultColors[acceptResult] || { bg: 'var(--bg-secondary)', border: 'var(--border)' }
+              return (
+                <>
+                  {/* Job Card Summary */}
+                  <div className="card" style={{ padding: '1.5rem', borderLeft: '4px solid #10b981', background: rc.bg, border: `1px solid ${rc.border}` }}>
+                    <h3 style={{ marginTop: 0, fontSize: '1.1rem', color: '#10b981', marginBottom: 12 }}>
+                      📋 Nghiệm thu Job Card: {jd?.jobCardCode || '—'}
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 16, alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>Tiến độ SX</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: totalProgress >= 100 ? '#16a34a' : '#f59e0b' }}>{totalProgress}%</div>
+                        <div style={{ height: 5, borderRadius: 3, background: 'var(--border)', overflow: 'hidden', marginTop: 4 }}>
+                          <div style={{ height: '100%', width: `${Math.min(totalProgress, 100)}%`, background: totalProgress >= 100 ? '#16a34a' : '#f59e0b', borderRadius: 3 }} />
+                        </div>
                       </div>
-                    ) : (
-                      <div key={field.key} style={{ gridColumn: field.fullWidth ? '1 / -1' : undefined }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
-                          {field.label} {field.required && <span style={{ color: '#e74c3c' }}>*</span>}
-                        </label>
-                        {renderField(field, formData[field.key] ?? '', (v) => handleFieldChange(field.key, v), isActive)}
+                      <div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>KL hoàn thành</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: 2 }}>{allQty.length > 0 ? allQty.join(', ') : '—'}</div>
                       </div>
-                    )
-                  ))}
-                </div>
-              </div>
-            )}
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Kết quả nghiệm thu *</label>
+                        <select
+                          className="input"
+                          value={acceptResult}
+                          disabled={!isActive}
+                          onChange={e => handleFieldChange('acceptanceResult', e.target.value)}
+                          style={{ width: '100%', padding: '8px 12px', fontSize: '0.9rem', fontWeight: 700, borderRadius: 8, border: `2px solid ${acceptResult === 'PASS' ? '#16a34a' : acceptResult === 'FAIL' ? '#dc2626' : acceptResult === 'CONDITIONAL' ? '#f59e0b' : 'var(--border)'}`, color: acceptResult === 'PASS' ? '#16a34a' : acceptResult === 'FAIL' ? '#dc2626' : acceptResult === 'CONDITIONAL' ? '#d97706' : undefined }}
+                        >
+                          <option value="">-- Chọn --</option>
+                          <option value="PASS">✅ PASS — Đạt</option>
+                          <option value="FAIL">❌ FAIL — Không đạt</option>
+                          <option value="CONDITIONAL">⚠️ CONDITIONAL — Đạt có điều kiện</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Original form fields below */}
+                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
+                    <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
+                      📝 Thông tin nhập liệu
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                      {config.fields.map(field => (
+                        field.type === 'section' ? (
+                          <div key={field.key} style={{ gridColumn: '1 / -1', marginTop: 12, paddingBottom: 6, borderBottom: '2px solid var(--accent-light, #c7d2fe)' }}>
+                            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent)' }}>{field.label}</span>
+                          </div>
+                        ) : (
+                          <div key={field.key} style={{ gridColumn: field.fullWidth ? '1 / -1' : undefined }}>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
+                              {field.label} {field.required && <span style={{ color: '#e74c3c' }}>*</span>}
+                            </label>
+                            {renderField(field, formData[field.key] ?? '', (v) => handleFieldChange(field.key, v), isActive)}
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
 
             {task.stepCode === 'P2.3' && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
@@ -3664,7 +3964,9 @@ export default function TaskDetailPage() {
                   ({Object.values(checklistState).filter(Boolean).length}/{config.checklist.length})
                 </span>
               </h3>
-              {config.checklist.map(item => (
+              {config.checklist
+                .filter(item => !(task.stepCode === 'P5.1' && item.key.startsWith('fab_')))
+                .map(item => (
                 <label key={item.key} style={{
                   display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)',
                   cursor: isActive ? 'pointer' : 'default', fontSize: '0.85rem', alignItems: 'flex-start',
@@ -3805,8 +4107,8 @@ export default function TaskDetailPage() {
             {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && (
               <div className="card" style={{ padding: '1.25rem' }}>
                 <h3 style={{ marginTop: 0, fontSize: '1rem' }}>🚀 Hành động</h3>
-                {/* P4.3 + P5.3: Conditional buttons based on inspection result */}
-                {(task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !(() => { try { const items = JSON.parse(formData.qcItems as string || '[]'); return items.some((q: {result: string}) => q.result === 'FAIL') } catch { return false } })()) && (
+                {/* P4.3 + P5.3 + P5.4: Conditional buttons based on inspection/acceptance result */}
+                {(task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !(() => { try { const items = JSON.parse(formData.qcItems as string || '[]'); return items.some((q: {result: string}) => q.result === 'FAIL') } catch { return false } })()) && (task.stepCode !== 'P5.4' || !formData.acceptanceResult || formData.acceptanceResult === 'PASS' || formData.acceptanceResult === 'CONDITIONAL') && (
                 <button
                   className="btn-accent"
                   onClick={() => handleSubmit('complete')}
@@ -3816,7 +4118,7 @@ export default function TaskDetailPage() {
                   {submitting ? '⏳ Đang xử lý...' : '✅ Hoàn thành bước này'}
                 </button>
                 )}
-                {rule?.rejectTo && (task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'FAIL' || formData.inspectionResult === 'CONDITIONAL') && (
+                {rule?.rejectTo && (task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'FAIL' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.4' || !formData.acceptanceResult || formData.acceptanceResult === 'FAIL' || formData.acceptanceResult === 'CONDITIONAL') && (
                   <div>
                     <button
                       onClick={() => setShowRejectForm(!showRejectForm)}
