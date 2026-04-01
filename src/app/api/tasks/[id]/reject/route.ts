@@ -38,6 +38,14 @@ export async function POST(
       )
     }
 
+    // Role-based authorization: only the assigned role (or admin) can reject
+    if (payload.roleCode !== task.assignedRole && payload.roleCode !== 'R00') {
+      return NextResponse.json(
+        { error: `Bạn (${payload.roleCode}) không có quyền từ chối bước này. Chỉ ${task.assignedRole} mới được phép.` },
+        { status: 403 }
+      )
+    }
+
     const rule = WORKFLOW_RULES[task.stepCode]
     if (!rule?.rejectTo && !overrideRejectTo) {
       return NextResponse.json(

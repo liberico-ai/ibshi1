@@ -3,6 +3,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { RBAC } from '@/lib/rbac-rules'
 
 // GET /api/qc/:id — Inspection detail + checklist items
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -32,8 +33,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!['R01', 'R09'].includes(payload.roleCode)) {
-      return errorResponse('Không có quyền', 403)
+    if (!RBAC.QC_ACTION.includes(payload.roleCode)) {
+      return errorResponse('Không có quyền thao tác đánh giá QC', 403)
     }
 
     const { id } = await params

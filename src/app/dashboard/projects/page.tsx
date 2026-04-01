@@ -210,7 +210,9 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
             {PRODUCT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select></div>
         <div className="input-field"><label className="input-label">Giá trị hợp đồng</label>
-          <input className="input" type="number" placeholder="0" value={form.contractValue} onChange={(e) => setForm({ ...form, contractValue: e.target.value })} /></div>
+          <input className="input" type="text" inputMode="numeric" placeholder="0"
+            value={form.contractValue ? form.contractValue.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+            onChange={(e) => setForm({ ...form, contractValue: e.target.value.replace(/,/g, '') })} /></div>
         <div className="input-field"><label className="input-label">Tiền tệ</label>
           <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             <option value="VND">VND</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="JPY">JPY</option>

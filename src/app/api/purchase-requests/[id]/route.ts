@@ -3,6 +3,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { RBAC } from '@/lib/rbac-rules'
 
 // PUT /api/purchase-requests/[id] — Approve/Reject/Update PR
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -21,8 +22,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!pr) return errorResponse('Không tìm thấy yêu cầu mua hàng', 404)
 
     if (action === 'approve') {
-      if (!['R01'].includes(payload.roleCode)) {
-        return errorResponse('Chỉ Ban Giám đốc mới được duyệt PR', 403)
+      if (!RBAC.PR_APPROVAL.includes(payload.roleCode)) {
+        return errorResponse('Chỉ Ban Giám đốc hoặc PM mới được duyệt PR', 403)
       }
       if (pr.status !== 'SUBMITTED') {
         return errorResponse('PR phải ở trạng thái "Đã gửi" để duyệt')
@@ -36,8 +37,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (action === 'reject') {
-      if (!['R01'].includes(payload.roleCode)) {
-        return errorResponse('Chỉ Ban Giám đốc mới được từ chối PR', 403)
+      if (!RBAC.PR_APPROVAL.includes(payload.roleCode)) {
+        return errorResponse('Chỉ Ban Giám đốc hoặc PM mới được từ chối PR', 403)
       }
       const updated = await prisma.purchaseRequest.update({
         where: { id },
