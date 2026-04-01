@@ -1,2 +1,0 @@
-2221: {/* P2.5: Show P2.4 data (KH SX + dự toán điều chỉnh) + BOM summary for BGĐ review */}
-2222: {task.stepCode === 'P2.5' && previousStepData && (

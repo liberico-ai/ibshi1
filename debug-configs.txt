@@ -1,8 +1,0 @@
-74: { key: 'checked_capacity', label: 'Đã kiểm tra năng lực sản xuất ban đầu' },
-105: { key: 'capacity_ok', label: 'Năng lực sản xuất đáp ứng được' },
-177: { key: 'ovh_production', label: 'Chi phí chung phục vụ sản xuất', labelEn: 'Production Overhead', type: 'currency' },
-300: { key: 'planFile', label: 'File KH sản xuất', accept: '.xlsx,.xls,.pdf' },
-312: { key: 'sx_plan_reviewed', label: 'Đã review kế hoạch sản xuất', required: true },
-381: title: 'Quản lý SX lập lệnh sản xuất cho tổ nội bộ',
-382: description: 'R06 lập Lệnh sản xuất cho tổ nội bộ. Sổ lệnh được hệ thống tự động tạo. Nhập danh sách chi tiết nội dung công việc cần phân giao.',
-552: { key: 'fabricationProgress', label: 'Tiến độ sản xuất (%)', labelEn: 'Fabrication Progress %', type: 'number', min: 0, max: 100 },

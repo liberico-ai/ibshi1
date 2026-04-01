@@ -59,7 +59,7 @@ schema-expansion.md
 /public/uploads/
 ibs-erp-20260322
 
-# Debug scripts
+# Debug & scratch scripts
 *-output.txt
 test-db.js
 reopen-task.js
@@ -67,4 +67,29 @@ reopen-p12a.js
 reopen.sql
 tmp-query.js
 list-materials.js
+export-steps.js
+update-p23.js
 test-results/
+
+# Backup folders (never commit full source copies)
+/backup/
+
+# Temp files & debug dumps
+tmp*
+tmp-*/
+debug*.txt
+cards.txt
+lines.txt
+output.txt
+match_results.txt
+wbs_lines.txt
+*.log
+
+# Scratch seeds & one-off scripts
+tmp_seed.ts
+tmp_seed.js
+
+# Excel/Word docs (use /docs or external storage)
+*.xlsx
+*.docx
+*.xls
