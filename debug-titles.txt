@@ -1,0 +1,34 @@
+945: <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Tổng dự toán từ P1.2 (DT03-DT07)</div>
+1099: {/* P1.2: Dynamic Estimate Tables (DT03-DT07) */}
+1183: {/* ── TM: DT02 - Tổng hợp dự toán thi công ── */}
+1184: {renderEstTable('📊 DT02 — Tổng hợp dự toán thi công', 'QT30-DT02', 'dt02Items',
+1194: {/* ── TM: DT03 - Dự toán VT tổng hợp ── */}
+1195: {renderEstTable('📦 DT03 — Dự toán chi phí VT (Thương mại)', 'QT30-DT03', 'dt03Items',
+1215: {/* ── TM: DT04 - Dự toán VT chi tiết ── */}
+1216: {renderEstTable('📋 DT04 — Dự toán chi tiết VT (Thương mại)', 'QT30-DT04', 'dt04Items',
+1230: {/* ── TM: DT05 - Dự toán dịch vụ ── */}
+1231: {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ (Thương mại)', 'QT30-DT05', 'dt05Items',
+1248: {/* ── SX: DT06 - Dự toán nhân công ── */}
+1249: {renderEstTable('👷 DT06 — Dự toán chi phí nhân công (Sản xuất)', 'QT30-DT06', 'dt06Items',
+1845: // ── P2.1A: TCKT (DT02 + DT07) ──
+1860: {renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items', colsCPChung,
+1890: // ── P2.1B: TM (DT03 + DT04 + DT05) ──
+1893: {renderEstTable('📦 DT03 — Dự toán chi phí VT tổng hợp', 'QT30-DT03', 'dt03Items', colsVTTH,
+1917: {renderEstTable('📋 DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items', colsVTCT,
+1934: {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items', colsDV,
+1953: // ── P2.1C: SX (DT06) ──
+1956: {renderEstTable('👷 DT06 — Dự toán chi phí nhân công trực tiếp', 'QT30-DT06', 'dt06Items', colsNC,
+2005: {/* P2.4 also renders DT02-DT07: aggregated from all departments */}
+2097: {(task.stepCode === 'P2.4') && renderEstTable('📦 DT03 — Dự toán chi phí VT tổng hợp (TM)', 'QT30-DT03', 'dt03Items',
+2108: {(task.stepCode === 'P2.4') && renderEstTable('📋 DT04 — Dự toán chi tiết VT (TM)', 'QT30-DT04', 'dt04Items',
+2121: {(task.stepCode === 'P2.4') && renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ (TM)', 'QT30-DT05', 'dt05Items',
+2132: {(task.stepCode === 'P2.4') && renderEstTable('👷 DT06 — Dự toán chi phí nhân công trực tiếp (SX)', 'QT30-DT06', 'dt06Items',
+2144: {(task.stepCode === 'P2.4') && renderEstTable('📊 DT02 — Tổng hợp chi phí dự toán thi công (TCKT)', 'QT30-DT02', 'dt02Items',
+2153: {(task.stepCode === 'P2.1A' || task.stepCode === 'P2.4') && renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính (TCKT)', 'QT30-DT07', 'dt07Items',
+2278: {/* Department Estimates DT02-DT07 from P2.4 */}
+2314: {renderReadonlyTable('DT02 — Tổng hợp chi phí (TCKT)', 'QT30-DT02', de.dt02Items || (previousStepData.estimate as Record<string, string>)?.dt02Items, [
+2318: {renderReadonlyTable('DT03 — VT tổng hợp (TM)', 'QT30-DT03', de.dt03Items || (previousStepData.estimate as Record<string, string>)?.dt03Items, [
+2323: {renderReadonlyTable('DT04 — VT chi tiết (TM)', 'QT30-DT04', de.dt04Items || (previousStepData.estimate as Record<string, string>)?.dt04Items, [
+2329: {renderReadonlyTable('DT05 — Dịch vụ thuê ngoài (TM)', 'QT30-DT05', de.dt05Items || (previousStepData.estimate as Record<string, string>)?.dt05Items, [
+2334: {renderReadonlyTable('DT06 — Nhân công trực tiếp (SX)', 'QT30-DT06', de.dt06Items || (previousStepData.estimate as Record<string, string>)?.dt06Items, [
+2339: {renderReadonlyTable('DT07 — CP chung, tài chính (TCKT)', 'QT30-DT07', de.dt07Items || (previousStepData.estimate as Record<string, string>)?.dt07Items, [

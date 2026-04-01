@@ -39,12 +39,12 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P1.3': {
     code: 'P1.3', name: 'Phê duyệt kế hoạch kickoff, WBS, milestones', nameEn: 'Plan Approval',
-    role: 'R01', gate: ['P1.2A'], next: ['P1.2', 'P2.1', 'P2.2', 'P2.3', 'P2.1A', 'P2.1B', 'P2.1C'], deadlineDays: 3, phase: 1,
+    role: 'R01', gate: ['P1.2A'], next: ['P2.1', 'P2.2', 'P2.3', 'P2.1A'], deadlineDays: 3, phase: 1,
     rejectTo: 'P1.2A',
   },
 
   // ── Phase 2: Thiết kế & Kế hoạch SX (BRD#6-10) ──
-  // P2.1, P2.2, P2.3, P2.1A, P2.1B, P2.1C run in PARALLEL after P1.3
+  // P2.1, P2.2, P2.3, P2.1A run in PARALLEL after P1.3
   'P2.1': {
     code: 'P2.1', name: 'Thiết kế xây dựng bản vẽ và đề xuất VT chính', nameEn: 'Design Drawing & Main Material BOM',
     role: 'R04', next: [], deadlineDays: 15, phase: 2,
@@ -54,24 +54,16 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
     role: 'R02', next: [], deadlineDays: 5, phase: 2,
   },
   'P2.3': {
-    code: 'P2.3', name: 'Kho đề xuất vật tư', nameEn: 'Warehouse Material Proposal',
+    code: 'P2.3', name: 'Kho đề xuất vật tư tiêu hao', nameEn: 'Warehouse Consumable Material Proposal',
     role: 'R05', next: [], deadlineDays: 5, phase: 2,
   },
   'P2.1A': {
-    code: 'P2.1A', name: 'Tập hợp thông tin dự toán của Tài chính kế toán', nameEn: 'Finance Estimate Info Compilation',
+    code: 'P2.1A', name: 'TCKT lập dự toán', nameEn: 'Finance Estimate Preparation',
     role: 'R08', next: [], deadlineDays: 7, phase: 2,
   },
-  'P2.1B': {
-    code: 'P2.1B', name: 'Tập hợp thông tin dự toán của Thương mại', nameEn: 'Commercial Estimate Info Compilation',
-    role: 'R07', next: [], deadlineDays: 7, phase: 2,
-  },
-  'P2.1C': {
-    code: 'P2.1C', name: 'Tập hợp thông tin dự toán của Sản xuất', nameEn: 'Production Estimate Info Compilation',
-    role: 'R06', next: [], deadlineDays: 7, phase: 2,
-  },
   'P2.4': {
-    code: 'P2.4', name: 'KTKH lập kế hoạch SX và điều chỉnh dự toán', nameEn: 'Production Plan & Budget Adjustment',
-    role: 'R03', gate: ['P2.1', 'P2.2', 'P2.3', 'P2.1A', 'P2.1B', 'P2.1C'], next: ['P2.5'], deadlineDays: 7, phase: 2,
+    code: 'P2.4', name: 'KTKH điều chỉnh dự toán', nameEn: 'Budget Adjustment',
+    role: 'R03', gate: ['P2.1', 'P2.2', 'P2.3', 'P2.1A'], next: ['P2.5'], deadlineDays: 7, phase: 2,
   },
   'P2.5': {
     code: 'P2.5', name: 'BGĐ phê duyệt KH SX và dự toán chính thức', nameEn: 'Approve Production Plan & Final Budget',

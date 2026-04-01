@@ -1,0 +1,5 @@
+1635: const getInheritedEstRows = (key: string, baseDefault: any[]) => {
+2081: getInheritedEstRows('dt03Items', [{ nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' }])
+2094: getInheritedEstRows('dt04Items', [{ maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' }])
+2105: getInheritedEstRows('dt05Items', [{ maCP: '', noiDung: '', dvt: '', kl: '', donGia: '', thanhTien: '' }])
+2116: getInheritedEstRows('dt06Items', [{ maCP: '', noiDung: '', dvt: '', kl: '', donGia: '', thanhTien: '' }])
