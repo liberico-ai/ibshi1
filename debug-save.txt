@@ -1,0 +1,30 @@
+246: function handleFieldChange(key: string, value: string | number) {
+861: handleFieldChange(`fab_${stage.key}_done`, newDone ? '1' : '')
+863: handleFieldChange(`fab_${stage.key}_progress`, '100')
+866: handleFieldChange('fabricationProgress', String(calcTotal(stage.key, newDone ? 100 : 0)))
+881: handleFieldChange(`fab_${stage.key}_progress`, e.target.value)
+882: handleFieldChange('fabricationProgress', String(calcTotal(stage.key, Number(e.target.value) || 0)))
+893: onChange={e => handleFieldChange(`fab_${stage.key}_qty`, e.target.value)}
+957: handleFieldChange('totalActualCost', String(total))
+961: handleFieldChange('costVariance', variance)
+969: handleFieldChange('grossProfit', String(profit))
+970: if (rev > 0) handleFieldChange('profitMargin', ((profit / rev) * 100).toFixed(1))
+1027: handleFieldChange(field.key, v)
+1032: handleFieldChange(field.key, v)
+1036: renderField(field, formData[field.key] ?? '', (v) => handleFieldChange(field.key, v), isActive)
+1089: const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+1163: {renderEstTable('📊 DT02 — Tổng hợp dự toán thi công', 'QT30-DT02', 'dt02Items',
+1267: const save = (next: WbsRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+1529: const saveLl = (next: LlItem[]) => handleFieldChange(llKey, JSON.stringify(next))
+1656: const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+1996: const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+2123: {(task.stepCode === 'P2.4') && renderEstTable('📊 DT02 — Tổng hợp chi phí dự toán thi công (TCKT)', 'QT30-DT02', 'dt02Items',
+2130: getInheritedEstRows('dt02Items', [{ maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: '', tyLe: '' }])
+2293: {renderReadonlyTable('DT02 — Tổng hợp chi phí (TCKT)', 'QT30-DT02', de.dt02Items, [
+3265: handleFieldChange('issueItems', JSON.stringify(items))
+3345: onChange={e => handleFieldChange('issueDate', e.target.value)}
+3351: onChange={e => handleFieldChange('wbsNode', e.target.value)}
+3447: const save = (cards: JobCard[]) => handleFieldChange('jobCards', JSON.stringify(cards))
+3546: const saveQc = (items: QcItem[]) => handleFieldChange('qcItems', JSON.stringify(items))
+3748: onChange={e => handleFieldChange('acceptanceResult', e.target.value)}
+3775: {renderField(field, formData[field.key] ?? '', (v) => handleFieldChange(field.key, v), isActive)}

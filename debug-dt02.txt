@@ -1,0 +1,5 @@
+1813: // ── P2.1A: TCKT (DT02 + DT07) ──
+1973: {/* P2.4 also renders DT02-DT07: aggregated from all departments */}
+2112: {(task.stepCode === 'P2.1A' || task.stepCode === 'P2.4') && renderEstTable('📊 DT02 — Tổng hợp chi phí dự toán thi công (TCKT)', 'QT30-DT02', 'dt02Items',
+2246: {/* Department Estimates DT02-DT07 from P2.1A/B/C */}
+2282: {renderReadonlyTable('DT02 — Tổng hợp chi phí (TCKT)', 'QT30-DT02', de.dt02Items, [

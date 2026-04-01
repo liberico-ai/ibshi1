@@ -1,0 +1,80 @@
+1103: const renderEstTable = (
+1104: title: string, code: string, dataKey: string,
+1105: columns: { key: string; label: string; type?: string; width?: string }[],
+1106: defaultRows: EstRow[]
+1107: ) => {
+1108: let rows: EstRow[] = []
+1109: try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+1110: const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+1111: const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+1112: const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+1113: const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+1114: return (
+1115: <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
+1116: <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+1117: <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({code})</span></h3>
+1118: {isActive && (
+1119: <button type="button" onClick={addRow}
+1120: style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+1121: + Thêm
+1122: </button>
+1670: const renderEstTable = (
+1671: title: string, code: string, dataKey: string,
+1672: columns: { key: string; label: string; type?: string; width?: string }[],
+1673: defaultRows: EstRow[]
+1674: ) => {
+1675: let rows: EstRow[] = []
+1676: try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+1677: const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+1678: const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+1679: const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+1680: const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+1681: 
+1682: const exportEstExcel = () => {
+1683: const headers = ['STT', ...columns.map(c => c.label)]
+1684: const data = rows.map((r, i) => [i + 1, ...columns.map(c => r[c.key] || '')])
+1685: const ws = XLSX.utils.aoa_to_sheet([headers, ...data])
+1686: const wb = XLSX.utils.book_new()
+1687: XLSX.utils.book_append_sheet(wb, ws, code)
+1688: XLSX.writeFile(wb, `${code}_${task?.project?.projectCode || 'P2'}.xlsx`)
+1689: }
+2010: const renderEstTable = (
+2011: title: string, code: string, dataKey: string,
+2012: columns: { key: string; label: string; type?: string; width?: string }[],
+2013: defaultRows: EstRow[]
+2014: ) => {
+2015: let rows: EstRow[] = []
+2016: try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
+2017: const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
+2018: const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
+2019: const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
+2020: const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
+2021: return (
+2022: <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
+2023: <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+2024: <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({code})</span></h3>
+2025: {isActive && (
+2026: <button type="button" onClick={addRow}
+2027: style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+2028: + Thêm
+2029: </button>
+2282: const renderReadonlyTable = (title: string, code: string, dataStr: string | null, columns: { key: string; label: string; width?: string }[]) => {
+2283: let rows: DtRow[] = []
+2284: try { rows = dataStr ? JSON.parse(dataStr as string) : [] } catch { rows = [] }
+2285: if (!rows || rows.length === 0) return (
+2286: <div className="card" style={{ padding: '1rem', marginTop: '0.75rem', borderLeft: '4px solid var(--border)' }}>
+2287: <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{title} <span style={{ fontSize: '0.65rem' }}>({code})</span> — Chưa có dữ liệu</h4>
+2288: </div>
+2289: )
+2290: return (
+2291: <div className="card" style={{ padding: '1rem', marginTop: '0.75rem', borderLeft: '4px solid var(--accent)' }}>
+2292: <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--accent)' }}>{title} <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>({code})</span></h4>
+2293: <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+2294: <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')}`, gap: 4, padding: '5px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+2295: <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+2296: {columns.map(c => <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>)}
+2297: </div>
+2298: {rows.map((row, ri) => (
+2299: <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+2300: <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
+2301: {columns.map(c => <span key={c.key} style={{ fontSize: '0.75rem' }}>{row[c.key] || '—'}</span>)}

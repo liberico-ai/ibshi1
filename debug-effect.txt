@@ -1,0 +1,12 @@
+3: import { useState, useEffect } from 'react'
+37: const [formData, setFormData] = useState<Record<string, string | number>>({})
+81: useEffect(() => { loadTask(); loadUsers() }, [taskId])
+108: setFormData(res.task.resultData as Record<string, string | number>)
+144: setFormData(prev => ({ ...prev, woNumber: woNum }))
+170: setFormData(prev => ({
+194: setFormData(prev => ({
+222: setFormData(prev => ({ ...prev, bomSummary, budgetComparison }))
+231: setFormData(prev => ({
+247: setFormData(prev => {
+3094: onChange={e => setFormData(prev => ({ ...prev, [`receivedQty_${idx}`]: e.target.value }))}
+4416: setFormData(prev => {

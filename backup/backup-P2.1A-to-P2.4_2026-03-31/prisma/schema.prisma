@@ -1,0 +1,1187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ══════════════════════════════════════════════════════
+//  AUTH & ORGANIZATION
+// ══════════════════════════════════════════════════════
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String?  @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  roleCode     String   @map("role_code")
+  userLevel    Int      @default(2) @map("user_level")
+  departmentId String?  @map("department_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  department    Department?    @relation(fields: [departmentId], references: [id])
+  assignedTasks WorkflowTask[] @relation("TaskAssignee")
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  employee      Employee?
+
+  @@index([roleCode])
+  @@index([departmentId])
+  @@map("users")
+}
+
+model Department {
+  id     String @id @default(cuid())
+  code   String @unique
+  name   String
+  nameEn String @default("") @map("name_en")
+  users     User[]
+  employees Employee[]
+
+  @@map("departments")
+}
+
+model Role {
+  code        String @id
+  name        String
+  nameEn      String @default("") @map("name_en")
+  permissions Json   @default("[]")
+
+  @@map("roles")
+}
+
+// ══════════════════════════════════════════════════════
+//  PROJECT & WBS
+// ══════════════════════════════════════════════════════
+
+model Project {
+  id            String    @id @default(cuid())
+  projectCode   String    @unique @map("project_code")
+  projectName   String    @map("project_name")
+  clientName    String    @map("client_name")
+  productType   String    @map("product_type")
+  contractValue Decimal?  @map("contract_value")
+  currency      String    @default("VND")
+  status        String    @default("ACTIVE")
+  startDate     DateTime? @map("start_date")
+  endDate       DateTime? @map("end_date")
+  pmUserId      String?   @map("pm_user_id")
+  description   String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  wbsNodes      WbsNode[]
+  tasks         WorkflowTask[]
+  milestones    Milestone[]
+  workOrders    WorkOrder[]
+  inspections   Inspection[]
+  drawings      Drawing[]
+  boms          BillOfMaterial[]
+  ecos          EngineeringChangeOrder[]
+  itps          InspectionTestPlan[]
+  ncrs          NonConformanceReport[]
+  purchaseReqs  PurchaseRequest[]
+  subcontracts  SubcontractorContract[]
+  lessonLearns  LessonLearned[]
+  invoices      Invoice[]
+  budgets       Budget[]
+  cashflows     CashflowEntry[]
+  safetyIncidents SafetyIncident[]
+  timesheets    Timesheet[]
+  deliveries    DeliveryRecord[]
+  pieceRateContracts PieceRateContract[]
+  changeEvents       ChangeEvent[]
+
+  @@index([status])
+  @@index([pmUserId])
+  @@map("projects")
+}
+
+model WbsNode {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  parentId  String?  @map("parent_id")
+  nodeCode  String   @map("node_code")
+  name      String
+  nameEn    String   @default("") @map("name_en")
+  weight    Decimal? @default(0)
+  sortOrder Int      @default(0) @map("sort_order")
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   WbsNode?  @relation("WbsHierarchy", fields: [parentId], references: [id])
+  children WbsNode[] @relation("WbsHierarchy")
+
+  @@unique([projectId, nodeCode])
+  @@index([projectId])
+  @@map("wbs_nodes")
+}
+
+model Milestone {
+  id            String    @id @default(cuid())
+  projectId     String    @map("project_id")
+  name          String
+  nameEn        String    @default("") @map("name_en")
+  description   String?
+  billingPercent Decimal? @default(0) @map("billing_percent")
+  plannedDate   DateTime? @map("planned_date")
+  actualDate    DateTime? @map("actual_date")
+  status        String    @default("PENDING") // PENDING, COMPLETED, DELAYED
+  sortOrder     Int       @default(0) @map("sort_order")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+  @@map("milestones")
+}
+
+model SubcontractorContract {
+  id            String    @id @default(cuid())
+  projectId     String    @map("project_id")
+  contractCode  String    @unique @map("contract_code")
+  vendorId      String    @map("vendor_id")
+  description   String
+  contractValue Decimal   @map("contract_value")
+  currency      String    @default("VND")
+  startDate     DateTime? @map("start_date")
+  endDate       DateTime? @map("end_date")
+  status        String    @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor  Vendor  @relation(fields: [vendorId], references: [id])
+
+  @@index([projectId])
+  @@index([vendorId])
+  @@map("subcontractor_contracts")
+}
+
+model LessonLearned {
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  category     String   // schedule, quality, cost, safety, communication
+  description  String
+  rootCause    String?  @map("root_cause")
+  actionTaken  String?  @map("action_taken")
+  recommendation String?
+  submittedBy  String   @map("submitted_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([category])
+  @@map("lesson_learned")
+}
+
+// ══════════════════════════════════════════════════════
+//  TASK ENGINE (Core)
+// ══════════════════════════════════════════════════════
+
+model WorkflowTask {
+  id           String    @id @default(cuid())
+  projectId    String    @map("project_id")
+  stepCode     String    @map("step_code")
+  stepName     String    @map("step_name")
+  stepNameEn   String    @default("") @map("step_name_en")
+  description  String?
+  assignedRole String    @map("assigned_role")
+  assignedTo   String?   @map("assigned_to")
+  status       String    @default("PENDING")
+  priority     Int       @default(0)
+  deadline     DateTime?
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  completedBy  String?   @map("completed_by")
+  resultData   Json?     @map("result_data")
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation("TaskAssignee", fields: [assignedTo], references: [id])
+
+  @@unique([projectId, stepCode])
+  @@index([assignedRole, status])
+  @@index([assignedTo, status])
+  @@index([projectId, status])
+  @@index([deadline])
+  @@index([status])
+  @@map("workflow_tasks")
+}
+
+// ══════════════════════════════════════════════════════
+//  NOTIFICATIONS & AUDIT
+// ══════════════════════════════════════════════════════
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false) @map("is_read")
+  linkUrl   String?  @map("link_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  changes   Json?
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ══════════════════════════════════════════════════════
+//  SUPPLY CHAIN (Warehouse + Procurement)
+// ══════════════════════════════════════════════════════
+
+model Vendor {
+  id           String   @id @default(cuid())
+  vendorCode   String   @unique @map("vendor_code")
+  name         String
+  contactName  String?  @map("contact_name")
+  email        String?
+  phone        String?
+  address      String?
+  country      String   @default("VN")
+  category     String   // steel_supplier, equipment, subcontractor, service
+  rating       Decimal? @default(0) // 0-5 vendor performance score
+  isActive     Boolean  @default(true) @map("is_active")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  purchaseOrders PurchaseOrder[]
+  invoices       Invoice[]
+  subcontracts   SubcontractorContract[]
+  millCerts      MillCertificate[]
+
+  @@index([category])
+  @@map("vendors")
+}
+
+model Material {
+  id            String   @id @default(cuid())
+  materialCode  String   @unique @map("material_code")
+  name          String
+  nameEn        String   @default("") @map("name_en")
+  unit          String   // kg, cái, bộ, m, m2, m3
+  category      String   // steel, pipe, valve, bolt, paint, welding
+  specification String?  // SA-516 Gr.70, A106 Gr.B, etc (ASME/DNV)
+  grade         String?  // material grade for traceability
+  minStock      Decimal  @default(0) @map("min_stock")
+  currentStock  Decimal  @default(0) @map("current_stock")
+  reservedStock Decimal  @default(0) @map("reserved_stock") // allocated to WO
+  unitPrice     Decimal? @map("unit_price")
+  currency      String   @default("VND")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  stockMovements StockMovement[]
+  prItems        PurchaseRequestItem[]
+  poItems        PurchaseOrderItem[]
+  materialIssues MaterialIssue[]
+  bomItems       BomItem[]
+  millCerts      MillCertificate[]
+
+  @@index([category])
+  @@index([specification])
+  @@map("materials")
+}
+
+model StockMovement {
+  id          String   @id @default(cuid())
+  materialId  String   @map("material_id")
+  projectId   String?  @map("project_id")
+  type        String   // IN, OUT, RETURN, ADJUST
+  quantity    Decimal
+  reason      String   // po_receipt, production_issue, return, adjustment, qc_reject
+  referenceNo String?  @map("reference_no")
+  heatNumber  String?  @map("heat_number")  // ASME/DNV traceability
+  lotNumber   String?  @map("lot_number")
+  poItemId    String?  @map("po_item_id")   // link to PO for receiving
+  performedBy String   @map("performed_by")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  material Material @relation(fields: [materialId], references: [id])
+
+  @@index([materialId, createdAt])
+  @@index([projectId])
+  @@index([type])
+  @@index([heatNumber])
+  @@map("stock_movements")
+}
+
+model PurchaseRequest {
+  id          String   @id @default(cuid())
+  prCode      String   @unique @map("pr_code")
+  projectId   String   @map("project_id")
+  requestedBy String   @map("requested_by")
+  status      String   @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, CONVERTED
+  urgency     String   @default("NORMAL") // NORMAL, URGENT, CRITICAL
+  notes       String?
+  approvedBy  String?  @map("approved_by")
+  approvedAt  DateTime? @map("approved_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project              @relation(fields: [projectId], references: [id])
+  items   PurchaseRequestItem[]
+
+  @@index([projectId])
+  @@index([status])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id           String  @id @default(cuid())
+  prId         String  @map("pr_id")
+  materialId   String  @map("material_id")
+  quantity     Decimal
+  requiredDate DateTime? @map("required_date")
+  specification String? // specific spec for this request
+  notes        String?
+
+  purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+  material        Material        @relation(fields: [materialId], references: [id])
+
+  @@index([prId])
+  @@index([materialId])
+  @@map("purchase_request_items")
+}
+
+model PurchaseOrder {
+  id          String    @id @default(cuid())
+  poCode      String    @unique @map("po_code")
+  vendorId    String    @map("vendor_id")
+  status      String    @default("DRAFT") // DRAFT, SENT, CONFIRMED, PARTIAL_RECEIVED, RECEIVED, CANCELLED
+  totalValue  Decimal?  @map("total_value")
+  currency    String    @default("VND")
+  orderDate   DateTime? @map("order_date")
+  deliveryDate DateTime? @map("delivery_date")
+  paymentTerms String?  @map("payment_terms")
+  createdBy   String    @map("created_by")
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  vendor Vendor              @relation(fields: [vendorId], references: [id])
+  items  PurchaseOrderItem[]
+
+  @@index([vendorId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id          String   @id @default(cuid())
+  poId        String   @map("po_id")
+  materialId  String   @map("material_id")
+  quantity    Decimal
+  unitPrice   Decimal  @map("unit_price")
+  receivedQty Decimal  @default(0) @map("received_qty")
+  notes       String?
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  material      Material      @relation(fields: [materialId], references: [id])
+
+  @@index([poId])
+  @@index([materialId])
+  @@map("purchase_order_items")
+}
+
+model MillCertificate {
+  id          String   @id @default(cuid())
+  certNumber  String   @unique @map("cert_number")
+  materialId  String   @map("material_id")
+  vendorId    String   @map("vendor_id")
+  heatNumber  String   @map("heat_number")
+  grade       String?
+  thickness   String?
+  chemComposition Json? @map("chem_composition") // JSON: {C, Mn, Si, P, S, ...}
+  mechProperties  Json? @map("mech_properties")  // JSON: {yield, tensile, elongation, ...}
+  fileUrl     String?  @map("file_url") // S3 signed URL to scanned MTR
+  isVerified  Boolean  @default(false) @map("is_verified")
+  verifiedBy  String?  @map("verified_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  material Material @relation(fields: [materialId], references: [id])
+  vendor   Vendor   @relation(fields: [vendorId], references: [id])
+
+  @@index([materialId])
+  @@index([heatNumber])
+  @@index([vendorId])
+  @@map("mill_certificates")
+}
+
+// ══════════════════════════════════════════════════════
+//  PRODUCTION
+// ══════════════════════════════════════════════════════
+
+model Workshop {
+  id       String @id @default(cuid())
+  code     String @unique // WS1, WS2, WS3, WS4, DRY_DOCK, PAINTING
+  name     String
+  nameEn   String @default("") @map("name_en")
+  capacity Int    @default(100) // max concurrent jobs percentage
+
+  workOrders WorkOrder[]
+
+  @@map("workshops")
+}
+
+model WorkOrder {
+  id           String    @id @default(cuid())
+  woCode       String    @unique @map("wo_code")
+  projectId    String    @map("project_id")
+  workshopId   String?   @map("workshop_id")
+  description  String
+  woType       String    @default("INTERNAL") @map("wo_type") // INTERNAL, SUBCONTRACT
+  teamCode     String    @map("team_code")
+  status       String    @default("PENDING_MATERIAL") // PENDING_MATERIAL, READY, IN_PROGRESS, QC_HOLD, COMPLETED, CANCELLED
+  plannedStart DateTime? @map("planned_start")
+  plannedEnd   DateTime? @map("planned_end")
+  actualStart  DateTime? @map("actual_start")
+  actualEnd    DateTime? @map("actual_end")
+  quantity     Decimal?  // planned quantity
+  completedQty Decimal?  @default(0) @map("completed_qty")
+  createdBy    String    @map("created_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  project        Project        @relation(fields: [projectId], references: [id])
+  workshop       Workshop?      @relation(fields: [workshopId], references: [id])
+  materialIssues MaterialIssue[]
+  jobCards       JobCard[]
+  deliveries     DeliveryRecord[]
+
+  @@index([projectId])
+  @@index([workshopId])
+  @@index([status])
+  @@map("work_orders")
+}
+
+model MaterialIssue {
+  id          String   @id @default(cuid())
+  workOrderId String   @map("work_order_id")
+  materialId  String   @map("material_id")
+  quantity    Decimal
+  heatNumber  String?  @map("heat_number") // traceability: which heat went into which WO
+  issuedBy    String   @map("issued_by")
+  issuedAt    DateTime @default(now()) @map("issued_at")
+  notes       String?
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
+  material  Material  @relation(fields: [materialId], references: [id])
+
+  @@index([workOrderId])
+  @@index([materialId])
+  @@index([heatNumber])
+  @@map("material_issues")
+}
+
+model JobCard {
+  id          String    @id @default(cuid())
+  jobCode     String    @unique @map("job_code")
+  workOrderId String    @map("work_order_id")
+  teamCode    String    @map("team_code")
+  workType    String    @map("work_type") // cutting, welding, assembly, painting, blasting
+  description String?
+  plannedQty  Decimal?  @map("planned_qty")
+  actualQty   Decimal?  @map("actual_qty")
+  unit        String    @default("kg")
+  workDate    DateTime  @map("work_date")
+  startTime   DateTime? @map("start_time")
+  endTime     DateTime? @map("end_time")
+  manpower    Int?      // number of workers
+  status      String    @default("OPEN") // OPEN, IN_PROGRESS, COMPLETED, CANCELLED
+  reportedBy  String    @map("reported_by") // tổ trưởng R06b
+  approvedBy  String?   @map("approved_by")
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
+
+  @@index([workOrderId])
+  @@index([teamCode])
+  @@index([workDate])
+  @@index([status])
+  @@map("job_cards")
+}
+
+// ══════════════════════════════════════════════════════
+//  QUALITY CONTROL (QC)
+// ══════════════════════════════════════════════════════
+
+model Inspection {
+  id             String    @id @default(cuid())
+  projectId      String    @map("project_id")
+  inspectionCode String    @unique @map("inspection_code")
+  type           String    // material_incoming, dimensional, ndt, pressure_test, fat, sat, visual
+  stepCode       String    @map("step_code")
+  status         String    @default("PENDING") // PENDING, PASSED, FAILED, CONDITIONAL
+  inspectorId    String?   @map("inspector_id")
+  inspectedAt    DateTime? @map("inspected_at")
+  resultData     Json?     @map("result_data")
+  remarks        String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  project        Project          @relation(fields: [projectId], references: [id])
+  checklistItems InspectionItem[]
+
+  @@index([projectId, type])
+  @@index([status])
+  @@map("inspections")
+}
+
+model InspectionItem {
+  id           String  @id @default(cuid())
+  inspectionId String  @map("inspection_id")
+  checkItem    String  @map("check_item")
+  standard     String?
+  result       String? // PASS, FAIL, N_A
+  measurement  String?
+  notes        String?
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
+  @@map("inspection_items")
+}
+
+model InspectionTestPlan {
+  id          String   @id @default(cuid())
+  itpCode     String   @unique @map("itp_code")
+  projectId   String   @map("project_id")
+  name        String
+  revision    String   @default("R0")
+  status      String   @default("DRAFT") // DRAFT, APPROVED, IN_PROGRESS, COMPLETED
+  approvedBy  String?  @map("approved_by")
+  approvedAt  DateTime? @map("approved_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project     Project          @relation(fields: [projectId], references: [id])
+  checkpoints ITPCheckpoint[]
+
+  @@index([projectId])
+  @@map("inspection_test_plans")
+}
+
+model ITPCheckpoint {
+  id            String  @id @default(cuid())
+  itpId         String  @map("itp_id")
+  checkpointNo  Int     @map("checkpoint_no")
+  activity      String  // welding, ndt, pressure_test, dimensional, painting
+  description   String
+  standard      String? // ASME Sec V, AWS D1.1, etc
+  acceptCriteria String? @map("accept_criteria")
+  inspectionType String  @default("MONITOR") @map("inspection_type") // HOLD, WITNESS, MONITOR, REVIEW
+  status        String  @default("PENDING") // PENDING, PASSED, FAILED, WAIVED
+  inspectedBy   String? @map("inspected_by")
+  inspectedAt   DateTime? @map("inspected_at")
+  remarks       String?
+  sortOrder     Int     @default(0) @map("sort_order")
+
+  itp InspectionTestPlan @relation(fields: [itpId], references: [id], onDelete: Cascade)
+
+  @@index([itpId])
+  @@map("itp_checkpoints")
+}
+
+model NonConformanceReport {
+  id            String    @id @default(cuid())
+  ncrCode       String    @unique @map("ncr_code")
+  projectId     String    @map("project_id")
+  category      String    // material, welding, dimensional, painting, process
+  severity      String    @default("MINOR") // MINOR, MAJOR, CRITICAL
+  description   String
+  rootCause     String?   @map("root_cause")
+  disposition   String?   // USE_AS_IS, REWORK, REJECT, RETURN_TO_VENDOR
+  reworkCount   Int       @default(0) @map("rework_count")
+  status        String    @default("OPEN") // OPEN, INVESTIGATING, ACTION_TAKEN, CLOSED, CANCELLED
+  raisedBy      String    @map("raised_by")
+  closedBy      String?   @map("closed_by")
+  closedAt      DateTime? @map("closed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project Project     @relation(fields: [projectId], references: [id])
+  actions NcrAction[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([severity])
+  @@map("non_conformance_reports")
+}
+
+model NcrAction {
+  id           String    @id @default(cuid())
+  ncrId        String    @map("ncr_id")
+  actionType   String    @map("action_type") // corrective, preventive, containment
+  description  String
+  assignedTo   String    @map("assigned_to")
+  dueDate      DateTime? @map("due_date")
+  completedAt  DateTime? @map("completed_at")
+  status       String    @default("OPEN") // OPEN, IN_PROGRESS, COMPLETED, OVERDUE
+  evidence     String?   // file URL or description of evidence
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  ncr NonConformanceReport @relation(fields: [ncrId], references: [id], onDelete: Cascade)
+
+  @@index([ncrId])
+  @@index([assignedTo])
+  @@map("ncr_actions")
+}
+
+model CertificateRegistry {
+  id          String    @id @default(cuid())
+  certType    String    @map("cert_type") // welder_cert, ndt_cert, workshop_cert, calibration
+  certNumber  String    @map("cert_number")
+  holderName  String    @map("holder_name") // person or equipment name
+  holderId    String?   @map("holder_id")   // user ID if person
+  issuedBy    String    @map("issued_by")   // certifying body
+  issueDate   DateTime  @map("issue_date")
+  expiryDate  DateTime  @map("expiry_date")
+  standard    String?   // AWS, ASNT, etc
+  scope       String?   // welding process, NDT method, etc
+  fileUrl     String?   @map("file_url")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([certType, certNumber])
+  @@index([holderId])
+  @@index([expiryDate])
+  @@index([certType])
+  @@map("certificate_registry")
+}
+
+// ══════════════════════════════════════════════════════
+//  DESIGN (Drawing, BOM, ECO)
+// ══════════════════════════════════════════════════════
+
+model Drawing {
+  id           String    @id @default(cuid())
+  drawingCode  String    @unique @map("drawing_code")
+  projectId    String    @map("project_id")
+  title        String
+  discipline   String    // structural, piping, electrical, mechanical
+  currentRev   String    @default("R0") @map("current_rev")
+  status       String    @default("IFR") // IFR, IFC, AFC (Issued For Review/Construction/As-built)
+  drawnBy      String?   @map("drawn_by")
+  checkedBy    String?   @map("checked_by")
+  approvedBy   String?   @map("approved_by")
+  fileUrl      String?   @map("file_url")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  project   Project           @relation(fields: [projectId], references: [id])
+  revisions DrawingRevision[]
+
+  @@index([projectId])
+  @@index([status])
+  @@map("drawings")
+}
+
+model DrawingRevision {
+  id          String   @id @default(cuid())
+  drawingId   String   @map("drawing_id")
+  revision    String   // R0, R1, R2, ...
+  description String?  // what changed
+  issuedDate  DateTime @map("issued_date")
+  issuedBy    String   @map("issued_by")
+  fileUrl     String?  @map("file_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  drawing Drawing @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+
+  @@unique([drawingId, revision])
+  @@index([drawingId])
+  @@map("drawing_revisions")
+}
+
+model BillOfMaterial {
+  id          String   @id @default(cuid())
+  bomCode     String   @unique @map("bom_code")
+  projectId   String   @map("project_id")
+  name        String
+  revision    String   @default("R0")
+  status      String   @default("DRAFT") // DRAFT, APPROVED, RELEASED
+  createdBy   String   @map("created_by")
+  approvedBy  String?  @map("approved_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project   @relation(fields: [projectId], references: [id])
+  items   BomItem[]
+
+  @@index([projectId])
+  @@map("bill_of_materials")
+}
+
+model BomItem {
+  id          String  @id @default(cuid())
+  bomId       String  @map("bom_id")
+  materialId  String  @map("material_id")
+  parentId    String? @map("parent_id") // for hierarchical BOM
+  quantity    Decimal
+  unit        String
+  remarks     String?
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  bom      BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  material Material       @relation(fields: [materialId], references: [id])
+  parent   BomItem?       @relation("BomHierarchy", fields: [parentId], references: [id])
+  children BomItem[]      @relation("BomHierarchy")
+
+  @@index([bomId])
+  @@index([materialId])
+  @@map("bom_items")
+}
+
+model EngineeringChangeOrder {
+  id            String    @id @default(cuid())
+  ecoCode       String    @unique @map("eco_code")
+  projectId     String    @map("project_id")
+  title         String
+  description   String
+  changeType    String    @map("change_type") // design, material, process, specification
+  impactCost    Decimal?  @map("impact_cost")
+  impactSchedule Int?     @map("impact_schedule") // days impact
+  status        String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, IMPLEMENTED
+  requestedBy   String    @map("requested_by")
+  approvedBy    String?   @map("approved_by")
+  approvedAt    DateTime? @map("approved_at")
+  implementedAt DateTime? @map("implemented_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+  @@map("engineering_change_orders")
+}
+
+// ══════════════════════════════════════════════════════
+//  HR & SALARY
+// ══════════════════════════════════════════════════════
+
+model Employee {
+  id             String    @id @default(cuid())
+  employeeCode   String    @unique @map("employee_code") // NV-001
+  userId         String?   @unique @map("user_id")
+  fullName       String    @map("full_name")
+  dateOfBirth    DateTime? @map("date_of_birth")
+  gender         String?   // male, female
+  phone          String?
+  email          String?
+  address        String?
+  idNumber       String?   @map("id_number") // CCCD
+  taxCode        String?   @map("tax_code")
+  socialInsNo    String?   @map("social_ins_no") // BHXH
+  bankAccount    String?   @map("bank_account")
+  bankName       String?   @map("bank_name")
+  departmentId   String?   @map("department_id")
+  position       String?   // direct worker, indirect, manager
+  employmentType String    @default("FULL_TIME") @map("employment_type") // FULL_TIME, CONTRACT, PROBATION
+  joinDate       DateTime  @default(now()) @map("join_date")
+  leaveDate      DateTime? @map("leave_date")
+  status         String    @default("ACTIVE") // ACTIVE, ON_LEAVE, RESIGNED
+  dependents     Int       @default(0)          // Số người phụ thuộc (giảm trừ gia cảnh)
+  distanceKm     Int       @default(0) @map("distance_km") // Khoảng cách nhà→công ty (km)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user        User?              @relation(fields: [userId], references: [id])
+  department  Department?        @relation(fields: [departmentId], references: [id])
+  contracts   EmployeeContract[]
+  attendance  Attendance[]
+  salaries    SalaryRecord[]
+  timesheets  Timesheet[]
+
+  @@index([departmentId])
+  @@index([status])
+  @@map("employees")
+}
+
+model EmployeeContract {
+  id           String    @id @default(cuid())
+  contractCode String    @unique @map("contract_code")
+  employeeId   String    @map("employee_id")
+  contractType String    @map("contract_type") // probation, definite, indefinite, seasonal
+  startDate    DateTime  @map("start_date")
+  endDate      DateTime? @map("end_date")
+  baseSalary   Decimal   @map("base_salary")
+  allowances   Decimal   @default(0) // phụ cấp
+  currency     String    @default("VND")
+  workDays     Int       @default(26) @map("work_days") // per month
+  status       String    @default("ACTIVE") // ACTIVE, EXPIRED, TERMINATED
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@map("employee_contracts")
+}
+
+model Attendance {
+  id          String    @id @default(cuid())
+  employeeId  String    @map("employee_id")
+  date        DateTime
+  checkIn     DateTime? @map("check_in")
+  checkOut    DateTime? @map("check_out")
+  hoursWorked Decimal?  @map("hours_worked")
+  overtime    Decimal?  @default(0) // OT hours
+  status      String    @default("PRESENT") // PRESENT, ABSENT, LATE, HALF_DAY, LEAVE
+  leaveType   String?   @map("leave_type") // annual, sick, unpaid
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("attendance")
+}
+
+model SalaryRecord {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  month           Int       // 1-12
+  year            Int
+  baseSalary      Decimal   @map("base_salary")
+  workDays        Int       @map("work_days")
+  actualDays      Decimal   @map("actual_days")
+  overtimeHours   Decimal   @default(0) @map("overtime_hours")
+  overtimePay     Decimal   @default(0) @map("overtime_pay")
+  allowances      Decimal   @default(0)
+  bonus           Decimal   @default(0)
+  deductions      Decimal   @default(0) // KL, penalties
+  socialInsurance Decimal   @default(0) @map("social_insurance") // BHXH 8%
+  healthInsurance Decimal   @default(0) @map("health_insurance") // BHYT 1.5%
+  unemploymentIns Decimal   @default(0) @map("unemployment_ins") // BHTN 1%
+  taxableIncome   Decimal   @default(0) @map("taxable_income")
+  personalTax     Decimal   @default(0) @map("personal_tax") // thuế TNCN
+  netSalary       Decimal   @default(0) @map("net_salary")
+  status          String    @default("DRAFT") // DRAFT, CALCULATED, APPROVED, PAID
+  calculatedAt    DateTime? @map("calculated_at")
+  approvedBy      String?   @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  paidAt          DateTime? @map("paid_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, month, year])
+  @@index([month, year])
+  @@index([status])
+  @@map("salary_records")
+}
+
+// ══════════════════════════════════════════════════════
+//  FINANCE
+// ══════════════════════════════════════════════════════
+
+model Invoice {
+  id            String    @id @default(cuid())
+  invoiceCode   String    @unique @map("invoice_code") // INV-2026-001
+  projectId     String?   @map("project_id")
+  vendorId      String?   @map("vendor_id")
+  type          String    // RECEIVABLE (from client), PAYABLE (to vendor)
+  clientName    String?   @map("client_name")
+  description   String?
+  amount        Decimal
+  taxRate       Decimal   @default(10) @map("tax_rate") // VAT %
+  taxAmount     Decimal   @default(0) @map("tax_amount")
+  totalAmount   Decimal   @map("total_amount")
+  currency      String    @default("VND")
+  issueDate     DateTime  @default(now()) @map("issue_date")
+  dueDate       DateTime? @map("due_date")
+  paidAmount    Decimal   @default(0) @map("paid_amount")
+  status        String    @default("DRAFT") // DRAFT, SENT, PARTIALLY_PAID, PAID, OVERDUE, CANCELLED
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project  Project?  @relation(fields: [projectId], references: [id])
+  vendor   Vendor?   @relation(fields: [vendorId], references: [id])
+  payments Payment[]
+
+  @@index([projectId])
+  @@index([type])
+  @@index([status])
+  @@map("invoices")
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  invoiceId   String   @map("invoice_id")
+  amount      Decimal
+  paymentDate DateTime @map("payment_date")
+  method      String   @default("BANK_TRANSFER") // BANK_TRANSFER, CASH, CHECK
+  reference   String?  // bank ref number
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+model Budget {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  category    String   // MATERIAL, LABOR, EQUIPMENT, SUBCONTRACT, OVERHEAD
+  planned     Decimal  @default(0)
+  actual      Decimal  @default(0)
+  committed   Decimal  @default(0) // PO issued but not paid
+  forecast    Decimal  @default(0)
+  month       Int?
+  year        Int?
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, category, month, year])
+  @@index([projectId])
+  @@map("budgets")
+}
+
+model CashflowEntry {
+  id          String   @id @default(cuid())
+  entryCode   String   @unique @map("entry_code")
+  projectId   String?  @map("project_id")
+  type        String   // INFLOW, OUTFLOW
+  category    String   // REVENUE, MATERIAL_COST, LABOR, EQUIPMENT, OVERHEAD, TAX, OTHER
+  amount      Decimal
+  description String?
+  entryDate   DateTime @map("entry_date")
+  reference   String?
+  status      String   @default("RECORDED") // RECORDED, VERIFIED, RECONCILED
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([type])
+  @@index([entryDate])
+  @@map("cashflow_entries")
+}
+
+// ══════════════════════════════════════════════════════
+//  HSE - SAFETY
+// ══════════════════════════════════════════════════════
+
+model SafetyIncident {
+  id            String    @id @default(cuid())
+  incidentCode  String    @unique @map("incident_code")
+  projectId     String    @map("project_id")
+  incidentDate  DateTime  @map("incident_date")
+  severity      String    // NEAR_MISS, MINOR, MAJOR, CRITICAL
+  category      String    // fall, electrical, fire, chemical, ergonomic, other
+  location      String?
+  description   String
+  rootCause     String?   @map("root_cause")
+  correctiveAction String? @map("corrective_action")
+  reportedBy    String    @map("reported_by")
+  status        String    @default("OPEN") // OPEN, INVESTIGATING, RESOLVED, CLOSED
+  resolvedAt    DateTime? @map("resolved_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([severity])
+  @@map("safety_incidents")
+}
+
+model Timesheet {
+  id          String   @id @default(cuid())
+  employeeId  String   @map("employee_id")
+  projectId   String   @map("project_id")
+  workDate    DateTime @map("work_date")
+  hoursRegular Decimal @default(8) @map("hours_regular")
+  hoursOT     Decimal  @default(0) @map("hours_ot")
+  taskDescription String? @map("task_description")
+  status      String   @default("DRAFT") // DRAFT, SUBMITTED, APPROVED
+  approvedBy  String?  @map("approved_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  project  Project  @relation(fields: [projectId], references: [id])
+
+  @@unique([employeeId, projectId, workDate])
+  @@index([employeeId])
+  @@index([projectId])
+  @@index([workDate])
+  @@map("timesheets")
+}
+
+// ══════════════════════════════════════════════════════
+//  DELIVERY (Phase 5)
+// ══════════════════════════════════════════════════════
+
+model DeliveryRecord {
+  id              String    @id @default(cuid())
+  deliveryCode    String    @unique @map("delivery_code")
+  projectId       String    @map("project_id")
+  workOrderId     String?   @map("work_order_id")
+  status          String    @default("PACKING") // PACKING, SHIPPED, DELIVERED, RECEIVED
+  packingList     Json?     @map("packing_list")
+  shippingMethod  String?   @map("shipping_method")
+  trackingNo      String?   @map("tracking_no")
+  shippedAt       DateTime? @map("shipped_at")
+  deliveredAt     DateTime? @map("delivered_at")
+  receivedBy      String?   @map("received_by")
+  notes           String?
+  createdBy       String    @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  project   Project    @relation(fields: [projectId], references: [id])
+  workOrder WorkOrder? @relation(fields: [workOrderId], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+  @@map("delivery_records")
+}
+
+// ══════════════════════════════════════════════════════
+//  FILE ATTACHMENTS
+// ══════════════════════════════════════════════════════
+
+model FileAttachment {
+  id         String   @id @default(cuid())
+  entityType String   @map("entity_type") // Project, Drawing, Inspection, Contract
+  entityId   String   @map("entity_id")
+  fileName   String   @map("file_name")
+  fileUrl    String   @map("file_url")
+  fileSize   Int?     @map("file_size")
+  mimeType   String?  @map("mime_type")
+  uploadedBy String   @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@map("file_attachments")
+}
+
+// ══════════════════════════════════════════════════════
+//  PIECE-RATE SALARY (Lương Khoán)
+// ══════════════════════════════════════════════════════
+
+model PieceRateContract {
+  id            String    @id @default(cuid())
+  contractCode  String    @unique @map("contract_code")
+  projectId     String    @map("project_id")
+  teamCode      String    @map("team_code")
+  workType      String    @map("work_type")
+  unitPrice     Decimal   @map("unit_price")
+  unit          String    @default("kg")
+  contractValue Decimal?  @map("contract_value")
+  startDate     DateTime  @map("start_date")
+  endDate       DateTime? @map("end_date")
+  status        String    @default("ACTIVE")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project Project                @relation(fields: [projectId], references: [id])
+  outputs MonthlyPieceRateOutput[]
+
+  @@index([projectId])
+  @@index([teamCode])
+  @@map("piece_rate_contracts")
+}
+
+model MonthlyPieceRateOutput {
+  id          String   @id @default(cuid())
+  contractId  String   @map("contract_id")
+  month       Int
+  year        Int
+  quantity    Decimal
+  unitPrice   Decimal  @map("unit_price")
+  totalAmount Decimal  @map("total_amount")
+  verifiedBy  String?  @map("verified_by")
+  status      String   @default("DRAFT")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  contract PieceRateContract @relation(fields: [contractId], references: [id])
+
+  @@unique([contractId, month, year])
+  @@map("monthly_piece_rate_outputs")
+}
+
+// ══════════════════════════════════════════════════════
+//  CHANGE EVENT AUDIT (Sync & Reject Tracking)
+// ══════════════════════════════════════════════════════
+
+model ChangeEvent {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  sourceStep  String   @map("source_step")
+  sourceModel String   @map("source_model")
+  sourceId    String   @map("source_id")
+  eventType   String   @map("event_type")    // REJECT, SYNC, SUBSTITUTE, REWORK
+  targetModel String   @map("target_model")
+  targetId    String   @map("target_id")
+  dataBefore  Json?    @map("data_before")
+  dataAfter   Json?    @map("data_after")
+  reason      String?
+  triggeredBy String   @map("triggered_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([sourceStep])
+  @@map("change_events")
+}
+
+// ══════════════════════════════════════════════════════
+//  SYSTEM CONFIG
+// ══════════════════════════════════════════════════════
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
+

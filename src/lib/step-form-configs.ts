@@ -252,7 +252,7 @@ const P2_2: StepFormConfig = {
 const P2_3: StepFormConfig = {
   stepCode: 'P2.3',
   formType: 'input',
-  title: 'Kho đề xuất vật tư',
+  title: 'Kho đề xuất vật tư tiêu hao',
   description: 'Kho review tồn kho hiện có và đề xuất vật tư có thể dùng cho dự án (tận dụng surplus từ dự án trước).',
   fields: [
     // Inventory table + BOM form for supplementary materials are rendered dynamically in page.tsx
@@ -271,11 +271,13 @@ const P2_3: StepFormConfig = {
 const P2_1A: StepFormConfig = {
   stepCode: 'P2.1A',
   formType: 'input',
-  title: 'Tập hợp thông tin dự toán của Tài chính kế toán',
-  description: 'R08 (Kế toán) tập hợp chi phí chung, chi phí tài chính, chi phí quản lý cho dự toán dự án.',
-  fields: [],
+  title: 'TCKT lập dự toán',
+  description: 'R08 (Kế toán) lập dự toán chi phí chung, chi phí tài chính, chi phí quản lý cho dự án.',
+  fields: [
+    { key: 'estimateNotes', label: 'Ghi chú dự toán', labelEn: 'Estimate Notes', type: 'textarea', fullWidth: true },
+  ],
   checklist: [
-    { key: 'cost_items_verified', label: 'Đã xác minh các hạng mục chi phí' },
+    { key: 'cost_items_verified', label: 'Đã xác minh các hạng mục chi phí', required: true },
     { key: 'tax_calculated', label: 'Đã tính toán thuế phí' },
   ],
   attachments: [
@@ -283,40 +285,10 @@ const P2_1A: StepFormConfig = {
   ],
 }
 
-const P2_1B: StepFormConfig = {
-  stepCode: 'P2.1B',
-  formType: 'input',
-  title: 'Tập hợp thông tin dự toán của Thương mại',
-  description: 'R07 (Thương mại) tập hợp giá vật tư, chi phí vận chuyển, phí dịch vụ thuê ngoài cho dự toán.',
-  fields: [],
-  checklist: [
-    { key: 'supplier_prices_confirmed', label: 'Đã xác nhận giá NCC' },
-    { key: 'transport_quoted', label: 'Đã có báo giá vận chuyển' },
-  ],
-  attachments: [
-    { key: 'commercialReport', label: 'Báo giá NCC / Thương mại', accept: '.xlsx,.xls,.pdf' },
-  ],
-}
-
-const P2_1C: StepFormConfig = {
-  stepCode: 'P2.1C',
-  formType: 'input',
-  title: 'Tập hợp thông tin dự toán của Sản xuất',
-  description: 'R06 (Sản xuất) tập hợp thông tin nhân công, định mức lao động, năng lực phân xưởng cho dự toán.',
-  fields: [],
-  checklist: [
-    { key: 'labor_norm_checked', label: 'Đã kiểm tra định mức lao động' },
-    { key: 'workshop_available', label: 'Đã xác nhận năng lực phân xưởng' },
-  ],
-  attachments: [
-    { key: 'productionReport', label: 'Báo cáo năng lực SX', accept: '.xlsx,.xls,.pdf' },
-  ],
-}
-
 const P2_4: StepFormConfig = {
   stepCode: 'P2.4',
   formType: 'input',
-  title: 'KTKH lập kế hoạch SX và điều chỉnh dự toán',
+  title: 'KTKH điều chỉnh dự toán',
   description: 'Tổng hợp dữ liệu dự toán từ TCKT, Thương mại, Sản xuất. KTKH điều chỉnh và lập kế hoạch SX tổng thể.',
   fields: [],
   checklist: [
@@ -337,9 +309,7 @@ const P2_5: StepFormConfig = {
   description: 'BGĐ review kế hoạch SX và dự toán đã điều chỉnh. Pass → Dự án chính thức khởi động.',
   fields: [],
   checklist: [
-    { key: 'sx_plan_reviewed', label: 'Đã review kế hoạch sản xuất', required: true },
     { key: 'budget_reviewed', label: 'Đã review dự toán chính thức', required: true },
-    { key: 'timeline_approved', label: 'Timeline khả thi', required: true },
   ],
   attachments: [],
 }
@@ -798,7 +768,7 @@ const P6_5: StepFormConfig = {
 
 export const STEP_FORM_CONFIGS: Record<string, StepFormConfig> = {
   'P1.1': P1_1, 'P1.1B': P1_1B, 'P1.2A': P1_2A, 'P1.2': P1_2, 'P1.3': P1_3,
-  'P2.1': P2_1, 'P2.2': P2_2, 'P2.3': P2_3, 'P2.1A': P2_1A, 'P2.1B': P2_1B, 'P2.1C': P2_1C, 'P2.4': P2_4, 'P2.5': P2_5,
+  'P2.1': P2_1, 'P2.2': P2_2, 'P2.3': P2_3, 'P2.1A': P2_1A, 'P2.4': P2_4, 'P2.5': P2_5,
   'P3.1': P3_1, 'P3.2': P3_2, 'P3.3': P3_3, 'P3.4': P3_4,
   'P3.5': P3_5, 'P3.6': P3_6, 'P3.7': P3_7,
   'P4.1': P4_1, 'P4.2': P4_2, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,

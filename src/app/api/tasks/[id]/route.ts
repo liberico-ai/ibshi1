@@ -58,8 +58,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return null
     }
 
-    if (task.stepCode === 'P1.1B') {
-      // For P1.1B: fetch P1.1's attached files
+    if (task.stepCode === 'P1.1B' || task.stepCode === 'P2.1A') {
+      // For P1.1B and P2.1A: fetch P1.1's attached files (Project Contract)
       const p1Task = await prisma.workflowTask.findFirst({
         where: { projectId: task.projectId, stepCode: 'P1.1' },
         select: { resultData: true },
@@ -228,9 +228,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // For P2.4: fetch BOM data from P2.1 (VT chính), P2.2 (VT hàn/sơn), P2.3 (VT phụ) + P1.2 estimate
-    // + P2.1A/B/C department estimate data
     if (task.stepCode === 'P2.4') {
-      const [p21Task, p22Task, p23Task, p12Task, p21aTask, p21bTask, p21cTask] = await Promise.all([
+      const [p21Task, p22Task, p23Task, p12Task, p21aTask] = await Promise.all([
         prisma.workflowTask.findFirst({
           where: { projectId: task.projectId, stepCode: 'P2.1' },
           select: { resultData: true, status: true },
@@ -249,52 +248,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }),
         prisma.workflowTask.findFirst({
           where: { projectId: task.projectId, stepCode: 'P2.1A' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1B' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1C' },
-          select: { resultData: true, status: true },
+          select: { resultData: true },
         }),
       ])
 
-      // Merge DT table data from P2.1A/B/C into P2.4's resultData if not already populated
-      const currentRD = (task.resultData as Record<string, unknown>) || {}
-      const p21aRD = (p21aTask?.resultData as Record<string, unknown>) || {}
-      const p21bRD = (p21bTask?.resultData as Record<string, unknown>) || {}
-      const p21cRD = (p21cTask?.resultData as Record<string, unknown>) || {}
-      const dtMerge: Record<string, unknown> = {}
-      // Only merge if P2.4 doesn't have data yet
-      if (!currentRD.dt02Items && p21aRD.dt02Items) dtMerge.dt02Items = p21aRD.dt02Items
-      if (!currentRD.dt07Items && p21aRD.dt07Items) dtMerge.dt07Items = p21aRD.dt07Items
-      if (!currentRD.dt03Items && p21bRD.dt03Items) dtMerge.dt03Items = p21bRD.dt03Items
-      if (!currentRD.dt04Items && p21bRD.dt04Items) dtMerge.dt04Items = p21bRD.dt04Items
-      if (!currentRD.dt05Items && p21bRD.dt05Items) dtMerge.dt05Items = p21bRD.dt05Items
-      if (!currentRD.dt06Items && p21cRD.dt06Items) dtMerge.dt06Items = p21cRD.dt06Items
-      if (Object.keys(dtMerge).length > 0) {
-        const merged = { ...currentRD, ...dtMerge }
-        await prisma.workflowTask.update({
-          where: { id: task.id },
-          data: { resultData: JSON.parse(JSON.stringify(merged)) },
-        })
-        // Update the task object so response reflects the merge
-        ;(task as Record<string, unknown>).resultData = merged
-      }
+      const est12 = (p12Task?.resultData as Record<string, any>) || {}
+      const est21a = (p21aTask?.resultData as Record<string, any>) || {}
 
       previousStepData = {
         bomMain: p21Task?.resultData || null,       // VT chính from Thiết kế
         bomWeldPaint: p22Task?.resultData || null,   // VT hàn/sơn from PM
         bomSupply: p23Task?.resultData || null,      // VT phụ from Kho
-        estimate: p12Task?.resultData || null,       // Dự toán from KTKH
+        estimate: { ...est12, ...est21a },           // Dự toán from P1.2 (DT02..06) & P2.1A (DT07)
       }
     }
 
-    // For P2.5: fetch P2.4 (KH SX + dự toán điều chỉnh) + P1.2 estimate + P2.1A/B/C department data
+    // For P2.5: fetch P2.4 (KH SX + dự toán điều chỉnh) + P1.2 estimate + BOM data
     if (task.stepCode === 'P2.5') {
-      const [p24Task, p21Task, p22Task, p23Task, p12Task, p21aTask, p21bTask, p21cTask] = await Promise.all([
+      const [p24Task, p21Task, p22Task, p23Task, p12Task, p21aTask] = await Promise.all([
         prisma.workflowTask.findFirst({
           where: { projectId: task.projectId, stepCode: 'P2.4' },
           select: { resultData: true, status: true },
@@ -317,37 +288,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }),
         prisma.workflowTask.findFirst({
           where: { projectId: task.projectId, stepCode: 'P2.1A' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1B' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1C' },
-          select: { resultData: true, status: true },
+          select: { resultData: true },
         }),
       ])
-      // Build department estimates from P2.4 (if merged) or directly from P2.1A/B/C
-      const p24RD = (p24Task?.resultData as Record<string, unknown>) || {}
-      const p21aRD = (p21aTask?.resultData as Record<string, unknown>) || {}
-      const p21bRD = (p21bTask?.resultData as Record<string, unknown>) || {}
-      const p21cRD = (p21cTask?.resultData as Record<string, unknown>) || {}
-      const departmentEstimates = {
-        dt02Items: p24RD.dt02Items || p21aRD.dt02Items || null,
-        dt03Items: p24RD.dt03Items || p21bRD.dt03Items || null,
-        dt04Items: p24RD.dt04Items || p21bRD.dt04Items || null,
-        dt05Items: p24RD.dt05Items || p21bRD.dt05Items || null,
-        dt06Items: p24RD.dt06Items || p21cRD.dt06Items || null,
-        dt07Items: p24RD.dt07Items || p21aRD.dt07Items || null,
-      }
+
+      const est12 = (p12Task?.resultData as Record<string, any>) || {}
+      const est21a = (p21aTask?.resultData as Record<string, any>) || {}
+
       previousStepData = {
         plan: p24Task?.resultData || null,
-        estimate: p12Task?.resultData || null,
+        estimate: { ...est12, ...est21a },
         bomMain: p21Task?.resultData || null,
         bomWeldPaint: p22Task?.resultData || null,
         bomSupply: p23Task?.resultData || null,
-        departmentEstimates,
       }
     }
 
@@ -569,7 +522,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    // P6.2: Fetch P1.2 estimate data to compute budget total
+    // P6.2: Fetch P1.2 estimate data for budget reference
     if (task.stepCode === 'P6.2') {
       const p12Task = await prisma.workflowTask.findFirst({
         where: { projectId: task.projectId, stepCode: 'P1.2' },
@@ -577,18 +530,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
       const rd = p12Task?.resultData as Record<string, unknown> | null
       if (rd) {
-        const tableKeys = ['dt03Items', 'dt04Items', 'dt05Items', 'dt06Items', 'dt07Items']
-        let budgetTotal = 0
-        for (const tk of tableKeys) {
-          try {
-            const items = typeof rd[tk] === 'string' ? JSON.parse(rd[tk] as string) : rd[tk]
-            if (Array.isArray(items)) {
-              for (const row of items) {
-                budgetTotal += Number(String(row.thanhTien || '0').replace(/[,.]/g, '')) || 0
-              }
-            }
-          } catch { /* ignore parse errors */ }
-        }
+        // Use totalEstimate from P1.2 form fields
+        const budgetTotal = Number(rd.totalEstimate || 0)
         previousStepData = { ...previousStepData, budgetTotal }
       }
     }

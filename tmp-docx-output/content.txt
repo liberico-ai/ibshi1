@@ -1,0 +1,1658 @@
+
+
+
+
+
+
+
+
+
+
+
+
+CÔNG TY CỔ PHẦN IBS(IBS JOINT STOCK COMPANY)
+
+
+
+TÀI LIỆU MÔ TẢ HỆ THỐNG ERPIBS ERP SYSTEM DESCRIPTION DOCUMENT
+
+
+
+Tài liệu nghiệp vụ phục vụ xác nhận yêu cầu hệ thống(Business Requirement Confirmation Document)
+
+
+
+
+
+
+
+
+
+Phiên bản: v2.0 — Production
+
+Ngày phát hành: 30/03/2026
+
+Người soạn: IBS IT Team
+
+Trạng thái: CHỜ XÁC NHẬN NGHIỆP VỤ
+
+
+
+MỤC LỤC
+
+1. Tổng quan hệ thống
+
+2. Kiến trúc & Công nghệ
+
+3. Phân quyền & Vai trò (RBAC)
+
+4. Danh sách Module chức năng
+
+5. Workflow dự án — 34 bước & 6 giai đoạn
+
+6. Luồng nghiệp vụ chi tiết từng Module
+
+7. Module Lương (Payroll)
+
+8. Quy tắc nghiệp vụ & Chốt chặn (Business Rules)
+
+9. Ma trận trách nhiệm RACI
+
+10. Phụ lục — Danh sách nhân sự hệ thống
+
+
+
+1. TỔNG QUAN HỆ THỐNG
+
+1.1. Giới thiệu
+
+IBS ERP là nền tảng quản lý tổng thể doanh nghiệp (Enterprise Resource Planning) chuyên biệt cho ngành công nghiệp nặng (Heavy Industry). Hệ thống quản lý toàn bộ vòng đời dự án từ Ký hợp đồng → Thiết kế → Mua hàng → Sản xuất → Giao hàng → Quyết toán.
+
+1.2. Đặc điểm chính
+
+Quản lý dự án theo 6 giai đoạn, 34 bước workflow tự động hóa
+
+Phân quyền RBAC theo vai trò (20 roles bao gồm cấp phó) và ma trận Module
+
+Hệ thống giao việc 2 cấp (Manager → Staff) cho phép ủy quyền nội bộ
+
+Tự động tính toán tiến độ dựa trên trạng thái hoàn thành các đầu việc
+
+Quản lý chi tiết BOM, WBS, Budget, Milestones và Kho vật tư
+
+Module Lương tích hợp: Lương văn phòng (VP) & Lương khoán sản xuất (TT)
+
+Dashboard theo vai trò — hiển thị thông tin phù hợp với từng người dùng
+
+Hệ thống thông báo thời gian thực và Nhật ký hành động (Audit Log)
+
+1.3. Phạm vi sản phẩm
+
+STT
+
+Loại sản phẩm
+
+Tên tiếng Anh
+
+1
+
+Bình chịu áp & Trao đổi nhiệt
+
+Pressure Vessel & Heat Exchanger
+
+2
+
+Hệ thống HRSG & FGD
+
+HRSG & FGD Systems
+
+3
+
+Kết cấu phi tiêu chuẩn & Cầu
+
+Non-standard Steel Structures & Bridges
+
+4
+
+Cẩu & Thiết bị cảng
+
+Crane & Port Equipment
+
+5
+
+Đóng tàu & Công trình biển
+
+Shipbuilding & Offshore
+
+6
+
+Thiết bị hoá dầu
+
+Petrochemical Skid & Module
+
+
+
+2. KIẾN TRÚC & CÔNG NGHỆ
+
+2.1. Công nghệ lõi
+
+Thành phần
+
+Công nghệ
+
+Ghi chú
+
+Backend API
+
+Python 3 / Flask / Gunicorn
+
+REST API + JWT Authentication
+
+Frontend
+
+Next.js (React) + TypeScript
+
+SPA Dashboard, Responsive
+
+Database
+
+SQLite (Production) / PostgreSQL (Staging)
+
+Hơn 90 bảng dữ liệu
+
+Bảo mật
+
+JWT HS256, PBKDF2 hashing
+
+XSS escaping, CORS restricted
+
+Logging
+
+Structured JSON Logging
+
+ELK / CloudWatch ready
+
+Triển khai
+
+Vercel (Frontend) + PythonAnywhere (API)
+
+CI/CD tự động
+
+2.2. Kiến trúc Module (Blueprints)
+
+Blueprint
+
+URL Prefix
+
+Chức năng
+
+auth_bp
+
+/api/auth
+
+Đăng nhập, quản lý users, cơ chế giao việc Manager/Staff
+
+project_bp
+
+/api/v1/project
+
+Dự án, WBS, Budget, BOM, Milestones, Workflow Engine
+
+purchasing_bp
+
+/api/v1/purchasing
+
+Đề nghị cấp (DNC), PR, PO, quản lý NCC và báo giá
+
+production_bp
+
+/api/v1/production
+
+Lệnh sản xuất (LSX), tiến độ thực hiện theo tổ
+
+payroll_bp
+
+/api/v1/payroll
+
+Chấm công, sản lượng tổ, tính lương, duyệt & thanh toán
+
+common_bp
+
+/api/v1/common
+
+Hệ thống thông báo, Dashboard, Audit log
+
+
+
+3. PHÂN QUYỀN & VAI TRÒ (RBAC)
+
+3.1. Danh sách vai trò
+
+Hệ thống có 20 vai trò, bao gồm 10 vai trò chính và 10 cấp phó tương ứng:
+
+Mã
+
+Tên vai trò
+
+English
+
+Module truy cập
+
+R01
+
+Ban Giám đốc
+
+Board of Directors
+
+Tất cả module
+
+R02
+
+Quản lý Dự án
+
+Project Manager
+
+Dự án, Thiết kế, Kho, HR, Tài chính, Báo cáo
+
+R03
+
+Kinh tế Kế hoạch
+
+Planning & Economics
+
+Dự án, Tài chính, Kho, SX, QC, Báo cáo
+
+R04
+
+Thiết kế
+
+Engineering
+
+Thiết kế, Dự án
+
+R05
+
+Kho
+
+Warehouse
+
+Kho vận
+
+R06
+
+Quản lý Sản xuất
+
+Production Manager
+
+Sản xuất, Kho, HR, QC, Báo cáo
+
+R06b
+
+Tổ trưởng SX
+
+Team Leader
+
+Sản xuất, HR
+
+R07
+
+Thương mại
+
+Commercial
+
+Kho, Tài chính, Sản xuất
+
+R08
+
+Kế toán
+
+Accounting
+
+Tài chính, Báo cáo
+
+R09
+
+Chất lượng (QC)
+
+Quality Control
+
+QC, Báo cáo
+
+R10
+
+Quản trị Hệ thống
+
+System Admin
+
+Tất cả module
+
+3.2. Cơ chế giao việc 2 cấp (User Level)
+
+Hệ thống phân cấp nhân sự thành 2 level để hỗ trợ ủy quyền công việc trong nội bộ phòng ban:
+
+Cấp
+
+Quyền hạn & Luồng xử lý
+
+Level 1 (Manager)
+
+Thấy toàn bộ task phòng ban → Giao việc cho Staff → Review kết quả → Xác nhận hoàn thành
+
+Level 0 (Staff)
+
+Chỉ thấy task được giao → Thực hiện & Upload tài liệu → Gửi lại cho Manager review
+
+
+
+Luồng giao việc chi tiết:
+
+1. Hệ thống tự động tạo task PENDING cho Manager (Level 1) khi dự án đến giai đoạn mới
+
+2. Manager nhấn "Giao việc" → Chọn Staff (Level 0) cùng phòng ban → Nhập chỉ dẫn
+
+3. Staff nhận task → Thực hiện → Upload file → Nhấn "Hoàn thành"
+
+4. Task quay về Manager → Manager kiểm tra → Nhấn "Hoàn thành" → Workflow chuyển bước tiếp
+
+
+
+4. DANH SÁCH MODULE CHỨC NĂNG
+
+4.1. Nhóm: Tổng quan
+
+Chức năng
+
+Mô tả chi tiết
+
+Bảng điều khiển (Dashboard)
+
+Hiển thị KPI tổng hợp, tiến độ dự án, bottleneck theo phòng ban, insights theo vai trò
+
+Công việc (Tasks)
+
+Danh sách task cá nhân, lọc theo trạng thái, giao việc, đính kèm tài liệu
+
+Thông báo
+
+Cảnh báo deadline, task mới, yêu cầu phê duyệt — realtime
+
+
+
+4.2. Nhóm: Dự án
+
+Chức năng
+
+Mô tả chi tiết
+
+Dự án (Projects)
+
+Tạo/sửa dự án, theo dõi 6 giai đoạn, tự động tính tiến độ %
+
+Cột mốc (Milestones)
+
+Quản lý milestone dự án, cảnh báo chậm tiến độ
+
+Thầu phụ (Subcontracts)
+
+Quản lý hợp đồng thầu phụ, theo dõi thanh toán
+
+Bài học KN (Lessons)
+
+Ghi nhận bài học kinh nghiệm từ dự án hoàn thành
+
+An toàn (Safety)
+
+Quản lý an toàn lao động, báo cáo sự cố
+
+
+
+4.3. Nhóm: Thiết kế
+
+Chức năng
+
+Mô tả chi tiết
+
+Thiết kế (Design)
+
+Quản lý bản vẽ thiết kế theo dự án
+
+Định mức VT (BOM)
+
+Bill of Materials — so sánh BOM thiết kế vs BOM hợp đồng
+
+Bản vẽ (Drawings)
+
+Quản lý revision, trạng thái IFR/IFC/Approved
+
+Thay đổi TK (ECO)
+
+Engineering Change Order — quy trình thay đổi thiết kế có kiểm soát
+
+
+
+4.4. Nhóm: Kho & Mua hàng
+
+Chức năng
+
+Mô tả chi tiết
+
+Kho (Warehouse)
+
+Tổng quan tồn kho, cảnh báo thiếu hàng, dashboard vật tư
+
+Mua hàng (Procurement)
+
+Tổng quan quy trình mua hàng, theo dõi PR/PO
+
+Đề nghị mua (PR)
+
+Purchase Request — tạo yêu cầu mua vật tư từ BOM
+
+Đơn đặt hàng (PO)
+
+Purchase Order — phát hành PO, theo dõi trạng thái giao hàng
+
+Xuất Nhập (Movements)
+
+Ghi nhận xuất/nhập kho, theo dõi lịch sử
+
+Nhận hàng (GRN)
+
+Goods Receipt Note — xác nhận nhận hàng từ NCC
+
+Cấp phát VT (Mat Issue)
+
+Xuất vật tư cho sản xuất, kiểm tra tồn kho đủ
+
+Nhà cung cấp (Vendors)
+
+Quản lý danh sách NCC, đánh giá, lịch sử giao dịch
+
+
+
+4.5. Nhóm: Sản xuất
+
+Chức năng
+
+Mô tả chi tiết
+
+Sản xuất (Production)
+
+Dashboard sản xuất, Work Order, tiến độ theo tổ
+
+Phiếu công việc (Job Cards)
+
+Phân công công việc hàng ngày cho tổ sản xuất
+
+Phân xưởng (Workshops)
+
+Quản lý capacity phân xưởng, lịch máy
+
+Giao hàng (Delivery)
+
+Quản lý bốc xếp, vận chuyển, xác nhận giao hàng
+
+
+
+4.6. Nhóm: Chất lượng (QC)
+
+Chức năng
+
+Mô tả chi tiết
+
+Chất lượng (QC)
+
+Dashboard QC tổng quan
+
+Kiểm tra (Inspections)
+
+Biên bản kiểm tra chất lượng tại công đoạn
+
+Kế hoạch KT (ITP)
+
+Inspection & Test Plan — kế hoạch kiểm tra theo dự án
+
+Báo cáo KPH (NCR)
+
+Non-Conformance Report — xử lý lỗi chất lượng
+
+Chứng chỉ (Certificates)
+
+Quản lý chứng chỉ hàn, NDT, của nhân viên
+
+Chứng chỉ VL (Mill Certs)
+
+Chứng chỉ vật liệu từ nhà sản xuất
+
+Nghiệm thu (FAT/SAT)
+
+Factory/Site Acceptance Test — nghiệm thu nhà máy/hiện trường
+
+Hồ sơ CL (MRB)
+
+Material Review Board Dossier — tổng hợp hồ sơ chất lượng
+
+
+
+4.7. Nhóm: Nhân sự (HR)
+
+Chức năng
+
+Mô tả chi tiết
+
+Nhân sự (HR)
+
+Dashboard nhân sự, thống kê nhân viên theo trạng thái
+
+Nhân viên (Employees)
+
+Quản lý hồ sơ nhân viên, mã NV, phòng ban, vị trí
+
+Bảng lương (Salary)
+
+Tính lương VP & TT, duyệt, thanh toán
+
+Chấm công (Timesheets)
+
+Nhập chấm công, import Excel, quản lý công
+
+Điểm danh (Attendance)
+
+Điểm danh hàng ngày
+
+Phòng ban (Departments)
+
+Quản lý cơ cấu tổ chức
+
+HĐLĐ (Contracts)
+
+Quản lý hợp đồng lao động
+
+HĐ Khoán (Piece Rate)
+
+Hợp đồng khoán sản phẩm cho tổ sản xuất
+
+KL Khoán (Output)
+
+Khối lượng khoán thực tế theo tháng
+
+
+
+4.8. Nhóm: Tài chính
+
+Chức năng
+
+Mô tả chi tiết
+
+Tài chính (Finance)
+
+Dashboard tài chính tổng quan
+
+Hóa đơn (Invoices)
+
+Quản lý hóa đơn mua/bán
+
+Dòng tiền (Cashflow)
+
+Theo dõi dòng tiền dự án
+
+Bút toán (Entries)
+
+Ghi nhận bút toán kế toán
+
+Thanh toán (Payments)
+
+Quản lý thanh toán NCC, khách hàng
+
+Ngân sách (Budgets)
+
+Quản lý ngân sách dự án, so sánh thực tế vs kế hoạch
+
+Quyết toán (Settlement)
+
+Quyết toán chi phí dự án khi hoàn thành
+
+
+
+
+
+5. WORKFLOW DỰ ÁN — 34 BƯỚC & 6 GIAI ĐOẠN
+
+Mỗi dự án trong hệ thống đi qua 6 giai đoạn tuần tự với tổng cộng 34 bước workflow. Tiến độ dự án được tự động tính = (Số task DONE / 34) × 100%.
+
+Giai đoạn 1: Khởi động & Hợp đồng
+
+Mã
+
+Tên bước
+
+Vai trò
+
+Logic / Quy tắc
+
+P1.1
+
+Ký HĐ & Tạo dự án
+
+BGĐ (R01)
+
+Khởi tạo Project Code → Trigger P1.2
+
+P1.2
+
+Kick-off Meeting
+
+PM (R02)
+
+Trigger song song P1.3A & P1.3B
+
+P1.3A
+
+Lập kế hoạch tiến độ
+
+PM (R02)
+
+Gate: P1.3A + P1.3C done → Phase 2
+
+P1.3B
+
+Lập Dự Toán Tài Chính
+
+KTKH (R03)
+
+Budget Estimation → Trigger P1.3C
+
+P1.3C
+
+Phê duyệt DTTC
+
+BGĐ (R01)
+
+Gate: P1.3A + P1.3C done → Phase 2
+
+
+
+Giai đoạn 2: Thiết kế
+
+Mã
+
+Tên bước
+
+Vai trò
+
+Logic / Quy tắc
+
+P2.1
+
+Review bản vẽ KH
+
+TK (R04)
+
+Input cho BOM → Trigger P2.2
+
+P2.2
+
+Xây dựng BOM
+
+TK (R04)
+
+So sánh BOM TK vs BOM HĐ (TC-02-03)
+
+P2.3
+
+Phát hành bản vẽ IFC
+
+TK (R04)
+
+Yêu cầu IFC Stamp (TC-02-05)
+
+P2.4
+
+KH Phê duyệt bản vẽ
+
+PM (R02)
+
+Approved → Phase 3; Comment → Loop P2.3
+
+
+
+Giai đoạn 3: Vật tư & Mua hàng
+
+Mã
+
+Tên bước
+
+Vai trò
+
+Logic / Quy tắc
+
+P3.1
+
+Lập PR vật tư chính
+
+TK (R04)
+
+→ Trigger P3.2
+
+P3.2
+
+Mời báo giá (≥3 NCC)
+
+TM (R07)
+
+Tối thiểu 3 báo giá (TC-03-04)
+
+P3.3
+
+Duyệt ngân sách
+
+KT (R08)
+
+Cảnh báo vượt budget lên BGĐ (TC-03-05)
+
+P3.3_PO
+
+Phát hành PO
+
+TM (R07)
+
+PO > 50 triệu cần BGĐ ký (TC-03-06)
+
+P3.4
+
+Nghiệm thu vật tư
+
+QC (R09)
+
+Fail → Trả TM; Pass → P3.5
+
+P3.5
+
+Nhập kho
+
+Kho (R05)
+
+→ Chuyển sang Phase 4
+
+
+
+Giai đoạn 4: Sản xuất
+
+Mã
+
+Tên bước
+
+Vai trò
+
+Logic / Quy tắc
+
+P4.1
+
+Tạo Lệnh SX (LSX)
+
+QLSX (R06)
+
+Phải link BOM dự án (TC-04-02)
+
+P4.2
+
+Xuất kho VT cho SX
+
+Kho (R05)
+
+→ Trigger P4.3
+
+P4.3-P4.7
+
+Gia công: CUT→FIT→WLD→MCH→TRF
+
+Tổ SX (R06b)
+
+5 công đoạn tuần tự
+
+P4.8
+
+FAT (Nghiệm thu NM)
+
+QC (R09)
+
+KH ký; Fail → Fix task R06b
+
+P4.9-P4.11
+
+Hoàn thiện: BLS→FPC→PCK
+
+Tổ SX (R06b)
+
+Blasting, Finishing, Packing (RTS)
+
+
+
+Giai đoạn 5: Giao hàng
+
+Mã
+
+Tên bước
+
+Vai trò
+
+Logic / Quy tắc
+
+P5.1
+
+Giao hàng lên xe
+
+Tổ SX (R06b)
+
+Ký 3 bên: SX + VT + PM (TC-05-01)
+
+P5.2
+
+Thủ tục XNK & Hồ sơ
+
+TM (R07)
+
+Packing List, CO, Bill of Lading
+
+P5.3
+
+KH nhận hàng/hồ sơ
+
+PM (R02)
+
+Bắt buộc đính kèm chứng từ (TC-05-02)
+
+
+
+Giai đoạn 6: Quyết toán
+
+Mã
+
+Tên bước
+
+Vai trò
+
+Logic / Quy tắc
+
+P6.1
+
+QC Dossier
+
+QC (R09)
+
+Tổng hợp hồ sơ chất lượng
+
+P6.2
+
+Quyết toán chi phí
+
+KT (R08)
+
+Đóng chi phí trực tiếp
+
+P6.3
+
+Quyết toán tổng hợp
+
+KTKH (R03)
+
+Lãi/Lỗ dự án (Final P&L)
+
+P6.4
+
+Lesson Learned
+
+PM (R02)
+
+Rút kinh nghiệm nội bộ
+
+P6.5
+
+Đóng Dự Án (FINISHED)
+
+PM → BGĐ
+
+Gate: P6.1-P6.4 all DONE
+
+
+
+
+
+6. LUỒNG NGHIỆP VỤ CHI TIẾT TỪNG MODULE
+
+6.1. Luồng Quản lý Dự án
+
+1. BGĐ (R01) ký hợp đồng → Tạo dự án mới trên hệ thống
+
+2. Hệ thống tự động sinh mã dự án (VD: DA-26-001) và tạo 34 task workflow
+
+3. PM (R02) được gán quản lý dự án → Kick-off Meeting → Lập WBS & Tiến độ
+
+4. KTKH (R03) lập Dự toán Tài chính (DTTC) → BGĐ phê duyệt
+
+5. Khi Gate P1.3A + P1.3C hoàn thành → Hệ thống tự động mở Phase 2 (Thiết kế)
+
+6. Tiến độ tự động cập nhật: progress_pct = (task DONE / 34) × 100%
+
+6.2. Luồng Thiết kế & BOM
+
+1. Phòng TK (R04) nhận bản vẽ mẫu từ khách hàng → Review kỹ thuật
+
+2. Xây dựng BOM (Bill of Materials) — so sánh với BOM hợp đồng (chênh lệch > 0.01kg cảnh báo)
+
+3. Phát hành bản vẽ IFC (Issued For Construction) — yêu cầu có dấu IFC Stamp
+
+4. PM gửi khách hàng phê duyệt → Approved mới chuyển Phase 3; Comment thì loop lại
+
+5. ECO (Engineering Change Order) — mọi thay đổi thiết kế phải qua quy trình kiểm soát
+
+6.3. Luồng Mua hàng & Kho
+
+1. Từ BOM → Phòng TK tạo PR (Purchase Request) cho vật tư cần mua
+
+2. Phòng TM (R07) mời báo giá → Phải có TỐI THIỂU 3 báo giá NCC (trừ khi tồn kho đủ)
+
+3. So sánh giá → Chọn NCC → Duyệt ngân sách với Kế toán
+
+4. Nếu giá trị PO > 50,000,000 VND → Bắt buộc BGĐ phê duyệt chữ ký
+
+5. Phát hành PO → NCC giao hàng → QC nghiệm thu vật tư đầu vào
+
+6. Nghiệm thu đạt → Nhập kho → Cập nhật tồn kho → Sẵn sàng xuất cho SX
+
+7. Khi SX cần vật tư → Tạo phiếu xuất kho → Kiểm tra tồn kho đủ → Xuất
+
+8. Hệ thống ngăn xuất kho khi tồn kho không đủ (Negative Stock Prevention)
+
+6.4. Luồng Sản xuất
+
+1. QLSX (R06) tạo Lệnh SX (LSX) → Link với BOM dự án
+
+2. Kho xuất vật tư cho sản xuất → Hệ thống kiểm tra BOM matching
+
+3. 5 công đoạn gia công tuần tự: CUT (Cắt) → FIT (Lắp) → WLD (Hàn) → MCH (Gia công CK) → TRF (Bề mặt)
+
+4. Mỗi công đoạn có Job Card — Tổ trưởng (R06b) xác nhận khối lượng hoàn thành
+
+5. FAT (Factory Acceptance Test) — QC & Khách hàng cùng nghiệm thu tại nhà máy
+
+6. Nếu FAT Fail → Tạo task khắc phục cho tổ SX → Fix → Re-test
+
+7. FAT Pass → Hoàn thiện (Blasting, Finishing, Coating) → Đóng gói (Packing) → RTS
+
+6.5. Luồng Giao hàng
+
+1. Sản phẩm RTS → Bốc xếp lên xe — yêu cầu ký xác nhận 3 bên (SX, Vận tải, PM)
+
+2. Phòng TM chuẩn bị hồ sơ xuất nhập khẩu: Packing List, CO, Bill of Lading
+
+3. Giao hàng → Khách hàng ký nhận → PM upload chứng từ biên bản giao nhận
+
+4. Bắt buộc đính kèm ảnh/chứng từ → Hệ thống chuyển sang Phase 6 (Quyết toán)
+
+6.6. Luồng QC (Chất lượng)
+
+1. ITP (Inspection & Test Plan) — Lập kế hoạch kiểm tra cho từng dự án
+
+2. Kiểm tra tại mỗi công đoạn SX → Tạo biên bản kiểm tra (Inspection Report)
+
+3. Nếu phát hiện lỗi → Tạo NCR (Non-Conformance Report) → Gán trách nhiệm khắc phục
+
+4. Quản lý chứng chỉ nhân viên (hàn, NDT) — cảnh báo khi sắp hết hạn
+
+5. FAT/SAT — Nghiệm thu nhà máy / hiện trường với khách hàng
+
+6. MRB Dossier — Tổng hợp toàn bộ hồ sơ chất lượng khi đóng dự án
+
+
+
+7. MODULE LƯƠNG (PAYROLL)
+
+7.1. Hai loại lương song song
+
+A. Lương Văn phòng (VP)
+
+Lương theo ngày công chuẩn (26 ngày/tháng)
+
+Đơn giá ngày = Lương cơ bản / 26
+
+Thử việc: 85% đơn giá chuẩn
+
+Hệ số tăng ca: Thường 1.5x | Đêm 2.0x | CN 2.0x | CN Đêm 2.7x | Lễ 3.0x | Lễ Đêm 3.9x
+
+Khấu trừ: BHXH 10.5% | Thuế TNCN 10% (phần thu nhập > 11 triệu)
+
+Phạt đi muộn: 50,000đ/giờ
+
+B. Lương Sản xuất khoán (TT)
+
+Ngân sách tổ = Σ (Khối lượng × Đơn giá giao khoán)
+
+Phân bổ cá nhân theo tỷ lệ man-day:
+
+  → Man-day cá nhân = Ngày công chính thức + Tăng ca quy đổi
+
+  → Lương cá nhân = (Man-day cá nhân / Tổng man-day tổ) × Ngân sách tổ
+
+7.2. Workflow Lương (7 bước)
+
+Bước
+
+Tên
+
+Vai trò
+
+Mô tả
+
+L1 (PAY.1)
+
+Giao khoán & Đơn giá
+
+KTKH (R03)
+
+Phân bổ đơn giá cho tổ SX
+
+L2 (PAY.2)
+
+Nghiệm thu KL thực tế
+
+PM (R02)
+
+Xác nhận khối lượng hoàn thành
+
+L3 (PAY.3)
+
+Kiểm tra KL & Giá trị
+
+QLSX + KTKH
+
+Cross-check số liệu
+
+L4 (PAY.4)
+
+Nhập chấm công
+
+HCNS
+
+Manual hoặc Import Excel (.xlsx)
+
+L5 (PAY.5)
+
+Tính lương tự động
+
+Hệ thống
+
+Engine tự động tính VP + TT
+
+L6 (PAY.6)
+
+Duyệt lương
+
+KTKH → BGĐ
+
+Approved / Rejected (phải ghi lý do)
+
+L7 (PAY.7)
+
+Thanh toán
+
+KTTC (R08)
+
+Chuyển khoản & Ghi nhận Bank Ref
+
+7.3. Quy tắc nghiệp vụ Lương
+
+Mã
+
+Quy tắc
+
+BR-01
+
+KL xác nhận không được vượt KL phân bổ trong LSX
+
+BR-02
+
+Tính lương bị block nếu chấm công chưa hoàn tất
+
+BR-03
+
+Từ chối (Reject) lương phải ghi rõ lý do
+
+BR-04
+
+Lương đã duyệt (Approved) không thể sửa — phải Reject rồi làm lại
+
+
+
+8. QUY TẮC NGHIỆP VỤ & CHỐT CHẶN (BUSINESS RULES)
+
+8.1. Gate Checks (Chốt chặn giai đoạn)
+
+Gate
+
+Điều kiện
+
+Gate GĐ1→GĐ2
+
+P1.3A (Tiến độ) + P1.3C (Dự toán) phải DONE mới mở Thiết kế
+
+Gate GĐ5→GĐ6
+
+P5.3 yêu cầu bắt buộc đính kèm ảnh/chứng từ giao nhận
+
+Gate Đóng DA
+
+P6.1 + P6.2 + P6.3 + P6.4 tất cả DONE mới cho phép P6.5
+
+8.2. Validation Rules (Quy tắc kiểm tra)
+
+Mã
+
+Tên quy tắc
+
+Chi tiết
+
+TC-02-03
+
+So sánh BOM TK vs BOM HĐ
+
+Cảnh báo nếu chênh lệch > 0.01kg
+
+TC-02-05
+
+Kiểm tra IFC Stamp
+
+Yêu cầu xác nhận dấu IFC trước phát hành
+
+TC-03-04
+
+Báo giá NCC
+
+Tối thiểu 3 báo giá độc lập (trừ khi tồn kho đủ)
+
+TC-03-05
+
+Vượt ngân sách
+
+Tự động cảnh báo BGĐ khi PO vượt DTTC
+
+TC-03-06
+
+PO giá trị lớn
+
+PO > 50,000,000 VND bắt buộc BGĐ ký phê duyệt
+
+TC-04-02
+
+LSX liên kết BOM
+
+Work Order phải link BOM hợp lệ để truy vết vật tư
+
+TC-05-01
+
+Xác nhận giao hàng
+
+Ký 3 bên: SX + Vận tải + PM
+
+TC-05-02
+
+Chứng từ giao nhận
+
+Bắt buộc đính kèm file ảnh/scan biên bản KH nhận hàng
+
+8.3. Quy tắc Kho & Tồn kho
+
+Ngăn chặn xuất kho khi tồn kho không đủ (Negative Stock Prevention)
+
+Cảnh báo vật tư sắp hết (Low Stock Alert) trên Dashboard
+
+Mỗi phiếu xuất kho phải link với Project Code và LSX
+
+GRN phải có nghiệm thu QC đầu vào trước khi nhập
+
+
+
+9. MA TRẬN TRÁCH NHIỆM RACI
+
+R = Responsible (Thực hiện) | A = Accountable (Chịu trách nhiệm) | C = Consulted (Tham vấn) | I = Informed (Được thông báo)
+
+Hoạt động
+
+BGĐ
+
+PM
+
+KTKH
+
+TK
+
+Kho
+
+SX
+
+TM
+
+KT
+
+QC
+
+Admin
+
+Tạo dự án
+
+R
+
+I
+
+I
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Lập DTTC
+
+A
+
+I
+
+R
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Thiết kế BOM
+
+I
+
+C
+
+
+
+R
+
+
+
+
+
+
+
+
+
+
+
+
+
+Lập PR
+
+I
+
+C
+
+
+
+R
+
+
+
+
+
+
+
+
+
+
+
+
+
+Mời báo giá
+
+A
+
+I
+
+
+
+
+
+
+
+
+
+R
+
+
+
+
+
+
+
+Phát hành PO
+
+A
+
+I
+
+
+
+
+
+
+
+
+
+R
+
+
+
+
+
+
+
+Nhập kho
+
+
+
+I
+
+
+
+
+
+R
+
+
+
+
+
+
+
+
+
+
+
+Tạo LSX
+
+
+
+I
+
+
+
+
+
+
+
+R
+
+
+
+
+
+
+
+
+
+Gia công SX
+
+
+
+I
+
+
+
+
+
+
+
+R
+
+
+
+
+
+
+
+
+
+FAT/SAT
+
+A
+
+C
+
+
+
+
+
+
+
+
+
+
+
+
+
+R
+
+
+
+Giao hàng
+
+
+
+R
+
+
+
+
+
+
+
+C
+
+C
+
+
+
+
+
+
+
+QC Dossier
+
+
+
+I
+
+
+
+
+
+
+
+
+
+
+
+
+
+R
+
+
+
+Quyết toán
+
+A
+
+C
+
+C
+
+
+
+
+
+
+
+
+
+R
+
+
+
+
+
+Đóng dự án
+
+A
+
+R
+
+I
+
+I
+
+I
+
+I
+
+I
+
+I
+
+I
+
+I
+
+
+
+10. PHỤ LỤC — DANH SÁCH NHÂN SỰ HỆ THỐNG
+
+Phòng ban
+
+Manager (Level 1)
+
+Staff (Level 0)
+
+BGĐ (R01)
+
+Toàn ĐV, Bằng HN, Vinh NQ, Hà TT
+
+—
+
+PM (R02)
+
+Giang ĐĐ
+
+Thư NB, Hưng ĐQ, Dương NQ, Anh TV
+
+KTKH (R03)
+
+Đoan NĐ
+
+Thúy NTH
+
+Thiết kế (R04)
+
+Lưu ĐT, Tuấn PM, Ước LV
+
+Long LH, Nguyệt NTH, Anh VP, Thuận TX, Nhung NT, Quân NV, Hiếu TT, Huy NQ, Cường LĐ
+
+Kho (R05)
+
+Lương NTH, Thương BT
+
+—
+
+QLSX (R06)
+
+Toàn PĐ
+
+Thắng NC, Hiền NM, Tú NT, Toàn PH, Hưng TT, Kiên LT
+
+Tổ SX (R06b)
+
+Trung ĐV
+
+—
+
+TM (R07)
+
+Hưng TH
+
+Đức CV, Khánh LT, Phong ĐB, Ngần VT
+
+KT (R08)
+
+Sâm LĐ
+
+Thanh NV, Hùng ĐM, Ngoãn TT
+
+QC (R09)
+
+Hải TQ
+
+Việt NH, Quý NH, Liên ĐT, Vinh VQ, Quỳnh ĐTX, Hưng ND, Mạnh ND, Đông NT, Tâm NV, Thắng NV, Anh NQ
+
+Admin (R10)
+
+Toàn NĐ
+
+—
+
+
+
+
+
+— HẾT TÀI LIỆU —
+
+
+
+
+
+Người soạn
+
+Người review
+
+Phê duyệt
+
+IT Team
+
+PM / KTKH
+
+Ban Giám đốc
+
+
+
+
+
+
+
+Ký tên: ________________
+
+Ký tên: ________________
+
+Ký tên: ________________
+
