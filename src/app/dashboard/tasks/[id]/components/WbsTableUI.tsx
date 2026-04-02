@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import * as XLSX from 'xlsx';
 import {  } from "lucide-react";
 // Type definitions
 
@@ -6,15 +7,20 @@ export type TeamAssign = {
   teamName: string;
   startDate: string;
   endDate: string;
-  notes: string;
+  notes?: string;
+  volume?: string;
 };
 export type CellAssignMap = Record<number, Record<string, TeamAssign[]>>;
-export type LsxIssuedMap = Record<number, Record<string, { status: "pending" | "approved" | "rejected"; details: any }>>;
+export type LsxIssuedMap = Record<number, Record<string, Record<number, { status: "pending" | "approved" | "rejected"; details: any }>>>;
 export type MaterialReqItem = {
   name: string;
-  qty: string;
+  code?: string;
+  quantity?: string;
+  qty?: string;
+  unit?: string;
   spec: string;
   status?: string;
+  requested?: boolean;
 };
 export type MaterialReqMap = Record<number, Record<string, Record<number, MaterialReqItem[]>>>;
 
@@ -676,7 +682,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                       <option value="kg">kg</option><option value="tấn">tấn</option><option value="m">m</option><option value="m2">m²</option><option value="cái">cái</option><option value="bộ">bộ</option><option value="lít">lít</option><option value="hộp">hộp</option><option value="cuộn">cuộn</option>
                     </select>
                     <div style={{ textAlign: 'center' }}>
-                      {m.name.trim() && m.code.trim() && Number(m.quantity) > 0 ? (
+                      {m.name.trim() && (m.code || '').trim() && Number(m.quantity) > 0 ? (
                         <button type="button" disabled={m.requested}
                           onClick={async () => {
                             const n = [...tempMaterials]; n[mi] = { ...n[mi], requested: true }; setTempMaterials(n);
