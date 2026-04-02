@@ -153,7 +153,7 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [draftId] = useState(() => crypto.randomUUID())
+  const [draftId] = useState(() => `draft-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
