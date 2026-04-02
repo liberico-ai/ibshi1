@@ -120,7 +120,7 @@ export default function ProjectsPage() {
             <div className="flex items-center gap-4 text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
               <span>{PRODUCT_TYPES.find((t) => t.value === p.productType)?.label || p.productType}</span>
               {p.contractValue && (
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1" suppressHydrationWarning>
                   💰 {formatCurrency(p.contractValue, p.currency)}
                 </span>
               )}
