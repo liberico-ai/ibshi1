@@ -15804,12 +15804,27 @@ export default function TaskDetailPage() {
                           <input
                             type="file"
                             multiple
-                            accept={att.accept}
                             disabled={!isActive || uploadingKey === att.key}
                             style={{ fontSize: "0.8rem", width: "100%" }}
                             onChange={async (e) => {
                               const files = e.target.files;
                               if (!files || files.length === 0 || !task) return;
+                              
+                              // Check extensions on client side based on att.accept
+                              if (att.accept) {
+                                const allowedExts = att.accept.split(',').filter((a: string) => a.startsWith('.')).map((e: string) => e.toLowerCase());
+                                const invalidFile = Array.from(files).find(f => {
+                                  const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+                                  return !allowedExts.includes(ext);
+                                });
+                                if (invalidFile) {
+                                  setError(`Định dạng không hợp lệ: ${invalidFile.name}. Chỉ chấp nhận: ${allowedExts.join(', ')}`);
+                                  // Clear input so they can re-select
+                                  e.target.value = '';
+                                  return;
+                                }
+                              }
+                              
                               setUploadingKey(att.key);
                               try {
                                 const newUrls: string[] = [];

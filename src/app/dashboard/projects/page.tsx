@@ -158,9 +158,31 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const FILE_SLOTS = [
+    { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'po', label: 'PO khách hàng', icon: '📋', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'contract', label: 'Hợp đồng / Phụ lục', icon: '📄', accept: ACCEPT.DOCS_PLUS },
+    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', icon: '📐', accept: ACCEPT.DRAWING_PLUS },
+  ]
+
   function handleFileChange(key: string, incomingFiles: FileList | null) {
     if (incomingFiles) {
-      setFiles(prev => ({ ...prev, [key]: Array.from(incomingFiles) }))
+      const filesArr = Array.from(incomingFiles)
+      const slot = FILE_SLOTS.find(s => s.key === key)
+      if (slot) {
+        // Strict mapping of allowed extensions out of the ACCEPT string
+        const allowedExts = slot.accept.split(',').filter(a => a.startsWith('.')).map(e => e.toLowerCase())
+        const invalidFile = filesArr.find(f => {
+          const ext = '.' + f.name.split('.').pop()?.toLowerCase()
+          return !allowedExts.includes(ext)
+        })
+        if (invalidFile) {
+          setError(`File định dạng không hợp lệ: ${invalidFile.name}. Vui lòng chỉ tải các dạng: ${allowedExts.join(', ')}`)
+          return
+        }
+      }
+      setError('')
+      setFiles(prev => ({ ...prev, [key]: filesArr }))
     }
   }
 
@@ -216,12 +238,7 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
   }
 
 
-  const FILE_SLOTS = [
-    { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: ACCEPT.OFFICE_ARCHIVE },
-    { key: 'po', label: 'PO khách hàng', icon: '📋', accept: ACCEPT.OFFICE_ARCHIVE },
-    { key: 'contract', label: 'Hợp đồng / Phụ lục', icon: '📄', accept: ACCEPT.DOCS_PLUS },
-    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', icon: '📐', accept: ACCEPT.DRAWING_PLUS },
-  ]
+  // FILE_SLOTS is defined above handleFileChange
 
   return (
     <Card padding="default" className="animate-fade-in" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
@@ -282,14 +299,14 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
                     ))}
                     <label style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)', cursor: 'pointer', textAlign: 'center', marginTop: 4 }}>
                       + Chọn lại tệp
-                      <input type="file" multiple accept={slot.accept}
-                        onChange={(e) => handleFileChange(slot.key, e.target.files)}
+                      <input type="file" multiple
+                        onChange={(e) => { handleFileChange(slot.key, e.target.files); e.target.value = '' }}
                         className="hidden" style={{ display: 'none' }} />
                     </label>
                   </div>
                 ) : (
-                  <input type="file" multiple accept={slot.accept}
-                    onChange={(e) => handleFileChange(slot.key, e.target.files)}
+                  <input type="file" multiple
+                    onChange={(e) => { handleFileChange(slot.key, e.target.files); e.target.value = '' }}
                     style={{ fontSize: 'var(--text-xs)', width: '100%', color: 'var(--text-muted)' }} />
                 )}
               </div>
