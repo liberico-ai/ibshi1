@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { WORKFLOW_RULES, getWorkflowProgress } from '@/lib/workflow-engine'
+import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
+import { validateBody, validateParams } from '@/lib/api-helpers'
+import { updateProjectSchema, idParamSchema } from '@/lib/schemas'
 
 // GET /api/projects/[id]
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -9,7 +12,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
 
     const project = await prisma.project.findUnique({
       where: { id },
@@ -59,22 +64,29 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return errorResponse('Bạn không có quyền cập nhật dự án', 403)
     }
 
-    const { id } = await params
-    const body = await req.json()
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
+    const result = await validateBody(req, updateProjectSchema)
+    if (!result.success) return result.response
+    const { projectName, clientName, contractValue, currency, startDate, endDate, status, description } = result.data
 
     const project = await prisma.project.update({
       where: { id },
       data: {
-        projectName: body.projectName,
-        clientName: body.clientName,
-        contractValue: body.contractValue ? parseFloat(body.contractValue) : undefined,
-        currency: body.currency,
-        startDate: body.startDate ? new Date(body.startDate) : undefined,
-        endDate: body.endDate ? new Date(body.endDate) : undefined,
-        status: body.status,
-        description: body.description,
+        projectName,
+        clientName,
+        contractValue: contractValue ? parseFloat(String(contractValue)) : undefined,
+        currency,
+        startDate: startDate ? new Date(startDate) : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+        status,
+        description,
       },
     })
+
+    // Invalidate project caches after update
+    await cacheInvalidate(CACHE_KEYS.projects)
 
     return successResponse({ project: { ...project, contractValue: project.contractValue?.toString() } }, 'Cập nhật dự án thành công')
   } catch (err) {
@@ -89,7 +101,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const body = await req.json()
 
     if (body.action === 'CLOSE') {
@@ -123,6 +137,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // Audit log
       const { logAudit, getClientIP } = await import('@/lib/auth')
       await logAudit(payload.userId, 'CLOSE', 'Project', id, { status: 'CLOSED' }, getClientIP(req))
+
+      // Invalidate project and dashboard caches after close
+      await Promise.all([
+        cacheInvalidate(CACHE_KEYS.projects),
+        cacheInvalidate(CACHE_KEYS.dashboard),
+      ])
 
       return successResponse(
         { project: { ...project, contractValue: project.contractValue?.toString() } },

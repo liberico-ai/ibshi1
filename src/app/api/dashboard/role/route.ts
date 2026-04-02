@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { withCache } from '@/lib/cache'
 
 // GET /api/dashboard/role — Role-specific dashboard widgets
 export async function GET(req: NextRequest) {
@@ -8,6 +9,16 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
+    const data = await withCache(`dashboard:role:${user.roleCode}:${user.userId}`, 60, () => fetchRoleWidgets(user))
+
+    return successResponse(data)
+  } catch (err) {
+    console.error('GET /api/dashboard/role error:', err)
+    return errorResponse('Lỗi hệ thống', 500)
+  }
+}
+
+async function fetchRoleWidgets(user: { userId: string; roleCode: string }) {
     const role = user.roleCode
     const widgets: Record<string, unknown> = { role }
 
@@ -130,9 +141,5 @@ export async function GET(req: NextRequest) {
       widgets.totalSafetyIncidents = totalIncidents
     }
 
-    return successResponse({ widgets })
-  } catch (err) {
-    console.error('GET /api/dashboard/role error:', err)
-    return errorResponse('Lỗi hệ thống', 500)
-  }
+    return { widgets }
 }

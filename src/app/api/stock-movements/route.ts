@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { RBAC } from '@/lib/rbac-rules'
+import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
+import { validateBody } from '@/lib/api-helpers'
+import { stockMovementSchema } from '@/lib/schemas'
 
 // GET /api/stock-movements — List stock movements
 export async function GET(req: NextRequest) {
@@ -54,21 +57,14 @@ export async function POST(req: NextRequest) {
       return errorResponse('Chỉ Kho hoặc BGĐ mới được tạo phiếu nhập/xuất', 403)
     }
 
-    const body = await req.json()
-    const { materialId, type, quantity, reason, referenceCode, heatNumber, lotNumber } = body
-
-    if (!materialId || !type || !quantity) {
-      return errorResponse('Thiếu thông tin: vật tư, loại (IN/OUT), số lượng')
-    }
-
-    if (!['IN', 'OUT', 'ADJUSTMENT'].includes(type)) {
-      return errorResponse('Loại phải là IN, OUT, hoặc ADJUSTMENT')
-    }
+    const validation = await validateBody(req, stockMovementSchema)
+    if (!validation.success) return validation.response
+    const { materialId, type, quantity, reason, referenceNo: referenceCode, heatNumber, lotNumber } = validation.data
 
     const material = await prisma.material.findUnique({ where: { id: materialId } })
     if (!material) return errorResponse('Không tìm thấy vật tư', 404)
 
-    const qty = parseFloat(quantity)
+    const qty = quantity
     if (type === 'OUT' && Number(material.currentStock) < qty) {
       return errorResponse(`Không đủ tồn kho. Hiện có: ${material.currentStock}, yêu cầu: ${qty}`)
     }
@@ -96,6 +92,9 @@ export async function POST(req: NextRequest) {
 
       return movement
     })
+
+    // Invalidate warehouse cache after stock movement
+    await cacheInvalidate(CACHE_KEYS.warehouse)
 
     return successResponse({ movement: result },
       type === 'IN' ? `Đã nhập ${qty} ${material.unit}` : `Đã xuất ${qty} ${material.unit}`,

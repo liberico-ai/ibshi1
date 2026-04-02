@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP, getUserProjectIds } from '@/lib/auth'
 import { initializeProjectWorkflow, completeTask } from '@/lib/workflow-engine'
+import { withCache, cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
+import { validateQuery, validateBody } from '@/lib/api-helpers'
+import { projectListQuerySchema, createProjectSchema } from '@/lib/schemas'
 
 // GET /api/projects — List all projects
 export async function GET(req: NextRequest) {
@@ -9,69 +12,72 @@ export async function GET(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { searchParams } = new URL(req.url)
-    const status = searchParams.get('status')
-    const search = searchParams.get('search') || ''
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
+    const qResult = validateQuery(req.url, projectListQuerySchema)
+    if (!qResult.success) return qResult.response
+    const { page, limit, search, status } = qResult.data
 
-    const where: Record<string, unknown> = {}
-    if (status) where.status = status
-    if (search) {
-      where.OR = [
-        { projectCode: { contains: search, mode: 'insensitive' } },
-        { projectName: { contains: search, mode: 'insensitive' } },
-        { clientName: { contains: search, mode: 'insensitive' } },
-      ]
-    }
-
-    // RLS: non-R01 users see only their projects (PM + assigned tasks)
-    if (payload.roleCode !== 'R01') {
-      const projectIds = await getUserProjectIds(payload)
-      if (projectIds !== null && projectIds.length > 0) {
-        where.id = { in: projectIds }
-      } else if (projectIds !== null) {
-        where.pmUserId = payload.userId // fallback
+    const cacheKey = `projects:list:${payload.userId}:${status || ''}:${search}:${page}:${limit}`
+    const data = await withCache(cacheKey, 60, async () => {
+      const where: Record<string, unknown> = {}
+      if (status) where.status = status
+      if (search) {
+        where.OR = [
+          { projectCode: { contains: search, mode: 'insensitive' } },
+          { projectName: { contains: search, mode: 'insensitive' } },
+          { clientName: { contains: search, mode: 'insensitive' } },
+        ]
       }
-    }
 
-    const [total, projects] = await Promise.all([
-      prisma.project.count({ where }),
-      prisma.project.findMany({
-        where,
-        include: {
-          tasks: { select: { stepCode: true, status: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-    ])
+      // RLS: non-R01 users see only their projects (PM + assigned tasks)
+      if (payload.roleCode !== 'R01') {
+        const projectIds = await getUserProjectIds(payload)
+        if (projectIds !== null && projectIds.length > 0) {
+          where.id = { in: projectIds }
+        } else if (projectIds !== null) {
+          where.pmUserId = payload.userId // fallback
+        }
+      }
 
-    const result = projects.map((p) => {
-      const totalTasks = p.tasks.length
-      const completed = p.tasks.filter((t) => t.status === 'DONE').length
+      const [total, projects] = await Promise.all([
+        prisma.project.count({ where }),
+        prisma.project.findMany({
+          where,
+          include: {
+            tasks: { select: { stepCode: true, status: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+      ])
+
+      const result = projects.map((p) => {
+        const totalTasks = p.tasks.length
+        const completed = p.tasks.filter((t) => t.status === 'DONE').length
+        return {
+          id: p.id,
+          projectCode: p.projectCode,
+          projectName: p.projectName,
+          clientName: p.clientName,
+          productType: p.productType,
+          status: p.status,
+          contractValue: p.contractValue?.toString(),
+          currency: p.currency,
+          startDate: p.startDate,
+          endDate: p.endDate,
+          progress: totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0,
+          totalTasks,
+          completedTasks: completed,
+        }
+      })
+
       return {
-        id: p.id,
-        projectCode: p.projectCode,
-        projectName: p.projectName,
-        clientName: p.clientName,
-        productType: p.productType,
-        status: p.status,
-        contractValue: p.contractValue?.toString(),
-        currency: p.currency,
-        startDate: p.startDate,
-        endDate: p.endDate,
-        progress: totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0,
-        totalTasks,
-        completedTasks: completed,
+        projects: result,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       }
     })
 
-    return successResponse({
-      projects: result,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    })
+    return successResponse(data)
   } catch (err) {
     console.error('GET /api/projects error:', err)
     return errorResponse('Lỗi hệ thống', 500)
@@ -88,14 +94,11 @@ export async function POST(req: NextRequest) {
       return errorResponse('Bạn không có quyền tạo dự án', 403)
     }
 
-    const body = await req.json()
+    const result = await validateBody(req, createProjectSchema)
+    if (!result.success) return result.response
     const { projectCode, projectName, clientName, productType,
             contractValue, currency, startDate, endDate, description,
-            draftId } = body
-
-    if (!projectCode || !projectName || !clientName || !productType) {
-      return errorResponse('Thiếu thông tin bắt buộc: mã dự án, tên, khách hàng, loại sản phẩm')
-    }
+            draftId } = result.data
 
     const existing = await prisma.project.findUnique({ where: { projectCode } })
     if (existing) return errorResponse(`Mã dự án ${projectCode} đã tồn tại`)
@@ -106,7 +109,7 @@ export async function POST(req: NextRequest) {
         projectName,
         clientName,
         productType,
-        contractValue: contractValue ? parseFloat(contractValue) : null,
+        contractValue: contractValue ? parseFloat(String(contractValue)) : null,
         currency: currency || 'VND',
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
@@ -150,6 +153,12 @@ export async function POST(req: NextRequest) {
     }
 
     await logAudit(payload.userId, 'CREATE', 'Project', project.id, { projectCode, projectName, linkedFiles: linkedCount }, getClientIP(req))
+
+    // Invalidate project and dashboard caches
+    await Promise.all([
+      cacheInvalidate(CACHE_KEYS.projects),
+      cacheInvalidate(CACHE_KEYS.dashboard),
+    ])
 
     return successResponse({ project }, 'Dự án đã được khởi tạo thành công', 201)
   } catch (err) {

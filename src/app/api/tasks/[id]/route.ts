@@ -3,6 +3,9 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { getTaskById, assignTask } from '@/lib/task-engine'
 import { completeTask, WORKFLOW_RULES } from '@/lib/workflow-engine'
 import prisma from '@/lib/db'
+import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
+import { validateParams } from '@/lib/api-helpers'
+import { idParamSchema } from '@/lib/schemas'
 
 // GET /api/tasks/[id]
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -10,7 +13,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const task = await getTaskById(id)
     if (!task) return errorResponse('Task không tồn tại', 404)
 
@@ -616,7 +621,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const body = await req.json()
     const { action } = body
 
@@ -644,6 +651,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         return errorResponse(`Bạn (${payload.roleCode}) không có quyền thực hiện bước này. Hãy yêu cầu quản lý phân công task cho bạn.`, 403)
       }
       const result = await completeTask(id, payload.userId, body.resultData, body.notes)
+
+      // Invalidate dashboard and task caches after completion
+      await Promise.all([
+        cacheInvalidate(CACHE_KEYS.dashboard),
+        cacheInvalidate(CACHE_KEYS.tasks),
+      ])
+
       return successResponse({ nextSteps: result.nextSteps }, 'Task hoàn thành')
     }
 
