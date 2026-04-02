@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     let projectCode: string, projectName: string, clientName: string, productType: string
     let contractValue: string | null = null, currency: string | null = null
     let startDate: string | null = null, endDate: string | null = null, description: string | null = null
-    let savedFiles: Record<string, string> = {}
+    let savedFiles: Record<string, string[]> = {}
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData()
@@ -117,13 +117,21 @@ export async function POST(req: NextRequest) {
 
         const fileKeys = ['file_rfq', 'file_po', 'file_contract', 'file_spec']
         for (const key of fileKeys) {
-          const file = formData.get(key) as File | null
-          if (file && file.size > 0) {
-            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-            const filePath = path.join(uploadDir, `${key}_${safeName}`)
-            const buffer = Buffer.from(await file.arrayBuffer())
-            await writeFile(filePath, buffer)
-            savedFiles[key] = `/uploads/projects/${projectCode}/${key}_${safeName}`
+          const files = formData.getAll(key) as File[]
+          if (files && files.length > 0) {
+            savedFiles[key] = []
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i]
+              if (file.size > 0) {
+                // Add index/timestamp to prevent overwrite if multiple files have same name
+                const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+                const uniqueName = files.length > 1 ? `${i}_${safeName}` : safeName
+                const filePath = path.join(uploadDir, `${key}_${uniqueName}`)
+                const buffer = Buffer.from(await file.arrayBuffer())
+                await writeFile(filePath, buffer)
+                savedFiles[key].push(`/uploads/projects/${projectCode}/${key}_${uniqueName}`)
+              }
+            }
           }
         }
       } catch (fsErr) {

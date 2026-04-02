@@ -152,14 +152,24 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
     projectCode: '', projectName: '', clientName: '', productType: 'pressure_vessel',
     contractValue: '', currency: 'VND', description: '', startDate: '', endDate: '',
   })
-  const [files, setFiles] = useState<Record<string, File | null>>({
-    rfq: null, po: null, contract: null, spec: null,
+  const [files, setFiles] = useState<Record<string, File[]>>({
+    rfq: [], po: [], contract: [], spec: [],
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  function handleFileChange(key: string, file: File | null) {
-    setFiles(prev => ({ ...prev, [key]: file }))
+  function handleFileChange(key: string, incomingFiles: FileList | null) {
+    if (incomingFiles) {
+      setFiles(prev => ({ ...prev, [key]: Array.from(incomingFiles) }))
+    }
+  }
+
+  function handleFileRemove(key: string, index: number) {
+    setFiles(prev => {
+      const newFiles = [...prev[key]]
+      newFiles.splice(index, 1)
+      return { ...prev, [key]: newFiles }
+    })
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -172,7 +182,9 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
       if (hasFiles) {
         const formData = new FormData()
         Object.entries(form).forEach(([k, v]) => formData.append(k, v))
-        Object.entries(files).forEach(([k, f]) => { if (f) formData.append(`file_${k}`, f) })
+        Object.entries(files).forEach(([k, fileArray]) => {
+          fileArray.forEach(f => formData.append(`file_${k}`, f))
+        })
         const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
         const response = await fetch('/api/projects', {
           method: 'POST',
@@ -250,24 +262,34 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {FILE_SLOTS.map(slot => (
               <div key={slot.key} style={{
-                border: `1px dashed ${files[slot.key] ? 'var(--accent)' : 'var(--border)'}`,
+                border: `1px dashed ${files[slot.key].length > 0 ? 'var(--accent)' : 'var(--border)'}`,
                 borderRadius: 'var(--radius)', padding: 'var(--space-sm) var(--space-sm)',
-                background: files[slot.key] ? 'var(--ibs-navy-50)' : 'var(--bg-secondary)',
+                background: files[slot.key].length > 0 ? 'var(--ibs-navy-50)' : 'var(--bg-secondary)',
                 transition: 'all 0.2s',
               }}>
                 <div className="flex items-center gap-2 mb-2">
                   <span>{slot.icon}</span>
                   <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--text-primary)' }}>{slot.label}</span>
                 </div>
-                {files[slot.key] ? (
-                  <div className="flex items-center gap-2">
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)' }} className="truncate flex-1">✓ {files[slot.key]!.name}</span>
-                    <button type="button" onClick={() => handleFileChange(slot.key, null)}
-                      style={{ fontSize: 'var(--text-xs)', color: 'var(--danger)', cursor: 'pointer', background: 'none', border: 'none' }}>✕</button>
+                {files[slot.key].length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {files[slot.key].map((f, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-white/50 p-1.5 rounded border border-[var(--accent)]/20">
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)' }} className="truncate flex-1">✓ {f.name}</span>
+                        <button type="button" onClick={() => handleFileRemove(slot.key, i)}
+                          style={{ fontSize: 'var(--text-xs)', color: 'var(--danger)', cursor: 'pointer', background: 'none', border: 'none', padding: '0 4px', flexShrink: 0 }}>✕</button>
+                      </div>
+                    ))}
+                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)', cursor: 'pointer', textAlign: 'center', marginTop: 4 }}>
+                      + Chọn lại tệp
+                      <input type="file" multiple accept={slot.accept}
+                        onChange={(e) => handleFileChange(slot.key, e.target.files)}
+                        className="hidden" style={{ display: 'none' }} />
+                    </label>
                   </div>
                 ) : (
-                  <input type="file" accept={slot.accept}
-                    onChange={(e) => handleFileChange(slot.key, e.target.files?.[0] || null)}
+                  <input type="file" multiple accept={slot.accept}
+                    onChange={(e) => handleFileChange(slot.key, e.target.files)}
                     style={{ fontSize: 'var(--text-xs)', width: '100%', color: 'var(--text-muted)' }} />
                 )}
               </div>

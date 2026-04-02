@@ -67,8 +67,8 @@ export default function TaskDetailPage() {
     string,
     string
   > | null>(null);
-  // Attachments uploaded during this step (key → uploaded URL)
-  const [pendingAttachments, setPendingAttachments] = useState<Record<string, string>>({});
+  // Attachments uploaded during this step (key → uploaded URL(s))
+  const [pendingAttachments, setPendingAttachments] = useState<Record<string, string[]>>({});
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   const [rejectionInfo, setRejectionInfo] = useState<{
@@ -15773,81 +15773,75 @@ export default function TaskDetailPage() {
                       </div>
                       {fileUrl ? (
                         (() => {
-                          const fileName = decodeURIComponent(
-                            fileUrl.split("/").pop() || "",
-                          ).replace(/^file_(rfq|po|contract|spec)_/, "");
+                          const urls = Array.isArray(fileUrl) ? fileUrl : [fileUrl];
                           return (
-                            <a
-                              href={fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                padding: "6px 10px",
-                                borderRadius: 6,
-                                background: "#f0fdf4",
-                                border: "1px solid #bbf7d0",
-                                textDecoration: "none",
-                                color: "#15803d",
-                                fontSize: "0.8rem",
-                                fontWeight: 500,
-                              }}
-                            >
-                              <span>📄</span>
-                              <span
-                                style={{
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {fileName}
-                              </span>
-                              <span
-                                style={{
-                                  marginLeft: "auto",
-                                  flexShrink: 0,
-                                  color: "#166534",
-                                }}
-                              >
-                                ↓
-                              </span>
-                            </a>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {urls.map((url, idx) => {
+                                const fileName = decodeURIComponent(url.split("/").pop() || "").replace(/^[^_]+_(rfq|po|contract|spec)_/, "");
+                                return (
+                                  <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 6, background: "#f0fdf4", border: "1px solid #bbf7d0", textDecoration: "none", color: "#15803d", fontSize: "0.8rem", fontWeight: 500 }}>
+                                    <span>📄</span>
+                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fileName}</span>
+                                    <span style={{ marginLeft: "auto", flexShrink: 0, color: "#166534" }}>↓</span>
+                                  </a>
+                                );
+                              })}
+                            </div>
                           );
                         })()
                       ) : (
                         <div style={{ position: 'relative' }}>
+                          {pendingAttachments[att.key] && pendingAttachments[att.key].length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                              {pendingAttachments[att.key].map((url, idx) => (
+                                <div key={idx} style={{ fontSize: '0.75rem', color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <span>✓</span>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{decodeURIComponent(url.split("/").pop() || "")}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <input
                             type="file"
+                            multiple
                             accept={att.accept}
                             disabled={!isActive || uploadingKey === att.key}
                             style={{ fontSize: "0.8rem", width: "100%" }}
                             onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file || !task) return;
+                              const files = e.target.files;
+                              if (!files || files.length === 0 || !task) return;
                               setUploadingKey(att.key);
                               try {
-                                const fd = new FormData();
-                                fd.append('file', file);
-                                fd.append('entityType', 'Task');
-                                fd.append('entityId', task.id);
-                                const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null;
-                                const res = await fetch('/api/upload', {
-                                  method: 'POST',
-                                  body: fd,
-                                  headers: token ? { Authorization: `Bearer ${token}` } : {},
-                                }).then(r => r.json());
-                                if (res.ok) {
-                                  setPendingAttachments(prev => ({ ...prev, [att.key]: res.attachment.fileUrl }));
-                                  setSuccessMsg(`✅ Đã đính kèm: ${file.name}`);
-                                  setTimeout(() => setSuccessMsg(''), 3000);
-                                } else {
-                                  setError(res.error || 'Lỗi upload file');
+                                const newUrls: string[] = [];
+                                for (let i = 0; i < files.length; i++) {
+                                  const file = files[i];
+                                  const fd = new FormData();
+                                  fd.append('file', file);
+                                  fd.append('entityType', 'Task');
+                                  fd.append('entityId', task.id);
+                                  const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null;
+                                  const res = await fetch('/api/upload', {
+                                    method: 'POST',
+                                    body: fd,
+                                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                                  }).then(r => r.json());
+                                  
+                                  if (res.ok) {
+                                    newUrls.push(res.attachment.fileUrl);
+                                  } else {
+                                    throw new Error(res.error || `Lỗi upload file ${file.name}`);
+                                  }
                                 }
-                              } catch {
-                                setError('Lỗi kết nối khi upload file');
+                                
+                                setPendingAttachments(prev => {
+                                  const existing = prev[att.key] || [];
+                                  return { ...prev, [att.key]: [...existing, ...newUrls] };
+                                });
+                                
+                                setSuccessMsg(`✅ Đã đính kèm: ${files.length} tệp`);
+                                setTimeout(() => setSuccessMsg(''), 3000);
+                              } catch (err: any) {
+                                setError(err.message || 'Lỗi kết nối khi upload file');
                               } finally {
                                 setUploadingKey(null);
                               }
@@ -15856,11 +15850,6 @@ export default function TaskDetailPage() {
                           {uploadingKey === att.key && (
                             <span style={{ fontSize: '0.75rem', color: 'var(--accent)', marginTop: 4, display: 'block' }}>
                               ⏳ Đang upload...
-                            </span>
-                          )}
-                          {pendingAttachments[att.key] && (
-                            <span style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: 4, display: 'block' }}>
-                              ✓ Đã upload thành công
                             </span>
                           )}
                         </div>
