@@ -107,24 +107,33 @@ export async function POST(req: NextRequest) {
       endDate = formData.get('endDate') as string | null
       description = formData.get('description') as string | null
 
-      // Save uploaded files to public/uploads/projects/{projectCode}/
-      const { writeFile, mkdir } = await import('fs/promises')
-      const path = await import('path')
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'projects', projectCode || 'temp')
-      await mkdir(uploadDir, { recursive: true })
+      // Save uploaded files — wrapped in try/catch so file failures
+      // do NOT block project creation (e.g. read-only FS on Docker)
+      try {
+        const { writeFile, mkdir } = await import('fs/promises')
+        const path = await import('path')
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'projects', projectCode || 'temp')
+        await mkdir(uploadDir, { recursive: true })
 
-      const fileKeys = ['file_rfq', 'file_po', 'file_contract', 'file_spec']
-      for (const key of fileKeys) {
-        const file = formData.get(key) as File | null
-        if (file && file.size > 0) {
-          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-          const filePath = path.join(uploadDir, `${key}_${safeName}`)
-          const buffer = Buffer.from(await file.arrayBuffer())
-          await writeFile(filePath, buffer)
-          savedFiles[key] = `/uploads/projects/${projectCode}/${key}_${safeName}`
+        const fileKeys = ['file_rfq', 'file_po', 'file_contract', 'file_spec']
+        for (const key of fileKeys) {
+          const file = formData.get(key) as File | null
+          if (file && file.size > 0) {
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+            const filePath = path.join(uploadDir, `${key}_${safeName}`)
+            const buffer = Buffer.from(await file.arrayBuffer())
+            await writeFile(filePath, buffer)
+            savedFiles[key] = `/uploads/projects/${projectCode}/${key}_${safeName}`
+          }
         }
+      } catch (fsErr) {
+        // File save failed (e.g. read-only FS on Docker). Log but continue —
+        // the project record itself will still be created successfully.
+        console.warn('POST /api/projects: file save skipped (FS error):', fsErr)
+        savedFiles = {}
       }
     } else {
+
       const body = await req.json()
       projectCode = body.projectCode
       projectName = body.projectName
