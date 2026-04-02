@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!['R01', 'R02'].includes(payload.roleCode)) {
+    if (!['R01', 'R02', 'R02a'].includes(payload.roleCode)) {
       return errorResponse('Bạn không có quyền tạo dự án', 403)
     }
 
