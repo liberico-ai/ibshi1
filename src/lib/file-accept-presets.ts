@@ -2,6 +2,14 @@
 // Centralized MIME/extension groups for all AttachmentSlot configs.
 // Add new formats HERE — step-form-configs.ts will inherit automatically.
 
+// ⚠️ ROOT CAUSE FIX:
+// macOS file picker (Safari/Chrome on Mac) grays out files when only
+// dot-extensions (.zip) are given. It needs MIME types to identify files.
+// Always include both: extension + MIME type for non-standard formats.
+
+const ARCH_EXT  = '.zip,.rar'
+const ARCH_MIME = 'application/zip,application/x-zip-compressed,application/vnd.rar,application/x-rar-compressed,application/octet-stream'
+
 export const ACCEPT = {
   // ── Atomic groups ──────────────────────────────────────────────────
   /** PDF + Word documents */
@@ -19,39 +27,44 @@ export const ACCEPT = {
   /** Presentation files */
   PRESENTATION: '.pptx,.ppt',
 
-  /** Compressed archives (ZIP + RAR) */
-  ARCHIVE:      '.zip,.rar',
+  /**
+   * Compressed archives — ZIP + RAR.
+   * Includes MIME types so macOS file picker does NOT gray out archives.
+   * ZIP MIME: application/zip, application/x-zip-compressed
+   * RAR MIME: application/vnd.rar, application/x-rar-compressed
+   */
+  ARCHIVE: `${ARCH_EXT},${ARCH_MIME}`,
 
   // ── Compound presets ───────────────────────────────────────────────
   /**
-   * Documents + archives.
+   * Documents + archives (ZIP/RAR).
    * Use when: hợp đồng, PO, biên bản — có thể kèm phụ lục nén.
    */
-  DOCS_PLUS:      '.pdf,.doc,.docx,.zip,.rar',
+  DOCS_PLUS: `.pdf,.doc,.docx,${ARCH_EXT},${ARCH_MIME}`,
 
   /**
-   * Spreadsheets + archives.
+   * Spreadsheets + archives (ZIP/RAR).
    * Use when: bảng tính BOM, dự toán, báo cáo — có thể gửi gói nhiều sheet.
    */
-  SHEETS_PLUS:    '.xlsx,.xls,.csv,.zip,.rar',
+  SHEETS_PLUS: `.xlsx,.xls,.csv,${ARCH_EXT},${ARCH_MIME}`,
 
   /**
-   * Technical drawings + archives.
+   * Technical drawings + archives (ZIP/RAR).
    * Use when: bản vẽ kỹ thuật, drawing package từ Tekla/AutoCAD — thường rất nhiều file.
    */
-  DRAWING_PLUS:   '.pdf,.dwg,.dxf,.zip,.rar',
+  DRAWING_PLUS: `.pdf,.dwg,.dxf,${ARCH_EXT},${ARCH_MIME}`,
 
   /**
-   * Office docs + spreadsheets + archives.
+   * Office docs + spreadsheets + archives (ZIP/RAR).
    * Use when: tài liệu đa dạng (RFQ, PO, spec, hợp đồng).
    */
-  OFFICE_ARCHIVE: '.pdf,.doc,.docx,.xlsx,.xls,.zip,.rar',
+  OFFICE_ARCHIVE: `.pdf,.doc,.docx,.xlsx,.xls,${ARCH_EXT},${ARCH_MIME}`,
 
   /**
    * Full lesson-learned / handover package.
    * Use when: tài liệu bàn giao dự án, lesson learned, kickoff pack.
    */
-  LESSON_PACK:    '.pdf,.docx,.xlsx,.pptx,.zip,.rar',
+  LESSON_PACK: `.pdf,.docx,.xlsx,.pptx,${ARCH_EXT},${ARCH_MIME}`,
 } as const
 
 export type AcceptPreset = typeof ACCEPT[keyof typeof ACCEPT]
