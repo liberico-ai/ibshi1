@@ -7,6 +7,7 @@ import { PRODUCT_TYPES } from '@/lib/constants'
 import { formatCurrency, getProgressColor } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Badge, Button } from '@/components/ui'
+import MultiFileUpload from '@/components/MultiFileUpload'
 
 interface Project {
   id: string; projectCode: string; projectName: string; clientName: string;
@@ -150,49 +151,72 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
     projectCode: '', projectName: '', clientName: '', productType: 'pressure_vessel',
     contractValue: '', currency: 'VND', description: '', startDate: '', endDate: '',
   })
-  const [files, setFiles] = useState<Record<string, File | null>>({
-    rfq: null, po: null, contract: null, spec: null,
-  })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-
-  function handleFileChange(key: string, file: File | null) {
-    setFiles(prev => ({ ...prev, [key]: file }))
-  }
+  const [createdProject, setCreatedProject] = useState<Project | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSubmitting(true)
 
-    const hasFiles = Object.values(files).some(f => f !== null)
-
-    if (hasFiles) {
-      const formData = new FormData()
-      Object.entries(form).forEach(([k, v]) => formData.append(k, v))
-      Object.entries(files).forEach(([k, f]) => { if (f) formData.append(`file_${k}`, f) })
-      const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        body: formData,
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      }).then(r => r.json())
-      setSubmitting(false)
-      if (res.ok) onCreated(res.project)
-      else setError(res.error || 'Lỗi tạo dự án')
+    const res = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(form) })
+    setSubmitting(false)
+    if (res.ok) {
+      setCreatedProject(res.project)
     } else {
-      const res = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(form) })
-      setSubmitting(false)
-      if (res.ok) onCreated(res.project)
-      else setError(res.error || 'Lỗi tạo dự án')
+      setError(res.error || 'Lỗi tạo dự án')
     }
   }
 
-  const FILE_SLOTS = [
-    { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: '.pdf,.doc,.docx,.xls,.xlsx' },
-    { key: 'po', label: 'PO khách hàng', icon: '📋', accept: '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.png' },
-    { key: 'contract', label: 'Hợp đồng / Phụ lục', icon: '📄', accept: '.pdf,.doc,.docx' },
-    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', icon: '📐', accept: '.pdf,.dwg,.dxf,.doc,.docx' },
-  ]
+  // After project created, show upload section then close
+  if (createdProject) {
+    return (
+      <Card padding="default" className="animate-fade-in">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--space-md)' }}>
+          <span style={{ fontSize: '1.5rem' }}>✅</span>
+          <div>
+            <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 700, margin: 0, color: 'var(--accent)' }}>
+              Dự án đã tạo: {createdProject.projectCode}
+            </h3>
+            <p style={{ fontSize: 'var(--text-sm)', margin: '2px 0 0', color: 'var(--text-secondary)' }}>
+              Bây giờ hãy đính kèm tài liệu liên quan (tuỳ chọn):
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 'var(--space-md)' }}>
+          <MultiFileUpload
+            label="RFQ / Inquiry"
+            entityType="Project"
+            entityId={`${createdProject.id}_rfq`}
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
+          />
+          <MultiFileUpload
+            label="PO khách hàng"
+            entityType="Project"
+            entityId={`${createdProject.id}_po`}
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
+          />
+          <MultiFileUpload
+            label="Hợp đồng / Phụ lục"
+            entityType="Project"
+            entityId={`${createdProject.id}_contract`}
+            accept=".pdf,.doc,.docx"
+          />
+          <MultiFileUpload
+            label="Spec / Bản vẽ kỹ thuật"
+            entityType="Project"
+            entityId={`${createdProject.id}_spec`}
+            accept=".pdf,.dwg,.dxf,.doc,.docx"
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)' }}>
+          <Button variant="accent" onClick={() => onCreated(createdProject)}>Hoàn tất & Đóng</Button>
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <Card padding="default" className="animate-fade-in" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
@@ -221,44 +245,9 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
           <input className="input" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
         <div className="md:col-span-2 input-field"><label className="input-label">Mô tả</label>
           <textarea className="input" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-
-        {/* Document attachments */}
-        <div className="md:col-span-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)', marginTop: 4 }}>
-          <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-sm)', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)' }}>
-            📎 Tài liệu đính kèm
-            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400, color: 'var(--text-muted)' }}>(tuỳ chọn)</span>
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {FILE_SLOTS.map(slot => (
-              <div key={slot.key} style={{
-                border: `1px dashed ${files[slot.key] ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 'var(--radius)', padding: 'var(--space-sm) var(--space-sm)',
-                background: files[slot.key] ? 'var(--ibs-navy-50)' : 'var(--bg-secondary)',
-                transition: 'all 0.2s',
-              }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span>{slot.icon}</span>
-                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--text-primary)' }}>{slot.label}</span>
-                </div>
-                {files[slot.key] ? (
-                  <div className="flex items-center gap-2">
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)' }} className="truncate flex-1">✓ {files[slot.key]!.name}</span>
-                    <button type="button" onClick={() => handleFileChange(slot.key, null)}
-                      style={{ fontSize: 'var(--text-xs)', color: 'var(--danger)', cursor: 'pointer', background: 'none', border: 'none' }}>✕</button>
-                  </div>
-                ) : (
-                  <input type="file" accept={slot.accept}
-                    onChange={(e) => handleFileChange(slot.key, e.target.files?.[0] || null)}
-                    style={{ fontSize: 'var(--text-xs)', width: '100%', color: 'var(--text-muted)' }} />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
         <div className="md:col-span-2 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)' }}>
           <Button variant="outline" onClick={onClose} type="button">Hủy</Button>
-          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo dự án'}</Button>
+          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo dự án →'}</Button>
         </div>
       </form>
     </Card>

@@ -6,6 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
+import MultiFileUpload from '@/components/MultiFileUpload'
 
 interface TaskData {
   id: string
@@ -1374,7 +1375,25 @@ export default function TaskDetailPage() {
   const isActive = task.status === 'IN_PROGRESS'
   const isDone = task.status === 'DONE'
 
+  let isP45Valid = true
+  let displayTitle = task.stepName
+  if (task && task.stepCode === 'P4.5') {
+    const src = (task.resultData as any)?.sourceStep
+    if (src === 'P3.3') displayTitle = 'Kho cấp vật tư cho PM (Thầu phụ)'
+    else if (src === 'P3.4') displayTitle = 'Kho cấp vật tư cho QLSX (Nội bộ)'
+    else displayTitle = 'Kho đề nghị cấp vật tư cho PM và QLSX'
 
+    const reqs = ((task.resultData as Record<string, any>)?.materialIssueRequests as Record<string, any>[]) || []
+    const req = reqs[0]
+    if (req) {
+      const stockItem = inventoryMaterials.find(m => m.materialCode === req.code)
+      const currentStock = stockItem ? Number(stockItem.currentStock) : 0
+      const reqQty = Number(req.quantity) || 0
+      if (currentStock < reqQty) isP45Valid = false
+    } else {
+      isP45Valid = false
+    }
+  }
   return (
     <div style={{ maxWidth: 960, margin: '0 auto' }}>
       {/* Header */}
@@ -1392,7 +1411,7 @@ export default function TaskDetailPage() {
           <span>{task.project.projectName}</span>
         </div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)' }}>
-          {task.stepCode} — {task.stepName}
+          {task.stepCode} — {displayTitle}
         </h1>
         <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary, #475569)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: isDone ? '#059669' : isActive ? '#2563eb' : 'inherit' }}>
@@ -3840,61 +3859,67 @@ export default function TaskDetailPage() {
                     </div>
                   )}
 
-                  {/* Vật tư xuất ra — editable form */}
-                  <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <h3 style={{ margin: 0, fontSize: '1rem', color: '#0ea5e9' }}>📤 Vật tư xuất ra</h3>
-                      {isActive && (
-                        <button type="button" onClick={() => updateIssueItems([...issueItems, { name: '', code: '', spec: '', qty: '', unit: '' }])}
-                          style={{ fontSize: '0.75rem', color: '#0ea5e9', background: 'none', border: '1px dashed #0ea5e9', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-                          + Thêm dòng
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12, padding: '10px 12px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                      <div>
-                        <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Ngày xuất *</label>
-                        <input className="input" type="date" value={formData.issueDate as string || ''} disabled={!isActive}
-                          onChange={e => handleFieldChange('issueDate', e.target.value)}
-                          style={{ fontSize: '0.85rem', padding: '6px 8px', width: '100%' }} />
+                  {/* P4.5 Custom Request UI */}
+                  {(() => {
+                    const reqs = ((task.resultData as Record<string, any>)?.materialIssueRequests as Record<string, any>[]) || []
+                    if (reqs.length === 0) return null
+                    return (
+                      <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>
+                          🧾 Đề nghị cấp ({reqs.length})
+                        </h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.2fr', gap: 10, padding: '8px 12px', background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                          <span>Mã & Tên VT</span>
+                          <span style={{ textAlign: 'center' }}>Quy chuẩn</span>
+                          <span style={{ textAlign: 'center' }}>SL Đề nghị</span>
+                          <span style={{ textAlign: 'center' }}>Thực xuất / Tồn kho</span>
+                        </div>
+                        {reqs.map((req, idx) => {
+                          const stockItem = inventoryMaterials.find(m => m.materialCode === req.code)
+                          const currentStock = stockItem ? Number(stockItem.currentStock) : 0
+                          const reqQty = Number(req.quantity) || 0
+                          const sufficientStock = currentStock >= reqQty
+                          
+                          // Add 'Thực xuất' input logic
+                          const txKey = `actualQty_${req.code}_${idx}`
+                          const actualQtyStr = formData[txKey] as string
+                          const updateTx = (val: string) => handleFieldChange(txKey, val)
+                          
+                          return (
+                            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.2fr', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', alignItems: 'center' }}>
+                              <div>
+                                <div style={{ fontWeight: 600, color: 'var(--accent)' }}>{req.code}</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{req.name}</div>
+                              </div>
+                              <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{req.spec || '—'}</div>
+                              <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.9rem' }}>{reqQty.toLocaleString('vi-VN')} <span style={{fontSize:'0.75rem', color: 'var(--text-muted)'}}>{req.unit}</span></div>
+                              
+                              {stockItem ? (
+                                <div style={{ textAlign: 'center' }}>
+                                  <div style={{ fontWeight: 800, fontSize: '0.9rem', color: sufficientStock ? '#16a34a' : '#dc2626' }}>
+                                    (Tồn: {currentStock.toLocaleString('vi-VN')} {stockItem.unit})
+                                  </div>
+                                  {!sufficientStock && <div style={{ fontSize: '0.7rem', color: '#dc2626', marginTop: 4, fontWeight: 600 }}>Tồn kho KHÔNG ĐỦ!</div>}
+                                  {sufficientStock && isActive && (
+                                     <div style={{ marginTop: 6, display: 'flex', justifyContent: 'center' }}>
+                                        <input className="input" type="number" placeholder="Số lượng thực xuất" value={actualQtyStr || ''} onChange={e => updateTx(e.target.value)} disabled={!isActive} style={{ fontSize:'0.8rem', padding: '6px 8px', textAlign: 'center', width: '130px', border: '1px solid #16a34a', background: '#f0fdf4' }} />
+                                     </div>
+                                  )}
+                                  {isDone && (
+                                     <div style={{ marginTop: 6, fontSize: '0.85rem', fontWeight: 700, color: '#16a34a' }}>
+                                        Thực xuất: {actualQtyStr || 0}
+                                     </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div style={{ textAlign: 'center', color: '#dc2626', fontWeight: 600, fontSize: '0.8rem' }}>Kho chưa có VT này</div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
-                      <div>
-                        <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>WBS Node *</label>
-                        <input className="input" placeholder="Nhập WBS Node" value={formData.wbsNode as string || ''} disabled={!isActive}
-                          onChange={e => handleFieldChange('wbsNode', e.target.value)}
-                          style={{ fontSize: '0.85rem', padding: '6px 8px', width: '100%' }} />
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.5fr 30px', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
-                      {['#', 'Tên VT', 'Mã VT', 'Quy chuẩn', 'Khối lượng', 'ĐVT', ''].map(h => (
-                        <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                      ))}
-                    </div>
-                    {issueItems.map((item, idx) => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.5fr 30px', gap: 4, padding: '3px 2px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{idx + 1}</span>
-                        <input className="input" placeholder="Tên vật tư" value={item.name} disabled={!isActive}
-                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], name: e.target.value }; updateIssueItems(next) }}
-                          style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                        <input className="input" placeholder="Mã VT" value={item.code} disabled={!isActive}
-                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], code: e.target.value }; updateIssueItems(next) }}
-                          style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                        <input className="input" placeholder="Quy chuẩn" value={item.spec} disabled={!isActive}
-                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], spec: e.target.value }; updateIssueItems(next) }}
-                          style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                        <input className="input" type="number" placeholder="0" value={item.qty} disabled={!isActive}
-                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], qty: e.target.value }; updateIssueItems(next) }}
-                          style={{ fontSize: '0.8rem', padding: '4px 6px', textAlign: 'right' }} />
-                        <input className="input" placeholder="ĐVT" value={item.unit} disabled={!isActive}
-                          onChange={e => { const next = [...issueItems]; next[idx] = { ...next[idx], unit: e.target.value }; updateIssueItems(next) }}
-                          style={{ fontSize: '0.8rem', padding: '4px 6px' }} />
-                        {isActive && issueItems.length > 1 && (
-                          <button type="button" onClick={() => updateIssueItems(issueItems.filter((_, i) => i !== idx))}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700, padding: 0 }}>−</button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                    )
+                  })()}
                 </>
               )
             })()}
@@ -4868,39 +4893,18 @@ export default function TaskDetailPage() {
             {config.attachments.length > 0 && (
               <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
                 <h3 style={{ marginTop: 0, fontSize: '1rem' }}>📎 Tài liệu đính kèm</h3>
-                {config.attachments.map(att => {
-                  const FILE_KEY_MAP: Record<string, string> = { rfq: 'file_rfq', po: 'file_po', spec: 'file_spec', contract: 'file_contract' }
-                  const fileKey = FILE_KEY_MAP[att.key]
-                  const fileUrl = siblingFiles && fileKey ? siblingFiles[fileKey] : null
-                  return (
-                    <div key={att.key} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: 4 }}>
-                        {att.label} {att.required && <span style={{ color: '#e74c3c' }}>*</span>}
-                      </div>
-                      {fileUrl ? (() => {
-                        const fileName = decodeURIComponent(fileUrl.split('/').pop() || '').replace(/^file_(rfq|po|contract|spec)_/, '')
-                        return (
-                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" style={{
-                            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-                            borderRadius: 6, background: '#f0fdf4', border: '1px solid #bbf7d0',
-                            textDecoration: 'none', color: '#15803d', fontSize: '0.8rem', fontWeight: 500,
-                          }}>
-                            <span>📄</span>
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</span>
-                            <span style={{ marginLeft: 'auto', flexShrink: 0, color: '#166534' }}>↓</span>
-                          </a>
-                        )
-                      })() : (
-                        <input
-                          type="file"
-                          accept={att.accept}
-                          disabled={!isActive}
-                          style={{ fontSize: '0.8rem', width: '100%' }}
-                        />
-                      )}
-                    </div>
-                  )
-                })}
+                {config.attachments.map(att => (
+                  <div key={att.key} style={{ paddingBottom: '10px', borderBottom: '1px solid var(--border)', marginBottom: '10px' }}>
+                    <MultiFileUpload
+                      label={att.label + (att.required ? ' *' : '')}
+                      entityType="Task"
+                      entityId={`${task.id}_${att.key}`}
+                      accept={att.accept || undefined}
+                      disabled={!isActive}
+                      compact
+                    />
+                  </div>
+                ))}
               </div>
             )}
 
@@ -4985,8 +4989,8 @@ export default function TaskDetailPage() {
             {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && (
               <div className="card" style={{ padding: '1.25rem' }}>
                 <h3 style={{ marginTop: 0, fontSize: '1rem' }}>🚀 Hành động</h3>
-                {/* P4.3 + P5.3 + P5.4: Conditional buttons based on inspection/acceptance result */}
-                {(task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !(() => { try { const items = JSON.parse(formData.qcItems as string || '[]'); return items.some((q: {result: string}) => q.result === 'FAIL') } catch { return false } })()) && (task.stepCode !== 'P5.4' || !formData.acceptanceResult || formData.acceptanceResult === 'PASS' || formData.acceptanceResult === 'CONDITIONAL') && (
+                {/* P4.3 + P5.3 + P5.4: Conditional buttons based on inspection/acceptance result, and P4.5 invalid stock */}
+                {(task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !(() => { try { const items = JSON.parse(formData.qcItems as string || '[]'); return items.some((q: {result: string}) => q.result === 'FAIL') } catch { return false } })()) && (task.stepCode !== 'P5.4' || !formData.acceptanceResult || formData.acceptanceResult === 'PASS' || formData.acceptanceResult === 'CONDITIONAL') && isP45Valid && (
                 <button
                   className="btn-accent"
                   onClick={() => handleSubmit('complete')}
