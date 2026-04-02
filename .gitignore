@@ -43,21 +43,25 @@ next-env.d.ts
 /src/generated/prisma
 
 # Non-essential project files
-/Dữ liệu HI sau migrate/
-*.pdf
-IBSHI_Users_Roles_Export.xls
-rename_task.js
-rename_task.sql
-system-audit-*.md
-gap-analysis.md
-gap-closure-roadmap.md
-erp-roadmap.md
-schema-expansion.md
 /docs/
 /.agent/
 /.gemini/
 /public/uploads/
-ibs-erp-20260322
+/.venv/
+
+# Data & document files (never commit)
+*.pdf
+*.xlsx
+*.docx
+*.xls
+
+# One-off fix/scratch scripts
+fix*.js
+wbs_*.js
+wbs_*.txt
+restore_*.js
+rename_task.*
+db-connect.sh
 
 # Debug & scratch scripts
 *-output.txt
@@ -69,27 +73,31 @@ tmp-query.js
 list-materials.js
 export-steps.js
 update-p23.js
+test.ts
+
+# Test artifacts
 test-results/
+e2e/screenshots/
 
-# Backup folders (never commit full source copies)
-/backup/
-
-# Temp files & debug dumps
+# Debug dumps & temp files
+*_debug.json
+parsed-*.json
+tsc_*.txt
 tmp*
 tmp-*/
 debug*.txt
-cards.txt
-lines.txt
-output.txt
-match_results.txt
-wbs_lines.txt
 *.log
+system-audit-*.md
+gap-analysis.md
+gap-closure-roadmap.md
+erp-roadmap.md
+schema-expansion.md
 
-# Scratch seeds & one-off scripts
+# Backup folders
+/backup/
+ibs-erp-20260322
+/Dữ liệu HI sau migrate/
+
+# Scratch seeds
 tmp_seed.ts
 tmp_seed.js
-
-# Excel/Word docs (use /docs or external storage)
-*.xlsx
-*.docx
-*.xls

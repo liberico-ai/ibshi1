@@ -8,9 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "npx prisma migrate dev",
+    "db:migrate:deploy": "npx prisma migrate deploy",
     "db:seed": "npx prisma db seed",
     "db:setup": "npx prisma migrate dev --name init && npx prisma db seed",
-    "db:studio": "npx prisma studio"
+    "db:studio": "npx prisma studio",
+    "deploy": "bash scripts/deploy.sh"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

@@ -1,4 +1,0 @@
-src/app/dashboard/tasks/[id]/page.tsx(590,45): error TS2686: 'React' refers to a UMD global, but the current file is a module. Consider adding an import instead.
-src/app/dashboard/tasks/[id]/page.tsx(2011,24): error TS2367: This comparison appears to be unintentional because the types '"P2.4"' and '"P1.2"' have no overlap.
-src/app/dashboard/tasks/[id]/page.tsx(2011,84): error TS2367: This comparison appears to be unintentional because the types '"P2.4"' and '"P2.1A"' have no overlap.
-src/app/dashboard/tasks/[id]/page.tsx(2071,21): error TS2367: This comparison appears to be unintentional because the types '"P2.4"' and '"P2.1A"' have no overlap.
