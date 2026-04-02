@@ -348,6 +348,47 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       previousStepData = { prItems: allPrItems }
     }
 
+    // For P3.3 and P3.4: fetch P1.2A (WBS plan) + BOM from P2.1/P2.2/P2.3
+    if (task.stepCode === 'P3.3' || task.stepCode === 'P3.4') {
+      const [p12aTask, p21Task, p22Task, p23Task] = await Promise.all([
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P1.2A' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.1' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.2' },
+          select: { resultData: true, status: true },
+        }),
+        prisma.workflowTask.findFirst({
+          where: { projectId: task.projectId, stepCode: 'P2.3' },
+          select: { resultData: true, status: true },
+        }),
+      ])
+      type BomEntry = { name: string; code: string; spec: string; quantity: string; unit: string }
+      const allBomItems: (BomEntry & { source: string })[] = []
+      const bomSources = [
+        { data: p21Task?.resultData as Record<string, unknown> | null, label: 'P2.1 - VT chính' },
+        { data: p22Task?.resultData as Record<string, unknown> | null, label: 'P2.2 - Hàn & Sơn' },
+        { data: p23Task?.resultData as Record<string, unknown> | null, label: 'P2.3 - VT phụ' },
+      ]
+      for (const src of bomSources) {
+        const items = (src.data?.bomItems as BomEntry[]) || []
+        for (const item of items) {
+          if (item.name?.trim()) {
+            allBomItems.push({ ...item, source: src.label })
+          }
+        }
+      }
+      previousStepData = {
+        plan: p12aTask?.resultData || null,
+        bomItems: allBomItems,
+      }
+    }
+
     // For P3.6: fetch P3.5 (supplier quotes) + P1.2 (estimate for budget comparison)
     if (task.stepCode === 'P3.6') {
       const [p35Task, p12Task] = await Promise.all([

@@ -1,0 +1,6 @@
+src/app/dashboard/tasks/[id]/page.tsx(7,3): error TS1005: ',' expected.
+src/app/dashboard/tasks/[id]/page.tsx(7,9): error TS1005: ',' expected.
+src/app/dashboard/tasks/[id]/page.tsx(7,26): error TS1005: ',' expected.
+src/app/dashboard/tasks/[id]/page.tsx(7,28): error TS1003: Identifier expected.
+src/app/dashboard/tasks/[id]/page.tsx(195,4): error TS1128: Declaration or statement expected.
+src/app/dashboard/tasks/[id]/page.tsx(195,6): error TS1434: Unexpected keyword or identifier.

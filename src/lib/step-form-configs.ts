@@ -124,7 +124,6 @@ const P1_2A: StepFormConfig = {
     { key: 'kickoffAgenda', label: 'Nội dung Kickoff', labelEn: 'Kickoff Agenda', type: 'textarea', fullWidth: true },
   ],
   checklist: [
-    { key: 'wbs_created', label: 'Đã tạo WBS theo biểu mẫu BCTH-IBSHI-QLDA-095' },
     { key: 'kickoff_planned', label: 'Đã lên kế hoạch kickoff meeting' },
     { key: 'budget_distributed', label: 'Đã phân bổ theo WBS node' },
   ],
