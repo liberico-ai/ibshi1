@@ -1,16 +1,11 @@
-import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { successResponse, errorResponse } from '@/lib/auth'
 
 // GET /api/cron/deadline-check — Check overdue tasks and generate notifications
 // Called by external cron or Vercel cron every 15 minutes
-export async function GET(req: NextRequest) {
+// Note: cron secret validation is handled by middleware
+export async function GET() {
   try {
-    const cronSecret = req.headers.get('x-cron-secret')
-    const expectedSecret = process.env.CRON_SECRET || 'ibs-cron-2026'
-    if (cronSecret && cronSecret !== expectedSecret) {
-      return errorResponse('Invalid cron secret', 401)
-    }
 
     const now = new Date()
 

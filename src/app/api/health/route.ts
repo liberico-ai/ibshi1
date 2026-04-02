@@ -6,7 +6,7 @@ export async function GET() {
 
   try {
     // Verify database connectivity
-    await prisma.$queryRawUnsafe('SELECT 1')
+    await prisma.$queryRaw`SELECT 1`
 
     return NextResponse.json({
       status: 'ok',
