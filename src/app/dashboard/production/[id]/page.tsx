@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { RBAC } from '@/lib/rbac-rules'
 
 interface WorkOrderDetail {
   id: string; woCode: string; projectId: string; description: string;
@@ -47,6 +48,9 @@ export default function ProductionDetailPage() {
   const [wo, setWo] = useState<WorkOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [transitioning, setTransitioning] = useState(false)
+  
+  const currentUser = useAuthStore((state) => state.user)
+  const roleCode = currentUser?.roleCode || ''
 
   useEffect(() => { loadWO() }, [id])
 
@@ -71,6 +75,9 @@ export default function ProductionDetailPage() {
 
   const cfg = STATUS_CFG[wo.status] || STATUS_CFG.OPEN
   const transitions = TRANSITIONS[wo.status] || []
+  
+  // Conditionally show buttons if user role is in RBAC list
+  const showActionButtons = RBAC.PRODUCTION_ACTION.includes(roleCode) || RBAC.QC_ACTION.includes(roleCode)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -90,7 +97,12 @@ export default function ProductionDetailPage() {
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{wo.description}</h1>
           </div>
           <div className="flex gap-2">
-            {transitions.map(t => (
+            {!showActionButtons && transitions.length > 0 && (
+              <span className="text-sm px-4 py-2 flex items-center gap-1 rounded-lg" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
+                🔒 Chỉ quyền SX/QC
+              </span>
+            )}
+            {showActionButtons && transitions.map(t => (
               <button
                 key={t.next}
                 onClick={() => handleTransition(t.next)}

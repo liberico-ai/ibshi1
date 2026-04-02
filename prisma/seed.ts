@@ -90,7 +90,7 @@ async function main() {
     { username: 'duongnq', fullName: 'Nguyễn Quý Dương', roleCode: 'R02a', userLevel: 2, deptCode: 'QLDA' },
     { username: 'anhtv', fullName: 'Trần Việt Anh', roleCode: 'R02a', userLevel: 2, deptCode: 'QLDA' },
     { username: 'luudt', fullName: 'Đỗ Trọng Lưu', roleCode: 'R04', userLevel: 1, deptCode: 'TK' },
-    { username: 'nampq', fullName: 'Phạm Quốc Nam', roleCode: 'R04', userLevel: 1, deptCode: 'TK' },
+    { username: 'tuanpm', fullName: 'Phạm Minh Tuấn', roleCode: 'R04', userLevel: 1, deptCode: 'TK' },
     { username: 'longlh', fullName: 'Lê Hồng Long', roleCode: 'R04a', userLevel: 2, deptCode: 'TK' },
     { username: 'nguyennth', fullName: 'Ninh Thị Hồng Nguyệt', roleCode: 'R04a', userLevel: 2, deptCode: 'TK' },
     { username: 'anhvp', fullName: 'Vũ Phương Anh', roleCode: 'R04a', userLevel: 2, deptCode: 'TK' },

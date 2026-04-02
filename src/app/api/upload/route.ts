@@ -4,6 +4,25 @@ import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 
+// ── Upload Security ──────────────────────────────────────────────────
+// Server-side whitelist — must mirror ACCEPT presets in file-accept-presets.ts
+const ALLOWED_EXTENSIONS = new Set([
+  // Documents
+  '.pdf', '.doc', '.docx',
+  // Spreadsheets
+  '.xlsx', '.xls', '.csv',
+  // Technical drawings
+  '.dwg', '.dxf',
+  // Images
+  '.jpg', '.jpeg', '.png',
+  // Presentations
+  '.pptx', '.ppt',
+  // Archives (ZIP + RAR)
+  '.zip', '.rar',
+])
+
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+
 // POST /api/upload — File upload
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +36,23 @@ export async function POST(req: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ ok: false, error: 'Chưa chọn file' }, { status: 400 })
+    }
+
+    // Validate file extension
+    const ext = path.extname(file.name).toLowerCase()
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      return NextResponse.json(
+        { ok: false, error: `Định dạng file "${ext}" không được phép. Chấp nhận: PDF, Word, Excel, DWG, hình ảnh, ZIP, RAR.` },
+        { status: 400 }
+      )
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { ok: false, error: 'File quá lớn. Kích thước tối đa là 50 MB.' },
+        { status: 400 }
+      )
     }
 
     // Create upload directory

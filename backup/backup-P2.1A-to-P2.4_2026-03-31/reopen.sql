@@ -1,1 +1,0 @@
-UPDATE "WorkflowTask" SET status = 'OPEN', "completedAt" = NULL, "completedBy" = NULL, "resultData" = '{}' WHERE "stepCode" = 'P1.2A' AND "projectId" = (SELECT id FROM "Project" WHERE "projectCode" = 'DA-26-199' LIMIT 1);

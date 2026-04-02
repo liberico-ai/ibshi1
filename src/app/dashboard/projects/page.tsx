@@ -7,6 +7,8 @@ import { PRODUCT_TYPES } from '@/lib/constants'
 import { formatCurrency, getProgressColor } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Badge, Button } from '@/components/ui'
+import { ACCEPT } from '@/lib/file-accept-presets'
+
 
 interface Project {
   id: string; projectCode: string; projectName: string; clientName: string;
@@ -118,7 +120,7 @@ export default function ProjectsPage() {
             <div className="flex items-center gap-4 text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
               <span>{PRODUCT_TYPES.find((t) => t.value === p.productType)?.label || p.productType}</span>
               {p.contractValue && (
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1" suppressHydrationWarning>
                   💰 {formatCurrency(p.contractValue, p.currency)}
                 </span>
               )}
@@ -150,49 +152,93 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
     projectCode: '', projectName: '', clientName: '', productType: 'pressure_vessel',
     contractValue: '', currency: 'VND', description: '', startDate: '', endDate: '',
   })
-  const [files, setFiles] = useState<Record<string, File | null>>({
-    rfq: null, po: null, contract: null, spec: null,
+  const [files, setFiles] = useState<Record<string, File[]>>({
+    rfq: [], po: [], contract: [], spec: [],
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  function handleFileChange(key: string, file: File | null) {
-    setFiles(prev => ({ ...prev, [key]: file }))
+  const FILE_SLOTS = [
+    { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'po', label: 'PO khách hàng', icon: '📋', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'contract', label: 'Hợp đồng / Phụ lục', icon: '📄', accept: ACCEPT.DOCS_PLUS },
+    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', icon: '📐', accept: ACCEPT.DRAWING_PLUS },
+  ]
+
+  function handleFileChange(key: string, incomingFiles: FileList | null) {
+    if (incomingFiles) {
+      const filesArr = Array.from(incomingFiles)
+      const slot = FILE_SLOTS.find(s => s.key === key)
+      if (slot) {
+        // Strict mapping of allowed extensions out of the ACCEPT string
+        const allowedExts = slot.accept.split(',').filter(a => a.startsWith('.')).map(e => e.toLowerCase())
+        const invalidFile = filesArr.find(f => {
+          const ext = '.' + f.name.split('.').pop()?.toLowerCase()
+          return !allowedExts.includes(ext)
+        })
+        if (invalidFile) {
+          setError(`File định dạng không hợp lệ: ${invalidFile.name}. Vui lòng chỉ tải các dạng: ${allowedExts.join(', ')}`)
+          return
+        }
+      }
+      setError('')
+      setFiles(prev => ({ ...prev, [key]: filesArr }))
+    }
+  }
+
+  function handleFileRemove(key: string, index: number) {
+    setFiles(prev => {
+      const newFiles = [...prev[key]]
+      newFiles.splice(index, 1)
+      return { ...prev, [key]: newFiles }
+    })
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSubmitting(true)
 
-    const hasFiles = Object.values(files).some(f => f !== null)
+    try {
+      const hasFiles = Object.values(files).some(f => f !== null)
 
-    if (hasFiles) {
-      const formData = new FormData()
-      Object.entries(form).forEach(([k, v]) => formData.append(k, v))
-      Object.entries(files).forEach(([k, f]) => { if (f) formData.append(`file_${k}`, f) })
-      const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        body: formData,
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      }).then(r => r.json())
+      if (hasFiles) {
+        const formData = new FormData()
+        Object.entries(form).forEach(([k, v]) => formData.append(k, v))
+        Object.entries(files).forEach(([k, fileArray]) => {
+          fileArray.forEach(f => formData.append(`file_${k}`, f))
+        })
+        const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          body: formData,
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        })
+        if (!response.ok) {
+          // Try to parse error JSON; if not JSON (e.g. 413 HTML page), use status text
+          let errMsg = `Lỗi server (${response.status})`
+          try { const errBody = await response.json(); errMsg = errBody.error || errMsg } catch { /* non-JSON response */ }
+          setSubmitting(false)
+          setError(errMsg)
+          return
+        }
+        const res = await response.json()
+        setSubmitting(false)
+        if (res.ok) onCreated(res.project)
+        else setError(res.error || 'Lỗi tạo dự án')
+      } else {
+        const res = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(form) })
+        setSubmitting(false)
+        if (res.ok) onCreated(res.project)
+        else setError(res.error || 'Lỗi tạo dự án')
+      }
+    } catch (err) {
       setSubmitting(false)
-      if (res.ok) onCreated(res.project)
-      else setError(res.error || 'Lỗi tạo dự án')
-    } else {
-      const res = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(form) })
-      setSubmitting(false)
-      if (res.ok) onCreated(res.project)
-      else setError(res.error || 'Lỗi tạo dự án')
+      setError(err instanceof Error ? err.message : 'Lỗi kết nối. Vui lòng thử lại.')
     }
   }
 
-  const FILE_SLOTS = [
-    { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: '.pdf,.doc,.docx,.xls,.xlsx' },
-    { key: 'po', label: 'PO khách hàng', icon: '📋', accept: '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.png' },
-    { key: 'contract', label: 'Hợp đồng / Phụ lục', icon: '📄', accept: '.pdf,.doc,.docx' },
-    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', icon: '📐', accept: '.pdf,.dwg,.dxf,.doc,.docx' },
-  ]
+
+  // FILE_SLOTS is defined above handleFileChange
 
   return (
     <Card padding="default" className="animate-fade-in" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
@@ -210,7 +256,9 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
             {PRODUCT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select></div>
         <div className="input-field"><label className="input-label">Giá trị hợp đồng</label>
-          <input className="input" type="number" placeholder="0" value={form.contractValue} onChange={(e) => setForm({ ...form, contractValue: e.target.value })} /></div>
+          <input className="input" type="text" inputMode="numeric" placeholder="0"
+            value={form.contractValue ? form.contractValue.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+            onChange={(e) => setForm({ ...form, contractValue: e.target.value.replace(/,/g, '') })} /></div>
         <div className="input-field"><label className="input-label">Tiền tệ</label>
           <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             <option value="VND">VND</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="JPY">JPY</option>
@@ -231,24 +279,34 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {FILE_SLOTS.map(slot => (
               <div key={slot.key} style={{
-                border: `1px dashed ${files[slot.key] ? 'var(--accent)' : 'var(--border)'}`,
+                border: `1px dashed ${files[slot.key].length > 0 ? 'var(--accent)' : 'var(--border)'}`,
                 borderRadius: 'var(--radius)', padding: 'var(--space-sm) var(--space-sm)',
-                background: files[slot.key] ? 'var(--ibs-navy-50)' : 'var(--bg-secondary)',
+                background: files[slot.key].length > 0 ? 'var(--ibs-navy-50)' : 'var(--bg-secondary)',
                 transition: 'all 0.2s',
               }}>
                 <div className="flex items-center gap-2 mb-2">
                   <span>{slot.icon}</span>
                   <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--text-primary)' }}>{slot.label}</span>
                 </div>
-                {files[slot.key] ? (
-                  <div className="flex items-center gap-2">
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)' }} className="truncate flex-1">✓ {files[slot.key]!.name}</span>
-                    <button type="button" onClick={() => handleFileChange(slot.key, null)}
-                      style={{ fontSize: 'var(--text-xs)', color: 'var(--danger)', cursor: 'pointer', background: 'none', border: 'none' }}>✕</button>
+                {files[slot.key].length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {files[slot.key].map((f, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-white/50 p-1.5 rounded border border-[var(--accent)]/20">
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)' }} className="truncate flex-1">✓ {f.name}</span>
+                        <button type="button" onClick={() => handleFileRemove(slot.key, i)}
+                          style={{ fontSize: 'var(--text-xs)', color: 'var(--danger)', cursor: 'pointer', background: 'none', border: 'none', padding: '0 4px', flexShrink: 0 }}>✕</button>
+                      </div>
+                    ))}
+                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)', cursor: 'pointer', textAlign: 'center', marginTop: 4 }}>
+                      + Chọn lại tệp
+                      <input type="file" multiple
+                        onChange={(e) => { handleFileChange(slot.key, e.target.files); e.target.value = '' }}
+                        className="hidden" style={{ display: 'none' }} />
+                    </label>
                   </div>
                 ) : (
-                  <input type="file" accept={slot.accept}
-                    onChange={(e) => handleFileChange(slot.key, e.target.files?.[0] || null)}
+                  <input type="file" multiple
+                    onChange={(e) => { handleFileChange(slot.key, e.target.files); e.target.value = '' }}
                     style={{ fontSize: 'var(--text-xs)', width: '100%', color: 'var(--text-muted)' }} />
                 )}
               </div>

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatCurrency } from '@/lib/utils'
+import { RBAC } from '@/lib/rbac-rules'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Button } from '@/components/ui'
 import { ChevronRight } from 'lucide-react'
@@ -45,6 +46,10 @@ export default function WarehousePage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
+  const currentUser = useAuthStore((state) => state.user)
+  const roleCode = currentUser?.roleCode || ''
+  const hasStorePermission = RBAC.STORE_ACTION.includes(roleCode)
+
   useEffect(() => { apiFetch('/api/warehouse/stats').then(r => { if (r.ok) setStats(r) }) }, [])
   useEffect(() => { setPage(1) }, [search, categoryFilter])
   useEffect(() => { loadMaterials() }, [search, categoryFilter, page])
@@ -71,7 +76,7 @@ export default function WarehousePage() {
       <PageHeader
         title="Quản lý Kho"
         subtitle={`${pagination.total} vật tư • ${materials.filter(m => m.lowStock).length} dưới mức tối thiểu`}
-        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Thêm vật tư</Button>}
+        actions={hasStorePermission ? <Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Thêm vật tư</Button> : undefined}
       />
 
       {/* ═══ KPI Dashboard v2 ═══ */}

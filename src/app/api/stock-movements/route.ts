@@ -3,6 +3,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { RBAC } from '@/lib/rbac-rules'
 
 // GET /api/stock-movements — List stock movements
 export async function GET(req: NextRequest) {
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!['R01', 'R05'].includes(payload.roleCode)) {
+    if (!RBAC.STORE_ACTION.includes(payload.roleCode)) {
       return errorResponse('Chỉ Kho hoặc BGĐ mới được tạo phiếu nhập/xuất', 403)
     }
 
