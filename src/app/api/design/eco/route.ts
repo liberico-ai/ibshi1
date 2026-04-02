@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createEcoSchema } from '@/lib/schemas'
 
 // GET /api/design/eco — List ECOs
 export async function GET(req: NextRequest) {
@@ -32,12 +34,9 @@ export async function POST(req: NextRequest) {
     return errorResponse('Không có quyền tạo ECO', 403)
   }
 
-  const body = await req.json()
-  const { projectId, title, description, changeType, impactCost, impactSchedule } = body
-
-  if (!projectId || !title || !description || !changeType) {
-    return errorResponse('Thiếu: dự án, tiêu đề, mô tả, loại thay đổi')
-  }
+  const result = await validateBody(req, createEcoSchema)
+  if (!result.success) return result.response
+  const { projectId, title, description, changeType, impactCost, impactSchedule } = result.data
 
   const year = new Date().getFullYear().toString().slice(-2)
   const count = await prisma.engineeringChangeOrder.count()

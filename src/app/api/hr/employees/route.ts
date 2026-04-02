@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateQuery, validateBody } from '@/lib/api-helpers'
+import { employeeListQuerySchema, createEmployeeSchema } from '@/lib/schemas'
 
 // GET /api/hr/employees — list with filters
 export async function GET(req: NextRequest) {
@@ -8,11 +10,9 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    const { searchParams } = new URL(req.url)
-    const search = searchParams.get('search') || ''
-    const status = searchParams.get('status') || ''
-    const department = searchParams.get('department') || ''
-    const page = Math.max(1, Number(searchParams.get('page')) || 1)
+    const qResult = validateQuery(req.url, employeeListQuerySchema)
+    if (!qResult.success) return qResult.response
+    const { page, search, status, department } = qResult.data
     const limit = 20
 
     const where: Record<string, unknown> = {}
@@ -58,12 +58,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Không có quyền' }, { status: 403 })
     }
 
-    const body = await req.json()
-    const { employeeCode, fullName, phone, email, departmentId, position, employmentType, joinDate } = body
-
-    if (!employeeCode || !fullName) {
-      return errorResponse('Thiếu mã NV hoặc tên', 400)
-    }
+    const result = await validateBody(req, createEmployeeSchema)
+    if (!result.success) return result.response
+    const { employeeCode, fullName, phone, email, departmentId, position, employmentType, joinDate } = result.data
 
     const employee = await prisma.employee.create({
       data: {

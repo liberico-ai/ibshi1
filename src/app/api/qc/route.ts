@@ -3,6 +3,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateQuery, validateBody } from '@/lib/api-helpers'
+import { inspectionListQuerySchema, createInspectionSchema } from '@/lib/schemas'
 
 // GET /api/qc — List inspections
 export async function GET(req: NextRequest) {
@@ -10,13 +12,9 @@ export async function GET(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { searchParams } = new URL(req.url)
-    const projectId = searchParams.get('projectId')
-    const type = searchParams.get('type')
-    const status = searchParams.get('status')
-    const search = searchParams.get('search') || ''
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
+    const qResult = validateQuery(req.url, inspectionListQuerySchema)
+    if (!qResult.success) return qResult.response
+    const { page, limit, search, status, projectId, type } = qResult.data
 
     const where: Record<string, unknown> = {}
     if (projectId) where.projectId = projectId
@@ -79,12 +77,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('Không có quyền tạo biên bản QC', 403)
     }
 
-    const body = await req.json()
-    const { inspectionCode, projectId, type, stepCode, checklistItems } = body
-
-    if (!inspectionCode || !projectId || !type || !stepCode) {
-      return errorResponse('Thiếu: mã biên bản, dự án, loại, bước workflow')
-    }
+    const result = await validateBody(req, createInspectionSchema)
+    if (!result.success) return result.response
+    const { inspectionCode, projectId, type, stepCode, checklistItems } = result.data
 
     const existing = await prisma.inspection.findUnique({ where: { inspectionCode } })
     if (existing) return errorResponse(`Mã biên bản ${inspectionCode} đã tồn tại`)

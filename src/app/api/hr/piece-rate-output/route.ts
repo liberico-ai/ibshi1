@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createPieceRateOutputSchema } from '@/lib/schemas'
 
 // GET /api/hr/piece-rate-output
 export async function GET(req: NextRequest) {
@@ -51,28 +53,25 @@ export async function POST(req: NextRequest) {
       return errorResponse('Không có quyền nhập KL khoán', 403)
     }
 
-    const body = await req.json()
-    const { contractId, month, year, quantity, notes } = body
-
-    if (!contractId || !month || !year || quantity === undefined) {
-      return errorResponse('Thiếu: contractId, month, year, quantity')
-    }
+    const result = await validateBody(req, createPieceRateOutputSchema)
+    if (!result.success) return result.response
+    const { contractId, month, year, quantity, notes } = result.data
 
     // Get unit price from contract
     const contract = await prisma.pieceRateContract.findUnique({ where: { id: contractId } })
     if (!contract) return errorResponse('HĐ khoán không tồn tại', 404)
 
     const unitPrice = Number(contract.unitPrice)
-    const totalAmount = parseFloat(quantity) * unitPrice
+    const totalAmount = quantity * unitPrice
 
     const output = await prisma.monthlyPieceRateOutput.upsert({
-      where: { contractId_month_year: { contractId, month: Number(month), year: Number(year) } },
-      update: { quantity: parseFloat(quantity), unitPrice, totalAmount, notes },
+      where: { contractId_month_year: { contractId, month, year } },
+      update: { quantity, unitPrice, totalAmount, notes },
       create: {
         contractId,
-        month: Number(month),
-        year: Number(year),
-        quantity: parseFloat(quantity),
+        month,
+        year,
+        quantity,
         unitPrice,
         totalAmount,
         notes,

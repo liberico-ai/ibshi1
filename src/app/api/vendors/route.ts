@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createVendorSchema } from '@/lib/schemas'
 
 // GET /api/vendors — List vendors with stats
 export async function GET(req: NextRequest) {
@@ -43,12 +45,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('Không có quyền tạo NCC', 403)
     }
 
-    const body = await req.json()
-    const { vendorCode, name, category, country, contactName, email, phone, address, notes } = body
-
-    if (!vendorCode || !name || !category) {
-      return errorResponse('Thiếu thông tin bắt buộc (mã, tên, loại)')
-    }
+    const result = await validateBody(req, createVendorSchema)
+    if (!result.success) return result.response
+    const { vendorCode, name, category, country, contactName, email, phone, address, notes } = result.data
 
     const existing = await prisma.vendor.findUnique({ where: { vendorCode } })
     if (existing) return errorResponse(`Mã NCC ${vendorCode} đã tồn tại`)

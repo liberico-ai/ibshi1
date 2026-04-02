@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createMillCertSchema } from '@/lib/schemas'
 
 // GET /api/mill-certificates — list mill certificates
 export async function GET(req: NextRequest) {
@@ -44,12 +46,9 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    const body = await req.json()
-    const { certNumber, materialId, vendorId, heatNumber, grade, thickness } = body
-
-    if (!certNumber || !materialId || !vendorId || !heatNumber) {
-      return errorResponse('Thiếu: certNumber, materialId, vendorId, heatNumber')
-    }
+    const result = await validateBody(req, createMillCertSchema)
+    if (!result.success) return result.response
+    const { certNumber, materialId, vendorId, heatNumber, grade, thickness } = result.data
 
     const exists = await prisma.millCertificate.findUnique({ where: { certNumber } })
     if (exists) return errorResponse(`Số chứng chỉ ${certNumber} đã tồn tại`)

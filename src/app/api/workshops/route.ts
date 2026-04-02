@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createWorkshopSchema } from '@/lib/schemas'
 
 // GET /api/workshops — list workshops with WO counts
 export async function GET(req: NextRequest) {
@@ -26,10 +28,9 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    const body = await req.json()
-    const { code, name, nameEn, capacity } = body
-
-    if (!code || !name) return errorResponse('Thiếu: code, name')
+    const result = await validateBody(req, createWorkshopSchema)
+    if (!result.success) return result.response
+    const { code, name, nameEn, capacity } = result.data
 
     const exists = await prisma.workshop.findUnique({ where: { code } })
     if (exists) return errorResponse(`Mã xưởng ${code} đã tồn tại`)

@@ -3,6 +3,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateParams } from '@/lib/api-helpers'
+import { idParamSchema } from '@/lib/schemas'
 
 // GET /api/production/:id — Work order detail + material issues
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -10,7 +12,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
 
     const wo = await prisma.workOrder.findUnique({
       where: { id },
@@ -48,7 +52,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return errorResponse('Không có quyền', 403)
     }
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const body = await req.json()
     const { action } = body
 
@@ -94,7 +100,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse('Không có quyền cấp vật tư', 403)
     }
 
-    const { id } = await params
+    const pResult2 = validateParams(await params, idParamSchema)
+    if (!pResult2.success) return pResult2.response
+    const { id } = pResult2.data
     const body = await req.json()
     const { materialId, quantity, notes } = body
 

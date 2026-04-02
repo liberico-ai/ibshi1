@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createDeliverySchema } from '@/lib/schemas'
 
 // GET /api/delivery — list deliveries
 export async function GET(req: NextRequest) {
@@ -42,10 +44,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('Bạn không có quyền tạo phiếu giao hàng', 403)
     }
 
-    const body = await req.json()
-    const { projectId, workOrderId, packingList, shippingMethod, notes } = body
-
-    if (!projectId) return errorResponse('Thiếu mã dự án')
+    const result = await validateBody(req, createDeliverySchema)
+    if (!result.success) return result.response
+    const { projectId, workOrderId, packingList, shippingMethod, notes } = result.data
 
     const count = await prisma.deliveryRecord.count()
     const deliveryCode = `DL-${String(count + 1).padStart(5, '0')}`
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
         deliveryCode,
         projectId,
         workOrderId: workOrderId || null,
-        packingList: packingList || null,
+        packingList: (packingList as object) || undefined,
         shippingMethod: shippingMethod || null,
         notes,
         createdBy: user.userId,

@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { convertPrToPoSchema } from '@/lib/schemas'
 
 // POST /api/purchase-orders/convert — Convert approved PR to PO
 export async function POST(req: NextRequest) {
@@ -12,11 +14,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('Bạn không có quyền chuyển PR→PO', 403)
     }
 
-    const body = await req.json()
-    const { purchaseRequestId, vendorId, deliveryDate, notes } = body
-
-    if (!purchaseRequestId) return errorResponse('Thiếu ID yêu cầu mua hàng')
-    if (!vendorId) return errorResponse('Thiếu nhà cung cấp (vendorId)')
+    const result = await validateBody(req, convertPrToPoSchema)
+    if (!result.success) return result.response
+    const { prId: purchaseRequestId, vendorId } = result.data
 
     const pr = await prisma.purchaseRequest.findUnique({
       where: { id: purchaseRequestId },
@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
         vendorId,
         status: 'DRAFT',
         totalValue,
-        deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
-        notes: notes || `Converted from ${pr.prCode}`,
+        deliveryDate: null,
+        notes: `Converted from ${pr.prCode}`,
         createdBy: user.userId,
         items: { create: itemsData },
       },

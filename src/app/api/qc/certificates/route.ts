@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createCertificateSchema } from '@/lib/schemas'
 
 // GET /api/qc/certificates — List certificates
 export async function GET(req: NextRequest) {
@@ -37,12 +39,9 @@ export async function POST(req: NextRequest) {
     return errorResponse('Không có quyền tạo chứng chỉ', 403)
   }
 
-  const body = await req.json()
-  const { certType, certNumber, holderName, holderId, issuedBy, issueDate, expiryDate, standard, scope } = body
-
-  if (!certType || !certNumber || !holderName || !issuedBy || !issueDate || !expiryDate) {
-    return errorResponse('Thiếu thông tin bắt buộc')
-  }
+  const result = await validateBody(req, createCertificateSchema)
+  if (!result.success) return result.response
+  const { certType, certNumber, holderName, holderId, issuedBy, issueDate, expiryDate, standard, scope } = result.data
 
   const cert = await prisma.certificateRegistry.create({
     data: {

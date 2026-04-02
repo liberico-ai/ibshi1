@@ -10,6 +10,8 @@ import {
   logAudit,
   getClientIP,
 } from '@/lib/auth'
+import { validateBody, validateParams } from '@/lib/api-helpers'
+import { updateUserSchema, idParamSchema } from '@/lib/schemas'
 
 const ADMIN_ROLES = ['R01', 'R10']
 
@@ -19,7 +21,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const user = await prisma.user.findUnique({
       where: { id },
       select: {
@@ -44,9 +48,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!payload) return unauthorizedResponse()
     if (!ADMIN_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ Admin mới có quyền sửa user')
 
-    const { id } = await params
-    const body = await req.json()
-    const { fullName, email, roleCode, userLevel, departmentCode, isActive } = body
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
+    const result = await validateBody(req, updateUserSchema)
+    if (!result.success) return result.response
+    const { fullName, email, roleCode, userLevel, departmentCode, isActive } = result.data
 
     const existing = await prisma.user.findUnique({ where: { id } })
     if (!existing) return errorResponse('User không tồn tại', 404)
@@ -72,7 +79,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const updated = await prisma.user.update({ where: { id }, data })
 
     await logAudit(payload.userId, 'UPDATE', 'User', id, {
-      changes: body,
+      changes: result.data,
       targetUser: existing.username,
     }, getClientIP(req))
 
@@ -95,7 +102,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!payload) return unauthorizedResponse()
     if (!ADMIN_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ Admin mới có quyền')
 
-    const { id } = await params
+    const pResult2 = validateParams(await params, idParamSchema)
+    if (!pResult2.success) return pResult2.response
+    const { id } = pResult2.data
 
     if (id === payload.userId) return errorResponse('Không thể vô hiệu hóa chính mình')
 

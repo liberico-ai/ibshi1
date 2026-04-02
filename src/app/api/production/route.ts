@@ -3,6 +3,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateQuery } from '@/lib/api-helpers'
+import { searchFilterSchema } from '@/lib/schemas'
 
 // GET /api/production — List work orders
 export async function GET(req: NextRequest) {
@@ -10,12 +12,10 @@ export async function GET(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { searchParams } = new URL(req.url)
-    const status = searchParams.get('status')
-    const projectId = searchParams.get('projectId')
-    const search = searchParams.get('search') || ''
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
+    const qResult = validateQuery(req.url, searchFilterSchema)
+    if (!qResult.success) return qResult.response
+    const { page, limit, search, status } = qResult.data
+    const projectId = new URL(req.url).searchParams.get('projectId')
 
     const where: Record<string, unknown> = {}
     if (status) where.status = status

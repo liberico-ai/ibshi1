@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
 import { RBAC } from '@/lib/rbac-rules'
+import { validateBody, validateParams } from '@/lib/api-helpers'
+import { createMaterialIssueSchema, idParamSchema } from '@/lib/schemas'
 
 // POST /api/production/[id]/issue-material — Issue material for a Work Order
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -13,13 +15,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse('Chỉ Kho hoặc SX được cấp phát vật tư', 403)
     }
 
-    const { id } = await params
-    const body = await req.json()
-    const { materialId, quantity, heatNumber, lotNumber, notes } = body
-
-    if (!materialId || !quantity || quantity <= 0) {
-      return errorResponse('Thiếu vật tư hoặc số lượng không hợp lệ')
-    }
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
+    const result = await validateBody(req, createMaterialIssueSchema)
+    if (!result.success) return result.response
+    const { materialId, quantity, heatNumber, notes } = result.data
 
     // Check WO exists and is active
     const wo = await prisma.workOrder.findUnique({ where: { id } })
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           reason: 'wo_issue',
           referenceNo: wo.woCode,
           heatNumber: heatNumber || null,
-          lotNumber: lotNumber || null,
+          lotNumber: null,
           notes: notes || `Cấp phát cho ${wo.woCode}`,
           performedBy: user.userId,
         },
