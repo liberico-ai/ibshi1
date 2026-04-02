@@ -460,7 +460,7 @@ const P4_1: StepFormConfig = {
     { key: 'ap_recorded', label: 'Đã ghi nhận vào A/P', required: true },
   ],
   attachments: [
-    { key: 'paymentProof', label: 'Chứng từ thanh toán', accept: '.pdf,.jpg,.png' },
+    { key: 'paymentProof', label: 'Chứng từ thanh toán', accept: ACCEPT.DOCS_IMAGE },
   ],
 }
 
@@ -479,7 +479,7 @@ const P4_2: StepFormConfig = {
     { key: 'qc_handover', label: 'Đã bàn giao cho QC nghiệm thu', required: true },
   ],
   attachments: [
-    { key: 'deliveryNote', label: 'Phiếu giao hàng', accept: '.pdf' },
+    { key: 'deliveryNote', label: 'Phiếu giao hàng', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -498,7 +498,7 @@ const P4_3: StepFormConfig = {
     { key: 'cert_verified', label: 'Đã xác minh material certificate', required: true },
   ],
   attachments: [
-    { key: 'inspectionReport', label: 'Biên bản nghiệm thu', accept: '.pdf' },
+    { key: 'inspectionReport', label: 'Biên bản nghiệm thu', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -517,7 +517,7 @@ const P4_4: StepFormConfig = {
     { key: 'reserved_project', label: 'Đã reserved cho dự án', required: true },
   ],
   attachments: [
-    { key: 'grnFile', label: 'Phiếu nhập kho', accept: '.pdf' },
+    { key: 'grnFile', label: 'Phiếu nhập kho', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -534,7 +534,7 @@ const P4_5: StepFormConfig = {
     { key: 'issue_slip', label: 'Đã lập phiếu xuất kho', required: true },
   ],
   attachments: [
-    { key: 'issueSlip', label: 'Phiếu xuất kho', accept: '.pdf' },
+    { key: 'issueSlip', label: 'Phiếu xuất kho', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -601,7 +601,7 @@ const P5_3: StepFormConfig = {
     { key: 'witness_point_checked', label: 'Đã kiểm tra tại Witness Point' },
   ],
   attachments: [
-    { key: 'itpReport', label: 'Báo cáo ITP', accept: '.pdf' },
+    { key: 'itpReport', label: 'Báo cáo ITP', accept: ACCEPT.DOCS },
   ],
 }
 
