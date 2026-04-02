@@ -207,7 +207,6 @@ model WorkflowTask {
   project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee User?   @relation("TaskAssignee", fields: [assignedTo], references: [id])
 
-  @@unique([projectId, stepCode])
   @@index([assignedRole, status])
   @@index([assignedTo, status])
   @@index([projectId, status])

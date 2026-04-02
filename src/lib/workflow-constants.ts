@@ -119,11 +119,11 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P4.4': {
     code: 'P4.4', name: 'Kho nghiệm thu số lượng và nhập kho', nameEn: 'Warehouse Quantity Check & Stock In',
-    role: 'R05', next: ['P4.5'], deadlineDays: 3, phase: 4,
+    role: 'R05', next: [], deadlineDays: 3, phase: 4,
   },
   'P4.5': {
     code: 'P4.5', name: 'Kho đề nghị cấp vật tư cho PM và QLSX', nameEn: 'Warehouse Issue Material to PM & Production',
-    role: 'R05', next: ['P5.1'], deadlineDays: 3, phase: 4,
+    role: 'R05', next: [], deadlineDays: 3, phase: 4,
   },
 
   // ── Phase 5: Sản xuất (BRD#26-31) ──
