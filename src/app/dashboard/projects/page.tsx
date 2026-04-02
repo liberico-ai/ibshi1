@@ -7,8 +7,7 @@ import { PRODUCT_TYPES } from '@/lib/constants'
 import { formatCurrency, getProgressColor } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Badge, Button } from '@/components/ui'
-import { ACCEPT } from '@/lib/file-accept-presets'
-
+import MultiFileUpload from '@/components/MultiFileUpload'
 
 interface Project {
   id: string; projectCode: string; projectName: string; clientName: string;
@@ -81,7 +80,7 @@ export default function ProjectsPage() {
         <StatCard label="Tạm ngưng" value={onHoldCount} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>⏸️</span>} />
       </div>
 
-      {showCreate && <CreateProjectForm onClose={() => setShowCreate(false)} onCreated={(p) => {
+      {showCreate && <CreateProjectForm onClose={() => setShowCreate(false)} onCreated={(p: Project) => {
         setProjects([p, ...projects])
         setShowCreate(false)
       }} />}
@@ -152,96 +151,29 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
     projectCode: '', projectName: '', clientName: '', productType: 'pressure_vessel',
     contractValue: '', currency: 'VND', description: '', startDate: '', endDate: '',
   })
-  const [files, setFiles] = useState<Record<string, File[]>>({
-    rfq: [], po: [], contract: [], spec: [],
-  })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-
-  const FILE_SLOTS = [
-    { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: ACCEPT.OFFICE_ARCHIVE },
-    { key: 'po', label: 'PO khách hàng', icon: '📋', accept: ACCEPT.OFFICE_ARCHIVE },
-    { key: 'contract', label: 'Hợp đồng / Phụ lục', icon: '📄', accept: ACCEPT.DOCS_PLUS },
-    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', icon: '📐', accept: ACCEPT.DRAWING_PLUS },
-  ]
-
-  function handleFileChange(key: string, incomingFiles: FileList | null) {
-    if (incomingFiles) {
-      const filesArr = Array.from(incomingFiles)
-      const slot = FILE_SLOTS.find(s => s.key === key)
-      if (slot) {
-        // Strict mapping of allowed extensions out of the ACCEPT string
-        const allowedExts = slot.accept.split(',').filter(a => a.startsWith('.')).map(e => e.toLowerCase())
-        const invalidFile = filesArr.find(f => {
-          const ext = '.' + f.name.split('.').pop()?.toLowerCase()
-          return !allowedExts.includes(ext)
-        })
-        if (invalidFile) {
-          setError(`File định dạng không hợp lệ: ${invalidFile.name}. Vui lòng chỉ tải các dạng: ${allowedExts.join(', ')}`)
-          return
-        }
-      }
-      setError('')
-      setFiles(prev => ({ ...prev, [key]: filesArr }))
-    }
-  }
-
-  function handleFileRemove(key: string, index: number) {
-    setFiles(prev => {
-      const newFiles = [...prev[key]]
-      newFiles.splice(index, 1)
-      return { ...prev, [key]: newFiles }
-    })
-  }
+  const [draftId] = useState(() => crypto.randomUUID())
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSubmitting(true)
 
-    try {
-      const hasFiles = Object.values(files).some(f => f !== null)
-
-      if (hasFiles) {
-        const formData = new FormData()
-        Object.entries(form).forEach(([k, v]) => formData.append(k, v))
-        Object.entries(files).forEach(([k, fileArray]) => {
-          fileArray.forEach(f => formData.append(`file_${k}`, f))
-        })
-        const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
-        const response = await fetch('/api/projects', {
-          method: 'POST',
-          body: formData,
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        })
-        if (!response.ok) {
-          // Try to parse error JSON; if not JSON (e.g. 413 HTML page), use status text
-          let errMsg = `Lỗi server (${response.status})`
-          try { const errBody = await response.json(); errMsg = errBody.error || errMsg } catch { /* non-JSON response */ }
-          setSubmitting(false)
-          setError(errMsg)
-          return
-        }
-        const res = await response.json()
-        setSubmitting(false)
-        if (res.ok) onCreated(res.project)
-        else setError(res.error || 'Lỗi tạo dự án')
-      } else {
-        const res = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(form) })
-        setSubmitting(false)
-        if (res.ok) onCreated(res.project)
-        else setError(res.error || 'Lỗi tạo dự án')
-      }
-    } catch (err) {
-      setSubmitting(false)
-      setError(err instanceof Error ? err.message : 'Lỗi kết nối. Vui lòng thử lại.')
+    const res = await apiFetch('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify({ ...form, draftId }),
+    })
+    setSubmitting(false)
+    if (res.ok) {
+      onCreated(res.project)
+      onClose()
+    } else {
+      setError(res.error || 'Lỗi tạo dự án')
     }
   }
 
-
-  // FILE_SLOTS is defined above handleFileChange
-
   return (
-    <Card padding="default" className="animate-fade-in" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+    <Card padding="default" className="animate-fade-in" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
       <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 'var(--space-md)', color: 'var(--text-primary)' }}>Tạo dự án mới</h3>
       {error && <div className="mb-3 p-2 rounded" style={{ fontSize: 'var(--text-sm)', background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }}>{error}</div>}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -270,53 +202,22 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
         <div className="md:col-span-2 input-field"><label className="input-label">Mô tả</label>
           <textarea className="input" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
 
-        {/* Document attachments */}
+        {/* ── Đính kèm tài liệu (upload ngay vào temp, link khi tạo DA) ── */}
         <div className="md:col-span-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)', marginTop: 4 }}>
-          <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-sm)', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)' }}>
-            📎 Tài liệu đính kèm
-            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400, color: 'var(--text-muted)' }}>(tuỳ chọn)</span>
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {FILE_SLOTS.map(slot => (
-              <div key={slot.key} style={{
-                border: `1px dashed ${files[slot.key].length > 0 ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 'var(--radius)', padding: 'var(--space-sm) var(--space-sm)',
-                background: files[slot.key].length > 0 ? 'var(--ibs-navy-50)' : 'var(--bg-secondary)',
-                transition: 'all 0.2s',
-              }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span>{slot.icon}</span>
-                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--text-primary)' }}>{slot.label}</span>
-                </div>
-                {files[slot.key].length > 0 ? (
-                  <div className="flex flex-col gap-2">
-                    {files[slot.key].map((f, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-white/50 p-1.5 rounded border border-[var(--accent)]/20">
-                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)' }} className="truncate flex-1">✓ {f.name}</span>
-                        <button type="button" onClick={() => handleFileRemove(slot.key, i)}
-                          style={{ fontSize: 'var(--text-xs)', color: 'var(--danger)', cursor: 'pointer', background: 'none', border: 'none', padding: '0 4px', flexShrink: 0 }}>✕</button>
-                      </div>
-                    ))}
-                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)', cursor: 'pointer', textAlign: 'center', marginTop: 4 }}>
-                      + Chọn lại tệp
-                      <input type="file" multiple
-                        onChange={(e) => { handleFileChange(slot.key, e.target.files); e.target.value = '' }}
-                        className="hidden" style={{ display: 'none' }} />
-                    </label>
-                  </div>
-                ) : (
-                  <input type="file" multiple
-                    onChange={(e) => { handleFileChange(slot.key, e.target.files); e.target.value = '' }}
-                    style={{ fontSize: 'var(--text-xs)', width: '100%', color: 'var(--text-muted)' }} />
-                )}
-              </div>
-            ))}
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+            📎 Đính kèm tài liệu <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(tuỳ chọn — không giới hạn định dạng)</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <MultiFileUpload label="RFQ / Inquiry" entityType="ProjectDraft" entityId={`${draftId}_rfq`} compact />
+            <MultiFileUpload label="PO khách hàng" entityType="ProjectDraft" entityId={`${draftId}_po`} compact />
+            <MultiFileUpload label="Hợp đồng / Phụ lục" entityType="ProjectDraft" entityId={`${draftId}_contract`} compact />
+            <MultiFileUpload label="Spec / Bản vẽ kỹ thuật" entityType="ProjectDraft" entityId={`${draftId}_spec`} compact />
           </div>
         </div>
 
         <div className="md:col-span-2 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)' }}>
           <Button variant="outline" onClick={onClose} type="button">Hủy</Button>
-          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo dự án'}</Button>
+          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo dự án →'}</Button>
         </div>
       </form>
     </Card>

@@ -61,6 +61,12 @@ export const ACCEPT = {
   OFFICE_ARCHIVE: `.pdf,.doc,.docx,.xlsx,.xls,${ARCH_EXT},${ARCH_MIME}`,
 
   /**
+   * Documents + images (PDF, Word, JPG, PNG).
+   * Use when: chứng từ thanh toán, biên bản — có thể là ảnh chụp hoặc scan.
+   */
+  DOCS_IMAGE: '.pdf,.doc,.docx,.jpg,.jpeg,.png',
+
+  /**
    * Full lesson-learned / handover package.
    * Use when: tài liệu bàn giao dự án, lesson learned, kickoff pack.
    */

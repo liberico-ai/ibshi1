@@ -4,21 +4,13 @@ import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 
+
 // ── Upload Security ──────────────────────────────────────────────────
-// Server-side whitelist — must mirror ACCEPT presets in file-accept-presets.ts
-const ALLOWED_EXTENSIONS = new Set([
-  // Documents
-  '.pdf', '.doc', '.docx',
-  // Spreadsheets
-  '.xlsx', '.xls', '.csv',
-  // Technical drawings
-  '.dwg', '.dxf',
-  // Images
-  '.jpg', '.jpeg', '.png',
-  // Presentations
-  '.pptx', '.ppt',
-  // Archives (ZIP + RAR)
-  '.zip', '.rar',
+// Block only truly dangerous executable extensions.
+// All document/archive/image formats are allowed per business requirement.
+const BLOCKED_EXTENSIONS = new Set([
+  '.exe', '.bat', '.cmd', '.sh', '.ps1', '.msi', '.dll', '.com', '.scr',
+  '.vbs', '.vbe', '.js', '.jse', '.wsf', '.wsh', '.cpl', '.hta',
 ])
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -38,11 +30,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Chưa chọn file' }, { status: 400 })
     }
 
-    // Validate file extension
+    // Block dangerous executable extensions
     const ext = path.extname(file.name).toLowerCase()
-    if (!ALLOWED_EXTENSIONS.has(ext)) {
+    if (BLOCKED_EXTENSIONS.has(ext)) {
       return NextResponse.json(
-        { ok: false, error: `Định dạng file "${ext}" không được phép. Chấp nhận: PDF, Word, Excel, DWG, hình ảnh, ZIP, RAR.` },
+        { ok: false, error: `Định dạng file "${ext}" bị chặn vì lý do bảo mật.` },
         { status: 400 }
       )
     }
