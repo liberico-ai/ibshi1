@@ -67,6 +67,10 @@ export default function TaskDetailPage() {
     string,
     string
   > | null>(null);
+  // Attachments uploaded during this step (key → uploaded URL)
+  const [pendingAttachments, setPendingAttachments] = useState<Record<string, string>>({});
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+
   const [rejectionInfo, setRejectionInfo] = useState<{
     reason: string;
     rejectedBy: string;
@@ -921,6 +925,8 @@ export default function TaskDetailPage() {
           ...finalData,
           checklist: checklistState,
           ...(siblingFiles ? { attachedFiles: siblingFiles } : {}),
+          ...(Object.keys(pendingAttachments).length > 0 ? { pendingAttachments } : {}),
+
           ...(milestones.length > 0 ? { milestones } : {}),
           ...(bomItems.filter((b) => b.name.trim()).length > 0
             ? { bomItems: bomItems.filter((b) => b.name.trim()) }
@@ -15812,12 +15818,52 @@ export default function TaskDetailPage() {
                           );
                         })()
                       ) : (
-                        <input
-                          type="file"
-                          accept={att.accept}
-                          disabled={!isActive}
-                          style={{ fontSize: "0.8rem", width: "100%" }}
-                        />
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type="file"
+                            accept={att.accept}
+                            disabled={!isActive || uploadingKey === att.key}
+                            style={{ fontSize: "0.8rem", width: "100%" }}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file || !task) return;
+                              setUploadingKey(att.key);
+                              try {
+                                const fd = new FormData();
+                                fd.append('file', file);
+                                fd.append('entityType', 'Task');
+                                fd.append('entityId', task.id);
+                                const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null;
+                                const res = await fetch('/api/upload', {
+                                  method: 'POST',
+                                  body: fd,
+                                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                                }).then(r => r.json());
+                                if (res.ok) {
+                                  setPendingAttachments(prev => ({ ...prev, [att.key]: res.attachment.fileUrl }));
+                                  setSuccessMsg(`✅ Đã đính kèm: ${file.name}`);
+                                  setTimeout(() => setSuccessMsg(''), 3000);
+                                } else {
+                                  setError(res.error || 'Lỗi upload file');
+                                }
+                              } catch {
+                                setError('Lỗi kết nối khi upload file');
+                              } finally {
+                                setUploadingKey(null);
+                              }
+                            }}
+                          />
+                          {uploadingKey === att.key && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--accent)', marginTop: 4, display: 'block' }}>
+                              ⏳ Đang upload...
+                            </span>
+                          )}
+                          {pendingAttachments[att.key] && (
+                            <span style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: 4, display: 'block' }}>
+                              ✓ Đã upload thành công
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   );

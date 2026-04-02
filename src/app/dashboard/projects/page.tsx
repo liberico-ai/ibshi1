@@ -7,6 +7,8 @@ import { PRODUCT_TYPES } from '@/lib/constants'
 import { formatCurrency, getProgressColor } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Badge, Button } from '@/components/ui'
+import { ACCEPT } from '@/lib/file-accept-presets'
+
 
 interface Project {
   id: string; projectCode: string; projectName: string; clientName: string;
@@ -188,10 +190,10 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
   }
 
   const FILE_SLOTS = [
-    { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: '.pdf,.doc,.docx,.xls,.xlsx' },
-    { key: 'po', label: 'PO khách hàng', icon: '📋', accept: '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.png' },
-    { key: 'contract', label: 'Hợp đồng / Phụ lục', icon: '📄', accept: '.pdf,.doc,.docx' },
-    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', icon: '📐', accept: '.pdf,.dwg,.dxf,.doc,.docx' },
+    { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'po', label: 'PO khách hàng', icon: '📋', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'contract', label: 'Hợp đồng / Phụ lục', icon: '📄', accept: ACCEPT.DOCS_PLUS },
+    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', icon: '📐', accept: ACCEPT.DRAWING_PLUS },
   ]
 
   return (
