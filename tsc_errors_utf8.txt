@@ -1,0 +1,14 @@
+﻿src/app/dashboard/tasks/[id]/page.tsx(694,22): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/app/dashboard/tasks/[id]/page.tsx(747,19): error TS1003: Identifier expected.
+src/app/dashboard/tasks/[id]/page.tsx(749,13): error TS1005: ':' expected.
+src/app/dashboard/tasks/[id]/page.tsx(749,17): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/app/dashboard/tasks/[id]/page.tsx(3323,15): error TS1003: Identifier expected.
+src/app/dashboard/tasks/[id]/page.tsx(3398,11): error TS1128: Declaration or statement expected.
+src/app/dashboard/tasks/[id]/page.tsx(3641,11): error TS1128: Declaration or statement expected.
+src/app/dashboard/tasks/[id]/page.tsx(3642,9): error TS1109: Expression expected.
+src/app/dashboard/tasks/[id]/page.tsx(3643,7): error TS1109: Expression expected.
+src/app/dashboard/tasks/[id]/page.tsx(3643,9): error TS1128: Declaration or statement expected.
+src/app/dashboard/tasks/[id]/page.tsx(3665,8): error TS1128: Declaration or statement expected.
+src/app/dashboard/tasks/[id]/page.tsx(3666,5): error TS1128: Declaration or statement expected.
+src/app/dashboard/tasks/[id]/page.tsx(3667,3): error TS1109: Expression expected.
+src/app/dashboard/tasks/[id]/page.tsx(3668,1): error TS1128: Declaration or statement expected.

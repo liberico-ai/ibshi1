@@ -1,0 +1,4 @@
+﻿src/app/dashboard/tasks/[id]/page.tsx(2150,28): error TS2367: This comparison appears to be unintentional because the types '"P2.4"' and '"P1.2"' have no overlap.
+src/app/dashboard/tasks/[id]/page.tsx(2150,88): error TS2367: This comparison appears to be unintentional because the types '"P2.4"' and '"P2.1A"' have no overlap.
+src/app/dashboard/tasks/[id]/page.tsx(2210,25): error TS2367: This comparison appears to be unintentional because the types '"P2.4"' and '"P2.1A"' have no overlap.
+
