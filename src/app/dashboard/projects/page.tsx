@@ -166,28 +166,43 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
     e.preventDefault()
     setError(''); setSubmitting(true)
 
-    const hasFiles = Object.values(files).some(f => f !== null)
+    try {
+      const hasFiles = Object.values(files).some(f => f !== null)
 
-    if (hasFiles) {
-      const formData = new FormData()
-      Object.entries(form).forEach(([k, v]) => formData.append(k, v))
-      Object.entries(files).forEach(([k, f]) => { if (f) formData.append(`file_${k}`, f) })
-      const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        body: formData,
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      }).then(r => r.json())
+      if (hasFiles) {
+        const formData = new FormData()
+        Object.entries(form).forEach(([k, v]) => formData.append(k, v))
+        Object.entries(files).forEach(([k, f]) => { if (f) formData.append(`file_${k}`, f) })
+        const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          body: formData,
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        })
+        if (!response.ok) {
+          // Try to parse error JSON; if not JSON (e.g. 413 HTML page), use status text
+          let errMsg = `Lỗi server (${response.status})`
+          try { const errBody = await response.json(); errMsg = errBody.error || errMsg } catch { /* non-JSON response */ }
+          setSubmitting(false)
+          setError(errMsg)
+          return
+        }
+        const res = await response.json()
+        setSubmitting(false)
+        if (res.ok) onCreated(res.project)
+        else setError(res.error || 'Lỗi tạo dự án')
+      } else {
+        const res = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(form) })
+        setSubmitting(false)
+        if (res.ok) onCreated(res.project)
+        else setError(res.error || 'Lỗi tạo dự án')
+      }
+    } catch (err) {
       setSubmitting(false)
-      if (res.ok) onCreated(res.project)
-      else setError(res.error || 'Lỗi tạo dự án')
-    } else {
-      const res = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(form) })
-      setSubmitting(false)
-      if (res.ok) onCreated(res.project)
-      else setError(res.error || 'Lỗi tạo dự án')
+      setError(err instanceof Error ? err.message : 'Lỗi kết nối. Vui lòng thử lại.')
     }
   }
+
 
   const FILE_SLOTS = [
     { key: 'rfq', label: 'RFQ / Inquiry', icon: '📩', accept: ACCEPT.OFFICE_ARCHIVE },

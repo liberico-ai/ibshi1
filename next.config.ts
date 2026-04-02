@@ -13,6 +13,12 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Allow large file uploads (50MB) — default 1MB blocks ZIP/RAR files
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+  },
   async headers() {
     return [
       {
