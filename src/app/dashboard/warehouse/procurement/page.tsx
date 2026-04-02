@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatCurrency } from '@/lib/utils'
+import { RBAC } from '@/lib/rbac-rules'
 
 interface PR {
   id: string; prCode: string; status: string; urgency: string; notes: string | null;
@@ -86,7 +87,7 @@ export default function ProcurementPage() {
     else alert(res.error || res.message || 'Lỗi thao tác')
   }
 
-  const canApprove = user?.roleCode === 'R01'
+  const canApprove = RBAC.PR_APPROVAL.includes(user?.roleCode || '')
   const canCreate = ['R01', 'R02', 'R03', 'R05'].includes(user?.roleCode || '')
 
   if (loading) {
@@ -190,10 +191,13 @@ export default function ProcurementPage() {
                       <button onClick={() => handleAction(pr.id, 'approve')}
                         className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white"
                         style={{ background: '#16a34a' }}>✓ Duyệt</button>
-                      <button onClick={() => handleAction(pr.id, 'reject', { reason: 'Từ chối bởi BGĐ' })}
+                      <button onClick={() => handleAction(pr.id, 'reject', { reason: 'Từ chối bởi quản lý' })}
                         className="px-3 py-1.5 rounded-lg text-[11px] font-semibold"
                         style={{ background: '#fef2f2', color: '#dc2626' }}>✗ Từ chối</button>
                     </>
+                  )}
+                  {pr.status === 'SUBMITTED' && !canApprove && (
+                    <span className="text-xs text-slate-400 font-medium px-2 py-1 bg-slate-100 rounded">🔒 Chỉ BGĐ/PM</span>
                   )}
                   {pr.status === 'APPROVED' && (
                     <button onClick={() => {

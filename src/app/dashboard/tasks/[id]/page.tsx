@@ -2,11 +2,24 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
+
+// ── Number formatting helpers ──
+const formatNumberWithCommas = (val: string | number): string => {
+  if (val === "" || val === null || val === undefined) return "";
+  const str = String(val).replace(/,/g, "");
+  if (str === "-" || str === ".") return str;
+  const num = parseFloat(str);
+  if (isNaN(num)) return String(val);
+  const parts = str.split(".");
+  const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
+};
+const unformatNumber = (val: string): string => String(val).replace(/,/g, "");
 
 interface TaskData {
   id: string
@@ -4295,7 +4308,7 @@ export default function TaskDetailPage() {
                     </div>
                   </div>
                   {/* Original form fields below — hidden for P3.3/P3.4 which use WBS-only workflow */}
-                  {task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && (
+                  {(task.stepCode as string) !== 'P3.3' && (task.stepCode as string) !== 'P3.4' && (
                   <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                     <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
                       📝 Thông tin nhập liệu
@@ -4552,8 +4565,8 @@ export default function TaskDetailPage() {
             {(task.stepCode === 'P2.1' || task.stepCode === 'P2.2' || task.stepCode === 'P2.3') && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: `2px solid ${task.stepCode === 'P3.3' ? '#f59e0b' : 'var(--accent)'}`, paddingBottom: 8, flex: 1 }}>
-                    {task.stepCode === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: `2px solid ${(task.stepCode as string) === 'P3.3' ? '#f59e0b' : 'var(--accent)'}`, paddingBottom: 8, flex: 1 }}>
+                    {(task.stepCode as string) === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
                   </h3>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" onClick={exportBomExcel}

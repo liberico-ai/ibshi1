@@ -211,6 +211,38 @@ async function validateProofOfDelivery(
   return EMPTY_OK
 }
 
+// ── TC-XX: P4.5 Validate Sufficient Stock before Deduction ──
+// Ensure stock is available before allowing warehouse issue step to complete
+async function validateSufficientStock(
+  _projectId: string,
+  resultData?: Record<string, unknown>
+): Promise<ValidationResult> {
+  const issueItemsRaw = resultData?.issueItems as string | undefined
+  let issueItems: { name: string; code: string; spec: string; qty: string; unit: string }[] = []
+  try { issueItems = issueItemsRaw ? JSON.parse(issueItemsRaw) : [] } catch { issueItems = [] }
+  const validItems = issueItems.filter(item => item.code?.trim() && Number(item.qty) > 0)
+  
+  if (validItems.length === 0) return EMPTY_OK
+
+  const errors: string[] = []
+  for (const item of validItems) {
+    const material = await prisma.material.findFirst({
+      where: { materialCode: item.code.trim() },
+      select: { currentStock: true },
+    })
+    if (material) {
+      const qty = Number(item.qty)
+      if (Number(material.currentStock) < qty) {
+        errors.push(`Vật tư ${item.name} (${item.code}) không đủ tồn kho (Cần xuất: ${qty}, Tồn: ${Number(material.currentStock)})`)
+      }
+    } else {
+      errors.push(`Không tìm thấy mã vật tư: ${item.code}`)
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings: [] }
+}
+
 // ── Rule Registry: maps step codes to their validation functions ──
 
 const STEP_VALIDATION_MAP: Record<string, (projectId: string, resultData?: Record<string, unknown>) => Promise<ValidationResult>> = {
@@ -228,8 +260,9 @@ const STEP_VALIDATION_MAP: Record<string, (projectId: string, resultData?: Recor
     }
   },
   'P3.4': validateLSXBOMLink,       // TC-04-02
-  // 'P5.5': validateShippingSignoff,  // TC-05-01 removed — P5.5 is salary calculation, not shipping
-  // 'P6.1': validateProofOfDelivery,  // TC-05-02 removed — P6.1 is QC dossier, not delivery proof
+  'P4.5': validateSufficientStock,  // Strict stock check to prevent negative inventory
+  'P5.4': validateShippingSignoff,  // TC-05-01: 3-way shipping sign-off at PM volume acceptance
+  'P6.1': validateProofOfDelivery,  // TC-05-02: proof of delivery at QC dossier compilation
 }
 
 // ── Main Entry Point ──

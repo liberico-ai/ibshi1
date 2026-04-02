@@ -8,6 +8,7 @@ import { formatCurrency, getProgressColor } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Badge, Button } from '@/components/ui'
 import MultiFileUpload from '@/components/MultiFileUpload'
+import { ACCEPT } from '@/lib/file-accept-presets'
 
 interface Project {
   id: string; projectCode: string; projectName: string; clientName: string;
@@ -119,7 +120,7 @@ export default function ProjectsPage() {
             <div className="flex items-center gap-4 text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
               <span>{PRODUCT_TYPES.find((t) => t.value === p.productType)?.label || p.productType}</span>
               {p.contractValue && (
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1" suppressHydrationWarning>
                   💰 {formatCurrency(p.contractValue, p.currency)}
                 </span>
               )}
@@ -189,25 +190,25 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
             label="RFQ / Inquiry"
             entityType="Project"
             entityId={`${createdProject.id}_rfq`}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
+            accept={ACCEPT.OFFICE_ARCHIVE}
           />
           <MultiFileUpload
             label="PO khách hàng"
             entityType="Project"
             entityId={`${createdProject.id}_po`}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
+            accept={ACCEPT.OFFICE_ARCHIVE}
           />
           <MultiFileUpload
             label="Hợp đồng / Phụ lục"
             entityType="Project"
             entityId={`${createdProject.id}_contract`}
-            accept=".pdf,.doc,.docx"
+            accept={ACCEPT.DOCS_PLUS}
           />
           <MultiFileUpload
             label="Spec / Bản vẽ kỹ thuật"
             entityType="Project"
             entityId={`${createdProject.id}_spec`}
-            accept=".pdf,.dwg,.dxf,.doc,.docx"
+            accept={ACCEPT.DRAWING_PLUS}
           />
         </div>
 
@@ -234,7 +235,9 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
             {PRODUCT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select></div>
         <div className="input-field"><label className="input-label">Giá trị hợp đồng</label>
-          <input className="input" type="number" placeholder="0" value={form.contractValue} onChange={(e) => setForm({ ...form, contractValue: e.target.value })} /></div>
+          <input className="input" type="text" inputMode="numeric" placeholder="0"
+            value={form.contractValue ? form.contractValue.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+            onChange={(e) => setForm({ ...form, contractValue: e.target.value.replace(/,/g, '') })} /></div>
         <div className="input-field"><label className="input-label">Tiền tệ</label>
           <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             <option value="VND">VND</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="JPY">JPY</option>
