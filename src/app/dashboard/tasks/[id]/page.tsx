@@ -1091,39 +1091,11 @@ export default function TaskDetailPage() {
   const rule = task ? WORKFLOW_RULES[task.stepCode] : undefined
   const phaseName = rule ? PHASE_LABELS[rule.phase]?.name : ''
 
-  // Helper: sum thanhTien from a table data JSON string
-  function sumTableThanhTien(jsonStr: string | number | undefined): number {
-    if (!jsonStr) return 0
-    try {
-      const rows = JSON.parse(String(jsonStr))
-      if (!Array.isArray(rows)) return 0
-      return rows.reduce((s: number, r: Record<string, string>) => s + (Number(r.thanhTien) || Number(r.giaTri) || 0), 0)
-    } catch { return 0 }
-  }
-
   function handleFieldChange(key: string, value: string | number) {
     setFormData(prev => {
       const next = { ...prev, [key]: value }
-      // Auto-calculate total for P1.2 estimate from tables
-      if (task && task.stepCode === 'P1.2' && ['dt03Items', 'dt05Items', 'dt06Items', 'dt07Items'].includes(key)) {
-        const totalMaterial = sumTableThanhTien(key === 'dt03Items' ? value : next.dt03Items)
-        const totalService = sumTableThanhTien(key === 'dt05Items' ? value : next.dt05Items)
-        const totalLabor = sumTableThanhTien(key === 'dt06Items' ? value : next.dt06Items)
-        const totalOverhead = sumTableThanhTien(key === 'dt07Items' ? value : next.dt07Items)
-        next.totalEstimate = totalMaterial + totalService + totalLabor + totalOverhead
-        next.totalMaterial = totalMaterial
-        next.totalLabor = totalLabor
-        next.totalService = totalService
-        next.totalOverhead = totalOverhead
-        // Auto-update DT02 summary
-        const dt02Rows = [
-          { maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: String(totalMaterial), tyLe: next.totalEstimate ? String(((totalMaterial / (next.totalEstimate as number)) * 100).toFixed(1)) : '' },
-          { maCP: 'II', noiDung: 'Chi phí nhân công khoán', giaTri: String(totalLabor), tyLe: next.totalEstimate ? String(((totalLabor / (next.totalEstimate as number)) * 100).toFixed(1)) : '' },
-          { maCP: 'III', noiDung: 'Chi phí dịch vụ thuê ngoài', giaTri: String(totalService), tyLe: next.totalEstimate ? String(((totalService / (next.totalEstimate as number)) * 100).toFixed(1)) : '' },
-          { maCP: 'IV', noiDung: 'Chi phí chung', giaTri: String(totalOverhead), tyLe: next.totalEstimate ? String(((totalOverhead / (next.totalEstimate as number)) * 100).toFixed(1)) : '' },
-        ]
-        next.dt02Items = JSON.stringify(dt02Rows)
-      } else if (config && config.fields.some(f => f.key === 'totalEstimate' && f.type === 'readonly')) {
+      // Auto-calculate total from currency fields (P2.4 and other steps with editable tables)
+      if (config && config.fields.some(f => f.key === 'totalEstimate' && f.type === 'readonly')) {
         // Fallback for other steps with currency fields
         const currencyKeys = config.fields.filter(f => f.type === 'currency').map(f => f.key)
         if (currencyKeys.length > 0) {
@@ -1374,7 +1346,7 @@ export default function TaskDetailPage() {
 
     // Complete action
     const finalData = { ...formData }
-    if (task.stepCode === 'P1.2' || task.stepCode === 'P2.4' || task.stepCode === 'P2.1A') {
+    if (task.stepCode === 'P2.4' || task.stepCode === 'P2.1A') {
       const ensuredKeys = [
         { key: 'dt02Items', def: [{ maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: '', tyLe: '' }] },
         { key: 'dt03Items', def: [{ nhomVT: '', danhMuc: '', dvt: '', kl: '', donGia: '', thanhTien: '' }] },
@@ -1384,8 +1356,7 @@ export default function TaskDetailPage() {
         { key: 'dt07Items', def: [{ maCP: '', danhMuc: '', dvt: '', kl: '', donGia: '', thanhTien: '' }] },
       ]
       ensuredKeys.forEach(({ key, def }) => {
-        const isRendered = (task.stepCode === 'P1.2' && ['dt02Items','dt03Items','dt04Items','dt05Items','dt06Items','dt07Items'].includes(key)) ||
-                           (task.stepCode === 'P2.1A' && ['dt02Items','dt07Items'].includes(key)) ||
+        const isRendered = (task.stepCode === 'P2.1A' && ['dt02Items','dt07Items'].includes(key)) ||
                            (task.stepCode === 'P2.4')
         if (isRendered && !finalData[key]) {
           const defaultArray = Array.isArray(def) ? def : [def] // TS compat, def is always array here
@@ -2133,277 +2104,28 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {/* P1.2: Dynamic Estimate Tables (DT03-DT07) */}
+            {/* P1.2: Estimate Summary (upload Excel → show DT02 summary) */}
             {task.stepCode === 'P1.2' && (() => {
-              // Generic table renderer for estimate forms
-              type EstRow = Record<string, string>
-              const renderEstTable = (
-                title: string, code: string, dataKey: string,
-                columns: { key: string; label: string; type?: string; width?: string }[],
-                defaultRows: EstRow[]
-              ) => {
-                let rows: EstRow[] = []
-                try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
-                const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
-                const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
-                const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
-                const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
-                return (
-                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title}</h3>
-                      {isActive && (
-                        <button type="button" onClick={addRow}
-                          style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                          + Thêm
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
-                        {columns.map(c => (
-                          <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>
-                        ))}
-                        {isActive && <span />}
-                      </div>
-                      {rows.map((row, ri) => (
-                        <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
-                          {columns.map(c => {
-                            if (c.key.toLowerCase() === 'dvt') {
-                              return (
-                                <select key={c.key} className="input" value={row[c.key] || ''} disabled={!isActive}
-                                  onChange={e => update(ri, c.key, e.target.value)}
-                                  style={{ fontSize: '0.75rem', padding: '3px 2px' }}>
-                                  <option value="">-Chọn-</option>
-                                  <option value="kg">kg</option>
-                                  <option value="tấn">tấn</option>
-                                  <option value="m">m</option>
-                                  <option value="m2">m2</option>
-                                  <option value="m3">m3</option>
-                                  <option value="cái">cái</option>
-                                  <option value="bộ">bộ</option>
-                                  <option value="lít">lít</option>
-                                  <option value="tháng">tháng</option>
-                                  <option value="ngày">ngày</option>
-                                  <option value="giờ">giờ</option>
-                                  <option value="lóng">lóng</option>
-                                  <option value="tấm">tấm</option>
-                                  <option value="thanh">thanh</option>
-                                  <option value="ống">ống</option>
-                                </select>
-                              )
-                            }
-                            const isNumber = c.type === 'number' || ['kl', 'sl', 'dongia', 'thanhtien'].includes(c.key.toLowerCase())
-                            return (
-                              <input key={c.key} type={isNumber ? 'number' : 'text'} className="input" value={row[c.key] || ''} disabled={!isActive}
-                                onChange={e => update(ri, c.key, e.target.value)}
-                                placeholder={c.label}
-                                style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: isNumber ? 'right' : 'left' }} />
-                            )
-                          })}
-                          {isActive && rows.length > 1 && (
-                            <button type="button" onClick={() => removeRow(ri)}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
-                  </div>
-                )
-              }
+              const fmt = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+              const contractVal = Number(task.project?.contractValue) || 0
+              const totalMat = Number(formData.totalMaterial) || 0
+              const totalLab = Number(formData.totalLabor) || 0
+              const totalSvc = Number(formData.totalService) || 0
+              const totalOvh = Number(formData.totalOverhead) || 0
+              const totalEst = Number(formData.totalEstimate) || 0
+              const profit = contractVal - totalEst
+              const pct = (v: number) => totalEst > 0 ? ((v / totalEst) * 100).toFixed(1) + '%' : '—'
+              const hasData = totalEst > 0
 
-              // DT02 auto-summary (readonly)
-              const dt02Summary = (() => {
-                const totalMat = sumTableThanhTien(formData.dt03Items)
-                const totalLab = sumTableThanhTien(formData.dt06Items)
-                const totalSvc = sumTableThanhTien(formData.dt05Items)
-                const totalOvh = sumTableThanhTien(formData.dt07Items)
-                const total = totalMat + totalLab + totalSvc + totalOvh
-                const pct = (v: number) => total > 0 ? ((v / total) * 100).toFixed(1) + '%' : '—'
-                const fmt = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
-                const contractVal = Number(task.project?.contractValue) || 0
-                const profit = contractVal - total
-                return { totalMat, totalLab, totalSvc, totalOvh, total, pct, fmt, contractVal, profit }
-              })()
+              // Parse DT02 detail rows if available
+              let dt02Rows: { maCP: string; noiDung: string; giaTri: number }[] = []
+              try {
+                const parsed = formData.dt02Detail ? JSON.parse(String(formData.dt02Detail)) : null
+                if (Array.isArray(parsed)) dt02Rows = parsed
+              } catch { /* ignore */ }
 
-              // ── Multi-sheet Excel Export (8 sheets: Cover, DT01-DT07) ──
-              const parseRows = (key: string): Record<string, string>[] => {
-                try { const p = formData[key] ? JSON.parse(String(formData[key])) : null; return Array.isArray(p) ? p : [] } catch { return [] }
-              }
-
-              const exportFullEstimate = () => {
-                const wb = XLSX.utils.book_new()
-                const projectCode = task.project?.projectCode || 'PROJECT'
-                const clientName = task.project?.clientName || ''
-                const projectName = task.project?.projectName || ''
-                const contractVal = Number(task.project?.contractValue) || 0
-                const totalCost = dt02Summary.total
-                const profit = contractVal - totalCost
-
-                // ── Sheet 1: Cover ──
-                const coverData = [
-                  ['CÔNG TY CỔ PHẦN KẾT CẤU THÉP IBS'],
-                  ['DỰ TOÁN THI CÔNG'],
-                  [],
-                  ['Mã dự án:', projectCode],
-                  ['Khách hàng:', clientName],
-                  ['Tên dự án:', projectName],
-                  ['Số hợp đồng:', String(formData.dt01_contractNumber || '')],
-                  [],
-                  ['Giá trị hợp đồng:', contractVal],
-                  ['Tổng chi phí dự toán:', totalCost],
-                  ['Lợi nhuận dự kiến:', profit],
-                  ['Tỷ lệ LN (%):', contractVal > 0 ? ((profit / contractVal) * 100).toFixed(1) + '%' : ''],
-                  [],
-                  ['Người lập:', '', '', 'Người duyệt:'],
-                ]
-                const wsCover = XLSX.utils.aoa_to_sheet(coverData)
-                wsCover['!cols'] = [{ wch: 24 }, { wch: 30 }, { wch: 16 }, { wch: 24 }]
-                // Formula refs to DT02 sheet
-                XLSX.utils.sheet_add_aoa(wsCover, [['=\'DT02(TH)\'!C9']], { origin: 'B10' })
-                XLSX.utils.book_append_sheet(wb, wsCover, '+Cover')
-
-                // ── Sheet 2: DT01(TTC) — Project Info ──
-                const dt01Data = [
-                  ['DT01 — THÔNG TIN CHUNG DỰ ÁN'],
-                  [],
-                  ['A. THÔNG TIN DỰ ÁN'],
-                  ['Mã dự án', projectCode],
-                  ['Khách hàng', clientName],
-                  ['Tên dự án', projectName],
-                  ['Sản phẩm', task.project?.productType || ''],
-                  ['Giá trị HĐ', contractVal],
-                  ['Ngày bắt đầu', task.project?.startDate ? new Date(task.project.startDate).toLocaleDateString('vi-VN') : ''],
-                  ['Ngày giao hàng', task.project?.endDate ? new Date(task.project.endDate).toLocaleDateString('vi-VN') : ''],
-                  [],
-                  ['B. PHẠM VI CÔNG VIỆC'],
-                  ['Khối lượng thi công', String(formData.dt01_volume || '')],
-                  ['Đợt thanh toán', String(formData.dt01_paymentTerms || '')],
-                  ['Điều khoản phạt', String(formData.dt01_penalties || '')],
-                  [],
-                  ['C. TỔNG HỢP P&L'],
-                  ['Tổng doanh thu (HĐ)', contractVal],
-                  ['Tổng chi phí', '=\'DT02(TH)\'!C9'],
-                  ['Lợi nhuận', '=B18-B19'],
-                  ['Tỷ lệ LN (%)', '=IF(B18>0,B20/B18*100,0)'],
-                ]
-                const wsDt01 = XLSX.utils.aoa_to_sheet(dt01Data)
-                wsDt01['!cols'] = [{ wch: 22 }, { wch: 36 }]
-                XLSX.utils.book_append_sheet(wb, wsDt01, 'DT01(TTC)')
-
-                // ── Sheet 3: DT02(TH) — Cost Summary ──
-                const dt02Data = [
-                  ['DT02 — TỔNG HỢP DỰ TOÁN CHI PHÍ'],
-                  [],
-                  ['STT', 'Hạng mục chi phí', 'Giá trị (VNĐ)', 'Tỷ lệ (%)'],
-                  ['I', 'Chi phí vật tư', '=\'DT03(VT)\'!G' + 'LAST', '=IF(C9>0,C4/C9*100,0)'],
-                  ['II', 'Chi phí nhân công', '=\'DT06(NC)\'!G' + 'LAST', '=IF(C9>0,C5/C9*100,0)'],
-                  ['III', 'Chi phí dịch vụ', '=\'DT05(DV)\'!G' + 'LAST', '=IF(C9>0,C6/C9*100,0)'],
-                  ['IV', 'Chi phí chung (CPC)', '=\'DT07(CPC)\'!G' + 'LAST', '=IF(C9>0,C7/C9*100,0)'],
-                  [],
-                  ['', 'TỔNG CHI PHÍ', '=SUM(C4:C7)', '100%'],
-                ]
-                const wsDt02 = XLSX.utils.aoa_to_sheet(dt02Data)
-                wsDt02['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 20 }, { wch: 12 }]
-                XLSX.utils.book_append_sheet(wb, wsDt02, 'DT02(TH)')
-
-                // Helper: create detail sheet from table data
-                const makeDetailSheet = (
-                  _sheetTitle: string, dataKey: string,
-                  cols: { key: string; label: string }[]
-                ) => {
-                  const rows = parseRows(dataKey)
-                  const headers = ['STT', ...cols.map(c => c.label)]
-                  const data = rows.map((r, i) => [i + 1, ...cols.map(c => {
-                    const v = r[c.key] || ''
-                    return isNaN(Number(v)) || v === '' ? v : Number(v)
-                  })])
-                  const lastDataRow = data.length + 2 // header at row 1, data starts row 2
-                  const totalRow = new Array(headers.length).fill('')
-                  totalRow[0] = ''
-                  totalRow[1] = 'TỔNG CỘNG'
-                  // SUM formula for thanhTien column
-                  const sumColIdx = cols.findIndex(c => c.key === 'thanhTien' || c.key === 'giaTri')
-                  if (sumColIdx >= 0) {
-                    const colLetter = String.fromCharCode(66 + sumColIdx) // B=66, +sumColIdx (STT is col A, data starts at B)
-                    totalRow[sumColIdx + 1] = `=SUM(${colLetter}2:${colLetter}${lastDataRow})`
-                  }
-                  const allData = [headers, ...data, totalRow]
-                  const ws = XLSX.utils.aoa_to_sheet(allData)
-                  ws['!cols'] = headers.map(h => ({ wch: Math.max(String(h).length + 4, 14) }))
-                  return { ws, lastRow: lastDataRow + 1 } // lastRow = total row number
-                }
-
-                // ── Sheet 4: DT03(VT) ──
-                const dt03Cols = [
-                  { key: 'nhomVT', label: 'Nhóm VT' }, { key: 'danhMuc', label: 'Danh mục VT' },
-                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL/SL' },
-                  { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
-                ]
-                const { ws: wsDt03 } = makeDetailSheet('DT03 — Dự toán VT', 'dt03Items', dt03Cols)
-                XLSX.utils.book_append_sheet(wb, wsDt03, 'DT03(VT)')
-
-                // ── Sheet 5: DT04(VT detail) ──
-                const dt04Cols = [
-                  { key: 'maVT', label: 'Mã VT' }, { key: 'tenVT', label: 'Tên VT' },
-                  { key: 'macVL', label: 'Mác VL' }, { key: 'quyCach', label: 'Quy cách' },
-                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL/SL' },
-                  { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
-                ]
-                const { ws: wsDt04 } = makeDetailSheet('DT04 — Chi tiết VT', 'dt04Items', dt04Cols)
-                XLSX.utils.book_append_sheet(wb, wsDt04, 'DT04(VT)')
-
-                // ── Sheet 6: DT05(DV) ──
-                const dt05Cols = [
-                  { key: 'maCP', label: 'Mã CP' }, { key: 'noiDung', label: 'Nội dung công việc' },
-                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
-                  { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
-                ]
-                const { ws: wsDt05 } = makeDetailSheet('DT05 — Dịch vụ', 'dt05Items', dt05Cols)
-                XLSX.utils.book_append_sheet(wb, wsDt05, 'DT05(DV)')
-
-                // ── Sheet 7: DT06(NC) ──
-                const dt06Cols = [
-                  { key: 'maCP', label: 'Mã CP' }, { key: 'noiDung', label: 'Nội dung công việc' },
-                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
-                  { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
-                ]
-                const { ws: wsDt06 } = makeDetailSheet('DT06 — Nhân công', 'dt06Items', dt06Cols)
-                XLSX.utils.book_append_sheet(wb, wsDt06, 'DT06(NC)')
-
-                // ── Sheet 8: DT07(CPC) ──
-                const dt07Cols = [
-                  { key: 'maCP', label: 'Mã CP' }, { key: 'danhMuc', label: 'Danh mục chi phí' },
-                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
-                  { key: 'donGia', label: 'Đơn giá BQ' }, { key: 'thanhTien', label: 'Thành tiền' },
-                ]
-                const { ws: wsDt07 } = makeDetailSheet('DT07 — Chi phí chung', 'dt07Items', dt07Cols)
-                XLSX.utils.book_append_sheet(wb, wsDt07, 'DT07(CPC)')
-
-                // Calculate actual total row positions for DT02 cross-sheet formulas
-                const dt03Rows = parseRows('dt03Items')
-                const dt05Rows = parseRows('dt05Items')
-                const dt06Rows = parseRows('dt06Items')
-                const dt07Rows = parseRows('dt07Items')
-                const dt03TotalRow = dt03Rows.length + 2
-                const dt05TotalRow = dt05Rows.length + 2
-                const dt06TotalRow = dt06Rows.length + 2
-                const dt07TotalRow = dt07Rows.length + 2
-
-                // Re-set DT02 cells with correct formula references
-                wsDt02['C4'] = { t: 'n', f: `'DT03(VT)'!G${dt03TotalRow}` }
-                wsDt02['C5'] = { t: 'n', f: `'DT06(NC)'!G${dt06TotalRow}` }
-                wsDt02['C6'] = { t: 'n', f: `'DT05(DV)'!G${dt05TotalRow}` }
-                wsDt02['C7'] = { t: 'n', f: `'DT07(CPC)'!G${dt07TotalRow}` }
-
-                XLSX.writeFile(wb, `DuToan_${projectCode}.xlsx`)
-              }
-
-              // ── Multi-sheet Excel Import ──
-              const importFullEstimate = () => {
+              // ── Import Excel: parse DT02 summary → store totals in formData ──
+              const importEstimateExcel = () => {
                 const input = document.createElement('input')
                 input.type = 'file'
                 input.accept = '.xlsx,.xls'
@@ -2413,104 +2135,66 @@ export default function TaskDetailPage() {
                   const reader = new FileReader()
                   reader.onload = (evt) => {
                     const wb = XLSX.read(evt.target?.result, { type: 'binary' })
-                    const sheetNames = wb.SheetNames.map(s => s.toLowerCase())
-                    let importCount = 0
+                    const sheetNames = wb.SheetNames
 
-                    // Map sheet names to data keys and column definitions
-                    const sheetMap: { pattern: string; dataKey: string; cols: { key: string; label: string }[] }[] = [
-                      { pattern: 'dt03', dataKey: 'dt03Items', cols: [
-                        { key: 'nhomVT', label: 'Nhóm VT' }, { key: 'danhMuc', label: 'Danh mục VT' },
-                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL/SL' },
-                        { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
-                      ]},
-                      { pattern: 'dt04', dataKey: 'dt04Items', cols: [
-                        { key: 'maVT', label: 'Mã VT' }, { key: 'tenVT', label: 'Tên VT' },
-                        { key: 'macVL', label: 'Mác VL' }, { key: 'quyCach', label: 'Quy cách' },
-                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL/SL' },
-                        { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
-                      ]},
-                      { pattern: 'dt05', dataKey: 'dt05Items', cols: [
-                        { key: 'maCP', label: 'Mã CP' }, { key: 'noiDung', label: 'Nội dung công việc' },
-                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
-                        { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
-                      ]},
-                      { pattern: 'dt06', dataKey: 'dt06Items', cols: [
-                        { key: 'maCP', label: 'Mã CP' }, { key: 'noiDung', label: 'Nội dung công việc' },
-                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
-                        { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
-                      ]},
-                      { pattern: 'dt07', dataKey: 'dt07Items', cols: [
-                        { key: 'maCP', label: 'Mã CP' }, { key: 'danhMuc', label: 'Danh mục chi phí' },
-                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
-                        { key: 'donGia', label: 'Đơn giá BQ' }, { key: 'thanhTien', label: 'Thành tiền' },
-                      ]},
-                    ]
-
-                    sheetMap.forEach(({ pattern, dataKey, cols }) => {
-                      // Find matching sheet (e.g. "DT03(VT)", "DT03", "dt03-vt")
-                      const sheetIdx = sheetNames.findIndex(s => s.includes(pattern))
-                      if (sheetIdx < 0) return
-                      const ws = wb.Sheets[wb.SheetNames[sheetIdx]]
-                      const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })
-                      if (jsonData.length < 2) return
-
-                      const headerRow = jsonData[0].map(h => String(h || '').trim().toLowerCase())
-                      // Map headers to column keys
-                      const colMapping = headerRow.map(h => {
-                        // Match by label (case-insensitive) or by key
-                        const col = cols.find(c =>
-                          c.label.toLowerCase() === h || c.key.toLowerCase() === h ||
-                          h.includes(c.label.toLowerCase().split(' ')[0])
-                        )
-                        return col ? col.key : ''
-                      })
-
-                      const imported: Record<string, string>[] = []
-                      for (let i = 1; i < jsonData.length; i++) {
-                        const rowData = jsonData[i]
-                        if (!rowData || rowData.every(c => !c)) continue
-                        // Skip total/summary rows
-                        const firstCell = String(rowData[0] || '').toLowerCase()
-                        if (firstCell.includes('tổng') || firstCell.includes('total')) continue
-                        // Skip STT column (first col is always STT)
-                        const newRow: Record<string, string> = Object.fromEntries(cols.map(c => [c.key, '']))
-                        colMapping.forEach((key, ci) => {
-                          if (key && ci > 0 && rowData[ci] != null) { // ci>0 to skip STT
-                            newRow[key] = String(rowData[ci])
-                          }
-                        })
-                        // Also try mapping without STT offset if header mapping includes col keys
-                        if (!colMapping[0] && colMapping.slice(1).some(k => k)) {
-                          // Header row starts with STT, data cols offset by 1 — already handled above
-                        }
-                        if (Object.values(newRow).some(v => String(v).trim())) imported.push(newRow)
-                      }
-
-                      if (imported.length > 0) {
-                        handleFieldChange(dataKey, JSON.stringify(imported))
-                        importCount += imported.length
-                      }
-                    })
-
-                    // Import DT01 fields from DT01 sheet
-                    const dt01Idx = sheetNames.findIndex(s => s.includes('dt01'))
-                    if (dt01Idx >= 0) {
-                      const ws = wb.Sheets[wb.SheetNames[dt01Idx]]
-                      const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })
-                      rows.forEach(row => {
-                        const label = String(row[0] || '').trim().toLowerCase()
-                        const val = row[1] != null ? String(row[1]) : ''
-                        if (label.includes('khối lượng')) handleFieldChange('dt01_volume', val)
-                        if (label.includes('thanh toán')) handleFieldChange('dt01_paymentTerms', val)
-                        if (label.includes('phạt')) handleFieldChange('dt01_penalties', val)
-                      })
+                    // Find DT02 sheet (contains "DT02" or "TH")
+                    const dt02Name = sheetNames.find(s => s.toLowerCase().includes('dt02'))
+                    if (!dt02Name) {
+                      setError('Không tìm thấy sheet DT02 trong file Excel.')
+                      return
                     }
 
-                    if (importCount > 0) {
-                      setSuccessMsg(`✅ Đã import ${importCount} dòng từ ${wb.SheetNames.length} sheets`)
+                    const ws = wb.Sheets[dt02Name]
+                    const data: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
+
+                    // Parse DT02: find rows with Roman numerals I-IV for main categories
+                    let matTotal = 0, labTotal = 0, svcTotal = 0, ovhTotal = 0, grandTotal = 0
+                    const detailRows: { maCP: string; noiDung: string; giaTri: number }[] = []
+
+                    for (const row of data) {
+                      if (!row || row.length < 4) continue
+                      const stt = String(row[0] || '').trim()
+                      const content = String(row[2] || '').trim()
+                      const value = Number(row[3]) || 0
+
+                      if (stt === 'I') { matTotal = value; detailRows.push({ maCP: 'I', noiDung: content || 'Chi phí vật tư', giaTri: value }) }
+                      else if (stt === 'II') { labTotal = value; detailRows.push({ maCP: 'II', noiDung: content || 'Chi phí nhân công', giaTri: value }) }
+                      else if (stt === 'III') { svcTotal = value; detailRows.push({ maCP: 'III', noiDung: content || 'Chi phí dịch vụ', giaTri: value }) }
+                      else if (stt === 'IV') { ovhTotal = value; detailRows.push({ maCP: 'IV', noiDung: content || 'Chi phí chung', giaTri: value }) }
+
+                      // Sub-items (numeric STT under each category)
+                      if (/^\d+$/.test(stt) && value > 0) {
+                        const maCP = String(row[1] || stt)
+                        detailRows.push({ maCP, noiDung: content, giaTri: value })
+                      }
+                    }
+
+                    // Find grand total row
+                    for (const row of data) {
+                      if (!row) continue
+                      const content = String(row[2] || '').toLowerCase()
+                      if (content.includes('tổng hợp') || content.includes('tổng chi phí')) {
+                        grandTotal = Number(row[3]) || 0
+                      }
+                    }
+                    if (!grandTotal) grandTotal = matTotal + labTotal + svcTotal + ovhTotal
+
+                    if (grandTotal > 0) {
+                      // Store summary values using functional updates
+                      setFormData(prev => ({
+                        ...prev,
+                        totalMaterial: matTotal,
+                        totalLabor: labTotal,
+                        totalService: svcTotal,
+                        totalOverhead: ovhTotal,
+                        totalEstimate: grandTotal,
+                        dt02Detail: JSON.stringify(detailRows),
+                        estimateFileName: file.name,
+                      }))
+                      setSuccessMsg(`✅ Đã import dự toán: ${fmt(grandTotal)} từ ${sheetNames.length} sheets`)
                       setTimeout(() => setSuccessMsg(''), 4000)
                     } else {
-                      setError('Không tìm thấy dữ liệu phù hợp. Kiểm tra tên sheet (DT03, DT04, DT05, DT06, DT07).')
+                      setError('Không đọc được dữ liệu DT02. Kiểm tra file Excel có đúng định dạng.')
                     }
                   }
                   reader.readAsBinaryString(file)
@@ -2518,34 +2202,70 @@ export default function TaskDetailPage() {
                 input.click()
               }
 
+              // ── Export template (8-sheet Excel) ──
+              const exportTemplate = () => {
+                const wb = XLSX.utils.book_new()
+                const projectCode = task.project?.projectCode || 'PROJECT'
+
+                // Cover
+                const coverData = [
+                  ['CÔNG TY CỔ PHẦN KẾT CẤU THÉP IBS'], [], [],
+                  ['DỰ TOÁN THI CÔNG'], [],
+                  ['Mã dự án', projectCode],
+                  ['Khách hàng', task.project?.clientName || ''],
+                  ['Tên dự án', task.project?.projectName || ''],
+                ]
+                const wsCover = XLSX.utils.aoa_to_sheet(coverData)
+                wsCover['!cols'] = [{ wch: 20 }, { wch: 40 }]
+                XLSX.utils.book_append_sheet(wb, wsCover, '+Cover')
+
+                // DT01
+                const dt01Data = [
+                  ['DT01 — THÔNG TIN CHUNG DỰ ÁN'], [],
+                  ['STT', 'Dữ liệu', 'Thông tin', 'Ghi chú'],
+                  ['A', 'THÔNG TIN CHUNG'],
+                  [1, 'Khách hàng', task.project?.clientName || ''],
+                  [2, 'Tên dự án', task.project?.projectName || ''],
+                  [3, 'Mã dự án', projectCode],
+                  [4, 'Giá trị HĐ', contractVal],
+                ]
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dt01Data), 'DT01 (TTC)')
+
+                // DT02
+                const dt02Data = [
+                  ['TỔNG HỢP DỰ TOÁN CHI PHÍ THI CÔNG'], [],
+                  ['STT', 'Mã CP', 'Nội dung chi phí', 'Giá trị', 'Tỷ lệ'],
+                  ['I', '', 'Chi phí vật tư', '', ''],
+                  ['II', '', 'Chi phí nhân công trực tiếp', '', ''],
+                  ['III', '', 'Chi phí dịch vụ thuê ngoài', '', ''],
+                  ['IV', '', 'Chi phí chung', '', ''],
+                  [], ['', '', 'TỔNG HỢP CHI PHÍ', '=SUM(D4:D7)', ''],
+                ]
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dt02Data), 'DT02 (TH)')
+
+                // DT03-DT07 (empty templates with headers)
+                const sheets: [string, string, string[]][] = [
+                  ['DT03 (VT)', 'DỰ TOÁN CHI PHÍ VẬT TƯ', ['STT', 'Nhóm vật tư', 'Danh mục vật tư', 'Đơn vị tính', 'Khối lượng/ Số lượng', 'Đơn giá (vnd)', 'Thành tiền (vnd)']],
+                  ['DT04 (VT)', 'BẢNG DỰ TOÁN CHI TIẾT VẬT TƯ', ['STT', 'Nhóm vật tư', 'Mã vật tư', 'Danh mục vật tư', 'Đơn vị tính', 'Mác vật liệu', 'Quy cách', '', '', 'Khối lượng', 'Đơn giá (vnd)', 'Thành tiền (vnd)']],
+                  ['DT05 (DV)', 'DỰ TOÁN CHI PHÍ DỊCH VỤ', ['STT', 'Mã CP', 'NỘI DUNG CÔNG VIỆC', 'Đơn vị tính', 'Khối lượng', 'Đơn giá (vnd)', 'Thành tiền (vnd)']],
+                  ['DT06 (NC)', 'DỰ TOÁN CHI PHÍ NHÂN CÔNG TRỰC TIẾP', ['STT', 'Mã CP', 'NỘI DUNG CÔNG VIỆC', 'Đơn vị tính', 'Khối lượng', 'Đơn giá (vnd)', 'Thành tiền (vnd)']],
+                  ['DT07 (CPC)', 'DỰ TOÁN CHI PHÍ CHUNG, CHI PHÍ TÀI CHÍNH', ['STT', 'Mã CP', 'Danh mục chi phí', 'Đơn vị tính', 'Khối lượng', 'Đơn giá bình quân', 'Thành tiền']],
+                ]
+                sheets.forEach(([name, title, headers]) => {
+                  const data = [[title], [], headers]
+                  const ws = XLSX.utils.aoa_to_sheet(data)
+                  ws['!cols'] = headers.map(h => ({ wch: Math.max(String(h).length + 4, 14) }))
+                  XLSX.utils.book_append_sheet(wb, ws, name)
+                })
+
+                XLSX.writeFile(wb, `DuToan_Template_${projectCode}.xlsx`)
+              }
+
               return (
                 <>
-                  {/* ── Excel Template Download/Upload (Multi-sheet) ── */}
-                  <div className="card" style={{ padding: '1.25rem', marginBottom: '0.5rem', borderLeft: '4px solid #7c3aed' }}>
-                    <h3 style={{ margin: '0 0 10px', fontSize: '0.95rem', color: '#7c3aed' }}>📥 Excel Dự toán (8 sheets)</h3>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px' }}>
-                      File Excel gồm: Cover, DT01(TTC), DT02(TH), DT03(VT), DT04(VT), DT05(DV), DT06(NC), DT07(CPC) — có công thức liên kết giữa các sheet.
-                    </p>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" onClick={exportFullEstimate}
-                        style={{ flex: 1, padding: '10px 16px', fontSize: '0.85rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                        ⬇️ Tải Template Dự Toán
-                      </button>
-                      {isActive && (
-                        <button type="button" onClick={importFullEstimate}
-                          style={{ flex: 1, padding: '10px 16px', fontSize: '0.85rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                          ⬆️ Upload Excel Dự Toán
-                        </button>
-                      )}
-                    </div>
-                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '8px 0 0', fontStyle: 'italic' }}>
-                      Công thức liên kết sẽ được tính khi mở trong Excel/LibreOffice.
-                    </p>
-                  </div>
-
                   {/* ── DT01: Thông tin dự án ── */}
                   <div className="card" style={{ padding: '1.25rem', marginBottom: '0.5rem', borderLeft: '4px solid #3b82f6' }}>
-                    <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#3b82f6' }}>📋 DT01 — Thông tin chung dự án</h3>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#3b82f6' }}>DT01 — Thông tin chung dự án</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', fontSize: '0.85rem' }}>
                       <div><span style={{ color: 'var(--text-muted)' }}>Mã dự án:</span> <strong>{task.project.projectCode}</strong></div>
                       <div><span style={{ color: 'var(--text-muted)' }}>Khách hàng:</span> <strong>{task.project.clientName}</strong></div>
@@ -2557,157 +2277,96 @@ export default function TaskDetailPage() {
                     </div>
                   </div>
 
-                  {/* ── DT02: Tổng hợp chi phí (auto-calculated) ── */}
-                  <div className="card" style={{ padding: '1.25rem', marginTop: '0.5rem', borderLeft: '4px solid #059669' }}>
-                    <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#059669' }}>📊 DT02 — Tổng hợp dự toán chi phí</h3>
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontSize: '0.85rem' }}>
-                      {[
-                        { label: 'I. Chi phí vật tư', value: dt02Summary.totalMat, color: '#e63946' },
-                        { label: 'II. Chi phí nhân công', value: dt02Summary.totalLab, color: '#f59e0b' },
-                        { label: 'III. Chi phí dịch vụ', value: dt02Summary.totalSvc, color: '#3b82f6' },
-                        { label: 'IV. Chi phí chung', value: dt02Summary.totalOvh, color: '#8b5cf6' },
-                      ].map((item, i) => (
-                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 600 }}>{item.label}</span>
-                          <span style={{ textAlign: 'right', fontWeight: 600, color: item.color }}>{dt02Summary.fmt(item.value)}</span>
-                          <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{dt02Summary.pct(item.value)}</span>
-                        </div>
-                      ))}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '10px 12px', background: 'var(--bg-secondary)', fontWeight: 700, fontSize: '0.95rem' }}>
-                        <span>TỔNG CHI PHÍ</span>
-                        <span style={{ textAlign: 'right', color: 'var(--accent)' }}>{dt02Summary.fmt(dt02Summary.total)}</span>
-                        <span style={{ textAlign: 'right' }}>100%</span>
-                      </div>
-                      {dt02Summary.contractVal > 0 && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderTop: '2px solid var(--border)' }}>
-                          <span style={{ fontWeight: 600 }}>Lợi nhuận dự kiến</span>
-                          <span style={{ textAlign: 'right', fontWeight: 700, color: dt02Summary.profit >= 0 ? '#059669' : '#dc2626' }}>{dt02Summary.fmt(dt02Summary.profit)}</span>
-                          <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{dt02Summary.contractVal > 0 ? ((dt02Summary.profit / dt02Summary.contractVal) * 100).toFixed(1) + '%' : ''}</span>
-                        </div>
+                  {/* ── Excel Upload/Download ── */}
+                  <div className="card" style={{ padding: '1.25rem', marginBottom: '0.5rem', borderLeft: '4px solid #7c3aed' }}>
+                    <h3 style={{ margin: '0 0 10px', fontSize: '0.95rem', color: '#7c3aed' }}>Excel Dự toán thi công</h3>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px' }}>
+                      Upload file Excel dự toán (8 sheets: Cover, DT01-DT07). Hệ thống tự động đọc DT02 để hiển thị tổng hợp chi phí.
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" onClick={exportTemplate}
+                        style={{ flex: 1, padding: '10px 16px', fontSize: '0.85rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                        Tải Template Dự Toán
+                      </button>
+                      {isActive && (
+                        <button type="button" onClick={importEstimateExcel}
+                          style={{ flex: 1, padding: '10px 16px', fontSize: '0.85rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                        Upload Excel Dự Toán
+                        </button>
                       )}
                     </div>
+                    {formData.estimateFileName && (
+                      <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: '0.8rem' }}>
+                        File đã upload: <strong>{String(formData.estimateFileName)}</strong>
+                      </div>
+                    )}
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '8px 0 0', fontStyle: 'italic' }}>
+                      Đính kèm file gốc ở mục &quot;Tài liệu đính kèm&quot; bên dưới để lưu trữ.
+                    </p>
                   </div>
 
-                  {/* ── TM: DT03 - Dự toán VT tổng hợp ── */}
-                  {renderEstTable('📦 DT03 — Dự toán chi phí VT', 'QT30-DT03', 'dt03Items',
-                    [
-                      { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
-                      { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
-                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.6fr' },
-                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.8fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.8fr' },
-                    ],
-                    [
-                      { nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTP', danhMuc: 'Vật tư phụ kiện, bu lông…', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTDK', danhMuc: 'Vật tư đóng kiện', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTBP', danhMuc: 'Vật tư làm biện pháp', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTTH', danhMuc: 'Vật tư tiêu hao', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTS', danhMuc: 'Vật tư sơn', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTDP', danhMuc: 'Vật tư dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                    ]
-                  )}
+                  {/* ── DT02: Tổng hợp chi phí (from parsed Excel) ── */}
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '0.5rem', borderLeft: '4px solid #059669' }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#059669' }}>DT02 — Tổng hợp dự toán chi phí</h3>
+                    {!hasData ? (
+                      <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        Chưa có dữ liệu. Vui lòng upload file Excel dự toán.
+                      </div>
+                    ) : (
+                      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontSize: '0.85rem' }}>
+                        {[
+                          { label: 'I. Chi phí vật tư', value: totalMat, color: '#e63946' },
+                          { label: 'II. Chi phí nhân công', value: totalLab, color: '#f59e0b' },
+                          { label: 'III. Chi phí dịch vụ', value: totalSvc, color: '#3b82f6' },
+                          { label: 'IV. Chi phí chung', value: totalOvh, color: '#8b5cf6' },
+                        ].map((item, i) => (
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 600 }}>{item.label}</span>
+                            <span style={{ textAlign: 'right', fontWeight: 600, color: item.color }}>{fmt(item.value)}</span>
+                            <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{pct(item.value)}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '10px 12px', background: 'var(--bg-secondary)', fontWeight: 700, fontSize: '0.95rem' }}>
+                          <span>TỔNG CHI PHÍ</span>
+                          <span style={{ textAlign: 'right', color: 'var(--accent)' }}>{fmt(totalEst)}</span>
+                          <span style={{ textAlign: 'right' }}>100%</span>
+                        </div>
+                        {contractVal > 0 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderTop: '2px solid var(--border)' }}>
+                            <span style={{ fontWeight: 600 }}>Lợi nhuận dự kiến</span>
+                            <span style={{ textAlign: 'right', fontWeight: 700, color: profit >= 0 ? '#059669' : '#dc2626' }}>{fmt(profit)}</span>
+                            <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{((profit / contractVal) * 100).toFixed(1)}%</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  {/* ── TM: DT04 - Dự toán VT chi tiết ── */}
-                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items',
-                    [
-                      { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
-                      { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
-                      { key: 'macVL', label: 'Mác VL', width: '0.6fr' },
-                      { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.4fr' },
-                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.5fr' },
-                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
-                    ],
-                    [{ maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
-                  )}
-
-                  {/* ── TM: DT05 - Dự toán dịch vụ ── */}
-                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items',
-                    [
-                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
-                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
-                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
-                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
-                    ],
-                    [
-                      { maCP: 'VT', noiDung: 'Vận tải', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'NDT', noiDung: 'NDT, quy trình và thí nghiệm', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'MK', noiDung: 'Mạ kẽm', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPK', noiDung: 'Các chi phí khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                    ]
-                  )}
-
-                  {/* ── SX: DT06 - Dự toán nhân công ── */}
-                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công', 'QT30-DT06', 'dt06Items',
-                    [
-                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
-                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
-                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
-                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
-                    ],
-                    [
-                      { maCP: 'PC', noiDung: 'Pha cắt', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'GC', noiDung: 'Gia công', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CT', noiDung: 'Chế tạo - Lan can', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CT', noiDung: 'Chế tạo - Giá đỡ', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CT', noiDung: 'Chế tạo - Ống', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CT', noiDung: 'Chế tạo - Hộp', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'KK', noiDung: 'Khung kiện', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'TH', noiDung: 'Tổ hợp sản phẩm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'LD', noiDung: 'Lắp dựng + Nghiệm thu', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'VS', noiDung: 'Vệ sinh vật liệu hợp kim', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'SON', noiDung: 'Làm sạch, Sơn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'BO', noiDung: 'Bảo ôn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'LTB', noiDung: 'Lắp thiết bị phụ kiện trước đóng kiện', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'DK', noiDung: 'Đóng kiện', dvt: 'Kiện', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'GH', noiDung: 'Giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'DP', noiDung: 'Nhân công dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                    ]
-                  )}
-
-                  {/* ── DT07 - Chi phí chung, tài chính ── */}
-                  {renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items',
-                    [
-                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
-                      { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
-                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
-                      { key: 'donGia', label: 'Đơn giá BQ', type: 'number', width: '0.7fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
-                    ],
-                    [
-                      { maCP: 'CPC', danhMuc: 'I. Chi phí chung phục vụ sản xuất', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-01', danhMuc: 'Nhân công (ngoài khoán)', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-02', danhMuc: 'Thuê công nhân thời vụ', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-03', danhMuc: 'Khấu hao TSCĐ', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-04', danhMuc: 'Sửa chữa máy móc thiết bị', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-05', danhMuc: 'Điện sản xuất', dvt: 'kWh', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-06', danhMuc: 'Nước sản xuất', dvt: 'm³', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-07', danhMuc: 'Khí nén (Oxy, Acetylen…)', dvt: 'Chai', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-08', danhMuc: 'Nhiên liệu (dầu, xăng)', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-09', danhMuc: 'Chi phí an toàn lao động', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPC-10', danhMuc: 'Chi phí SX khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CTC', danhMuc: 'II. Chi phí tài chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CTC-01', danhMuc: 'Phí bảo lãnh thực hiện HĐ', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CTC-02', danhMuc: 'Phí bảo lãnh tạm ứng', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CTC-03', danhMuc: 'Phí bảo lãnh bảo hành', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CTC-04', danhMuc: 'Lãi vay ngân hàng', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CTC-05', danhMuc: 'Bảo hiểm dự án', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CQL', danhMuc: 'III. Chi phí Quản Lý', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CQL-01', danhMuc: 'Lương nhân viên gián tiếp', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CQL-02', danhMuc: 'Văn phòng phẩm', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CQL-03', danhMuc: 'Bảo vệ, an ninh', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CQL-04', danhMuc: 'Chi phí tiếp khách', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CQL-05', danhMuc: 'Chi phí quản lý khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                    ]
-                  )}
+                    {/* DT02 Detail breakdown (collapsible) */}
+                    {dt02Rows.length > 0 && (
+                      <details style={{ marginTop: 10 }}>
+                        <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                          Chi tiết DT02 ({dt02Rows.length} dòng)
+                        </summary>
+                        <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', marginTop: 6, fontSize: '0.8rem' }}>
+                          {dt02Rows.map((row, i) => {
+                            const isHeader = ['I', 'II', 'III', 'IV'].includes(row.maCP)
+                            return (
+                              <div key={i} style={{
+                                display: 'grid', gridTemplateColumns: '60px 1fr 120px',
+                                padding: '4px 10px', borderBottom: '1px solid var(--border)',
+                                background: isHeader ? 'var(--bg-secondary)' : 'transparent',
+                                fontWeight: isHeader ? 700 : 400,
+                              }}>
+                                <span style={{ color: 'var(--text-muted)' }}>{row.maCP}</span>
+                                <span>{row.noiDung}</span>
+                                <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? Number(row.giaTri).toLocaleString('vi-VN') : ''}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </details>
+                    )}
+                  </div>
                 </>
               )
             })()}
