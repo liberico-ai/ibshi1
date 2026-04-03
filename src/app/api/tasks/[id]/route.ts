@@ -645,7 +645,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const baseUserRole = payload.roleCode.replace(/[a-zA-Z]$/, '')
       const isAssignedToMe = task.assignedTo === payload.userId
       
-      const isAuthorized = isGlobalAdmin || isAssignedToMe || (payload.userLevel === 1 && baseUserRole === baseTaskRole && !task.assignedTo)
+      const isAuthorized = isGlobalAdmin || isAssignedToMe || (baseUserRole === baseTaskRole && !task.assignedTo)
       
       if (!isAuthorized) {
         return errorResponse(`Bạn (${payload.roleCode}) không có quyền thực hiện bước này. Hãy yêu cầu quản lý phân công task cho bạn.`, 403)

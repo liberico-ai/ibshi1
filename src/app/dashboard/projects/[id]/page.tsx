@@ -342,7 +342,13 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
   
   const canAssignLevel = currentUserLevel === 1 || currentUserRole === 'R00' || currentUserRole === 'R01' || currentUserRole === 'R02'
   const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(currentUserRole)
-  const hasAssignPerm = (task: Task) => canAssignLevel && (isGlobalAdmin || currentUserRole === task.assignedRole)
+  const hasAssignPerm = (task: Task) => {
+    if (!canAssignLevel) return false
+    if (isGlobalAdmin) return true
+    const userBase = currentUserRole.replace(/[a-zA-Z]$/, '')
+    const taskBase = task.assignedRole.replace(/[a-zA-Z]$/, '')
+    return userBase === taskBase
+  }
 
   return (
     <div className="card overflow-hidden" style={{ borderLeft: `4px solid ${borderColor}` }}>

@@ -843,9 +843,11 @@ export default function TaskDetailPage() {
   const params = useParams()
   const router = useRouter()
   const taskId = params.id as string
+  const { user: currentUser } = useAuthStore()
 
   const [task, setTask] = useState<TaskData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showAssignModal, setShowAssignModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState<Record<string, string | number>>({})
   const [checklistState, setChecklistState] = useState<Record<string, boolean>>({})
@@ -896,6 +898,34 @@ export default function TaskDetailPage() {
   async function loadUsers() {
     const res = await apiFetch('/api/users')
     if (res.ok && res.users) setUserList(res.users)
+  }
+
+  // Check if current user can assign this task (L1 same department or admin)
+  const canAssignTask = (() => {
+    if (!currentUser || !task) return false
+    const userRole = currentUser.roleCode || ''
+    const userLevel = currentUser.userLevel ?? 99
+    const isAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(userRole)
+    if (isAdmin) return true
+    if (userLevel > 1) return false
+    const userBase = userRole.replace(/[a-zA-Z]$/, '')
+    const taskBase = task.assignedRole.replace(/[a-zA-Z]$/, '')
+    return userBase === taskBase
+  })()
+
+  async function handleAssignTask(userId: string) {
+    const res = await apiFetch(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'assign', assignToUserId: userId }),
+    })
+    if (res.ok || res.success) {
+      setSuccessMsg('✅ Đã phân công thành công')
+      setShowAssignModal(false)
+      loadTask()
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } else {
+      setError(res.error || 'Lỗi khi phân công')
+    }
   }
 
   async function loadInventory() {
@@ -1435,11 +1465,21 @@ export default function TaskDetailPage() {
               ⏰ Deadline: {new Date(task.deadline).toLocaleDateString('vi-VN')}
             </span>
           )}
-          {task.assignee && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              👤 {task.assignee.fullName}
-            </span>
-          )}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            👤 {task.assignee ? task.assignee.fullName : <span className="italic opacity-60">Chưa phân công</span>}
+            {canAssignTask && isActive && (
+              <button
+                onClick={() => setShowAssignModal(true)}
+                style={{
+                  marginLeft: 4, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600,
+                  background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                Phân công
+              </button>
+            )}
+          </span>
         </div>
       </div>
 
@@ -5115,6 +5155,73 @@ export default function TaskDetailPage() {
           )}
         </div>
       )}
+
+      {/* Assign Task Modal */}
+      {showAssignModal && task && (
+        <TaskAssignModal
+          task={task}
+          userList={userList}
+          onClose={() => setShowAssignModal(false)}
+          onSubmit={handleAssignTask}
+        />
+      )}
+    </div>
+  )
+}
+
+function TaskAssignModal({ task, userList, onClose, onSubmit }: {
+  task: TaskData
+  userList: { id: string; fullName: string; roleCode: string }[]
+  onClose: () => void
+  onSubmit: (userId: string) => void
+}) {
+  const [selectedUser, setSelectedUser] = useState('')
+  const baseRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
+  const relevantUsers = userList.filter(u => u.roleCode.startsWith(baseRole))
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
+      <div className="card w-full max-w-md rounded-2xl p-6 shadow-2xl relative" style={{ background: 'var(--bg-card, #fff)' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>👤 Phân công công việc</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--bg-secondary)]" style={{ color: 'var(--text-muted)', fontSize: 20, lineHeight: 1 }}>&times;</button>
+        </div>
+        <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>
+          Bước <strong>{task.stepCode} — {task.stepName}</strong><br />
+          Vai trò phụ trách: <span className="font-mono px-1 rounded" style={{ background: 'var(--bg-secondary)' }}>{task.assignedRole}</span>
+        </p>
+
+        {relevantUsers.length === 0 ? (
+          <div className="py-8 text-center text-red-500">Không tìm thấy nhân viên nào thuộc {task.assignedRole}.</div>
+        ) : (
+          <div className="mb-6">
+            <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>CHỌN NHÂN SỰ</label>
+            <select
+              className="w-full p-2.5 rounded-xl border"
+              style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border)', outline: 'none' }}
+              value={selectedUser}
+              onChange={e => setSelectedUser(e.target.value)}
+            >
+              <option value="">-- Click để chọn --</option>
+              {relevantUsers.map(u => (
+                <option key={u.id} value={u.id}>{u.fullName} ({u.roleCode})</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 mt-4">
+          <button onClick={onClose} className="px-4 py-2 font-semibold rounded-lg hover:opacity-80 transition" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>Hủy</button>
+          <button
+            onClick={() => { if (selectedUser) onSubmit(selectedUser) }}
+            className="px-5 py-2 font-bold rounded-lg transition hover:opacity-90 disabled:opacity-50"
+            style={{ background: '#3b82f6', color: 'white' }}
+            disabled={relevantUsers.length === 0 || !selectedUser}
+          >
+            Lưu / Giao việc
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
