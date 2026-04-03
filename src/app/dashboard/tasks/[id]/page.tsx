@@ -278,6 +278,14 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
 
             imported.push(newRow);
           }
+          // Remove summary/total row: if first row's KL ≈ sum of remaining rows, it's a parent
+          if (imported.length > 2) {
+            const firstKL = Number(imported[0].khoiLuong) || 0;
+            const restKL = imported.slice(1).reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+            if (firstKL > 0 && restKL > 0 && Math.abs(firstKL - restKL) / firstKL < 0.05) {
+              imported.shift();
+            }
+          }
           if (imported.length > 0) {
             save(imported);
           } else {
