@@ -152,7 +152,10 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
   const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i));
   const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n); };
 
-  const subCols = [
+  // Base keys handled separately in table layout
+  const baseKeys = new Set(['stt', 'hangMuc', 'dvt', 'khoiLuong', 'phamVi', 'thauPhu', 'batDau', 'ketThuc', 'khuVuc', 'ghiChu', 'trangThai']);
+  // Default sub-columns (shown when no extra keys exist in data)
+  const defaultSubCols = [
     { key: 'cutting', label: 'Cắt' }, { key: 'machining', label: 'GCCK' },
     { key: 'fitup', label: 'Gá' }, { key: 'welding', label: 'Hàn' },
     { key: 'tryAssembly', label: 'Tổ hợp' }, { key: 'dismantle', label: 'Tháo dỡ' },
@@ -160,6 +163,14 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
     { key: 'insulation', label: 'Bảo ôn' }, { key: 'commissioning', label: 'Chạy thử' },
     { key: 'packing', label: 'Đóng kiện' }, { key: 'delivery', label: 'Giao hàng' },
   ];
+  // Derive sub-columns dynamically from actual data keys
+  const dataExtraKeys = new Set<string>();
+  rows.forEach(r => Object.keys(r).forEach(k => { if (!baseKeys.has(k) && r[k]) dataExtraKeys.add(k); }));
+  // Use label map for known keys, otherwise use key as label
+  const labelMap: Record<string, string> = { cutting: 'Cắt', machining: 'GCCK', fitup: 'Gá', welding: 'Hàn', tryAssembly: 'Tổ hợp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch', painting: 'Sơn', insulation: 'Bảo ôn', commissioning: 'Chạy thử', packing: 'Đóng kiện', delivery: 'Giao hàng', shippingFrame: 'Shipping', khungKien: 'Khung kiện' };
+  const subCols = dataExtraKeys.size > 0
+    ? Array.from(dataExtraKeys).map(k => ({ key: k, label: labelMap[k] || k }))
+    : defaultSubCols;
   
   const exportExcel = () => {
     const headers = ['STT', 'Tên hạng mục', 'ĐVT', 'Khối lượng', 'Phạm vi', 'Thầu phụ', 'Bắt đầu', 'Kết thúc', 'Trạng thái', ...subCols.map(c => c.label), 'Khu vực TC', 'Ghi chú'];
@@ -168,7 +179,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
       ...subCols.map(c => r[c.key] || ''), r.khuVuc, r.ghiChu
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-    ws['!cols'] = [{ wch: 5 }, { wch: 35 }, { wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, ...subCols.map(() => ({ wch: 8 })), { wch: 15 }, { wch: 20 }];
+    ws['!cols'] = [{ wch: 5 }, { wch: 35 }, { wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, ...subCols.map(() => ({ wch: 10 })), { wch: 15 }, { wch: 20 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'WBS');
     XLSX.writeFile(wb, `WBS_export.xlsx`);
@@ -214,31 +225,53 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             return headerRow.findIndex(h => keywords.some(kw => h.includes(kw)));
           };
 
-          const colIndices = {
-            stt: findColIndex(['stt', 'no.', 'số tt']),
-            hangMuc: findColIndex(['hạng mục', 'công trình', 'description', 'tên']),
-            dvt: findColIndex(['đvt', 'unit']),
-            khoiLuong: findColIndex(['khối lượng', 'volume']),
-            phamVi: findColIndex(['ibs hi', 'phạm vi', 'scope']),
-            thauPhu: findColIndex(['thầu phụ', 'sub-contractor', 'name']),
-            batDau: findColIndex(['bắt đầu', 'start']),
-            ketThuc: findColIndex(['kết thúc', 'finish']),
-            trangThai: findColIndex(['trạng thái', 'status']),
-            cutting: findColIndex(['cắt', 'cutting']),
-            machining: findColIndex(['gcck', 'machining']),
-            fitup: findColIndex(['gá', 'fitup']),
-            welding: findColIndex(['hàn', 'welding']),
-            tryAssembly: findColIndex(['tổ hợp', 'try-assembly', 'tổ hợp']),
-            dismantle: findColIndex(['tháo dỡ', 'dismantle']),
-            blasting: findColIndex(['làm sạch', 'blasting']),
-            painting: findColIndex(['sơn', 'painting']),
-            insulation: findColIndex(['bảo ôn', 'insulation']),
-            commissioning: findColIndex(['chạy thử', 'commissioning']),
-            packing: findColIndex(['đóng kiện', 'packing']),
-            delivery: findColIndex(['giao hàng', 'delivery']),
-            khuVuc: findColIndex(['khu vực', 'area']),
-            ghiChu: findColIndex(['ghi chú', 'remark', 'ghi chú'])
-          };
+          // Known column mappings: keywords → key name
+          const knownCols: [string, string[]][] = [
+            ['stt', ['stt', 'no.', 'số tt']],
+            ['hangMuc', ['hạng mục', 'công trình', 'description', 'tên']],
+            ['dvt', ['đvt', 'unit']],
+            ['khoiLuong', ['khối lượng', 'volume']],
+            ['phamVi', ['ibs hi', 'phạm vi', 'scope']],
+            ['thauPhu', ['thầu phụ', 'sub-contractor']],
+            ['batDau', ['bắt đầu', 'start']],
+            ['ketThuc', ['kết thúc', 'finish']],
+            ['trangThai', ['shipping frame', 'trạng thái', 'status']],
+            ['cutting', ['cắt', 'cutting']],
+            ['machining', ['gcck', 'machining']],
+            ['fitup', ['gá', 'fitup']],
+            ['welding', ['hàn', 'welding']],
+            ['tryAssembly', ['tổ hợp', 'try-assembly']],
+            ['dismantle', ['tháo dỡ', 'dismantle']],
+            ['blasting', ['làm sạch', 'blasting']],
+            ['painting', ['sơn', 'painting']],
+            ['insulation', ['bảo ôn', 'insulation']],
+            ['commissioning', ['chạy thử', 'commissioning']],
+            ['khungKien', ['chế tạo khung kiện', 'khung kiện']],
+            ['packing', ['đóng kiện', 'packing']],
+            ['delivery', ['giao hàng', 'delivery']],
+            ['khuVuc', ['khu vực', 'area']],
+            ['ghiChu', ['ghi chú', 'remark']],
+          ];
+
+          // Build colIndices from known mappings
+          const colIndices: Record<string, number> = {};
+          const mappedCols = new Set<number>();
+          knownCols.forEach(([key, keywords]) => {
+            const idx = findColIndex(keywords);
+            if (idx >= 0) { colIndices[key] = idx; mappedCols.add(idx); }
+          });
+
+          // Auto-detect unmapped columns → use sanitized header as key
+          headerRow.forEach((h, colIdx) => {
+            if (!h || mappedCols.has(colIdx)) return;
+            // Skip the first column (often row-group label, not useful)
+            if (colIdx === 0) return;
+            // Create a camelCase key from header text
+            const clean = h.replace(/[^a-zA-Zàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ0-9\s]/gi, '').trim();
+            if (!clean) return;
+            const key = 'x_' + clean.substring(0, 30).replace(/\s+/g, '_');
+            colIndices[key] = colIdx;
+          });
 
           const imported: WbsRow[] = [];
           for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
@@ -266,7 +299,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             const newRow = emptyRow();
             const dateKeys = new Set(['batDau', 'ketThuc']);
             Object.keys(colIndices).forEach(key => {
-              const idx = colIndices[key as keyof typeof colIndices];
+              const idx = colIndices[key];
               if (idx >= 0 && rowData[idx] !== undefined && rowData[idx] !== null && rowData[idx] !== '') {
                 let val = rowData[idx];
                 // Convert Excel serial dates to YYYY-MM-DD for HTML date inputs
@@ -274,7 +307,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                   const d = new Date((val - 25569) * 86400000);
                   val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 }
-                newRow[key as keyof WbsRow] = String(val).trim();
+                newRow[key] = String(val).trim();
               }
             });
             
@@ -393,7 +426,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               </div>
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', minWidth: 2400 }}>
+              <table style={{ borderCollapse: 'collapse', minWidth: 700 + subCols.length * 80 }}>
                 <thead>
                   <tr>
                     <th rowSpan={2} style={{ ...thS, position: 'sticky', left: 0, zIndex: 5, width: 40, background: '#c7e2ef' }}>STT</th>
@@ -402,7 +435,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     <th rowSpan={2} style={{ ...thS, width: 80 }}>KL</th>
                     <th colSpan={2} style={{ ...thS, background: '#d0e8d0' }}>PHẠM VI</th>
                     <th colSpan={2} style={{ ...thS, background: '#e8ddd0' }}>TIẾN ĐỘ</th>
-                    <th colSpan={12} style={{ ...thS, background: '#fde7e7' }}>CHI TIẾT</th>
+                    <th colSpan={subCols.length} style={{ ...thS, background: '#fde7e7' }}>CHI TIẾT</th>
                     <th rowSpan={2} style={{ ...thS, width: 100 }}>KHU VỰC</th>
                     <th rowSpan={2} style={{ ...thS, width: 120 }}>GHI CHÚ</th>
                     <th rowSpan={2} style={{ ...thS, width: 70 }}>TT</th>
