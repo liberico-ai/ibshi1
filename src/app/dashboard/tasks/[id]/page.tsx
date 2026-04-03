@@ -1091,14 +1091,45 @@ export default function TaskDetailPage() {
   const rule = task ? WORKFLOW_RULES[task.stepCode] : undefined
   const phaseName = rule ? PHASE_LABELS[rule.phase]?.name : ''
 
+  // Helper: sum thanhTien from a table data JSON string
+  function sumTableThanhTien(jsonStr: string | number | undefined): number {
+    if (!jsonStr) return 0
+    try {
+      const rows = JSON.parse(String(jsonStr))
+      if (!Array.isArray(rows)) return 0
+      return rows.reduce((s: number, r: Record<string, string>) => s + (Number(r.thanhTien) || Number(r.giaTri) || 0), 0)
+    } catch { return 0 }
+  }
+
   function handleFieldChange(key: string, value: string | number) {
     setFormData(prev => {
       const next = { ...prev, [key]: value }
-      // Auto-calculate total for P1.2 estimate
-      if (config && config.fields.some(f => f.key === 'totalEstimate')) {
+      // Auto-calculate total for P1.2 estimate from tables
+      if (task && task.stepCode === 'P1.2' && ['dt03Items', 'dt05Items', 'dt06Items', 'dt07Items'].includes(key)) {
+        const totalMaterial = sumTableThanhTien(key === 'dt03Items' ? value : next.dt03Items)
+        const totalService = sumTableThanhTien(key === 'dt05Items' ? value : next.dt05Items)
+        const totalLabor = sumTableThanhTien(key === 'dt06Items' ? value : next.dt06Items)
+        const totalOverhead = sumTableThanhTien(key === 'dt07Items' ? value : next.dt07Items)
+        next.totalEstimate = totalMaterial + totalService + totalLabor + totalOverhead
+        next.totalMaterial = totalMaterial
+        next.totalLabor = totalLabor
+        next.totalService = totalService
+        next.totalOverhead = totalOverhead
+        // Auto-update DT02 summary
+        const dt02Rows = [
+          { maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: String(totalMaterial), tyLe: next.totalEstimate ? String(((totalMaterial / (next.totalEstimate as number)) * 100).toFixed(1)) : '' },
+          { maCP: 'II', noiDung: 'Chi phí nhân công khoán', giaTri: String(totalLabor), tyLe: next.totalEstimate ? String(((totalLabor / (next.totalEstimate as number)) * 100).toFixed(1)) : '' },
+          { maCP: 'III', noiDung: 'Chi phí dịch vụ thuê ngoài', giaTri: String(totalService), tyLe: next.totalEstimate ? String(((totalService / (next.totalEstimate as number)) * 100).toFixed(1)) : '' },
+          { maCP: 'IV', noiDung: 'Chi phí chung', giaTri: String(totalOverhead), tyLe: next.totalEstimate ? String(((totalOverhead / (next.totalEstimate as number)) * 100).toFixed(1)) : '' },
+        ]
+        next.dt02Items = JSON.stringify(dt02Rows)
+      } else if (config && config.fields.some(f => f.key === 'totalEstimate' && f.type === 'readonly')) {
+        // Fallback for other steps with currency fields
         const currencyKeys = config.fields.filter(f => f.type === 'currency').map(f => f.key)
-        const total = currencyKeys.reduce((sum, k) => sum + (Number(next[k]) || 0), 0)
-        next.totalEstimate = total
+        if (currencyKeys.length > 0) {
+          const total = currencyKeys.reduce((sum, k) => sum + (Number(next[k]) || 0), 0)
+          next.totalEstimate = total
+        }
       }
       return next
     })
@@ -1353,7 +1384,7 @@ export default function TaskDetailPage() {
         { key: 'dt07Items', def: [{ maCP: '', danhMuc: '', dvt: '', kl: '', donGia: '', thanhTien: '' }] },
       ]
       ensuredKeys.forEach(({ key, def }) => {
-        const isRendered = (task.stepCode === 'P1.2' && ['dt03Items','dt04Items','dt05Items','dt06Items'].includes(key)) ||
+        const isRendered = (task.stepCode === 'P1.2' && ['dt02Items','dt03Items','dt04Items','dt05Items','dt06Items','dt07Items'].includes(key)) ||
                            (task.stepCode === 'P2.1A' && ['dt02Items','dt07Items'].includes(key)) ||
                            (task.stepCode === 'P2.4')
         if (isRendered && !finalData[key]) {
@@ -1636,9 +1667,17 @@ export default function TaskDetailPage() {
                   {isActive && planDecision === 'pending' && (
                     <div style={{ marginTop: 16 }}>
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button onClick={() => handleSubmit('complete')} disabled={submitting}
+                        <button onClick={async () => {
+                          setPlanDecision('approved')
+                          await apiFetch(`/api/tasks/${taskId}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ action: 'save', resultData: { ...formData, planApproved: true, checklist: checklistState } }),
+                          })
+                          setSuccessMsg('✅ Đã duyệt kế hoạch. Vui lòng duyệt dự toán bên dưới.')
+                          setTimeout(() => setSuccessMsg(''), 4000)
+                        }} disabled={submitting}
                           style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          {submitting ? '⏳ Đang xử lý...' : '✅ Duyệt kế hoạch'}
+                          ✅ Duyệt kế hoạch
                         </button>
                         <button onClick={() => setShowPlanReject(!showPlanReject)} disabled={submitting}
                           style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
@@ -1677,6 +1716,155 @@ export default function TaskDetailPage() {
                     </div>
                   )}
                 </div>
+
+                {/* ══ P1.3: ESTIMATE APPROVAL (from P1.2) ══ */}
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>📊 Dự toán thi công (từ P1.2)</h2>
+                    {estimateDecision !== 'pending' && (
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: estimateDecision === 'approved' ? '#16a34a' : '#dc2626' }}>
+                        {estimateDecision === 'approved' ? '✅ Đã duyệt' : '❌ Đã từ chối'}
+                      </span>
+                    )}
+                  </div>
+                  {previousStepData?.estimate ? (() => {
+                    const est = previousStepData.estimate as Record<string, unknown>
+                    const totalEst = Number(est.totalEstimate) || 0
+                    const contractVal = Number(task.project?.contractValue) || 0
+                    const profit = contractVal - totalEst
+                    const fmtVND = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+
+                    // Parse table data
+                    const parseTbl = (key: string) => { try { return JSON.parse(String(est[key] || '[]')) } catch { return [] } }
+                    const dt03 = parseTbl('dt03Items')
+                    const dt04 = parseTbl('dt04Items')
+                    const dt06 = parseTbl('dt06Items')
+                    const dt07 = parseTbl('dt07Items')
+
+                    const renderReadonly = (title: string, items: Record<string,string>[], cols: { key: string; label: string }[]) => {
+                      if (!items || items.length === 0) return null
+                      return (
+                        <details style={{ marginTop: 10 }}>
+                          <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-secondary)', padding: '6px 0' }}>{title} ({items.length} dòng)</summary>
+                          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'auto', marginTop: 6, fontSize: '0.8rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: cols.map(() => '1fr').join(' '), gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', fontWeight: 700, color: 'var(--text-muted)' }}>
+                              {cols.map(c => <span key={c.key}>{c.label}</span>)}
+                            </div>
+                            {items.map((row, i) => (
+                              <div key={i} style={{ display: 'grid', gridTemplateColumns: cols.map(() => '1fr').join(' '), gap: 4, padding: '4px 8px', borderBottom: i < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                                {cols.map(c => <span key={c.key}>{row[c.key] || ''}</span>)}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )
+                    }
+
+                    return (
+                      <div>
+                        {/* Cover summary */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: 16 }}>
+                          <div style={{ background: 'var(--bg-secondary)', borderRadius: 10, padding: '1rem', textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tổng chi phí dự toán</div>
+                            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--accent)' }}>{fmtVND(totalEst)}</div>
+                          </div>
+                          <div style={{ background: 'var(--bg-secondary)', borderRadius: 10, padding: '1rem', textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lợi nhuận dự kiến</div>
+                            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: profit >= 0 ? '#059669' : '#dc2626' }}>{fmtVND(Math.abs(profit))}</div>
+                            {contractVal > 0 && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({((profit / contractVal) * 100).toFixed(1)}% HĐ)</div>}
+                          </div>
+                        </div>
+
+                        {/* DT02 summary */}
+                        {(() => {
+                          const dt02 = parseTbl('dt02Items')
+                          if (dt02.length > 0) return (
+                            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', marginBottom: 12, fontSize: '0.85rem' }}>
+                              {dt02.map((row: Record<string,string>, i: number) => (
+                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '0.3fr 1.5fr 1fr 0.5fr', padding: '6px 12px', borderBottom: '1px solid var(--border)', fontWeight: row.maCP?.startsWith('I') ? 600 : 400 }}>
+                                  <span>{row.maCP}</span><span>{row.noiDung}</span>
+                                  <span style={{ textAlign: 'right' }}>{Number(row.giaTri) > 0 ? Number(row.giaTri).toLocaleString('vi-VN') : ''}</span>
+                                  <span style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{row.tyLe ? row.tyLe + '%' : ''}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                          return null
+                        })()}
+
+                        {/* Detail tables (collapsible) */}
+                        {renderReadonly('DT03 — Chi phí vật tư', dt03, [{key:'nhomVT',label:'Nhóm'},{key:'danhMuc',label:'Danh mục'},{key:'kl',label:'KL'},{key:'thanhTien',label:'Thành tiền'}])}
+                        {renderReadonly('DT04 — BOM chi tiết', dt04, [{key:'maVT',label:'Mã VT'},{key:'tenVT',label:'Tên VT'},{key:'quyCach',label:'Quy cách'},{key:'kl',label:'KL'},{key:'thanhTien',label:'Thành tiền'}])}
+                        {renderReadonly('DT06 — Nhân công', dt06, [{key:'maCP',label:'Mã'},{key:'noiDung',label:'Nội dung'},{key:'kl',label:'KL'},{key:'thanhTien',label:'Thành tiền'}])}
+                        {renderReadonly('DT07 — Chi phí chung', dt07, [{key:'maCP',label:'Mã'},{key:'danhMuc',label:'Danh mục'},{key:'kl',label:'KL'},{key:'thanhTien',label:'Thành tiền'}])}
+                      </div>
+                    )
+                  })() : (
+                    <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu dự toán từ P1.2</div>
+                  )}
+
+                  {/* Estimate approve/reject buttons */}
+                  {isActive && estimateDecision === 'pending' && previousStepData?.estimate && (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button onClick={async () => {
+                          setEstimateDecision('approved')
+                          await apiFetch(`/api/tasks/${taskId}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ action: 'save', resultData: { ...formData, estimateApproved: true, planApproved: planDecision === 'approved', checklist: checklistState } }),
+                          })
+                          setSuccessMsg('✅ Đã duyệt dự toán.')
+                          setTimeout(() => setSuccessMsg(''), 3000)
+                        }} disabled={submitting}
+                          style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                          ✅ Duyệt dự toán
+                        </button>
+                        <button onClick={() => setShowEstimateReject(!showEstimateReject)} disabled={submitting}
+                          style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                          ❌ Từ chối dự toán
+                        </button>
+                      </div>
+                      {showEstimateReject && (
+                        <div style={{ marginTop: 10 }}>
+                          <textarea value={estimateRejectReason} onChange={e => setEstimateRejectReason(e.target.value)}
+                            placeholder="Nhập lý do từ chối dự toán..." rows={2}
+                            style={{ width: '100%', borderRadius: 8, border: '1px solid #dc2626', padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical', background: 'var(--bg-secondary)' }} />
+                          <button onClick={async () => {
+                            if (!estimateRejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return; }
+                            setSubmitting(true)
+                            try {
+                              await apiFetch(`/api/tasks/${taskId}/reject`, {
+                                method: 'POST',
+                                body: JSON.stringify({ reason: estimateRejectReason, overrideRejectTo: 'P1.2' }),
+                              })
+                              setSuccessMsg('✅ Đã từ chối dự toán và đẩy lại về KTKH (P1.2)')
+                              setTimeout(() => router.push('/dashboard/tasks'), 2000)
+                            } catch { setError('Lỗi khi từ chối') }
+                            setSubmitting(false)
+                          }} disabled={submitting}
+                            style={{ marginTop: 6, padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                            ⚠️ Xác nhận từ chối dự toán → Gửi lại KTKH (P1.2)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {estimateDecision === 'approved' && task?.resultData && Boolean((task.resultData as Record<string, unknown>).estimateApproved) && (
+                    <div style={{ marginTop: 12, padding: '8px 16px', background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600 }}>
+                      ✅ Dự toán đã được phê duyệt
+                    </div>
+                  )}
+                </div>
+
+                {/* P1.3: Complete button — only when BOTH plan + estimate approved */}
+                {isActive && planDecision === 'approved' && estimateDecision === 'approved' && (
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', textAlign: 'center' }}>
+                    <button onClick={() => handleSubmit('complete')} disabled={submitting}
+                      style={{ padding: '12px 32px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: '1rem' }}>
+                      {submitting ? '⏳ Đang xử lý...' : '✅ Hoàn thành phê duyệt (Kế hoạch + Dự toán)'}
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -2027,8 +2215,66 @@ export default function TaskDetailPage() {
                 )
               }
 
+              // DT02 auto-summary (readonly)
+              const dt02Summary = (() => {
+                const totalMat = sumTableThanhTien(formData.dt03Items)
+                const totalLab = sumTableThanhTien(formData.dt06Items)
+                const totalSvc = sumTableThanhTien(formData.dt05Items)
+                const totalOvh = sumTableThanhTien(formData.dt07Items)
+                const total = totalMat + totalLab + totalSvc + totalOvh
+                const pct = (v: number) => total > 0 ? ((v / total) * 100).toFixed(1) + '%' : '—'
+                const fmt = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+                const contractVal = Number(task.project?.contractValue) || 0
+                const profit = contractVal - total
+                return { totalMat, totalLab, totalSvc, totalOvh, total, pct, fmt, contractVal, profit }
+              })()
+
               return (
                 <>
+                  {/* ── DT01: Thông tin dự án ── */}
+                  <div className="card" style={{ padding: '1.25rem', marginBottom: '0.5rem', borderLeft: '4px solid #3b82f6' }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#3b82f6' }}>📋 DT01 — Thông tin chung dự án</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', fontSize: '0.85rem' }}>
+                      <div><span style={{ color: 'var(--text-muted)' }}>Mã dự án:</span> <strong>{task.project.projectCode}</strong></div>
+                      <div><span style={{ color: 'var(--text-muted)' }}>Khách hàng:</span> <strong>{task.project.clientName}</strong></div>
+                      <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-muted)' }}>Tên dự án:</span> <strong>{task.project.projectName}</strong></div>
+                      {task.project.contractValue && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{Number(task.project.contractValue).toLocaleString('vi-VN')} đ</strong></div>}
+                      {task.project.productType && <div><span style={{ color: 'var(--text-muted)' }}>Sản phẩm:</span> {task.project.productType}</div>}
+                      {task.project.startDate && <div><span style={{ color: 'var(--text-muted)' }}>Bắt đầu:</span> {new Date(task.project.startDate).toLocaleDateString('vi-VN')}</div>}
+                      {task.project.endDate && <div><span style={{ color: 'var(--text-muted)' }}>Giao hàng:</span> {new Date(task.project.endDate).toLocaleDateString('vi-VN')}</div>}
+                    </div>
+                  </div>
+
+                  {/* ── DT02: Tổng hợp chi phí (auto-calculated) ── */}
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '0.5rem', borderLeft: '4px solid #059669' }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#059669' }}>📊 DT02 — Tổng hợp dự toán chi phí</h3>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontSize: '0.85rem' }}>
+                      {[
+                        { label: 'I. Chi phí vật tư', value: dt02Summary.totalMat, color: '#e63946' },
+                        { label: 'II. Chi phí nhân công', value: dt02Summary.totalLab, color: '#f59e0b' },
+                        { label: 'III. Chi phí dịch vụ', value: dt02Summary.totalSvc, color: '#3b82f6' },
+                        { label: 'IV. Chi phí chung', value: dt02Summary.totalOvh, color: '#8b5cf6' },
+                      ].map((item, i) => (
+                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 600 }}>{item.label}</span>
+                          <span style={{ textAlign: 'right', fontWeight: 600, color: item.color }}>{dt02Summary.fmt(item.value)}</span>
+                          <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{dt02Summary.pct(item.value)}</span>
+                        </div>
+                      ))}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '10px 12px', background: 'var(--bg-secondary)', fontWeight: 700, fontSize: '0.95rem' }}>
+                        <span>TỔNG CHI PHÍ</span>
+                        <span style={{ textAlign: 'right', color: 'var(--accent)' }}>{dt02Summary.fmt(dt02Summary.total)}</span>
+                        <span style={{ textAlign: 'right' }}>100%</span>
+                      </div>
+                      {dt02Summary.contractVal > 0 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderTop: '2px solid var(--border)' }}>
+                          <span style={{ fontWeight: 600 }}>Lợi nhuận dự kiến</span>
+                          <span style={{ textAlign: 'right', fontWeight: 700, color: dt02Summary.profit >= 0 ? '#059669' : '#dc2626' }}>{dt02Summary.fmt(dt02Summary.profit)}</span>
+                          <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{dt02Summary.contractVal > 0 ? ((dt02Summary.profit / dt02Summary.contractVal) * 100).toFixed(1) + '%' : ''}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
                   {/* ── TM: DT03 - Dự toán VT tổng hợp ── */}
                   {renderEstTable('📦 DT03 — Dự toán chi phí VT', 'QT30-DT03', 'dt03Items',
@@ -2111,6 +2357,43 @@ export default function TaskDetailPage() {
                       { maCP: 'DK', noiDung: 'Đóng kiện', dvt: 'Kiện', kl: '', donGia: '', thanhTien: '' },
                       { maCP: 'GH', noiDung: 'Giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
                       { maCP: 'DP', noiDung: 'Nhân công dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                    ]
+                  )}
+
+                  {/* ── DT07 - Chi phí chung, tài chính ── */}
+                  {renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items',
+                    [
+                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
+                      { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
+                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
+                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
+                      { key: 'donGia', label: 'Đơn giá BQ', type: 'number', width: '0.7fr' },
+                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
+                    ],
+                    [
+                      { maCP: 'CPC', danhMuc: 'I. Chi phí chung phục vụ sản xuất', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-01', danhMuc: 'Nhân công (ngoài khoán)', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-02', danhMuc: 'Thuê công nhân thời vụ', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-03', danhMuc: 'Khấu hao TSCĐ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-04', danhMuc: 'Sửa chữa máy móc thiết bị', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-05', danhMuc: 'Điện sản xuất', dvt: 'kWh', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-06', danhMuc: 'Nước sản xuất', dvt: 'm³', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-07', danhMuc: 'Khí nén (Oxy, Acetylen…)', dvt: 'Chai', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-08', danhMuc: 'Nhiên liệu (dầu, xăng)', dvt: 'Lít', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-09', danhMuc: 'Chi phí an toàn lao động', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CPC-10', danhMuc: 'Chi phí SX khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC', danhMuc: 'II. Chi phí tài chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-01', danhMuc: 'Phí bảo lãnh thực hiện HĐ', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-02', danhMuc: 'Phí bảo lãnh tạm ứng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-03', danhMuc: 'Phí bảo lãnh bảo hành', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-04', danhMuc: 'Lãi vay ngân hàng', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CTC-05', danhMuc: 'Bảo hiểm dự án', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL', danhMuc: 'III. Chi phí Quản Lý', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-01', danhMuc: 'Lương nhân viên gián tiếp', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-02', danhMuc: 'Văn phòng phẩm', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-03', danhMuc: 'Bảo vệ, an ninh', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-04', danhMuc: 'Chi phí tiếp khách', dvt: '', kl: '', donGia: '', thanhTien: '' },
+                      { maCP: 'CQL-05', danhMuc: 'Chi phí quản lý khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
                     ]
                   )}
                 </>

@@ -139,71 +139,36 @@ const P1_2: StepFormConfig = {
   title: 'Xây dựng dự toán thi công',
   description: 'KTKH lập dự toán chi tiết: vật tư, nhân công, dịch vụ thuê ngoài, chi phí chung',
   fields: [
-    // ── 1. Chi phí vật tư ──
-    { key: 'sec_material', label: '1. Chi phí vật tư', labelEn: 'Material Cost', type: 'section' },
-    { key: 'mat_main', label: 'Vật tư chính', labelEn: 'Main Material', type: 'currency' },
-    { key: 'mat_accessory', label: 'Vật tư phụ kiện, bu lông…', labelEn: 'Accessories & Bolts', type: 'currency' },
-    { key: 'mat_packing', label: 'Vật tư đóng kiện', labelEn: 'Packing Material', type: 'currency' },
-    { key: 'mat_method', label: 'Vật tư làm biện pháp', labelEn: 'Method Material', type: 'currency' },
-    { key: 'mat_consumable', label: 'Vật tư tiêu hao', labelEn: 'Consumables', type: 'currency' },
-    { key: 'mat_paint', label: 'Vật tư sơn', labelEn: 'Paint Material', type: 'currency' },
-    { key: 'mat_reserve', label: 'Vật tư dự phòng', labelEn: 'Material Reserve', type: 'currency' },
+    // ── DT01: Thông tin bổ sung dự án ──
+    { key: 'sec_dt01', label: 'DT01 — Thông tin bổ sung', labelEn: 'Additional Project Info', type: 'section' },
+    { key: 'dt01_volume', label: 'Khối lượng thi công / Phạm vi', labelEn: 'Scope & Volume', type: 'textarea' },
+    { key: 'dt01_paymentTerms', label: 'Các đợt thanh toán', labelEn: 'Payment Terms', type: 'textarea' },
+    { key: 'dt01_penalties', label: 'Điều khoản phạt Hợp đồng', labelEn: 'Contract Penalties', type: 'textarea' },
 
-    // ── 2. Chi phí nhân công trực tiếp ──
-    { key: 'sec_labor', label: '2. Chi phí nhân công trực tiếp', labelEn: 'Direct Labor Cost', type: 'section' },
-    { key: 'lab_cutting', label: 'Pha cắt', labelEn: 'Cutting', type: 'currency' },
-    { key: 'lab_machining', label: 'Gia công', labelEn: 'Machining', type: 'currency' },
-    { key: 'lab_fabrication', label: 'Chế tạo', labelEn: 'Fabrication', type: 'currency' },
-    { key: 'lab_framing', label: 'Khung kiện', labelEn: 'Framing', type: 'currency' },
-    { key: 'lab_assembly_product', label: 'Tổ hợp sản phẩm', labelEn: 'Product Assembly', type: 'currency' },
-    { key: 'lab_erection', label: 'Lắp dựng + Nghiệm thu', labelEn: 'Erection & Inspection', type: 'currency' },
-    { key: 'lab_cleaning_alloy', label: 'Vệ sinh vật liệu hợp kim bằng dung dịch', labelEn: 'Alloy Cleaning', type: 'currency' },
-    { key: 'lab_surface_paint', label: 'Làm sạch, Sơn', labelEn: 'Surface & Painting', type: 'currency' },
-    { key: 'lab_insulation', label: 'Bảo ôn', labelEn: 'Insulation', type: 'currency' },
-    { key: 'lab_equip_install', label: 'Lắp thiết bị phụ kiện trước khi đóng kiện', labelEn: 'Equipment Install', type: 'currency' },
-    { key: 'lab_packing', label: 'Đóng kiện', labelEn: 'Packing', type: 'currency' },
-    { key: 'lab_delivery', label: 'Giao hàng', labelEn: 'Delivery', type: 'currency' },
-    { key: 'lab_reserve', label: 'Nhân công dự phòng', labelEn: 'Labor Reserve', type: 'currency' },
-
-    // ── 3. Chi phí dịch vụ thuê ngoài ──
-    { key: 'sec_outsource', label: '3. Chi phí dịch vụ thuê ngoài', labelEn: 'Outsource Services', type: 'section' },
-    { key: 'out_transport', label: 'Vận tải', labelEn: 'Transport', type: 'currency' },
-    { key: 'out_ndt', label: 'NDT, quy trình và thí nghiệm', labelEn: 'NDT & Testing', type: 'currency' },
-    { key: 'out_galvanize', label: 'Mạ kẽm', labelEn: 'Galvanization', type: 'currency' },
-    { key: 'out_other', label: 'Chi phí khác', labelEn: 'Other Costs', type: 'currency' },
-    { key: 'out_reserve', label: 'Chi phí dự phòng', labelEn: 'Outsource Reserve', type: 'currency' },
-
-    // ── 4. Chi phí chung ──
-    { key: 'sec_overhead', label: '4. Chi phí chung', labelEn: 'Overhead', type: 'section' },
-    { key: 'ovh_production', label: 'Chi phí chung phục vụ sản xuất', labelEn: 'Production Overhead', type: 'currency' },
-    { key: 'ovh_financial', label: 'Chi phí tài chính', labelEn: 'Financial Cost', type: 'currency' },
-    { key: 'ovh_management', label: 'Chi phí Quản Lý', labelEn: 'Management Cost', type: 'currency' },
-
-    // ── Tổng ──
+    // ── Tổng (auto-calculated from tables) ──
     { key: 'totalEstimate', label: 'TỔNG CHI PHÍ DỰ TOÁN', labelEn: 'Total Estimate', type: 'readonly', fullWidth: true },
   ],
   checklist: [
     { key: 'bom_matched', label: 'Đã đối chiếu BOM với yêu cầu kỹ thuật', required: true },
     { key: 'transport_included', label: 'Đã tính đủ chi phí vận chuyển' },
     { key: 'risk_added', label: 'Đã cộng phí dự phòng rủi ro' },
+    { key: 'dt02_verified', label: 'Đã kiểm tra tổng hợp DT02 khớp với chi tiết' },
   ],
   attachments: [
     { key: 'detail_estimate', label: 'Bảng dự toán chi tiết (Excel)', accept: ACCEPT.SHEETS_PLUS },
   ],
   excelTemplate: 'du_toan',
-  validationRules: [
-    { field: 'totalEstimate', rule: 'lt_contract_90', message: 'Dự toán > 90% giá trị HĐ — rủi ro lỗ' },
-  ],
 }
 
 const P1_3: StepFormConfig = {
   stepCode: 'P1.3',
   formType: 'approval',
-  title: 'Phê duyệt kế hoạch kickoff, WBS, milestones',
-  description: 'BGĐ phê duyệt kế hoạch kickoff, WBS, milestones của PM',
+  title: 'Phê duyệt kế hoạch và dự toán thi công',
+  description: 'BGĐ phê duyệt kế hoạch kickoff, WBS, milestones của PM và dự toán thi công của KTKH',
   fields: [],
   checklist: [
     { key: 'plan_reviewed', label: 'Đã review kế hoạch kickoff, WBS, milestones', required: true },
+    { key: 'estimate_reviewed', label: 'Đã review dự toán thi công (DT01-DT07)', required: true },
   ],
   attachments: [],
 }
