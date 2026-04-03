@@ -118,18 +118,23 @@ const P1_2A: StepFormConfig = {
   stepCode: 'P1.2A',
   formType: 'input',
   title: 'Lập kế hoạch kickoff, WBS, milestones',
-  description: 'PM lập WBS theo biểu mẫu BCTH-IBSHI-QLDA-095, phân bổ khối lượng, phạm vi, tiến độ, thầu phụ.',
+  description: 'PM lập BB họp triển khai dự án, WBS theo biểu mẫu BCTH-IBSHI-QLDA-095, phân bổ khối lượng, phạm vi, tiến độ.',
   fields: [
-    { key: 'kickoffDate', label: 'Ngày Kickoff Meeting', labelEn: 'Kickoff Date', type: 'date', required: true },
-    { key: 'kickoffAgenda', label: 'Nội dung Kickoff', labelEn: 'Kickoff Agenda', type: 'textarea', fullWidth: true },
+    { key: 'sec_mom_header', label: 'BB HỌP TRIỂN KHAI DỰ ÁN (Minutes of Meeting)', labelEn: 'Minutes of Meeting', type: 'section' },
+    { key: 'momPlace', label: 'Địa điểm (Place)', labelEn: 'Place', type: 'text' },
+    { key: 'kickoffDate', label: 'Ngày họp (Date)', labelEn: 'Meeting Date', type: 'date', required: true },
+    { key: 'momNumber', label: 'Số biên bản (MOM No.)', labelEn: 'MOM No.', type: 'text' },
+    { key: 'momPreparedBy', label: 'Người lập (Prepared by)', labelEn: 'Prepared by', type: 'text' },
+    { key: 'kickoffAgenda', label: 'Chủ đề (Subject)', labelEn: 'Subject', type: 'textarea', fullWidth: true },
   ],
   checklist: [
     { key: 'kickoff_planned', label: 'Đã lên kế hoạch kickoff meeting' },
     { key: 'budget_distributed', label: 'Đã phân bổ theo WBS node' },
+    { key: 'mom_reviewed', label: 'BB họp đã được xem xét và xác nhận' },
   ],
   attachments: [
     { key: 'wbs_file', label: 'File WBS (Excel/PDF)', accept: ACCEPT.SHEETS_PLUS },
-    { key: 'kickoff_doc', label: 'Tài liệu Kickoff', accept: ACCEPT.LESSON_PACK },
+    { key: 'kickoff_doc', label: 'Tài liệu Kickoff / BB họp gốc', accept: ACCEPT.LESSON_PACK },
   ],
 }
 
