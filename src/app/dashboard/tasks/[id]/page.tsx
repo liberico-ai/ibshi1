@@ -250,16 +250,18 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             
             if (!hangMucVal && !sttVal) continue;
 
-            // Only include rows that have a KL (weight/quantity) value
-            const klVal = colIndices.khoiLuong >= 0 && rowData[colIndices.khoiLuong] != null ? String(rowData[colIndices.khoiLuong]).trim() : '';
-            if (!klVal || klVal === '0') continue;
+            // Only include rows that have a numeric KL (weight/quantity) value
+            const klRaw = colIndices.khoiLuong >= 0 ? rowData[colIndices.khoiLuong] : null;
+            const klNum = Number(klRaw);
+            if (!klRaw || isNaN(klNum) || klNum <= 0) continue;
 
             const sttLower = sttVal.toLowerCase();
             const hangMucLower = hangMucVal.toLowerCase();
-            
+
             if (sttLower === '(a)' || sttLower === 'stt' || sttLower.includes('sub-contractor') || sttLower === '(i-1)' || sttLower.includes('d-')) continue;
             if (hangMucLower.includes('dự kiến nhà máy') || hangMucLower.includes('dự kiến') || hangMucLower.includes('ghi chú') || hangMucLower.includes('bcth-ibshi-qlda-01') || hangMucLower.includes('kế hoạch tổng thể')) continue;
             if (hangMucLower === 'tổng nhân lực cần cho các dự án') continue;
+            if (hangMucLower.includes('người lập') || hangMucLower.includes('prepared by') || hangMucLower.includes('approved by') || hangMucLower.includes('người duyệt')) continue;
 
             const newRow = emptyRow();
             Object.keys(colIndices).forEach(key => {
