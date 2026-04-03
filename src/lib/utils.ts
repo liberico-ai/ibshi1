@@ -8,13 +8,16 @@ export function cn(...inputs: ClassValue[]) {
 export function formatCurrency(value: string | number | null | undefined, currency = 'VND'): string {
   if (!value) return '-'
   const num = typeof value === 'string' ? parseFloat(value) : value
-  if (currency === 'VND') return new Intl.NumberFormat('vi-VN').format(num) + ' ₫'
+  // Use 'en-US' locale — always available in Node.js minimal ICU (Alpine Docker).
+  // 'vi-VN' is NOT available in Alpine's minimal ICU, causing SSR/client hydration mismatch.
+  if (currency === 'VND') return new Intl.NumberFormat('en-US').format(num) + ' ₫'
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(num)
 }
 
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '-'
-  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(date))
+  // Use 'en-GB' (DD/MM/YYYY) — safe in Alpine minimal ICU unlike 'vi-VN'
+  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(date))
 }
 
 export function getStatusColor(status: string): string {

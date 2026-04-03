@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { RBAC } from '@/lib/rbac-rules'
 
 interface InspectionDetail {
   id: string; projectId: string; inspectionCode: string;
@@ -38,6 +39,10 @@ export default function QCDetailPage() {
   const [loading, setLoading] = useState(true)
   const [remarks, setRemarks] = useState('')
   const [itemResults, setItemResults] = useState<Record<string, { result: string; measurement: string; notes: string }>>({})
+
+  const currentUser = useAuthStore((state) => state.user)
+  const roleCode = currentUser?.roleCode || ''
+  const hasActionPermission = RBAC.QC_ACTION.includes(roleCode)
 
   useEffect(() => { loadInspection() }, [id])
 
@@ -95,11 +100,18 @@ export default function QCDetailPage() {
             </div>
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{QC_TYPES[inspection.type] || inspection.type}</h1>
           </div>
-          {isPending && (
+          {isPending && hasActionPermission && (
             <div className="flex gap-2">
               <button onClick={() => submitVerdict('PASSED')} className="text-sm px-4 py-2 rounded-lg font-medium" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>Đạt</button>
               <button onClick={() => submitVerdict('CONDITIONAL')} className="text-sm px-4 py-2 rounded-lg font-medium" style={{ background: '#fefce8', color: '#ca8a04', border: '1px solid #fde68a' }}>Đạt ĐK</button>
               <button onClick={() => submitVerdict('FAILED')} className="text-sm px-4 py-2 rounded-lg font-medium" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>Không đạt</button>
+            </div>
+          )}
+          {isPending && !hasActionPermission && (
+            <div className="flex gap-2">
+              <span className="text-sm px-4 py-2 flex items-center gap-1 rounded-lg" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
+                🔒 Chỉ quyền QC/BGĐ
+              </span>
             </div>
           )}
         </div>
@@ -137,7 +149,7 @@ export default function QCDetailPage() {
                   <td style={{ color: 'var(--text-primary)' }}>{ci.checkItem}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{ci.standard || '—'}</td>
                   <td>
-                    {isPending ? (
+                    {isPending && hasActionPermission ? (
                       <select className="input py-1 text-xs" value={itemResults[ci.id]?.result || ''} onChange={(e) => updateItem(ci.id, 'result', e.target.value)}>
                         <option value="">—</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="N_A">N/A</option>
                       </select>
@@ -148,8 +160,8 @@ export default function QCDetailPage() {
                       }}>{ci.result || '—'}</span>
                     )}
                   </td>
-                  <td>{isPending ? <input className="input py-1 text-xs" placeholder="Giá trị" value={itemResults[ci.id]?.measurement || ''} onChange={(e) => updateItem(ci.id, 'measurement', e.target.value)} /> : <span style={{ color: 'var(--text-muted)' }}>{ci.measurement || '—'}</span>}</td>
-                  <td>{isPending ? <input className="input py-1 text-xs" placeholder="Ghi chú" value={itemResults[ci.id]?.notes || ''} onChange={(e) => updateItem(ci.id, 'notes', e.target.value)} /> : <span style={{ color: 'var(--text-muted)' }}>{ci.notes || '—'}</span>}</td>
+                  <td>{isPending && hasActionPermission ? <input className="input py-1 text-xs" placeholder="Giá trị" value={itemResults[ci.id]?.measurement || ''} onChange={(e) => updateItem(ci.id, 'measurement', e.target.value)} /> : <span style={{ color: 'var(--text-muted)' }}>{ci.measurement || '—'}</span>}</td>
+                  <td>{isPending && hasActionPermission ? <input className="input py-1 text-xs" placeholder="Ghi chú" value={itemResults[ci.id]?.notes || ''} onChange={(e) => updateItem(ci.id, 'notes', e.target.value)} /> : <span style={{ color: 'var(--text-muted)' }}>{ci.notes || '—'}</span>}</td>
                 </tr>
               ))}
             </tbody>

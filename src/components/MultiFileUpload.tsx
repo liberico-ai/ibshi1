@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { apiFetch } from '@/hooks/useAuth'
 
 export interface UploadedFile {
   id: string
@@ -23,7 +24,7 @@ interface MultiFileUploadProps {
   compact?: boolean       // smaller UI variant
 }
 
-const ALL_TYPES = '.pdf,.doc,.docx,.xlsx,.xls,.xls,.pptx,.jpg,.jpeg,.png,.gif,.dwg,.dxf,.zip,.rar,.csv,.txt'
+const ALL_TYPES = '.pdf,.doc,.docx,.xlsx,.xls,.pptx,.jpg,.jpeg,.png,.gif,.dwg,.dxf,.zip,.rar,.csv,.txt'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -43,18 +44,23 @@ function getFileIcon(fileName: string): string {
   return '📎'
 }
 
+/** Extract dot-extensions from an accept string (ignoring MIME types) */
+function getAllowedExtensions(accept: string): string[] {
+  return accept.split(',').map(s => s.trim().toLowerCase()).filter(s => s.startsWith('.'))
+}
+
 export default function MultiFileUpload({
   label,
   entityType,
   entityId,
-  existingFiles = [],
+  existingFiles,
   accept = ALL_TYPES,
   disabled = false,
   onUploaded,
   onDeleted,
   compact = false,
 }: MultiFileUploadProps) {
-  const [files, setFiles] = useState<UploadedFile[]>(existingFiles)
+  const [files, setFiles] = useState<UploadedFile[]>(existingFiles || [])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
@@ -83,6 +89,49 @@ export default function MultiFileUpload({
     return () => { isMounted = false }
   }, [entityType, entityId])
   const inputRef = useRef<HTMLInputElement>(null)
+  const hasFetched = useRef(false)
+
+  // ── FIX #2: Fetch existing files from server on mount ──
+  useEffect(() => {
+    if (hasFetched.current || (existingFiles && existingFiles.length > 0)) return
+    hasFetched.current = true
+
+    async function fetchExisting() {
+      try {
+        const res = await apiFetch(`/api/upload?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`)
+        if (res.ok && res.attachments?.length > 0) {
+          setFiles(res.attachments)
+        }
+      } catch {
+        // Silently fail — non-critical
+      }
+    }
+    fetchExisting()
+  }, [entityType, entityId, existingFiles])
+
+  // ── FIX #1: Client-side extension validation (backup for drag-and-drop) ──
+  function validateExtensions(fileList: File[]): File[] {
+    const allowedExts = getAllowedExtensions(accept)
+    if (allowedExts.length === 0) return fileList // no filter if only MIME types
+
+    const valid: File[] = []
+    const invalid: string[] = []
+
+    for (const f of fileList) {
+      const ext = '.' + (f.name.split('.').pop()?.toLowerCase() || '')
+      if (allowedExts.includes(ext)) {
+        valid.push(f)
+      } else {
+        invalid.push(f.name)
+      }
+    }
+
+    if (invalid.length > 0) {
+      setError(`Định dạng không hợp lệ: ${invalid.join(', ')}. Chấp nhận: ${allowedExts.join(', ')}`)
+    }
+
+    return valid
+  }
 
   async function uploadFile(file: File) {
     const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
@@ -105,8 +154,15 @@ export default function MultiFileUpload({
     setError('')
     setUploading(true)
 
+    // Validate extensions before uploading
+    const validFiles = validateExtensions(Array.from(fileList))
+    if (validFiles.length === 0) {
+      setUploading(false)
+      return
+    }
+
     const results: UploadedFile[] = []
-    for (const file of Array.from(fileList)) {
+    for (const file of validFiles) {
       try {
         const res = await uploadFile(file)
         if (res.ok && res.attachment) {
@@ -127,9 +183,19 @@ export default function MultiFileUpload({
     if (inputRef.current) inputRef.current.value = ''
   }
 
+  // ── FIX #3: Delete syncs to server ──
   async function handleDelete(fileId: string) {
+    // Optimistic UI update
     setFiles(prev => prev.filter(f => f.id !== fileId))
     onDeleted?.(fileId)
+
+    // Server-side delete (fire-and-forget, non-blocking)
+    try {
+      await apiFetch(`/api/upload/${fileId}`, { method: 'DELETE' })
+    } catch {
+      // If server delete fails, the file is already removed from UI.
+      // The file record will be orphaned but not visible to user.
+    }
   }
 
   const borderColor = dragOver ? 'var(--accent)' : disabled ? 'var(--border)' : 'var(--border)'

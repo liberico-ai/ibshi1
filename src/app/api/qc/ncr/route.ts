@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createNcrSchema } from '@/lib/schemas'
 
 // GET /api/qc/ncr — List NCRs
 export async function GET(req: NextRequest) {
@@ -35,12 +37,9 @@ export async function POST(req: NextRequest) {
     return errorResponse('Không có quyền tạo NCR', 403)
   }
 
-  const body = await req.json()
-  const { projectId, category, severity, description, rootCause } = body
-
-  if (!projectId || !category || !description) {
-    return errorResponse('Thiếu: dự án, loại, mô tả')
-  }
+  const result = await validateBody(req, createNcrSchema)
+  if (!result.success) return result.response
+  const { projectId, category, severity, description, rootCause } = result.data
 
   const year = new Date().getFullYear().toString().slice(-2)
   const count = await prisma.nonConformanceReport.count()

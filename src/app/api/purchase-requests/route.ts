@@ -3,6 +3,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateQuery, validateBody } from '@/lib/api-helpers'
+import { searchFilterSchema, createPurchaseRequestSchema } from '@/lib/schemas'
 
 // GET /api/purchase-requests — List purchase requests
 export async function GET(req: NextRequest) {
@@ -10,9 +12,9 @@ export async function GET(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { searchParams } = new URL(req.url)
-    const status = searchParams.get('status')
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+    const qResult = validateQuery(req.url, searchFilterSchema)
+    if (!qResult.success) return qResult.response
+    const { page, status } = qResult.data
     const limit = 20
 
     const where: Record<string, unknown> = {}
@@ -59,12 +61,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('Bạn không có quyền tạo yêu cầu mua hàng', 403)
     }
 
-    const body = await req.json()
-    const { projectId, urgency, notes, items } = body
-
-    if (!projectId || !items || items.length === 0) {
-      return errorResponse('Cần chọn dự án và ít nhất 1 vật tư')
-    }
+    const result = await validateBody(req, createPurchaseRequestSchema)
+    if (!result.success) return result.response
+    const { projectId, urgency, notes, items } = result.data
 
     // Generate PR code: PR-YY-NNN
     const year = new Date().getFullYear().toString().slice(-2)

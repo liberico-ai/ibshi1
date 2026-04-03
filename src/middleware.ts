@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkRateLimit, RATE_PRESETS } from '@/lib/rate-limiter'
 
 // ── Public routes that don't require authentication ──
 const PUBLIC_ROUTES = ['/api/auth/login', '/api/health']
@@ -41,6 +42,33 @@ async function verifyJWTEdge(token: string, secret: string): Promise<boolean> {
   }
 }
 
+// ── Decode JWT payload without verification (used after middleware already verified) ──
+function decodeJWTPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    return JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+  } catch {
+    return null
+  }
+}
+
+// ── Get client IP for rate limiting ──
+function getClientIP(req: NextRequest): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || req.headers.get('x-real-ip')
+    || 'unknown'
+}
+
+// ── Add CORS headers to response ──
+function addCorsHeaders(response: NextResponse, req: NextRequest): NextResponse {
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || req.headers.get('origin') || ''
+  response.headers.set('Access-Control-Allow-Origin', allowedOrigin)
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  return response
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
@@ -49,13 +77,25 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow public routes
-  if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next()
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    const response = new NextResponse(null, { status: 204 })
+    return addCorsHeaders(response, req)
   }
 
-  // Allow CRON routes only with valid secret (future: add CRON_SECRET check)
+  // Allow public routes
+  if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
+    const response = NextResponse.next()
+    return addCorsHeaders(response, req)
+  }
+
+  // Validate CRON routes with secret
   if (pathname.startsWith('/api/cron')) {
+    const cronSecret = req.headers.get('x-cron-secret')
+    const expected = process.env.CRON_SECRET
+    if (!expected || cronSecret !== expected) {
+      return NextResponse.json({ ok: false, error: 'Invalid cron secret' }, { status: 401 })
+    }
     return NextResponse.next()
   }
 
@@ -76,7 +116,21 @@ export async function middleware(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid or expired token' }, { status: 401 })
   }
 
-  return NextResponse.next()
+  // Rate limiting for authenticated API routes
+  const payload = decodeJWTPayload(token)
+  const rateLimitKey = (payload?.userId as string) || getClientIP(req)
+  const isUpload = pathname.includes('/upload')
+  const preset = isUpload ? RATE_PRESETS.API_UPLOAD : RATE_PRESETS.API_GENERAL
+
+  if (!checkRateLimit(rateLimitKey, preset.maxRequests, preset.windowMs)) {
+    return NextResponse.json(
+      { ok: false, error: 'Too many requests. Please try again later.' },
+      { status: 429 }
+    )
+  }
+
+  const response = NextResponse.next()
+  return addCorsHeaders(response, req)
 }
 
 export const config = {

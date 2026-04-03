@@ -186,6 +186,7 @@ export const MENU_ITEMS = [
   // ── Reports ──
   { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R08', 'R08a', 'R09', 'R09a'], group: 'reports' },
   { key: 'audit-log', label: 'Nhật ký', labelEn: 'Audit Log', icon: 'ScrollText', href: '/dashboard/audit-log', roles: ['R01', 'R10'], group: 'reports' },
+  { key: 'error-logs', label: 'Error Logs', labelEn: 'Error Logs', icon: 'AlertTriangle', href: '/dashboard/admin/error-logs', roles: ['R01', 'R10'], group: 'reports' },
 
   // ── System ──
   { key: 'users', label: 'Người dùng', labelEn: 'Users', icon: 'Users', href: '/dashboard/users', roles: ['R01', 'R10'], group: 'system' },

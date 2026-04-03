@@ -227,7 +227,7 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
   const DEPT_COLORS: Record<string, string> = { SX: '#e74c3c', QC: '#2ecc71', KHO: '#f39c12', TK: '#3498db', PM: '#9b59b6', KTKH: '#1abc9c', TM: '#e67e22', KT: '#34495e', 'BGĐ': '#8e44ad', HT: '#95a5a6' }
 
   return (
-    <div className="project-row">
+    <a href={`/dashboard/projects/${p.id}`} className="project-row" style={{ display: 'block', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
         <div>
@@ -243,8 +243,8 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
 
       {/* Task progress bar */}
       <div style={{ marginBottom: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', width: 24 }}>📋</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', width: 100 }}>Tiến độ C.Việc</span>
           <div className="progress-bar" style={{ flex: 1 }}>
             <div className={`progress-bar-fill ${getProgressColor(p.progress)}`} style={{ width: `${p.progress}%` }} />
           </div>
@@ -253,15 +253,15 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
 
       {/* Volume progress bar */}
       <div style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', width: 24 }}>⚖️</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', width: 100 }}>Khối lượng T.Tế</span>
           {vol.estimatedKg > 0 ? (
             <div style={{ flex: 1, height: 8, borderRadius: 4, background: '#e8ecf1', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(vol.completedPercent, 100)}%`, background: '#93c5fd', borderRadius: 4, transition: 'width 0.6s ease' }} />
               <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(vol.acceptedPercent, 100)}%`, background: '#2563eb', borderRadius: 4, transition: 'width 0.6s ease' }} />
             </div>
           ) : (
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu KL</span>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu KL (BOM)</span>
           )}
         </div>
       </div>
@@ -284,7 +284,7 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
           </span>
         )}
       </div>
-    </div>
+    </a>
   )
 }
 

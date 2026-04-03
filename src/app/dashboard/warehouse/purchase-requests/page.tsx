@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { RBAC } from '@/lib/rbac-rules'
 
 interface PR {
   id: string; prCode: string; status: string; priority: string; requiredDate: string | null; createdAt: string;
@@ -16,6 +17,10 @@ export default function PurchaseRequestsPage() {
   const [prs, setPrs] = useState<PR[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  const currentUser = useAuthStore((state) => state.user)
+  const roleCode = currentUser?.roleCode || ''
+  const hasApprovePermission = RBAC.PR_APPROVAL.includes(roleCode)
 
   const fetchData = () => {
     setLoading(true)
@@ -87,8 +92,8 @@ export default function PurchaseRequestsPage() {
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{pr.requiredDate ? new Date(pr.requiredDate).toLocaleDateString('vi-VN') : '—'}</td>
                 <td className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{pr.items?.length || 0}</td>
                 <td>
-                  <div className="flex gap-1">
-                    {(pr.status === 'PENDING' || pr.status === 'DRAFT' || pr.status === 'SUBMITTED') && (
+                  <div className="flex gap-1 items-center">
+                    {(pr.status === 'PENDING' || pr.status === 'DRAFT' || pr.status === 'SUBMITTED') && hasApprovePermission && (
                       <>
                         <button
                           onClick={() => handleApprove(pr.id, 'approve')}
@@ -107,6 +112,9 @@ export default function PurchaseRequestsPage() {
                           ✗ Từ chối
                         </button>
                       </>
+                    )}
+                    {(pr.status === 'PENDING' || pr.status === 'DRAFT' || pr.status === 'SUBMITTED') && !hasApprovePermission && (
+                      <span className="text-xs text-slate-400 font-medium">🔒 Chỉ BGĐ/PM</span>
                     )}
                     {pr.status === 'APPROVED' && (
                       <button

@@ -3,6 +3,9 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { RBAC } from '@/lib/rbac-rules'
+import { validateParams } from '@/lib/api-helpers'
+import { idParamSchema } from '@/lib/schemas'
 
 // GET /api/qc/:id — Inspection detail + checklist items
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -10,7 +13,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
 
     const inspection = await prisma.inspection.findUnique({
       where: { id },
@@ -32,11 +37,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!['R01', 'R09'].includes(payload.roleCode)) {
-      return errorResponse('Không có quyền', 403)
+    if (!RBAC.QC_ACTION.includes(payload.roleCode)) {
+      return errorResponse('Không có quyền thao tác đánh giá QC', 403)
     }
 
-    const { id } = await params
+    const pResult2 = validateParams(await params, idParamSchema)
+    if (!pResult2.success) return pResult2.response
+    const { id } = pResult2.data
     const body = await req.json()
     const { status, remarks, checklistResults } = body
 

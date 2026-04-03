@@ -1,13 +1,17 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateParams } from '@/lib/api-helpers'
+import { idParamSchema } from '@/lib/schemas'
 
 // GET /api/purchase-orders/[id] — PO detail with items + vendor
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
 
-  const { id } = await params
+  const pResult = validateParams(await params, idParamSchema)
+  if (!pResult.success) return pResult.response
+  const { id } = pResult.data
   const po = await prisma.purchaseOrder.findUnique({
     where: { id },
     include: {
@@ -27,7 +31,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
 
-  const { id } = await params
+  const pResult2 = validateParams(await params, idParamSchema)
+  if (!pResult2.success) return pResult2.response
+  const { id } = pResult2.data
   const body = await req.json()
   const { action } = body as { action: string }
 

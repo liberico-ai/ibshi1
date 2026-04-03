@@ -38,8 +38,8 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
     role: 'R03', next: ['P1.3', 'P2.1', 'P2.2', 'P2.3', 'P2.1A'], deadlineDays: 5, phase: 1,
   },
   'P1.3': {
-    code: 'P1.3', name: 'Phê duyệt Dự toán, kế hoạch kickoff, WBS, milestones', nameEn: 'Estimate & Plan Approval',
-    role: 'R01', gate: ['P1.2A'], next: [], deadlineDays: 3, phase: 1,
+    code: 'P1.3', name: 'Phê duyệt kế hoạch và dự toán thi công', nameEn: 'Plan & Estimate Approval',
+    role: 'R01', gate: ['P1.2A', 'P1.2'], next: ['P2.1', 'P2.2', 'P2.3', 'P2.1A'], deadlineDays: 3, phase: 1,
     rejectTo: 'P1.2A',
   },
 

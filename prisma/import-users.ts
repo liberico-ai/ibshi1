@@ -82,7 +82,7 @@ const USERS: UserRecord[] = [
   { username: 'anhtv',     fullName: 'Trần Việt Anh',        roleCode: 'R02a', userLevel: 2, deptCode: 'QLDA' },
 
   // ── Phòng Kỹ Thuật → Thiết kế (TK) — Fixed: STT 42 R05 → R04 ──
-  { username: 'nampq',     fullName: 'Phạm Quốc Nam',        roleCode: 'R04',  userLevel: 1, deptCode: 'TK' }, // Fixed: R05 → R04
+  { username: 'tuanpm',    fullName: 'Phạm Minh Tuấn',       roleCode: 'R04',  userLevel: 1, deptCode: 'TK' }, // Fixed: R05 → R04
 
   // ── Tổ Sản Xuất (SX) ──
   { username: 'trungdv',   fullName: 'Đặng Văn Trung',       roleCode: 'R06b', userLevel: 1, deptCode: 'SX' },

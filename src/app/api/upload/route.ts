@@ -4,6 +4,17 @@ import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 
+
+// ── Upload Security ──────────────────────────────────────────────────
+// Block only truly dangerous executable extensions.
+// All document/archive/image formats are allowed per business requirement.
+const BLOCKED_EXTENSIONS = new Set([
+  '.exe', '.bat', '.cmd', '.sh', '.ps1', '.msi', '.dll', '.com', '.scr',
+  '.vbs', '.vbe', '.js', '.jse', '.wsf', '.wsh', '.cpl', '.hta',
+])
+
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+
 // POST /api/upload — File upload
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +28,23 @@ export async function POST(req: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ ok: false, error: 'Chưa chọn file' }, { status: 400 })
+    }
+
+    // Block dangerous executable extensions
+    const ext = path.extname(file.name).toLowerCase()
+    if (BLOCKED_EXTENSIONS.has(ext)) {
+      return NextResponse.json(
+        { ok: false, error: `Định dạng file "${ext}" bị chặn vì lý do bảo mật.` },
+        { status: 400 }
+      )
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { ok: false, error: 'File quá lớn. Kích thước tối đa là 50 MB.' },
+        { status: 400 }
+      )
     }
 
     // Create upload directory

@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, hashPassword, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createUserSchema } from '@/lib/schemas'
 
 // GET /api/users — List all users
 export async function GET(req: NextRequest) {
@@ -40,12 +42,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('Chỉ BGĐ hoặc Admin hệ thống mới có quyền tạo người dùng', 403)
     }
 
-    const body = await req.json()
-    const { username, password, fullName, roleCode, userLevel, email, departmentCode } = body
-
-    if (!username || !password || !fullName || !roleCode) {
-      return errorResponse('Thiếu thông tin bắt buộc')
-    }
+    const result = await validateBody(req, createUserSchema)
+    if (!result.success) return result.response
+    const { username, password, fullName, roleCode, userLevel, email, departmentCode } = result.data
 
     const existing = await prisma.user.findUnique({ where: { username } })
     if (existing) return errorResponse(`Username ${username} đã tồn tại`)

@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createPaymentSchema } from '@/lib/schemas'
 
 // GET /api/finance/payments — list payments with invoice info
 export async function GET(req: NextRequest) {
@@ -56,12 +58,9 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    const body = await req.json()
-    const { invoiceId, amount, paymentDate, method, reference, notes } = body
-
-    if (!invoiceId || !amount || !paymentDate) {
-      return errorResponse('Thiếu thông tin: invoiceId, amount, paymentDate')
-    }
+    const result = await validateBody(req, createPaymentSchema)
+    if (!result.success) return result.response
+    const { invoiceId, amount, paymentDate, method, reference, notes } = result.data
 
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
     if (!invoice) return errorResponse('Hóa đơn không tồn tại', 404)

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { recordAttendanceSchema } from '@/lib/schemas'
 
 // GET /api/hr/attendance — list attendance for month/employee
 export async function GET(req: NextRequest) {
@@ -52,10 +54,9 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    const body = await req.json()
-    const { employeeId, date, checkIn, checkOut, status, overtime, notes } = body
-
-    if (!employeeId || !date) return errorResponse('Thiếu nhân viên hoặc ngày', 400)
+    const result = await validateBody(req, recordAttendanceSchema)
+    if (!result.success) return result.response
+    const { employeeId, date, checkIn, checkOut, status, overtime, notes } = result.data
 
     const hoursWorked = checkIn && checkOut
       ? Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 3600000 * 10) / 10

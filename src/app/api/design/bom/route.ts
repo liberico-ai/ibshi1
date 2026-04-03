@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createBomSchema } from '@/lib/schemas'
 
 // GET /api/design/bom — List BOMs
 export async function GET(req: NextRequest) {
@@ -36,13 +38,9 @@ export async function POST(req: NextRequest) {
     return errorResponse('Không có quyền tạo BOM', 403)
   }
 
-  const body = await req.json()
-  const { projectId, name, items } = body as {
-    projectId: string; name: string;
-    items?: Array<{ materialId: string; quantity: number; unit: string; remarks?: string }>
-  }
-
-  if (!projectId || !name) return errorResponse('Thiếu: dự án, tên BOM')
+  const result = await validateBody(req, createBomSchema)
+  if (!result.success) return result.response
+  const { projectId, name, items } = result.data
 
   const year = new Date().getFullYear().toString().slice(-2)
   const count = await prisma.billOfMaterial.count()

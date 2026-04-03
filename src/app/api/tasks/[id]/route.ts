@@ -3,14 +3,24 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { getTaskById, assignTask } from '@/lib/task-engine'
 import { completeTask, processP45PartialIssue, WORKFLOW_RULES } from '@/lib/workflow-engine'
 import prisma from '@/lib/db'
+import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
+import { validateParams } from '@/lib/api-helpers'
+import { idParamSchema } from '@/lib/schemas'
+import { withErrorHandler } from '@/lib/with-error-handler'
+import type { PrevStepFile } from '@/lib/types'
+import {
+  aggregateBomItems, fetchEstimateData, fetchSupplierData,
+  fetchPoData, fetchPlanData, fetchStepResult, fetchAllMaterials, fetchAvailableInventory
+} from '@/lib/data-fetchers'
 
 // GET /api/tasks/[id]
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const payload = await authenticateRequest(req)
-    if (!payload) return unauthorizedResponse()
+export const GET = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const payload = await authenticateRequest(req)
+  if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const task = await getTaskById(id)
     if (!task) return errorResponse('Task không tồn tại', 404)
 
@@ -111,42 +121,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // For P3.2: fetch BOM items from P2.1/P2.2/P2.3 and compare with Materials stock
     let previousStepData: Record<string, unknown> | null = null
     if (task.stepCode === 'P3.2') {
-      const [p21Task, p22Task, p23Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.3' },
-          select: { resultData: true, status: true },
-        }),
-      ])
-
-      // Collect all BOM items from P2.1/P2.2/P2.3
-      type BomEntry = { name: string; code: string; spec: string; quantity: string; unit: string }
-      const allPrItems: (BomEntry & { source: string })[] = []
-      const sources = [
-        { data: p21Task?.resultData as Record<string, unknown> | null, label: 'P2.1' },
-        { data: p22Task?.resultData as Record<string, unknown> | null, label: 'P2.2' },
-        { data: p23Task?.resultData as Record<string, unknown> | null, label: 'P2.3' },
-      ]
-      for (const src of sources) {
-        const items = (src.data?.bomItems as BomEntry[]) || []
-        for (const item of items) {
-          if (item.name?.trim()) {
-            allPrItems.push({ ...item, source: src.label })
-          }
-        }
-      }
+      const allPrItems = await aggregateBomItems(task.projectId)
 
       // Fetch all materials for stock comparison
-      const materials = await prisma.material.findMany({
-        select: { materialCode: true, name: true, specification: true, currentStock: true, unit: true },
-      })
+      const materials = await fetchAllMaterials()
 
       // Compare each PR item with stock
       const fromStock: unknown[] = []
@@ -193,111 +171,50 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // For P1.3: fetch both P1.2A (plan) and P1.2 (estimate) data
     if (task.stepCode === 'P1.3') {
-      const [p12aTask, p12Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P1.2A' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P1.2' },
-          select: { resultData: true, status: true },
-        }),
+      const [planData, estimateData] = await Promise.all([
+        fetchPlanData(task.projectId),
+        fetchEstimateData(task.projectId),
       ])
-      previousStepData = {
-        plan: p12aTask?.resultData || null,
-        estimate: p12Task?.resultData || null,
-      }
+      previousStepData = { plan: planData, estimate: estimateData }
     }
 
     // For P2.3: fetch P2.2 (BOM) data + P1.2 (estimate) for comparison
     if (task.stepCode === 'P2.3') {
-      const [p22Task, p12Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P1.2' },
-          select: { resultData: true, status: true },
-        }),
+      const [p22Task, estimateData] = await Promise.all([
+        fetchStepResult(task.projectId, 'P2.2'),
+        fetchEstimateData(task.projectId),
       ])
-      previousStepData = {
-        bom: p22Task?.resultData || null,
-        estimate: p12Task?.resultData || null,
-      }
+      previousStepData = { bom: p22Task?.resultData || null, estimate: estimateData }
     }
 
     // For P2.4: fetch BOM data from P2.1 (VT chính), P2.2 (VT hàn/sơn), P2.3 (VT phụ) + P1.2 estimate
     if (task.stepCode === 'P2.4') {
-      const [p21Task, p22Task, p23Task, p12Task, p21aTask] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.3' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P1.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1A' },
-          select: { resultData: true },
-        }),
+      const [p21Task, p22Task, p23Task, estimateData] = await Promise.all([
+        fetchStepResult(task.projectId, 'P2.1'),
+        fetchStepResult(task.projectId, 'P2.2'),
+        fetchStepResult(task.projectId, 'P2.3'),
+        fetchEstimateData(task.projectId, { mergeP21A: true }),
       ])
-
-      const est12 = (p12Task?.resultData as Record<string, any>) || {}
-      const est21a = (p21aTask?.resultData as Record<string, any>) || {}
-
       previousStepData = {
         bomMain: p21Task?.resultData || null,       // VT chính from Thiết kế
         bomWeldPaint: p22Task?.resultData || null,   // VT hàn/sơn from PM
         bomSupply: p23Task?.resultData || null,      // VT phụ from Kho
-        estimate: { ...est12, ...est21a },           // Dự toán from P1.2 (DT02..06) & P2.1A (DT07)
+        estimate: estimateData,                      // Dự toán from P1.2 (DT02..06) & P2.1A (DT07)
       }
     }
 
     // For P2.5: fetch P2.4 (KH SX + dự toán điều chỉnh) + P1.2 estimate + BOM data
     if (task.stepCode === 'P2.5') {
-      const [p24Task, p21Task, p22Task, p23Task, p12Task, p21aTask] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.4' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.3' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P1.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1A' },
-          select: { resultData: true },
-        }),
+      const [p24Task, p21Task, p22Task, p23Task, estimateData] = await Promise.all([
+        fetchStepResult(task.projectId, 'P2.4'),
+        fetchStepResult(task.projectId, 'P2.1'),
+        fetchStepResult(task.projectId, 'P2.2'),
+        fetchStepResult(task.projectId, 'P2.3'),
+        fetchEstimateData(task.projectId, { mergeP21A: true }),
       ])
-
-      const est12 = (p12Task?.resultData as Record<string, any>) || {}
-      const est21a = (p21aTask?.resultData as Record<string, any>) || {}
-
       previousStepData = {
         plan: p24Task?.resultData || null,
-        estimate: { ...est12, ...est21a },
+        estimate: estimateData,
         bomMain: p21Task?.resultData || null,
         bomWeldPaint: p22Task?.resultData || null,
         bomSupply: p23Task?.resultData || null,
@@ -306,219 +223,83 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // For P3.1: fetch P1.2A (WBS plan) for PM reference
     if (task.stepCode === 'P3.1') {
-      const p12aTask = await prisma.workflowTask.findFirst({
-        where: { projectId: task.projectId, stepCode: 'P1.2A' },
-        select: { resultData: true, status: true },
-      })
-      previousStepData = {
-        plan: p12aTask?.resultData || null,
-      }
+      const planData = await fetchPlanData(task.projectId)
+      previousStepData = { plan: planData }
     }
     // For P3.5: fetch BOM items from P2.1/P2.2/P2.3 (same PR list as P3.2)
     if (task.stepCode === 'P3.5') {
-      const [p21Task, p22Task, p23Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.3' },
-          select: { resultData: true, status: true },
-        }),
-      ])
-      type BomEntry = { name: string; code: string; spec: string; quantity: string; unit: string }
-      const allPrItems: (BomEntry & { source: string })[] = []
-      const sources = [
-        { data: p21Task?.resultData as Record<string, unknown> | null, label: 'P2.1' },
-        { data: p22Task?.resultData as Record<string, unknown> | null, label: 'P2.2' },
-        { data: p23Task?.resultData as Record<string, unknown> | null, label: 'P2.3' },
-      ]
-      for (const src of sources) {
-        const items = (src.data?.bomItems as BomEntry[]) || []
-        for (const item of items) {
-          if (item.name?.trim()) {
-            allPrItems.push({ ...item, source: src.label })
-          }
-        }
-      }
+      const allPrItems = await aggregateBomItems(task.projectId)
       previousStepData = { prItems: allPrItems }
     }
 
     // For P3.3 and P3.4: fetch P1.2A (WBS plan) + BOM from P2.1/P2.2/P2.3
     if (task.stepCode === 'P3.3' || task.stepCode === 'P3.4') {
-      const [p12aTask, p21Task, p22Task, p23Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P1.2A' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.3' },
-          select: { resultData: true, status: true },
-        }),
+      const [planData, allBomItems] = await Promise.all([
+        fetchPlanData(task.projectId),
+        aggregateBomItems(task.projectId, 'descriptive'),
       ])
-      type BomEntry = { name: string; code: string; spec: string; quantity: string; unit: string }
-      const allBomItems: (BomEntry & { source: string })[] = []
-      const bomSources = [
-        { data: p21Task?.resultData as Record<string, unknown> | null, label: 'P2.1 - VT chính' },
-        { data: p22Task?.resultData as Record<string, unknown> | null, label: 'P2.2 - Hàn & Sơn' },
-        { data: p23Task?.resultData as Record<string, unknown> | null, label: 'P2.3 - VT phụ' },
-      ]
-      for (const src of bomSources) {
-        const items = (src.data?.bomItems as BomEntry[]) || []
-        for (const item of items) {
-          if (item.name?.trim()) {
-            allBomItems.push({ ...item, source: src.label })
-          }
-        }
-      }
-      previousStepData = {
-        plan: p12aTask?.resultData || null,
-        bomItems: allBomItems,
-      }
+      previousStepData = { plan: planData, bomItems: allBomItems }
     }
 
     // For P3.6: fetch P3.5 (supplier quotes) + P1.2 (estimate for budget comparison)
     if (task.stepCode === 'P3.6') {
-      const [p35Task, p12Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P3.5' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P1.2' },
-          select: { resultData: true, status: true },
-        }),
+      const [supplierData, estimateData] = await Promise.all([
+        fetchSupplierData(task.projectId),
+        fetchEstimateData(task.projectId),
       ])
-      previousStepData = {
-        supplierData: p35Task?.resultData || null,
-        estimate: p12Task?.resultData || null,
-      }
+      previousStepData = { supplierData, estimate: estimateData }
     }
 
     // For P3.7: fetch P3.5 supplier quotes for best-price summary
     if (task.stepCode === 'P3.7') {
-      const p35Task = await prisma.workflowTask.findFirst({
-        where: { projectId: task.projectId, stepCode: 'P3.5' },
-        select: { resultData: true, status: true },
-      })
-      previousStepData = {
-        supplierData: p35Task?.resultData || null,
-      }
+      const supplierData = await fetchSupplierData(task.projectId)
+      previousStepData = { supplierData }
     }
 
     // For P4.1: fetch P3.7 (PO + payment terms + delivery plan) for Kế toán
     if (task.stepCode === 'P4.1') {
-      const p37Task = await prisma.workflowTask.findFirst({
-        where: { projectId: task.projectId, stepCode: 'P3.7' },
-        select: { resultData: true, status: true },
-      })
-      previousStepData = {
-        poData: p37Task?.resultData || null,
-      }
+      const poData = await fetchPoData(task.projectId)
+      previousStepData = { poData }
     }
 
     // For P4.2: fetch P3.7 (delivery plan) + P3.5 (supplier quotes) for tracking
     if (task.stepCode === 'P4.2') {
-      const [p37Task, p35Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P3.7' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P3.5' },
-          select: { resultData: true, status: true },
-        }),
+      const [poData, supplierData] = await Promise.all([
+        fetchPoData(task.projectId),
+        fetchSupplierData(task.projectId),
       ])
-      previousStepData = {
-        poData: p37Task?.resultData || null,
-        supplierData: p35Task?.resultData || null,
-      }
+      previousStepData = { poData, supplierData }
     }
 
     // For P4.3: fetch P3.7 (PO + delivery data) + P3.5 (supplier quotes) for QC to see incoming goods
     if (task.stepCode === 'P4.3') {
-      const [p37Task, p35Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P3.7' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P3.5' },
-          select: { resultData: true, status: true },
-        }),
+      const [poData, supplierData] = await Promise.all([
+        fetchPoData(task.projectId),
+        fetchSupplierData(task.projectId),
       ])
-      previousStepData = {
-        poData: p37Task?.resultData || null,
-        supplierData: p35Task?.resultData || null,
-      }
+      previousStepData = { poData, supplierData }
     }
 
     // For P4.4: fetch P4.3 (QC result) + P3.5 (supplier materials) + BOM (PR quantities) for Kho
     if (task.stepCode === 'P4.4') {
-      const [p43Task, p35Task, p21Task, p22Task, p23Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P4.3' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P3.5' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.1' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.2' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P2.3' },
-          select: { resultData: true, status: true },
-        }),
+      const [p43Task, supplierData, allBomItems] = await Promise.all([
+        fetchStepResult(task.projectId, 'P4.3'),
+        fetchSupplierData(task.projectId),
+        aggregateBomItems(task.projectId),
       ])
-      // Aggregate BOM items for PR quantities
-      type BomEntry = { name: string; quantity: string; unit: string }
-      const bomSources = [
-        (p21Task?.resultData as Record<string, unknown> | null)?.bomItems as BomEntry[] || [],
-        (p22Task?.resultData as Record<string, unknown> | null)?.bomItems as BomEntry[] || [],
-        (p23Task?.resultData as Record<string, unknown> | null)?.bomItems as BomEntry[] || [],
-      ]
-      const prItems = bomSources.flat().filter(b => b?.name?.trim())
       previousStepData = {
         qcData: p43Task?.resultData || null,
-        supplierData: p35Task?.resultData || null,
-        prItems,
+        supplierData,
+        prItems: allBomItems,
       }
     }
 
     // For P4.5: fetch P3.3 (subcontractor LSX) + P3.4 WO items + Materials inventory for material issue
     if (task.stepCode === 'P4.5') {
       const [p33Task, p34Task, materials] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P3.3' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P3.4' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.material.findMany({
-          select: { materialCode: true, name: true, specification: true, currentStock: true, unit: true, category: true },
-          orderBy: { category: 'asc' },
-        }),
+        fetchStepResult(task.projectId, 'P3.3'),
+        fetchStepResult(task.projectId, 'P3.4'),
+        fetchAvailableInventory(),
       ])
       previousStepData = {
         lsxData: p33Task?.resultData || null,
@@ -536,26 +317,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // For P5.2: fetch P5.1 job card data to auto-display completed stages
     if (task.stepCode === 'P5.2') {
-      const p51Task = await prisma.workflowTask.findFirst({
-        where: { projectId: task.projectId, stepCode: 'P5.1' },
-        select: { resultData: true, status: true },
-      })
-      previousStepData = {
-        jobCardData: p51Task?.resultData || null,
-      }
+      const p51Task = await fetchStepResult(task.projectId, 'P5.1')
+      previousStepData = { jobCardData: p51Task?.resultData || null }
     }
 
     // For P5.4: fetch P5.1 (job card data) + P5.2 (volume report with job cards) for PM review
     if (task.stepCode === 'P5.4') {
       const [p51Task, p52Task] = await Promise.all([
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P5.1' },
-          select: { resultData: true, status: true },
-        }),
-        prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: 'P5.2' },
-          select: { resultData: true, status: true },
-        }),
+        fetchStepResult(task.projectId, 'P5.1'),
+        fetchStepResult(task.projectId, 'P5.2'),
       ])
       previousStepData = {
         jobCardData: p51Task?.resultData || null,
@@ -565,11 +335,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // P6.2: Fetch P1.2 estimate data for budget reference
     if (task.stepCode === 'P6.2') {
-      const p12Task = await prisma.workflowTask.findFirst({
-        where: { projectId: task.projectId, stepCode: 'P1.2' },
-        select: { resultData: true },
-      })
-      const rd = p12Task?.resultData as Record<string, unknown> | null
+      const rd = await fetchEstimateData(task.projectId)
       if (rd) {
         // Use totalEstimate from P1.2 form fields
         const budgetTotal = Number(rd.totalEstimate || 0)
@@ -601,56 +367,126 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    return successResponse({ task, siblingFiles, rejectionInfo, previousStepData })
-  } catch (err) {
-    console.error('GET /api/tasks/[id] error:', err)
-    return errorResponse('Lỗi hệ thống', 500)
-  }
-}
+    // Fetch file attachments from all previous steps (completed or in-progress) in the same project
+    const otherTasks = await prisma.workflowTask.findMany({
+      where: {
+        projectId: task.projectId,
+        id: { not: task.id },
+        status: { in: ['DONE', 'IN_PROGRESS'] },
+      },
+      select: { id: true, stepCode: true, stepName: true },
+      orderBy: { stepCode: 'asc' },
+    })
+
+    let previousStepFiles: PrevStepFile[] = []
+
+    if (otherTasks.length > 0) {
+      const taskIds = otherTasks.map(t => t.id)
+      const allFiles = await prisma.fileAttachment.findMany({
+        where: {
+          entityType: 'Task',
+          OR: taskIds.map(tid => ({ entityId: { startsWith: tid } })),
+        },
+        select: { id: true, entityId: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
+
+      // Group files by task ID (entityId format: "{taskId}_{attachmentKey}")
+      const filesByTaskId = new Map<string, typeof allFiles>()
+      for (const f of allFiles) {
+        const tid = f.entityId.split('_')[0]
+        if (!filesByTaskId.has(tid)) filesByTaskId.set(tid, [])
+        filesByTaskId.get(tid)!.push(f)
+      }
+
+      previousStepFiles = otherTasks
+        .filter(t => filesByTaskId.has(t.id))
+        .map(t => ({
+          stepCode: t.stepCode,
+          stepName: t.stepName,
+          files: filesByTaskId.get(t.id)!.map(f => ({
+            id: f.id, fileName: f.fileName, fileUrl: f.fileUrl,
+            fileSize: f.fileSize, mimeType: f.mimeType, createdAt: f.createdAt,
+          })),
+        }))
+    }
+
+    return successResponse({ task, siblingFiles, rejectionInfo, previousStepData, previousStepFiles })
+})
 
 // PUT /api/tasks/[id] — Complete or assign task
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const payload = await authenticateRequest(req)
-    if (!payload) return unauthorizedResponse()
+export const PUT = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const payload = await authenticateRequest(req)
+  if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
-    const body = await req.json()
-    const { action } = body
+  const pResult = validateParams(await params, idParamSchema)
+  if (!pResult.success) return pResult.response
+  const { id } = pResult.data
+  const body = await req.json()
+  const { action } = body
 
-    if (action === 'save') {
-      // Save resultData without completing — used for partial approval state
-      await prisma.workflowTask.update({
-        where: { id },
-        data: { resultData: body.resultData ? JSON.parse(JSON.stringify(body.resultData)) : undefined },
-      })
-      return successResponse({}, 'Đã lưu dữ liệu')
-    }
-
-    if (action === 'partial_issue') {
-      const result = await processP45PartialIssue(id, payload.userId, body.resultData || {})
-      if (result.isPartial) {
-        return successResponse({ isPartial: true, issuedAccumulated: result.issuedAccumulated }, 'Đã xuất kho một phần. Task vẫn mở để xuất tiếp.')
-      }
-      return successResponse({ isPartial: false, nextSteps: [] }, 'Đã xuất đủ 100%. Task hoàn thành!')
-    }
-
-    if (action === 'complete') {
-      const result = await completeTask(id, payload.userId, body.resultData, body.notes)
-      return successResponse({ nextSteps: result.nextSteps }, 'Task hoàn thành')
-    }
-
-    if (action === 'assign') {
-      if (payload.userLevel > 1) {
-        return errorResponse('Chỉ L1 (trưởng phòng) mới có quyền phân công', 403)
-      }
-      const updated = await assignTask(id, body.assignToUserId)
-      return successResponse({ task: updated }, 'Đã phân công task')
-    }
-
-    return errorResponse('Action không hợp lệ. Sử dụng: complete, assign')
-  } catch (err) {
-    console.error('PUT /api/tasks/[id] error:', err)
-    return errorResponse((err as Error).message || 'Lỗi hệ thống', 500)
+  if (action === 'save') {
+    // Save resultData without completing — used for partial approval state
+    const updatedTask = await prisma.workflowTask.update({
+      where: { id },
+      data: { resultData: body.resultData ? JSON.parse(JSON.stringify(body.resultData)) : undefined },
+    })
+    return successResponse({ task: updatedTask }, 'Đã lưu dữ liệu')
   }
-}
+
+  if (action === 'partial_issue') {
+    const result = await processP45PartialIssue(id, payload.userId, body.resultData || {})
+    if (result.isPartial) {
+      return successResponse({ isPartial: true, issuedAccumulated: result.issuedAccumulated }, 'Đã xuất kho một phần. Task vẫn mở để xuất tiếp.')
+    }
+    return successResponse({ isPartial: false, nextSteps: [] }, 'Đã xuất đủ 100%. Task hoàn thành!')
+  }
+
+  if (action === 'complete') {
+    // Role-based authorization: only the assigned role (or admin) can complete
+    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    if (!task) return errorResponse('Task không tồn tại', 404)
+    const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(payload.roleCode)
+    const baseTaskRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
+    const baseUserRole = payload.roleCode.replace(/[a-zA-Z]$/, '')
+    const isAssignedToMe = task.assignedTo === payload.userId
+
+    const isAuthorized = isGlobalAdmin || isAssignedToMe || (baseUserRole === baseTaskRole && !task.assignedTo)
+
+    if (!isAuthorized) {
+      return errorResponse(`Bạn (${payload.roleCode}) không có quyền thực hiện bước này. Hãy yêu cầu quản lý phân công task cho bạn.`, 403)
+    }
+    const result = await completeTask(id, payload.userId, body.resultData, body.notes)
+
+    // Invalidate dashboard and task caches after completion
+    await Promise.all([
+      cacheInvalidate(CACHE_KEYS.dashboard),
+      cacheInvalidate(CACHE_KEYS.tasks),
+    ])
+
+    return successResponse({ nextSteps: result.nextSteps }, 'Task hoàn thành')
+  }
+
+  if (action === 'assign') {
+    if (payload.userLevel > 1 && payload.roleCode !== 'R00') {
+      return errorResponse('Chỉ L1 (trưởng phòng) hoặc Admin mới có quyền phân công', 403)
+    }
+
+    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    if (!task) return errorResponse('Task không tồn tại', 404)
+
+    // Strict role check: PM (R02, R02a) and Admin (R00, R01) can bypass, otherwise assigner must match task role
+    const userBaseRole = payload.roleCode.replace(/[a-z]$/i, '')
+    const taskBaseRole = task.assignedRole.replace(/[a-z]$/i, '')
+    const isGlobalAdmin = ['R00', 'R01', 'R02'].includes(userBaseRole)
+
+    if (!isGlobalAdmin && userBaseRole !== taskBaseRole) {
+      return errorResponse(`Bạn không có quyền phân công. Chỉ Quản lý bộ phận ${task.assignedRole} hoặc PM mới được thao tác.`, 403)
+    }
+
+    const updated = await assignTask(id, body.assignToUserId)
+    return successResponse({ task: updated }, 'Đã phân công task')
+  }
+
+  return errorResponse('Action không hợp lệ. Sử dụng: complete, assign')
+})

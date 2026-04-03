@@ -3,6 +3,9 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { RBAC } from '@/lib/rbac-rules'
+import { validateParams } from '@/lib/api-helpers'
+import { idParamSchema } from '@/lib/schemas'
 
 // PUT /api/purchase-requests/[id] — Approve/Reject/Update PR
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -10,7 +13,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const body = await req.json()
     const { action } = body // 'approve' | 'reject' | 'convert'
 
@@ -21,8 +26,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!pr) return errorResponse('Không tìm thấy yêu cầu mua hàng', 404)
 
     if (action === 'approve') {
-      if (!['R01'].includes(payload.roleCode)) {
-        return errorResponse('Chỉ Ban Giám đốc mới được duyệt PR', 403)
+      if (!RBAC.PR_APPROVAL.includes(payload.roleCode)) {
+        return errorResponse('Chỉ Ban Giám đốc hoặc PM mới được duyệt PR', 403)
       }
       if (pr.status !== 'SUBMITTED') {
         return errorResponse('PR phải ở trạng thái "Đã gửi" để duyệt')
@@ -36,8 +41,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (action === 'reject') {
-      if (!['R01'].includes(payload.roleCode)) {
-        return errorResponse('Chỉ Ban Giám đốc mới được từ chối PR', 403)
+      if (!RBAC.PR_APPROVAL.includes(payload.roleCode)) {
+        return errorResponse('Chỉ Ban Giám đốc hoặc PM mới được từ chối PR', 403)
       }
       const updated = await prisma.purchaseRequest.update({
         where: { id },
@@ -120,7 +125,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const { id } = await params
+    const pResult2 = validateParams(await params, idParamSchema)
+    if (!pResult2.success) return pResult2.response
+    const { id } = pResult2.data
     const pr = await prisma.purchaseRequest.findUnique({
       where: { id },
       include: {

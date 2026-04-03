@@ -503,7 +503,7 @@ async function runWorkflowHooks(
       let issueItems: { name: string; code: string; spec: string; qty: string; unit: string }[] = []
       try { issueItems = issueItemsRaw ? JSON.parse(issueItemsRaw) : [] } catch { issueItems = [] }
       const validItems = issueItems.filter(item => item.code?.trim() && Number(item.qty) > 0)
-      
+
       // Feature: Support new interface materialIssueRequests
       const reqs = (resultData.materialIssueRequests as Record<string, any>[]) || []
       for (let i = 0; i < reqs.length; i++) {
@@ -520,6 +520,10 @@ async function runWorkflowHooks(
            })
         }
       }
+
+      // Pre-validate stock sufficiency
+      const insufficientItems: string[] = []
+      const materialOps: { materialId: string; qty: number; item: typeof validItems[0] }[] = []
       for (const item of validItems) {
         const material = await prisma.material.findFirst({
           where: { materialCode: item.code.trim() },
@@ -527,25 +531,37 @@ async function runWorkflowHooks(
         })
         if (material) {
           const qty = Number(item.qty)
-          await prisma.$transaction([
-            prisma.stockMovement.create({
-              data: {
-                materialId: material.id,
-                projectId,
-                type: 'OUT',
-                quantity: qty,
-                reason: 'production_issue',
-                referenceNo: `${projCode}-P4.5`,
-                performedBy: userId,
-                notes: `Xuất VT: ${item.name} (${item.code}) x ${qty} ${item.unit}`,
-              },
-            }),
-            prisma.material.update({
-              where: { id: material.id },
-              data: { currentStock: { decrement: qty } },
-            }),
-          ])
+          if (Number(material.currentStock) < qty) {
+            insufficientItems.push(`${item.name} (${item.code}): cần ${qty}, tồn ${Number(material.currentStock)}`)
+          }
+          materialOps.push({ materialId: material.id, qty, item })
         }
+      }
+
+      if (insufficientItems.length > 0) {
+        console.warn(`[P4.5] Insufficient stock warnings: ${insufficientItems.join('; ')}`)
+      }
+
+      // Execute deductions in individual transactions (each item atomic)
+      for (const op of materialOps) {
+        await prisma.$transaction([
+          prisma.stockMovement.create({
+            data: {
+              materialId: op.materialId,
+              projectId,
+              type: 'OUT',
+              quantity: op.qty,
+              reason: 'production_issue',
+              referenceNo: `${projCode}-P4.5`,
+              performedBy: userId,
+              notes: `Xuất VT: ${op.item.name} (${op.item.code}) x ${op.qty} ${op.item.unit}`,
+            },
+          }),
+          prisma.material.update({
+            where: { id: op.materialId },
+            data: { currentStock: { decrement: op.qty } },
+          }),
+        ])
       }
     }
 

@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createBudgetSchema } from '@/lib/schemas'
 
 // GET /api/finance/budgets — project budgets with variance analysis
 export async function GET(req: NextRequest) {
@@ -71,38 +73,35 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    const body = await req.json()
-    const { projectId, category, planned, actual, committed, forecast, month, year, notes } = body
-
-    if (!projectId || !category) {
-      return errorResponse('Thiếu thông tin: projectId, category')
-    }
+    const result = await validateBody(req, createBudgetSchema)
+    if (!result.success) return result.response
+    const { projectId, category, planned, actual, committed, forecast, month, year, notes } = result.data
 
     const budget = await prisma.budget.upsert({
       where: {
         projectId_category_month_year: {
           projectId,
           category,
-          month: month || null,
-          year: year || null,
+          month: month ?? 0,
+          year: year ?? 0,
         },
       },
       create: {
         projectId,
         category,
-        planned: Number(planned || 0),
-        actual: Number(actual || 0),
-        committed: Number(committed || 0),
-        forecast: Number(forecast || 0),
-        month: month || null,
-        year: year || null,
+        planned,
+        actual,
+        committed,
+        forecast,
+        month: month ?? null,
+        year: year ?? null,
         notes,
       },
       update: {
-        planned: Number(planned || 0),
-        actual: Number(actual || 0),
-        committed: Number(committed || 0),
-        forecast: Number(forecast || 0),
+        planned,
+        actual,
+        committed,
+        forecast,
         notes,
       },
     })

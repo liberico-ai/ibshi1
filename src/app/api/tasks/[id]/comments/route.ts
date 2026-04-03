@@ -1,13 +1,17 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody, validateParams } from '@/lib/api-helpers'
+import { taskCommentSchema, idParamSchema } from '@/lib/schemas'
 
 // GET /api/tasks/[id]/comments — List comments for a task
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
 
-  const { id } = await params
+  const pResult = validateParams(await params, idParamSchema)
+  if (!pResult.success) return pResult.response
+  const { id } = pResult.data
 
   const comments = await prisma.auditLog.findMany({
     where: { entityId: id, entity: 'TASK_COMMENT' },
@@ -22,11 +26,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
 
-  const { id } = await params
-  const body = await req.json()
-  const { content } = body
-
-  if (!content || !content.trim()) return errorResponse('Nội dung bình luận không được trống')
+  const pResult = validateParams(await params, idParamSchema)
+  if (!pResult.success) return pResult.response
+  const { id } = pResult.data
+  const result = await validateBody(req, taskCommentSchema)
+  if (!result.success) return result.response
+  const { content } = result.data
 
   const task = await prisma.workflowTask.findUnique({ where: { id } })
   if (!task) return errorResponse('Không tìm thấy task', 404)

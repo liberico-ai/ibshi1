@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createItpSchema } from '@/lib/schemas'
 
 // GET /api/qc/itp — List ITPs
 export async function GET(req: NextRequest) {
@@ -42,13 +44,9 @@ export async function POST(req: NextRequest) {
     return errorResponse('Không có quyền tạo ITP', 403)
   }
 
-  const body = await req.json()
-  const { projectId, name, checkpoints } = body as {
-    projectId: string; name: string;
-    checkpoints?: Array<{ activity: string; description: string; standard?: string; acceptCriteria?: string; inspectionType?: string }>
-  }
-
-  if (!projectId || !name) return errorResponse('Thiếu dự án hoặc tên ITP')
+  const result = await validateBody(req, createItpSchema)
+  if (!result.success) return result.response
+  const { projectId, name, checkpoints } = result.data
 
   const year = new Date().getFullYear().toString().slice(-2)
   const count = await prisma.inspectionTestPlan.count()
@@ -57,9 +55,9 @@ export async function POST(req: NextRequest) {
   const itp = await prisma.inspectionTestPlan.create({
     data: {
       itpCode, projectId, name,
-      checkpoints: checkpoints ? {
+      checkpoints: checkpoints && checkpoints.length > 0 ? {
         create: checkpoints.map((cp, i) => ({
-          checkpointNo: i + 1,
+          checkpointNo: cp.checkpointNo ?? i + 1,
           activity: cp.activity,
           description: cp.description,
           standard: cp.standard || null,

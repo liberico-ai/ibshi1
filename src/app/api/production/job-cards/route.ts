@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createJobCardSchema } from '@/lib/schemas'
 
 // GET /api/production/job-cards — List job cards
 export async function GET(req: NextRequest) {
@@ -52,12 +54,9 @@ export async function POST(req: NextRequest) {
     return errorResponse('Không có quyền tạo phiếu công việc', 403)
   }
 
-  const body = await req.json()
-  const { workOrderId, workType, description, plannedQty, actualQty, unit, workDate, manpower, notes } = body
-
-  if (!workOrderId || !workType || !workDate) {
-    return errorResponse('Thiếu: WO, loại công việc, ngày làm')
-  }
+  const result = await validateBody(req, createJobCardSchema)
+  if (!result.success) return result.response
+  const { workOrderId, workType, description, plannedQty, unit, workDate, manpower, notes } = result.data
 
   const wo = await prisma.workOrder.findUnique({ where: { id: workOrderId } })
   if (!wo) return errorResponse('Không tìm thấy WO')
@@ -78,11 +77,11 @@ export async function POST(req: NextRequest) {
       workType,
       description: description || `${workType} — ${wo.woCode}`,
       plannedQty: plannedQty || null,
-      actualQty: actualQty || null,
+      actualQty: null,
       unit: unit || 'kg',
       workDate: new Date(workDate),
-      manpower: manpower ? parseInt(manpower) : null,
-      status: actualQty ? 'COMPLETED' : 'IN_PROGRESS',
+      manpower: manpower || null,
+      status: 'IN_PROGRESS',
       reportedBy: user.userId,
       notes: notes || null,
     },

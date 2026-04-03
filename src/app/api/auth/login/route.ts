@@ -8,6 +8,8 @@ import {
   unauthorizedResponse,
   logAudit,
 } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { loginSchema } from '@/lib/schemas'
 
 // ── In-memory rate limiter ──
 const loginAttempts = new Map<string, { count: number; resetAt: number }>()
@@ -49,12 +51,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('Quá nhiều lần đăng nhập. Vui lòng thử lại sau 1 phút.', 429)
     }
 
-    const body = await req.json()
-    const { username, password } = body
-
-    if (!username || !password) {
-      return errorResponse('Vui lòng nhập tên đăng nhập và mật khẩu')
-    }
+    const result = await validateBody(req, loginSchema)
+    if (!result.success) return result.response
+    const { username, password } = result.data
 
     const user = await prisma.user.findFirst({
       where: { username: { equals: username, mode: 'insensitive' } },

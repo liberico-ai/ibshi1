@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createTimesheetSchema } from '@/lib/schemas'
 
 // GET /api/hr/timesheets — list timesheets
 export async function GET(req: NextRequest) {
@@ -50,12 +52,9 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    const body = await req.json()
-    const { employeeId, projectId, workDate, hoursRegular, hoursOT, taskDescription } = body
-
-    if (!employeeId || !projectId || !workDate) {
-      return errorResponse('Thiếu: employeeId, projectId, workDate')
-    }
+    const result = await validateBody(req, createTimesheetSchema)
+    if (!result.success) return result.response
+    const { employeeId, projectId, workDate, hoursRegular, hoursOT, taskDescription } = result.data
 
     const ts = await prisma.timesheet.upsert({
       where: {

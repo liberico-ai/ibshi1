@@ -47,7 +47,7 @@ export default function SubcontractsPage() {
       method: 'POST',
       body: JSON.stringify({
         projectId: fd.get('projectId'), contractCode: fd.get('contractCode'), vendorId: fd.get('vendorId'),
-        description: fd.get('description'), contractValue: Number(fd.get('contractValue')),
+        description: fd.get('description'), contractValue: Number(String(fd.get('contractValue')).replace(/,/g, '')),
         startDate: fd.get('startDate') || null, endDate: fd.get('endDate') || null,
       }),
     })
@@ -84,7 +84,8 @@ export default function SubcontractsPage() {
               {vendorList.map(v => <option key={v.id} value={v.id}>{v.vendorCode} — {v.name}</option>)}
             </select>
             <input name="description" required placeholder="Mô tả công việc *" className="input-field text-sm col-span-2" />
-            <input name="contractValue" type="number" required placeholder="Giá trị HĐ *" className="input-field text-sm" />
+            <input name="contractValue" type="text" inputMode="numeric" required placeholder="Giá trị HĐ *" className="input-field text-sm"
+              onChange={(e) => { e.target.value = e.target.value.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') }} />
             <input name="startDate" type="date" className="input-field text-sm" />
             <input name="endDate" type="date" className="input-field text-sm" />
           </div>

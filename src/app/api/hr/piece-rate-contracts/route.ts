@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createPieceRateContractSchema } from '@/lib/schemas'
 
 // GET /api/hr/piece-rate-contracts
 export async function GET(req: NextRequest) {
@@ -43,12 +45,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('Không có quyền tạo hợp đồng khoán', 403)
     }
 
-    const body = await req.json()
-    const { projectId, teamCode, workType, unitPrice, unit, contractValue, startDate, endDate } = body
-
-    if (!projectId || !teamCode || !workType || !unitPrice) {
-      return errorResponse('Thiếu thông tin: projectId, teamCode, workType, unitPrice')
-    }
+    const result = await validateBody(req, createPieceRateContractSchema)
+    if (!result.success) return result.response
+    const { projectId, teamCode, workType, unitPrice, unit, contractValue, startDate, endDate } = result.data
 
     const count = await prisma.pieceRateContract.count()
     const contractCode = `KH-${String(count + 1).padStart(4, '0')}`
@@ -59,9 +58,9 @@ export async function POST(req: NextRequest) {
         projectId,
         teamCode,
         workType,
-        unitPrice: parseFloat(unitPrice),
+        unitPrice,
         unit: unit || 'kg',
-        contractValue: contractValue ? parseFloat(contractValue) : null,
+        contractValue: contractValue ?? null,
         startDate: new Date(startDate || Date.now()),
         endDate: endDate ? new Date(endDate) : null,
       },

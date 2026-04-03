@@ -3,6 +3,9 @@ import prisma from '@/lib/db'
 import { rejectTask } from '@/lib/workflow-engine'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import { authenticateRequest } from '@/lib/auth'
+import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
+import { validateBody, validateParams } from '@/lib/api-helpers'
+import { rejectTaskSchema, idParamSchema } from '@/lib/schemas'
 
 export async function POST(
   request: NextRequest,
@@ -14,16 +17,13 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { id: taskId } = await params
-    const body = await request.json()
-    const { reason, overrideRejectTo } = body
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id: taskId } = pResult.data
 
-    if (!reason) {
-      return NextResponse.json(
-        { error: 'reason is required' },
-        { status: 400 }
-      )
-    }
+    const bodyResult = await validateBody(request, rejectTaskSchema)
+    if (!bodyResult.success) return bodyResult.response
+    const { reason, overrideRejectTo } = bodyResult.data
 
     // Verify task exists and is in-progress
     const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
@@ -38,6 +38,14 @@ export async function POST(
       )
     }
 
+    // Role-based authorization: only the assigned role (or admin) can reject
+    if (payload.roleCode !== task.assignedRole && payload.roleCode !== 'R00') {
+      return NextResponse.json(
+        { error: `Bạn (${payload.roleCode}) không có quyền từ chối bước này. Chỉ ${task.assignedRole} mới được phép.` },
+        { status: 403 }
+      )
+    }
+
     const rule = WORKFLOW_RULES[task.stepCode]
     if (!rule?.rejectTo && !overrideRejectTo) {
       return NextResponse.json(
@@ -48,6 +56,12 @@ export async function POST(
 
     // Use userId from JWT token, not from body
     const result = await rejectTask(taskId, payload.userId, reason, overrideRejectTo)
+
+    // Invalidate dashboard and task caches after rejection
+    await Promise.all([
+      cacheInvalidate(CACHE_KEYS.dashboard),
+      cacheInvalidate(CACHE_KEYS.tasks),
+    ])
 
     const targetRule = WORKFLOW_RULES[result.returnedTo]
     return NextResponse.json({

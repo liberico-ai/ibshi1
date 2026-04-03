@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
+import { validateParams } from '@/lib/api-helpers'
+import { idParamSchema } from '@/lib/schemas'
 
 // POST /api/purchase-requests/[id]/approve — Approve or reject a PR
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -12,7 +14,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse('Bạn không có quyền duyệt PR', 403)
     }
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const body = await req.json()
     const { action, comment } = body // action: 'APPROVE' | 'REJECT'
 

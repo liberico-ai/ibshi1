@@ -80,7 +80,7 @@ export default function ProjectsPage() {
         <StatCard label="Tạm ngưng" value={onHoldCount} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>⏸️</span>} />
       </div>
 
-      {showCreate && <CreateProjectForm onClose={() => setShowCreate(false)} onCreated={(p) => {
+      {showCreate && <CreateProjectForm onClose={() => setShowCreate(false)} onCreated={(p: Project) => {
         setProjects([p, ...projects])
         setShowCreate(false)
       }} />}
@@ -119,7 +119,7 @@ export default function ProjectsPage() {
             <div className="flex items-center gap-4 text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
               <span>{PRODUCT_TYPES.find((t) => t.value === p.productType)?.label || p.productType}</span>
               {p.contractValue && (
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1" suppressHydrationWarning>
                   💰 {formatCurrency(p.contractValue, p.currency)}
                 </span>
               )}
@@ -153,73 +153,27 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [createdProject, setCreatedProject] = useState<Project | null>(null)
+  const [draftId] = useState(() => `draft-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSubmitting(true)
 
-    const res = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(form) })
+    const res = await apiFetch('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify({ ...form, draftId }),
+    })
     setSubmitting(false)
     if (res.ok) {
-      setCreatedProject(res.project)
+      onCreated(res.project)
+      onClose()
     } else {
       setError(res.error || 'Lỗi tạo dự án')
     }
   }
 
-  // After project created, show upload section then close
-  if (createdProject) {
-    return (
-      <Card padding="default" className="animate-fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--space-md)' }}>
-          <span style={{ fontSize: '1.5rem' }}>✅</span>
-          <div>
-            <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 700, margin: 0, color: 'var(--accent)' }}>
-              Dự án đã tạo: {createdProject.projectCode}
-            </h3>
-            <p style={{ fontSize: 'var(--text-sm)', margin: '2px 0 0', color: 'var(--text-secondary)' }}>
-              Bây giờ hãy đính kèm tài liệu liên quan (tuỳ chọn):
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 'var(--space-md)' }}>
-          <MultiFileUpload
-            label="RFQ / Inquiry"
-            entityType="Project"
-            entityId={`${createdProject.id}_rfq`}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
-          />
-          <MultiFileUpload
-            label="PO khách hàng"
-            entityType="Project"
-            entityId={`${createdProject.id}_po`}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
-          />
-          <MultiFileUpload
-            label="Hợp đồng / Phụ lục"
-            entityType="Project"
-            entityId={`${createdProject.id}_contract`}
-            accept=".pdf,.doc,.docx"
-          />
-          <MultiFileUpload
-            label="Spec / Bản vẽ kỹ thuật"
-            entityType="Project"
-            entityId={`${createdProject.id}_spec`}
-            accept=".pdf,.dwg,.dxf,.doc,.docx"
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)' }}>
-          <Button variant="accent" onClick={() => onCreated(createdProject)}>Hoàn tất & Đóng</Button>
-        </div>
-      </Card>
-    )
-  }
-
   return (
-    <Card padding="default" className="animate-fade-in" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+    <Card padding="default" className="animate-fade-in" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
       <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 'var(--space-md)', color: 'var(--text-primary)' }}>Tạo dự án mới</h3>
       {error && <div className="mb-3 p-2 rounded" style={{ fontSize: 'var(--text-sm)', background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }}>{error}</div>}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -234,7 +188,9 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
             {PRODUCT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select></div>
         <div className="input-field"><label className="input-label">Giá trị hợp đồng</label>
-          <input className="input" type="number" placeholder="0" value={form.contractValue} onChange={(e) => setForm({ ...form, contractValue: e.target.value })} /></div>
+          <input className="input" type="text" inputMode="numeric" placeholder="0"
+            value={form.contractValue ? form.contractValue.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+            onChange={(e) => setForm({ ...form, contractValue: e.target.value.replace(/,/g, '') })} /></div>
         <div className="input-field"><label className="input-label">Tiền tệ</label>
           <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             <option value="VND">VND</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="JPY">JPY</option>
@@ -245,6 +201,20 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
           <input className="input" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
         <div className="md:col-span-2 input-field"><label className="input-label">Mô tả</label>
           <textarea className="input" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+
+        {/* ── Đính kèm tài liệu (upload ngay vào temp, link khi tạo DA) ── */}
+        <div className="md:col-span-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)', marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+            📎 Đính kèm tài liệu <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(tuỳ chọn — không giới hạn định dạng)</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <MultiFileUpload label="RFQ / Inquiry" entityType="ProjectDraft" entityId={`${draftId}_rfq`} compact />
+            <MultiFileUpload label="PO khách hàng" entityType="ProjectDraft" entityId={`${draftId}_po`} compact />
+            <MultiFileUpload label="Hợp đồng / Phụ lục" entityType="ProjectDraft" entityId={`${draftId}_contract`} compact />
+            <MultiFileUpload label="Spec / Bản vẽ kỹ thuật" entityType="ProjectDraft" entityId={`${draftId}_spec`} compact />
+          </div>
+        </div>
+
         <div className="md:col-span-2 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)' }}>
           <Button variant="outline" onClick={onClose} type="button">Hủy</Button>
           <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo dự án →'}</Button>

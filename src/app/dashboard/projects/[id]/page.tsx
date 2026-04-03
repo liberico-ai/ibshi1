@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PHASE_LABELS, WORKFLOW_RULES } from '@/lib/workflow-constants'
 import { getStatusBg, formatDate, formatCurrency } from '@/lib/utils'
 
@@ -50,7 +50,9 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true)
   const [completingTask, setCompletingTask] = useState<Task | null>(null)
   const [rejectingTask, setRejectingTask] = useState<Task | null>(null)
+  const [assigningTask, setAssigningTask] = useState<Task | null>(null)
   const [closing, setClosing] = useState(false)
+  const { user: currentUser } = useAuthStore()
 
   useEffect(() => {
     if (params.id) {
@@ -70,6 +72,8 @@ export default function ProjectDetailPage() {
       setCompletingTask(null)
       const updated = await apiFetch(`/api/projects/${params.id}`)
       if (updated.ok) setProject(updated.project)
+    } else {
+      alert(res.error || 'Lỗi hoàn thành task')
     }
   }
 
@@ -113,6 +117,20 @@ export default function ProjectDetailPage() {
     }
   }
 
+  async function handleAssign(taskId: string, userId: string) {
+    const res = await apiFetch(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'assign', assignToUserId: userId }),
+    })
+    if (res.ok) {
+      setAssigningTask(null)
+      const updated = await apiFetch(`/api/projects/${params.id}`)
+      if (updated.ok) setProject(updated.project)
+    } else {
+      alert(res.error || 'Lỗi phân công task')
+    }
+  }
+
   if (loading) return <div className="h-64 rounded-xl animate-pulse" style={{ background: 'var(--bg-card)' }} />
   if (!project) return <p style={{ color: 'var(--text-muted)' }}>Dự án không tồn tại</p>
 
@@ -138,6 +156,15 @@ export default function ProjectDetailPage() {
           task={rejectingTask}
           onClose={() => setRejectingTask(null)}
           onSubmit={(reason) => handleReject(rejectingTask.id, reason)}
+        />
+      )}
+
+      {/* Assign Task Modal */}
+      {assigningTask && (
+        <AssignTaskModal
+          task={assigningTask}
+          onClose={() => setAssigningTask(null)}
+          onSubmit={(userId) => handleAssign(assigningTask.id, userId)}
         />
       )}
 
@@ -293,6 +320,9 @@ export default function ProjectDetailPage() {
                 defaultExpanded={isActive || (!isComplete && phaseNum === project.progress.currentPhase)}
                 onCompleteClick={onCompleteClick}
                 onRejectClick={(task: Task) => setRejectingTask(task)}
+                onAssignClick={(task: Task) => setAssigningTask(task)}
+                currentUserRole={currentUser?.roleCode || ''}
+                currentUserLevel={currentUser?.userLevel}
               />
             )
           })}
@@ -302,12 +332,23 @@ export default function ProjectDetailPage() {
   )
 }
 
-function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, borderColor, isComplete, isActive, defaultExpanded, onCompleteClick, onRejectClick }: {
+function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, borderColor, isComplete, isActive, defaultExpanded, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, currentUserLevel }: {
   phaseNum: number; phaseName: string; tasks: Task[]; doneCount: number; totalCount: number;
   pct: number; borderColor: string; isComplete: boolean; isActive: boolean; defaultExpanded: boolean;
-  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void;
+  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
+  currentUserRole: string; currentUserLevel?: number;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
+  
+  const canAssignLevel = currentUserLevel === 1 || currentUserRole === 'R00' || currentUserRole === 'R01' || currentUserRole === 'R02'
+  const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(currentUserRole)
+  const hasAssignPerm = (task: Task) => {
+    if (!canAssignLevel) return false
+    if (isGlobalAdmin) return true
+    const userBase = currentUserRole.replace(/[a-zA-Z]$/, '')
+    const taskBase = task.assignedRole.replace(/[a-zA-Z]$/, '')
+    return userBase === taskBase
+  }
 
   return (
     <div className="card overflow-hidden" style={{ borderLeft: `4px solid ${borderColor}` }}>
@@ -376,9 +417,29 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
                 )}
               </span>
 
-              {/* Assignee */}
-              <span className="text-xs hidden md:block w-24 truncate" style={{ color: 'var(--text-muted)' }}>
-                {task.assignee?.fullName || task.assignedRole}
+              <span className="text-xs hidden md:block w-48 truncate flex items-center" style={{ color: 'var(--text-muted)' }} title={task.assignee ? `${task.assignedRole} - ${task.assignee.fullName}` : task.assignedRole}>
+                <span className="font-mono text-[10px] mr-1 px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800" style={{ color: 'var(--text-primary)' }}>{task.assignedRole}</span>
+                
+                <span className="truncate flex-1">
+                  {task.assignee ? (
+                    <span>
+                      {task.assignee.fullName} <span className="opacity-60">({task.assignee.username})</span>
+                    </span>
+                  ) : (
+                    <span className="italic opacity-60">Chưa phân công</span>
+                  )}
+                </span>
+
+                {hasAssignPerm(task) && task.status !== 'DONE' && task.status !== 'REJECTED' && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onAssignClick(task); }}
+                    className="ml-2 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                    title="Phân công công việc"
+                    style={{ padding: '2px 4px', fontSize: '12px' }}
+                  >
+                    👤
+                  </button>
+                )}
               </span>
 
               {/* Deadline */}
@@ -393,25 +454,31 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
                 {task.status === 'DONE' ? '✓ Xong' : task.status === 'IN_PROGRESS' ? 'Đang XL' : task.status === 'REJECTED' ? 'Từ chối' : 'Chờ'}
               </span>
 
-              {/* Action buttons */}
+              {/* Action buttons — role-checked */}
               {task.status === 'IN_PROGRESS' && (
-                <div className="flex items-center gap-1">
-                  {WORKFLOW_RULES[task.stepCode]?.rejectTo && (
+                currentUserRole && (currentUserRole === task.assignedRole || currentUserRole === 'R00') ? (
+                  <div className="flex items-center gap-1">
+                    {WORKFLOW_RULES[task.stepCode]?.rejectTo && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRejectClick(task) }}
+                        className="text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all hover:opacity-80"
+                        style={{ background: '#dc262612', color: '#dc2626', border: '1px solid #dc262625' }}
+                      >
+                        Từ chối
+                      </button>
+                    )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); onRejectClick(task) }}
-                      className="text-[11px] px-2 py-1 rounded-md font-medium transition-all hover:opacity-80"
-                      style={{ background: '#dc262612', color: '#dc2626', border: '1px solid #dc262625' }}
+                      onClick={(e) => { e.stopPropagation(); onCompleteClick(task) }}
+                      className="btn-accent text-[11px] px-2.5 py-1"
                     >
-                      Từ chối
+                      ✓ Hoàn thành
                     </button>
-                  )}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onCompleteClick(task) }}
-                    className="btn-accent text-[11px] px-2.5 py-1"
-                  >
-                    ✓ Hoàn thành
-                  </button>
-                </div>
+                  </div>
+                ) : (
+                  <span className="text-[10px] px-2 py-1 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>
+                    🔒 {task.assignedRole}
+                  </span>
+                )
               )}
             </div>
           ))}
@@ -542,6 +609,77 @@ function RejectTaskModal({ task, onClose, onSubmit }: {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Assign Task Modal ──
+
+function AssignTaskModal({ task, onClose, onSubmit }: { task: Task; onClose: () => void; onSubmit: (userId: string) => void }) {
+  const [users, setUsers] = useState<any[]>([])
+  const [selectedUser, setSelectedUser] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    apiFetch('/api/users').then(res => {
+      if (res.ok && res.users) {
+        const baseRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
+        const relevant = res.users.filter((u: any) => u.roleCode.startsWith(baseRole))
+        setUsers(relevant)
+      }
+      setLoading(false)
+    })
+  }, [task.assignedRole])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
+      <div className="card w-full max-w-md bg-[var(--bg-card)] rounded-2xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>👤 Phân công công việc</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--bg-secondary)]" style={{ color: 'var(--text-muted)' }}>&times;</button>
+        </div>
+        <p className="text-sm text-[var(--text-muted)] mb-5">
+          Bước <strong>{task.stepCode} - {task.stepName}</strong><br/>
+          Vai trò phụ trách: <span className="font-mono bg-[var(--bg-secondary)] px-1 rounded">{task.assignedRole}</span>
+        </p>
+        
+        {loading ? (
+          <div className="py-8 text-center opacity-60">Đang tải danh sách nhân sự...</div>
+        ) : users.length === 0 ? (
+          <div className="py-8 text-center text-red-500">
+            Không tìm thấy nhân viên nào thuộc {task.assignedRole}.
+          </div>
+        ) : (
+          <div className="mb-6">
+            <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>CHỌN NHÂN SỰ {task.assignedRole}</label>
+            <select 
+              className="w-full p-2.5 rounded-xl border" 
+              style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', outline: 'none' }}
+              value={selectedUser} 
+              onChange={(e) => setSelectedUser(e.target.value)}
+            >
+              <option value="">-- Click để chọn --</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.fullName} ({u.username}) {u.userLevel === 1 ? '🌟' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        
+        <div className="flex justify-end gap-3 mt-4">
+          <button onClick={onClose} className="px-4 py-2 font-semibold rounded-lg hover:opacity-80 transition" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>Hủy</button>
+          <button 
+            onClick={() => { if(selectedUser) onSubmit(selectedUser) }} 
+            className="px-5 py-2 font-bold rounded-lg transition hover:opacity-90 disabled:opacity-50"
+            style={{ background: '#3b82f6', color: 'white' }}
+            disabled={loading || users.length === 0 || !selectedUser}
+          >
+            Lưu / Giao việc
+          </button>
+        </div>
       </div>
     </div>
   )

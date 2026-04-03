@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createDrawingSchema } from '@/lib/schemas'
 
 // GET /api/design — List drawings
 export async function GET(req: NextRequest) {
@@ -37,12 +39,9 @@ export async function POST(req: NextRequest) {
     return errorResponse('Không có quyền tạo bản vẽ', 403)
   }
 
-  const body = await req.json()
-  const { projectId, title, discipline } = body
-
-  if (!projectId || !title || !discipline) {
-    return errorResponse('Thiếu: dự án, tiêu đề, loại bản vẽ')
-  }
+  const result = await validateBody(req, createDrawingSchema)
+  if (!result.success) return result.response
+  const { projectId, title, discipline } = result.data
 
   const year = new Date().getFullYear().toString().slice(-2)
   const count = await prisma.drawing.count()

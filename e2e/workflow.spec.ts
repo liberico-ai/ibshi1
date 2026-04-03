@@ -178,7 +178,7 @@ async function loginBrowser(page: Page, username: string, password: string): Pro
 
 test.describe('IBS-ERP Full Workflow E2E', () => {
   test.describe.configure({ mode: 'serial' })
-  let tokens: Record<string, string> = {}
+  const tokens: Record<string, string> = {}
   let projectId: string
 
   // Login all users and create project before running tests

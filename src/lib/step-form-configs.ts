@@ -1,6 +1,8 @@
 // ── Task Step Form Configuration Registry ──
 // Maps each workflow step to its form fields, checklist items, and attachments
 
+import { ACCEPT } from './file-accept-presets'
+
 export interface FormField {
   key: string
   label: string
@@ -75,10 +77,10 @@ const P1_1: StepFormConfig = {
     { key: 'confirmed_timeline', label: 'Đã xác nhận timeline với khách hàng' },
   ],
   attachments: [
-    { key: 'rfq', label: 'RFQ từ khách hàng', accept: '.pdf,.doc,.docx,.xlsx,.xls' },
-    { key: 'po', label: 'PO từ khách hàng', accept: '.pdf,.doc,.docx,.xlsx,.xls' },
-    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', accept: '.pdf,.dwg,.dxf' },
-    { key: 'contract', label: 'Hợp đồng / Phụ lục', accept: '.pdf,.doc,.docx' },
+    { key: 'rfq', label: 'RFQ từ khách hàng', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'po', label: 'PO từ khách hàng', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', accept: ACCEPT.DRAWING_PLUS },
+    { key: 'contract', label: 'Hợp đồng / Phụ lục', accept: ACCEPT.DOCS_PLUS },
   ],
 }
 
@@ -105,10 +107,10 @@ const P1_1B: StepFormConfig = {
     { key: 'capacity_ok', label: 'Năng lực sản xuất đáp ứng được' },
   ],
   attachments: [
-    { key: 'rfq', label: 'RFQ từ khách hàng', accept: '.pdf,.doc,.docx,.xlsx,.xls' },
-    { key: 'po', label: 'PO từ khách hàng', accept: '.pdf,.doc,.docx,.xlsx,.xls' },
-    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', accept: '.pdf,.dwg,.dxf' },
-    { key: 'contract', label: 'Hợp đồng / Phụ lục', accept: '.pdf,.doc,.docx' },
+    { key: 'rfq', label: 'RFQ từ khách hàng', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'po', label: 'PO từ khách hàng', accept: ACCEPT.OFFICE_ARCHIVE },
+    { key: 'spec', label: 'Spec / Bản vẽ kỹ thuật', accept: ACCEPT.DRAWING_PLUS },
+    { key: 'contract', label: 'Hợp đồng / Phụ lục', accept: ACCEPT.DOCS_PLUS },
   ],
 }
 
@@ -116,18 +118,23 @@ const P1_2A: StepFormConfig = {
   stepCode: 'P1.2A',
   formType: 'input',
   title: 'Lập kế hoạch kickoff, WBS, milestones',
-  description: 'PM lập WBS theo biểu mẫu BCTH-IBSHI-QLDA-095, phân bổ khối lượng, phạm vi, tiến độ, thầu phụ.',
+  description: 'PM lập BB họp triển khai dự án, WBS theo biểu mẫu BCTH-IBSHI-QLDA-095, phân bổ khối lượng, phạm vi, tiến độ.',
   fields: [
-    { key: 'kickoffDate', label: 'Ngày Kickoff Meeting', labelEn: 'Kickoff Date', type: 'date', required: true },
-    { key: 'kickoffAgenda', label: 'Nội dung Kickoff', labelEn: 'Kickoff Agenda', type: 'textarea', fullWidth: true },
+    { key: 'sec_mom_header', label: 'BB HỌP TRIỂN KHAI DỰ ÁN (Minutes of Meeting)', labelEn: 'Minutes of Meeting', type: 'section' },
+    { key: 'momPlace', label: 'Địa điểm (Place)', labelEn: 'Place', type: 'text' },
+    { key: 'kickoffDate', label: 'Ngày họp (Date)', labelEn: 'Meeting Date', type: 'date', required: true },
+    { key: 'momNumber', label: 'Số biên bản (MOM No.)', labelEn: 'MOM No.', type: 'text' },
+    { key: 'momPreparedBy', label: 'Người lập (Prepared by)', labelEn: 'Prepared by', type: 'text' },
+    { key: 'kickoffAgenda', label: 'Chủ đề (Subject)', labelEn: 'Subject', type: 'textarea', fullWidth: true },
   ],
   checklist: [
     { key: 'kickoff_planned', label: 'Đã lên kế hoạch kickoff meeting' },
     { key: 'budget_distributed', label: 'Đã phân bổ theo WBS node' },
+    { key: 'mom_reviewed', label: 'BB họp đã được xem xét và xác nhận' },
   ],
   attachments: [
-    { key: 'wbs_file', label: 'File WBS (Excel/PDF)', accept: '.xlsx,.xls,.pdf' },
-    { key: 'kickoff_doc', label: 'Tài liệu Kickoff', accept: '.pdf,.doc,.docx,.pptx' },
+    { key: 'wbs_file', label: 'File WBS (Excel/PDF)', accept: ACCEPT.SHEETS_PLUS },
+    { key: 'kickoff_doc', label: 'Tài liệu Kickoff / BB họp gốc', accept: ACCEPT.LESSON_PACK },
   ],
 }
 
@@ -137,72 +144,35 @@ const P1_2: StepFormConfig = {
   title: 'Xây dựng dự toán thi công',
   description: 'KTKH lập dự toán chi tiết: vật tư, nhân công, dịch vụ thuê ngoài, chi phí chung',
   fields: [
-    // ── 1. Chi phí vật tư ──
-    { key: 'sec_material', label: '1. Chi phí vật tư', labelEn: 'Material Cost', type: 'section' },
-    { key: 'mat_main', label: 'Vật tư chính', labelEn: 'Main Material', type: 'currency' },
-    { key: 'mat_accessory', label: 'Vật tư phụ kiện, bu lông…', labelEn: 'Accessories & Bolts', type: 'currency' },
-    { key: 'mat_packing', label: 'Vật tư đóng kiện', labelEn: 'Packing Material', type: 'currency' },
-    { key: 'mat_method', label: 'Vật tư làm biện pháp', labelEn: 'Method Material', type: 'currency' },
-    { key: 'mat_consumable', label: 'Vật tư tiêu hao', labelEn: 'Consumables', type: 'currency' },
-    { key: 'mat_paint', label: 'Vật tư sơn', labelEn: 'Paint Material', type: 'currency' },
-    { key: 'mat_reserve', label: 'Vật tư dự phòng', labelEn: 'Material Reserve', type: 'currency' },
+    // ── DT01: Thông tin bổ sung dự án ──
+    { key: 'sec_dt01', label: 'DT01 — Thông tin bổ sung', labelEn: 'Additional Project Info', type: 'section' },
+    { key: 'dt01_volume', label: 'Khối lượng thi công / Phạm vi', labelEn: 'Scope & Volume', type: 'textarea' },
+    { key: 'dt01_paymentTerms', label: 'Các đợt thanh toán', labelEn: 'Payment Terms', type: 'textarea' },
+    { key: 'dt01_penalties', label: 'Điều khoản phạt Hợp đồng', labelEn: 'Contract Penalties', type: 'textarea' },
 
-    // ── 2. Chi phí nhân công trực tiếp ──
-    { key: 'sec_labor', label: '2. Chi phí nhân công trực tiếp', labelEn: 'Direct Labor Cost', type: 'section' },
-    { key: 'lab_cutting', label: 'Pha cắt', labelEn: 'Cutting', type: 'currency' },
-    { key: 'lab_machining', label: 'Gia công', labelEn: 'Machining', type: 'currency' },
-    { key: 'lab_fabrication', label: 'Chế tạo', labelEn: 'Fabrication', type: 'currency' },
-    { key: 'lab_framing', label: 'Khung kiện', labelEn: 'Framing', type: 'currency' },
-    { key: 'lab_assembly_product', label: 'Tổ hợp sản phẩm', labelEn: 'Product Assembly', type: 'currency' },
-    { key: 'lab_erection', label: 'Lắp dựng + Nghiệm thu', labelEn: 'Erection & Inspection', type: 'currency' },
-    { key: 'lab_cleaning_alloy', label: 'Vệ sinh vật liệu hợp kim bằng dung dịch', labelEn: 'Alloy Cleaning', type: 'currency' },
-    { key: 'lab_surface_paint', label: 'Làm sạch, Sơn', labelEn: 'Surface & Painting', type: 'currency' },
-    { key: 'lab_insulation', label: 'Bảo ôn', labelEn: 'Insulation', type: 'currency' },
-    { key: 'lab_equip_install', label: 'Lắp thiết bị phụ kiện trước khi đóng kiện', labelEn: 'Equipment Install', type: 'currency' },
-    { key: 'lab_packing', label: 'Đóng kiện', labelEn: 'Packing', type: 'currency' },
-    { key: 'lab_delivery', label: 'Giao hàng', labelEn: 'Delivery', type: 'currency' },
-    { key: 'lab_reserve', label: 'Nhân công dự phòng', labelEn: 'Labor Reserve', type: 'currency' },
-
-    // ── 3. Chi phí dịch vụ thuê ngoài ──
-    { key: 'sec_outsource', label: '3. Chi phí dịch vụ thuê ngoài', labelEn: 'Outsource Services', type: 'section' },
-    { key: 'out_transport', label: 'Vận tải', labelEn: 'Transport', type: 'currency' },
-    { key: 'out_ndt', label: 'NDT, quy trình và thí nghiệm', labelEn: 'NDT & Testing', type: 'currency' },
-    { key: 'out_galvanize', label: 'Mạ kẽm', labelEn: 'Galvanization', type: 'currency' },
-    { key: 'out_other', label: 'Chi phí khác', labelEn: 'Other Costs', type: 'currency' },
-    { key: 'out_reserve', label: 'Chi phí dự phòng', labelEn: 'Outsource Reserve', type: 'currency' },
-
-    // ── 4. Chi phí chung ──
-    { key: 'sec_overhead', label: '4. Chi phí chung', labelEn: 'Overhead', type: 'section' },
-    { key: 'ovh_production', label: 'Chi phí chung phục vụ sản xuất', labelEn: 'Production Overhead', type: 'currency' },
-    { key: 'ovh_financial', label: 'Chi phí tài chính', labelEn: 'Financial Cost', type: 'currency' },
-    { key: 'ovh_management', label: 'Chi phí Quản Lý', labelEn: 'Management Cost', type: 'currency' },
-
-    // ── Tổng ──
+    // ── Tổng (auto-calculated from tables) ──
     { key: 'totalEstimate', label: 'TỔNG CHI PHÍ DỰ TOÁN', labelEn: 'Total Estimate', type: 'readonly', fullWidth: true },
   ],
   checklist: [
     { key: 'bom_matched', label: 'Đã đối chiếu BOM với yêu cầu kỹ thuật', required: true },
     { key: 'transport_included', label: 'Đã tính đủ chi phí vận chuyển' },
     { key: 'risk_added', label: 'Đã cộng phí dự phòng rủi ro' },
+    { key: 'dt02_verified', label: 'Đã kiểm tra tổng hợp DT02 khớp với chi tiết' },
   ],
   attachments: [
-    { key: 'detail_estimate', label: 'Bảng dự toán chi tiết (Excel)', accept: '.xlsx,.xls' },
-  ],
-  excelTemplate: 'du_toan',
-  validationRules: [
-    { field: 'totalEstimate', rule: 'lt_contract_90', message: 'Dự toán > 90% giá trị HĐ — rủi ro lỗ' },
+    { key: 'detail_estimate', label: 'Bảng dự toán chi tiết (Excel)', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
 const P1_3: StepFormConfig = {
   stepCode: 'P1.3',
   formType: 'approval',
-  title: 'Phê duyệt Dự toán, kế hoạch kickoff, WBS, milestones',
-  description: 'BGĐ phê duyệt dự toán thi công sơ bộ (KTKH lập), kế hoạch kickoff, WBS, milestones của PM',
+  title: 'Phê duyệt kế hoạch và dự toán thi công',
+  description: 'BGĐ phê duyệt kế hoạch kickoff, WBS, milestones của PM và dự toán thi công của KTKH',
   fields: [],
   checklist: [
     { key: 'plan_reviewed', label: 'Đã review kế hoạch kickoff, WBS, milestones', required: true },
-    { key: 'estimate_reviewed', label: 'Đã review dự toán thi công sơ bộ', required: true },
+    { key: 'estimate_reviewed', label: 'Đã review dự toán thi công (DT01-DT07)', required: true },
   ],
   attachments: [],
 }
@@ -225,8 +195,8 @@ const P2_1: StepFormConfig = {
     { key: 'ifc_released', label: 'Bản vẽ đã đạt IFC', required: true },
   ],
   attachments: [
-    { key: 'drawings', label: 'File bản vẽ (DWG/PDF)', accept: '.pdf,.dwg,.dxf', required: true },
-    { key: 'bomFile', label: 'File BOM (Excel)', accept: '.xlsx,.xls,.csv' },
+    { key: 'drawings', label: 'File bản vẽ (DWG/PDF)', accept: ACCEPT.DRAWING_PLUS, required: true },
+    { key: 'bomFile', label: 'File BOM (Excel)', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -244,7 +214,7 @@ const P2_2: StepFormConfig = {
     { key: 'paint_spec_checked', label: 'Đã kiểm tra quy chuẩn vật tư sơn', required: true },
   ],
   attachments: [
-    { key: 'weldingPaintFile', label: 'File danh sách VT hàn & sơn', accept: '.xlsx,.xls,.pdf,.csv' },
+    { key: 'weldingPaintFile', label: 'File danh sách VT hàn & sơn', accept: ACCEPT.OFFICE_ARCHIVE },
   ],
   validationRules: [],
 }
@@ -263,7 +233,7 @@ const P2_3: StepFormConfig = {
     { key: 'surplus_checked', label: 'Đã kiểm tra surplus từ dự án trước', required: true },
   ],
   attachments: [
-    { key: 'stockReportFile', label: 'File báo cáo tồn kho', accept: '.xlsx,.xls,.pdf,.csv' },
+    { key: 'stockReportFile', label: 'File báo cáo tồn kho', accept: ACCEPT.SHEETS_PLUS },
   ],
   validationRules: [],
 }
@@ -281,7 +251,7 @@ const P2_1A: StepFormConfig = {
     { key: 'tax_calculated', label: 'Đã tính toán thuế phí' },
   ],
   attachments: [
-    { key: 'financeReport', label: 'Báo cáo chi phí tài chính', accept: '.xlsx,.xls,.pdf' },
+    { key: 'financeReport', label: 'Báo cáo chi phí tài chính', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -297,8 +267,8 @@ const P2_4: StepFormConfig = {
     { key: 'wbs_updated', label: 'WBS budget đã cập nhật' },
   ],
   attachments: [
-    { key: 'planFile', label: 'File KH sản xuất', accept: '.xlsx,.xls,.pdf' },
-    { key: 'budgetFile', label: 'File dự toán điều chỉnh', accept: '.xlsx,.xls,.pdf' },
+    { key: 'planFile', label: 'File KH sản xuất', accept: ACCEPT.SHEETS_PLUS },
+    { key: 'budgetFile', label: 'File dự toán điều chỉnh', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -346,7 +316,7 @@ const P3_2: StepFormConfig = {
     { key: 'pr_consolidated', label: 'Đã tạo consolidated PR', required: true },
   ],
   attachments: [
-    { key: 'prFile', label: 'File PR tổng hợp', accept: '.xlsx,.xls,.pdf' },
+    { key: 'prFile', label: 'File PR tổng hợp', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -369,7 +339,7 @@ const P3_3: StepFormConfig = {
     { key: 'subcon_notified', label: 'Đã thông báo thầu phụ' },
   ],
   attachments: [
-    { key: 'woFile', label: 'File lệnh SX', accept: '.pdf,.xlsx' },
+    { key: 'woFile', label: 'File lệnh SX', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -390,7 +360,7 @@ const P3_4: StepFormConfig = {
     { key: 'material_status_checked', label: 'Đã kiểm tra trạng thái VT' },
   ],
   attachments: [
-    { key: 'woFile', label: 'File lệnh SX', accept: '.pdf,.xlsx' },
+    { key: 'woFile', label: 'File lệnh SX', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -439,7 +409,7 @@ const P3_7: StepFormConfig = {
     { key: 'payment_confirmed', label: 'Đã xác nhận ĐK thanh toán', required: true },
   ],
   attachments: [
-    { key: 'poFile', label: 'File PO', accept: '.pdf' },
+    { key: 'poFile', label: 'File PO', accept: ACCEPT.DOCS_PLUS },
   ],
 }
 
@@ -459,7 +429,7 @@ const P4_1: StepFormConfig = {
     { key: 'ap_recorded', label: 'Đã ghi nhận vào A/P', required: true },
   ],
   attachments: [
-    { key: 'paymentProof', label: 'Chứng từ thanh toán', accept: '.pdf,.jpg,.png' },
+    { key: 'paymentProof', label: 'Chứng từ thanh toán', accept: ACCEPT.DOCS_IMAGE },
   ],
 }
 
@@ -478,7 +448,7 @@ const P4_2: StepFormConfig = {
     { key: 'qc_handover', label: 'Đã bàn giao cho QC nghiệm thu', required: true },
   ],
   attachments: [
-    { key: 'deliveryNote', label: 'Phiếu giao hàng', accept: '.pdf' },
+    { key: 'deliveryNote', label: 'Phiếu giao hàng', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -497,7 +467,7 @@ const P4_3: StepFormConfig = {
     { key: 'cert_verified', label: 'Đã xác minh material certificate', required: true },
   ],
   attachments: [
-    { key: 'inspectionReport', label: 'Biên bản nghiệm thu', accept: '.pdf' },
+    { key: 'inspectionReport', label: 'Biên bản nghiệm thu', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -516,7 +486,7 @@ const P4_4: StepFormConfig = {
     { key: 'reserved_project', label: 'Đã reserved cho dự án', required: true },
   ],
   attachments: [
-    { key: 'grnFile', label: 'Phiếu nhập kho', accept: '.pdf' },
+    { key: 'grnFile', label: 'Phiếu nhập kho', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -533,7 +503,7 @@ const P4_5: StepFormConfig = {
     { key: 'issue_slip', label: 'Đã lập phiếu xuất kho', required: true },
   ],
   attachments: [
-    { key: 'issueSlip', label: 'Phiếu xuất kho', accept: '.pdf' },
+    { key: 'issueSlip', label: 'Phiếu xuất kho', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -600,7 +570,7 @@ const P5_3: StepFormConfig = {
     { key: 'witness_point_checked', label: 'Đã kiểm tra tại Witness Point' },
   ],
   attachments: [
-    { key: 'itpReport', label: 'Báo cáo ITP', accept: '.pdf' },
+    { key: 'itpReport', label: 'Báo cáo ITP', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -639,7 +609,7 @@ const P5_5: StepFormConfig = {
     { key: 'r03_approved', label: 'R03 đã phê duyệt', required: true },
   ],
   attachments: [
-    { key: 'salaryFile', label: 'File bảng lương khoán', accept: '.xlsx,.xls' },
+    { key: 'salaryFile', label: 'File bảng lương khoán', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -668,7 +638,7 @@ const P6_1: StepFormConfig = {
     { key: 'pressure_test_passed', label: 'Pressure test đã pass (nếu có)' },
   ],
   attachments: [
-    { key: 'qcDossier', label: 'File QC Dossier tổng hợp', accept: '.pdf,.zip', required: true },
+    { key: 'qcDossier', label: 'File QC Dossier tổng hợp', accept: ACCEPT.DOCS_PLUS, required: true },
   ],
 }
 
@@ -692,7 +662,7 @@ const P6_2: StepFormConfig = {
     { key: 'subcon_settled', label: 'Thầu phụ đã quyết toán' },
   ],
   attachments: [
-    { key: 'costReport', label: 'Báo cáo quyết toán chi phí (Excel)', accept: '.xlsx,.xls' },
+    { key: 'costReport', label: 'Báo cáo quyết toán chi phí (Excel)', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -715,7 +685,7 @@ const P6_3: StepFormConfig = {
     { key: 'variance_analyzed', label: 'Đã phân tích chênh lệch' },
   ],
   attachments: [
-    { key: 'plReport', label: 'Báo cáo P&L tổng hợp', accept: '.xlsx,.xls,.pdf' },
+    { key: 'plReport', label: 'Báo cáo P&L tổng hợp', accept: ACCEPT.SHEETS_PLUS },
   ],
 }
 
@@ -737,8 +707,8 @@ const P6_4: StepFormConfig = {
     { key: 'actions_assigned', label: 'Đã giao hành động cải tiến' },
   ],
   attachments: [
-    { key: 'lessonLearnFile', label: 'File Lesson Learned', accept: '.pdf,.docx,.xlsx,.pptx' },
-    { key: 'meetingMinutes', label: 'Biên bản họp', accept: '.pdf,.docx' },
+    { key: 'lessonLearnFile', label: 'File Lesson Learned', accept: ACCEPT.LESSON_PACK },
+    { key: 'meetingMinutes', label: 'Biên bản họp', accept: ACCEPT.DOCS_PLUS },
   ],
 }
 

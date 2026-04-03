@@ -10,6 +10,8 @@ import {
   logAudit,
   getClientIP,
 } from '@/lib/auth'
+import { validateParams } from '@/lib/api-helpers'
+import { idParamSchema } from '@/lib/schemas'
 
 const ADMIN_ROLES = ['R01', 'R10']
 
@@ -20,7 +22,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!payload) return unauthorizedResponse()
     if (!ADMIN_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ Admin mới có quyền reset mật khẩu')
 
-    const { id } = await params
+    const pResult = validateParams(await params, idParamSchema)
+    if (!pResult.success) return pResult.response
+    const { id } = pResult.data
     const body = await req.json()
     const { newPassword } = body
 

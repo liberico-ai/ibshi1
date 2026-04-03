@@ -2,11 +2,25 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
+import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
+
+// ── Number formatting helpers ──
+const formatNumberWithCommas = (val: string | number): string => {
+  if (val === "" || val === null || val === undefined) return "";
+  const str = String(val).replace(/,/g, "");
+  if (str === "-" || str === ".") return str;
+  const num = parseFloat(str);
+  if (isNaN(num)) return String(val);
+  const parts = str.split(".");
+  const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
+};
+const unformatNumber = (val: string): string => String(val).replace(/,/g, "");
 
 interface TaskData {
   id: string
@@ -28,17 +42,9 @@ interface TaskData {
   assignee: { id: string; fullName: string; username: string } | null
 }
 
-type TeamAssign = { teamName: string; volume: string; startDate: string; endDate: string };
-type CellAssignMap = Record<number, Record<string, TeamAssign[]>>;
-type LsxIssuedMap = Record<number, Record<string, Record<number, boolean>>>;
-
-type MaterialReqItem = { name: string; code: string; spec: string; quantity: string; unit: string; requested?: boolean };
-type MaterialReqMap = Record<number, Record<string, Record<number, MaterialReqItem[]>>>;
-
 function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave, stepFilter }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void; stepFilter?: string }) {
-  type WbsRow = Record<string, string>;
   const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
-  
+
   let rows: WbsRow[] = [];
   try {
     const p = wbsItemsData ? (typeof wbsItemsData === 'string' ? JSON.parse(wbsItemsData) : wbsItemsData) : null;
@@ -139,7 +145,10 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
   const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i));
   const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n); };
 
-  const subCols = [
+  // Base keys handled separately in table layout
+  const baseKeys = new Set(['stt', 'hangMuc', 'dvt', 'khoiLuong', 'phamVi', 'thauPhu', 'batDau', 'ketThuc', 'khuVuc', 'ghiChu', 'trangThai']);
+  // Default sub-columns (shown when no extra keys exist in data)
+  const defaultSubCols = [
     { key: 'cutting', label: 'Cắt' }, { key: 'machining', label: 'GCCK' },
     { key: 'fitup', label: 'Gá' }, { key: 'welding', label: 'Hàn' },
     { key: 'tryAssembly', label: 'Tổ hợp' }, { key: 'dismantle', label: 'Tháo dỡ' },
@@ -147,6 +156,22 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
     { key: 'insulation', label: 'Bảo ôn' }, { key: 'commissioning', label: 'Chạy thử' },
     { key: 'packing', label: 'Đóng kiện' }, { key: 'delivery', label: 'Giao hàng' },
   ];
+  // Derive sub-columns dynamically from actual data keys
+  const dataExtraKeys = new Set<string>();
+  rows.forEach(r => Object.keys(r).forEach(k => { if (!baseKeys.has(k) && r[k]) dataExtraKeys.add(k); }));
+  // Preferred column order + label map
+  const colOrderList = ['cutting', 'machining', 'fitup', 'welding', 'tryAssembly', 'dismantle', 'blasting', 'painting', 'galvanize', 'insulation', 'commissioning', 'khungKien', 'packing', 'delivery'];
+  const labelMap: Record<string, string> = { cutting: 'Cắt', machining: 'GCCK', fitup: 'Gá', welding: 'Hàn', tryAssembly: 'Tổ hợp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch', painting: 'Sơn', galvanize: 'Mạ', insulation: 'Bảo ôn', commissioning: 'Chạy thử', packing: 'Đóng kiện', delivery: 'Giao hàng', shippingFrame: 'Shipping', khungKien: 'Khung kiện' };
+  const subCols = dataExtraKeys.size > 0
+    ? Array.from(dataExtraKeys)
+        .sort((a, b) => {
+          const ia = colOrderList.indexOf(a); const ib = colOrderList.indexOf(b);
+          if (ia >= 0 && ib >= 0) return ia - ib;
+          if (ia >= 0) return -1; if (ib >= 0) return 1;
+          return a.localeCompare(b);
+        })
+        .map(k => ({ key: k, label: labelMap[k] || k }))
+    : defaultSubCols;
 
   // Step filter helpers (P3.3 vs P3.4 IBS routing)
   const _isIBS = (val: string) => (val || '').trim().toUpperCase().includes('IBS');
@@ -167,6 +192,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
     return true;
   };
 
+
   const exportExcel = () => {
     const headers = ['STT', 'Tên hạng mục', 'ĐVT', 'Khối lượng', 'Phạm vi', 'Thầu phụ', 'Bắt đầu', 'Kết thúc', 'Trạng thái', ...subCols.map(c => c.label), 'Khu vực TC', 'Ghi chú'];
     const data = rows.map(r => [
@@ -174,7 +200,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
       ...subCols.map(c => r[c.key] || ''), r.khuVuc, r.ghiChu
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-    ws['!cols'] = [{ wch: 5 }, { wch: 35 }, { wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, ...subCols.map(() => ({ wch: 8 })), { wch: 15 }, { wch: 20 }];
+    ws['!cols'] = [{ wch: 5 }, { wch: 35 }, { wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, ...subCols.map(() => ({ wch: 10 })), { wch: 15 }, { wch: 20 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'WBS');
     XLSX.writeFile(wb, `WBS_export.xlsx`);
@@ -220,31 +246,54 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             return headerRow.findIndex(h => keywords.some(kw => h.includes(kw)));
           };
 
-          const colIndices = {
-            stt: findColIndex(['stt', 'no.', 'số tt']),
-            hangMuc: findColIndex(['hạng mục', 'công trình', 'description', 'tên']),
-            dvt: findColIndex(['đvt', 'unit']),
-            khoiLuong: findColIndex(['khối lượng', 'volume']),
-            phamVi: findColIndex(['ibs hi', 'phạm vi', 'scope']),
-            thauPhu: findColIndex(['thầu phụ', 'sub-contractor', 'name']),
-            batDau: findColIndex(['bắt đầu', 'start']),
-            ketThuc: findColIndex(['kết thúc', 'finish']),
-            trangThai: findColIndex(['trạng thái', 'status']),
-            cutting: findColIndex(['cắt', 'cutting']),
-            machining: findColIndex(['gcck', 'machining']),
-            fitup: findColIndex(['gá', 'fitup']),
-            welding: findColIndex(['hàn', 'welding']),
-            tryAssembly: findColIndex(['tổ hợp', 'try-assembly', 'tổ hợp']),
-            dismantle: findColIndex(['tháo dỡ', 'dismantle']),
-            blasting: findColIndex(['làm sạch', 'blasting']),
-            painting: findColIndex(['sơn', 'painting']),
-            insulation: findColIndex(['bảo ôn', 'insulation']),
-            commissioning: findColIndex(['chạy thử', 'commissioning']),
-            packing: findColIndex(['đóng kiện', 'packing']),
-            delivery: findColIndex(['giao hàng', 'delivery']),
-            khuVuc: findColIndex(['khu vực', 'area']),
-            ghiChu: findColIndex(['ghi chú', 'remark', 'ghi chú'])
-          };
+          // Known column mappings: keywords → key name (ORDER matters for display)
+          const knownCols: [string, string[]][] = [
+            ['stt', ['stt', 'no.', 'số tt']],
+            ['hangMuc', ['hạng mục', 'công trình', 'description', 'tên']],
+            ['dvt', ['đvt', 'unit']],
+            ['khoiLuong', ['khối lượng', 'volume']],
+            ['phamVi', ['ibs hi', 'phạm vi', 'scope']],
+            ['thauPhu', ['thầu phụ', 'sub-contractor']],
+            ['batDau', ['bắt đầu', 'start']],
+            ['ketThuc', ['kết thúc', 'finish']],
+            ['trangThai', ['shipping frame', 'trạng thái', 'status']],
+            ['cutting', ['cắt', 'cutting']],
+            ['machining', ['gcck', 'machining']],
+            ['fitup', ['gá', 'fitup']],
+            ['welding', ['hàn', 'welding']],
+            ['tryAssembly', ['tổ hợp', 'try-assembly']],
+            ['dismantle', ['tháo dỡ', 'dismantle']],
+            ['blasting', ['làm sạch', 'blasting']],
+            ['painting', ['sơn', 'painting']],
+            ['galvanize', ['mạ', 'galvanize']],
+            ['insulation', ['bảo ôn', 'insulation']],
+            ['commissioning', ['chạy thử', 'commissioning']],
+            ['khungKien', ['chế tạo khung kiện', 'khung kiện']],
+            ['packing', ['đóng kiện', 'packing']],
+            ['delivery', ['giao hàng', 'delivery']],
+            ['khuVuc', ['khu vực', 'area']],
+            ['ghiChu', ['ghi chú', 'remark']],
+          ];
+
+          // Build colIndices from known mappings (first match wins per column)
+          const colIndices: Record<string, number> = {};
+          const mappedCols = new Set<number>();
+          knownCols.forEach(([key, keywords]) => {
+            const idx = headerRow.findIndex((h, i) => !mappedCols.has(i) && keywords.some(kw => h.includes(kw)));
+            if (idx >= 0) { colIndices[key] = idx; mappedCols.add(idx); }
+          });
+
+          // Auto-detect unmapped columns → use sanitized header as key
+          headerRow.forEach((h, colIdx) => {
+            if (!h || mappedCols.has(colIdx)) return;
+            // Skip the first column (often row-group label, not useful)
+            if (colIdx === 0) return;
+            // Create a camelCase key from header text
+            const clean = h.replace(/[^a-zA-Zàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ0-9\s]/gi, '').trim();
+            if (!clean) return;
+            const key = 'x_' + clean.substring(0, 30).replace(/\s+/g, '_');
+            colIndices[key] = colIdx;
+          });
 
           const imported: WbsRow[] = [];
           for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
@@ -255,19 +304,32 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             const hangMucVal = colIndices.hangMuc >= 0 && rowData[colIndices.hangMuc] != null ? String(rowData[colIndices.hangMuc]).trim() : '';
             
             if (!hangMucVal && !sttVal) continue;
-            
+
+            // Only include rows that have a numeric KL (weight/quantity) value
+            const klRaw = colIndices.khoiLuong >= 0 ? rowData[colIndices.khoiLuong] : null;
+            const klNum = Number(klRaw);
+            if (!klRaw || isNaN(klNum) || klNum <= 0) continue;
+
             const sttLower = sttVal.toLowerCase();
             const hangMucLower = hangMucVal.toLowerCase();
-            
+
             if (sttLower === '(a)' || sttLower === 'stt' || sttLower.includes('sub-contractor') || sttLower === '(i-1)' || sttLower.includes('d-')) continue;
             if (hangMucLower.includes('dự kiến nhà máy') || hangMucLower.includes('dự kiến') || hangMucLower.includes('ghi chú') || hangMucLower.includes('bcth-ibshi-qlda-01') || hangMucLower.includes('kế hoạch tổng thể')) continue;
             if (hangMucLower === 'tổng nhân lực cần cho các dự án') continue;
+            if (hangMucLower.includes('người lập') || hangMucLower.includes('prepared by') || hangMucLower.includes('approved by') || hangMucLower.includes('người duyệt')) continue;
 
             const newRow = emptyRow();
+            const dateKeys = new Set(['batDau', 'ketThuc']);
             Object.keys(colIndices).forEach(key => {
-              const idx = colIndices[key as keyof typeof colIndices];
+              const idx = colIndices[key];
               if (idx >= 0 && rowData[idx] !== undefined && rowData[idx] !== null && rowData[idx] !== '') {
-                newRow[key as keyof WbsRow] = String(rowData[idx]).trim();
+                let val = rowData[idx];
+                // Convert Excel serial dates to YYYY-MM-DD for HTML date inputs
+                if (dateKeys.has(key) && typeof val === 'number' && val > 40000 && val < 60000) {
+                  const d = new Date((val - 25569) * 86400000);
+                  val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                }
+                newRow[key] = String(val).trim();
               }
             });
             
@@ -277,6 +339,14 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             }
 
             imported.push(newRow);
+          }
+          // Remove summary/total row: if first row's KL ≈ sum of remaining rows, it's a parent
+          if (imported.length > 2) {
+            const firstKL = Number(imported[0].khoiLuong) || 0;
+            const restKL = imported.slice(1).reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+            if (firstKL > 0 && restKL > 0 && Math.abs(firstKL - restKL) / firstKL < 0.05) {
+              imported.shift();
+            }
           }
           if (imported.length > 0) {
             save(imported);
@@ -293,7 +363,15 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
     input.click();
   };
 
-  const totalKL = rows.reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+  // Calculate total KL, excluding summary rows whose KL = sum of remaining rows
+  let totalKL = rows.reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+  if (rows.length > 2) {
+    const firstKL = Number(rows[0].khoiLuong) || 0;
+    const restKL = rows.slice(1).reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+    if (firstKL > 0 && restKL > 0 && Math.abs(firstKL - restKL) / firstKL < 0.05) {
+      totalKL = restKL;
+    }
+  }
   const doneCount = rows.filter(r => (r.trangThai || '').toLowerCase().includes('done')).length;
   const ongoingCount = rows.filter(r => (r.trangThai || '').toLowerCase().includes('ongoing')).length;
 
@@ -370,7 +448,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               </div>
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', minWidth: 2400 }}>
+              <table style={{ borderCollapse: 'collapse', minWidth: 700 + subCols.length * 80 }}>
                 <thead>
                   <tr>
                     <th rowSpan={2} style={{ ...thS, position: 'sticky', left: 0, zIndex: 5, width: 40, background: '#c7e2ef' }}>STT</th>
@@ -379,7 +457,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     <th rowSpan={2} style={{ ...thS, width: 80 }}>KL</th>
                     <th colSpan={2} style={{ ...thS, background: '#d0e8d0' }}>PHẠM VI</th>
                     <th colSpan={2} style={{ ...thS, background: '#e8ddd0' }}>TIẾN ĐỘ</th>
-                    <th colSpan={12} style={{ ...thS, background: '#fde7e7' }}>CHI TIẾT</th>
+                    <th colSpan={subCols.length} style={{ ...thS, background: '#fde7e7' }}>CHI TIẾT</th>
                     <th rowSpan={2} style={{ ...thS, width: 100 }}>KHU VỰC</th>
                     <th rowSpan={2} style={{ ...thS, width: 120 }}>GHI CHÚ</th>
                     <th rowSpan={2} style={{ ...thS, width: 70 }}>TT</th>
@@ -705,25 +783,25 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     <input className="input" placeholder="Tên vật tư" value={m.name} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], name: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
-                    <input className="input" placeholder="Mã VT" value={m.code} disabled={m.requested}
+                    <input className="input" placeholder="Mã VT" value={m.code || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], code: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
                     <input className="input" placeholder="Quy chuẩn" value={m.spec} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], spec: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
-                    <input className="input" type="number" placeholder="0" value={m.quantity} disabled={m.requested}
+                    <input className="input" type="number" placeholder="0" value={m.quantity || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], quantity: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, textAlign: 'right', opacity: m.requested ? 0.7 : 1 }} />
-                    <select className="input" value={m.unit} disabled={m.requested}
+                    <select className="input" value={m.unit || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], unit: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.8rem', padding: '8px 4px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }}>
                       <option value="kg">kg</option><option value="tấn">tấn</option><option value="m">m</option><option value="m2">m²</option><option value="cái">cái</option><option value="bộ">bộ</option><option value="lít">lít</option><option value="hộp">hộp</option><option value="cuộn">cuộn</option>
                     </select>
                     <div style={{ textAlign: 'center' }}>
-                      {m.name.trim() && m.code.trim() && Number(m.quantity) > 0 ? (
+                      {m.name.trim() && (m.code || '').trim() && Number(m.quantity) > 0 ? (
                         <button type="button" disabled={m.requested}
                           onClick={async () => {
-                            const trimmedItem = { ...m, name: m.name.trim(), code: m.code.trim(), requested: true };
+                            const trimmedItem = { ...m, name: m.name.trim(), code: (m.code || '').trim(), requested: true };
                             const n = [...tempMaterials]; n[mi] = trimmedItem; setTempMaterials(n);
                             await onRequestIssue?.(idx, stageKey, teamIdx, mi, trimmedItem);
                           }}
@@ -748,7 +826,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#f1f5f9', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Hủy</button>
                 <button type="button" disabled={overLimit || filledCount === 0}
                   onClick={() => {
-                    const valid = tempMaterials.filter(m => m.name.trim()).map(m => ({ ...m, name: m.name.trim(), code: m.code.trim() }));
+                    const valid = tempMaterials.filter(m => m.name.trim()).map(m => ({ ...m, name: m.name.trim(), code: (m.code || '').trim() }));
                     onUpdateMaterials?.(idx, stageKey, teamIdx, valid);
                     setDncRow(null);
                   }}
@@ -855,13 +933,403 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// MOM Sections UI — BB họp triển khai dự án (Minutes of Meeting)
+// ══════════════════════════════════════════════════════════════
+
+const DEFAULT_SECTIONS: MomSection[] = [
+  { key: 'I', title: 'Hợp đồng', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
+  { key: 'II', title: 'Thiết kế', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
+  { key: 'III', title: 'Vật tư', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
+  { key: 'IV', title: 'Phần chế tạo', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
+  { key: 'V', title: 'Các việc liên quan', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
+]
+
+function MomSectionsUI({ isEditable, attendantsData, sectionsData, onAttendantsChange, onSectionsChange, onHeaderImport }: {
+  isEditable: boolean
+  attendantsData: unknown
+  sectionsData: unknown
+  onAttendantsChange: (val: string) => void
+  onSectionsChange: (val: string) => void
+  onHeaderImport?: (h: Record<string, string>) => void
+}) {
+  // Parse data
+  let attendants: MomAttendant[] = []
+  try { const p = attendantsData ? JSON.parse(String(attendantsData)) : null; if (Array.isArray(p)) attendants = p } catch { /* */ }
+
+  let sections: MomSection[] = []
+  try { const p = sectionsData ? JSON.parse(String(sectionsData)) : null; if (Array.isArray(p) && p.length > 0) sections = p } catch { /* */ }
+  if (sections.length === 0) sections = DEFAULT_SECTIONS
+
+  const updateAttendants = (next: MomAttendant[]) => onAttendantsChange(JSON.stringify(next))
+  const updateSections = (next: MomSection[]) => onSectionsChange(JSON.stringify(next))
+
+  const addAttendant = () => updateAttendants([...attendants, { name: '', role: '' }])
+  const removeAttendant = (i: number) => updateAttendants(attendants.filter((_, idx) => idx !== i))
+  const editAttendant = (i: number, field: string, val: string) => {
+    const next = [...attendants]; next[i] = { ...next[i], [field]: val }; updateAttendants(next)
+  }
+
+  const addItem = (secIdx: number) => {
+    const next = [...sections]
+    const items = next[secIdx].items
+    next[secIdx] = { ...next[secIdx], items: [...items, { stt: String(items.length + 1), noiDung: '', actionBy: '', dueDate: '', remark: '' }] }
+    updateSections(next)
+  }
+  const removeItem = (secIdx: number, itemIdx: number) => {
+    const next = [...sections]
+    next[secIdx] = { ...next[secIdx], items: next[secIdx].items.filter((_, i) => i !== itemIdx) }
+    updateSections(next)
+  }
+  const editItem = (secIdx: number, itemIdx: number, field: string, val: string) => {
+    const next = [...sections]
+    const items = [...next[secIdx].items]
+    items[itemIdx] = { ...items[itemIdx], [field]: val }
+    next[secIdx] = { ...next[secIdx], items }
+    updateSections(next)
+  }
+  const editSectionTitle = (secIdx: number, val: string) => {
+    const next = [...sections]; next[secIdx] = { ...next[secIdx], title: val }; updateSections(next)
+  }
+  const addSection = () => {
+    const keys = ['I','II','III','IV','V','VI','VII','VIII','IX','X']
+    const nextKey = keys[sections.length] || String(sections.length + 1)
+    updateSections([...sections, { key: nextKey, title: '', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] }])
+  }
+  const removeSection = (secIdx: number) => updateSections(sections.filter((_, i) => i !== secIdx))
+
+  // ── Import BB họp Excel ──
+  const importMomExcel = () => {
+    const input = document.createElement('input')
+    input.type = 'file'; input.accept = '.xlsx,.xls'
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (evt) => {
+        const wb = XLSX.read(evt.target?.result, { type: 'binary' })
+        const ws = wb.Sheets[wb.SheetNames[wb.SheetNames.length - 1]] // Last sheet is usually the target
+        const data: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
+
+        // Parse header
+        const header: Record<string, string> = {}
+        const parsedAttendants: MomAttendant[] = []
+        let inAttendants = false
+        let sectionStartRow = -1
+
+        for (let r = 0; r < Math.min(data.length, 20); r++) {
+          const row = data[r]
+          if (!row) continue
+          const c0 = String(row[0] || '').trim()
+          const c2 = String(row[2] || '').trim()
+
+          // Place
+          if (c0.toLowerCase().includes('place') || c0.includes('Địa điểm')) {
+            header.momPlace = c2
+          }
+          // Date
+          if (c0.toLowerCase().includes('date') || c0.includes('Ngày')) {
+            const rawDate = row[2]
+            if (typeof rawDate === 'number') {
+              // Excel serial date → YYYY-MM-DD
+              const d = new Date((rawDate - 25569) * 86400000)
+              header.kickoffDate = d.toISOString().split('T')[0]
+            } else if (rawDate) {
+              header.kickoffDate = String(rawDate)
+            }
+          }
+          // MOM No
+          if (c0.includes('MOM No') || c0.includes('Số biên bản')) {
+            const rawNum = row[row.length - 1]
+            if (typeof rawNum === 'number') {
+              const d = new Date((rawNum - 25569) * 86400000)
+              header.momNumber = d.toLocaleDateString('vi-VN')
+            } else {
+              header.momNumber = String(rawNum || '')
+            }
+          }
+          // Prepared by
+          if (c0.toLowerCase().includes('prepared') || c0.includes('Chuẩn bị')) {
+            header.momPreparedBy = c2 || String(row[row.length - 1] || '')
+          }
+          // Attendants
+          if (c0.toLowerCase().includes('attendant') || c0.includes('Thành phần')) {
+            inAttendants = true
+            if (c2) parsedAttendants.push({ name: c2.split(':')[0]?.trim() || c2, role: c2.split(':')[1]?.trim() || '' })
+            continue
+          }
+          if (inAttendants) {
+            if (c0.toLowerCase().includes('subject') || c0.includes('Chủ đề') || c2.includes('Acknowledge')) {
+              inAttendants = false
+            } else if (c2 && !c2.includes('Acknowledge')) {
+              // "Mr Hưng: PM" or "IBSHI:" etc
+              if (c2.endsWith(':') || c2.toUpperCase() === c2) {
+                // Group header like "IBSHI:" — skip or add as role marker
+              } else {
+                const parts = c2.split(':')
+                parsedAttendants.push({ name: parts[0]?.trim() || c2, role: parts[1]?.trim() || '' })
+              }
+            }
+          }
+          // Subject
+          if (c0.toLowerCase().includes('subject') || c0.includes('Chủ đề')) {
+            header.kickoffAgenda = c2
+          }
+          // Detect section start (STT header row)
+          if (c0.toLowerCase().includes('stt') || c0.includes('No.')) {
+            sectionStartRow = r + 1
+          }
+        }
+
+        // Parse sections by Roman numerals
+        if (sectionStartRow < 0) sectionStartRow = 15 // fallback
+        const parsedSections: MomSection[] = []
+        let currentSection: MomSection | null = null
+        const romanPattern = /^(I{1,3}|IV|V|VI{0,3}|IX|X)$/
+
+        for (let r = sectionStartRow; r < data.length; r++) {
+          const row = data[r]
+          if (!row || row.every(c => !c)) continue
+          const stt = String(row[0] || '').trim()
+          const content = String(row[1] || '').trim()
+
+          if (romanPattern.test(stt)) {
+            // New section header
+            if (currentSection) parsedSections.push(currentSection)
+            currentSection = { key: stt, title: content.replace(/:$/, ''), items: [] }
+          } else if (currentSection && (content || String(row[2] || ''))) {
+            // Item row
+            const noiDung = content || String(row[2] || '')
+            const actionByRaw = row[8] ?? row[7] ?? ''
+            const dueDateRaw = row[9] ?? ''
+            const remarkRaw = row[10] ?? ''
+
+            let dueDate = ''
+            if (typeof dueDateRaw === 'number') {
+              const d = new Date((dueDateRaw - 25569) * 86400000)
+              dueDate = d.toLocaleDateString('vi-VN')
+            } else if (dueDateRaw) {
+              dueDate = String(dueDateRaw)
+            }
+
+            if (noiDung.includes('Acknowledge') || noiDung.includes('ĐẠI DIỆN')) continue
+            currentSection.items.push({
+              stt: stt || '-',
+              noiDung,
+              actionBy: String(actionByRaw || ''),
+              dueDate,
+              remark: String(remarkRaw || ''),
+            })
+          }
+        }
+        if (currentSection && currentSection.items.length > 0) parsedSections.push(currentSection)
+
+        // Apply parsed data
+        if (parsedAttendants.length > 0) updateAttendants(parsedAttendants)
+        if (parsedSections.length > 0) updateSections(parsedSections)
+        if (onHeaderImport && Object.keys(header).length > 0) onHeaderImport(header)
+      }
+      reader.readAsBinaryString(file)
+    }
+    input.click()
+  }
+
+  // ── Export BB họp Excel ──
+  const exportMomExcel = () => {
+    const wb = XLSX.utils.book_new()
+    const rows: (string | number | null)[][] = []
+
+    // Header
+    rows.push([null, null, null, 'THE MINUTES OF MEETING\nBiên bản cuộc họp'])
+    rows.push([])
+    rows.push(['ATTENDANTS\nThành phần tham dự', null, attendants.map(a => `${a.name}${a.role ? ': ' + a.role : ''}`).join('\n')])
+    rows.push([])
+    rows.push(['No.\nSTT', 'DESCRIPTION OF DISCUSSION\nNội dung cuộc họp', null, null, null, null, null, null, 'ACTION BY\nHành động bởi', 'DUE DATE\nThời hạn', 'REMARK\nGhi chú'])
+
+    sections.forEach(sec => {
+      rows.push([sec.key, `${sec.title}:`])
+      sec.items.forEach(item => {
+        rows.push([item.stt, item.noiDung, null, null, null, null, null, null, item.actionBy, item.dueDate, item.remark])
+      })
+    })
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{ wch: 6 }, { wch: 50 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 14 }, { wch: 20 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'BB Hop')
+    XLSX.writeFile(wb, 'BB_Hop_Trien_Khai.xlsx')
+  }
+
+  const cellStyle = { padding: '4px 6px', border: '1px solid var(--border)', fontSize: '0.8rem' }
+  const inputStyle = { width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, fontSize: '0.8rem', background: 'var(--bg-secondary)' }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+      {/* Import / Export buttons */}
+      <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #7c3aed' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#7c3aed' }}>Nội dung BB họp triển khai dự án</h3>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" onClick={exportMomExcel}
+              style={{ padding: '6px 12px', fontSize: '0.8rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+              📥 Export
+            </button>
+            {isEditable && (
+              <button type="button" onClick={importMomExcel}
+                style={{ padding: '6px 12px', fontSize: '0.8rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                📤 Import Excel
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Attendants */}
+      <div className="card" style={{ padding: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <h4 style={{ margin: 0, fontSize: '0.9rem' }}>Thành phần tham dự (Attendants)</h4>
+          {isEditable && (
+            <button type="button" onClick={addAttendant}
+              style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
+              + Thêm
+            </button>
+          )}
+        </div>
+        {attendants.length === 0 ? (
+          <div style={{ padding: 12, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', border: '1px dashed var(--border)', borderRadius: 6 }}>
+            Chưa có. Nhấn &quot;Import Excel&quot; hoặc &quot;Thêm&quot; để bắt đầu.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-secondary)' }}>
+                <th style={{ ...cellStyle, width: 30 }}>#</th>
+                <th style={cellStyle}>Họ tên</th>
+                <th style={cellStyle}>Chức danh / Phòng ban</th>
+                {isEditable && <th style={{ ...cellStyle, width: 40 }}></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {attendants.map((a, i) => (
+                <tr key={i}>
+                  <td style={{ ...cellStyle, textAlign: 'center' }}>{i + 1}</td>
+                  <td style={cellStyle}>
+                    {isEditable ? <input style={inputStyle} value={a.name} onChange={e => editAttendant(i, 'name', e.target.value)} placeholder="VD: Mr Hưng" />
+                      : a.name}
+                  </td>
+                  <td style={cellStyle}>
+                    {isEditable ? <input style={inputStyle} value={a.role} onChange={e => editAttendant(i, 'role', e.target.value)} placeholder="VD: PM" />
+                      : a.role}
+                  </td>
+                  {isEditable && (
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      <button type="button" onClick={() => removeAttendant(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem' }}>✕</button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Sections I-V */}
+      {sections.map((sec, secIdx) => (
+        <div key={sec.key} className="card" style={{ padding: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--accent)' }}>{sec.key}.</span>
+              {isEditable ? (
+                <input style={{ ...inputStyle, fontWeight: 600, fontSize: '0.9rem', minWidth: 200 }} value={sec.title}
+                  onChange={e => editSectionTitle(secIdx, e.target.value)} placeholder="Tên mục" />
+              ) : (
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{sec.title}</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {isEditable && (
+                <button type="button" onClick={() => addItem(secIdx)}
+                  style={{ padding: '3px 8px', fontSize: '0.7rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
+                  + Thêm
+                </button>
+              )}
+              {isEditable && sections.length > 1 && (
+                <button type="button" onClick={() => removeSection(secIdx)}
+                  style={{ padding: '3px 8px', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
+                  Xóa mục
+                </button>
+              )}
+            </div>
+          </div>
+          {sec.items.length === 0 ? (
+            <div style={{ padding: 8, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>Không có nội dung</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--bg-secondary)' }}>
+                  <th style={{ ...cellStyle, width: 40 }}>STT</th>
+                  <th style={cellStyle}>Nội dung</th>
+                  <th style={{ ...cellStyle, width: 110 }}>Hành động bởi</th>
+                  <th style={{ ...cellStyle, width: 100 }}>Thời hạn</th>
+                  <th style={{ ...cellStyle, width: 130 }}>Ghi chú</th>
+                  {isEditable && <th style={{ ...cellStyle, width: 30 }}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {sec.items.map((item, itemIdx) => (
+                  <tr key={itemIdx}>
+                    <td style={{ ...cellStyle, textAlign: 'center' }}>
+                      {isEditable ? <input style={{ ...inputStyle, width: 30, textAlign: 'center' }} value={item.stt} onChange={e => editItem(secIdx, itemIdx, 'stt', e.target.value)} />
+                        : item.stt}
+                    </td>
+                    <td style={cellStyle}>
+                      {isEditable ? <input style={inputStyle} value={item.noiDung} onChange={e => editItem(secIdx, itemIdx, 'noiDung', e.target.value)} placeholder="Nội dung công việc" />
+                        : item.noiDung}
+                    </td>
+                    <td style={cellStyle}>
+                      {isEditable ? <input style={inputStyle} value={item.actionBy} onChange={e => editItem(secIdx, itemIdx, 'actionBy', e.target.value)} placeholder="Ai thực hiện" />
+                        : item.actionBy}
+                    </td>
+                    <td style={cellStyle}>
+                      {isEditable ? <input style={inputStyle} value={item.dueDate} onChange={e => editItem(secIdx, itemIdx, 'dueDate', e.target.value)} placeholder="dd/mm/yyyy" />
+                        : item.dueDate}
+                    </td>
+                    <td style={cellStyle}>
+                      {isEditable ? <input style={inputStyle} value={item.remark} onChange={e => editItem(secIdx, itemIdx, 'remark', e.target.value)} placeholder="Ghi chú" />
+                        : item.remark}
+                    </td>
+                    {isEditable && (
+                      <td style={{ ...cellStyle, textAlign: 'center' }}>
+                        <button type="button" onClick={() => removeItem(secIdx, itemIdx)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem' }}>✕</button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ))}
+
+      {/* Add section button */}
+      {isEditable && (
+        <button type="button" onClick={addSection}
+          style={{ padding: '8px 16px', fontSize: '0.85rem', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px dashed var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600, width: '100%' }}>
+          + Thêm mục mới
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function TaskDetailPage() {
   const params = useParams()
   const router = useRouter()
   const taskId = params.id as string
+  const { user: currentUser } = useAuthStore()
 
   const [task, setTask] = useState<TaskData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showAssignModal, setShowAssignModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState<Record<string, string | number>>({})
   const [checklistState, setChecklistState] = useState<Record<string, boolean>>({})
@@ -878,8 +1346,6 @@ export default function TaskDetailPage() {
   const emptyWoItem = { costCode: '', content: '', jobCode: '', typeCode: '', unit: '', qty1: '', qty2: '', totalQty: '', startDate: '', endDate: '' }
   const [woItems, setWoItems] = useState<{ costCode: string; content: string; jobCode: string; typeCode: string; unit: string; qty1: string; qty2: string; totalQty: string; startDate: string; endDate: string }[]>([{ ...emptyWoItem }])
   // P3.5 supplier entries
-  type SupplierQuote = { material: string; price: string }
-  type SupplierEntry = { name: string; quotes: SupplierQuote[] }
   const emptyQuote: SupplierQuote = { material: '', price: '' }
   const emptySupplier: SupplierEntry = { name: '', quotes: [{ ...emptyQuote }] }
   const [suppliers, setSuppliers] = useState<SupplierEntry[]>([{ ...emptySupplier, quotes: [{ ...emptyQuote }] }, { ...emptySupplier, quotes: [{ ...emptyQuote }] }, { ...emptySupplier, quotes: [{ ...emptyQuote }] }])
@@ -894,6 +1360,7 @@ export default function TaskDetailPage() {
   const [inventorySearch, setInventorySearch] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
   const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; departmentEstimates?: any; budgetTotal?: any } | null>(null)
+  const [previousStepFiles, setPreviousStepFiles] = useState<PrevStepFile[]>([])
   // P1.2A WBS expanded rows
   const [wbsExpandedRows, setWbsExpandedRows] = useState<Set<number>>(new Set())
   // P4.1 payment confirmations per milestone
@@ -912,6 +1379,34 @@ export default function TaskDetailPage() {
   async function loadUsers() {
     const res = await apiFetch('/api/users')
     if (res.ok && res.users) setUserList(res.users)
+  }
+
+  // Check if current user can assign this task (L1 same department or admin)
+  const canAssignTask = (() => {
+    if (!currentUser || !task) return false
+    const userRole = currentUser.roleCode || ''
+    const userLevel = currentUser.userLevel ?? 99
+    const isAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(userRole)
+    if (isAdmin) return true
+    if (userLevel > 1) return false
+    const userBase = userRole.replace(/[a-zA-Z]$/, '')
+    const taskBase = task.assignedRole.replace(/[a-zA-Z]$/, '')
+    return userBase === taskBase
+  })()
+
+  async function handleAssignTask(userId: string) {
+    const res = await apiFetch(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'assign', assignToUserId: userId }),
+    })
+    if (res.ok || res.success) {
+      setSuccessMsg('✅ Đã phân công thành công')
+      setShowAssignModal(false)
+      loadTask()
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } else {
+      setError(res.error || 'Lỗi khi phân công')
+    }
   }
 
   async function loadInventory() {
@@ -971,6 +1466,9 @@ export default function TaskDetailPage() {
         const pCode = res.task.project?.projectCode || 'LSX'
         const woNum = `${pCode}-${String(Math.floor(Math.random() * 99) + 1).padStart(2, '0')}`
         setFormData(prev => ({ ...prev, woNumber: woNum }))
+      }
+      if (res.previousStepFiles) {
+        setPreviousStepFiles(res.previousStepFiles)
       }
       if (res.previousStepData) {
         setPreviousStepData(res.previousStepData)
@@ -1075,11 +1573,14 @@ export default function TaskDetailPage() {
   function handleFieldChange(key: string, value: string | number) {
     setFormData(prev => {
       const next = { ...prev, [key]: value }
-      // Auto-calculate total for P1.2 estimate
-      if (config && config.fields.some(f => f.key === 'totalEstimate')) {
+      // Auto-calculate total from currency fields (P2.4 and other steps with editable tables)
+      if (config && config.fields.some(f => f.key === 'totalEstimate' && f.type === 'readonly')) {
+        // Fallback for other steps with currency fields
         const currencyKeys = config.fields.filter(f => f.type === 'currency').map(f => f.key)
-        const total = currencyKeys.reduce((sum, k) => sum + (Number(next[k]) || 0), 0)
-        next.totalEstimate = total
+        if (currencyKeys.length > 0) {
+          const total = currencyKeys.reduce((sum, k) => sum + (Number(next[k]) || 0), 0)
+          next.totalEstimate = total
+        }
       }
       return next
     })
@@ -1264,21 +1765,6 @@ export default function TaskDetailPage() {
       return
     }
 
-    // Validate milestones for P1.2A
-    if (task.stepCode === 'P1.2A' && action === 'complete') {
-      if (milestones.length === 0) {
-        setError('Vui lòng thêm ít nhất 1 milestone')
-        setSubmitting(false)
-        return
-      }
-      const incompleteMilestones = milestones.some(m => !m.name.trim())
-      if (incompleteMilestones) {
-        setError('Vui lòng nhập tên cho tất cả milestone')
-        setSubmitting(false)
-        return
-      }
-    }
-
     // Validate BOM items for P2.1 (VT chính) — P2.2 is optional
     if (task.stepCode === 'P2.1' && action === 'complete') {
       const filledBomItems = bomItems.filter(b => b.name.trim() && b.code.trim())
@@ -1324,7 +1810,7 @@ export default function TaskDetailPage() {
 
     // Complete action
     const finalData = { ...formData }
-    if (task.stepCode === 'P1.2' || task.stepCode === 'P2.4' || task.stepCode === 'P2.1A') {
+    if (task.stepCode === 'P2.4' || task.stepCode === 'P2.1A') {
       const ensuredKeys = [
         { key: 'dt02Items', def: [{ maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: '', tyLe: '' }] },
         { key: 'dt03Items', def: [{ nhomVT: '', danhMuc: '', dvt: '', kl: '', donGia: '', thanhTien: '' }] },
@@ -1334,8 +1820,7 @@ export default function TaskDetailPage() {
         { key: 'dt07Items', def: [{ maCP: '', danhMuc: '', dvt: '', kl: '', donGia: '', thanhTien: '' }] },
       ]
       ensuredKeys.forEach(({ key, def }) => {
-        const isRendered = (task.stepCode === 'P1.2' && ['dt03Items','dt04Items','dt05Items','dt06Items'].includes(key)) ||
-                           (task.stepCode === 'P2.1A' && ['dt02Items','dt07Items'].includes(key)) ||
+        const isRendered = (task.stepCode === 'P2.1A' && ['dt02Items','dt07Items'].includes(key)) ||
                            (task.stepCode === 'P2.4')
         if (isRendered && !finalData[key]) {
           const defaultArray = Array.isArray(def) ? def : [def] // TS compat, def is always array here
@@ -1478,11 +1963,21 @@ export default function TaskDetailPage() {
               ⏰ Deadline: {new Date(task.deadline).toLocaleDateString('vi-VN')}
             </span>
           )}
-          {task.assignee && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              👤 {task.assignee.fullName}
-            </span>
-          )}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            👤 {task.assignee ? task.assignee.fullName : <span className="italic opacity-60">Chưa phân công</span>}
+            {canAssignTask && isActive && (
+              <button
+                onClick={() => setShowAssignModal(true)}
+                style={{
+                  marginLeft: 4, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600,
+                  background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                Phân công
+              </button>
+            )}
+          </span>
         </div>
       </div>
 
@@ -1588,44 +2083,47 @@ export default function TaskDetailPage() {
                   </div>
                   {previousStepData.plan ? (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      {previousStepData.plan.wbsStructure && (
-                        <div style={{ gridColumn: '1 / -1' }}>
-                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Cấu trúc WBS</label>
-                          <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '0.75rem', whiteSpace: 'pre-wrap', fontSize: '0.9rem', marginTop: 4 }}>{previousStepData.plan.wbsStructure}</div>
+                      {/* MOM Header fields */}
+                      {previousStepData.plan.momPlace && (
+                        <div>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Địa điểm</label>
+                          <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '0.75rem', fontSize: '0.9rem', marginTop: 4 }}>{previousStepData.plan.momPlace}</div>
                         </div>
                       )}
                       {previousStepData.plan.kickoffDate && (
                         <div>
-                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Ngày Kickoff</label>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Ngày họp</label>
                           <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '0.75rem', fontSize: '0.9rem', marginTop: 4 }}>{previousStepData.plan.kickoffDate}</div>
                         </div>
                       )}
-                      {previousStepData.plan.kickoffAgenda && (
+                      {previousStepData.plan.momNumber && (
                         <div>
-                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Nội dung Kickoff</label>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Số biên bản</label>
+                          <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '0.75rem', fontSize: '0.9rem', marginTop: 4 }}>{previousStepData.plan.momNumber}</div>
+                        </div>
+                      )}
+                      {previousStepData.plan.kickoffAgenda && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Chủ đề</label>
                           <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '0.75rem', fontSize: '0.9rem', marginTop: 4 }}>{previousStepData.plan.kickoffAgenda}</div>
+                        </div>
+                      )}
+                      {/* MOM Sections (readonly) */}
+                      {previousStepData.plan.momSections && (
+                        <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+                          <MomSectionsUI
+                            isEditable={false}
+                            attendantsData={previousStepData.plan.momAttendants}
+                            sectionsData={previousStepData.plan.momSections}
+                            onAttendantsChange={() => {}}
+                            onSectionsChange={() => {}}
+                          />
                         </div>
                       )}
                       {/* WBS Display */}
                       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
                         <WbsTableUI isWbsEditable={false} wbsItemsData={previousStepData.plan.wbsItems} />
                       </div>
-                      {previousStepData.plan.milestones && previousStepData.plan.milestones.length > 0 && (
-                        <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Milestones ({previousStepData.plan.milestones.length})</label>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {previousStepData.plan.milestones.map((ms: { name: string; startDate: string; endDate: string; assigneeId: string }, i: number) => (
-                              <div key={i} style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '0.75rem', border: '1px solid var(--border)' }}>
-                                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>#{i+1} {ms.name}</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-                                  {ms.startDate && `Bắt đầu: ${ms.startDate}`}{ms.endDate && ` — Kết thúc: ${ms.endDate}`}
-                                  {ms.assigneeId && ` | Phụ trách: ${userList.find(u => u.id === ms.assigneeId)?.fullName || ms.assigneeId}`}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu kế hoạch</div>
@@ -1638,18 +2136,12 @@ export default function TaskDetailPage() {
                       <div style={{ display: 'flex', gap: 10 }}>
                         <button onClick={async () => {
                           setPlanDecision('approved')
-                          if (estimateDecision === 'approved') {
-                            // Both approved → auto-complete P1.3
-                            handleSubmit('complete')
-                          } else {
-                            // Save partial approval to DB so it persists on reload
-                            try {
-                              await apiFetch(`/api/tasks/${taskId}`, {
-                                method: 'PUT',
-                                body: JSON.stringify({ action: 'save', resultData: { planApproved: true } }),
-                              })
-                            } catch { /* ignore save error */ }
-                          }
+                          await apiFetch(`/api/tasks/${taskId}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ action: 'save', resultData: { ...formData, planApproved: true, checklist: checklistState } }),
+                          })
+                          setSuccessMsg('✅ Đã duyệt kế hoạch. Vui lòng duyệt dự toán bên dưới.')
+                          setTimeout(() => setSuccessMsg(''), 4000)
                         }} disabled={submitting}
                           style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
                           ✅ Duyệt kế hoạch
@@ -1694,239 +2186,183 @@ export default function TaskDetailPage() {
                   )}
                 </div>
 
-                {/* Section 2: Dự toán thi công sơ bộ from P1.2 — with independent approve/reject */}
-                {previousStepData.estimate && (() => {
-                  const est = previousStepData.estimate as Record<string, unknown>
+                {/* ══ P1.3: ESTIMATE APPROVAL (from P1.2) ══ */}
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>📊 Dự toán thi công (từ P1.2)</h2>
+                    {estimateDecision !== 'pending' && (
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: estimateDecision === 'approved' ? '#16a34a' : '#dc2626' }}>
+                        {estimateDecision === 'approved' ? '✅ Đã duyệt' : '❌ Đã từ chối'}
+                      </span>
+                    )}
+                  </div>
+                  {previousStepData?.estimate ? (() => {
+                    const est = previousStepData.estimate as Record<string, unknown>
+                    const totalMat = Number(est.totalMaterial) || 0
+                    const totalLab = Number(est.totalLabor) || 0
+                    const totalSvc = Number(est.totalService) || 0
+                    const totalOvh = Number(est.totalOverhead) || 0
+                    const totalEst = Number(est.totalEstimate) || 0
+                    const contractVal = Number(task.project?.contractValue) || 0
+                    const profit = contractVal - totalEst
+                    const fmtVND = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+                    const pctEst = (v: number) => totalEst > 0 ? ((v / totalEst) * 100).toFixed(1) + '%' : '—'
 
-                  const parseDtRows = (key: string): Record<string, string>[] => {
+                    // Parse DT02 detail rows
+                    let dt02Rows: { maCP: string; noiDung: string; giaTri: number }[] = []
                     try {
-                      const raw = est[key]
-                      if (!raw) return []
-                      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
-                      return Array.isArray(parsed) ? parsed : []
-                    } catch { return [] }
-                  }
+                      const parsed = est.dt02Detail ? JSON.parse(String(est.dt02Detail)) : null
+                      if (Array.isArray(parsed)) dt02Rows = parsed
+                    } catch { /* ignore */ }
 
-                  const summaryFields = [
-                    { key: 'mat_main', label: 'Vật tư chính' },
-                    { key: 'mat_accessory', label: 'Vật tư phụ kiện, bu lông…' },
-                    { key: 'mat_packing', label: 'Vật tư đóng kiện' },
-                    { key: 'mat_method', label: 'Vật tư làm biện pháp' },
-                    { key: 'mat_consumable', label: 'Vật tư tiêu hao' },
-                    { key: 'mat_paint', label: 'Vật tư sơn' },
-                    { key: 'mat_reserve', label: 'Vật tư dự phòng' },
-                  ]
-                  const laborFields = [
-                    { key: 'lab_cutting', label: 'Pha cắt' },
-                    { key: 'lab_machining', label: 'Gia công' },
-                    { key: 'lab_fabrication', label: 'Chế tạo' },
-                    { key: 'lab_framing', label: 'Khung kiện' },
-                    { key: 'lab_assembly_product', label: 'Tổ hợp sản phẩm' },
-                    { key: 'lab_erection', label: 'Lắp dựng + Nghiệm thu' },
-                    { key: 'lab_cleaning_alloy', label: 'Vệ sinh vật liệu hợp kim' },
-                    { key: 'lab_surface_paint', label: 'Làm sạch, Sơn' },
-                    { key: 'lab_insulation', label: 'Bảo ôn' },
-                    { key: 'lab_equip_install', label: 'Lắp thiết bị phụ kiện' },
-                    { key: 'lab_packing', label: 'Đóng kiện' },
-                    { key: 'lab_delivery', label: 'Giao hàng' },
-                    { key: 'lab_reserve', label: 'Nhân công dự phòng' },
-                  ]
-                  const outsourceFields = [
-                    { key: 'out_transport', label: 'Vận tải' },
-                    { key: 'out_ndt', label: 'NDT, quy trình và thí nghiệm' },
-                    { key: 'out_galvanize', label: 'Mạ kẽm' },
-                    { key: 'out_other', label: 'Chi phí khác' },
-                    { key: 'out_reserve', label: 'Chi phí dự phòng' },
-                  ]
-                  const overheadFields = [
-                    { key: 'ovh_production', label: 'Chi phí chung phục vụ SX' },
-                    { key: 'ovh_financial', label: 'Chi phí tài chính' },
-                    { key: 'ovh_management', label: 'Chi phí Quản Lý' },
-                  ]
-
-                  const renderCostSection = (title: string, icon: string, fields: { key: string; label: string }[], color: string) => {
-                    const filledFields = fields.filter(f => est[f.key] && Number(est[f.key]) > 0)
-                    if (filledFields.length === 0) return null
-                    const total = filledFields.reduce((s, f) => s + (Number(est[f.key]) || 0), 0)
                     return (
-                      <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {icon} {title}
-                          <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>({filledFields.length} hạng mục)</span>
+                      <div>
+                        {/* DT01: Project info */}
+                        <div style={{ borderRadius: 8, border: '1px solid var(--border)', padding: '1rem', marginBottom: 12 }}>
+                          <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: '#3b82f6' }}>DT01 — Thông tin chung dự án</h4>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px', fontSize: '0.85rem' }}>
+                            <div><span style={{ color: 'var(--text-muted)' }}>Mã dự án:</span> <strong>{task.project.projectCode}</strong></div>
+                            <div><span style={{ color: 'var(--text-muted)' }}>Khách hàng:</span> <strong>{task.project.clientName}</strong></div>
+                            <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-muted)' }}>Tên dự án:</span> <strong>{task.project.projectName}</strong></div>
+                            {task.project.contractValue && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{Number(task.project.contractValue).toLocaleString('vi-VN')} đ</strong></div>}
+                            {task.project.productType && <div><span style={{ color: 'var(--text-muted)' }}>Sản phẩm:</span> {task.project.productType}</div>}
+                          </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, paddingLeft: 8 }}>
-                          {filledFields.map(f => (
-                            <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>
-                              <span style={{ color: 'var(--text-secondary)' }}>{f.label}</span>
-                              <strong>{Number(est[f.key]).toLocaleString('vi-VN')}</strong>
+
+                        {/* DT02: Cost breakdown table */}
+                        {totalEst > 0 ? (
+                          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontSize: '0.85rem' }}>
+                            {[
+                              { label: 'I. Chi phí vật tư', value: totalMat, color: '#e63946' },
+                              { label: 'II. Chi phí nhân công', value: totalLab, color: '#f59e0b' },
+                              { label: 'III. Chi phí dịch vụ', value: totalSvc, color: '#3b82f6' },
+                              { label: 'IV. Chi phí chung', value: totalOvh, color: '#8b5cf6' },
+                            ].map((item, i) => (
+                              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 600 }}>{item.label}</span>
+                                <span style={{ textAlign: 'right', fontWeight: 600, color: item.color }}>{fmtVND(item.value)}</span>
+                                <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{pctEst(item.value)}</span>
+                              </div>
+                            ))}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '10px 12px', background: 'var(--bg-secondary)', fontWeight: 700, fontSize: '0.95rem' }}>
+                              <span>TỔNG CHI PHÍ</span>
+                              <span style={{ textAlign: 'right', color: 'var(--accent)' }}>{fmtVND(totalEst)}</span>
+                              <span style={{ textAlign: 'right' }}>100%</span>
                             </div>
-                          ))}
-                        </div>
-                        <div style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 700, color, marginTop: 4, paddingRight: 8 }}>
-                          Cộng: {total.toLocaleString('vi-VN')} đ
-                        </div>
+                            {contractVal > 0 && (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderTop: '2px solid var(--border)' }}>
+                                <span style={{ fontWeight: 600 }}>Lợi nhuận dự kiến</span>
+                                <span style={{ textAlign: 'right', fontWeight: 700, color: profit >= 0 ? '#059669' : '#dc2626' }}>{fmtVND(Math.abs(profit))}</span>
+                                <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{((profit / contractVal) * 100).toFixed(1)}%</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Chưa có dữ liệu tổng hợp chi phí từ P1.2
+                          </div>
+                        )}
+
+                        {/* DT02 Detail breakdown (collapsible) */}
+                        {dt02Rows.length > 0 && (
+                          <details style={{ marginTop: 10 }}>
+                            <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                              Chi tiết DT02 ({dt02Rows.length} dòng)
+                            </summary>
+                            <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', marginTop: 6, fontSize: '0.8rem' }}>
+                              {dt02Rows.map((row, i) => {
+                                const isHeader = ['I', 'II', 'III', 'IV'].includes(row.maCP)
+                                return (
+                                  <div key={i} style={{
+                                    display: 'grid', gridTemplateColumns: '60px 1fr 120px',
+                                    padding: '4px 10px', borderBottom: '1px solid var(--border)',
+                                    background: isHeader ? 'var(--bg-secondary)' : 'transparent',
+                                    fontWeight: isHeader ? 700 : 400,
+                                  }}>
+                                    <span style={{ color: 'var(--text-muted)' }}>{row.maCP}</span>
+                                    <span>{row.noiDung}</span>
+                                    <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? Number(row.giaTri).toLocaleString('vi-VN') : ''}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </details>
+                        )}
+
+                        {/* File đính kèm from P1.2 */}
+                        {est.estimateFileName ? (
+                          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: '0.8rem' }}>
+                            File dự toán: <strong>{String(est.estimateFileName)}</strong>
+                          </div>
+                        ) : null}
                       </div>
                     )
-                  }
+                  })() : (
+                    <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu dự toán từ P1.2</div>
+                  )}
 
-                  const dtTables = [
-                    { key: 'dt03Items', title: 'DT03 — Dự toán chi phí VT', code: 'QT30-DT03', color: '#3b82f6',
-                      columns: ['Nhóm VT', 'Danh mục VT', 'ĐVT', 'KL/SL', 'Đơn giá', 'Thành tiền'],
-                      colKeys: ['nhomVT', 'danhMuc', 'dvt', 'kl', 'donGia', 'thanhTien'] },
-                    { key: 'dt04Items', title: 'DT04 — Dự toán chi tiết VT', code: 'QT30-DT04', color: '#8b5cf6',
-                      columns: ['Mã VT', 'Tên VT', 'Mác VL', 'Quy cách', 'ĐVT', 'KL/SL', 'Đơn giá', 'Thành tiền'],
-                      colKeys: ['maVT', 'tenVT', 'macVL', 'quyCach', 'dvt', 'kl', 'donGia', 'thanhTien'] },
-                    { key: 'dt05Items', title: 'DT05 — Dự toán chi phí dịch vụ', code: 'QT30-DT05', color: '#f59e0b',
-                      columns: ['Mã CP', 'Nội dung công việc', 'ĐVT', 'KL', 'Đơn giá', 'Thành tiền'],
-                      colKeys: ['maCP', 'noiDung', 'dvt', 'kl', 'donGia', 'thanhTien'] },
-                    { key: 'dt06Items', title: 'DT06 — Dự toán chi phí nhân công', code: 'QT30-DT06', color: '#ef4444',
-                      columns: ['Mã CP', 'Nội dung công việc', 'ĐVT', 'KL', 'Đơn giá', 'Thành tiền'],
-                      colKeys: ['maCP', 'noiDung', 'dvt', 'kl', 'donGia', 'thanhTien'] },
-                  ]
-
-                  const totalEstimate = est.totalEstimate ? Number(est.totalEstimate) : 0
-
-                  return (
-                    <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderLeft: '4px solid #f59e0b', border: estimateDecision === 'approved' ? '2px solid #16a34a' : estimateDecision === 'rejected' ? '2px solid #dc2626' : undefined }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid #f59e0b', paddingBottom: 8 }}>
-                          💰 Dự toán thi công sơ bộ <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>(KTKH - P1.2)</span>
-                        </h3>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          {estimateDecision !== 'pending' && (
-                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: estimateDecision === 'approved' ? '#16a34a' : '#dc2626' }}>
-                              {estimateDecision === 'approved' ? '✅ Đã duyệt' : '❌ Đã từ chối'}
-                            </span>
-                          )}
-                          {totalEstimate > 0 && (
-                            <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 14px', fontSize: '0.9rem', fontWeight: 700, color: '#92400e' }}>
-                              TỔNG: {totalEstimate.toLocaleString('vi-VN')} đ
-                            </div>
-                          )}
-                        </div>
+                  {/* Estimate approve/reject buttons */}
+                  {isActive && estimateDecision === 'pending' && previousStepData?.estimate && (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button onClick={async () => {
+                          setEstimateDecision('approved')
+                          await apiFetch(`/api/tasks/${taskId}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ action: 'save', resultData: { ...formData, estimateApproved: true, planApproved: planDecision === 'approved', checklist: checklistState } }),
+                          })
+                          setSuccessMsg('✅ Đã duyệt dự toán.')
+                          setTimeout(() => setSuccessMsg(''), 3000)
+                        }} disabled={submitting}
+                          style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                          ✅ Duyệt dự toán
+                        </button>
+                        <button onClick={() => setShowEstimateReject(!showEstimateReject)} disabled={submitting}
+                          style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                          ❌ Từ chối dự toán
+                        </button>
                       </div>
-
-                      {renderCostSection('Chi phí vật tư', '📦', summaryFields, '#3b82f6')}
-                      {renderCostSection('Chi phí nhân công trực tiếp', '👷', laborFields, '#ef4444')}
-                      {renderCostSection('Chi phí dịch vụ thuê ngoài', '🔧', outsourceFields, '#f59e0b')}
-                      {renderCostSection('Chi phí chung', '🏢', overheadFields, '#6366f1')}
-
-                      {dtTables.map(dt => {
-                        const rows = parseDtRows(dt.key)
-                        const filledRows = rows.filter(r => dt.colKeys.some(k => r[k]?.trim()))
-                        if (filledRows.length === 0) return null
-                        return (
-                          <div key={dt.key} style={{ marginTop: 16 }}>
-                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: dt.color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                              📋 {dt.title}
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>{dt.code}</span>
-                            </div>
-                            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: `30px ${dt.colKeys.map(() => '1fr').join(' ')}`, gap: 0, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)' }}>
-                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
-                                {dt.columns.map(col => (
-                                  <span key={col} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>{col}</span>
-                                ))}
-                              </div>
-                              {filledRows.map((row, ri) => (
-                                <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${dt.colKeys.map(() => '1fr').join(' ')}`, gap: 0, padding: '4px 8px', borderBottom: ri < filledRows.length - 1 ? '1px solid var(--border)' : 'none', background: ri % 2 === 0 ? 'transparent' : 'var(--bg-secondary)', fontSize: '0.78rem' }}>
-                                  <span style={{ color: 'var(--text-muted)' }}>{ri + 1}</span>
-                                  {dt.colKeys.map(k => (
-                                    <span key={k} style={{ fontWeight: ['thanhTien', 'donGia', 'kl'].includes(k) ? 600 : 400, textAlign: ['thanhTien', 'donGia', 'kl'].includes(k) ? 'right' : 'left' as const }}>
-                                      {['thanhTien', 'donGia'].includes(k) && row[k] ? Number(row[k]).toLocaleString('vi-VN') : (row[k] || '—')}
-                                    </span>
-                                  ))}
-                                </div>
-                              ))}
-                            </div>
-                            <div style={{ marginTop: 4, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{filledRows.length} dòng</div>
-                          </div>
-                        )
-                      })}
-
-                      {est.estimateNotes && (
-                        <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 8, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                          📝 <strong>Ghi chú:</strong> {String(est.estimateNotes)}
-                        </div>
-                      )}
-
-                      {/* Estimate approve/reject buttons */}
-                      {isActive && estimateDecision === 'pending' && (
-                        <div style={{ marginTop: 16, padding: '12px 16px', background: '#fffbeb', borderRadius: 10, border: '1px solid #fde68a' }}>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#92400e', marginBottom: 8 }}>🚀 Hành động — Dự toán</div>
-                          <div style={{ display: 'flex', gap: 10 }}>
-                            <button onClick={async () => {
-                              setEstimateDecision('approved')
-                              if (planDecision === 'approved') {
-                                // Both approved → auto-complete P1.3
-                                handleSubmit('complete')
-                              } else {
-                                // Save partial approval to DB so it persists on reload
-                                try {
-                                  await apiFetch(`/api/tasks/${taskId}`, {
-                                    method: 'PUT',
-                                    body: JSON.stringify({ action: 'save', resultData: { estimateApproved: true } }),
-                                  })
-                                } catch { /* ignore save error */ }
-                              }
-                            }} disabled={submitting}
-                              style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                              ✅ Duyệt dự toán
-                            </button>
-                            <button onClick={() => setShowEstimateReject(!showEstimateReject)} disabled={submitting}
-                              style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                              ❌ Từ chối → Trả KTKH (P1.2)
-                            </button>
-                          </div>
-                          {showEstimateReject && (
-                            <div style={{ marginTop: 10 }}>
-                              <textarea value={estimateRejectReason} onChange={e => setEstimateRejectReason(e.target.value)}
-                                placeholder="Nhập lý do từ chối dự toán..." rows={2}
-                                style={{ width: '100%', borderRadius: 8, border: '1px solid #dc2626', padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical', background: '#fff' }} />
-                              <button onClick={async () => {
-                                if (!estimateRejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return; }
-                                setSubmitting(true)
-                                try {
-                                  const res = await apiFetch(`/api/tasks/${taskId}/reject`, {
-                                    method: 'POST',
-                                    body: JSON.stringify({ reason: `[Dự toán] ${estimateRejectReason}`, overrideRejectTo: 'P1.2' }),
-                                  })
-                                  if (res.success) {
-                                    setSuccessMsg('✅ Đã từ chối dự toán → Đẩy lại KTKH (P1.2)')
-                                    setTimeout(() => router.push('/dashboard/tasks'), 2000)
-                                  } else { setError(res.error || 'Lỗi khi từ chối') }
-                                } catch { setError('Lỗi khi từ chối') }
-                                setSubmitting(false)
-                              }} disabled={submitting}
-                                style={{ marginTop: 6, padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                                ⚠️ Xác nhận từ chối dự toán → Gửi lại KTKH (P1.2)
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {/* Estimate pre-approved from previous round */}
-                      {estimateDecision === 'approved' && task?.resultData && Boolean((task.resultData as Record<string, unknown>).estimateApproved) && (
-                        <div style={{ marginTop: 12, padding: '8px 16px', background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600 }}>
-                          ✅ Đã được phê duyệt từ lần xét duyệt trước
+                      {showEstimateReject && (
+                        <div style={{ marginTop: 10 }}>
+                          <textarea value={estimateRejectReason} onChange={e => setEstimateRejectReason(e.target.value)}
+                            placeholder="Nhập lý do từ chối dự toán..." rows={2}
+                            style={{ width: '100%', borderRadius: 8, border: '1px solid #dc2626', padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical', background: 'var(--bg-secondary)' }} />
+                          <button onClick={async () => {
+                            if (!estimateRejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return; }
+                            setSubmitting(true)
+                            try {
+                              await apiFetch(`/api/tasks/${taskId}/reject`, {
+                                method: 'POST',
+                                body: JSON.stringify({ reason: estimateRejectReason, overrideRejectTo: 'P1.2' }),
+                              })
+                              setSuccessMsg('✅ Đã từ chối dự toán và đẩy lại về KTKH (P1.2)')
+                              setTimeout(() => router.push('/dashboard/tasks'), 2000)
+                            } catch { setError('Lỗi khi từ chối') }
+                            setSubmitting(false)
+                          }} disabled={submitting}
+                            style={{ marginTop: 6, padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                            ⚠️ Xác nhận từ chối dự toán → Gửi lại KTKH (P1.2)
+                          </button>
                         </div>
                       )}
                     </div>
-                  )
-                })()}
+                  )}
+                  {estimateDecision === 'approved' && task?.resultData && Boolean((task.resultData as Record<string, unknown>).estimateApproved) && (
+                    <div style={{ marginTop: 12, padding: '8px 16px', background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600 }}>
+                      ✅ Dự toán đã được phê duyệt
+                    </div>
+                  )}
+                </div>
 
-                {/* Combined status banner when both approved */}
-                {planDecision === 'approved' && estimateDecision === 'approved' && (
-                  <div className="card" style={{ padding: '1.25rem', background: '#f0fdf4', border: '2px solid #16a34a', textAlign: 'center' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#16a34a', marginBottom: 4 }}>
-                      🎉 Cả hai phần đã được phê duyệt
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: '#166534' }}>
-                      Hệ thống đang hoàn thành bước P1.3...
-                    </div>
+                {/* P1.3: Complete button — only when BOTH plan + estimate approved */}
+                {isActive && planDecision === 'approved' && estimateDecision === 'approved' && (
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', textAlign: 'center' }}>
+                    <button onClick={() => handleSubmit('complete')} disabled={submitting}
+                      style={{ padding: '12px 32px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: '1rem' }}>
+                      {submitting ? '⏳ Đang xử lý...' : '✅ Hoàn thành phê duyệt (Kế hoạch + Dự toán)'}
+                    </button>
                   </div>
                 )}
-
               </>
             ) : (
               <>
@@ -2201,177 +2637,286 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {/* P1.2: Dynamic Estimate Tables (DT03-DT07) */}
+            {/* P1.2: Estimate Summary (upload Excel → show DT02 summary) */}
             {task.stepCode === 'P1.2' && (() => {
-              // Generic table renderer for estimate forms
-              type EstRow = Record<string, string>
-              const renderEstTable = (
-                title: string, code: string, dataKey: string,
-                columns: { key: string; label: string; type?: string; width?: string }[],
-                defaultRows: EstRow[]
-              ) => {
-                let rows: EstRow[] = []
-                try { const p = formData[dataKey] ? JSON.parse(formData[dataKey] as string) : null; rows = (Array.isArray(p) && p.length > 0) ? p : defaultRows } catch { rows = defaultRows }
-                const save = (next: EstRow[]) => handleFieldChange(dataKey, JSON.stringify(next))
-                const addRow = () => save([...rows, Object.fromEntries(columns.map(c => [c.key, '']))])
-                const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i))
-                const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n) }
-                return (
-                  <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid var(--accent)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--accent)' }}>{title}</h3>
-                      {isActive && (
-                        <button type="button" onClick={addRow}
-                          style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                          + Thêm
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
-                        {columns.map(c => (
-                          <span key={c.key} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{c.label}</span>
-                        ))}
-                        {isActive && <span />}
-                      </div>
-                      {rows.map((row, ri) => (
-                        <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${columns.map(c => c.width || '1fr').join(' ')} ${isActive ? '28px' : ''}`, gap: 4, padding: '3px 8px', borderBottom: ri < rows.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ri + 1}</span>
-                          {columns.map(c => {
-                            if (c.key.toLowerCase() === 'dvt') {
-                              return (
-                                <select key={c.key} className="input" value={row[c.key] || ''} disabled={!isActive}
-                                  onChange={e => update(ri, c.key, e.target.value)}
-                                  style={{ fontSize: '0.75rem', padding: '3px 2px' }}>
-                                  <option value="">-Chọn-</option>
-                                  <option value="kg">kg</option>
-                                  <option value="tấn">tấn</option>
-                                  <option value="m">m</option>
-                                  <option value="m2">m2</option>
-                                  <option value="m3">m3</option>
-                                  <option value="cái">cái</option>
-                                  <option value="bộ">bộ</option>
-                                  <option value="lít">lít</option>
-                                  <option value="tháng">tháng</option>
-                                  <option value="ngày">ngày</option>
-                                  <option value="giờ">giờ</option>
-                                  <option value="lóng">lóng</option>
-                                  <option value="tấm">tấm</option>
-                                  <option value="thanh">thanh</option>
-                                  <option value="ống">ống</option>
-                                </select>
-                              )
-                            }
-                            const isNumber = c.type === 'number' || ['kl', 'sl', 'dongia', 'thanhtien'].includes(c.key.toLowerCase())
-                            return (
-                              <input key={c.key} type={isNumber ? 'number' : 'text'} className="input" value={row[c.key] || ''} disabled={!isActive}
-                                onChange={e => update(ri, c.key, e.target.value)}
-                                placeholder={c.label}
-                                style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: isNumber ? 'right' : 'left' }} />
-                            )
-                          })}
-                          {isActive && rows.length > 1 && (
-                            <button type="button" onClick={() => removeRow(ri)}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rows.length} dòng</div>
-                  </div>
-                )
+              const fmt = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+              const contractVal = Number(task.project?.contractValue) || 0
+              const totalMat = Number(formData.totalMaterial) || 0
+              const totalLab = Number(formData.totalLabor) || 0
+              const totalSvc = Number(formData.totalService) || 0
+              const totalOvh = Number(formData.totalOverhead) || 0
+              const totalEst = Number(formData.totalEstimate) || 0
+              const profit = contractVal - totalEst
+              const pct = (v: number) => totalEst > 0 ? ((v / totalEst) * 100).toFixed(1) + '%' : '—'
+              const hasData = totalEst > 0
+
+              // Parse DT02 detail rows if available
+              let dt02Rows: { maCP: string; noiDung: string; giaTri: number }[] = []
+              try {
+                const parsed = formData.dt02Detail ? JSON.parse(String(formData.dt02Detail)) : null
+                if (Array.isArray(parsed)) dt02Rows = parsed
+              } catch { /* ignore */ }
+
+              // ── Import Excel: parse DT02 summary → store totals in formData ──
+              const importEstimateExcel = () => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.accept = '.xlsx,.xls'
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = (evt) => {
+                    const wb = XLSX.read(evt.target?.result, { type: 'binary' })
+                    const sheetNames = wb.SheetNames
+
+                    // Find DT02 sheet (contains "DT02" or "TH")
+                    const dt02Name = sheetNames.find(s => s.toLowerCase().includes('dt02'))
+                    if (!dt02Name) {
+                      setError('Không tìm thấy sheet DT02 trong file Excel.')
+                      return
+                    }
+
+                    const ws = wb.Sheets[dt02Name]
+                    const data: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
+
+                    // Parse DT02: find rows with Roman numerals I-IV for main categories
+                    let matTotal = 0, labTotal = 0, svcTotal = 0, ovhTotal = 0, grandTotal = 0
+                    const detailRows: { maCP: string; noiDung: string; giaTri: number }[] = []
+
+                    for (const row of data) {
+                      if (!row || row.length < 4) continue
+                      const stt = String(row[0] || '').trim()
+                      const content = String(row[2] || '').trim()
+                      const value = Number(row[3]) || 0
+
+                      if (stt === 'I') { matTotal = value; detailRows.push({ maCP: 'I', noiDung: content || 'Chi phí vật tư', giaTri: value }) }
+                      else if (stt === 'II') { labTotal = value; detailRows.push({ maCP: 'II', noiDung: content || 'Chi phí nhân công', giaTri: value }) }
+                      else if (stt === 'III') { svcTotal = value; detailRows.push({ maCP: 'III', noiDung: content || 'Chi phí dịch vụ', giaTri: value }) }
+                      else if (stt === 'IV') { ovhTotal = value; detailRows.push({ maCP: 'IV', noiDung: content || 'Chi phí chung', giaTri: value }) }
+
+                      // Sub-items (numeric STT under each category)
+                      if (/^\d+$/.test(stt) && value > 0) {
+                        const maCP = String(row[1] || stt)
+                        detailRows.push({ maCP, noiDung: content, giaTri: value })
+                      }
+                    }
+
+                    // Find grand total row
+                    for (const row of data) {
+                      if (!row) continue
+                      const content = String(row[2] || '').toLowerCase()
+                      if (content.includes('tổng hợp') || content.includes('tổng chi phí')) {
+                        grandTotal = Number(row[3]) || 0
+                      }
+                    }
+                    if (!grandTotal) grandTotal = matTotal + labTotal + svcTotal + ovhTotal
+
+                    if (grandTotal > 0) {
+                      // Store summary values using functional updates
+                      setFormData(prev => ({
+                        ...prev,
+                        totalMaterial: matTotal,
+                        totalLabor: labTotal,
+                        totalService: svcTotal,
+                        totalOverhead: ovhTotal,
+                        totalEstimate: grandTotal,
+                        dt02Detail: JSON.stringify(detailRows),
+                        estimateFileName: file.name,
+                      }))
+                      setSuccessMsg(`✅ Đã import dự toán: ${fmt(grandTotal)} từ ${sheetNames.length} sheets`)
+                      setTimeout(() => setSuccessMsg(''), 4000)
+                    } else {
+                      setError('Không đọc được dữ liệu DT02. Kiểm tra file Excel có đúng định dạng.')
+                    }
+                  }
+                  reader.readAsBinaryString(file)
+                }
+                input.click()
+              }
+
+              // ── Export template (8-sheet Excel) ──
+              const exportTemplate = () => {
+                const wb = XLSX.utils.book_new()
+                const projectCode = task.project?.projectCode || 'PROJECT'
+
+                // Cover
+                const coverData = [
+                  ['CÔNG TY CỔ PHẦN KẾT CẤU THÉP IBS'], [], [],
+                  ['DỰ TOÁN THI CÔNG'], [],
+                  ['Mã dự án', projectCode],
+                  ['Khách hàng', task.project?.clientName || ''],
+                  ['Tên dự án', task.project?.projectName || ''],
+                ]
+                const wsCover = XLSX.utils.aoa_to_sheet(coverData)
+                wsCover['!cols'] = [{ wch: 20 }, { wch: 40 }]
+                XLSX.utils.book_append_sheet(wb, wsCover, '+Cover')
+
+                // DT01
+                const dt01Data = [
+                  ['DT01 — THÔNG TIN CHUNG DỰ ÁN'], [],
+                  ['STT', 'Dữ liệu', 'Thông tin', 'Ghi chú'],
+                  ['A', 'THÔNG TIN CHUNG'],
+                  [1, 'Khách hàng', task.project?.clientName || ''],
+                  [2, 'Tên dự án', task.project?.projectName || ''],
+                  [3, 'Mã dự án', projectCode],
+                  [4, 'Giá trị HĐ', contractVal],
+                ]
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dt01Data), 'DT01 (TTC)')
+
+                // DT02
+                const dt02Data = [
+                  ['TỔNG HỢP DỰ TOÁN CHI PHÍ THI CÔNG'], [],
+                  ['STT', 'Mã CP', 'Nội dung chi phí', 'Giá trị', 'Tỷ lệ'],
+                  ['I', '', 'Chi phí vật tư', '', ''],
+                  ['II', '', 'Chi phí nhân công trực tiếp', '', ''],
+                  ['III', '', 'Chi phí dịch vụ thuê ngoài', '', ''],
+                  ['IV', '', 'Chi phí chung', '', ''],
+                  [], ['', '', 'TỔNG HỢP CHI PHÍ', '=SUM(D4:D7)', ''],
+                ]
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dt02Data), 'DT02 (TH)')
+
+                // DT03-DT07 (empty templates with headers)
+                const sheets: [string, string, string[]][] = [
+                  ['DT03 (VT)', 'DỰ TOÁN CHI PHÍ VẬT TƯ', ['STT', 'Nhóm vật tư', 'Danh mục vật tư', 'Đơn vị tính', 'Khối lượng/ Số lượng', 'Đơn giá (vnd)', 'Thành tiền (vnd)']],
+                  ['DT04 (VT)', 'BẢNG DỰ TOÁN CHI TIẾT VẬT TƯ', ['STT', 'Nhóm vật tư', 'Mã vật tư', 'Danh mục vật tư', 'Đơn vị tính', 'Mác vật liệu', 'Quy cách', '', '', 'Khối lượng', 'Đơn giá (vnd)', 'Thành tiền (vnd)']],
+                  ['DT05 (DV)', 'DỰ TOÁN CHI PHÍ DỊCH VỤ', ['STT', 'Mã CP', 'NỘI DUNG CÔNG VIỆC', 'Đơn vị tính', 'Khối lượng', 'Đơn giá (vnd)', 'Thành tiền (vnd)']],
+                  ['DT06 (NC)', 'DỰ TOÁN CHI PHÍ NHÂN CÔNG TRỰC TIẾP', ['STT', 'Mã CP', 'NỘI DUNG CÔNG VIỆC', 'Đơn vị tính', 'Khối lượng', 'Đơn giá (vnd)', 'Thành tiền (vnd)']],
+                  ['DT07 (CPC)', 'DỰ TOÁN CHI PHÍ CHUNG, CHI PHÍ TÀI CHÍNH', ['STT', 'Mã CP', 'Danh mục chi phí', 'Đơn vị tính', 'Khối lượng', 'Đơn giá bình quân', 'Thành tiền']],
+                ]
+                sheets.forEach(([name, title, headers]) => {
+                  const data = [[title], [], headers]
+                  const ws = XLSX.utils.aoa_to_sheet(data)
+                  ws['!cols'] = headers.map(h => ({ wch: Math.max(String(h).length + 4, 14) }))
+                  XLSX.utils.book_append_sheet(wb, ws, name)
+                })
+
+                XLSX.writeFile(wb, `DuToan_Template_${projectCode}.xlsx`)
               }
 
               return (
                 <>
+                  {/* ── DT01: Thông tin dự án ── */}
+                  <div className="card" style={{ padding: '1.25rem', marginBottom: '0.5rem', borderLeft: '4px solid #3b82f6' }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#3b82f6' }}>DT01 — Thông tin chung dự án</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', fontSize: '0.85rem' }}>
+                      <div><span style={{ color: 'var(--text-muted)' }}>Mã dự án:</span> <strong>{task.project.projectCode}</strong></div>
+                      <div><span style={{ color: 'var(--text-muted)' }}>Khách hàng:</span> <strong>{task.project.clientName}</strong></div>
+                      <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-muted)' }}>Tên dự án:</span> <strong>{task.project.projectName}</strong></div>
+                      {task.project.contractValue && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{Number(task.project.contractValue).toLocaleString('vi-VN')} đ</strong></div>}
+                      {task.project.productType && <div><span style={{ color: 'var(--text-muted)' }}>Sản phẩm:</span> {task.project.productType}</div>}
+                      {task.project.startDate && <div><span style={{ color: 'var(--text-muted)' }}>Bắt đầu:</span> {new Date(task.project.startDate).toLocaleDateString('vi-VN')}</div>}
+                      {task.project.endDate && <div><span style={{ color: 'var(--text-muted)' }}>Giao hàng:</span> {new Date(task.project.endDate).toLocaleDateString('vi-VN')}</div>}
+                    </div>
+                  </div>
 
-                  {/* ── TM: DT03 - Dự toán VT tổng hợp ── */}
-                  {renderEstTable('📦 DT03 — Dự toán chi phí VT', 'QT30-DT03', 'dt03Items',
-                    [
-                      { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
-                      { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
-                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.6fr' },
-                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.8fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.8fr' },
-                    ],
-                    [
-                      { nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTP', danhMuc: 'Vật tư phụ kiện, bu lông…', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTDK', danhMuc: 'Vật tư đóng kiện', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTBP', danhMuc: 'Vật tư làm biện pháp', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTTH', danhMuc: 'Vật tư tiêu hao', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTS', danhMuc: 'Vật tư sơn', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { nhomVT: 'VTDP', danhMuc: 'Vật tư dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                    ]
-                  )}
+                  {/* ── Excel Upload/Download ── */}
+                  <div className="card" style={{ padding: '1.25rem', marginBottom: '0.5rem', borderLeft: '4px solid #7c3aed' }}>
+                    <h3 style={{ margin: '0 0 10px', fontSize: '0.95rem', color: '#7c3aed' }}>Excel Dự toán thi công</h3>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px' }}>
+                      Upload file Excel dự toán (8 sheets: Cover, DT01-DT07). Hệ thống tự động đọc DT02 để hiển thị tổng hợp chi phí.
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" onClick={exportTemplate}
+                        style={{ flex: 1, padding: '10px 16px', fontSize: '0.85rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                        Tải Template Dự Toán
+                      </button>
+                      {isActive && (
+                        <button type="button" onClick={importEstimateExcel}
+                          style={{ flex: 1, padding: '10px 16px', fontSize: '0.85rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                        Upload Excel Dự Toán
+                        </button>
+                      )}
+                    </div>
+                    {formData.estimateFileName && (
+                      <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: '0.8rem' }}>
+                        File đã upload: <strong>{String(formData.estimateFileName)}</strong>
+                      </div>
+                    )}
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '8px 0 0', fontStyle: 'italic' }}>
+                      Đính kèm file gốc ở mục &quot;Tài liệu đính kèm&quot; bên dưới để lưu trữ.
+                    </p>
+                  </div>
 
-                  {/* ── TM: DT04 - Dự toán VT chi tiết ── */}
-                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items',
-                    [
-                      { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
-                      { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
-                      { key: 'macVL', label: 'Mác VL', width: '0.6fr' },
-                      { key: 'quyCach', label: 'Quy cách', width: '0.7fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.4fr' },
-                      { key: 'kl', label: 'KL/SL', type: 'number', width: '0.5fr' },
-                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
-                    ],
-                    [{ maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' }]
-                  )}
+                  {/* ── DT02: Tổng hợp chi phí (from parsed Excel) ── */}
+                  <div className="card" style={{ padding: '1.25rem', marginTop: '0.5rem', borderLeft: '4px solid #059669' }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#059669' }}>DT02 — Tổng hợp dự toán chi phí</h3>
+                    {!hasData ? (
+                      <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        Chưa có dữ liệu. Vui lòng upload file Excel dự toán.
+                      </div>
+                    ) : (
+                      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontSize: '0.85rem' }}>
+                        {[
+                          { label: 'I. Chi phí vật tư', value: totalMat, color: '#e63946' },
+                          { label: 'II. Chi phí nhân công', value: totalLab, color: '#f59e0b' },
+                          { label: 'III. Chi phí dịch vụ', value: totalSvc, color: '#3b82f6' },
+                          { label: 'IV. Chi phí chung', value: totalOvh, color: '#8b5cf6' },
+                        ].map((item, i) => (
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 600 }}>{item.label}</span>
+                            <span style={{ textAlign: 'right', fontWeight: 600, color: item.color }}>{fmt(item.value)}</span>
+                            <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{pct(item.value)}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '10px 12px', background: 'var(--bg-secondary)', fontWeight: 700, fontSize: '0.95rem' }}>
+                          <span>TỔNG CHI PHÍ</span>
+                          <span style={{ textAlign: 'right', color: 'var(--accent)' }}>{fmt(totalEst)}</span>
+                          <span style={{ textAlign: 'right' }}>100%</span>
+                        </div>
+                        {contractVal > 0 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.5fr', padding: '8px 12px', borderTop: '2px solid var(--border)' }}>
+                            <span style={{ fontWeight: 600 }}>Lợi nhuận dự kiến</span>
+                            <span style={{ textAlign: 'right', fontWeight: 700, color: profit >= 0 ? '#059669' : '#dc2626' }}>{fmt(profit)}</span>
+                            <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{((profit / contractVal) * 100).toFixed(1)}%</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  {/* ── TM: DT05 - Dự toán dịch vụ ── */}
-                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items',
-                    [
-                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
-                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
-                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
-                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
-                    ],
-                    [
-                      { maCP: 'VT', noiDung: 'Vận tải', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'NDT', noiDung: 'NDT, quy trình và thí nghiệm', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'MK', noiDung: 'Mạ kẽm', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CPK', noiDung: 'Các chi phí khác', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                    ]
-                  )}
-
-                  {/* ── SX: DT06 - Dự toán nhân công ── */}
-                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công', 'QT30-DT06', 'dt06Items',
-                    [
-                      { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
-                      { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
-                      { key: 'dvt', label: 'ĐVT', width: '0.5fr' },
-                      { key: 'kl', label: 'KL', type: 'number', width: '0.5fr' },
-                      { key: 'donGia', label: 'Đơn giá', type: 'number', width: '0.7fr' },
-                      { key: 'thanhTien', label: 'Thành tiền', type: 'number', width: '0.7fr' },
-                    ],
-                    [
-                      { maCP: 'PC', noiDung: 'Pha cắt', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'GC', noiDung: 'Gia công', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CT', noiDung: 'Chế tạo - Lan can', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CT', noiDung: 'Chế tạo - Giá đỡ', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CT', noiDung: 'Chế tạo - Ống', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'CT', noiDung: 'Chế tạo - Hộp', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'KK', noiDung: 'Khung kiện', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'TH', noiDung: 'Tổ hợp sản phẩm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'LD', noiDung: 'Lắp dựng + Nghiệm thu', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'VS', noiDung: 'Vệ sinh vật liệu hợp kim', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'SON', noiDung: 'Làm sạch, Sơn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'BO', noiDung: 'Bảo ôn', dvt: 'm²', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'LTB', noiDung: 'Lắp thiết bị phụ kiện trước đóng kiện', dvt: 'Bộ', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'DK', noiDung: 'Đóng kiện', dvt: 'Kiện', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'GH', noiDung: 'Giao hàng', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
-                      { maCP: 'DP', noiDung: 'Nhân công dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
-                    ]
-                  )}
+                    {/* DT02 Detail breakdown (collapsible) */}
+                    {dt02Rows.length > 0 && (
+                      <details style={{ marginTop: 10 }}>
+                        <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                          Chi tiết DT02 ({dt02Rows.length} dòng)
+                        </summary>
+                        <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', marginTop: 6, fontSize: '0.8rem' }}>
+                          {dt02Rows.map((row, i) => {
+                            const isHeader = ['I', 'II', 'III', 'IV'].includes(row.maCP)
+                            return (
+                              <div key={i} style={{
+                                display: 'grid', gridTemplateColumns: '60px 1fr 120px',
+                                padding: '4px 10px', borderBottom: '1px solid var(--border)',
+                                background: isHeader ? 'var(--bg-secondary)' : 'transparent',
+                                fontWeight: isHeader ? 700 : 400,
+                              }}>
+                                <span style={{ color: 'var(--text-muted)' }}>{row.maCP}</span>
+                                <span>{row.noiDung}</span>
+                                <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? Number(row.giaTri).toLocaleString('vi-VN') : ''}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </details>
+                    )}
+                  </div>
                 </>
               )
             })()}
+
+                        {/* P1.2A: MOM Sections (BB họp triển khai) */}
+            {task.stepCode === 'P1.2A' && (
+              <MomSectionsUI
+                isEditable={isActive}
+                attendantsData={formData['momAttendants']}
+                sectionsData={formData['momSections']}
+                onAttendantsChange={(val) => handleFieldChange('momAttendants', val)}
+                onSectionsChange={(val) => handleFieldChange('momSections', val)}
+                onHeaderImport={(h) => {
+                  Object.entries(h).forEach(([k, v]) => handleFieldChange(k, v))
+                }}
+              />
+            )}
 
                         {/* P1.2A: Dynamic WBS Table UI */}
             {task.stepCode === 'P1.2A' && <WbsTableUI isWbsEditable={isActive} wbsItemsData={formData['wbsItems']} onChange={(val) => handleFieldChange('wbsItems', val)} />}
@@ -2381,7 +2926,6 @@ export default function TaskDetailPage() {
             {task.stepCode === 'P3.1' && (() => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const planData = (previousStepData as any)?.plan || {}
-              type WbsRow = Record<string, string>
               let wbsRows: WbsRow[] = []
               try {
                 const raw = planData.wbsItems
@@ -4630,7 +5174,7 @@ export default function TaskDetailPage() {
                     </div>
                   </div>
                   {/* Original form fields below — hidden for P3.3/P3.4 which use WBS-only workflow */}
-                  {task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && (
+                  {(task.stepCode as string) !== 'P3.3' && (task.stepCode as string) !== 'P3.4' && (
                   <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                     <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
                       📝 Thông tin nhập liệu
@@ -4888,8 +5432,8 @@ export default function TaskDetailPage() {
             {(task.stepCode === 'P2.1' || task.stepCode === 'P2.2' || task.stepCode === 'P2.3') && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: `2px solid ${task.stepCode === 'P3.3' ? '#f59e0b' : 'var(--accent)'}`, paddingBottom: 8, flex: 1 }}>
-                    {task.stepCode === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: `2px solid ${(task.stepCode as string) === 'P3.3' ? '#f59e0b' : 'var(--accent)'}`, paddingBottom: 8, flex: 1 }}>
+                    {(task.stepCode as string) === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
                   </h3>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" onClick={exportBomExcel}
@@ -5011,94 +5555,7 @@ export default function TaskDetailPage() {
 
             {/* P3.4: Production Order - now handled via WBS LSX workflow */}
 
-            {/* Milestones Section — only for P1.2A */}
-            {task.stepCode === 'P1.2A' && (
-              <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, flex: 1 }}>
-                    🎯 Milestones <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (ít nhất 1)</span>
-                  </h3>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button type="button" onClick={exportMilestonesExcel}
-                      style={{ padding: '8px 12px', fontSize: '0.85rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                      📥 Export Excel
-                    </button>
-                    {isActive && (
-                      <button type="button" onClick={importMilestonesExcel}
-                        style={{ padding: '8px 12px', fontSize: '0.85rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                        📤 Import Excel
-                      </button>
-                    )}
-                    {isActive && (
-                      <button type="button" onClick={addMilestone}
-                        style={{
-                          background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6,
-                          padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
-                          display: 'flex', alignItems: 'center', gap: 6,
-                        }}>
-                        ➕ Thêm
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {milestones.length === 0 && (
-                  <div style={{
-                    padding: '2rem', textAlign: 'center', border: '2px dashed var(--border)',
-                    borderRadius: 10, color: 'var(--text-muted)', fontSize: '0.9rem',
-                  }}>
-                    Chưa có milestone nào. Nhấn &quot;Thêm Milestone&quot; để bắt đầu.
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {milestones.map((ms, idx) => (
-                    <div key={idx} style={{
-                      border: '1px solid var(--border)', borderRadius: 10, padding: '1rem',
-                      background: 'var(--bg-secondary)', position: 'relative',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--accent)' }}>Milestone #{idx + 1}</span>
-                        {isActive && (
-                          <button type="button" onClick={() => removeMilestone(idx)}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}>
-                            ✕ Xóa
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Nội dung <span style={{ color: '#e74c3c' }}>*</span></label>
-                          <input className="input" value={ms.name} disabled={!isActive}
-                            onChange={e => updateMilestone(idx, 'name', e.target.value)}
-                            placeholder="Ví dụ: Hoàn thành bản vẽ chi tiết" />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Ngày bắt đầu</label>
-                            <input className="input" type="date" value={ms.startDate} disabled={!isActive}
-                              onChange={e => updateMilestone(idx, 'startDate', e.target.value)} />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Ngày kết thúc</label>
-                            <input className="input" type="date" value={ms.endDate} disabled={!isActive}
-                              onChange={e => updateMilestone(idx, 'endDate', e.target.value)} />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Người chịu trách nhiệm</label>
-                            <select className="input" value={ms.assigneeId} disabled={!isActive}
-                              onChange={e => updateMilestone(idx, 'assigneeId', e.target.value)}>
-                              <option value="">-- Chọn --</option>
-                              {userList.map(u => (
-                                <option key={u.id} value={u.id}>{u.fullName} ({u.roleCode})</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Milestones Section removed for P1.2A — MOM sections now handle project planning */}
 
             {/* Notes */}
             <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
@@ -5224,6 +5681,51 @@ export default function TaskDetailPage() {
                 </label>
               ))}
             </div>
+
+            {/* Previous Step Documents */}
+            {previousStepFiles.length > 0 && (
+              <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>📂 Tài liệu từ các bước trước</h3>
+                {previousStepFiles.map(step => (
+                  <div key={step.stepCode} style={{ marginBottom: 12 }}>
+                    <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                      {step.stepCode} — {step.stepName}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {step.files.map(f => (
+                        <a
+                          key={f.id}
+                          href={f.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '6px 10px', borderRadius: 8,
+                            background: 'var(--bg-secondary)', textDecoration: 'none',
+                            color: 'var(--text-primary)', fontSize: '0.85rem',
+                            border: '1px solid var(--border)',
+                          }}
+                        >
+                          <span style={{ fontSize: '1rem' }}>
+                            {f.mimeType?.includes('pdf') ? '📄' : f.mimeType?.includes('image') ? '🖼️' : f.mimeType?.includes('sheet') || f.fileName.match(/\.xlsx?$/) ? '📊' : '📎'}
+                          </span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.fileName}
+                          </span>
+                          {f.fileSize && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                              {f.fileSize > 1048576 ? `${(f.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(f.fileSize / 1024)} KB`}
+                            </span>
+                          )}
+                          <span style={{ color: '#3b82f6', fontSize: '0.8rem', fontWeight: 600, flexShrink: 0 }}>⬇ Tải</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Attachments */}
             {config.attachments.length > 0 && (
@@ -5438,6 +5940,73 @@ export default function TaskDetailPage() {
           )}
         </div>
       )}
+
+      {/* Assign Task Modal */}
+      {showAssignModal && task && (
+        <TaskAssignModal
+          task={task}
+          userList={userList}
+          onClose={() => setShowAssignModal(false)}
+          onSubmit={handleAssignTask}
+        />
+      )}
+    </div>
+  )
+}
+
+function TaskAssignModal({ task, userList, onClose, onSubmit }: {
+  task: TaskData
+  userList: { id: string; fullName: string; roleCode: string }[]
+  onClose: () => void
+  onSubmit: (userId: string) => void
+}) {
+  const [selectedUser, setSelectedUser] = useState('')
+  const baseRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
+  const relevantUsers = userList.filter(u => u.roleCode.startsWith(baseRole))
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
+      <div className="card w-full max-w-md rounded-2xl p-6 shadow-2xl relative" style={{ background: 'var(--bg-card, #fff)' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>👤 Phân công công việc</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--bg-secondary)]" style={{ color: 'var(--text-muted)', fontSize: 20, lineHeight: 1 }}>&times;</button>
+        </div>
+        <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>
+          Bước <strong>{task.stepCode} — {task.stepName}</strong><br />
+          Vai trò phụ trách: <span className="font-mono px-1 rounded" style={{ background: 'var(--bg-secondary)' }}>{task.assignedRole}</span>
+        </p>
+
+        {relevantUsers.length === 0 ? (
+          <div className="py-8 text-center text-red-500">Không tìm thấy nhân viên nào thuộc {task.assignedRole}.</div>
+        ) : (
+          <div className="mb-6">
+            <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>CHỌN NHÂN SỰ</label>
+            <select
+              className="w-full p-2.5 rounded-xl border"
+              style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border)', outline: 'none' }}
+              value={selectedUser}
+              onChange={e => setSelectedUser(e.target.value)}
+            >
+              <option value="">-- Click để chọn --</option>
+              {relevantUsers.map(u => (
+                <option key={u.id} value={u.id}>{u.fullName} ({u.roleCode})</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 mt-4">
+          <button onClick={onClose} className="px-4 py-2 font-semibold rounded-lg hover:opacity-80 transition" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>Hủy</button>
+          <button
+            onClick={() => { if (selectedUser) onSubmit(selectedUser) }}
+            className="px-5 py-2 font-bold rounded-lg transition hover:opacity-90 disabled:opacity-50"
+            style={{ background: '#3b82f6', color: 'white' }}
+            disabled={relevantUsers.length === 0 || !selectedUser}
+          >
+            Lưu / Giao việc
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

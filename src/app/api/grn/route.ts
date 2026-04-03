@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createGrnSchema } from '@/lib/schemas'
 
 // GET /api/grn — List goods received (stock movements with type=IN, reason=po_receipt)
 export async function GET(req: NextRequest) {
@@ -48,15 +50,9 @@ export async function POST(req: NextRequest) {
     return errorResponse('Không có quyền nhận hàng', 403)
   }
 
-  const body = await req.json()
-  const { poId, items } = body as {
-    poId: string
-    items: Array<{ poItemId: string; receivedQty: number; heatNumber?: string; lotNumber?: string; notes?: string }>
-  }
-
-  if (!poId || !items || items.length === 0) {
-    return errorResponse('Thiếu thông tin PO hoặc vật tư nhận')
-  }
+  const validation = await validateBody(req, createGrnSchema)
+  if (!validation.success) return validation.response
+  const { poId, items } = validation.data
 
   // Validate PO exists and is in receivable state
   const po = await prisma.purchaseOrder.findUnique({

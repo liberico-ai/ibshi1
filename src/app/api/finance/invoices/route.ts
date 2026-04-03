@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { validateQuery } from '@/lib/api-helpers'
+import { searchFilterSchema } from '@/lib/schemas'
 
 // GET /api/finance/invoices
 export async function GET(req: NextRequest) {
@@ -8,11 +10,10 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    const { searchParams } = new URL(req.url)
-    const type = searchParams.get('type') || ''
-    const status = searchParams.get('status') || ''
-    const search = searchParams.get('search') || ''
-    const page = Math.max(1, Number(searchParams.get('page')) || 1)
+    const qResult = validateQuery(req.url, searchFilterSchema)
+    if (!qResult.success) return qResult.response
+    const { page, search, status } = qResult.data
+    const type = new URL(req.url).searchParams.get('type') || ''
     const limit = 20
 
     const where: Record<string, unknown> = {}

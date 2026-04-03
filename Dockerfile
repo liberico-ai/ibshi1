@@ -2,7 +2,7 @@
 FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 # ── Stage 2: Build ────────────────────────────────────────────────────────────
 FROM node:24-alpine AS builder
@@ -36,7 +36,15 @@ COPY --from=builder /app/prisma          ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
+# Create uploads directory with correct ownership BEFORE switching to nextjs user
+# This allows the app to write uploaded files at runtime
+RUN mkdir -p /app/public/uploads && \
+    chown -R nextjs:nodejs /app/public/uploads
+
 USER nextjs
+
+# Declare uploads as a volume so files persist across container restarts
+VOLUME ["/app/public/uploads"]
 
 EXPOSE 3000
 ENV PORT=3000
