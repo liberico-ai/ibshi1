@@ -1677,21 +1677,6 @@ export default function TaskDetailPage() {
       return
     }
 
-    // Validate milestones for P1.2A
-    if (task.stepCode === 'P1.2A' && action === 'complete') {
-      if (milestones.length === 0) {
-        setError('Vui lòng thêm ít nhất 1 milestone')
-        setSubmitting(false)
-        return
-      }
-      const incompleteMilestones = milestones.some(m => !m.name.trim())
-      if (incompleteMilestones) {
-        setError('Vui lòng nhập tên cho tất cả milestone')
-        setSubmitting(false)
-        return
-      }
-    }
-
     // Validate BOM items for P2.1 (VT chính) — P2.2 is optional
     if (task.stepCode === 'P2.1' && action === 'complete') {
       const filledBomItems = bomItems.filter(b => b.name.trim() && b.code.trim())
@@ -2024,22 +2009,6 @@ export default function TaskDetailPage() {
                       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
                         <WbsTableUI isWbsEditable={false} wbsItemsData={previousStepData.plan.wbsItems} />
                       </div>
-                      {previousStepData.plan.milestones && previousStepData.plan.milestones.length > 0 && (
-                        <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-                          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Milestones ({previousStepData.plan.milestones.length})</label>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {previousStepData.plan.milestones.map((ms: { name: string; startDate: string; endDate: string; assigneeId: string }, i: number) => (
-                              <div key={i} style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '0.75rem', border: '1px solid var(--border)' }}>
-                                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>#{i+1} {ms.name}</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-                                  {ms.startDate && `Bắt đầu: ${ms.startDate}`}{ms.endDate && ` — Kết thúc: ${ms.endDate}`}
-                                  {ms.assigneeId && ` | Phụ trách: ${userList.find(u => u.id === ms.assigneeId)?.fullName || ms.assigneeId}`}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu kế hoạch</div>
@@ -5440,94 +5409,7 @@ export default function TaskDetailPage() {
 
             {/* P3.4: Production Order - now handled via WBS LSX workflow */}
 
-            {/* Milestones Section — only for P1.2A */}
-            {task.stepCode === 'P1.2A' && (
-              <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, flex: 1 }}>
-                    🎯 Milestones <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (ít nhất 1)</span>
-                  </h3>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button type="button" onClick={exportMilestonesExcel}
-                      style={{ padding: '8px 12px', fontSize: '0.85rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                      📥 Export Excel
-                    </button>
-                    {isActive && (
-                      <button type="button" onClick={importMilestonesExcel}
-                        style={{ padding: '8px 12px', fontSize: '0.85rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                        📤 Import Excel
-                      </button>
-                    )}
-                    {isActive && (
-                      <button type="button" onClick={addMilestone}
-                        style={{
-                          background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6,
-                          padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
-                          display: 'flex', alignItems: 'center', gap: 6,
-                        }}>
-                        ➕ Thêm
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {milestones.length === 0 && (
-                  <div style={{
-                    padding: '2rem', textAlign: 'center', border: '2px dashed var(--border)',
-                    borderRadius: 10, color: 'var(--text-muted)', fontSize: '0.9rem',
-                  }}>
-                    Chưa có milestone nào. Nhấn &quot;Thêm Milestone&quot; để bắt đầu.
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {milestones.map((ms, idx) => (
-                    <div key={idx} style={{
-                      border: '1px solid var(--border)', borderRadius: 10, padding: '1rem',
-                      background: 'var(--bg-secondary)', position: 'relative',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--accent)' }}>Milestone #{idx + 1}</span>
-                        {isActive && (
-                          <button type="button" onClick={() => removeMilestone(idx)}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}>
-                            ✕ Xóa
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Nội dung <span style={{ color: '#e74c3c' }}>*</span></label>
-                          <input className="input" value={ms.name} disabled={!isActive}
-                            onChange={e => updateMilestone(idx, 'name', e.target.value)}
-                            placeholder="Ví dụ: Hoàn thành bản vẽ chi tiết" />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Ngày bắt đầu</label>
-                            <input className="input" type="date" value={ms.startDate} disabled={!isActive}
-                              onChange={e => updateMilestone(idx, 'startDate', e.target.value)} />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Ngày kết thúc</label>
-                            <input className="input" type="date" value={ms.endDate} disabled={!isActive}
-                              onChange={e => updateMilestone(idx, 'endDate', e.target.value)} />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>Người chịu trách nhiệm</label>
-                            <select className="input" value={ms.assigneeId} disabled={!isActive}
-                              onChange={e => updateMilestone(idx, 'assigneeId', e.target.value)}>
-                              <option value="">-- Chọn --</option>
-                              {userList.map(u => (
-                                <option key={u.id} value={u.id}>{u.fullName} ({u.roleCode})</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Milestones Section removed for P1.2A — MOM sections now handle project planning */}
 
             {/* Notes */}
             <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
