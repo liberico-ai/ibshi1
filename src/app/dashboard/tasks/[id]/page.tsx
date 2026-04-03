@@ -2229,8 +2229,320 @@ export default function TaskDetailPage() {
                 return { totalMat, totalLab, totalSvc, totalOvh, total, pct, fmt, contractVal, profit }
               })()
 
+              // ── Multi-sheet Excel Export (8 sheets: Cover, DT01-DT07) ──
+              const parseRows = (key: string): Record<string, string>[] => {
+                try { const p = formData[key] ? JSON.parse(String(formData[key])) : null; return Array.isArray(p) ? p : [] } catch { return [] }
+              }
+
+              const exportFullEstimate = () => {
+                const wb = XLSX.utils.book_new()
+                const projectCode = task.project?.projectCode || 'PROJECT'
+                const clientName = task.project?.clientName || ''
+                const projectName = task.project?.projectName || ''
+                const contractVal = Number(task.project?.contractValue) || 0
+                const totalCost = dt02Summary.total
+                const profit = contractVal - totalCost
+
+                // ── Sheet 1: Cover ──
+                const coverData = [
+                  ['CÔNG TY CỔ PHẦN KẾT CẤU THÉP IBS'],
+                  ['DỰ TOÁN THI CÔNG'],
+                  [],
+                  ['Mã dự án:', projectCode],
+                  ['Khách hàng:', clientName],
+                  ['Tên dự án:', projectName],
+                  ['Số hợp đồng:', String(formData.dt01_contractNumber || '')],
+                  [],
+                  ['Giá trị hợp đồng:', contractVal],
+                  ['Tổng chi phí dự toán:', totalCost],
+                  ['Lợi nhuận dự kiến:', profit],
+                  ['Tỷ lệ LN (%):', contractVal > 0 ? ((profit / contractVal) * 100).toFixed(1) + '%' : ''],
+                  [],
+                  ['Người lập:', '', '', 'Người duyệt:'],
+                ]
+                const wsCover = XLSX.utils.aoa_to_sheet(coverData)
+                wsCover['!cols'] = [{ wch: 24 }, { wch: 30 }, { wch: 16 }, { wch: 24 }]
+                // Formula refs to DT02 sheet
+                XLSX.utils.sheet_add_aoa(wsCover, [['=\'DT02(TH)\'!C9']], { origin: 'B10' })
+                XLSX.utils.book_append_sheet(wb, wsCover, '+Cover')
+
+                // ── Sheet 2: DT01(TTC) — Project Info ──
+                const dt01Data = [
+                  ['DT01 — THÔNG TIN CHUNG DỰ ÁN'],
+                  [],
+                  ['A. THÔNG TIN DỰ ÁN'],
+                  ['Mã dự án', projectCode],
+                  ['Khách hàng', clientName],
+                  ['Tên dự án', projectName],
+                  ['Sản phẩm', task.project?.productType || ''],
+                  ['Giá trị HĐ', contractVal],
+                  ['Ngày bắt đầu', task.project?.startDate ? new Date(task.project.startDate).toLocaleDateString('vi-VN') : ''],
+                  ['Ngày giao hàng', task.project?.endDate ? new Date(task.project.endDate).toLocaleDateString('vi-VN') : ''],
+                  [],
+                  ['B. PHẠM VI CÔNG VIỆC'],
+                  ['Khối lượng thi công', String(formData.dt01_volume || '')],
+                  ['Đợt thanh toán', String(formData.dt01_paymentTerms || '')],
+                  ['Điều khoản phạt', String(formData.dt01_penalties || '')],
+                  [],
+                  ['C. TỔNG HỢP P&L'],
+                  ['Tổng doanh thu (HĐ)', contractVal],
+                  ['Tổng chi phí', '=\'DT02(TH)\'!C9'],
+                  ['Lợi nhuận', '=B18-B19'],
+                  ['Tỷ lệ LN (%)', '=IF(B18>0,B20/B18*100,0)'],
+                ]
+                const wsDt01 = XLSX.utils.aoa_to_sheet(dt01Data)
+                wsDt01['!cols'] = [{ wch: 22 }, { wch: 36 }]
+                XLSX.utils.book_append_sheet(wb, wsDt01, 'DT01(TTC)')
+
+                // ── Sheet 3: DT02(TH) — Cost Summary ──
+                const dt02Data = [
+                  ['DT02 — TỔNG HỢP DỰ TOÁN CHI PHÍ'],
+                  [],
+                  ['STT', 'Hạng mục chi phí', 'Giá trị (VNĐ)', 'Tỷ lệ (%)'],
+                  ['I', 'Chi phí vật tư', '=\'DT03(VT)\'!G' + 'LAST', '=IF(C9>0,C4/C9*100,0)'],
+                  ['II', 'Chi phí nhân công', '=\'DT06(NC)\'!G' + 'LAST', '=IF(C9>0,C5/C9*100,0)'],
+                  ['III', 'Chi phí dịch vụ', '=\'DT05(DV)\'!G' + 'LAST', '=IF(C9>0,C6/C9*100,0)'],
+                  ['IV', 'Chi phí chung (CPC)', '=\'DT07(CPC)\'!G' + 'LAST', '=IF(C9>0,C7/C9*100,0)'],
+                  [],
+                  ['', 'TỔNG CHI PHÍ', '=SUM(C4:C7)', '100%'],
+                ]
+                const wsDt02 = XLSX.utils.aoa_to_sheet(dt02Data)
+                wsDt02['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 20 }, { wch: 12 }]
+                XLSX.utils.book_append_sheet(wb, wsDt02, 'DT02(TH)')
+
+                // Helper: create detail sheet from table data
+                const makeDetailSheet = (
+                  _sheetTitle: string, dataKey: string,
+                  cols: { key: string; label: string }[]
+                ) => {
+                  const rows = parseRows(dataKey)
+                  const headers = ['STT', ...cols.map(c => c.label)]
+                  const data = rows.map((r, i) => [i + 1, ...cols.map(c => {
+                    const v = r[c.key] || ''
+                    return isNaN(Number(v)) || v === '' ? v : Number(v)
+                  })])
+                  const lastDataRow = data.length + 2 // header at row 1, data starts row 2
+                  const totalRow = new Array(headers.length).fill('')
+                  totalRow[0] = ''
+                  totalRow[1] = 'TỔNG CỘNG'
+                  // SUM formula for thanhTien column
+                  const sumColIdx = cols.findIndex(c => c.key === 'thanhTien' || c.key === 'giaTri')
+                  if (sumColIdx >= 0) {
+                    const colLetter = String.fromCharCode(66 + sumColIdx) // B=66, +sumColIdx (STT is col A, data starts at B)
+                    totalRow[sumColIdx + 1] = `=SUM(${colLetter}2:${colLetter}${lastDataRow})`
+                  }
+                  const allData = [headers, ...data, totalRow]
+                  const ws = XLSX.utils.aoa_to_sheet(allData)
+                  ws['!cols'] = headers.map(h => ({ wch: Math.max(String(h).length + 4, 14) }))
+                  return { ws, lastRow: lastDataRow + 1 } // lastRow = total row number
+                }
+
+                // ── Sheet 4: DT03(VT) ──
+                const dt03Cols = [
+                  { key: 'nhomVT', label: 'Nhóm VT' }, { key: 'danhMuc', label: 'Danh mục VT' },
+                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL/SL' },
+                  { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
+                ]
+                const { ws: wsDt03 } = makeDetailSheet('DT03 — Dự toán VT', 'dt03Items', dt03Cols)
+                XLSX.utils.book_append_sheet(wb, wsDt03, 'DT03(VT)')
+
+                // ── Sheet 5: DT04(VT detail) ──
+                const dt04Cols = [
+                  { key: 'maVT', label: 'Mã VT' }, { key: 'tenVT', label: 'Tên VT' },
+                  { key: 'macVL', label: 'Mác VL' }, { key: 'quyCach', label: 'Quy cách' },
+                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL/SL' },
+                  { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
+                ]
+                const { ws: wsDt04 } = makeDetailSheet('DT04 — Chi tiết VT', 'dt04Items', dt04Cols)
+                XLSX.utils.book_append_sheet(wb, wsDt04, 'DT04(VT)')
+
+                // ── Sheet 6: DT05(DV) ──
+                const dt05Cols = [
+                  { key: 'maCP', label: 'Mã CP' }, { key: 'noiDung', label: 'Nội dung công việc' },
+                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
+                  { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
+                ]
+                const { ws: wsDt05 } = makeDetailSheet('DT05 — Dịch vụ', 'dt05Items', dt05Cols)
+                XLSX.utils.book_append_sheet(wb, wsDt05, 'DT05(DV)')
+
+                // ── Sheet 7: DT06(NC) ──
+                const dt06Cols = [
+                  { key: 'maCP', label: 'Mã CP' }, { key: 'noiDung', label: 'Nội dung công việc' },
+                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
+                  { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
+                ]
+                const { ws: wsDt06 } = makeDetailSheet('DT06 — Nhân công', 'dt06Items', dt06Cols)
+                XLSX.utils.book_append_sheet(wb, wsDt06, 'DT06(NC)')
+
+                // ── Sheet 8: DT07(CPC) ──
+                const dt07Cols = [
+                  { key: 'maCP', label: 'Mã CP' }, { key: 'danhMuc', label: 'Danh mục chi phí' },
+                  { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
+                  { key: 'donGia', label: 'Đơn giá BQ' }, { key: 'thanhTien', label: 'Thành tiền' },
+                ]
+                const { ws: wsDt07 } = makeDetailSheet('DT07 — Chi phí chung', 'dt07Items', dt07Cols)
+                XLSX.utils.book_append_sheet(wb, wsDt07, 'DT07(CPC)')
+
+                // Calculate actual total row positions for DT02 cross-sheet formulas
+                const dt03Rows = parseRows('dt03Items')
+                const dt05Rows = parseRows('dt05Items')
+                const dt06Rows = parseRows('dt06Items')
+                const dt07Rows = parseRows('dt07Items')
+                const dt03TotalRow = dt03Rows.length + 2
+                const dt05TotalRow = dt05Rows.length + 2
+                const dt06TotalRow = dt06Rows.length + 2
+                const dt07TotalRow = dt07Rows.length + 2
+
+                // Re-set DT02 cells with correct formula references
+                wsDt02['C4'] = { t: 'n', f: `'DT03(VT)'!G${dt03TotalRow}` }
+                wsDt02['C5'] = { t: 'n', f: `'DT06(NC)'!G${dt06TotalRow}` }
+                wsDt02['C6'] = { t: 'n', f: `'DT05(DV)'!G${dt05TotalRow}` }
+                wsDt02['C7'] = { t: 'n', f: `'DT07(CPC)'!G${dt07TotalRow}` }
+
+                XLSX.writeFile(wb, `DuToan_${projectCode}.xlsx`)
+              }
+
+              // ── Multi-sheet Excel Import ──
+              const importFullEstimate = () => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.accept = '.xlsx,.xls'
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = (evt) => {
+                    const wb = XLSX.read(evt.target?.result, { type: 'binary' })
+                    const sheetNames = wb.SheetNames.map(s => s.toLowerCase())
+                    let importCount = 0
+
+                    // Map sheet names to data keys and column definitions
+                    const sheetMap: { pattern: string; dataKey: string; cols: { key: string; label: string }[] }[] = [
+                      { pattern: 'dt03', dataKey: 'dt03Items', cols: [
+                        { key: 'nhomVT', label: 'Nhóm VT' }, { key: 'danhMuc', label: 'Danh mục VT' },
+                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL/SL' },
+                        { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
+                      ]},
+                      { pattern: 'dt04', dataKey: 'dt04Items', cols: [
+                        { key: 'maVT', label: 'Mã VT' }, { key: 'tenVT', label: 'Tên VT' },
+                        { key: 'macVL', label: 'Mác VL' }, { key: 'quyCach', label: 'Quy cách' },
+                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL/SL' },
+                        { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
+                      ]},
+                      { pattern: 'dt05', dataKey: 'dt05Items', cols: [
+                        { key: 'maCP', label: 'Mã CP' }, { key: 'noiDung', label: 'Nội dung công việc' },
+                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
+                        { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
+                      ]},
+                      { pattern: 'dt06', dataKey: 'dt06Items', cols: [
+                        { key: 'maCP', label: 'Mã CP' }, { key: 'noiDung', label: 'Nội dung công việc' },
+                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
+                        { key: 'donGia', label: 'Đơn giá' }, { key: 'thanhTien', label: 'Thành tiền' },
+                      ]},
+                      { pattern: 'dt07', dataKey: 'dt07Items', cols: [
+                        { key: 'maCP', label: 'Mã CP' }, { key: 'danhMuc', label: 'Danh mục chi phí' },
+                        { key: 'dvt', label: 'ĐVT' }, { key: 'kl', label: 'KL' },
+                        { key: 'donGia', label: 'Đơn giá BQ' }, { key: 'thanhTien', label: 'Thành tiền' },
+                      ]},
+                    ]
+
+                    sheetMap.forEach(({ pattern, dataKey, cols }) => {
+                      // Find matching sheet (e.g. "DT03(VT)", "DT03", "dt03-vt")
+                      const sheetIdx = sheetNames.findIndex(s => s.includes(pattern))
+                      if (sheetIdx < 0) return
+                      const ws = wb.Sheets[wb.SheetNames[sheetIdx]]
+                      const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })
+                      if (jsonData.length < 2) return
+
+                      const headerRow = jsonData[0].map(h => String(h || '').trim().toLowerCase())
+                      // Map headers to column keys
+                      const colMapping = headerRow.map(h => {
+                        // Match by label (case-insensitive) or by key
+                        const col = cols.find(c =>
+                          c.label.toLowerCase() === h || c.key.toLowerCase() === h ||
+                          h.includes(c.label.toLowerCase().split(' ')[0])
+                        )
+                        return col ? col.key : ''
+                      })
+
+                      const imported: Record<string, string>[] = []
+                      for (let i = 1; i < jsonData.length; i++) {
+                        const rowData = jsonData[i]
+                        if (!rowData || rowData.every(c => !c)) continue
+                        // Skip total/summary rows
+                        const firstCell = String(rowData[0] || '').toLowerCase()
+                        if (firstCell.includes('tổng') || firstCell.includes('total')) continue
+                        // Skip STT column (first col is always STT)
+                        const newRow: Record<string, string> = Object.fromEntries(cols.map(c => [c.key, '']))
+                        colMapping.forEach((key, ci) => {
+                          if (key && ci > 0 && rowData[ci] != null) { // ci>0 to skip STT
+                            newRow[key] = String(rowData[ci])
+                          }
+                        })
+                        // Also try mapping without STT offset if header mapping includes col keys
+                        if (!colMapping[0] && colMapping.slice(1).some(k => k)) {
+                          // Header row starts with STT, data cols offset by 1 — already handled above
+                        }
+                        if (Object.values(newRow).some(v => String(v).trim())) imported.push(newRow)
+                      }
+
+                      if (imported.length > 0) {
+                        handleFieldChange(dataKey, JSON.stringify(imported))
+                        importCount += imported.length
+                      }
+                    })
+
+                    // Import DT01 fields from DT01 sheet
+                    const dt01Idx = sheetNames.findIndex(s => s.includes('dt01'))
+                    if (dt01Idx >= 0) {
+                      const ws = wb.Sheets[wb.SheetNames[dt01Idx]]
+                      const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })
+                      rows.forEach(row => {
+                        const label = String(row[0] || '').trim().toLowerCase()
+                        const val = row[1] != null ? String(row[1]) : ''
+                        if (label.includes('khối lượng')) handleFieldChange('dt01_volume', val)
+                        if (label.includes('thanh toán')) handleFieldChange('dt01_paymentTerms', val)
+                        if (label.includes('phạt')) handleFieldChange('dt01_penalties', val)
+                      })
+                    }
+
+                    if (importCount > 0) {
+                      setSuccessMsg(`✅ Đã import ${importCount} dòng từ ${wb.SheetNames.length} sheets`)
+                      setTimeout(() => setSuccessMsg(''), 4000)
+                    } else {
+                      setError('Không tìm thấy dữ liệu phù hợp. Kiểm tra tên sheet (DT03, DT04, DT05, DT06, DT07).')
+                    }
+                  }
+                  reader.readAsBinaryString(file)
+                }
+                input.click()
+              }
+
               return (
                 <>
+                  {/* ── Excel Template Download/Upload (Multi-sheet) ── */}
+                  <div className="card" style={{ padding: '1.25rem', marginBottom: '0.5rem', borderLeft: '4px solid #7c3aed' }}>
+                    <h3 style={{ margin: '0 0 10px', fontSize: '0.95rem', color: '#7c3aed' }}>📥 Excel Dự toán (8 sheets)</h3>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px' }}>
+                      File Excel gồm: Cover, DT01(TTC), DT02(TH), DT03(VT), DT04(VT), DT05(DV), DT06(NC), DT07(CPC) — có công thức liên kết giữa các sheet.
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" onClick={exportFullEstimate}
+                        style={{ flex: 1, padding: '10px 16px', fontSize: '0.85rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                        ⬇️ Tải Template Dự Toán
+                      </button>
+                      {isActive && (
+                        <button type="button" onClick={importFullEstimate}
+                          style={{ flex: 1, padding: '10px 16px', fontSize: '0.85rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                          ⬆️ Upload Excel Dự Toán
+                        </button>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '8px 0 0', fontStyle: 'italic' }}>
+                      Công thức liên kết sẽ được tính khi mở trong Excel/LibreOffice.
+                    </p>
+                  </div>
+
                   {/* ── DT01: Thông tin dự án ── */}
                   <div className="card" style={{ padding: '1.25rem', marginBottom: '0.5rem', borderLeft: '4px solid #3b82f6' }}>
                     <h3 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#3b82f6' }}>📋 DT01 — Thông tin chung dự án</h3>

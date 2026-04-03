@@ -1073,3 +1073,36 @@ model SystemConfig {
 
   @@map("system_config")
 }
+
+model ErrorLog {
+  id         String   @id @default(cuid())
+  level      String   @default("ERROR")
+  message    String
+  stack      String?
+  code       String?
+
+  requestId  String?
+  method     String?
+  path       String?
+  statusCode Int?
+  duration   Int?
+
+  userId     String?
+  userRole   String?
+  ipAddress  String?
+  userAgent  String?
+
+  requestBody Json?
+  metadata    Json?
+
+  source     String   @default("server")
+  resolved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([level, createdAt])
+  @@index([path, createdAt])
+  @@index([userId, createdAt])
+  @@index([requestId])
+  @@index([resolved, createdAt])
+  @@map("error_logs")
+}

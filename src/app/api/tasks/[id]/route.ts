@@ -6,12 +6,12 @@ import prisma from '@/lib/db'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
+import { withErrorHandler } from '@/lib/with-error-handler'
 
 // GET /api/tasks/[id]
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const payload = await authenticateRequest(req)
-    if (!payload) return unauthorizedResponse()
+export const GET = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const payload = await authenticateRequest(req)
+  if (!payload) return unauthorizedResponse()
 
     const pResult = validateParams(await params, idParamSchema)
     if (!pResult.success) return pResult.response
@@ -654,82 +654,73 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     return successResponse({ task, siblingFiles, rejectionInfo, previousStepData, previousStepFiles })
-  } catch (err) {
-    console.error('GET /api/tasks/[id] error:', err)
-    return errorResponse('Lỗi hệ thống', 500)
-  }
-}
+})
 
 // PUT /api/tasks/[id] — Complete or assign task
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const payload = await authenticateRequest(req)
-    if (!payload) return unauthorizedResponse()
+export const PUT = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const payload = await authenticateRequest(req)
+  if (!payload) return unauthorizedResponse()
 
-    const pResult = validateParams(await params, idParamSchema)
-    if (!pResult.success) return pResult.response
-    const { id } = pResult.data
-    const body = await req.json()
-    const { action } = body
+  const pResult = validateParams(await params, idParamSchema)
+  if (!pResult.success) return pResult.response
+  const { id } = pResult.data
+  const body = await req.json()
+  const { action } = body
 
-    if (action === 'save') {
-      // Save resultData without completing — used for partial approval state
-      const updatedTask = await prisma.workflowTask.update({
-        where: { id },
-        data: { resultData: body.resultData ? JSON.parse(JSON.stringify(body.resultData)) : undefined },
-      })
-      return successResponse({ task: updatedTask }, 'Đã lưu dữ liệu')
-    }
-
-    if (action === 'complete') {
-      // Role-based authorization: only the assigned role (or admin) can complete
-      const task = await prisma.workflowTask.findUnique({ where: { id } })
-      if (!task) return errorResponse('Task không tồn tại', 404)
-      const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(payload.roleCode)
-      const baseTaskRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
-      const baseUserRole = payload.roleCode.replace(/[a-zA-Z]$/, '')
-      const isAssignedToMe = task.assignedTo === payload.userId
-      
-      const isAuthorized = isGlobalAdmin || isAssignedToMe || (baseUserRole === baseTaskRole && !task.assignedTo)
-      
-      if (!isAuthorized) {
-        return errorResponse(`Bạn (${payload.roleCode}) không có quyền thực hiện bước này. Hãy yêu cầu quản lý phân công task cho bạn.`, 403)
-      }
-      const result = await completeTask(id, payload.userId, body.resultData, body.notes)
-
-      // Invalidate dashboard and task caches after completion
-      await Promise.all([
-        cacheInvalidate(CACHE_KEYS.dashboard),
-        cacheInvalidate(CACHE_KEYS.tasks),
-      ])
-
-      return successResponse({ nextSteps: result.nextSteps }, 'Task hoàn thành')
-    }
-
-    if (action === 'assign') {
-      if (payload.userLevel > 1 && payload.roleCode !== 'R00') {
-        return errorResponse('Chỉ L1 (trưởng phòng) hoặc Admin mới có quyền phân công', 403)
-      }
-      
-      const task = await prisma.workflowTask.findUnique({ where: { id } })
-      if (!task) return errorResponse('Task không tồn tại', 404)
-      
-      // Strict role check: PM (R02, R02a) and Admin (R00, R01) can bypass, otherwise assigner must match task role
-      const userBaseRole = payload.roleCode.replace(/[a-z]$/i, '')
-      const taskBaseRole = task.assignedRole.replace(/[a-z]$/i, '')
-      const isGlobalAdmin = ['R00', 'R01', 'R02'].includes(userBaseRole)
-      
-      if (!isGlobalAdmin && userBaseRole !== taskBaseRole) {
-        return errorResponse(`Bạn không có quyền phân công. Chỉ Quản lý bộ phận ${task.assignedRole} hoặc PM mới được thao tác.`, 403)
-      }
-      
-      const updated = await assignTask(id, body.assignToUserId)
-      return successResponse({ task: updated }, 'Đã phân công task')
-    }
-
-    return errorResponse('Action không hợp lệ. Sử dụng: complete, assign')
-  } catch (err) {
-    console.error('PUT /api/tasks/[id] error:', err)
-    return errorResponse((err as Error).message || 'Lỗi hệ thống', 500)
+  if (action === 'save') {
+    // Save resultData without completing — used for partial approval state
+    const updatedTask = await prisma.workflowTask.update({
+      where: { id },
+      data: { resultData: body.resultData ? JSON.parse(JSON.stringify(body.resultData)) : undefined },
+    })
+    return successResponse({ task: updatedTask }, 'Đã lưu dữ liệu')
   }
-}
+
+  if (action === 'complete') {
+    // Role-based authorization: only the assigned role (or admin) can complete
+    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    if (!task) return errorResponse('Task không tồn tại', 404)
+    const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(payload.roleCode)
+    const baseTaskRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
+    const baseUserRole = payload.roleCode.replace(/[a-zA-Z]$/, '')
+    const isAssignedToMe = task.assignedTo === payload.userId
+
+    const isAuthorized = isGlobalAdmin || isAssignedToMe || (baseUserRole === baseTaskRole && !task.assignedTo)
+
+    if (!isAuthorized) {
+      return errorResponse(`Bạn (${payload.roleCode}) không có quyền thực hiện bước này. Hãy yêu cầu quản lý phân công task cho bạn.`, 403)
+    }
+    const result = await completeTask(id, payload.userId, body.resultData, body.notes)
+
+    // Invalidate dashboard and task caches after completion
+    await Promise.all([
+      cacheInvalidate(CACHE_KEYS.dashboard),
+      cacheInvalidate(CACHE_KEYS.tasks),
+    ])
+
+    return successResponse({ nextSteps: result.nextSteps }, 'Task hoàn thành')
+  }
+
+  if (action === 'assign') {
+    if (payload.userLevel > 1 && payload.roleCode !== 'R00') {
+      return errorResponse('Chỉ L1 (trưởng phòng) hoặc Admin mới có quyền phân công', 403)
+    }
+
+    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    if (!task) return errorResponse('Task không tồn tại', 404)
+
+    // Strict role check: PM (R02, R02a) and Admin (R00, R01) can bypass, otherwise assigner must match task role
+    const userBaseRole = payload.roleCode.replace(/[a-z]$/i, '')
+    const taskBaseRole = task.assignedRole.replace(/[a-z]$/i, '')
+    const isGlobalAdmin = ['R00', 'R01', 'R02'].includes(userBaseRole)
+
+    if (!isGlobalAdmin && userBaseRole !== taskBaseRole) {
+      return errorResponse(`Bạn không có quyền phân công. Chỉ Quản lý bộ phận ${task.assignedRole} hoặc PM mới được thao tác.`, 403)
+    }
+
+    const updated = await assignTask(id, body.assignToUserId)
+    return successResponse({ task: updated }, 'Đã phân công task')
+  }
+
+  return errorResponse('Action không hợp lệ. Sử dụng: complete, assign')
+})
