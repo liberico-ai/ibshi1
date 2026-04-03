@@ -264,10 +264,17 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             if (hangMucLower.includes('người lập') || hangMucLower.includes('prepared by') || hangMucLower.includes('approved by') || hangMucLower.includes('người duyệt')) continue;
 
             const newRow = emptyRow();
+            const dateKeys = new Set(['batDau', 'ketThuc']);
             Object.keys(colIndices).forEach(key => {
               const idx = colIndices[key as keyof typeof colIndices];
               if (idx >= 0 && rowData[idx] !== undefined && rowData[idx] !== null && rowData[idx] !== '') {
-                newRow[key as keyof WbsRow] = String(rowData[idx]).trim();
+                let val = rowData[idx];
+                // Convert Excel serial dates to dd/mm/yyyy for date columns
+                if (dateKeys.has(key) && typeof val === 'number' && val > 40000 && val < 60000) {
+                  const d = new Date((val - 25569) * 86400000);
+                  val = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+                }
+                newRow[key as keyof WbsRow] = String(val).trim();
               }
             });
             
