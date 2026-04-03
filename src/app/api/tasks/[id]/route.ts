@@ -608,7 +608,52 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    return successResponse({ task, siblingFiles, rejectionInfo, previousStepData })
+    // Fetch file attachments from all previous steps (completed or in-progress) in the same project
+    const otherTasks = await prisma.workflowTask.findMany({
+      where: {
+        projectId: task.projectId,
+        id: { not: task.id },
+        status: { in: ['DONE', 'IN_PROGRESS'] },
+      },
+      select: { id: true, stepCode: true, stepName: true },
+      orderBy: { stepCode: 'asc' },
+    })
+
+    type PrevStepFile = { stepCode: string; stepName: string; files: { id: string; fileName: string; fileUrl: string; fileSize: number | null; mimeType: string | null; createdAt: Date }[] }
+    let previousStepFiles: PrevStepFile[] = []
+
+    if (otherTasks.length > 0) {
+      const taskIds = otherTasks.map(t => t.id)
+      const allFiles = await prisma.fileAttachment.findMany({
+        where: {
+          entityType: 'Task',
+          OR: taskIds.map(tid => ({ entityId: { startsWith: tid } })),
+        },
+        select: { id: true, entityId: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
+
+      // Group files by task ID (entityId format: "{taskId}_{attachmentKey}")
+      const filesByTaskId = new Map<string, typeof allFiles>()
+      for (const f of allFiles) {
+        const tid = f.entityId.split('_')[0]
+        if (!filesByTaskId.has(tid)) filesByTaskId.set(tid, [])
+        filesByTaskId.get(tid)!.push(f)
+      }
+
+      previousStepFiles = otherTasks
+        .filter(t => filesByTaskId.has(t.id))
+        .map(t => ({
+          stepCode: t.stepCode,
+          stepName: t.stepName,
+          files: filesByTaskId.get(t.id)!.map(f => ({
+            id: f.id, fileName: f.fileName, fileUrl: f.fileUrl,
+            fileSize: f.fileSize, mimeType: f.mimeType, createdAt: f.createdAt,
+          })),
+        }))
+    }
+
+    return successResponse({ task, siblingFiles, rejectionInfo, previousStepData, previousStepFiles })
   } catch (err) {
     console.error('GET /api/tasks/[id] error:', err)
     return errorResponse('Lỗi hệ thống', 500)

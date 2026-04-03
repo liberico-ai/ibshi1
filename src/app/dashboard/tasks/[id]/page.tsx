@@ -880,6 +880,8 @@ export default function TaskDetailPage() {
   const [inventorySearch, setInventorySearch] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
   const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; departmentEstimates?: any; budgetTotal?: any } | null>(null)
+  type PrevStepFile = { stepCode: string; stepName: string; files: { id: string; fileName: string; fileUrl: string; fileSize: number | null; mimeType: string | null; createdAt: string }[] }
+  const [previousStepFiles, setPreviousStepFiles] = useState<PrevStepFile[]>([])
   // P1.2A WBS expanded rows
   const [wbsExpandedRows, setWbsExpandedRows] = useState<Set<number>>(new Set())
   // P4.1 payment confirmations per milestone
@@ -985,6 +987,9 @@ export default function TaskDetailPage() {
         const pCode = res.task.project?.projectCode || 'LSX'
         const woNum = `${pCode}-${String(Math.floor(Math.random() * 99) + 1).padStart(2, '0')}`
         setFormData(prev => ({ ...prev, woNumber: woNum }))
+      }
+      if (res.previousStepFiles) {
+        setPreviousStepFiles(res.previousStepFiles)
       }
       if (res.previousStepData) {
         setPreviousStepData(res.previousStepData)
@@ -4941,6 +4946,51 @@ export default function TaskDetailPage() {
                 </label>
               ))}
             </div>
+
+            {/* Previous Step Documents */}
+            {previousStepFiles.length > 0 && (
+              <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>📂 Tài liệu từ các bước trước</h3>
+                {previousStepFiles.map(step => (
+                  <div key={step.stepCode} style={{ marginBottom: 12 }}>
+                    <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                      {step.stepCode} — {step.stepName}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {step.files.map(f => (
+                        <a
+                          key={f.id}
+                          href={f.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '6px 10px', borderRadius: 8,
+                            background: 'var(--bg-secondary)', textDecoration: 'none',
+                            color: 'var(--text-primary)', fontSize: '0.85rem',
+                            border: '1px solid var(--border)',
+                          }}
+                        >
+                          <span style={{ fontSize: '1rem' }}>
+                            {f.mimeType?.includes('pdf') ? '📄' : f.mimeType?.includes('image') ? '🖼️' : f.mimeType?.includes('sheet') || f.fileName.match(/\.xlsx?$/) ? '📊' : '📎'}
+                          </span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.fileName}
+                          </span>
+                          {f.fileSize && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                              {f.fileSize > 1048576 ? `${(f.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(f.fileSize / 1024)} KB`}
+                            </span>
+                          )}
+                          <span style={{ color: '#3b82f6', fontSize: '0.8rem', fontWeight: 600, flexShrink: 0 }}>⬇ Tải</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Attachments */}
             {config.attachments.length > 0 && (
