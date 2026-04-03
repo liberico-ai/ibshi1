@@ -157,7 +157,6 @@ const P1_2: StepFormConfig = {
   attachments: [
     { key: 'detail_estimate', label: 'Bảng dự toán chi tiết (Excel)', accept: ACCEPT.SHEETS_PLUS },
   ],
-  excelTemplate: 'du_toan',
 }
 
 const P1_3: StepFormConfig = {
