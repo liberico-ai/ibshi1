@@ -269,10 +269,10 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               const idx = colIndices[key as keyof typeof colIndices];
               if (idx >= 0 && rowData[idx] !== undefined && rowData[idx] !== null && rowData[idx] !== '') {
                 let val = rowData[idx];
-                // Convert Excel serial dates to dd/mm/yyyy for date columns
+                // Convert Excel serial dates to YYYY-MM-DD for HTML date inputs
                 if (dateKeys.has(key) && typeof val === 'number' && val > 40000 && val < 60000) {
                   const d = new Date((val - 25569) * 86400000);
-                  val = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+                  val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 }
                 newRow[key as keyof WbsRow] = String(val).trim();
               }
