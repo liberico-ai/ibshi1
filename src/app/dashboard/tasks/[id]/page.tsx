@@ -301,7 +301,15 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
     input.click();
   };
 
-  const totalKL = rows.reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+  // Calculate total KL, excluding summary rows whose KL = sum of remaining rows
+  let totalKL = rows.reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+  if (rows.length > 2) {
+    const firstKL = Number(rows[0].khoiLuong) || 0;
+    const restKL = rows.slice(1).reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+    if (firstKL > 0 && restKL > 0 && Math.abs(firstKL - restKL) / firstKL < 0.05) {
+      totalKL = restKL;
+    }
+  }
   const doneCount = rows.filter(r => (r.trangThai || '').toLowerCase().includes('done')).length;
   const ongoingCount = rows.filter(r => (r.trangThai || '').toLowerCase().includes('ongoing')).length;
 
