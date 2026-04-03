@@ -227,7 +227,7 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
   const DEPT_COLORS: Record<string, string> = { SX: '#e74c3c', QC: '#2ecc71', KHO: '#f39c12', TK: '#3498db', PM: '#9b59b6', KTKH: '#1abc9c', TM: '#e67e22', KT: '#34495e', 'BGĐ': '#8e44ad', HT: '#95a5a6' }
 
   return (
-    <div className="project-row">
+    <a href={`/dashboard/projects/${p.id}`} className="project-row" style={{ display: 'block', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
         <div>
@@ -284,7 +284,7 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
           </span>
         )}
       </div>
-    </div>
+    </a>
   )
 }
 
