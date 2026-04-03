@@ -7,6 +7,7 @@ import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
+import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
 const formatNumberWithCommas = (val: string | number): string => {
@@ -41,17 +42,9 @@ interface TaskData {
   assignee: { id: string; fullName: string; username: string } | null
 }
 
-type TeamAssign = { teamName: string; volume: string; startDate: string; endDate: string };
-type CellAssignMap = Record<number, Record<string, TeamAssign[]>>;
-type LsxIssuedMap = Record<number, Record<string, Record<number, boolean>>>;
-
-type MaterialReqItem = { name: string; code: string; spec: string; quantity: string; unit: string; requested?: boolean };
-type MaterialReqMap = Record<number, Record<string, Record<number, MaterialReqItem[]>>>;
-
 function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void }) {
-  type WbsRow = Record<string, string>;
   const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
-  
+
   let rows: WbsRow[] = [];
   try {
     const p = wbsItemsData ? (typeof wbsItemsData === 'string' ? JSON.parse(wbsItemsData) : wbsItemsData) : null;
@@ -761,22 +754,22 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     <input className="input" placeholder="Tên vật tư" value={m.name} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], name: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
-                    <input className="input" placeholder="Mã VT" value={m.code} disabled={m.requested}
+                    <input className="input" placeholder="Mã VT" value={m.code || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], code: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
                     <input className="input" placeholder="Quy chuẩn" value={m.spec} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], spec: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
-                    <input className="input" type="number" placeholder="0" value={m.quantity} disabled={m.requested}
+                    <input className="input" type="number" placeholder="0" value={m.quantity || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], quantity: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, textAlign: 'right', opacity: m.requested ? 0.7 : 1 }} />
-                    <select className="input" value={m.unit} disabled={m.requested}
+                    <select className="input" value={m.unit || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], unit: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.8rem', padding: '8px 4px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }}>
                       <option value="kg">kg</option><option value="tấn">tấn</option><option value="m">m</option><option value="m2">m²</option><option value="cái">cái</option><option value="bộ">bộ</option><option value="lít">lít</option><option value="hộp">hộp</option><option value="cuộn">cuộn</option>
                     </select>
                     <div style={{ textAlign: 'center' }}>
-                      {m.name.trim() && m.code.trim() && Number(m.quantity) > 0 ? (
+                      {m.name.trim() && (m.code || '').trim() && Number(m.quantity) > 0 ? (
                         <button type="button" disabled={m.requested}
                           onClick={async () => {
                             const n = [...tempMaterials]; n[mi] = { ...n[mi], requested: true }; setTempMaterials(n);
@@ -913,9 +906,6 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
 // ══════════════════════════════════════════════════════════════
 // MOM Sections UI — BB họp triển khai dự án (Minutes of Meeting)
 // ══════════════════════════════════════════════════════════════
-type MomItem = { stt: string; noiDung: string; actionBy: string; dueDate: string; remark: string }
-type MomSection = { key: string; title: string; items: MomItem[] }
-type MomAttendant = { name: string; role: string }
 
 const DEFAULT_SECTIONS: MomSection[] = [
   { key: 'I', title: 'Hợp đồng', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
@@ -1326,8 +1316,6 @@ export default function TaskDetailPage() {
   const emptyWoItem = { costCode: '', content: '', jobCode: '', typeCode: '', unit: '', qty1: '', qty2: '', totalQty: '', startDate: '', endDate: '' }
   const [woItems, setWoItems] = useState<{ costCode: string; content: string; jobCode: string; typeCode: string; unit: string; qty1: string; qty2: string; totalQty: string; startDate: string; endDate: string }[]>([{ ...emptyWoItem }])
   // P3.5 supplier entries
-  type SupplierQuote = { material: string; price: string }
-  type SupplierEntry = { name: string; quotes: SupplierQuote[] }
   const emptyQuote: SupplierQuote = { material: '', price: '' }
   const emptySupplier: SupplierEntry = { name: '', quotes: [{ ...emptyQuote }] }
   const [suppliers, setSuppliers] = useState<SupplierEntry[]>([{ ...emptySupplier, quotes: [{ ...emptyQuote }] }, { ...emptySupplier, quotes: [{ ...emptyQuote }] }, { ...emptySupplier, quotes: [{ ...emptyQuote }] }])
@@ -1342,7 +1330,6 @@ export default function TaskDetailPage() {
   const [inventorySearch, setInventorySearch] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
   const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; departmentEstimates?: any; budgetTotal?: any } | null>(null)
-  type PrevStepFile = { stepCode: string; stepName: string; files: { id: string; fileName: string; fileUrl: string; fileSize: number | null; mimeType: string | null; createdAt: string }[] }
   const [previousStepFiles, setPreviousStepFiles] = useState<PrevStepFile[]>([])
   // P1.2A WBS expanded rows
   const [wbsExpandedRows, setWbsExpandedRows] = useState<Set<number>>(new Set())
@@ -2872,7 +2859,6 @@ export default function TaskDetailPage() {
             {task.stepCode === 'P3.1' && (() => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const planData = (previousStepData as any)?.plan || {}
-              type WbsRow = Record<string, string>
               let wbsRows: WbsRow[] = []
               try {
                 const raw = planData.wbsItems

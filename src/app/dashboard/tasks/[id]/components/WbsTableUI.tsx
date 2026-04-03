@@ -1,34 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from 'xlsx';
 import {  } from "lucide-react";
-// Type definitions
-
-export type TeamAssign = {
-  teamName: string;
-  startDate: string;
-  endDate: string;
-  notes?: string;
-  volume?: string;
-};
-export type CellAssignMap = Record<number, Record<string, TeamAssign[]>>;
-export type LsxIssuedMap = Record<number, Record<string, Record<number, { status: "pending" | "approved" | "rejected"; details: any }>>>;
-export type MaterialReqItem = {
-  name: string;
-  code?: string;
-  quantity?: string;
-  qty?: string;
-  unit?: string;
-  spec: string;
-  status?: string;
-  requested?: boolean;
-};
-export type MaterialReqMap = Record<number, Record<string, Record<number, MaterialReqItem[]>>>;
+import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow } from '@/lib/types'
+export type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow }
 
 
 function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void }) {
-  type WbsRow = Record<string, string>;
   const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
-  
+
   let rows: WbsRow[] = [];
   try {
     const p = wbsItemsData ? (typeof wbsItemsData === 'string' ? JSON.parse(wbsItemsData) : wbsItemsData) : null;
@@ -667,16 +646,16 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     <input className="input" placeholder="Tên vật tư" value={m.name} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], name: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
-                    <input className="input" placeholder="Mã VT" value={m.code} disabled={m.requested}
+                    <input className="input" placeholder="Mã VT" value={m.code || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], code: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
                     <input className="input" placeholder="Quy chuẩn" value={m.spec} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], spec: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }} />
-                    <input className="input" type="number" placeholder="0" value={m.quantity} disabled={m.requested}
+                    <input className="input" type="number" placeholder="0" value={m.quantity || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], quantity: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px', borderRadius: 6, textAlign: 'right', opacity: m.requested ? 0.7 : 1 }} />
-                    <select className="input" value={m.unit} disabled={m.requested}
+                    <select className="input" value={m.unit || ''} disabled={m.requested}
                       onChange={e => { const n = [...tempMaterials]; n[mi] = { ...n[mi], unit: e.target.value }; setTempMaterials(n); }}
                       style={{ fontSize: '0.8rem', padding: '8px 4px', borderRadius: 6, opacity: m.requested ? 0.7 : 1 }}>
                       <option value="kg">kg</option><option value="tấn">tấn</option><option value="m">m</option><option value="m2">m²</option><option value="cái">cái</option><option value="bộ">bộ</option><option value="lít">lít</option><option value="hộp">hộp</option><option value="cuộn">cuộn</option>

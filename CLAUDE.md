@@ -18,7 +18,10 @@ Before modifying any file, check what depends on it:
 | `src/lib/step-form-configs.ts` | ~400 | MEDIUM | Form fields, checklists, validation |
 | `src/lib/sync-engine.ts` | 357 | HIGH | Budget sync, stock movements, change events |
 | `src/lib/auth.ts` | 150 | HIGH | Auth, RBAC, all API responses |
-| `src/app/api/tasks/[id]/route.ts` | 700+ | HIGH | Task API, previousStepData for all steps |
+| `src/app/api/tasks/[id]/route.ts` | ~484 | HIGH | Task API, previousStepData for all steps |
+| `src/lib/types/cross-step-data.ts` | ~280 | HIGH | Single source of truth for ALL cross-step types |
+| `src/lib/data-fetchers.ts` | ~230 | HIGH | Shared data fetch helpers (BOM, estimate, supplier) |
+| `src/lib/schemas/cross-step.schema.ts` | ~120 | MEDIUM | Zod runtime validation for cross-step data |
 
 ### 3. Post-change Verification
 After every change, run in order:
@@ -63,6 +66,18 @@ errorResponse('message', 400) // { ok: false, error: 'message' }
 1. Find the step's section in `tasks/[id]/page.tsx` (search `task.stepCode === 'Pxx'`)
 2. Add rendering between the step description card and the generic form section
 3. Store data via `handleFieldChange(key, value)` — it auto-saves to formData
+
+### Changing a shared data structure (BOM, estimate, supplier, WBS, etc.)
+1. Update the type in `src/lib/types/cross-step-data.ts` (single source of truth)
+2. Update matching Zod schema in `src/lib/schemas/cross-step.schema.ts`
+3. Run `npx tsc --noEmit` — compiler will show ALL files that need updating
+4. Fix each consumer, then run `npx vitest run` to verify data flow tests pass
+
+### Adding a new previousStepData consumer
+1. Add the PrevData interface to `src/lib/types/cross-step-data.ts`
+2. Add entry to `PreviousStepDataMap`
+3. Use data fetcher helpers from `src/lib/data-fetchers.ts` (never duplicate fetch logic)
+4. Add integration test in `src/lib/__tests__/cross-step-flow.test.ts`
 
 ### Modifying workflow transitions
 1. Edit `workflow-constants.ts` — update `next`, `gate`, `rejectTo`

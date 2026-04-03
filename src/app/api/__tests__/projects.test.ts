@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
 import { prismaMock } from '@/lib/__mocks__/db'
 
 const { mockAuthUser } = vi.hoisted(() => ({
@@ -64,8 +65,8 @@ describe('GET /api/projects', () => {
   it('returns 401 when not authenticated', async () => {
     vi.mocked(authenticateRequest).mockResolvedValue(null)
 
-    const req = new Request('http://localhost/api/projects')
-    const res = await GET(req as any)
+    const req = new NextRequest('http://localhost/api/projects')
+    const res = await GET(req)
     expect(res.status).toBe(401)
     const json = await res.json()
     expect(json.ok).toBe(false)
@@ -75,8 +76,8 @@ describe('GET /api/projects', () => {
     prismaMock.project.count.mockResolvedValue(1)
     prismaMock.project.findMany.mockResolvedValue([SAMPLE_PROJECT] as any)
 
-    const req = new Request('http://localhost/api/projects?page=1&limit=20')
-    const res = await GET(req as any)
+    const req = new NextRequest('http://localhost/api/projects?page=1&limit=20')
+    const res = await GET(req)
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.ok).toBe(true)
@@ -90,8 +91,8 @@ describe('GET /api/projects', () => {
   })
 
   it('returns 400 when page is not a valid number', async () => {
-    const req = new Request('http://localhost/api/projects?page=abc')
-    const res = await GET(req as any)
+    const req = new NextRequest('http://localhost/api/projects?page=abc')
+    const res = await GET(req)
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.ok).toBe(false)
@@ -108,8 +109,8 @@ describe('GET /api/projects', () => {
     prismaMock.project.count.mockResolvedValue(1)
     prismaMock.project.findMany.mockResolvedValue([projectWithTasks] as any)
 
-    const req = new Request('http://localhost/api/projects')
-    const res = await GET(req as any)
+    const req = new NextRequest('http://localhost/api/projects')
+    const res = await GET(req)
     const json = await res.json()
     expect(json.projects[0].progress).toBe(50)
     expect(json.projects[0].totalTasks).toBe(2)
@@ -126,36 +127,36 @@ describe('POST /api/projects', () => {
   it('returns 401 when not authenticated', async () => {
     vi.mocked(authenticateRequest).mockResolvedValue(null)
 
-    const req = new Request('http://localhost/api/projects', {
+    const req = new NextRequest('http://localhost/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectCode: 'P-001', projectName: 'Test', clientName: 'Client', productType: 'Steel' }),
     })
-    const res = await POST(req as any)
+    const res = await POST(req)
     expect(res.status).toBe(401)
   })
 
   it('returns 403 when role is not authorized to create projects', async () => {
     vi.mocked(authenticateRequest).mockResolvedValue({ ...mockAuthUser, roleCode: 'R03' })
 
-    const req = new Request('http://localhost/api/projects', {
+    const req = new NextRequest('http://localhost/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectCode: 'P-001', projectName: 'Test', clientName: 'Client', productType: 'Steel' }),
     })
-    const res = await POST(req as any)
+    const res = await POST(req)
     expect(res.status).toBe(403)
     const json = await res.json()
     expect(json.ok).toBe(false)
   })
 
   it('returns 400 when required fields are missing', async () => {
-    const req = new Request('http://localhost/api/projects', {
+    const req = new NextRequest('http://localhost/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectCode: 'P-001' }), // missing projectName, clientName, productType
     })
-    const res = await POST(req as any)
+    const res = await POST(req)
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.ok).toBe(false)
@@ -166,12 +167,12 @@ describe('POST /api/projects', () => {
   it('returns 400 when project code already exists', async () => {
     prismaMock.project.findUnique.mockResolvedValue(SAMPLE_PROJECT as any)
 
-    const req = new Request('http://localhost/api/projects', {
+    const req = new NextRequest('http://localhost/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectCode: 'P-001', projectName: 'Test', clientName: 'Client', productType: 'Steel' }),
     })
-    const res = await POST(req as any)
+    const res = await POST(req)
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.ok).toBe(false)
@@ -185,12 +186,12 @@ describe('POST /api/projects', () => {
     prismaMock.workflowTask.findFirst.mockResolvedValue(null)
     prismaMock.auditLog.create.mockResolvedValue({} as any)
 
-    const req = new Request('http://localhost/api/projects', {
+    const req = new NextRequest('http://localhost/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectCode: 'P-001', projectName: 'Test Project', clientName: 'Test Client', productType: 'Steel' }),
     })
-    const res = await POST(req as any)
+    const res = await POST(req)
     expect(res.status).toBe(201)
     const json = await res.json()
     expect(json.ok).toBe(true)
