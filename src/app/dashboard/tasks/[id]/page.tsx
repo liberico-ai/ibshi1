@@ -166,10 +166,18 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
   // Derive sub-columns dynamically from actual data keys
   const dataExtraKeys = new Set<string>();
   rows.forEach(r => Object.keys(r).forEach(k => { if (!baseKeys.has(k) && r[k]) dataExtraKeys.add(k); }));
-  // Use label map for known keys, otherwise use key as label
-  const labelMap: Record<string, string> = { cutting: 'Cắt', machining: 'GCCK', fitup: 'Gá', welding: 'Hàn', tryAssembly: 'Tổ hợp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch', painting: 'Sơn', insulation: 'Bảo ôn', commissioning: 'Chạy thử', packing: 'Đóng kiện', delivery: 'Giao hàng', shippingFrame: 'Shipping', khungKien: 'Khung kiện' };
+  // Preferred column order + label map
+  const colOrderList = ['cutting', 'machining', 'fitup', 'welding', 'tryAssembly', 'dismantle', 'blasting', 'painting', 'galvanize', 'insulation', 'commissioning', 'khungKien', 'packing', 'delivery'];
+  const labelMap: Record<string, string> = { cutting: 'Cắt', machining: 'GCCK', fitup: 'Gá', welding: 'Hàn', tryAssembly: 'Tổ hợp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch', painting: 'Sơn', galvanize: 'Mạ', insulation: 'Bảo ôn', commissioning: 'Chạy thử', packing: 'Đóng kiện', delivery: 'Giao hàng', shippingFrame: 'Shipping', khungKien: 'Khung kiện' };
   const subCols = dataExtraKeys.size > 0
-    ? Array.from(dataExtraKeys).map(k => ({ key: k, label: labelMap[k] || k }))
+    ? Array.from(dataExtraKeys)
+        .sort((a, b) => {
+          const ia = colOrderList.indexOf(a); const ib = colOrderList.indexOf(b);
+          if (ia >= 0 && ib >= 0) return ia - ib;
+          if (ia >= 0) return -1; if (ib >= 0) return 1;
+          return a.localeCompare(b);
+        })
+        .map(k => ({ key: k, label: labelMap[k] || k }))
     : defaultSubCols;
   
   const exportExcel = () => {
@@ -225,7 +233,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             return headerRow.findIndex(h => keywords.some(kw => h.includes(kw)));
           };
 
-          // Known column mappings: keywords → key name
+          // Known column mappings: keywords → key name (ORDER matters for display)
           const knownCols: [string, string[]][] = [
             ['stt', ['stt', 'no.', 'số tt']],
             ['hangMuc', ['hạng mục', 'công trình', 'description', 'tên']],
@@ -244,6 +252,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             ['dismantle', ['tháo dỡ', 'dismantle']],
             ['blasting', ['làm sạch', 'blasting']],
             ['painting', ['sơn', 'painting']],
+            ['galvanize', ['mạ', 'galvanize']],
             ['insulation', ['bảo ôn', 'insulation']],
             ['commissioning', ['chạy thử', 'commissioning']],
             ['khungKien', ['chế tạo khung kiện', 'khung kiện']],
@@ -253,11 +262,11 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             ['ghiChu', ['ghi chú', 'remark']],
           ];
 
-          // Build colIndices from known mappings
+          // Build colIndices from known mappings (first match wins per column)
           const colIndices: Record<string, number> = {};
           const mappedCols = new Set<number>();
           knownCols.forEach(([key, keywords]) => {
-            const idx = findColIndex(keywords);
+            const idx = headerRow.findIndex((h, i) => !mappedCols.has(i) && keywords.some(kw => h.includes(kw)));
             if (idx >= 0) { colIndices[key] = idx; mappedCols.add(idx); }
           });
 
