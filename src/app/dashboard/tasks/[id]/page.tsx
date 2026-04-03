@@ -249,7 +249,11 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             const hangMucVal = colIndices.hangMuc >= 0 && rowData[colIndices.hangMuc] != null ? String(rowData[colIndices.hangMuc]).trim() : '';
             
             if (!hangMucVal && !sttVal) continue;
-            
+
+            // Only include rows that have a KL (weight/quantity) value
+            const klVal = colIndices.khoiLuong >= 0 && rowData[colIndices.khoiLuong] != null ? String(rowData[colIndices.khoiLuong]).trim() : '';
+            if (!klVal || klVal === '0') continue;
+
             const sttLower = sttVal.toLowerCase();
             const hangMucLower = hangMucVal.toLowerCase();
             
