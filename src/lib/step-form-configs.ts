@@ -197,11 +197,12 @@ const P1_2: StepFormConfig = {
 const P1_3: StepFormConfig = {
   stepCode: 'P1.3',
   formType: 'approval',
-  title: 'Phê duyệt kế hoạch kickoff, WBS, milestones',
-  description: 'BGĐ phê duyệt kế hoạch kickoff, WBS, milestones của PM',
+  title: 'Phê duyệt Dự toán, kế hoạch kickoff, WBS, milestones',
+  description: 'BGĐ phê duyệt dự toán thi công sơ bộ (KTKH lập), kế hoạch kickoff, WBS, milestones của PM',
   fields: [],
   checklist: [
     { key: 'plan_reviewed', label: 'Đã review kế hoạch kickoff, WBS, milestones', required: true },
+    { key: 'estimate_reviewed', label: 'Đã review dự toán thi công sơ bộ', required: true },
   ],
   attachments: [],
 }

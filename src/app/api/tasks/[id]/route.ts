@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { getTaskById, assignTask } from '@/lib/task-engine'
-import { completeTask, WORKFLOW_RULES } from '@/lib/workflow-engine'
+import { completeTask, processP45PartialIssue, WORKFLOW_RULES } from '@/lib/workflow-engine'
 import prisma from '@/lib/db'
 
 // GET /api/tasks/[id]
@@ -625,6 +625,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         data: { resultData: body.resultData ? JSON.parse(JSON.stringify(body.resultData)) : undefined },
       })
       return successResponse({}, 'Đã lưu dữ liệu')
+    }
+
+    if (action === 'partial_issue') {
+      const result = await processP45PartialIssue(id, payload.userId, body.resultData || {})
+      if (result.isPartial) {
+        return successResponse({ isPartial: true, issuedAccumulated: result.issuedAccumulated }, 'Đã xuất kho một phần. Task vẫn mở để xuất tiếp.')
+      }
+      return successResponse({ isPartial: false, nextSteps: [] }, 'Đã xuất đủ 100%. Task hoàn thành!')
     }
 
     if (action === 'complete') {

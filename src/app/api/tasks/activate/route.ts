@@ -22,13 +22,26 @@ export async function POST(req: NextRequest) {
       return errorResponse(`Invalid stepCode ${stepCode}`, 400)
     }
 
+    // Determine dynamic stepName for P4.5 based on source
+    let dynamicStepName = rule.name
+    let dynamicStepNameEn = rule.nameEn
+    if (stepCode === 'P4.5' && materialInfo?.sourceStep) {
+      if (materialInfo.sourceStep === 'P3.3') {
+        dynamicStepName = 'Kho cấp vật tư cho thầu phụ sản xuất'
+        dynamicStepNameEn = 'Warehouse Issue Material for Subcontractor'
+      } else if (materialInfo.sourceStep === 'P3.4') {
+        dynamicStepName = 'Kho cấp vật tư cho nội bộ sản xuất'
+        dynamicStepNameEn = 'Warehouse Issue Material for Internal Production'
+      }
+    }
+
     // CREATE a brand new task for this request, setting status directly to IN_PROGRESS
     const newTask = await prisma.workflowTask.create({
       data: {
         projectId,
         stepCode,
-        stepName: rule.name,
-        stepNameEn: rule.nameEn,
+        stepName: dynamicStepName,
+        stepNameEn: dynamicStepNameEn,
         status: 'IN_PROGRESS',
         assignedRole: rule.role,
         deadline: rule.deadlineDays
@@ -36,6 +49,7 @@ export async function POST(req: NextRequest) {
           : null,
         startedAt: new Date(),
         resultData: materialInfo ? {
+          sourceStep: materialInfo.sourceStep,
           materialIssueRequests: [
             {
               ...materialInfo,

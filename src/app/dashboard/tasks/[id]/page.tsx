@@ -35,7 +35,7 @@ type LsxIssuedMap = Record<number, Record<string, Record<number, boolean>>>;
 type MaterialReqItem = { name: string; code: string; spec: string; quantity: string; unit: string; requested?: boolean };
 type MaterialReqMap = Record<number, Record<string, Record<number, MaterialReqItem[]>>>;
 
-function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void }) {
+function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave, stepFilter }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void; stepFilter?: string }) {
   type WbsRow = Record<string, string>;
   const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
   
@@ -147,7 +147,26 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
     { key: 'insulation', label: 'Bảo ôn' }, { key: 'commissioning', label: 'Chạy thử' },
     { key: 'packing', label: 'Đóng kiện' }, { key: 'delivery', label: 'Giao hàng' },
   ];
-  
+
+  // Step filter helpers (P3.3 vs P3.4 IBS routing)
+  const _isIBS = (val: string) => (val || '').trim().toUpperCase().includes('IBS');
+  const _isEmpty = (val: string) => !(val || '').trim();
+  const isRowVisibleForStep = (row: WbsRow): boolean => {
+    if (!stepFilter || (stepFilter !== 'P3.3' && stepFilter !== 'P3.4')) return true;
+    const nonEmptyCells = subCols.filter(c => !_isEmpty(row[c.key] || ''));
+    if (nonEmptyCells.length === 0) return true;
+    if (stepFilter === 'P3.4') return nonEmptyCells.some(c => _isIBS(row[c.key] || ''));
+    if (stepFilter === 'P3.3') return nonEmptyCells.some(c => !_isIBS(row[c.key] || ''));
+    return true;
+  };
+  const isCellActiveForStep = (cellVal: string): boolean => {
+    if (!stepFilter || (stepFilter !== 'P3.3' && stepFilter !== 'P3.4')) return true;
+    if (_isEmpty(cellVal)) return true;
+    if (stepFilter === 'P3.4') return _isIBS(cellVal);
+    if (stepFilter === 'P3.3') return !_isIBS(cellVal);
+    return true;
+  };
+
   const exportExcel = () => {
     const headers = ['STT', 'Tên hạng mục', 'ĐVT', 'Khối lượng', 'Phạm vi', 'Thầu phụ', 'Bắt đầu', 'Kết thúc', 'Trạng thái', ...subCols.map(c => c.label), 'Khu vực TC', 'Ghi chú'];
     const data = rows.map(r => [
@@ -293,7 +312,6 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Biểu mẫu BCTH-IBSHI-QLDA-095</p>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            {mode === 'lsx' && onSave && <button type="button" onClick={onSave} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>💾 Lưu</button>}
             <button type="button" onClick={exportExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📤 Export</button>
             {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📥 Import</button>}
           </div>
@@ -345,6 +363,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               <div><h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0c4a6e' }}>📋 WBS</h2><span style={{ fontSize: '0.72rem', color: '#64748b' }}>{rows.length} hạng mục</span></div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {isWbsEditable && <button type="button" onClick={addRow} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>+ Thêm</button>}
+                {mode === 'lsx' && onSave && <button type="button" onClick={onSave} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>💾 Lưu</button>}
                 <button type="button" onClick={exportExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📤 Export</button>
                 {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📥 Import</button>}
                 <button type="button" onClick={() => setWbsModalOpen(false)} style={{ padding: '5px 14px', fontSize: '0.85rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>✕ Đóng</button>
@@ -377,6 +396,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 </thead>
                 <tbody>
                   {rows.map((row, ri) => {
+                    if (!isRowVisibleForStep(row)) return null;
                     const rowComplete = mode === 'lsx' && isRowComplete(ri, row);
                     return (
                     <tr key={ri} style={{ background: rowComplete ? '#dcfce7' : ri % 2 === 0 ? '#fff' : '#f8fafc' }}>
@@ -395,6 +415,14 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                         const totalKL = Number(row.khoiLuong) || 0;
                         const assignedKL = assigns.reduce((s, a) => s + (Number(a.volume) || 0), 0);
                         if (mode === 'lsx' && cellVal) {
+                          const cellActive = isCellActiveForStep(cellVal);
+                          if (!cellActive) {
+                            return (
+                              <td key={c.key} style={{ ...tdS }}>
+                                <div style={{ ...inputS, textAlign: 'center', color: '#9ca3af', cursor: 'not-allowed', background: '#e5e7eb', fontWeight: 600, border: '1px solid #d1d5db', borderRadius: 5, padding: '3px 5px', textDecoration: 'line-through', opacity: 0.7 }}>{cellVal}</div>
+                              </td>
+                            );
+                          }
                           // 3 states: full (green), partial (blue), none (yellow)
                           const isFull = assignCount > 0 && assignedKL >= totalKL;
                           const isPartial = assignCount > 0 && assignedKL < totalKL;
@@ -695,8 +723,9 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                       {m.name.trim() && m.code.trim() && Number(m.quantity) > 0 ? (
                         <button type="button" disabled={m.requested}
                           onClick={async () => {
-                            const n = [...tempMaterials]; n[mi] = { ...n[mi], requested: true }; setTempMaterials(n);
-                            await onRequestIssue?.(idx, stageKey, teamIdx, mi, m);
+                            const trimmedItem = { ...m, name: m.name.trim(), code: m.code.trim(), requested: true };
+                            const n = [...tempMaterials]; n[mi] = trimmedItem; setTempMaterials(n);
+                            await onRequestIssue?.(idx, stageKey, teamIdx, mi, trimmedItem);
                           }}
                           style={{ padding: '4px 8px', fontSize: '0.72rem', fontWeight: 700, borderRadius: 5, border: 'none', cursor: m.requested ? 'default' : 'pointer', background: m.requested ? '#d1fae5' : '#f59e0b', color: m.requested ? '#16a34a' : '#fff', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
                           {m.requested ? '✅ Đã ĐNC' : '📋 Đề nghị cấp'}
@@ -719,7 +748,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#f1f5f9', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Hủy</button>
                 <button type="button" disabled={overLimit || filledCount === 0}
                   onClick={() => {
-                    const valid = tempMaterials.filter(m => m.name.trim());
+                    const valid = tempMaterials.filter(m => m.name.trim()).map(m => ({ ...m, name: m.name.trim(), code: m.code.trim() }));
                     onUpdateMaterials?.(idx, stageKey, teamIdx, valid);
                     setDncRow(null);
                   }}
@@ -933,8 +962,8 @@ export default function TaskDetailPage() {
           setMilestones(rd.milestones as { name: string; startDate: string; endDate: string; assigneeId: string }[])
         }
       }
-      // Load inventory for P2.1/P2.2/P2.3 (always, not just when resultData exists)
-      if (['P2.1', 'P2.2', 'P2.3'].includes(res.task.stepCode)) {
+      // Load inventory for steps that need real-time stock
+      if (['P2.1', 'P2.2', 'P2.3', 'P4.5'].includes(res.task.stepCode)) {
         loadInventory()
       }
       // Auto-generate WO number for P3.4
@@ -1318,7 +1347,7 @@ export default function TaskDetailPage() {
     const res = await apiFetch(`/api/tasks/${taskId}`, {
       method: 'PUT',
       body: JSON.stringify({
-        action: 'complete',
+        action: task.stepCode === 'P4.5' ? 'partial_issue' : 'complete',
         resultData: {
           ...finalData,
           checklist: checklistState,
@@ -1333,14 +1362,20 @@ export default function TaskDetailPage() {
           ...(deliveryType === 'batch' ? { deliveryBatches: deliveryBatches.filter(d => d.material.trim()) } : {}),
           ...(paymentConfirmations.length > 0 ? { paymentConfirmations } : {}),
           ...(warehouseItems.length > 0 ? { warehouseItems } : {}),
+          ...(task.stepCode === 'P1.3' ? { planApproved: true, estimateApproved: true } : {}),
         },
         notes: submitNotes || `Completed: ${task.stepName}`,
       }),
     })
 
     if (res.ok) {
-      setSuccessMsg(`✅ Hoàn thành! Bước tiếp: ${res.nextSteps?.join(', ') || 'Không có'}`)
-      setTimeout(() => router.push('/dashboard/tasks'), 2000)
+      if (res.isPartial) {
+        setSuccessMsg('✅ Đã xuất kho một phần! Trang sẽ tải lại để xuất tiếp...')
+        setTimeout(() => window.location.reload(), 1500)
+      } else {
+        setSuccessMsg(`✅ Hoàn thành! Bước tiếp: ${res.nextSteps?.join(', ') || 'Không có'}`)
+        setTimeout(() => router.push('/dashboard/tasks'), 2000)
+      }
     } else {
       setError(res.error || 'Lỗi khi hoàn thành')
     }
@@ -1379,19 +1414,40 @@ export default function TaskDetailPage() {
   let displayTitle = task.stepName
   if (task && task.stepCode === 'P4.5') {
     const src = (task.resultData as any)?.sourceStep
-    if (src === 'P3.3') displayTitle = 'Kho cấp vật tư cho PM (Thầu phụ)'
-    else if (src === 'P3.4') displayTitle = 'Kho cấp vật tư cho QLSX (Nội bộ)'
-    else displayTitle = 'Kho đề nghị cấp vật tư cho PM và QLSX'
+    if (src === 'P3.3') displayTitle = 'Kho cấp vật tư cho thầu phụ sản xuất'
+    else if (src === 'P3.4') displayTitle = 'Kho cấp vật tư cho nội bộ sản xuất'
+    else displayTitle = 'Kho cấp vật tư'
 
     const reqs = ((task.resultData as Record<string, any>)?.materialIssueRequests as Record<string, any>[]) || []
-    const req = reqs[0]
-    if (req) {
-      const stockItem = inventoryMaterials.find(m => m.materialCode === req.code)
-      const currentStock = stockItem ? Number(stockItem.currentStock) : 0
-      const reqQty = Number(req.quantity) || 0
-      if (currentStock < reqQty) isP45Valid = false
-    } else {
+    const issuedAccumulated = ((task.resultData as Record<string, any>)?.issuedAccumulated as Record<string, number>) || {}
+    if (reqs.length === 0) {
       isP45Valid = false
+    } else {
+      // Check if there's at least one item that still needs issuing and user entered valid qty
+      let hasAnyValidInput = false
+      let hasAnyError = false
+      for (let i = 0; i < reqs.length; i++) {
+        const req = reqs[i]
+        const code = req.code?.trim()
+        if (!code) continue
+        const accKey = `${code}_${i}`
+        const reqQty = Number(req.quantity) || 0
+        const alreadyIssued = issuedAccumulated[accKey] || 0
+        const remaining = reqQty - alreadyIssued
+        if (remaining <= 0) continue // already fulfilled
+
+        const stockItem = inventoryMaterials.find(m => m.materialCode?.trim() === code)
+        const currentStock = stockItem ? Number(stockItem.currentStock) : 0
+
+        const txKey = `actualQty_${code}_${i}`
+        const actualQty = Number(formData[txKey]) || 0
+        if (actualQty > 0) {
+          hasAnyValidInput = true
+          if (actualQty > currentStock) { hasAnyError = true }
+          if (actualQty > remaining) { hasAnyError = true }
+        }
+      }
+      isP45Valid = hasAnyValidInput && !hasAnyError
     }
   }
   return (
@@ -1518,7 +1574,7 @@ export default function TaskDetailPage() {
             {/* P1.3 Dual Approval UI */}
             {task.stepCode === 'P1.3' && previousStepData ? (
               <>
-                {/* Section 1: PM Plan */}
+                {/* Section 1: PM Plan — with independent approve/reject */}
                 <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', border: planDecision === 'approved' ? '2px solid #16a34a' : planDecision === 'rejected' ? '2px solid #dc2626' : undefined }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8 }}>
@@ -1574,34 +1630,52 @@ export default function TaskDetailPage() {
                   ) : (
                     <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu kế hoạch</div>
                   )}
+
                   {/* Plan approve/reject buttons */}
                   {isActive && planDecision === 'pending' && (
-                    <div style={{ marginTop: 16 }}>
+                    <div style={{ marginTop: 16, padding: '12px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🚀 Hành động — Kế hoạch</div>
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button onClick={() => handleSubmit('complete')} disabled={submitting}
+                        <button onClick={async () => {
+                          setPlanDecision('approved')
+                          if (estimateDecision === 'approved') {
+                            // Both approved → auto-complete P1.3
+                            handleSubmit('complete')
+                          } else {
+                            // Save partial approval to DB so it persists on reload
+                            try {
+                              await apiFetch(`/api/tasks/${taskId}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ action: 'save', resultData: { planApproved: true } }),
+                              })
+                            } catch { /* ignore save error */ }
+                          }
+                        }} disabled={submitting}
                           style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          {submitting ? '⏳ Đang xử lý...' : '✅ Duyệt kế hoạch'}
+                          ✅ Duyệt kế hoạch
                         </button>
                         <button onClick={() => setShowPlanReject(!showPlanReject)} disabled={submitting}
                           style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          ❌ Từ chối / Yêu cầu chỉnh sửa
+                          ❌ Từ chối → Trả PM (P1.2A)
                         </button>
                       </div>
                       {showPlanReject && (
                         <div style={{ marginTop: 10 }}>
                           <textarea value={planRejectReason} onChange={e => setPlanRejectReason(e.target.value)}
                             placeholder="Nhập lý do từ chối kế hoạch..." rows={2}
-                            style={{ width: '100%', borderRadius: 8, border: '1px solid #dc2626', padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical', background: 'var(--bg-secondary)' }} />
+                            style={{ width: '100%', borderRadius: 8, border: '1px solid #dc2626', padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical', background: '#fff' }} />
                           <button onClick={async () => {
                             if (!planRejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return; }
                             setSubmitting(true)
                             try {
-                              await apiFetch(`/api/tasks/${taskId}/reject`, {
+                              const res = await apiFetch(`/api/tasks/${taskId}/reject`, {
                                 method: 'POST',
-                                body: JSON.stringify({ reason: planRejectReason, overrideRejectTo: 'P1.2A' }),
+                                body: JSON.stringify({ reason: `[Kế hoạch] ${planRejectReason}`, overrideRejectTo: 'P1.2A' }),
                               })
-                              setSuccessMsg('✅ Đã từ chối và đẩy lại task về PM (P1.2A)')
-                              setTimeout(() => router.push('/dashboard/tasks'), 2000)
+                              if (res.success) {
+                                setSuccessMsg('✅ Đã từ chối kế hoạch → Đẩy lại PM (P1.2A)')
+                                setTimeout(() => router.push('/dashboard/tasks'), 2000)
+                              } else { setError(res.error || 'Lỗi khi từ chối') }
                             } catch { setError('Lỗi khi từ chối') }
                             setSubmitting(false)
                           }} disabled={submitting}
@@ -1619,22 +1693,262 @@ export default function TaskDetailPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Section 2: Dự toán thi công sơ bộ from P1.2 — with independent approve/reject */}
+                {previousStepData.estimate && (() => {
+                  const est = previousStepData.estimate as Record<string, unknown>
+
+                  const parseDtRows = (key: string): Record<string, string>[] => {
+                    try {
+                      const raw = est[key]
+                      if (!raw) return []
+                      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+                      return Array.isArray(parsed) ? parsed : []
+                    } catch { return [] }
+                  }
+
+                  const summaryFields = [
+                    { key: 'mat_main', label: 'Vật tư chính' },
+                    { key: 'mat_accessory', label: 'Vật tư phụ kiện, bu lông…' },
+                    { key: 'mat_packing', label: 'Vật tư đóng kiện' },
+                    { key: 'mat_method', label: 'Vật tư làm biện pháp' },
+                    { key: 'mat_consumable', label: 'Vật tư tiêu hao' },
+                    { key: 'mat_paint', label: 'Vật tư sơn' },
+                    { key: 'mat_reserve', label: 'Vật tư dự phòng' },
+                  ]
+                  const laborFields = [
+                    { key: 'lab_cutting', label: 'Pha cắt' },
+                    { key: 'lab_machining', label: 'Gia công' },
+                    { key: 'lab_fabrication', label: 'Chế tạo' },
+                    { key: 'lab_framing', label: 'Khung kiện' },
+                    { key: 'lab_assembly_product', label: 'Tổ hợp sản phẩm' },
+                    { key: 'lab_erection', label: 'Lắp dựng + Nghiệm thu' },
+                    { key: 'lab_cleaning_alloy', label: 'Vệ sinh vật liệu hợp kim' },
+                    { key: 'lab_surface_paint', label: 'Làm sạch, Sơn' },
+                    { key: 'lab_insulation', label: 'Bảo ôn' },
+                    { key: 'lab_equip_install', label: 'Lắp thiết bị phụ kiện' },
+                    { key: 'lab_packing', label: 'Đóng kiện' },
+                    { key: 'lab_delivery', label: 'Giao hàng' },
+                    { key: 'lab_reserve', label: 'Nhân công dự phòng' },
+                  ]
+                  const outsourceFields = [
+                    { key: 'out_transport', label: 'Vận tải' },
+                    { key: 'out_ndt', label: 'NDT, quy trình và thí nghiệm' },
+                    { key: 'out_galvanize', label: 'Mạ kẽm' },
+                    { key: 'out_other', label: 'Chi phí khác' },
+                    { key: 'out_reserve', label: 'Chi phí dự phòng' },
+                  ]
+                  const overheadFields = [
+                    { key: 'ovh_production', label: 'Chi phí chung phục vụ SX' },
+                    { key: 'ovh_financial', label: 'Chi phí tài chính' },
+                    { key: 'ovh_management', label: 'Chi phí Quản Lý' },
+                  ]
+
+                  const renderCostSection = (title: string, icon: string, fields: { key: string; label: string }[], color: string) => {
+                    const filledFields = fields.filter(f => est[f.key] && Number(est[f.key]) > 0)
+                    if (filledFields.length === 0) return null
+                    const total = filledFields.reduce((s, f) => s + (Number(est[f.key]) || 0), 0)
+                    return (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {icon} {title}
+                          <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>({filledFields.length} hạng mục)</span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, paddingLeft: 8 }}>
+                          {filledFields.map(f => (
+                            <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>{f.label}</span>
+                              <strong>{Number(est[f.key]).toLocaleString('vi-VN')}</strong>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 700, color, marginTop: 4, paddingRight: 8 }}>
+                          Cộng: {total.toLocaleString('vi-VN')} đ
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  const dtTables = [
+                    { key: 'dt03Items', title: 'DT03 — Dự toán chi phí VT', code: 'QT30-DT03', color: '#3b82f6',
+                      columns: ['Nhóm VT', 'Danh mục VT', 'ĐVT', 'KL/SL', 'Đơn giá', 'Thành tiền'],
+                      colKeys: ['nhomVT', 'danhMuc', 'dvt', 'kl', 'donGia', 'thanhTien'] },
+                    { key: 'dt04Items', title: 'DT04 — Dự toán chi tiết VT', code: 'QT30-DT04', color: '#8b5cf6',
+                      columns: ['Mã VT', 'Tên VT', 'Mác VL', 'Quy cách', 'ĐVT', 'KL/SL', 'Đơn giá', 'Thành tiền'],
+                      colKeys: ['maVT', 'tenVT', 'macVL', 'quyCach', 'dvt', 'kl', 'donGia', 'thanhTien'] },
+                    { key: 'dt05Items', title: 'DT05 — Dự toán chi phí dịch vụ', code: 'QT30-DT05', color: '#f59e0b',
+                      columns: ['Mã CP', 'Nội dung công việc', 'ĐVT', 'KL', 'Đơn giá', 'Thành tiền'],
+                      colKeys: ['maCP', 'noiDung', 'dvt', 'kl', 'donGia', 'thanhTien'] },
+                    { key: 'dt06Items', title: 'DT06 — Dự toán chi phí nhân công', code: 'QT30-DT06', color: '#ef4444',
+                      columns: ['Mã CP', 'Nội dung công việc', 'ĐVT', 'KL', 'Đơn giá', 'Thành tiền'],
+                      colKeys: ['maCP', 'noiDung', 'dvt', 'kl', 'donGia', 'thanhTien'] },
+                  ]
+
+                  const totalEstimate = est.totalEstimate ? Number(est.totalEstimate) : 0
+
+                  return (
+                    <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderLeft: '4px solid #f59e0b', border: estimateDecision === 'approved' ? '2px solid #16a34a' : estimateDecision === 'rejected' ? '2px solid #dc2626' : undefined }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid #f59e0b', paddingBottom: 8 }}>
+                          💰 Dự toán thi công sơ bộ <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>(KTKH - P1.2)</span>
+                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {estimateDecision !== 'pending' && (
+                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: estimateDecision === 'approved' ? '#16a34a' : '#dc2626' }}>
+                              {estimateDecision === 'approved' ? '✅ Đã duyệt' : '❌ Đã từ chối'}
+                            </span>
+                          )}
+                          {totalEstimate > 0 && (
+                            <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 14px', fontSize: '0.9rem', fontWeight: 700, color: '#92400e' }}>
+                              TỔNG: {totalEstimate.toLocaleString('vi-VN')} đ
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {renderCostSection('Chi phí vật tư', '📦', summaryFields, '#3b82f6')}
+                      {renderCostSection('Chi phí nhân công trực tiếp', '👷', laborFields, '#ef4444')}
+                      {renderCostSection('Chi phí dịch vụ thuê ngoài', '🔧', outsourceFields, '#f59e0b')}
+                      {renderCostSection('Chi phí chung', '🏢', overheadFields, '#6366f1')}
+
+                      {dtTables.map(dt => {
+                        const rows = parseDtRows(dt.key)
+                        const filledRows = rows.filter(r => dt.colKeys.some(k => r[k]?.trim()))
+                        if (filledRows.length === 0) return null
+                        return (
+                          <div key={dt.key} style={{ marginTop: 16 }}>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: dt.color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              📋 {dt.title}
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>{dt.code}</span>
+                            </div>
+                            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: `30px ${dt.colKeys.map(() => '1fr').join(' ')}`, gap: 0, padding: '6px 8px', background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)' }}>
+                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>#</span>
+                                {dt.columns.map(col => (
+                                  <span key={col} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>{col}</span>
+                                ))}
+                              </div>
+                              {filledRows.map((row, ri) => (
+                                <div key={ri} style={{ display: 'grid', gridTemplateColumns: `30px ${dt.colKeys.map(() => '1fr').join(' ')}`, gap: 0, padding: '4px 8px', borderBottom: ri < filledRows.length - 1 ? '1px solid var(--border)' : 'none', background: ri % 2 === 0 ? 'transparent' : 'var(--bg-secondary)', fontSize: '0.78rem' }}>
+                                  <span style={{ color: 'var(--text-muted)' }}>{ri + 1}</span>
+                                  {dt.colKeys.map(k => (
+                                    <span key={k} style={{ fontWeight: ['thanhTien', 'donGia', 'kl'].includes(k) ? 600 : 400, textAlign: ['thanhTien', 'donGia', 'kl'].includes(k) ? 'right' : 'left' as const }}>
+                                      {['thanhTien', 'donGia'].includes(k) && row[k] ? Number(row[k]).toLocaleString('vi-VN') : (row[k] || '—')}
+                                    </span>
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{ marginTop: 4, fontSize: '0.7rem', color: 'var(--text-muted)' }}>{filledRows.length} dòng</div>
+                          </div>
+                        )
+                      })}
+
+                      {est.estimateNotes && (
+                        <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 8, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          📝 <strong>Ghi chú:</strong> {String(est.estimateNotes)}
+                        </div>
+                      )}
+
+                      {/* Estimate approve/reject buttons */}
+                      {isActive && estimateDecision === 'pending' && (
+                        <div style={{ marginTop: 16, padding: '12px 16px', background: '#fffbeb', borderRadius: 10, border: '1px solid #fde68a' }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#92400e', marginBottom: 8 }}>🚀 Hành động — Dự toán</div>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <button onClick={async () => {
+                              setEstimateDecision('approved')
+                              if (planDecision === 'approved') {
+                                // Both approved → auto-complete P1.3
+                                handleSubmit('complete')
+                              } else {
+                                // Save partial approval to DB so it persists on reload
+                                try {
+                                  await apiFetch(`/api/tasks/${taskId}`, {
+                                    method: 'PUT',
+                                    body: JSON.stringify({ action: 'save', resultData: { estimateApproved: true } }),
+                                  })
+                                } catch { /* ignore save error */ }
+                              }
+                            }} disabled={submitting}
+                              style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                              ✅ Duyệt dự toán
+                            </button>
+                            <button onClick={() => setShowEstimateReject(!showEstimateReject)} disabled={submitting}
+                              style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                              ❌ Từ chối → Trả KTKH (P1.2)
+                            </button>
+                          </div>
+                          {showEstimateReject && (
+                            <div style={{ marginTop: 10 }}>
+                              <textarea value={estimateRejectReason} onChange={e => setEstimateRejectReason(e.target.value)}
+                                placeholder="Nhập lý do từ chối dự toán..." rows={2}
+                                style={{ width: '100%', borderRadius: 8, border: '1px solid #dc2626', padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical', background: '#fff' }} />
+                              <button onClick={async () => {
+                                if (!estimateRejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return; }
+                                setSubmitting(true)
+                                try {
+                                  const res = await apiFetch(`/api/tasks/${taskId}/reject`, {
+                                    method: 'POST',
+                                    body: JSON.stringify({ reason: `[Dự toán] ${estimateRejectReason}`, overrideRejectTo: 'P1.2' }),
+                                  })
+                                  if (res.success) {
+                                    setSuccessMsg('✅ Đã từ chối dự toán → Đẩy lại KTKH (P1.2)')
+                                    setTimeout(() => router.push('/dashboard/tasks'), 2000)
+                                  } else { setError(res.error || 'Lỗi khi từ chối') }
+                                } catch { setError('Lỗi khi từ chối') }
+                                setSubmitting(false)
+                              }} disabled={submitting}
+                                style={{ marginTop: 6, padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                                ⚠️ Xác nhận từ chối dự toán → Gửi lại KTKH (P1.2)
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Estimate pre-approved from previous round */}
+                      {estimateDecision === 'approved' && task?.resultData && Boolean((task.resultData as Record<string, unknown>).estimateApproved) && (
+                        <div style={{ marginTop: 12, padding: '8px 16px', background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600 }}>
+                          ✅ Đã được phê duyệt từ lần xét duyệt trước
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* Combined status banner when both approved */}
+                {planDecision === 'approved' && estimateDecision === 'approved' && (
+                  <div className="card" style={{ padding: '1.25rem', background: '#f0fdf4', border: '2px solid #16a34a', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#16a34a', marginBottom: 4 }}>
+                      🎉 Cả hai phần đã được phê duyệt
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#166534' }}>
+                      Hệ thống đang hoàn thành bước P1.3...
+                    </div>
+                  </div>
+                )}
+
               </>
             ) : (
               <>
             {/* P5.1: Fabrication Stages — interactive progress cards (ABOVE the form) */}
             {task.stepCode === 'P5.1' && (() => {
-              const FAB_STAGES = [
-                { key: 'CUT', label: 'Pha cắt', icon: '🔹' },
-                { key: 'FIT', label: 'Gá lắp', icon: '🔹' },
-                { key: 'WLD', label: 'Hàn', icon: '🔹' },
-                { key: 'MCH', label: 'Gia công cơ khí', icon: '🔹' },
-                { key: 'TRF', label: 'Xử lý bề mặt', icon: '🔹' },
-                { key: 'FAT', label: 'Factory Acceptance Test', icon: '⭐' },
-                { key: 'BLS', label: 'Bắn bi / Làm sạch', icon: '🔹' },
-                { key: 'FPC', label: 'Sơn phủ', icon: '🔹' },
-                { key: 'PCK', label: 'Đóng kiện (Ready to Ship)', icon: '🔹' },
+              const ALL_FAB_STAGES = [
+                { key: 'CUT', label: 'Pha cắt', icon: '🔹', wbsKey: 'cutting' },
+                { key: 'FIT', label: 'Gá lắp', icon: '🔹', wbsKey: 'fitup' },
+                { key: 'WLD', label: 'Hàn', icon: '🔹', wbsKey: 'welding' },
+                { key: 'MCH', label: 'Gia công cơ khí', icon: '🔹', wbsKey: 'machining' },
+                { key: 'TRF', label: 'Xử lý bề mặt', icon: '🔹', wbsKey: 'tryAssembly' },
+                { key: 'FAT', label: 'Factory Acceptance Test', icon: '⭐', wbsKey: 'dismantle' },
+                { key: 'BLS', label: 'Bắn bi / Làm sạch', icon: '🔹', wbsKey: 'blasting' },
+                { key: 'FPC', label: 'Sơn phủ', icon: '🔹', wbsKey: 'painting' },
+                { key: 'PCK', label: 'Đóng kiện (Ready to Ship)', icon: '🔹', wbsKey: 'packing' },
               ]
+              // Filter stages based on stageKey from LSX (stored in resultData by createP51ForP45)
+              const rd = (task.resultData as Record<string, any>) || {}
+              const lsxStageKey = rd.stageKey as string | null
+              const FAB_STAGES = lsxStageKey
+                ? ALL_FAB_STAGES.filter(s => s.wbsKey === lsxStageKey)
+                : ALL_FAB_STAGES
               const calcTotal = (overrideKey?: string, overrideVal?: number) => {
                 const total = FAB_STAGES.reduce((sum, s) => {
                   if (overrideKey && s.key === overrideKey) return sum + (overrideVal ?? 0)
@@ -3863,57 +4177,78 @@ export default function TaskDetailPage() {
                   {(() => {
                     const reqs = ((task.resultData as Record<string, any>)?.materialIssueRequests as Record<string, any>[]) || []
                     if (reqs.length === 0) return null
+                    const issuedAccumulated = ((task.resultData as Record<string, any>)?.issuedAccumulated as Record<string, number>) || {}
+                    const allFulfilled = reqs.every((req: any, i: number) => {
+                      const code = req.code?.trim()
+                      if (!code) return true
+                      const accKey = `${code}_${i}`
+                      return (issuedAccumulated[accKey] || 0) >= (Number(req.quantity) || 0)
+                    })
                     return (
-                      <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
-                        <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>
-                          🧾 Đề nghị cấp ({reqs.length})
+                      <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: `4px solid ${allFulfilled ? '#16a34a' : '#0ea5e9'}` }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: allFulfilled ? '#16a34a' : '#0ea5e9' }}>
+                          {allFulfilled ? '✅' : '🧾'} Đề nghị cấp ({reqs.length}) {allFulfilled && <span style={{ fontSize: '0.8rem', background: '#dcfce7', color: '#16a34a', padding: '2px 10px', borderRadius: 12, marginLeft: 8 }}>Đã cấp đủ 100%</span>}
                         </h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.2fr', gap: 10, padding: '8px 12px', background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.6fr 0.6fr 0.6fr 0.8fr', gap: 10, padding: '8px 12px', background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
                           <span>Mã & Tên VT</span>
-                          <span style={{ textAlign: 'center' }}>Quy chuẩn</span>
                           <span style={{ textAlign: 'center' }}>SL Đề nghị</span>
-                          <span style={{ textAlign: 'center' }}>Thực xuất / Tồn kho</span>
+                          <span style={{ textAlign: 'center' }}>Đã xuất</span>
+                          <span style={{ textAlign: 'center' }}>Tồn kho</span>
+                          <span style={{ textAlign: 'center' }}>KL Thực xuất</span>
                         </div>
-                        {reqs.map((req, idx) => {
-                          const stockItem = inventoryMaterials.find(m => m.materialCode === req.code)
-                          const currentStock = stockItem ? Number(stockItem.currentStock) : 0
+                        {reqs.map((req: any, idx: number) => {
+                          const code = req.code?.trim() || ''
+                          const accKey = `${code}_${idx}`
+                          const alreadyIssued = issuedAccumulated[accKey] || 0
                           const reqQty = Number(req.quantity) || 0
-                          const sufficientStock = currentStock >= reqQty
-                          
-                          // Add 'Thực xuất' input logic
-                          const txKey = `actualQty_${req.code}_${idx}`
+                          const remaining = reqQty - alreadyIssued
+                          const itemFulfilled = remaining <= 0
+
+                          const stockItem = inventoryMaterials.find(m => m.materialCode?.trim() === code)
+                          const currentStock = stockItem ? Number(stockItem.currentStock) : 0
+
+                          const txKey = `actualQty_${code}_${idx}`
                           const actualQtyStr = formData[txKey] as string
                           const updateTx = (val: string) => handleFieldChange(txKey, val)
-                          
+
                           return (
-                            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.2fr', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', alignItems: 'center' }}>
+                            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.6fr 0.6fr 0.6fr 0.8fr', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', alignItems: 'center', background: itemFulfilled ? '#f0fdf4' : undefined }}>
                               <div>
                                 <div style={{ fontWeight: 600, color: 'var(--accent)' }}>{req.code}</div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{req.name}</div>
                               </div>
-                              <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{req.spec || '—'}</div>
-                              <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.9rem' }}>{reqQty.toLocaleString('vi-VN')} <span style={{fontSize:'0.75rem', color: 'var(--text-muted)'}}>{req.unit}</span></div>
-                              
-                              {stockItem ? (
-                                <div style={{ textAlign: 'center' }}>
-                                  <div style={{ fontWeight: 800, fontSize: '0.9rem', color: sufficientStock ? '#16a34a' : '#dc2626' }}>
-                                    (Tồn: {currentStock.toLocaleString('vi-VN')} {stockItem.unit})
-                                  </div>
-                                  {!sufficientStock && <div style={{ fontSize: '0.7rem', color: '#dc2626', marginTop: 4, fontWeight: 600 }}>Tồn kho KHÔNG ĐỦ!</div>}
-                                  {sufficientStock && isActive && (
-                                     <div style={{ marginTop: 6, display: 'flex', justifyContent: 'center' }}>
-                                        <input className="input" type="number" placeholder="Số lượng thực xuất" value={actualQtyStr || ''} onChange={e => updateTx(e.target.value)} disabled={!isActive} style={{ fontSize:'0.8rem', padding: '6px 8px', textAlign: 'center', width: '130px', border: '1px solid #16a34a', background: '#f0fdf4' }} />
-                                     </div>
-                                  )}
-                                  {isDone && (
-                                     <div style={{ marginTop: 6, fontSize: '0.85rem', fontWeight: 700, color: '#16a34a' }}>
-                                        Thực xuất: {actualQtyStr || 0}
-                                     </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div style={{ textAlign: 'center', color: '#dc2626', fontWeight: 600, fontSize: '0.8rem' }}>Kho chưa có VT này</div>
-                              )}
+                              <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.9rem' }}>{reqQty.toLocaleString('vi-VN')} <span style={{fontSize:'0.7rem', color: 'var(--text-muted)'}}>{req.unit}</span></div>
+                              <div style={{ textAlign: 'center', fontWeight: 700, color: alreadyIssued > 0 ? '#0ea5e9' : 'var(--text-muted)' }}>{alreadyIssued > 0 ? alreadyIssued.toLocaleString('vi-VN') : '0'}</div>
+                              {/* Tồn kho */}
+                              <div style={{ textAlign: 'center' }}>
+                                {stockItem ? (
+                                  <span style={{ fontWeight: 700, color: currentStock > 0 ? '#16a34a' : '#dc2626' }}>{currentStock.toLocaleString('vi-VN')}</span>
+                                ) : (
+                                  <span style={{ color: '#dc2626', fontWeight: 600, fontSize: '0.8rem' }}>Chưa có</span>
+                                )}
+                              </div>
+                              {/* KL Thực xuất */}
+                              <div style={{ textAlign: 'center' }}>
+                                {itemFulfilled ? (
+                                  <span style={{ color: '#16a34a', fontWeight: 700 }}>—</span>
+                                ) : isActive ? (
+                                  (() => {
+                                    const actualVal = Number(actualQtyStr) || 0
+                                    const overStock = actualVal > currentStock && actualVal > 0
+                                    const overRemaining = actualVal > remaining && actualVal > 0
+                                    const hasError = overStock || overRemaining
+                                    return (
+                                      <>
+                                        <input className="input" type="number" min="0" max={Math.min(remaining, currentStock)} placeholder="0" value={actualQtyStr || ''} onChange={e => updateTx(e.target.value)} style={{ fontSize:'0.8rem', padding: '6px 8px', textAlign: 'center', width: '100%', maxWidth: '110px', border: `1px solid ${hasError ? '#dc2626' : 'var(--border)'}`, background: hasError ? '#fef2f2' : '#fff' }} />
+                                        {overStock && <div style={{ fontSize: '0.6rem', color: '#dc2626', marginTop: 2, fontWeight: 700 }}>⚠️ Vượt kho</div>}
+                                        {!overStock && overRemaining && <div style={{ fontSize: '0.6rem', color: '#dc2626', marginTop: 2, fontWeight: 700 }}>⚠️ Vượt còn thiếu ({remaining})</div>}
+                                      </>
+                                    )
+                                  })()
+                                ) : (
+                                  <span style={{ fontWeight: 700, color: '#16a34a' }}>{actualQtyStr || '—'}</span>
+                                )}
+                              </div>
                             </div>
                           )
                         })}
@@ -4410,6 +4745,7 @@ export default function TaskDetailPage() {
                   isWbsEditable={false}
                   wbsItemsData={(previousStepData.plan as Record<string, unknown>).wbsItems}
                   mode="lsx"
+                  stepFilter={task.stepCode}
                   lsxStatus={(() => {
                     const rd = formData as Record<string, unknown>
                     return (rd.lsxStatus as Record<number, { lsx?: boolean; vt?: boolean }>) || {}
@@ -4897,8 +5233,8 @@ export default function TaskDetailPage() {
                   <div key={att.key} style={{ paddingBottom: '10px', borderBottom: '1px solid var(--border)', marginBottom: '10px' }}>
                     <MultiFileUpload
                       label={att.label + (att.required ? ' *' : '')}
-                      entityType="Task"
-                      entityId={`${task.id}_${att.key}`}
+                      entityType={task.stepCode === 'P1.1' ? 'Project' : 'Task'}
+                      entityId={task.stepCode === 'P1.1' ? `${task.projectId}_${att.key}` : `${task.id}_${att.key}`}
                       accept={att.accept || undefined}
                       disabled={!isActive}
                       compact

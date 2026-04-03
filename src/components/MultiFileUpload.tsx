@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 export interface UploadedFile {
   id: string
@@ -58,6 +58,30 @@ export default function MultiFileUpload({
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadFiles() {
+      try {
+        const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
+        const res = await fetch(`/api/upload?entityType=${entityType}&entityId=${entityId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).then(r => r.json())
+        if (res.ok && res.attachments && isMounted) {
+          // Merge with any existing passed files to prevent duplicates
+          setFiles(prev => {
+            const existingIds = new Set(prev.map(p => p.id))
+            const newFiles = res.attachments.filter((a: UploadedFile) => !existingIds.has(a.id))
+            return [...prev, ...newFiles]
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load existing files:', err)
+      }
+    }
+    loadFiles()
+    return () => { isMounted = false }
+  }, [entityType, entityId])
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function uploadFile(file: File) {

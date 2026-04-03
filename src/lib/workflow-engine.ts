@@ -10,8 +10,11 @@ export type { WorkflowStep } from './workflow-constants'
 
 // ── Workflow Engine Core Functions (Server-only) ──
 
+// Steps that are created dynamically (multi-instance), not during project init
+const DYNAMIC_STEPS = ['P5.1']
+
 export async function initializeProjectWorkflow(projectId: string): Promise<void> {
-  const steps = Object.values(WORKFLOW_RULES)
+  const steps = Object.values(WORKFLOW_RULES).filter(s => !DYNAMIC_STEPS.includes(s.code))
   const tasks = steps.map((step) => ({
     projectId,
     stepCode: step.code,
@@ -133,6 +136,87 @@ export async function completeTask(
   }
 
   return { nextSteps: activatedSteps }
+}
+
+// ── Auto-create P5.1 when a P4.5 task issues materials for the first time ──
+async function createP51ForP45(p45TaskId: string) {
+  const p45 = await prisma.workflowTask.findUnique({ where: { id: p45TaskId } })
+  if (!p45) return
+
+  const data = (p45.resultData as Record<string, any>) || {}
+
+  // Guard: only create once per P4.5 task
+  if (data._p51Created) return
+
+  const rule = WORKFLOW_RULES['P5.1']
+  if (!rule) return
+
+  // Determine dynamic name based on source
+  const sourceStep = data.sourceStep || 'P4.5'
+  let stepName = rule.name
+  let stepNameEn = rule.nameEn
+  if (sourceStep === 'P3.3') {
+    stepName = 'Tổ SX thực hiện SX (thầu phụ)'
+    stepNameEn = 'Production Execute (Subcontractor)'
+  } else if (sourceStep === 'P3.4') {
+    stepName = 'Tổ SX thực hiện SX (nội bộ)'
+    stepNameEn = 'Production Execute (Internal)'
+  }
+
+  // Create new P5.1 task
+  const newTask = await prisma.workflowTask.create({
+    data: {
+      projectId: p45.projectId,
+      stepCode: 'P5.1',
+      stepName,
+      stepNameEn,
+      assignedRole: rule.role,
+      status: TASK_STATUS.IN_PROGRESS,
+      startedAt: new Date(),
+      deadline: rule.deadlineDays
+        ? new Date(Date.now() + rule.deadlineDays * 24 * 60 * 60 * 1000)
+        : null,
+      resultData: {
+        sourceP45TaskId: p45TaskId,
+        sourceStep,
+        stageKey: (data.materialIssueRequests as Record<string, any>[])?.[0]?.stageKey || null,
+        materialIssueRequests: data.materialIssueRequests || [],
+      },
+    },
+  })
+
+  // Mark P4.5 so we don't create again
+  await prisma.workflowTask.update({
+    where: { id: p45TaskId },
+    data: {
+      resultData: JSON.parse(JSON.stringify({ ...data, _p51Created: true, _p51TaskId: newTask.id })),
+    },
+  })
+
+  // Notify R06b users
+  try {
+    const project = await prisma.project.findUnique({
+      where: { id: p45.projectId },
+      select: { projectCode: true, projectName: true },
+    })
+    const users = await prisma.user.findMany({
+      where: { roleCode: rule.role, isActive: true },
+      select: { id: true },
+    })
+    if (users.length > 0 && project) {
+      await prisma.notification.createMany({
+        data: users.map((u) => ({
+          userId: u.id,
+          title: `Công việc mới: ${stepName}`,
+          message: `Bước P5.1 của dự án ${project.projectCode} — ${project.projectName} đã sẵn sàng. VT đã được xuất kho.`,
+          type: 'task_assigned',
+          linkUrl: `/dashboard/tasks/${newTask.id}`,
+        })),
+      })
+    }
+  } catch (err) {
+    console.error('P5.1 notification error:', err)
+  }
 }
 
 // ── Reject Task (Reverse Flow) ──
@@ -277,6 +361,25 @@ async function runWorkflowHooks(
     }
 
     // ── Existing Module Hooks ──
+    
+    // P1.1: Lập KHDA → update Master Project record if edited
+    if (stepCode === 'P1.1' && resultData) {
+      const dataToUpdate: any = {}
+      if (resultData.projectName) dataToUpdate.projectName = resultData.projectName
+      if (resultData.projectCode) dataToUpdate.projectCode = resultData.projectCode
+      if (resultData.clientName) dataToUpdate.clientName = resultData.clientName
+      if (resultData.productType) dataToUpdate.productType = resultData.productType
+      if (resultData.currency) dataToUpdate.currency = resultData.currency
+      if (resultData.contractValue) dataToUpdate.contractValue = Number(resultData.contractValue)
+      if (resultData.description) dataToUpdate.description = resultData.description
+      
+      if (Object.keys(dataToUpdate).length > 0) {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: dataToUpdate,
+        })
+      }
+    }
 
     // P3.4A/B: Material receipt → auto StockMovement (IN)
     if (['P3.4A', 'P3.4B'].includes(stepCode) && resultData) {
@@ -395,11 +498,28 @@ async function runWorkflowHooks(
     }
 
     // P4.5: Kho xuất vật tư → auto deduct stock for each issued item
-    if (stepCode === 'P4.5' && resultData) {
+    if (stepCode === 'P4.5' && resultData && !resultData._stockAlreadyDeducted) {
       const issueItemsRaw = resultData.issueItems as string | undefined
       let issueItems: { name: string; code: string; spec: string; qty: string; unit: string }[] = []
       try { issueItems = issueItemsRaw ? JSON.parse(issueItemsRaw) : [] } catch { issueItems = [] }
       const validItems = issueItems.filter(item => item.code?.trim() && Number(item.qty) > 0)
+      
+      // Feature: Support new interface materialIssueRequests
+      const reqs = (resultData.materialIssueRequests as Record<string, any>[]) || []
+      for (let i = 0; i < reqs.length; i++) {
+        const req = reqs[i]
+        const txKey = `actualQty_${req.code?.trim()}_${i}`
+        const actualQty = Number(resultData[txKey]) || 0
+        if (actualQty > 0 && req.code?.trim()) {
+           validItems.push({
+             name: req.name || '',
+             code: req.code,
+             spec: req.spec || '',
+             qty: String(actualQty),
+             unit: req.unit || ''
+           })
+        }
+      }
       for (const item of validItems) {
         const material = await prisma.material.findFirst({
           where: { materialCode: item.code.trim() },
@@ -543,4 +663,98 @@ export async function activateTask(projectId: string, stepCode: string): Promise
   } catch (err) {
     console.error('Notification creation error:', err)
   }
+}
+
+// P4.5 Partial Issue: deduct stock per batch, track accumulated, complete only when all fulfilled
+export async function processP45PartialIssue(
+  taskId: string,
+  userId: string,
+  resultData: Record<string, unknown>
+): Promise<{ isPartial: boolean; issuedAccumulated: Record<string, number> }> {
+  const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
+  if (!task) throw new Error('Task not found')
+  if (task.status === TASK_STATUS.DONE) throw new Error('Task already completed')
+
+  const existingData = (task.resultData as Record<string, any>) || {}
+  const issuedAccumulated: Record<string, number> = { ...(existingData.issuedAccumulated || {}) }
+  const reqs = (existingData.materialIssueRequests as Record<string, any>[]) || []
+
+  const project = await prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true } })
+  const projCode = project?.projectCode || 'UNKNOWN'
+
+  for (let i = 0; i < reqs.length; i++) {
+    const req = reqs[i]
+    const code = req.code?.trim()
+    if (!code) continue
+
+    const txKey = `actualQty_${code}_${i}`
+    const actualQty = Number(resultData[txKey]) || 0
+    if (actualQty <= 0) continue
+
+    const material = await prisma.material.findFirst({
+      where: { materialCode: code },
+      select: { id: true, currentStock: true },
+    })
+    if (material) {
+      await prisma.$transaction([
+        prisma.stockMovement.create({
+          data: {
+            materialId: material.id,
+            projectId: task.projectId,
+            type: 'OUT',
+            quantity: actualQty,
+            reason: 'production_issue',
+            referenceNo: `${projCode}-P4.5`,
+            performedBy: userId,
+            notes: `Xuất VT (partial): ${req.name} (${code}) x ${actualQty} ${req.unit}`,
+          },
+        }),
+        prisma.material.update({
+          where: { id: material.id },
+          data: { currentStock: { decrement: actualQty } },
+        }),
+      ])
+    }
+
+    const accKey = `${code}_${i}`
+    issuedAccumulated[accKey] = (issuedAccumulated[accKey] || 0) + actualQty
+  }
+
+  // Check: all items fully issued (=== exactly)
+  let allFulfilled = reqs.length > 0
+  for (let i = 0; i < reqs.length; i++) {
+    const code = reqs[i].code?.trim()
+    if (!code) continue
+    const accKey = `${code}_${i}`
+    const reqQty = Number(reqs[i].quantity) || 0
+    const issued = issuedAccumulated[accKey] || 0
+    if (issued !== reqQty) { allFulfilled = false; break }
+  }
+
+  if (allFulfilled) {
+    // All fulfilled → complete the task. Set flag to skip double stock deduction.
+    const cleanedData: Record<string, unknown> = { ...existingData, issuedAccumulated, _stockAlreadyDeducted: true }
+    for (const key of Object.keys(cleanedData)) {
+      if (key.startsWith('actualQty_')) delete cleanedData[key]
+    }
+    await completeTask(taskId, userId, cleanedData)
+    // Also create P5.1 if this is the first (and only) issue
+    await createP51ForP45(taskId)
+    return { isPartial: false, issuedAccumulated }
+  }
+
+  // Partial: save accumulated progress, clear actualQty for next round
+  const updatedData: Record<string, unknown> = { ...existingData, issuedAccumulated }
+  for (const key of Object.keys(updatedData)) {
+    if (key.startsWith('actualQty_')) delete updatedData[key]
+  }
+  await prisma.workflowTask.update({
+    where: { id: taskId },
+    data: { resultData: JSON.parse(JSON.stringify(updatedData)) },
+  })
+
+  // Create P5.1 on first partial issue
+  await createP51ForP45(taskId)
+
+  return { isPartial: true, issuedAccumulated }
 }
