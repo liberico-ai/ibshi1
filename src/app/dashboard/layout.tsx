@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { useAuthStore } from '@/hooks/useAuth'
+import { useAuthStore, apiFetch } from '@/hooks/useAuth'
 import { ROLES, MENU_ITEMS, MENU_GROUPS, ROLE_GROUP_PRIORITY } from '@/lib/constants'
 import NotificationBell from '@/components/NotificationBell'
 import {
@@ -25,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [ready, setReady] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const [taskCount, setTaskCount] = useState(0)
 
   useEffect(() => {
     hydrate()
@@ -36,6 +37,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.push('/login')
     }
   }, [ready, isAuthenticated, router])
+
+  // Fetch pending task count for current user
+  useEffect(() => {
+    if (!ready || !isAuthenticated) return
+    const fetchCount = () => {
+      apiFetch('/api/tasks').then(res => {
+        if (res.ok) setTaskCount(res.tasks?.length ?? 0)
+      })
+    }
+    fetchCount()
+    const interval = setInterval(fetchCount, 30000) // refresh every 30s
+    return () => clearInterval(interval)
+  }, [ready, isAuthenticated])
 
   const roleCode = user?.roleCode || 'R01'
   const roleName = ROLES[roleCode as keyof typeof ROLES]?.name || roleCode
@@ -153,8 +167,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           className={`sidebar-link ${pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)) ? 'active' : ''}`}
                           title={item.label}
                         >
-                          <MenuIcon name={item.icon} />
-                          {!sidebarCollapsed && <span>{item.label}</span>}
+                          <span style={{ position: 'relative', display: 'inline-flex' }}>
+                            <MenuIcon name={item.icon} />
+                            {item.key === 'tasks' && taskCount > 0 && sidebarCollapsed && (
+                              <span style={{
+                                position: 'absolute', top: -6, right: -8,
+                                minWidth: 16, height: 16, borderRadius: 8,
+                                background: '#e63946', color: 'white',
+                                fontSize: 10, fontWeight: 700,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                padding: '0 4px', lineHeight: 1,
+                              }}>{taskCount > 99 ? '99+' : taskCount}</span>
+                            )}
+                          </span>
+                          {!sidebarCollapsed && (
+                            <>
+                              <span>{item.label}</span>
+                              {item.key === 'tasks' && taskCount > 0 && (
+                                <span style={{
+                                  marginLeft: 'auto',
+                                  minWidth: 20, height: 20, borderRadius: 10,
+                                  background: '#e63946', color: 'white',
+                                  fontSize: 11, fontWeight: 700,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  padding: '0 6px', lineHeight: 1,
+                                }}>{taskCount > 99 ? '99+' : taskCount}</span>
+                              )}
+                            </>
+                          )}
                         </Link>
                       ))}
                     </div>
