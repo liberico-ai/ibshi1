@@ -33,12 +33,12 @@ const USERS: Record<string, { username: string; password: string; role: string }
 // Step → responsible role mapping
 const STEP_USERS: Record<string, string> = {
   'P1.1': 'PM', 'P1.1B': 'BGD', 'P1.2A': 'PM', 'P1.2': 'KTKH', 'P1.3': 'BGD',
-  'P2.1': 'TK', 'P2.2': 'PM', 'P2.3': 'KHO', 'P2.4': 'KTKH', 'P2.5': 'BGD',
+  'P2.1': 'TK', 'P2.2': 'PM', 'P2.3': 'KHO', 'P2.1A': 'KT', 'P2.4': 'KTKH', 'P2.5': 'BGD',
   'P3.1': 'PM', 'P3.2': 'KHO', 'P3.3': 'PM', 'P3.4': 'QLSX',
   'P3.5': 'TM', 'P3.6': 'BGD', 'P3.7': 'TM',
   'P4.1': 'KT', 'P4.2': 'TM', 'P4.3': 'QC', 'P4.4': 'KHO', 'P4.5': 'KHO',
   'P5.1': 'TSX', 'P5.2': 'TSX', 'P5.3': 'QC', 'P5.4': 'PM', 'P5.5': 'KTKH',
-  'P6.1': 'KTKH',
+  'P6.1': 'QC', 'P6.2': 'KT', 'P6.3': 'KTKH', 'P6.4': 'PM', 'P6.5': 'BGD',
 }
 
 // ─── Helper: get JWT token ───────────────────────────────────────
@@ -212,11 +212,12 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
     // P1.3: BGĐ approves plan & budget (gate: P1.2A + P1.2)
     await fastForwardStep(request, tokens, 'P1.3', projectId)
 
-    // P2.1 + P2.2 + P2.3 run in parallel
-    const [taskP21, taskP22, taskP23] = await Promise.all([
+    // P2.1 + P2.2 + P2.3 + P2.1A run in parallel (all activated by P1.3)
+    const [taskP21, taskP22, taskP23, taskP21A] = await Promise.all([
       waitForTask(request, tokens.TK, 'P2.1', projectId),
       waitForTask(request, tokens.PM, 'P2.2', projectId),
       waitForTask(request, tokens.KHO, 'P2.3', projectId),
+      waitForTask(request, tokens.KT, 'P2.1A', projectId),
     ])
     await Promise.all([
       completeTaskAPI(request, tokens.TK, taskP21.id, {
@@ -234,9 +235,13 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
           { material: 'Gioăng PTFE', available: 100, unit: 'cái' },
         ],
       }),
+      completeTaskAPI(request, tokens.KT, taskP21A.id, {
+        dt07Items: [{ maCP: 'DT07-1', noiDung: 'Chi phí vật tư', giaTri: 5000000000 }],
+        totalLabor: '3000000000',
+      }),
     ])
 
-    // P2.4: KTKH production plan (gate: P2.1+P2.2+P2.3)
+    // P2.4: KTKH budget adjustment (gate: P2.1+P2.2+P2.3+P2.1A)
     await fastForwardStep(request, tokens, 'P2.4', projectId, {
       productionPlan: 'KH-SX-001',
       adjustedBudget: 13500000000,
@@ -295,11 +300,12 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
       endDate: '2026-05-15',
     })
 
-    // P3.4: QLSX internal WO
+    // P3.4: QLSX internal WO (requires bomLinked per TC-04-02)
     const taskP34 = await waitForTask(request, tokens.QLSX, 'P3.4', projectId)
     await completeTaskAPI(request, tokens.QLSX, taskP34.id, {
       internalWO: 'WO-INT-001',
       teams: ['Tổ hàn', 'Tổ cơ khí'],
+      bomLinked: true,
     })
   })
 
@@ -417,7 +423,16 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
   })
 
   test('P4.5: Warehouse issues material', async ({ request }) => {
-    await fastForwardStep(request, tokens, 'P4.5', projectId, {
+    // P4.5 is a multi-instance task, created via /api/tasks/activate
+    const activateRes = await request.post('/api/tasks/activate', {
+      headers: { Authorization: `Bearer ${tokens.KHO}` },
+      data: { projectId, stepCode: 'P4.5' },
+    })
+    const activateData = await activateRes.json()
+    if (!activateData.ok) throw new Error(`Activate P4.5 failed: ${JSON.stringify(activateData)}`)
+
+    const taskP45 = await waitForTask(request, tokens.KHO, 'P4.5', projectId)
+    await completeTaskAPI(request, tokens.KHO, taskP45.id, {
       issuedTo: 'PM + QLSX',
       issueDate: '2026-05-05',
     })
@@ -426,6 +441,12 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
   // ── Phase 5: Test merged fields + rejection flow ────────────────
 
   test('P5.1 → P5.2: hangMuc + jobCardCode ⭐', async ({ request, page }) => {
+    // P5.1 is a DYNAMIC_STEP — must be activated via API (like P4.5)
+    await request.post('/api/tasks/activate', {
+      headers: { Authorization: `Bearer ${tokens.TSX}` },
+      data: { projectId, stepCode: 'P5.1' },
+    })
+
     // P5.1: Production team executes
     await fastForwardStep(request, tokens, 'P5.1', projectId, {
       jobCardStatus: 'In Progress',
@@ -481,19 +502,36 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
     await completeTaskAPI(request, tokens.PM, taskP54.id, {
       acceptedVolume: 25,
       volumeUnit: 'tấn',
+      checklist: { signoff_production: true, signoff_transport: true, signoff_pm: true },
     })
   })
 
   // ── Phase 5-6: Close out ────────────────────────────────────────
 
-  test('P5.5 → P6.1: close project', async ({ request }) => {
+  test('P5.5 → P6: full project closure', async ({ request }) => {
     await fastForwardStep(request, tokens, 'P5.5', projectId, {
       salaryCalculation: 'Completed',
       totalPieceRate: 85000000,
     })
-    await fastForwardStep(request, tokens, 'P6.1', projectId, {
-      lessonsLearned: 'E2E test complete',
+
+    // P6.1 + P6.2 + P6.3 + P6.4 run in parallel
+    const [t61, t62, t63, t64] = await Promise.all([
+      waitForTask(request, tokens.QC, 'P6.1', projectId),
+      waitForTask(request, tokens.KT, 'P6.2', projectId),
+      waitForTask(request, tokens.KTKH, 'P6.3', projectId),
+      waitForTask(request, tokens.PM, 'P6.4', projectId),
+    ])
+    await Promise.all([
+      completeTaskAPI(request, tokens.QC, t61.id, { dossierComplete: true, checklist: { delivery_proof_attached: true } }),
+      completeTaskAPI(request, tokens.KT, t62.id, { directCostSettled: true }),
+      completeTaskAPI(request, tokens.KTKH, t63.id, { pnlComplete: true, profitLoss: 2500000000 }),
+      completeTaskAPI(request, tokens.PM, t64.id, { lessonsLearned: 'E2E test complete' }),
+    ])
+
+    // P6.5: BGĐ closure approval (gate: P6.1+P6.2+P6.3+P6.4)
+    await fastForwardStep(request, tokens, 'P6.5', projectId, {
       projectClosed: true,
+      closureApproved: true,
     })
   })
 
@@ -524,15 +562,17 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
       ])
       await fastForwardStep(request, tokens, 'P1.3', projectId2)
 
-      const [t21, t22, t23] = await Promise.all([
+      const [t21, t22, t23, t21a] = await Promise.all([
         waitForTask(request, tokens.TK, 'P2.1', projectId2),
         waitForTask(request, tokens.PM, 'P2.2', projectId2),
         waitForTask(request, tokens.KHO, 'P2.3', projectId2),
+        waitForTask(request, tokens.KT, 'P2.1A', projectId2),
       ])
       await Promise.all([
         completeTaskAPI(request, tokens.TK, t21.id, {}),
         completeTaskAPI(request, tokens.PM, t22.id, {}),
         completeTaskAPI(request, tokens.KHO, t23.id, {}),
+        completeTaskAPI(request, tokens.KT, t21a.id, {}),
       ])
       await fastForwardStep(request, tokens, 'P2.4', projectId2)
       await fastForwardStep(request, tokens, 'P2.5', projectId2)
@@ -545,7 +585,7 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
       ])
       await Promise.all([
         completeTaskAPI(request, tokens.KHO, t32.id, {}),
-        completeTaskAPI(request, tokens.QLSX, t34.id, {}),
+        completeTaskAPI(request, tokens.QLSX, t34.id, { bomLinked: true }),
       ])
 
       // P3.3 from P3.2
@@ -569,7 +609,19 @@ test.describe('IBS-ERP Full Workflow E2E', () => {
       await completeTaskAPI(request, tokens.TM, t42.id, {})
       await fastForwardStep(request, tokens, 'P4.3', projectId2)
       await fastForwardStep(request, tokens, 'P4.4', projectId2)
+
+      // P4.5 is multi-instance, activate it first
+      await request.post('/api/tasks/activate', {
+        headers: { Authorization: `Bearer ${tokens.KHO}` },
+        data: { projectId: projectId2, stepCode: 'P4.5' },
+      })
       await fastForwardStep(request, tokens, 'P4.5', projectId2)
+
+      // P5.1 is a DYNAMIC_STEP — must be activated via API
+      await request.post('/api/tasks/activate', {
+        headers: { Authorization: `Bearer ${tokens.TSX}` },
+        data: { projectId: projectId2, stepCode: 'P5.1' },
+      })
 
       // P5.1 → P5.2 → P5.3 (ready for rejection)
       await fastForwardStep(request, tokens, 'P5.1', projectId2, {

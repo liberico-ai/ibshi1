@@ -391,100 +391,263 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
         </div>
       </button>
 
-      {/* Phase Steps — compact table */}
+      {/* Phase Steps — compact table with multi-instance grouping */}
       {expanded && (
         <div style={{ borderTop: '1px solid var(--border-light)' }}>
+          <GroupedTaskList
+            tasks={tasks}
+            onCompleteClick={onCompleteClick}
+            onRejectClick={onRejectClick}
+            onAssignClick={onAssignClick}
+            currentUserRole={currentUserRole}
+            hasAssignPerm={hasAssignPerm}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Grouped Task List (collapses multi-instance steps like P4.5) ──
+
+function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, indent }: {
+  task: Task; isLast: boolean;
+  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
+  currentUserRole: string; hasAssignPerm: (task: Task) => boolean; indent?: boolean;
+}) {
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/30"
+      style={{
+        borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
+        paddingLeft: indent ? '2.5rem' : undefined,
+      }}
+    >
+      {/* Status dot */}
+      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+        task.status === 'DONE' ? 'bg-emerald-500' :
+        task.status === 'IN_PROGRESS' ? 'bg-blue-500 animate-pulse' :
+        task.status === 'REJECTED' ? 'bg-red-500' :
+        'bg-slate-300'
+      }`} />
+
+      {/* Step code */}
+      <span className="text-xs font-mono w-12 flex-shrink-0" style={{ color: 'var(--accent)' }}>{task.stepCode}</span>
+
+      {/* Step name */}
+      <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
+        {task.stepName}
+        {STEP_FIELDS[task.stepCode] && task.status === 'IN_PROGRESS' && (
+          <span className="text-xs ml-1.5 px-1.5 py-0.5 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>📋 Cần dữ liệu</span>
+        )}
+      </span>
+
+      <span className="text-xs hidden md:block w-48 truncate flex items-center" style={{ color: 'var(--text-muted)' }} title={task.assignee ? `${task.assignedRole} - ${task.assignee.fullName}` : task.assignedRole}>
+        <span className="font-mono text-[10px] mr-1 px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800" style={{ color: 'var(--text-primary)' }}>{task.assignedRole}</span>
+        <span className="truncate flex-1">
+          {task.assignee ? (
+            <span>{task.assignee.fullName} <span className="opacity-60">({task.assignee.username})</span></span>
+          ) : (
+            <span className="italic opacity-60">Chưa phân công</span>
+          )}
+        </span>
+        {hasAssignPerm(task) && task.status !== 'DONE' && task.status !== 'REJECTED' && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAssignClick(task); }}
+            className="ml-2 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+            title="Phân công công việc"
+            style={{ padding: '2px 4px', fontSize: '12px' }}
+          >
+            👤
+          </button>
+        )}
+      </span>
+
+      {/* Deadline */}
+      {task.deadline && (
+        <span className="text-xs hidden lg:block" style={{ color: 'var(--text-muted)' }}>
+          {formatDate(task.deadline)}
+        </span>
+      )}
+
+      {/* Status badge */}
+      <span className={`badge text-[11px] ${getStatusBg(task.status)}`} style={{ borderWidth: '1px' }}>
+        {task.status === 'DONE' ? '✓ Xong' : task.status === 'IN_PROGRESS' ? 'Đang XL' : task.status === 'REJECTED' ? 'Từ chối' : 'Chờ'}
+      </span>
+
+      {/* Action buttons */}
+      {task.status === 'IN_PROGRESS' && (
+        currentUserRole && (currentUserRole === task.assignedRole || currentUserRole === 'R00') ? (
+          <div className="flex items-center gap-1">
+            {WORKFLOW_RULES[task.stepCode]?.rejectTo && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onRejectClick(task) }}
+                className="text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all hover:opacity-80"
+                style={{ background: '#dc262612', color: '#dc2626', border: '1px solid #dc262625' }}
+              >
+                Từ chối
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onCompleteClick(task) }}
+              className="btn-accent text-[11px] px-2.5 py-1"
+            >
+              ✓ Hoàn thành
+            </button>
+          </div>
+        ) : (
+          <span className="text-[10px] px-2 py-1 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>
+            🔒 {task.assignedRole}
+          </span>
+        )
+      )}
+    </div>
+  )
+}
+
+function MultiInstanceGroup({ stepCode, tasks, isLastGroup, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm }: {
+  stepCode: string; tasks: Task[]; isLastGroup: boolean;
+  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
+  currentUserRole: string; hasAssignPerm: (task: Task) => boolean;
+}) {
+  const [groupExpanded, setGroupExpanded] = useState(false)
+  const doneCount = tasks.filter(t => t.status === 'DONE').length
+  const inProgressCount = tasks.filter(t => t.status === 'IN_PROGRESS').length
+  const rejectedCount = tasks.filter(t => t.status === 'REJECTED').length
+  const pendingCount = tasks.length - doneCount - inProgressCount - rejectedCount
+
+  return (
+    <div style={{ borderBottom: isLastGroup ? 'none' : '1px solid var(--border-light)' }}>
+      {/* Group summary header */}
+      <button
+        onClick={() => setGroupExpanded(!groupExpanded)}
+        className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/30 text-left"
+      >
+        {/* Status dot — blue if any in progress, green if all done */}
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+          inProgressCount > 0 ? 'bg-blue-500 animate-pulse' :
+          doneCount === tasks.length ? 'bg-emerald-500' :
+          rejectedCount > 0 ? 'bg-red-500' :
+          'bg-slate-300'
+        }`} />
+
+        {/* Step code */}
+        <span className="text-xs font-mono w-12 flex-shrink-0" style={{ color: 'var(--accent)' }}>{stepCode}</span>
+
+        {/* Group label + count */}
+        <span className="text-sm flex-1 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+          <span className="truncate">{tasks[0].stepName}</span>
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+            style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
+            {tasks.length} phiếu
+          </span>
+        </span>
+
+        {/* Status summary badges */}
+        <div className="flex items-center gap-1.5">
+          {doneCount > 0 && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>
+              {doneCount} xong
+            </span>
+          )}
+          {inProgressCount > 0 && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: '#dbeafe', color: '#2563eb' }}>
+              {inProgressCount} XL
+            </span>
+          )}
+          {pendingCount > 0 && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
+              {pendingCount} chờ
+            </span>
+          )}
+          {rejectedCount > 0 && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>
+              {rejectedCount} TC
+            </span>
+          )}
+        </div>
+
+        {/* Chevron */}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          className={`transition-transform flex-shrink-0 ${groupExpanded ? 'rotate-180' : ''}`}
+          style={{ color: 'var(--text-muted)' }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {/* Expanded individual tasks */}
+      {groupExpanded && (
+        <div style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-light)' }}>
           {tasks.map((task, i) => (
-            <div key={task.id}
-              className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/30"
-              style={{ borderBottom: i < tasks.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-              {/* Status dot */}
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                task.status === 'DONE' ? 'bg-emerald-500' :
-                task.status === 'IN_PROGRESS' ? 'bg-blue-500 animate-pulse' :
-                task.status === 'REJECTED' ? 'bg-red-500' :
-                'bg-slate-300'
-              }`} />
-
-              {/* Step code */}
-              <span className="text-xs font-mono w-12 flex-shrink-0" style={{ color: 'var(--accent)' }}>{task.stepCode}</span>
-
-              {/* Step name */}
-              <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
-                {task.stepName}
-                {STEP_FIELDS[task.stepCode] && task.status === 'IN_PROGRESS' && (
-                  <span className="text-xs ml-1.5 px-1.5 py-0.5 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>📋 Cần dữ liệu</span>
-                )}
-              </span>
-
-              <span className="text-xs hidden md:block w-48 truncate flex items-center" style={{ color: 'var(--text-muted)' }} title={task.assignee ? `${task.assignedRole} - ${task.assignee.fullName}` : task.assignedRole}>
-                <span className="font-mono text-[10px] mr-1 px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800" style={{ color: 'var(--text-primary)' }}>{task.assignedRole}</span>
-                
-                <span className="truncate flex-1">
-                  {task.assignee ? (
-                    <span>
-                      {task.assignee.fullName} <span className="opacity-60">({task.assignee.username})</span>
-                    </span>
-                  ) : (
-                    <span className="italic opacity-60">Chưa phân công</span>
-                  )}
-                </span>
-
-                {hasAssignPerm(task) && task.status !== 'DONE' && task.status !== 'REJECTED' && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onAssignClick(task); }}
-                    className="ml-2 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition"
-                    title="Phân công công việc"
-                    style={{ padding: '2px 4px', fontSize: '12px' }}
-                  >
-                    👤
-                  </button>
-                )}
-              </span>
-
-              {/* Deadline */}
-              {task.deadline && (
-                <span className="text-xs hidden lg:block" style={{ color: 'var(--text-muted)' }}>
-                  ⏱ {formatDate(task.deadline)}
-                </span>
-              )}
-
-              {/* Status badge */}
-              <span className={`badge text-[11px] ${getStatusBg(task.status)}`} style={{ borderWidth: '1px' }}>
-                {task.status === 'DONE' ? '✓ Xong' : task.status === 'IN_PROGRESS' ? 'Đang XL' : task.status === 'REJECTED' ? 'Từ chối' : 'Chờ'}
-              </span>
-
-              {/* Action buttons — role-checked */}
-              {task.status === 'IN_PROGRESS' && (
-                currentUserRole && (currentUserRole === task.assignedRole || currentUserRole === 'R00') ? (
-                  <div className="flex items-center gap-1">
-                    {WORKFLOW_RULES[task.stepCode]?.rejectTo && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onRejectClick(task) }}
-                        className="text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all hover:opacity-80"
-                        style={{ background: '#dc262612', color: '#dc2626', border: '1px solid #dc262625' }}
-                      >
-                        Từ chối
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onCompleteClick(task) }}
-                      className="btn-accent text-[11px] px-2.5 py-1"
-                    >
-                      ✓ Hoàn thành
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-[10px] px-2 py-1 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>
-                    🔒 {task.assignedRole}
-                  </span>
-                )
-              )}
-            </div>
+            <TaskRow
+              key={task.id}
+              task={task}
+              isLast={i === tasks.length - 1}
+              onCompleteClick={onCompleteClick}
+              onRejectClick={onRejectClick}
+              onAssignClick={onAssignClick}
+              currentUserRole={currentUserRole}
+              hasAssignPerm={hasAssignPerm}
+              indent
+            />
           ))}
         </div>
       )}
     </div>
+  )
+}
+
+function GroupedTaskList({ tasks, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm }: {
+  tasks: Task[];
+  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
+  currentUserRole: string; hasAssignPerm: (task: Task) => boolean;
+}) {
+  // Group consecutive tasks by stepCode, preserving order
+  const groups: Array<{ stepCode: string; tasks: Task[] }> = []
+  for (const task of tasks) {
+    const last = groups[groups.length - 1]
+    if (last && last.stepCode === task.stepCode) {
+      last.tasks.push(task)
+    } else {
+      groups.push({ stepCode: task.stepCode, tasks: [task] })
+    }
+  }
+
+  return (
+    <>
+      {groups.map((group, gi) => {
+        const isLastGroup = gi === groups.length - 1
+        // Single-instance step → render normally
+        if (group.tasks.length === 1) {
+          return (
+            <TaskRow
+              key={group.tasks[0].id}
+              task={group.tasks[0]}
+              isLast={isLastGroup}
+              onCompleteClick={onCompleteClick}
+              onRejectClick={onRejectClick}
+              onAssignClick={onAssignClick}
+              currentUserRole={currentUserRole}
+              hasAssignPerm={hasAssignPerm}
+            />
+          )
+        }
+        // Multi-instance step → collapsible group
+        return (
+          <MultiInstanceGroup
+            key={`${group.stepCode}-${gi}`}
+            stepCode={group.stepCode}
+            tasks={group.tasks}
+            isLastGroup={isLastGroup}
+            onCompleteClick={onCompleteClick}
+            onRejectClick={onRejectClick}
+            onAssignClick={onAssignClick}
+            currentUserRole={currentUserRole}
+            hasAssignPerm={hasAssignPerm}
+          />
+        )
+      })}
+    </>
   )
 }
 
