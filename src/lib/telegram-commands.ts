@@ -59,6 +59,11 @@ function statusEmoji(status: string): string {
 export function registerCommands(bot: Bot): void {
   bot.api.setMyCommands(COMMAND_LIST).catch(console.error)
 
+  // Global error handler — prevents bot crash on message errors
+  bot.catch((err) => {
+    console.error('Telegram bot error:', err.message || err)
+  })
+
   // ── /start ──────────────────────────────────────────────
   bot.command('start', async (ctx: Context) => {
     await ctx.reply(
@@ -71,7 +76,7 @@ export function registerCommands(bot: Bot): void {
 
   // ── /help ───────────────────────────────────────────────
   bot.command('help', async (ctx: Context) => {
-    const lines = COMMAND_LIST.map(c => `/${c.command} — ${c.description}`)
+    const lines = COMMAND_LIST.map(c => `/${c.command} — ${escapeHtml(c.description)}`)
     await ctx.reply(
       '📖 <b>DANH SÁCH LỆNH</b>\n━━━━━━━━━━━━━━━━\n' + lines.join('\n'),
       { parse_mode: 'HTML' },
