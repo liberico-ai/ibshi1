@@ -53,6 +53,10 @@ COPY --from=builder /app/node_modules/webidl-conversions ./node_modules/webidl-c
 RUN mkdir -p /app/public/uploads && \
     chown -R nextjs:nodejs /app/public/uploads
 
+# Startup script: starts Next.js server, then triggers Telegram bot init
+RUN printf '#!/bin/sh\nnode server.js &\nSERVER_PID=$!\nsleep 5\nwget -qO- http://localhost:3000/api/telegram/init || true\nwait $SERVER_PID\n' > /app/start.sh && \
+    chmod +x /app/start.sh
+
 USER nextjs
 
 # Declare uploads as a volume so files persist across container restarts
@@ -62,4 +66,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["/bin/sh", "/app/start.sh"]
