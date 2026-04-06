@@ -89,6 +89,11 @@ export async function middleware(req: NextRequest) {
     return addCorsHeaders(response, req)
   }
 
+  // Telegram webhook — verified by its own secret token (in the route handler)
+  if (pathname.startsWith('/api/telegram/webhook')) {
+    return NextResponse.next()
+  }
+
   // Validate CRON routes with secret
   if (pathname.startsWith('/api/cron')) {
     const cronSecret = req.headers.get('x-cron-secret')

@@ -1,5 +1,6 @@
 import prisma from '@/lib/db'
 import { successResponse, errorResponse } from '@/lib/auth'
+import { notifyTaskOverdue } from '@/lib/telegram-notifications'
 
 // GET /api/cron/deadline-check — Check overdue tasks and generate notifications
 // Called by external cron or Vercel cron every 15 minutes
@@ -48,6 +49,12 @@ export async function GET() {
             },
           })
           notificationsCreated++
+          // Push to Telegram group (fire-and-forget)
+          notifyTaskOverdue({
+            stepCode: task.stepCode, stepName: task.stepName,
+            projectCode: task.project.projectCode, projectName: task.project.projectName,
+            assignedRole: task.assignedRole, hoursOverdue,
+          }).catch(() => {})
         }
       }
 
