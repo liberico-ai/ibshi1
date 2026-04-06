@@ -42,7 +42,7 @@ interface TaskData {
   assignee: { id: string; fullName: string; username: string } | null
 }
 
-function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave, stepFilter }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void; stepFilter?: string }) {
+function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, stepFilter }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; stepFilter?: string }) {
   const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
 
   let rows: WbsRow[] = [];
@@ -441,7 +441,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               <div><h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0c4a6e' }}>📋 WBS</h2><span style={{ fontSize: '0.72rem', color: '#64748b' }}>{rows.length} hạng mục</span></div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {isWbsEditable && <button type="button" onClick={addRow} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>+ Thêm</button>}
-                {mode === 'lsx' && onSave && <button type="button" onClick={onSave} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>💾 Lưu</button>}
+
                 <button type="button" onClick={exportExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📤 Export</button>
                 {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📥 Import</button>}
                 <button type="button" onClick={() => setWbsModalOpen(false)} style={{ padding: '5px 14px', fontSize: '0.85rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>✕ Đóng</button>
@@ -1359,7 +1359,7 @@ export default function TaskDetailPage() {
   const [inventoryLoading, setInventoryLoading] = useState(false)
   const [inventorySearch, setInventorySearch] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
-  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; departmentEstimates?: any; budgetTotal?: any } | null>(null)
+  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; lsxTeamData?: { teamName: string; volume: string; startDate: string; endDate: string; stageKey: string }; departmentEstimates?: any; budgetTotal?: any } | null>(null)
   const [previousStepFiles, setPreviousStepFiles] = useState<PrevStepFile[]>([])
   // P1.2A WBS expanded rows
   const [wbsExpandedRows, setWbsExpandedRows] = useState<Set<number>>(new Set())
@@ -2366,112 +2366,77 @@ export default function TaskDetailPage() {
               </>
             ) : (
               <>
-            {/* P5.1: Fabrication Stages — interactive progress cards (ABOVE the form) */}
+            {/* P5.1: Thông tin Lệnh sản xuất from P3.3/P3.4 (dynamic) */}
             {task.stepCode === 'P5.1' && (() => {
-              const ALL_FAB_STAGES = [
-                { key: 'CUT', label: 'Pha cắt', icon: '🔹', wbsKey: 'cutting' },
-                { key: 'FIT', label: 'Gá lắp', icon: '🔹', wbsKey: 'fitup' },
-                { key: 'WLD', label: 'Hàn', icon: '🔹', wbsKey: 'welding' },
-                { key: 'MCH', label: 'Gia công cơ khí', icon: '🔹', wbsKey: 'machining' },
-                { key: 'TRF', label: 'Xử lý bề mặt', icon: '🔹', wbsKey: 'tryAssembly' },
-                { key: 'FAT', label: 'Factory Acceptance Test', icon: '⭐', wbsKey: 'dismantle' },
-                { key: 'BLS', label: 'Bắn bi / Làm sạch', icon: '🔹', wbsKey: 'blasting' },
-                { key: 'FPC', label: 'Sơn phủ', icon: '🔹', wbsKey: 'painting' },
-                { key: 'PCK', label: 'Đóng kiện (Ready to Ship)', icon: '🔹', wbsKey: 'packing' },
-              ]
-              // Filter stages based on stageKey from LSX (stored in resultData by createP51ForP45)
-              const rd = (task.resultData as Record<string, any>) || {}
-              const lsxStageKey = rd.stageKey as string | null
-              const FAB_STAGES = lsxStageKey
-                ? ALL_FAB_STAGES.filter(s => s.wbsKey === lsxStageKey)
-                : ALL_FAB_STAGES
-              const calcTotal = (overrideKey?: string, overrideVal?: number) => {
-                const total = FAB_STAGES.reduce((sum, s) => {
-                  if (overrideKey && s.key === overrideKey) return sum + (overrideVal ?? 0)
-                  const d = !!formData[`fab_${s.key}_done`]
-                  return sum + (d ? 100 : Number(formData[`fab_${s.key}_progress`] || 0))
-                }, 0)
-                return Math.round(total / FAB_STAGES.length)
+              const STAGE_LABELS: Record<string, string> = {
+                cutting: 'Pha cắt', fitup: 'Gá lắp', welding: 'Hàn',
+                machining: 'Gia công cơ khí', tryAssembly: 'Thử lắp ráp',
+                dismantle: 'Tháo dỡ', blasting: 'Bắn bi / Làm sạch',
+                painting: 'Sơn phủ', insulation: 'Bảo ôn', packing: 'Đóng kiện',
+                delivery: 'Giao hàng',
               }
+              // Use dynamic data from API (previousStepData.lsxTeamData) which reads P3.x cellAssignments live
+              const td = previousStepData?.lsxTeamData as Record<string, any>
+              const rd = (task.resultData as Record<string, any>) || {}
+              const stageKey = td?.stageKey || rd.stageKey || ''
+              const stageLabel = STAGE_LABELS[stageKey] || stageKey || '—'
+              const teamName = td?.teamName || '—'
+              const volume = td?.volume ? `${td.volume} kg` : '—'
+              const startDate = td?.startDate || '—'
+              const endDate = td?.endDate || '—'
+              const hangMuc = td?.hangMuc || '—'
+              const projectName = task.project?.projectName || task.project?.projectCode || '—'
               return (
-                <div className="card" style={{ padding: '1.5rem' }}>
-                  <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid #f59e0b', paddingBottom: 8, marginBottom: 16, color: '#f59e0b' }}>
-                    🏭 Các công đoạn sản xuất
+                <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
+                  <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid #0ea5e9', paddingBottom: 8, marginBottom: 8, color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    📋 Thông tin Lệnh sản xuất
                   </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {FAB_STAGES.map((stage, idx) => {
-                      const isDone = !!formData[`fab_${stage.key}_done`]
-                      const progress = isDone ? 100 : Number(formData[`fab_${stage.key}_progress`] || 0)
-                      const progressColor = progress >= 100 ? '#16a34a' : progress > 0 ? '#f59e0b' : 'var(--text-muted)'
-                      return (
-                        <div key={stage.key} style={{
-                          padding: '12px 16px', borderRadius: 10,
-                          border: `1px solid ${isDone ? '#bbf7d0' : 'var(--border)'}`,
-                          background: isDone ? '#f0fdf4' : 'var(--bg-secondary)',
-                          transition: 'all 0.2s',
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, width: 24 }}>{idx + 1}</span>
-                            <span style={{ fontSize: '1rem' }}>{stage.icon}</span>
-                            <span style={{ fontWeight: 700, fontSize: '0.9rem', flex: 1 }}>
-                              {stage.key} — {stage.label}
-                            </span>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: isActive ? 'pointer' : 'default', fontSize: '0.8rem', fontWeight: 600, color: isDone ? '#16a34a' : 'var(--text-secondary)' }}>
-                              <input type="checkbox" checked={isDone} disabled={!isActive}
-                                onChange={() => {
-                                  const newDone = !isDone
-                                  handleFieldChange(`fab_${stage.key}_done`, newDone ? '1' : '')
-                                  if (newDone) {
-                                    handleFieldChange(`fab_${stage.key}_progress`, '100')
-                                    if (!checklistState[`fab_${stage.key}`]) handleChecklistToggle(`fab_${stage.key}`)
-                                  }
-                                  handleFieldChange('fabricationProgress', String(calcTotal(stage.key, newDone ? 100 : 0)))
-                                }}
-                                style={{ accentColor: '#16a34a', width: 16, height: 16 }}
-                              />
-                              Hoàn thành
-                            </label>
-                          </div>
-                          {!isDone && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10, paddingLeft: 34 }}>
-                              <div>
-                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tiến độ (%)</label>
-                                <input className="input" type="number" min="0" max="100"
-                                  value={formData[`fab_${stage.key}_progress`] as string || ''}
-                                  disabled={!isActive}
-                                  onChange={e => {
-                                    handleFieldChange(`fab_${stage.key}_progress`, e.target.value)
-                                    handleFieldChange('fabricationProgress', String(calcTotal(stage.key, Number(e.target.value) || 0)))
-                                  }}
-                                  placeholder="0"
-                                  style={{ fontSize: '0.85rem', padding: '6px 8px', width: '100%' }}
-                                />
-                              </div>
-                              <div>
-                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>KL hoàn thành</label>
-                                <input className="input" type="text"
-                                  value={formData[`fab_${stage.key}_qty`] as string || ''}
-                                  disabled={!isActive}
-                                  onChange={e => handleFieldChange(`fab_${stage.key}_qty`, e.target.value)}
-                                  placeholder="VD: 500 kg"
-                                  style={{ fontSize: '0.85rem', padding: '6px 8px', width: '100%' }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                          {isDone && (
-                            <div style={{ marginTop: 6, paddingLeft: 34, fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>
-                              ✅ 100% — Hoàn thành {formData[`fab_${stage.key}_qty`] ? `(KL: ${formData[`fab_${stage.key}_qty`]})` : ''}
-                            </div>
-                          )}
-                          <div style={{ marginTop: 6, paddingLeft: 34 }}>
-                            <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${Math.min(progress, 100)}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s' }} />
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 20, fontWeight: 500 }}>
+                    Dự án: <strong style={{ color: 'var(--text-primary)' }}>{projectName}</strong>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Hạng mục</div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>{hangMuc}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Tổ sản xuất</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0ea5e9' }}>{teamName}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Công đoạn</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 600 }}>{stageLabel}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Khối lượng được giao</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>{volume}</div>
+                    </div>
+                    <div />
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Ngày bắt đầu</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{startDate}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Ngày kết thúc</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{endDate}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px dashed var(--border)', margin: '20px 0' }} />
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                      Khối lượng hoàn thành <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="number"
+                      className="input"
+                      placeholder="Nhập khối lượng đã hoàn thành..."
+                      value={formData.completedQuantity as string || ''}
+                      onChange={(e) => handleFieldChange('completedQuantity', e.target.value)}
+                      style={{ maxWidth: 300, fontSize: '1.1rem', fontWeight: 700, padding: '10px 14px' }}
+                    />
                   </div>
                 </div>
               )
@@ -2492,14 +2457,14 @@ export default function TaskDetailPage() {
             })()}
 
             {/* Form Fields — skip for steps with dynamic tables */}
-            {!['P5.4', 'P1.2', 'P2.1A', 'P2.1B', 'P2.1C', 'P2.4', 'P3.3', 'P3.4'].includes(task.stepCode) && (
+            {!['P5.1', 'P5.3', 'P5.4', 'P1.2', 'P2.1A', 'P2.1B', 'P2.1C', 'P2.4', 'P3.3', 'P3.4'].includes(task.stepCode) && (
             <div className="card" style={{ padding: '1.5rem', marginTop: task.stepCode === 'P5.1' ? '1rem' : undefined }}>
               <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
                 📝 Thông tin nhập liệu
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                 {config.fields.map(field => {
-                  const isAutoCalc = task.stepCode === 'P5.1' && field.key === 'fabricationProgress'
+                  // P6.2: auto-calc fields
                   // P6.2: auto-calc fields
                   const isP62Total = task.stepCode === 'P6.2' && field.key === 'totalActualCost'
                   const isP62Variance = task.stepCode === 'P6.2' && field.key === 'costVariance'
@@ -2507,7 +2472,7 @@ export default function TaskDetailPage() {
                   // P6.3: auto-calc fields
                   const isP63Profit = task.stepCode === 'P6.3' && field.key === 'grossProfit'
                   const isP63Margin = task.stepCode === 'P6.3' && field.key === 'profitMargin'
-                  const isReadonlyCalc = isAutoCalc || isP62Total || isP62Variance || isP63Profit || isP63Margin
+                  const isReadonlyCalc = isP62Total || isP62Variance || isP63Profit || isP63Margin
 
                   // P6.2 auto-calc helper
                   const calcP62 = (overrideKey?: string, overrideVal?: string) => {
@@ -2550,7 +2515,7 @@ export default function TaskDetailPage() {
                       const v = Number(formData.profitMargin || 0)
                       return v ? `${v}%` : '—'
                     }
-                    return `${formData.fabricationProgress || 0}%`
+                    return '—'
                   }
                   const getCalcColor = () => {
                     if (isP62Variance) {
@@ -2561,7 +2526,6 @@ export default function TaskDetailPage() {
                       const v = Number(formData.profitMargin || 0)
                       return v >= 10 ? '#16a34a' : v >= 0 ? '#f59e0b' : '#dc2626'
                     }
-                    if (isAutoCalc) return Number(formData.fabricationProgress || 0) >= 100 ? '#16a34a' : '#f59e0b'
                     return 'var(--text-primary)'
                   }
 
@@ -4803,46 +4767,8 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {/* P5.1: QR Scan section for viewing latest drawing */}
-            {task.stepCode === 'P5.1' && (() => {
-              const jcCode = formData.jobCardCode as string || ''
-              const projectCode = task.project.projectCode || ''
-              const qrContent = jcCode ? `https://erp.ibshi.com/drawing/${projectCode}/${jcCode}` : ''
-              return (
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
-                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#8b5cf6' }}>📱 Scan QR — Xem bản vẽ mới nhất</h3>
-                  {jcCode ? (
-                    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-                      <div style={{ background: '#fff', border: '2px solid var(--border)', borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrContent)}`}
-                          alt={`QR Code for ${jcCode}`}
-                          width={160} height={160}
-                          style={{ borderRadius: 8 }}
-                        />
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>{jcCode}</span>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
-                          Quét mã QR bằng điện thoại để xem bản vẽ sản xuất mới nhất cho Job Card <strong style={{ color: 'var(--text-primary)' }}>{jcCode}</strong>
-                        </div>
-                        <div style={{ fontSize: '0.8rem', marginBottom: 6 }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Dự án:</span> <strong>{projectCode}</strong>
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
-                          🔗 <a href={qrContent} target="_blank" rel="noopener noreferrer" style={{ color: '#8b5cf6' }}>{qrContent}</a>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ padding: '1.5rem', textAlign: 'center', border: '2px dashed var(--border)', borderRadius: 10, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      ⬆️ Nhập <strong>Mã Job Card</strong> ở trên để tạo mã QR
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
+
+
 
             {/* P5.2: Multi Job Card form with nested stages */}
             {task.stepCode === 'P5.2' && (() => {
@@ -4955,6 +4881,24 @@ export default function TaskDetailPage() {
 
             {/* P5.3: Multi-item QC inspection form */}
             {task.stepCode === 'P5.3' && (() => {
+              const lsx = previousStepData?.lsxTeamData as Record<string, unknown> | null;
+              const teamName = lsx?.teamName as string || '—';
+              const volume = lsx?.volume as string || '—';
+              const startDate = lsx?.startDate as string || '';
+              const endDate = lsx?.endDate as string || '';
+              const stageKey = lsx?.stageKey as string || '';
+              const hangMuc = lsx?.hangMuc as string || '—';
+              
+              const stageLabels: Record<string, string> = {
+                cutting: 'Cắt', machining: 'GCCK', fitup: 'Gá', welding: 'Hàn',
+                tryAssembly: 'Tổ hợp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch',
+                painting: 'Sơn', insulation: 'Bảo ôn', commissioning: 'Chạy thử',
+                packing: 'Đóng kiện', delivery: 'Giao hàng',
+              };
+              const stageName = stageLabels[stageKey] || stageKey || '—';
+              
+              const timeRange = startDate && endDate ? `${startDate} - ${endDate}` : (startDate || endDate || '—');
+
               type QcItem = { task: string; result: string }
               const raw = formData.qcItems as string | undefined
               let qcItems: QcItem[] = []
@@ -4969,6 +4913,37 @@ export default function TaskDetailPage() {
               }
               return (
                 <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${hasFail ? '#dc2626' : '#8b5cf6'}` }}>
+                  {lsx && (
+                    <div style={{ marginBottom: 16, padding: '12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: '#475569' }}>📋 Lệnh nhận việc (P5.1)</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1.5fr 1fr', gap: 12, fontSize: '0.8rem' }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Hạng mục</span>
+                          <div style={{ fontWeight: 600 }}>{hangMuc}</div>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Tổ sản xuất</span>
+                          <div style={{ fontWeight: 600 }}>{teamName}</div>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Công đoạn</span>
+                          <div style={{ fontWeight: 600 }}>{stageName}</div>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>KL giao</span>
+                          <div style={{ fontWeight: 600 }}>{volume}</div>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Thời gian thực hiện</span>
+                          <div style={{ fontWeight: 600 }}>{timeRange}</div>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Ngày YC</span>
+                          <div style={{ fontWeight: 700, color: '#f59e0b' }}>{task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : '—'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <h3 style={{ margin: 0, fontSize: '1rem', color: hasFail ? '#dc2626' : '#8b5cf6' }}>
                       🔍 Danh sách công việc nghiệm thu ({qcItems.length})
@@ -5030,11 +5005,24 @@ export default function TaskDetailPage() {
               if (!jd && !vd) return null
 
               // P5.1 data
-              const jobCardCode = jd?.jobCardCode as string || ''
-              const jobCardStatus = jd?.jobCardStatus as string || ''
-              const fabricationProgress = jd?.fabricationProgress as number || 0
-              const completedTasks = jd?.completedTasks as string || ''
-              const issues = jd?.issues as string || ''
+              const lsx = previousStepData?.lsxTeamData as Record<string, unknown> | null;
+              const teamName = lsx?.teamName as string || '—';
+              const volume = lsx?.volume as string || '—';
+              const startDate = lsx?.startDate as string || '';
+              const endDate = lsx?.endDate as string || '';
+              const stageKey = lsx?.stageKey as string || '';
+              const hangMuc = lsx?.hangMuc as string || '—';
+              const timeRange = startDate && endDate ? `${startDate} - ${endDate}` : (startDate || endDate || '—');
+              
+              const stageLabels: Record<string, string> = {
+                cutting: 'Pha cắt', machining: 'Gia công CK', fitup: 'Gá lắp', welding: 'Hàn',
+                tryAssembly: 'Tử lắp ráp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch',
+                painting: 'Sơn', insulation: 'Bảo ôn', commissioning: 'Chạy thử',
+                packing: 'Đóng kiện', delivery: 'Giao hàng',
+              };
+              const stageName = stageLabels[stageKey] || stageKey || '—';
+
+              const p51CompletedVolume = jd?.completedQuantity as string || '';
 
               // P5.2 data — multi job cards
               const weekNumber = vd?.weekNumber as string || ''
@@ -5043,46 +5031,9 @@ export default function TaskDetailPage() {
               let jobCards: JobCard[] = []
               try { jobCards = vd?.jobCards ? JSON.parse(vd.jobCards as string) : [] } catch { jobCards = [] }
               const cardColors = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444']
-              const statusLabel: Record<string, { label: string; bg: string; color: string }> = {
-                in_progress: { label: 'Đang thực hiện', bg: '#fef3c7', color: '#d97706' },
-                done: { label: 'Hoàn thành', bg: '#dcfce7', color: '#16a34a' },
-                paused: { label: 'Tạm dừng', bg: '#fee2e2', color: '#dc2626' },
-                issue: { label: 'Vấn đề phát sinh', bg: '#fef2f2', color: '#dc2626' },
-              }
-              const st = statusLabel[jobCardStatus]
+              
               return (
                 <>
-                  {/* P5.1: Job Card Status */}
-                  {jd && (
-                    <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #10b981' }}>
-                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#10b981' }}>🔧 Trạng thái SX (P5.1)</h3>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: '0.85rem' }}>
-                        <div>
-                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>Mã Job Card</span>
-                          <div style={{ fontWeight: 700, color: '#10b981' }}>{jobCardCode || '—'}</div>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>Trạng thái</span>
-                          <div>{st ? <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, background: st.bg, color: st.color }}>{st.label}</span> : '—'}</div>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>Tiến độ SX</span>
-                          <div style={{ fontWeight: 700 }}>{fabricationProgress}%</div>
-                        </div>
-                      </div>
-                      {completedTasks && (
-                        <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                          <strong>Công đoạn đã hoàn thành:</strong> {completedTasks}
-                        </div>
-                      )}
-                      {issues && (
-                        <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#dc2626' }}>
-                          <strong>⚠️ Vấn đề:</strong> {issues}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* P5.2: Volume Report — Job Cards */}
                   {vd && (
                     <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
@@ -5126,11 +5077,26 @@ export default function TaskDetailPage() {
             {/* P5.4: Job Card summary + Pass/Fail + Form Fields */}
             {task.stepCode === 'P5.4' && (() => {
               const jd = previousStepData?.jobCardData as Record<string, string> | null
-              const FAB_KEYS = ['CUT','FIT','WLD','MCH','TRF','FAT','BLS','FPC','PCK']
-              const FAB_LABELS: Record<string, string> = { CUT:'Pha cắt', FIT:'Gá lắp', WLD:'Hàn', MCH:'Gia công CK', TRF:'Xử lý BM', FAT:'FAT', BLS:'Bắn bi', FPC:'Sơn phủ', PCK:'Đóng kiện' }
-              const totalProgress = Number(jd?.fabricationProgress || 0)
-              const allQty = jd ? FAB_KEYS.map(k => jd[`fab_${k}_qty`] || '').filter(Boolean) : []
+              const lsx = previousStepData?.lsxTeamData as Record<string, unknown> | null;
+              const p51CompletedVolume = jd?.completedQuantity as string || '';
               const acceptResult = (formData.acceptanceResult as string) || ''
+              
+              const teamName = lsx?.teamName as string || '—';
+              const volume = lsx?.volume as string || '—';
+              const startDate = lsx?.startDate as string || '';
+              const endDate = lsx?.endDate as string || '';
+              const stageKey = lsx?.stageKey as string || '';
+              const hangMuc = lsx?.hangMuc as string || '—';
+              const timeRange = startDate && endDate ? `${startDate} - ${endDate}` : (startDate || endDate || '—');
+              
+              const stageLabels: Record<string, string> = {
+                cutting: 'Pha cắt', machining: 'Gia công CK', fitup: 'Gá lắp', welding: 'Hàn',
+                tryAssembly: 'Tổ hợp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch',
+                painting: 'Sơn', insulation: 'Bảo ôn', commissioning: 'Chạy thử',
+                packing: 'Đóng kiện', delivery: 'Giao hàng',
+              };
+              const stageName = stageLabels[stageKey] || stageKey || '—';
+
               const resultColors: Record<string, { bg: string; border: string }> = {
                 PASS: { bg: '#f0fdf4', border: '#bbf7d0' },
                 FAIL: { bg: '#fef2f2', border: '#fecaca' },
@@ -5140,36 +5106,71 @@ export default function TaskDetailPage() {
               return (
                 <>
                   {/* Job Card Summary */}
-                  <div className="card" style={{ padding: '1.5rem', borderLeft: '4px solid #10b981', background: rc.bg, border: `1px solid ${rc.border}` }}>
-                    <h3 style={{ marginTop: 0, fontSize: '1.1rem', color: '#10b981', marginBottom: 12 }}>
-                      📋 Nghiệm thu Job Card: {jd?.jobCardCode || '—'}
-                    </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 16, alignItems: 'center' }}>
+                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #10b981', background: rc.bg, border: `1px solid ${rc.border}` }}>
+                    <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#10b981' }}>📋 Thông tin Lệnh sản xuất (P5.1)</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1.5fr 1fr', gap: 12, fontSize: '0.8rem', marginBottom: '20px' }}>
                       <div>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>Tiến độ SX</div>
-                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: totalProgress >= 100 ? '#16a34a' : '#f59e0b' }}>{totalProgress}%</div>
-                        <div style={{ height: 5, borderRadius: 3, background: 'var(--border)', overflow: 'hidden', marginTop: 4 }}>
-                          <div style={{ height: '100%', width: `${Math.min(totalProgress, 100)}%`, background: totalProgress >= 100 ? '#16a34a' : '#f59e0b', borderRadius: 3 }} />
+                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Hạng mục</span>
+                        <div style={{ fontWeight: 800, fontSize: '1.1rem', marginTop: 4 }}>{hangMuc}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Tổ sản xuất</span>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0ea5e9', marginTop: 4 }}>{teamName}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Công đoạn</span>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', marginTop: 4 }}>{stageName}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>KL giao</span>
+                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#16a34a', marginTop: 4 }}>{volume} kg</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Thời gian thực hiện</span>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', marginTop: 4 }}>{timeRange}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Ngày YC</span>
+                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f59e0b', marginTop: 4 }}>{task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : '—'}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 4 }}>Khối lượng hoàn thành từ P5.1:</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#16a34a' }}>
+                          {p51CompletedVolume} {p51CompletedVolume ? 'kg' : '—'}
                         </div>
                       </div>
-                      <div>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>KL hoàn thành</div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: 2 }}>{allQty.length > 0 ? allQty.join(', ') : '—'}</div>
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Kết quả nghiệm thu *</label>
-                        <select
-                          className="input"
-                          value={acceptResult}
-                          disabled={!isActive}
-                          onChange={e => handleFieldChange('acceptanceResult', e.target.value)}
-                          style={{ width: '100%', padding: '8px 12px', fontSize: '0.9rem', fontWeight: 700, borderRadius: 8, border: `2px solid ${acceptResult === 'PASS' ? '#16a34a' : acceptResult === 'FAIL' ? '#dc2626' : acceptResult === 'CONDITIONAL' ? '#f59e0b' : 'var(--border)'}`, color: acceptResult === 'PASS' ? '#16a34a' : acceptResult === 'FAIL' ? '#dc2626' : acceptResult === 'CONDITIONAL' ? '#d97706' : undefined }}
-                        >
-                          <option value="">-- Chọn --</option>
-                          <option value="PASS">✅ PASS — Đạt</option>
-                          <option value="FAIL">❌ FAIL — Không đạt</option>
-                          <option value="CONDITIONAL">⚠️ CONDITIONAL — Đạt có điều kiện</option>
-                        </select>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Khối lượng xác nhận (PM) <span style={{ color: '#ef4444' }}>*</span></label>
+                          <input
+                            type="number"
+                            className="input"
+                            placeholder="Nhập khối lượng PM xác nhận..."
+                            value={formData.pmConfirmedVolume as string || ''}
+                            disabled={!isActive}
+                            onChange={(e) => handleFieldChange('pmConfirmedVolume', e.target.value)}
+                            style={{ width: '100%', padding: '8px 12px', fontSize: '0.95rem', fontWeight: 700, borderRadius: 8 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Kết quả nghiệm thu <span style={{ color: '#ef4444' }}>*</span></label>
+                          <select
+                            className="input"
+                            value={acceptResult}
+                            disabled={!isActive}
+                            onChange={e => handleFieldChange('acceptanceResult', e.target.value)}
+                            style={{ width: '100%', padding: '8px 12px', fontSize: '0.9rem', fontWeight: 700, borderRadius: 8, border: `2px solid ${acceptResult === 'PASS' ? '#16a34a' : acceptResult === 'FAIL' ? '#dc2626' : acceptResult === 'CONDITIONAL' ? '#f59e0b' : 'var(--border)'}`, color: acceptResult === 'PASS' ? '#16a34a' : acceptResult === 'FAIL' ? '#dc2626' : acceptResult === 'CONDITIONAL' ? '#d97706' : undefined }}
+                          >
+                            <option value="">-- Chọn --</option>
+                            <option value="PASS">✅ PASS — Đạt</option>
+                            <option value="FAIL">❌ FAIL — Không đạt</option>
+                            <option value="CONDITIONAL">⚠️ CONDITIONAL — Đạt có điều kiện</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -5298,7 +5299,7 @@ export default function TaskDetailPage() {
                     const rd = formData as Record<string, unknown>
                     try { return rd.cellAssignments ? (typeof rd.cellAssignments === 'string' ? JSON.parse(rd.cellAssignments as string) : rd.cellAssignments) as CellAssignMap : {} } catch { return {} }
                   })()}
-                  onAssign={(ri, colKey, assigns) => {
+                  onAssign={async (ri, colKey, assigns) => {
                     const rd = formData as Record<string, unknown>
                     let existing: CellAssignMap = {}
                     try { existing = rd.cellAssignments ? (typeof rd.cellAssignments === 'string' ? JSON.parse(rd.cellAssignments as string) : rd.cellAssignments) as CellAssignMap : {} } catch { /* */ }
@@ -5306,6 +5307,13 @@ export default function TaskDetailPage() {
                     handleFieldChange('cellAssignments', JSON.stringify(updated))
                     setSuccessMsg(`✅ Đã lưu phân giao ${assigns.length} tổ cho cột ${colKey}`)
                     setTimeout(() => setSuccessMsg(''), 3000)
+                    // Auto-persist to DB so P5.1 can read cellAssignments
+                    try {
+                      await apiFetch(`/api/tasks/${task.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ action: 'save', resultData: { ...formData, cellAssignments: JSON.stringify(updated) } }),
+                      })
+                    } catch { /* silent */ }
                   }}
                   onIssueLSX={(ri, row) => {
                     const existing = (formData as Record<string, unknown>).lsxStatus as Record<number, { lsx?: boolean; vt?: boolean }> || {}
@@ -5325,7 +5333,7 @@ export default function TaskDetailPage() {
                     const rd = formData as Record<string, unknown>
                     try { return rd.lsxIssuedDetails ? (typeof rd.lsxIssuedDetails === 'string' ? JSON.parse(rd.lsxIssuedDetails as string) : rd.lsxIssuedDetails) as LsxIssuedMap : {} } catch { return {} }
                   })()}
-                  onIssueSingleTeam={(ri, colKey, teamIdx) => {
+                  onIssueSingleTeam={async (ri, colKey, teamIdx) => {
                     const rd = formData as Record<string, unknown>
                     let existing: LsxIssuedMap = {}
                     try { existing = rd.lsxIssuedDetails ? (typeof rd.lsxIssuedDetails === 'string' ? JSON.parse(rd.lsxIssuedDetails as string) : rd.lsxIssuedDetails) as LsxIssuedMap : {} } catch { /* */ }
@@ -5333,6 +5341,13 @@ export default function TaskDetailPage() {
                     handleFieldChange('lsxIssuedDetails', JSON.stringify(updated))
                     setSuccessMsg(`✅ Đã phát hành LSX cho tổ #${teamIdx + 1} - ${colKey}`)
                     setTimeout(() => setSuccessMsg(''), 3000)
+                    // Auto-persist to DB
+                    try {
+                      await apiFetch(`/api/tasks/${task.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ action: 'save', resultData: { ...formData, lsxIssuedDetails: JSON.stringify(updated) } }),
+                      })
+                    } catch { /* silent */ }
                   }}
                   materialRequests={(() => {
                     const rd = formData as Record<string, unknown>
@@ -5376,7 +5391,23 @@ export default function TaskDetailPage() {
                       }
                       handleFieldChange('materialRequests', JSON.stringify(updatedMR))
 
-                      // 2. Activate P4.5 task via API
+                      // 2. Auto-save entire formData to DB before creating P4.5
+                      //    This ensures cellAssignments are persisted for P5.1 to read
+                      try {
+                        await apiFetch(`/api/tasks/${task.id}`, {
+                          method: 'PUT',
+                          body: JSON.stringify({ action: 'save', resultData: { ...formData, materialRequests: JSON.stringify(updatedMR) } }),
+                        })
+                      } catch { /* silent */ }
+
+                      // 3. Activate P4.5 task via API — include team assignment data
+                      const cellsRaw = (formData as Record<string, unknown>).cellAssignments
+                      let teamAssign: { teamName?: string; volume?: string; startDate?: string; endDate?: string } = {}
+                      try {
+                        const ca = cellsRaw ? (typeof cellsRaw === 'string' ? JSON.parse(cellsRaw as string) : cellsRaw) as CellAssignMap : {}
+                        const t = ca[ri]?.[stageKey]?.[teamIdx]
+                        if (t) teamAssign = { teamName: t.teamName, volume: t.volume, startDate: t.startDate, endDate: t.endDate }
+                      } catch { /* */ }
                       const res = await apiFetch('/api/tasks/activate', {
                         method: 'POST',
                         body: JSON.stringify({
@@ -5392,6 +5423,7 @@ export default function TaskDetailPage() {
                             sourceRow: ri,
                             stageKey,
                             teamIdx,
+                            ...teamAssign,
                           }
                         })
                       })
@@ -5405,25 +5437,7 @@ export default function TaskDetailPage() {
                     }
                     setTimeout(() => setSuccessMsg(''), 4000)
                   }}
-                  onSave={async () => {
-                    try {
-                      const res = await apiFetch(`/api/tasks/${task.id}`, {
-                        method: 'PUT',
-                        body: JSON.stringify({
-                          action: 'save',
-                          resultData: formData,
-                        }),
-                      })
-                      if (res.success !== false) {
-                        setSuccessMsg('💾 Đã lưu trạng thái thành công!')
-                      } else {
-                        setError('Lỗi khi lưu. Vui lòng thử lại.')
-                      }
-                    } catch {
-                      setError('Lỗi kết nối. Vui lòng thử lại.')
-                    }
-                    setTimeout(() => setSuccessMsg(''), 3000)
-                  }}
+
                 />
               </div>
             )}
@@ -5824,11 +5838,29 @@ export default function TaskDetailPage() {
             )}
 
             {/* Actions — hidden for P1.1B and P1.3 since they have inline actions in main area */}
-            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && (
+            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && (() => {
+              const p53QcRaw = formData.qcItems as string | undefined;
+              let p53QcItems: {result: string}[] = [];
+              try { p53QcItems = p53QcRaw ? JSON.parse(p53QcRaw) : []; } catch { p53QcItems = []; }
+              const p53HasFail = p53QcItems.some(q => q.result === 'FAIL');
+              const p53HasCond = p53QcItems.some(q => q.result === 'CONDITIONAL');
+
+              const canApprove = (task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') &&
+                                 (task.stepCode !== 'P5.3' || !p53HasFail) &&
+                                 (task.stepCode !== 'P5.4' || !formData.acceptanceResult || formData.acceptanceResult === 'PASS' || formData.acceptanceResult === 'CONDITIONAL') && isP45Valid;
+
+              const canReject = rule?.rejectTo &&
+                                (
+                                  (task.stepCode === 'P4.3' && (!formData.inspectionResult || formData.inspectionResult === 'FAIL' || formData.inspectionResult === 'CONDITIONAL')) ||
+                                  (task.stepCode === 'P5.3' && (p53HasFail || p53HasCond)) ||
+                                  (task.stepCode === 'P5.4' && (!formData.acceptanceResult || formData.acceptanceResult === 'FAIL' || formData.acceptanceResult === 'CONDITIONAL')) ||
+                                  (task.stepCode !== 'P4.3' && task.stepCode !== 'P5.3' && task.stepCode !== 'P5.4')
+                                );
+
+              return (
               <div className="card" style={{ padding: '1.25rem' }}>
                 <h3 style={{ marginTop: 0, fontSize: '1rem' }}>🚀 Hành động</h3>
-                {/* P4.3 + P5.3 + P5.4: Conditional buttons based on inspection/acceptance result, and P4.5 invalid stock */}
-                {(task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.3' || !(() => { try { const items = JSON.parse(formData.qcItems as string || '[]'); return items.some((q: {result: string}) => q.result === 'FAIL') } catch { return false } })()) && (task.stepCode !== 'P5.4' || !formData.acceptanceResult || formData.acceptanceResult === 'PASS' || formData.acceptanceResult === 'CONDITIONAL') && isP45Valid && (
+                {canApprove && (
                 <button
                   className="btn-accent"
                   onClick={() => handleSubmit('complete')}
@@ -5838,7 +5870,7 @@ export default function TaskDetailPage() {
                   {submitting ? '⏳ Đang xử lý...' : '✅ Hoàn thành bước này'}
                 </button>
                 )}
-                {rule?.rejectTo && (task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'FAIL' || formData.inspectionResult === 'CONDITIONAL') && (task.stepCode !== 'P5.4' || !formData.acceptanceResult || formData.acceptanceResult === 'FAIL' || formData.acceptanceResult === 'CONDITIONAL') && (
+                {canReject && (
                   <div>
                     <button
                       onClick={() => setShowRejectForm(!showRejectForm)}
@@ -5849,7 +5881,7 @@ export default function TaskDetailPage() {
                         color: '#e74c3c', cursor: 'pointer',
                       }}
                     >
-                      ❌ Từ chối → {rule.rejectTo}
+                      ❌ Từ chối → {rule?.rejectTo}
                     </button>
                     {showRejectForm && (
                       <div style={{ marginTop: 8 }}>
@@ -5870,19 +5902,12 @@ export default function TaskDetailPage() {
                             if (!rejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return }
                             setSubmitting(true)
                             setError('')
-                            // P5.3: Save QC items result data before rejecting
-                            if (task.stepCode === 'P5.3' && formData.qcItems) {
-                              await apiFetch(`/api/tasks/${taskId}`, {
-                                method: 'PUT',
-                                body: JSON.stringify({ action: 'save', resultData: { ...formData, checklist: checklistState } }),
-                              })
-                            }
                             const res = await apiFetch(`/api/tasks/${taskId}/reject`, {
                               method: 'POST',
                               body: JSON.stringify({ reason: rejectReason }),
                             })
                             if (res.success) {
-                              setSuccessMsg(`✅ Đã từ chối → ${rule.rejectTo}`)
+                              setSuccessMsg(`✅ Đã từ chối → ${rule?.rejectTo}`)
                               setTimeout(() => router.push('/dashboard/tasks'), 2000)
                             } else {
                               setError(res.error || 'Lỗi khi từ chối')
@@ -5902,7 +5927,8 @@ export default function TaskDetailPage() {
                   </div>
                 )}
               </div>
-            )}
+            )
+            })()}
 
             {/* Back button */}
             <button

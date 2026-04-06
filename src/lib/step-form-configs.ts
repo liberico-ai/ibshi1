@@ -512,29 +512,13 @@ const P4_5: StepFormConfig = {
 const P5_1: StepFormConfig = {
   stepCode: 'P5.1',
   formType: 'input',
-  title: 'Tổ SX thực hiện SX và theo dõi job card',
-  description: 'R06b cập nhật trạng thái job card: bắt đầu, hoàn thành từng công đoạn, vấn đề phát sinh. Scan QR xem bản vẽ mới nhất.',
+  title: 'Yêu cầu nghiệm thu LSX',
+  description: 'Hiển thị Lệnh sản xuất tương ứng đã được đẩy xuống cho bộ phận và ghi nhận khối lượng hoàn thành.',
   fields: [
-    { key: 'jobCardCode', label: 'Mã Job Card', labelEn: 'Job Card Code', type: 'text', required: true },
-    { key: 'jobCardStatus', label: 'Trạng thái job card', labelEn: 'Job Card Status', type: 'select', options: [{ value: 'in_progress', label: 'Đang thực hiện' }, { value: 'done', label: 'Hoàn thành' }, { value: 'paused', label: 'Tạm dừng' }, { value: 'issue', label: 'Vấn đề phát sinh' }], required: true },
-    { key: 'fabricationProgress', label: 'Tiến độ sản xuất (%)', labelEn: 'Fabrication Progress %', type: 'number', min: 0, max: 100 },
-    { key: 'completedTasks', label: 'Công đoạn đã hoàn thành', labelEn: 'Completed Tasks', type: 'textarea', fullWidth: true },
-    { key: 'issues', label: 'Vấn đề phát sinh', labelEn: 'Issues', type: 'textarea', fullWidth: true },
-    // QR scan section rendered dynamically in page.tsx
+    { key: 'completedQuantity', label: 'Số lượng đã hoàn thành', labelEn: 'Completed Quantity', type: 'number', required: true },
   ],
   checklist: [
-    { key: 'job_card_updated', label: 'Đã cập nhật job card', required: true },
-    { key: 'vt_confirmed', label: 'Đã xác nhận VT đã dùng' },
-    // 9 fabrication sub-steps (BRD P4.3-P4.11)
-    { key: 'fab_CUT', label: '🔹 CUT — Pha cắt hoàn thành' },
-    { key: 'fab_FIT', label: '🔹 FIT — Gá lắp hoàn thành' },
-    { key: 'fab_WLD', label: '🔹 WLD — Hàn hoàn thành' },
-    { key: 'fab_MCH', label: '🔹 MCH — Gia công cơ khí hoàn thành' },
-    { key: 'fab_TRF', label: '🔹 TRF — Xử lý bề mặt hoàn thành' },
-    { key: 'fab_FAT', label: '⭐ FAT — Factory Acceptance Test hoàn thành' },
-    { key: 'fab_BLS', label: '🔹 BLS — Bắn bi / Làm sạch hoàn thành' },
-    { key: 'fab_FPC', label: '🔹 FPC — Sơn phủ hoàn thành' },
-    { key: 'fab_PCK', label: '🔹 PCK — Đóng kiện (Ready to Ship) hoàn thành' },
+    { key: 'volume_reported', label: 'Đã báo cáo SL hoàn thành', required: true }
   ],
   attachments: [],
 }
@@ -579,11 +563,7 @@ const P5_4: StepFormConfig = {
   formType: 'input',
   title: 'PM nghiệm thu khối lượng thực hiện',
   description: 'PM xác nhận KL hoàn thành của tổ và thầu phụ. Dữ liệu cập nhật WBS progress%, tính lương khoán, trigger milestone billing.',
-  fields: [
-    { key: 'verifiedVolume', label: 'KL đã xác nhận', labelEn: 'Verified Volume', type: 'textarea', fullWidth: true, required: true },
-    { key: 'wbsProgress', label: '% Tiến độ WBS', labelEn: 'WBS Progress %', type: 'number' },
-    { key: 'acceptanceNotes', label: 'Ghi chú nghiệm thu', labelEn: 'Acceptance Notes', type: 'textarea', fullWidth: true },
-  ],
+  fields: [],
   checklist: [
     { key: 'volume_confirmed', label: 'Xác nhận đã hoàn thành đủ khối lượng', required: true },
     { key: 'volume_verified', label: 'Đã xác nhận KL hoàn thành', required: true },

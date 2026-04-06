@@ -128,8 +128,8 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
 
   // ── Phase 5: Sản xuất (BRD#26-31) ──
   'P5.1': {
-    code: 'P5.1', name: 'Tổ SX thực hiện sản xuất và theo dõi job card', nameEn: 'Production Team Execute & Track Job Cards',
-    role: 'R06b', next: ['P5.2'], phase: 5,
+    code: 'P5.1', name: 'Yêu cầu nghiệm thu LSX', nameEn: 'LSX Acceptance Request',
+    role: 'R06b', next: ['P5.3', 'P5.4'], phase: 5,
   },
   'P5.2': {
     code: 'P5.2', name: 'Tổ SX báo cáo khối lượng hoàn thành theo tuần', nameEn: 'Weekly Production Volume Report',
@@ -143,7 +143,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   'P5.4': {
     code: 'P5.4', name: 'PM nghiệm thu khối lượng thực hiện', nameEn: 'PM Volume Acceptance',
     role: 'R02', next: ['P5.5'], phase: 5,
-    rejectTo: 'P5.2', // PM fail → tổ SX báo cáo lại
+    rejectTo: 'P5.1', // PM fail → trả về P5.1
   },
   'P5.5': {
     code: 'P5.5', name: 'Tổng hợp và tính lương khoán', nameEn: 'Piece-rate Salary Calculation',

@@ -315,19 +315,144 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       }
     }
 
-    // For P5.2: fetch P5.1 job card data to auto-display completed stages
-    if (task.stepCode === 'P5.2') {
+    // For P5.1, P5.3, P5.4: dynamically load LSX data from parent P3.x task cellAssignments
+    if (task.stepCode === 'P5.1' || task.stepCode === 'P5.3' || task.stepCode === 'P5.4') {
+      const rd = (task.resultData as Record<string, unknown>) || {}
+      const sourceStep = rd.sourceStep as string || 'P3.4'
+      const sourceP45TaskId = rd.sourceP45TaskId as string
+
+      // Get P4.5 to find sourceRow, stageKey, teamIdx + direct team data
+      let stageKey = rd.stageKey as string || ''
+      let sourceRow: number | null = null
+      let teamIdx = 0
+      let p45TeamData: { teamName?: string; volume?: string; startDate?: string; endDate?: string } | null = null
+
+      if (sourceP45TaskId) {
+        const p45 = await prisma.workflowTask.findUnique({
+          where: { id: sourceP45TaskId },
+          select: { resultData: true },
+        })
+        if (p45) {
+          const p45rd = (p45.resultData as Record<string, unknown>) || {}
+          const req = (p45rd.materialIssueRequests as Array<Record<string, unknown>>)?.[0]
+          if (req) {
+            sourceRow = req.sourceRow as number ?? null
+            stageKey = stageKey || (req.stageKey as string) || ''
+            teamIdx = (req.teamIdx as number) ?? 0
+            // Direct team data from P4.5 (available when DNC VT passes it)
+            if (req.teamName) {
+              p45TeamData = {
+                teamName: req.teamName as string,
+                volume: req.volume as string,
+                startDate: req.startDate as string,
+                endDate: req.endDate as string,
+              }
+            }
+          }
+        }
+      }
+
+      // Try cellAssignments from parent P3.x first
+      let found = false
+      const parentTask = await prisma.workflowTask.findFirst({
+        where: { stepCode: sourceStep, projectId: task.projectId },
+        orderBy: { createdAt: 'desc' },
+        select: { resultData: true },
+      })
+
+      if (parentTask) {
+        const prd = (parentTask.resultData as Record<string, unknown>) || {}
+        let cells: Record<string, Record<string, Array<{ teamName: string; volume: string; startDate: string; endDate: string }>>> = {}
+        try {
+          const raw = prd.cellAssignments
+          cells = typeof raw === 'string' ? JSON.parse(raw) : (raw as typeof cells) || {}
+        } catch { cells = {} }
+
+        const rowKey = String(sourceRow)
+        let teamData = cells[rowKey]?.[stageKey]?.[teamIdx] || null
+        if (!teamData && teamIdx !== 0) teamData = cells[rowKey]?.[stageKey]?.[0] || null
+        if (!teamData && stageKey) {
+          for (const rk of Object.keys(cells)) {
+            if (cells[rk]?.[stageKey]?.[0]) { teamData = cells[rk][stageKey][0]; break }
+          }
+        }
+
+        let hangMucName = ''
+        if (sourceRow !== null) {
+          const planData = await fetchPlanData(task.projectId)
+          try {
+            const wbsRaw = planData?.wbsItems as string | undefined
+            const wbsList = wbsRaw ? JSON.parse(wbsRaw) : []
+            if (wbsList[Number(sourceRow)]) {
+              hangMucName = wbsList[Number(sourceRow)].hangMuc || ''
+            }
+          } catch { /* ignore */ }
+        }
+
+        if (teamData) {
+          previousStepData = {
+            ...previousStepData,
+            lsxTeamData: {
+              teamName: teamData.teamName,
+              volume: rd.remainingVolume !== undefined ? String(rd.remainingVolume) : teamData.volume,
+              startDate: teamData.startDate,
+              endDate: teamData.endDate,
+              stageKey,
+              hangMuc: hangMucName,
+            },
+          }
+          found = true
+        }
+      }
+
+      // Fallback: use team data stored directly in P4.5 materialIssueRequests
+      if (!found && p45TeamData) {
+        let hangMucName = ''
+        if (sourceRow !== null) {
+          const planData = await fetchPlanData(task.projectId)
+          try {
+            const wbsRaw = planData?.wbsItems as string | undefined
+            const wbsList = wbsRaw ? JSON.parse(wbsRaw) : []
+            if (wbsList[Number(sourceRow)]) {
+              hangMucName = wbsList[Number(sourceRow)].hangMuc || ''
+            }
+          } catch { /* ignore */ }
+        }
+
+        previousStepData = {
+          ...previousStepData,
+          lsxTeamData: {
+            teamName: p45TeamData.teamName || '',
+            volume: rd.remainingVolume !== undefined ? String(rd.remainingVolume) : (p45TeamData.volume || ''),
+            startDate: p45TeamData.startDate || '',
+            endDate: p45TeamData.endDate || '',
+            stageKey,
+            hangMuc: hangMucName,
+          },
+        }
+      }
+    }
+
+    if (task.stepCode === 'P5.2' || task.stepCode === 'P5.3') {
       const p51Task = await fetchStepResult(task.projectId, 'P5.1')
-      previousStepData = { jobCardData: p51Task?.resultData || null }
+      previousStepData = { ...previousStepData, jobCardData: p51Task?.resultData || null }
     }
 
     // For P5.4: fetch P5.1 (job card data) + P5.2 (volume report with job cards) for PM review
     if (task.stepCode === 'P5.4') {
-      const [p51Task, p52Task] = await Promise.all([
-        fetchStepResult(task.projectId, 'P5.1'),
-        fetchStepResult(task.projectId, 'P5.2'),
-      ])
+      const rd = (task.resultData as Record<string, unknown>) || {}
+      
+      let p51Task: any = null;
+      if (rd.sourceP51TaskId) {
+        p51Task = await prisma.workflowTask.findUnique({ where: { id: String(rd.sourceP51TaskId) } });
+      } else {
+        p51Task = await fetchStepResult(task.projectId, 'P5.1');
+      }
+
+      const p52Task = await fetchStepResult(task.projectId, 'P5.2')
+      
       previousStepData = {
+        ...previousStepData,
         jobCardData: p51Task?.resultData || null,
         volumeData: p52Task?.resultData || null,
       }
