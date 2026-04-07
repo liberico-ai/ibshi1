@@ -171,16 +171,19 @@ export async function GET(req: NextRequest) {
         hmNode.totalHm += vol
 
         if (!hmNode.stages.has(stageName)) {
-          // totalAssigned: sum all team volumes from cellAssignments for this sourceRow + stageKey
+          // totalAssigned = WBS item's khoiLuong (total volume for this hang muc)
           let totalAssigned = 0
-          if (sourceRow != null && stageKey) {
-            const p3rd = p3Map.get(t.projectId) || {}
-            let cells: any = {}
-            try { cells = typeof p3rd.cellAssignments === 'string' ? JSON.parse(p3rd.cellAssignments) : (p3rd.cellAssignments || {}) } catch {}
-            const assigns = cells[String(sourceRow)]?.[stageKey] || []
-            totalAssigned = assigns.reduce((sum: number, a: any) => sum + (Number(a.volume) || 0), 0)
+          if (sourceRow != null) {
+            const planData = planMap.get(t.projectId) || {}
+            try {
+              const wbsRaw = planData.wbsItems as string | undefined
+              if (wbsRaw) {
+                const wbsList = JSON.parse(wbsRaw)
+                totalAssigned = parseVolumeStr(wbsList[Number(sourceRow)]?.khoiLuong)
+              }
+            } catch { /* ignore */ }
           }
-          // Fallback: if cellAssignments gave 0, use lsxData volume from P5.1
+          // Fallback: use lsxData volume from P5.1
           if (totalAssigned === 0 && lsxData.items?.[0]?.volume) {
             totalAssigned = parseVolumeStr(lsxData.items[0].volume)
           }
