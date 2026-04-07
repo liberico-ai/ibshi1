@@ -232,7 +232,7 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
         <div>
           <span className="mono-label" style={{ color: '#f06876' }}>{p.projectCode}</span>
-          <h4 style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: '#f0f4f8', marginTop: 4 }}>{p.projectName}</h4>
+          <div style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: '#f0f4f8', marginTop: 4 }}>{p.projectName}</div>
           <p style={{ fontSize: 'var(--text-sm)', color: '#94a3b8', marginTop: 2 }}>{p.clientName}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
