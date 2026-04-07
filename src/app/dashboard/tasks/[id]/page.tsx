@@ -5735,8 +5735,8 @@ export default function TaskDetailPage() {
                   <div key={att.key} style={{ paddingBottom: '10px', borderBottom: '1px solid var(--border)', marginBottom: '10px' }}>
                     <MultiFileUpload
                       label={att.label + (att.required ? ' *' : '')}
-                      entityType={task.stepCode === 'P1.1' ? 'Project' : 'Task'}
-                      entityId={task.stepCode === 'P1.1' ? `${task.projectId}_${att.key}` : `${task.id}_${att.key}`}
+                      entityType={['P1.1', 'P1.1B'].includes(task.stepCode) ? 'Project' : 'Task'}
+                      entityId={['P1.1', 'P1.1B'].includes(task.stepCode) ? `${task.projectId}_${att.key}` : `${task.id}_${att.key}`}
                       accept={att.accept || undefined}
                       disabled={!isActive}
                       compact
