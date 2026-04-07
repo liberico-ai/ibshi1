@@ -120,6 +120,9 @@ interface StageData {
   name: string;
   weeks: Record<string, number>;
   total: number;
+  totalAssigned?: number;
+  totalProduced?: number;
+  totalRemaining?: number;
 }
 interface HangMucData {
   name: string;
@@ -158,9 +161,12 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
         <table className="data-table" style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#1e293b', color: 'white' }}>
-              <th style={{ width: '30%', padding: '12px 16px', fontWeight: 600 }}>Cấu trúc Hình cây (WBS)</th>
-              {weekKeys.map(w => <th key={w} className="text-right" style={{ width: '12%', padding: '12px 16px', fontWeight: 600 }}>{w}</th>)}
-              <th className="text-right" style={{ width: '15%', padding: '12px 16px', fontWeight: 800, color: '#38bdf8' }}>Tổng Luỹ kế</th>
+              <th style={{ width: '25%', padding: '12px 16px', fontWeight: 600 }}>Cấu trúc Hình cây (WBS)</th>
+              {weekKeys.map(w => <th key={w} className="text-right" style={{ width: '8%', padding: '12px 16px', fontWeight: 600 }}>{w}</th>)}
+              <th className="text-right whitespace-nowrap" style={{ padding: '12px 16px', fontWeight: 800, color: '#38bdf8', borderLeft: '1px solid #334155' }}>Nghiệm thu (P5.4)</th>
+              <th className="text-right whitespace-nowrap" style={{ padding: '12px 16px', fontWeight: 600, color: '#f8fafc' }}>Phân giao (WBS)</th>
+              <th className="text-right whitespace-nowrap" style={{ padding: '12px 16px', fontWeight: 600, color: '#f8fafc' }}>Sản xuất (P5.1)</th>
+              <th className="text-right whitespace-nowrap" style={{ padding: '12px 16px', fontWeight: 600, color: '#fde047' }}>Còn lại</th>
             </tr>
           </thead>
           <tbody>
@@ -182,9 +188,21 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
                       </td>
                     )
                   })}
-                  <td className="text-right font-extrabold text-sm" style={{ color: '#0ea5e9', background: '#f8fafc', borderLeft: '2px solid white' }}>
+                  <td className="text-right font-extrabold text-sm whitespace-nowrap" style={{ color: '#0ea5e9', background: '#f8fafc', borderLeft: '2px solid white' }}>
                     {proj.totalProj.toLocaleString()} kg
                   </td>
+                  {(() => {
+                    const pAssigned = proj.hangMucs.reduce((sum, hm) => sum + hm.stages.reduce((s, stg) => s + (stg.totalAssigned || 0), 0), 0)
+                    const pProduced = proj.hangMucs.reduce((sum, hm) => sum + hm.stages.reduce((s, stg) => s + (stg.totalProduced || 0), 0), 0)
+                    const pRemaining = proj.hangMucs.reduce((sum, hm) => sum + hm.stages.reduce((s, stg) => s + (stg.totalRemaining || 0), 0), 0)
+                    return (
+                      <>
+                        <td className="text-right font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{pAssigned.toLocaleString()}</td>
+                        <td className="text-right font-bold text-sm" style={{ color: '#16a34a' }}>{pProduced.toLocaleString()}</td>
+                        <td className="text-right font-bold text-sm" style={{ color: pRemaining > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{pRemaining.toLocaleString()}</td>
+                      </>
+                    )
+                  })()}
                 </tr>
 
                 {proj.hangMucs.map((hm: HangMucData, j: number) => (
@@ -209,6 +227,18 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
                       <td className="text-right font-bold text-xs" style={{ color: 'var(--text-primary)', borderLeft: '1px solid #f1f5f9' }}>
                         {hm.totalHm.toLocaleString()}
                       </td>
+                      {(() => {
+                        const hAssigned = hm.stages.reduce((s, stg) => s + (stg.totalAssigned || 0), 0)
+                        const hProduced = hm.stages.reduce((s, stg) => s + (stg.totalProduced || 0), 0)
+                        const hRemaining = hm.stages.reduce((s, stg) => s + (stg.totalRemaining || 0), 0)
+                        return (
+                          <>
+                            <td className="text-right font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>{hAssigned.toLocaleString()}</td>
+                            <td className="text-right font-semibold text-xs" style={{ color: '#16a34a' }}>{hProduced.toLocaleString()}</td>
+                            <td className="text-right font-semibold text-xs" style={{ color: hRemaining > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{hRemaining.toLocaleString()}</td>
+                          </>
+                        )
+                      })()}
                     </tr>
 
                     {/* CÁC CÔNG ĐOẠN */}
@@ -242,6 +272,9 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
                         <td className="text-right text-xs font-semibold" style={{ color: '#64748b', borderLeft: '1px dotted #e2e8f0' }}>
                           {stg.total.toLocaleString()}
                         </td>
+                        <td className="text-right text-xs" style={{ color: 'var(--text-primary)' }}>{(stg.totalAssigned || 0).toLocaleString()}</td>
+                        <td className="text-right text-xs" style={{ color: '#16a34a' }}>{(stg.totalProduced || 0).toLocaleString()}</td>
+                        <td className="text-right text-xs font-semibold" style={{ color: (stg.totalRemaining || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{(stg.totalRemaining || 0).toLocaleString()}</td>
                       </tr>
                     ))}
                   </React.Fragment>
@@ -260,9 +293,21 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
                   </td>
                 )
               })}
-              <td className="text-right text-base font-black p-4" style={{ color: '#0284c7', borderLeft: '2px solid #e2e8f0' }}>
+              <td className="text-right text-base font-black p-4 whitespace-nowrap" style={{ color: '#0284c7', borderLeft: '2px solid #e2e8f0' }}>
                 {weeklyData.reduce((acc: number, proj: ProjectData) => acc + proj.totalProj, 0).toLocaleString()} <span className="text-xs">kg</span>
               </td>
+              {(() => {
+                const totalAssigned = weeklyData.reduce((sum, proj) => sum + proj.hangMucs.reduce((hs, hm) => hs + hm.stages.reduce((ss, stg) => ss + (stg.totalAssigned || 0), 0), 0), 0)
+                const totalProduced = weeklyData.reduce((sum, proj) => sum + proj.hangMucs.reduce((hs, hm) => hs + hm.stages.reduce((ss, stg) => ss + (stg.totalProduced || 0), 0), 0), 0)
+                const totalRemaining = weeklyData.reduce((sum, proj) => sum + proj.hangMucs.reduce((hs, hm) => hs + hm.stages.reduce((ss, stg) => ss + (stg.totalRemaining || 0), 0), 0), 0)
+                return (
+                  <>
+                    <td className="text-right text-base font-bold p-4 whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{totalAssigned.toLocaleString()}</td>
+                    <td className="text-right text-base font-bold p-4 whitespace-nowrap" style={{ color: '#16a34a' }}>{totalProduced.toLocaleString()}</td>
+                    <td className="text-right text-base font-bold p-4 whitespace-nowrap" style={{ color: '#f59e0b' }}>{totalRemaining.toLocaleString()}</td>
+                  </>
+                )
+              })()}
             </tr>
           </tfoot>
         </table>

@@ -59,6 +59,31 @@ export async function GET(req: NextRequest) {
         if (!planMap.has(pt.projectId)) planMap.set(pt.projectId, pt.resultData)
       }
 
+      const p3Tasks = await prisma.workflowTask.findMany({
+        where: { projectId: { in: projectIds }, stepCode: { in: ['P3.3', 'P3.4'] } },
+        select: { projectId: true, resultData: true },
+        orderBy: { createdAt: 'desc' }
+      })
+      const p3Map = new Map<string, any>()
+      for (const pt of p3Tasks) {
+        if (!p3Map.has(pt.projectId)) p3Map.set(pt.projectId, pt.resultData)
+      }
+
+      const allP51Tasks = await prisma.workflowTask.findMany({
+        where: { projectId: { in: projectIds }, stepCode: 'P5.1', status: 'DONE' },
+        select: { projectId: true, resultData: true }
+      })
+      
+      const p51_p45Ids = [...new Set(allP51Tasks.map(t => ((t.resultData as any)?.sourceP45TaskId as string)).filter(Boolean))]
+      const missingP45Ids = p51_p45Ids.filter(id => !p45Map.has(id))
+      if (missingP45Ids.length > 0) {
+        const extraP45 = await prisma.workflowTask.findMany({
+          where: { id: { in: missingP45Ids } },
+          select: { id: true, resultData: true }
+        })
+        for (const t of extraP45) p45Map.set(t.id, t.resultData as any)
+      }
+
       const getWbsItemName = (projectId: string, sourceRow: number | null | undefined): string => {
         if (sourceRow == null || sourceRow === undefined) return 'Hạng mục chung'
         const planData = planMap.get(projectId) || {}
@@ -122,12 +147,33 @@ export async function GET(req: NextRequest) {
         const hmNode = projNode.hangMucs.get(hangMuc)
         hmNode.totalHm += vol
 
+        // Ensure stage node exists
         if (!hmNode.stages.has(stageName)) {
-          hmNode.stages.set(stageName, { name: stageName, weeks: {}, total: 0 })
+          // Calculate one-time metrics for this stage when first created
+          const p3rd = p3Map.get(t.projectId) || {}
+          let cells: any = {}
+          try { cells = typeof p3rd.cellAssignments === 'string' ? JSON.parse(p3rd.cellAssignments) : (p3rd.cellAssignments || {}) } catch {}
+          const assigns = sourceRow != null && stageKey ? (cells[String(sourceRow)]?.[stageKey] || []) : []
+          const totalAssigned = assigns.reduce((sum: number, a: any) => sum + (Number(a.volume) || 0), 0)
+
+          const totalProduced = sourceRow != null && stageKey ? allP51Tasks.filter(p51 => {
+             if (p51.projectId !== t.projectId) return false
+             const p51rd = (p51.resultData as any) || {}
+             if (p51rd.stageKey !== stageKey) return false
+             const p51_45Id = p51rd.sourceP45TaskId
+             if (!p51_45Id) return false
+             const p51_45Data = p45Map.get(p51_45Id)
+             const preq = (p51_45Data?.materialIssueRequests as Array<any>)?.[0]
+             return preq?.sourceRow === sourceRow
+          }).reduce((s, p) => s + (Number((p.resultData as any)?.completedQuantity) || 0), 0) : 0
+
+          hmNode.stages.set(stageName, { name: stageName, weeks: {}, total: 0, totalAssigned, totalProduced, totalRemaining: 0 })
         }
+
         const stgNode = hmNode.stages.get(stageName)
         stgNode.total += vol
         stgNode.weeks[weekKey] = (stgNode.weeks[weekKey] || 0) + vol
+        stgNode.totalRemaining = Math.max(0, stgNode.totalAssigned - stgNode.total)
       }
 
       // Convert Maps to Arrays for JSON response structure
