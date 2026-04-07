@@ -114,6 +114,8 @@ function parsePrExcel(data: any[][], category: 'weld' | 'paint'): PrMaterialItem
     const spec = String(row[specCol] || '').trim()
     const unit = String(row[unitCol] || '').trim()
     if (!description) continue
+    // Skip rows where description is purely numbers (e.g. number-index rows)
+    if (!/[a-zA-ZÀ-ỹ]/.test(description)) continue
 
     // Get quantity: prefer current ordered, then total ordered, then scan cols 4-8
     let qty = 0

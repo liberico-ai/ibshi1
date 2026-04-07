@@ -136,6 +136,9 @@ function parsePrExcel(data: any[][]): PrMaterialItem[] {
     const unit = String(row[4] || '').trim()
     const unitWeight = Number(row[5]) || 0
 
+    // Skip rows where description is purely numbers (e.g. number-index rows)
+    if (description && !/[a-zA-ZÀ-ỹ]/.test(description)) continue
+
     // Detect category header rows
     if (isCategoryRow(stt, unit)) {
       currentCategory = extractCategory(stt)
