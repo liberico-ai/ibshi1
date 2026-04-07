@@ -42,5 +42,5 @@ export function resetRateLimitStore(): void {
 // ── Presets ──
 export const RATE_PRESETS = {
   API_GENERAL: { maxRequests: 100, windowMs: 60_000 },
-  API_UPLOAD: { maxRequests: 10, windowMs: 60_000 },
+  API_UPLOAD: { maxRequests: 50, windowMs: 60_000 }, // Tăng từ 10 lên 50 để upload nhiều file (kéo/thả) không bị block
 } as const
