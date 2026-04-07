@@ -485,6 +485,37 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
     }
 
     const updated = await assignTask(id, body.assignToUserId)
+
+    // Send Telegram DM to assigned user (fire-and-forget)
+    try {
+      const { notifyTaskAssigned } = await import('@/lib/telegram-notifications')
+      const fullTask = await prisma.workflowTask.findUnique({
+        where: { id },
+        select: {
+          id: true, stepCode: true, stepName: true, deadline: true,
+          project: { select: { projectCode: true, projectName: true } },
+        },
+      })
+      const assigner = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { fullName: true },
+      })
+      if (fullTask?.project && assigner) {
+        notifyTaskAssigned({
+          userId: body.assignToUserId,
+          assignedByName: assigner.fullName,
+          stepCode: fullTask.stepCode,
+          stepName: fullTask.stepName,
+          projectCode: fullTask.project.projectCode,
+          projectName: fullTask.project.projectName,
+          deadline: fullTask.deadline,
+          taskId: fullTask.id,
+        }).catch(err => console.error('Telegram DM assign error:', err))
+      }
+    } catch (err) {
+      console.error('Telegram assign notification error:', err)
+    }
+
     return successResponse({ task: updated }, 'Đã phân công task')
   }
 

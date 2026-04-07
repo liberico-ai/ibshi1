@@ -4,7 +4,7 @@
 // ALL calls are fire-and-forget — errors never block workflow
 // ══════════════════════════════════════════════════════════════
 
-import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
+import { sendGroupMessage, sendDirectMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { ROLES } from '@/lib/constants'
 
 // ── Shared helpers ──────────────────────────────────────────
@@ -41,6 +41,49 @@ export async function notifyTaskActivated(data: TaskNotifyData): Promise<void> {
     url ? `🔗 <a href="${url}/dashboard/tasks/${data.taskId}">Xem chi tiết</a>` : '',
   ].filter(Boolean).join('\n')
   await sendGroupMessage(msg)
+}
+
+// ── Task Assigned → DM to assigned user ─────────────────────
+
+export async function notifyTaskAssigned(data: {
+  userId: string
+  assignedByName: string
+  stepCode: string
+  stepName: string
+  projectCode: string
+  projectName: string
+  deadline: Date | null
+  taskId: string
+}): Promise<void> {
+  const url = appUrl()
+  const msg = [
+    '📌 <b>BẠN ĐƯỢC PHÂN CÔNG VIỆC MỚI</b>',
+    '━━━━━━━━━━━━━━━━━━━━━',
+    `📁 Dự án: <b>${escapeHtml(data.projectCode)}</b> — ${escapeHtml(data.projectName)}`,
+    `🔧 Công việc: <b>${escapeHtml(data.stepCode)}</b> — ${escapeHtml(data.stepName)}`,
+    `👤 Phân công bởi: ${escapeHtml(data.assignedByName)}`,
+    `⏰ Deadline: <b>${formatDeadline(data.deadline)}</b>`,
+    url ? `🔗 <a href="${url}/dashboard/tasks/${data.taskId}">Xem chi tiết</a>` : '',
+  ].filter(Boolean).join('\n')
+  await sendDirectMessage(data.userId, msg)
+}
+
+// ── Task Activated → DM to all role-matched users ───────────
+
+export async function notifyUsersTaskActivated(data: TaskNotifyData & {
+  userIds: string[]
+}): Promise<void> {
+  const url = appUrl()
+  const msg = [
+    '📋 <b>CÔNG VIỆC MỚI CHO BẠN</b>',
+    '━━━━━━━━━━━━━━━━━━━━━',
+    `📁 Dự án: <b>${escapeHtml(data.projectCode)}</b> — ${escapeHtml(data.projectName)}`,
+    `🔧 Công việc: <b>${escapeHtml(data.stepCode)}</b> — ${escapeHtml(data.stepName)}`,
+    `👤 Phụ trách: ${escapeHtml(data.assignedRole)} (${escapeHtml(roleName(data.assignedRole))})`,
+    `⏰ Deadline: <b>${formatDeadline(data.deadline)}</b>`,
+    url ? `🔗 <a href="${url}/dashboard/tasks/${data.taskId}">Xem chi tiết</a>` : '',
+  ].filter(Boolean).join('\n')
+  await Promise.allSettled(data.userIds.map(uid => sendDirectMessage(uid, msg)))
 }
 
 // ── Task Rejected → Group notification ──────────────────────
