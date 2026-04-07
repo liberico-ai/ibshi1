@@ -151,9 +151,9 @@ export async function GET(req: NextRequest) {
         const pCode = t.project.projectCode
         const pName = t.project.projectName
 
-        // Hang muc: prefer lsxData items, fallback to WBS lookup
-        const lsxHangMuc = lsxData.items?.[0]?.hangMuc
-        const hangMuc = (lsxHangMuc && lsxHangMuc !== '—') ? lsxHangMuc : getWbsItemName(t.projectId, sourceRow)
+        // Hang muc: prefer WBS plan data (correct category), fallback to lsxData
+        const wbsHangMuc = getWbsItemName(t.projectId, sourceRow)
+        const hangMuc = wbsHangMuc !== 'Hạng mục chung' ? wbsHangMuc : (lsxData.items?.[0]?.hangMuc || 'Hạng mục chung')
         const stageName = STAGE_LABELS[stageKey] || lsxData.stageLabel || stageKey || 'Công đoạn chung'
         
         const weekKey = `Tuần ${getWeek(new Date(t.completedAt))}`
