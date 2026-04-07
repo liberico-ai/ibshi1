@@ -4944,6 +4944,16 @@ export default function TaskDetailPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Phần tải lên ITP */}
+                  <div style={{ marginBottom: 16, padding: '16px', background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
+                    <MultiFileUpload 
+                      label="📥 Kế hoạch kiểm tra và nghiệm thu (ITP)"
+                      entityType="Task_ITP"
+                      entityId={task.id}
+                      disabled={!isActive}
+                    />
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <h3 style={{ margin: 0, fontSize: '1rem', color: hasFail ? '#dc2626' : '#8b5cf6' }}>
                       🔍 Danh sách công việc nghiệm thu ({qcItems.length})
