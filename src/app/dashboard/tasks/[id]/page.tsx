@@ -8,6 +8,7 @@ import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
 import BomPrUploadUI from './components/BomPrUploadUI'
+import WeldPaintUploadUI from './components/WeldPaintUploadUI'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
@@ -3590,6 +3591,21 @@ export default function TaskDetailPage() {
                         })
                       )
                     } catch { items = [] }
+                  } else if (section.key === 'bomWeldPaint' && (data?.weldPrItems || data?.paintPrItems)) {
+                    // P2.2 new format: separate weld + paint PR data
+                    try {
+                      const parse = (raw: unknown) => {
+                        const arr = typeof raw === 'string' ? JSON.parse(raw) : raw
+                        return (arr as { description: string; spec: string; quantity: number; unit: string }[]).map(
+                          (pr: { description: string; spec: string; quantity: number; unit: string }) => ({
+                            name: pr.description, code: '', spec: pr.spec, quantity: String(pr.quantity), unit: pr.unit
+                          })
+                        )
+                      }
+                      const weld = data?.weldPrItems ? parse(data.weldPrItems) : []
+                      const paint = data?.paintPrItems ? parse(data.paintPrItems) : []
+                      items = [...weld, ...paint]
+                    } catch { items = [] }
                   } else {
                     items = (data?.bomItems as typeof items) || []
                   }
@@ -3756,6 +3772,21 @@ export default function TaskDetailPage() {
                           name: pr.description, code: pr.stt, spec: pr.profile, quantity: String(pr.quantity), unit: pr.unit
                         })
                       )
+                    } catch { items = [] }
+                  } else if (section.key === 'bomWeldPaint' && (data?.weldPrItems || data?.paintPrItems)) {
+                    // P2.2 new format: separate weld + paint PR data
+                    try {
+                      const parse = (raw: unknown) => {
+                        const arr = typeof raw === 'string' ? JSON.parse(raw) : raw
+                        return (arr as { description: string; spec: string; quantity: number; unit: string }[]).map(
+                          (pr: { description: string; spec: string; quantity: number; unit: string }) => ({
+                            name: pr.description, code: '', spec: pr.spec, quantity: String(pr.quantity), unit: pr.unit
+                          })
+                        )
+                      }
+                      const weld = data?.weldPrItems ? parse(data.weldPrItems) : []
+                      const paint = data?.paintPrItems ? parse(data.paintPrItems) : []
+                      items = [...weld, ...paint]
                     } catch { items = [] }
                   } else {
                     items = (data?.bomItems as typeof items) || []
@@ -5394,12 +5425,24 @@ export default function TaskDetailPage() {
               />
             )}
 
-            {/* BOM Table — Editable for P2.2 (VT hàn & sơn), P2.3 (VT phụ) */}
-            {(task.stepCode === 'P2.2' || task.stepCode === 'P2.3') && (
+            {/* P2.2: Welding & Paint PR Upload */}
+            {task.stepCode === 'P2.2' && (
+              <WeldPaintUploadUI
+                isEditable={isActive}
+                weldData={formData['weldPrItems'] as string | undefined}
+                paintData={formData['paintPrItems'] as string | undefined}
+                onChangeWeld={(val) => handleFieldChange('weldPrItems', val)}
+                onChangePaint={(val) => handleFieldChange('paintPrItems', val)}
+                projectCode={task.project?.projectCode}
+              />
+            )}
+
+            {/* P2.3: BOM Table (VT phụ) — kept as manual entry */}
+            {task.stepCode === 'P2.3' && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, flex: 1 }}>
-                    {task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : '📦 Danh sách vật tư (Hàn & Sơn)'} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>
+                    📦 Đề xuất vật tư <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>
                   </h3>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" onClick={exportBomExcel}
@@ -5424,7 +5467,6 @@ export default function TaskDetailPage() {
                     )}
                   </div>
                 </div>
-                {/* Table Header */}
                 <div style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 0.7fr 0.7fr 40px', gap: 8, marginBottom: 6, padding: '0 4px' }}>
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>#</span>
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tên VT *</span>
@@ -5434,7 +5476,6 @@ export default function TaskDetailPage() {
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>ĐVT</span>
                   <span></span>
                 </div>
-                {/* Table Rows */}
                 {bomItems.map((item, idx) => (
                   <div key={idx} style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 0.7fr 0.7fr 40px', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                     <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{idx + 1}</span>
@@ -5449,16 +5490,9 @@ export default function TaskDetailPage() {
                     <select className="input" value={item.unit} disabled={!isActive}
                       onChange={e => updateBomItem(idx, 'unit', e.target.value)} style={{ fontSize: '0.85rem', padding: '3px 2px' }}>
                       <option value="">-ĐVT-</option>
-                      <option value="kg">kg</option>
-                      <option value="tấn">tấn</option>
-                      <option value="m">m</option>
-                      <option value="m2">m2</option>
-                      <option value="m3">m3</option>
-                      <option value="cái">cái</option>
-                      <option value="bộ">bộ</option>
-                      <option value="lít">lít</option>
-                      <option value="tháng">tháng</option>
-                      <option value="giờ">giờ</option>
+                      <option value="kg">kg</option><option value="tấn">tấn</option><option value="m">m</option>
+                      <option value="m2">m2</option><option value="m3">m3</option><option value="cái">cái</option>
+                      <option value="bộ">bộ</option><option value="lít">lít</option>
                     </select>
                     {isActive && (
                       <button type="button" onClick={() => removeBomItem(idx)}
