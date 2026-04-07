@@ -204,7 +204,8 @@ export async function GET(req: NextRequest) {
         const stgNode = hmNode.stages.get(stageName)
         stgNode.total += vol
         stgNode.weeks[weekKey] = (stgNode.weeks[weekKey] || 0) + vol
-        stgNode.totalRemaining = Math.max(0, stgNode.totalAssigned - stgNode.total)
+        // Còn lại cần TH = SL phân giao (WBS) - KL xác nhận (P5.4)
+        stgNode.totalRemaining = stgNode.totalAssigned - stgNode.total
       }
 
       // Convert Maps to Arrays for JSON response structure
