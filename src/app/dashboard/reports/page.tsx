@@ -211,38 +211,15 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
 
                 {proj.hangMucs.map((hm: HangMucData, j: number) => (
                   <React.Fragment key={`${proj.projectCode}-${hm.name}`}>
-                    {/* DÒNG HẠNG MỤC */}
+                    {/* DÒNG HẠNG MỤC - chỉ hiển thị tên tham chiếu */}
                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <td colSpan={1} style={{ padding: '8px 16px 8px 36px' }}>
+                      <td colSpan={weekKeys.length + 5} style={{ padding: '8px 16px 8px 36px' }}>
                         <div className="font-semibold text-xs text-slate-700 flex items-center">
                           <span className="mr-2 text-slate-400">↳</span>
                           <span className="px-2 py-0.5 rounded bg-slate-200 mr-2 text-[10px]">HẠNG MỤC</span>
                           {hm.name}
                         </div>
                       </td>
-                      {weekKeys.map(w => {
-                        const hmSum = hm.stages.reduce((s: number, stg: StageData) => s + (stg.weeks[w] || 0), 0)
-                        return (
-                          <td key={w} className="text-right font-semibold text-xs" style={{ color: hmSum > 0 ? '#16a34a' : 'var(--text-muted)' }}>
-                            {hmSum > 0 ? hmSum.toLocaleString() : '-'}
-                          </td>
-                        )
-                      })}
-                      <td className="text-right font-bold text-xs" style={{ color: 'var(--text-primary)', borderLeft: '1px solid #f1f5f9' }}>
-                        {hm.totalHm.toLocaleString()}
-                      </td>
-                      {(() => {
-                        const hAssigned = hm.stages.reduce((s, stg) => s + (stg.totalAssigned || 0), 0)
-                        const hProduced = hm.stages.reduce((s, stg) => s + (stg.totalProduced || 0), 0)
-                        const hRemaining = hm.stages.reduce((s, stg) => s + (stg.totalRemaining || 0), 0)
-                        return (
-                          <>
-                            <td className="text-right font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>{hAssigned.toLocaleString()}</td>
-                            <td className="text-right font-semibold text-xs" style={{ color: '#16a34a' }}>{hProduced.toLocaleString()}</td>
-                            <td className="text-right font-semibold text-xs" style={{ color: hRemaining > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{hRemaining.toLocaleString()}</td>
-                          </>
-                        )
-                      })()}
                     </tr>
 
                     {/* CÁC CÔNG ĐOẠN */}
