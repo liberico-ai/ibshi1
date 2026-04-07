@@ -29,23 +29,91 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // ──── P-02: Project Progress ────
+    // ──── P-02: Project Progress (Weekly Volume from P5.4) ────
     if (type === 'project-progress') {
-      const projects = await prisma.project.findMany({
-        where: { status: { not: 'CLOSED' } },
-        select: { id: true, projectCode: true, projectName: true, clientName: true, status: true },
+      const p54Tasks = await prisma.workflowTask.findMany({
+        where: { stepCode: 'P5.4', status: 'DONE' },
+        include: { project: { select: { projectCode: true, projectName: true } } },
+        orderBy: { completedAt: 'asc' },
       })
-      const projectProgress = await Promise.all(
-        projects.map(async (p) => {
-          const [total, done, overdue] = await Promise.all([
-            prisma.workflowTask.count({ where: { projectId: p.id } }),
-            prisma.workflowTask.count({ where: { projectId: p.id, status: 'DONE' } }),
-            prisma.workflowTask.count({ where: { projectId: p.id, status: { not: 'DONE' }, deadline: { lt: new Date() } } }),
-          ])
-          return { ...p, totalTasks: total, completedTasks: done, overdueTasks: overdue, percentage: total > 0 ? Math.round((done / total) * 100) : 0 }
-        })
-      )
-      return successResponse({ projects: projectProgress.sort((a, b) => b.percentage - a.percentage) })
+
+      // Extract P5.1 IDs to get lsxData (hangMuc, stageLabel)
+      const p51Ids = [...new Set(p54Tasks.map(t => ((t.resultData as any)?.sourceP51TaskId as string)).filter(Boolean))]
+      const p51Tasks = await prisma.workflowTask.findMany({
+        where: { id: { in: p51Ids } },
+        select: { id: true, resultData: true },
+      })
+      const p51Map = new Map(p51Tasks.map(t => [t.id, t.resultData as any]))
+
+      const weeklyDataMap = new Map<string, any>()
+
+      const getWeek = (d: Date) => {
+        const date = new Date(d.getTime())
+        date.setHours(0, 0, 0, 0)
+        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7)
+        const week1 = new Date(date.getFullYear(), 0, 4)
+        return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
+      }
+
+      for (const t of p54Tasks) {
+        if (!t.completedAt) continue
+        const rd = (t.resultData as any) || {}
+        const vol = Number(rd.completedQuantity) || 0
+        if (vol <= 0) continue
+
+        const p51Data = rd.sourceP51TaskId ? p51Map.get(rd.sourceP51TaskId) : null
+        const lsxData = p51Data?.lsxData || {}
+        
+        const pCode = t.project.projectCode
+        const pName = t.project.projectName
+        const hangMuc = lsxData.items?.[0]?.hangMuc || 'Hạng mục chung'
+        const stageName = lsxData.stageLabel || rd.stageKey || 'Công đoạn chung'
+        const weekKey = `Tuần ${getWeek(new Date(t.completedAt))}`
+
+        if (!weeklyDataMap.has(pCode)) {
+          weeklyDataMap.set(pCode, { projectCode: pCode, projectName: pName, hangMucs: new Map(), totalProj: 0 })
+        }
+        const projNode = weeklyDataMap.get(pCode)
+        projNode.totalProj += vol
+
+        if (!projNode.hangMucs.has(hangMuc)) {
+          projNode.hangMucs.set(hangMuc, { name: hangMuc, stages: new Map(), totalHm: 0 })
+        }
+        const hmNode = projNode.hangMucs.get(hangMuc)
+        hmNode.totalHm += vol
+
+        if (!hmNode.stages.has(stageName)) {
+          hmNode.stages.set(stageName, { name: stageName, weeks: {}, total: 0 })
+        }
+        const stgNode = hmNode.stages.get(stageName)
+        stgNode.total += vol
+        stgNode.weeks[weekKey] = (stgNode.weeks[weekKey] || 0) + vol
+      }
+
+      // Convert Maps to Arrays for JSON response structure
+      const weeklyData = Array.from(weeklyDataMap.values()).map(proj => ({
+        ...proj,
+        hangMucs: Array.from(proj.hangMucs.values()).map((hm: any) => ({
+          ...hm,
+          stages: Array.from(hm.stages.values())
+        }))
+      }))
+
+      // Find all unique weeks that have data across entire dataset
+      const weekKeysSet = new Set<string>()
+      weeklyData.forEach(p => p.hangMucs.forEach((h: any) => h.stages.forEach((s: any) => Object.keys(s.weeks).forEach(w => weekKeysSet.add(w)))))
+      // Just take them as sorted array (Tuần 1, Tuần 2...)
+      const weekKeys = Array.from(weekKeysSet).sort((a, b) => {
+        const numA = parseInt(a.replace('Tuần ', '')) || 0
+        const numB = parseInt(b.replace('Tuần ', '')) || 0
+        return numA - numB
+      })
+      // Ensure at least Tuần 1-4 exists for aesthetic reasons, if empty
+      if (weekKeys.length === 0) {
+        weekKeys.push('Tuần 1', 'Tuần 2', 'Tuần 3', 'Tuần 4')
+      }
+
+      return successResponse({ weeklyData, weekKeys })
     }
 
     // ──── P-05 / TC-01: Financial — Budget vs Actual ────

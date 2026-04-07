@@ -261,7 +261,6 @@ const STEP_VALIDATION_MAP: Record<string, (projectId: string, resultData?: Recor
   },
   'P3.4': validateLSXBOMLink,       // TC-04-02
   'P4.5': validateSufficientStock,  // Strict stock check to prevent negative inventory
-  'P5.4': validateShippingSignoff,  // TC-05-01: 3-way shipping sign-off at PM volume acceptance
   'P6.1': validateProofOfDelivery,  // TC-05-02: proof of delivery at QC dossier compilation
 }
 

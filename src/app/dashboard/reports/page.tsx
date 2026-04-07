@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 
 type Tab = 'overview' | 'projects' | 'financial' | 'production' | 'qc' | 'warehouse' | 'hr' | 'safety' | 'procurement'
@@ -115,28 +115,158 @@ function OverviewReport({ data }: { data: Record<string, unknown> }) {
   )
 }
 
-// ─── Projects ───
+// ─── Projects (P5.4 Weekly Volume Report) ───
+interface StageData {
+  name: string;
+  weeks: Record<string, number>;
+  total: number;
+}
+interface HangMucData {
+  name: string;
+  totalHm: number;
+  stages: StageData[];
+}
+interface ProjectData {
+  projectCode: string;
+  projectName: string;
+  totalProj: number;
+  hangMucs: HangMucData[];
+}
+
 function ProjectsReport({ data }: { data: Record<string, unknown> }) {
-  const projects = (data.projects || []) as { projectCode: string; projectName: string; clientName: string; totalTasks: number; completedTasks: number; overdueTasks: number; percentage: number }[]
+  const customData = data.weeklyData as ProjectData[] | undefined
+  const customWeekKeys = data.weekKeys as string[] | undefined
+
+  const weeklyData: ProjectData[] = customData || []
+  const weekKeys = customWeekKeys || ['Tuần 1', 'Tuần 2', 'Tuần 3', 'Tuần 4']
+
   return (
-    <div className="space-y-3">
-      {projects.length === 0 ? <p className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Không có dự án</p>
-      : projects.map(p => (
-        <div key={p.projectCode} className="card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <span className="text-xs font-mono font-bold" style={{ color: 'var(--accent)' }}>{p.projectCode}</span>
-              <span className="text-sm font-medium ml-2" style={{ color: 'var(--text-primary)' }}>{p.projectName}</span>
-              {p.overdueTasks > 0 && <span className="text-xs ml-2 px-1.5 py-0.5 rounded-full font-bold" style={{ background: '#dc262620', color: '#dc2626' }}>⚠ {p.overdueTasks} quá hạn</span>}
-            </div>
-            <span className="text-lg font-bold" style={{ color: p.percentage >= 80 ? '#16a34a' : p.percentage >= 50 ? '#f59e0b' : 'var(--text-muted)' }}>{p.percentage}%</span>
-          </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
-            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${p.percentage}%`, background: p.percentage >= 80 ? '#16a34a' : p.percentage >= 50 ? '#f59e0b' : 'var(--primary)' }} />
-          </div>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{p.completedTasks}/{p.totalTasks} tasks</p>
+    <div className="card overflow-hidden animate-fade-in shadow-sm border border-slate-200">
+      <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)', background: '#f8fafc' }}>
+        <div>
+          <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <span style={{ color: '#f59e0b', fontSize: '1.2rem' }}>📊</span>
+            Báo cáo Sản lượng Nghiệm thu (P5.4)
+          </h3>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Chi tiết theo Dự án {'>'} Hạng mục {'>'} Công đoạn. Dữ liệu từ khối lượng PM xác nhận.</p>
         </div>
-      ))}
+        <button className="text-xs font-bold px-3 py-1.5 rounded-lg transition-transform hover:scale-105" style={{ background: '#0ea5e9', color: 'white' }}>
+          Tải xuống Excel
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="data-table" style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#1e293b', color: 'white' }}>
+              <th style={{ width: '30%', padding: '12px 16px', fontWeight: 600 }}>Cấu trúc Hình cây (WBS)</th>
+              {weekKeys.map(w => <th key={w} className="text-right" style={{ width: '12%', padding: '12px 16px', fontWeight: 600 }}>{w}</th>)}
+              <th className="text-right" style={{ width: '15%', padding: '12px 16px', fontWeight: 800, color: '#38bdf8' }}>Tổng Luỹ kế</th>
+            </tr>
+          </thead>
+          <tbody>
+            {weeklyData.map((proj, i) => (
+              <React.Fragment key={proj.projectCode}>
+                {/* DÒNG DỰ ÁN */}
+                <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', borderTop: i > 0 ? '4px solid white' : 'none' }}>
+                  <td colSpan={1} style={{ padding: '10px 16px' }}>
+                    <div className="font-bold text-sm" style={{ color: 'var(--primary)' }}>
+                      <span className="mr-2">📁</span>
+                      {proj.projectCode} — <span style={{ color: 'var(--text-primary)' }}>{proj.projectName}</span>
+                    </div>
+                  </td>
+                  {weekKeys.map(w => {
+                    const projSum = proj.hangMucs.reduce((sum: number, hm: HangMucData) => sum + hm.stages.reduce((s: number, stg: StageData) => s + (stg.weeks[w] || 0), 0), 0)
+                    return (
+                      <td key={w} className="text-right font-bold text-sm" style={{ background: projSum > 0 ? '#e0f2fe' : 'transparent', color: projSum > 0 ? '#0369a1' : 'var(--text-muted)', borderLeft: '1px solid #f1f5f9' }}>
+                        {projSum > 0 ? projSum.toLocaleString() : '-'}
+                      </td>
+                    )
+                  })}
+                  <td className="text-right font-extrabold text-sm" style={{ color: '#0ea5e9', background: '#f8fafc', borderLeft: '2px solid white' }}>
+                    {proj.totalProj.toLocaleString()} kg
+                  </td>
+                </tr>
+
+                {proj.hangMucs.map((hm: HangMucData, j: number) => (
+                  <React.Fragment key={`${proj.projectCode}-${hm.name}`}>
+                    {/* DÒNG HẠNG MỤC */}
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <td colSpan={1} style={{ padding: '8px 16px 8px 36px' }}>
+                        <div className="font-semibold text-xs text-slate-700 flex items-center">
+                          <span className="mr-2 text-slate-400">↳</span>
+                          <span className="px-2 py-0.5 rounded bg-slate-200 mr-2 text-[10px]">HẠNG MỤC</span>
+                          {hm.name}
+                        </div>
+                      </td>
+                      {weekKeys.map(w => {
+                        const hmSum = hm.stages.reduce((s: number, stg: StageData) => s + (stg.weeks[w] || 0), 0)
+                        return (
+                          <td key={w} className="text-right font-semibold text-xs" style={{ color: hmSum > 0 ? '#16a34a' : 'var(--text-muted)' }}>
+                            {hmSum > 0 ? hmSum.toLocaleString() : '-'}
+                          </td>
+                        )
+                      })}
+                      <td className="text-right font-bold text-xs" style={{ color: 'var(--text-primary)', borderLeft: '1px solid #f1f5f9' }}>
+                        {hm.totalHm.toLocaleString()}
+                      </td>
+                    </tr>
+
+                    {/* CÁC CÔNG ĐOẠN */}
+                    {hm.stages.map((stg: StageData, k: number) => (
+                      <tr key={stg.name} className="hover:bg-slate-50 transition-colors" style={{ borderBottom: k === hm.stages.length - 1 ? 'none' : '1px dotted #e2e8f0' }}>
+                        <td style={{ padding: '8px 16px 8px 64px' }}>
+                          <span className="text-xs font-medium" style={{ color: '#64748b' }}>
+                            <span className="mr-2 text-slate-300">▪</span>
+                            {stg.name}
+                          </span>
+                        </td>
+                        {weekKeys.map(w => {
+                          const val = stg.weeks[w] || 0
+                          const isHigh = val > 1000
+                          return (
+                            <td key={w} className="text-right text-xs" style={{ verticalAlign: 'middle' }}>
+                              {val > 0 ? (
+                                <span className="inline-block px-2 py-0.5 rounded-full" style={{
+                                  background: isHigh ? '#dcfce7' : '#f1f5f9',
+                                  color: isHigh ? '#166534' : '#475569',
+                                  fontWeight: isHigh ? 700 : 600
+                                }}>
+                                  {val.toLocaleString()} <span className="text-[9px] opacity-70">kg</span>
+                                </span>
+                              ) : (
+                                <span style={{ color: '#cbd5e1' }}>—</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                        <td className="text-right text-xs font-semibold" style={{ color: '#64748b', borderLeft: '1px dotted #e2e8f0' }}>
+                          {stg.total.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </React.Fragment>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: '#f8fafc', borderTop: '2px solid #94a3b8' }}>
+              <td className="text-right text-sm font-bold p-4" style={{ color: 'var(--text-primary)' }}>TỔNG SẢN LƯỢNG NGHIỆM THU:</td>
+              {weekKeys.map(w => {
+                const sum = weeklyData.reduce((acc: number, proj: ProjectData) => acc + proj.hangMucs.reduce((s: number, hm: HangMucData) => s + hm.stages.reduce((st: number, stg: StageData) => st + (stg.weeks[w] || 0), 0), 0), 0)
+                return (
+                  <td key={w} className="text-right text-sm font-black p-4" style={{ color: '#0ea5e9' }}>
+                    {sum.toLocaleString()} <span className="text-xs">kg</span>
+                  </td>
+                )
+              })}
+              <td className="text-right text-base font-black p-4" style={{ color: '#0284c7', borderLeft: '2px solid #e2e8f0' }}>
+                {weeklyData.reduce((acc: number, proj: ProjectData) => acc + proj.totalProj, 0).toLocaleString()} <span className="text-xs">kg</span>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   )
 }
