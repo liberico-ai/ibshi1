@@ -35,7 +35,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P1.2': {
     code: 'P1.2', name: 'Xây dựng dự toán thi công', nameEn: 'Prepare Construction Estimate',
-    role: 'R03', next: ['P1.3', 'P2.1', 'P2.2', 'P2.3', 'P2.1A'], deadlineDays: 5, phase: 1,
+    role: 'R03', next: ['P1.3'], deadlineDays: 5, phase: 1,
   },
   'P1.3': {
     code: 'P1.3', name: 'Phê duyệt kế hoạch và dự toán thi công', nameEn: 'Plan & Estimate Approval',
@@ -44,7 +44,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
 
   // ── Phase 2: Thiết kế & Kế hoạch SX (BRD#6-10) ──
-  // P2.1, P2.2, P2.3, P2.1A run in PARALLEL after P1.2
+  // P2.1, P2.2, P2.3, P2.1A run in PARALLEL after P1.3 approval
   'P2.1': {
     code: 'P2.1', name: 'Thiết kế xây dựng bản vẽ và đề xuất VT chính', nameEn: 'Design Drawing & Main Material BOM',
     role: 'R04', next: [], deadlineDays: 15, phase: 2,

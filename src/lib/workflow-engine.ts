@@ -3,6 +3,7 @@ import { TASK_STATUS } from './constants'
 import { WORKFLOW_RULES } from './workflow-constants'
 import { syncBOMtoBudget, syncPOtoBudget, syncGRNtoBudget, logChangeEvent, runReverseHooks } from './sync-engine'
 import { runValidationRules } from './validation-rules'
+import { notifyTaskActivated, notifyTaskRejected } from './telegram-notifications'
 
 // Re-export client-safe items for backward compatibility
 export { WORKFLOW_RULES, PHASE_LABELS, getWorkflowProgress } from './workflow-constants'
@@ -553,6 +554,13 @@ export async function rejectTask(
             linkUrl: `/dashboard/projects/${task.projectId}`,
           })),
         })
+        // Push rejection to Telegram group (fire-and-forget)
+        notifyTaskRejected({
+          stepCode: task.stepCode, stepName: rule.name,
+          projectCode: project.projectCode, projectName: project.projectName,
+          assignedRole: rule.role, deadline: null, taskId,
+          reason, returnedTo: rejectTo, returnedStepName: targetRule.name,
+        }).catch(err => console.error('Telegram rejectTask error:', err))
       }
     }
   } catch (err) {
@@ -950,7 +958,7 @@ export async function activateTask(projectId: string, stepCode: string): Promise
     })
     const users = await prisma.user.findMany({
       where: { roleCode: rule.role, isActive: true },
-      select: { id: true },
+      select: { id: true, fullName: true, telegramChatId: true },
     })
     // Find the task ID for this step+project to link notifications correctly
     const task = await prisma.workflowTask.findFirst({
@@ -958,6 +966,7 @@ export async function activateTask(projectId: string, stepCode: string): Promise
       select: { id: true },
     })
     if (users.length > 0 && project && task) {
+      const deadline = rule.deadlineDays ? new Date(Date.now() + rule.deadlineDays * 86400000) : null
       await prisma.notification.createMany({
         data: users.map((u) => ({
           userId: u.id,
@@ -967,6 +976,15 @@ export async function activateTask(projectId: string, stepCode: string): Promise
           linkUrl: `/dashboard/tasks/${task.id}`,
         })),
       })
+      // Push to Telegram group + tag users (fire-and-forget)
+      notifyTaskActivated({
+        stepCode, stepName: rule.name,
+        projectCode: project.projectCode, projectName: project.projectName,
+        assignedRole: rule.role,
+        deadline,
+        taskId: task.id,
+        mentionUsers: users.map(u => ({ fullName: u.fullName, telegramChatId: u.telegramChatId })),
+      }).catch(err => console.error('Telegram activateTask error:', err))
     }
   } catch (err) {
     console.error('Notification creation error:', err)

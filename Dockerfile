@@ -36,10 +36,26 @@ COPY --from=builder /app/prisma          ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
+# Copy grammy (Telegram bot) + deps — not auto-traced by Next.js standalone
+COPY --from=builder /app/node_modules/grammy          ./node_modules/grammy
+COPY --from=builder /app/node_modules/@grammyjs        ./node_modules/@grammyjs
+COPY --from=builder /app/node_modules/node-fetch        ./node_modules/node-fetch
+COPY --from=builder /app/node_modules/abort-controller  ./node_modules/abort-controller
+COPY --from=builder /app/node_modules/event-target-shim ./node_modules/event-target-shim
+COPY --from=builder /app/node_modules/debug             ./node_modules/debug
+COPY --from=builder /app/node_modules/ms                ./node_modules/ms
+COPY --from=builder /app/node_modules/whatwg-url        ./node_modules/whatwg-url
+COPY --from=builder /app/node_modules/tr46              ./node_modules/tr46
+COPY --from=builder /app/node_modules/webidl-conversions ./node_modules/webidl-conversions
+
 # Create uploads directory with correct ownership BEFORE switching to nextjs user
 # This allows the app to write uploaded files at runtime
 RUN mkdir -p /app/public/uploads && \
     chown -R nextjs:nodejs /app/public/uploads
+
+# Startup script: starts Next.js server, then triggers Telegram bot init
+RUN printf '#!/bin/sh\nnode server.js &\nSERVER_PID=$!\nsleep 5\nwget -qO- http://localhost:3000/api/telegram/init || true\nwait $SERVER_PID\n' > /app/start.sh && \
+    chmod +x /app/start.sh
 
 USER nextjs
 
@@ -50,4 +66,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["/bin/sh", "/app/start.sh"]

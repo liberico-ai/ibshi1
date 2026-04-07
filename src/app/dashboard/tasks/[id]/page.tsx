@@ -7,6 +7,8 @@ import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
+import BomPrUploadUI from './components/BomPrUploadUI'
+import WeldPaintUploadUI from './components/WeldPaintUploadUI'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
@@ -1412,18 +1414,26 @@ export default function TaskDetailPage() {
     return userBase === taskBase
   })()
 
+  const [assigning, setAssigning] = useState(false)
+
   async function handleAssignTask(userId: string) {
-    const res = await apiFetch(`/api/tasks/${taskId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ action: 'assign', assignToUserId: userId }),
-    })
-    if (res.ok || res.success) {
-      setSuccessMsg('✅ Đã phân công thành công')
-      setShowAssignModal(false)
-      loadTask()
-      setTimeout(() => setSuccessMsg(''), 3000)
-    } else {
-      setError(res.error || 'Lỗi khi phân công')
+    if (assigning) return
+    setAssigning(true)
+    try {
+      const res = await apiFetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ action: 'assign', assignToUserId: userId }),
+      })
+      if (res.ok || res.success) {
+        setSuccessMsg('✅ Đã phân công thành công')
+        setShowAssignModal(false)
+        loadTask()
+        setTimeout(() => setSuccessMsg(''), 3000)
+      } else {
+        setError(res.error || 'Lỗi khi phân công')
+      }
+    } finally {
+      setAssigning(false)
     }
   }
 
@@ -1476,7 +1486,7 @@ export default function TaskDetailPage() {
         }
       }
       // Load inventory for steps that need real-time stock
-      if (['P2.1', 'P2.2', 'P2.3', 'P4.5'].includes(res.task.stepCode)) {
+      if (['P4.5'].includes(res.task.stepCode)) {
         loadInventory()
       }
       // Auto-generate WO number for P3.4
@@ -1783,11 +1793,13 @@ export default function TaskDetailPage() {
       return
     }
 
-    // Validate BOM items for P2.1 (VT chính) — P2.2 is optional
+    // Validate PR data for P2.1 (VT chính) — must have uploaded PR
     if (task.stepCode === 'P2.1' && action === 'complete') {
-      const filledBomItems = bomItems.filter(b => b.name.trim() && b.code.trim())
-      if (filledBomItems.length < 3) {
-        setError('Danh sách vật tư phải có tối thiểu 3 mục (đã nhập tên + mã VT)')
+      const prData = formData['bomPrItems']
+      let prItems: unknown[] = []
+      try { prItems = prData ? JSON.parse(String(prData)) : [] } catch { prItems = [] }
+      if (!Array.isArray(prItems) || prItems.length < 1) {
+        setError('Vui lòng upload file PR Excel từ phòng Thiết kế trước khi hoàn thành')
         setSubmitting(false)
         return
       }
@@ -3551,7 +3563,35 @@ export default function TaskDetailPage() {
                   { key: 'bomSupply', label: '📋 VT phụ — Kho (P2.3)', color: '#10b981' },
                 ].map(section => {
                   const data = previousStepData[section.key as keyof typeof previousStepData] as Record<string, unknown> | null
-                  const items = (data?.bomItems as { name: string; code: string; spec: string; quantity: string; unit: string }[]) || []
+                  // P2.1 stores PR data as bomPrItems (new format), fallback to old bomItems
+                  let items: { name: string; code: string; spec: string; quantity: string; unit: string }[] = []
+                  if (section.key === 'bomMain' && data?.bomPrItems) {
+                    try {
+                      const prRaw = typeof data.bomPrItems === 'string' ? JSON.parse(data.bomPrItems as string) : data.bomPrItems
+                      items = (prRaw as { stt: string; description: string; profile: string; quantity: number; unit: string }[]).map(
+                        (pr: { stt: string; description: string; profile: string; quantity: number; unit: string }) => ({
+                          name: pr.description, code: pr.stt, spec: pr.profile, quantity: String(pr.quantity), unit: pr.unit
+                        })
+                      )
+                    } catch { items = [] }
+                  } else if (section.key === 'bomWeldPaint' && (data?.weldPrItems || data?.paintPrItems)) {
+                    // P2.2 new format: separate weld + paint PR data
+                    try {
+                      const parse = (raw: unknown) => {
+                        const arr = typeof raw === 'string' ? JSON.parse(raw) : raw
+                        return (arr as { description: string; spec: string; quantity: number; unit: string }[]).map(
+                          (pr: { description: string; spec: string; quantity: number; unit: string }) => ({
+                            name: pr.description, code: '', spec: pr.spec, quantity: String(pr.quantity), unit: pr.unit
+                          })
+                        )
+                      }
+                      const weld = data?.weldPrItems ? parse(data.weldPrItems) : []
+                      const paint = data?.paintPrItems ? parse(data.paintPrItems) : []
+                      items = [...weld, ...paint]
+                    } catch { items = [] }
+                  } else {
+                    items = (data?.bomItems as typeof items) || []
+                  }
                   const filledItems = items.filter(b => b.name?.trim())
                   return (
                     <div key={section.key} className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${section.color}` }}>
@@ -3705,7 +3745,35 @@ export default function TaskDetailPage() {
                   { key: 'bomSupply', label: '📋 VT phụ — Kho (P2.3)', color: '#10b981' },
                 ].map(section => {
                   const data = previousStepData[section.key as keyof typeof previousStepData] as Record<string, unknown> | null
-                  const items = (data?.bomItems as { name: string; code: string; spec: string; quantity: string; unit: string }[]) || []
+                  // P2.1 stores PR data as bomPrItems (new format), fallback to old bomItems
+                  let items: { name: string; code: string; spec: string; quantity: string; unit: string }[] = []
+                  if (section.key === 'bomMain' && data?.bomPrItems) {
+                    try {
+                      const prRaw = typeof data.bomPrItems === 'string' ? JSON.parse(data.bomPrItems as string) : data.bomPrItems
+                      items = (prRaw as { stt: string; description: string; profile: string; quantity: number; unit: string }[]).map(
+                        (pr: { stt: string; description: string; profile: string; quantity: number; unit: string }) => ({
+                          name: pr.description, code: pr.stt, spec: pr.profile, quantity: String(pr.quantity), unit: pr.unit
+                        })
+                      )
+                    } catch { items = [] }
+                  } else if (section.key === 'bomWeldPaint' && (data?.weldPrItems || data?.paintPrItems)) {
+                    // P2.2 new format: separate weld + paint PR data
+                    try {
+                      const parse = (raw: unknown) => {
+                        const arr = typeof raw === 'string' ? JSON.parse(raw) : raw
+                        return (arr as { description: string; spec: string; quantity: number; unit: string }[]).map(
+                          (pr: { description: string; spec: string; quantity: number; unit: string }) => ({
+                            name: pr.description, code: '', spec: pr.spec, quantity: String(pr.quantity), unit: pr.unit
+                          })
+                        )
+                      }
+                      const weld = data?.weldPrItems ? parse(data.weldPrItems) : []
+                      const paint = data?.paintPrItems ? parse(data.paintPrItems) : []
+                      items = [...weld, ...paint]
+                    } catch { items = [] }
+                  } else {
+                    items = (data?.bomItems as typeof items) || []
+                  }
                   const filledItems = items.filter(b => b.name?.trim())
                   if (filledItems.length === 0) return null
                   return (
@@ -5231,87 +5299,6 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {['P2.1', 'P2.2', 'P2.3'].includes(task.stepCode) && (
-              <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0ea5e9' }}>
-                    📋 Vật tư tồn kho hiện trường (Tất cả)
-                  </h3>
-                  <div style={{ position: 'relative', width: 280 }}>
-                    <input type="text" className="input" placeholder="🔍 Tìm kiếm mã/tên VT..." 
-                      value={inventorySearch} onChange={e => setInventorySearch(e.target.value)}
-                      style={{ width: '100%', fontSize: '0.85rem', padding: '6px 12px 6px 30px', borderRadius: 20, border: '1px solid var(--border)' }} />
-                    <span style={{ position: 'absolute', left: 10, top: 7, fontSize: '0.8rem' }}>🔍</span>
-                  </div>
-                </div>
-                {inventoryLoading ? (
-                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>⏳ Đang tải dữ liệu tồn kho...</div>
-                ) : (() => {
-                  const searchLower = inventorySearch.toLowerCase().trim()
-                  const filtered = inventoryMaterials.filter(m => {
-                    if (!searchLower) return true
-                    return m.name.toLowerCase().includes(searchLower) ||
-                      m.materialCode.toLowerCase().includes(searchLower) ||
-                      (m.specification || '').toLowerCase().includes(searchLower) ||
-                      m.category.toLowerCase().includes(searchLower) ||
-                      m.unit.toLowerCase().includes(searchLower)
-                  })
-
-                  if (filtered.length === 0) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border)', borderRadius: 10 }}>Chưa có vật tư nào phù hợp trong kho.</div>
-
-                  return (
-                    <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '40px 100px 1.5fr 1.2fr 80px 60px 50px', gap: 6, padding: '8px 4px', borderBottom: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>#</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Mã VT</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tên vật tư</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Quy chuẩn</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'right' }}>Tồn kho</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>ĐVT</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>Thêm</span>
-                      </div>
-                      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                        {filtered.map((m, idx) => (
-                          <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '40px 100px 1.5fr 1.2fr 80px 60px 50px', gap: 6, padding: '5px 4px', background: idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', alignItems: 'center' }}>
-                            <span style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75rem' }}>{idx + 1}</span>
-                            <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.75rem' }}>{m.materialCode}</span>
-                            <span style={{ fontWeight: 600 }}>{m.name}</span>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>{m.specification || '—'}</span>
-                            <span style={{ fontWeight: 700, color: m.currentStock > 100 ? '#16a34a' : '#dc2626', textAlign: 'right' }}>{m.currentStock.toLocaleString()}</span>
-                            <span style={{ color: 'var(--text-secondary)', textAlign: 'center', fontSize: '0.75rem' }}>{m.unit}</span>
-                            <button type="button" onClick={() => {
-                              if (task.stepCode === 'P2.1' || task.stepCode === 'P2.2' || task.stepCode === 'P2.3') {
-                                setBomItems(prev => {
-                                  // Find first empty row to replace, or append if none
-                                  const idx = prev.findIndex(r => !r.name.trim() && !r.code.trim())
-                                  if (idx >= 0) {
-                                    const next = [...prev]
-                                    next[idx] = { ...next[idx], name: m.name, code: m.materialCode, spec: m.specification || '', unit: m.unit }
-                                    return next
-                                  }
-                                  return [...prev, { name: m.name, code: m.materialCode, spec: m.specification || '', quantity: '', unit: m.unit }]
-                                })
-                                setSuccessMsg('Đã thêm ' + m.materialCode + ' vào danh sách dưới.')
-                                setTimeout(() => setSuccessMsg(''), 2000)
-                              }
-                            }}
-                              disabled={!isActive}
-                              title="Thêm vào BOM bên dưới"
-                              style={{ background: '#0ea5e9', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 0', width: '100%', cursor: isActive ? 'pointer' : 'not-allowed', fontSize: '0.85rem', fontWeight: 700, opacity: isActive ? 1 : 0.5 }}>
-                              +
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: 8 }}>
-                        Hiển thị <strong>{filtered.length}</strong> / {inventoryMaterials.length} vật tư tham khảo.
-                      </div>
-                    </>
-                  )
-                })()}
-              </div>
-            )}
-
             {/* P3.3 & P3.4: WBS with LSX action buttons */}
             {(task.stepCode === 'P3.3' || task.stepCode === 'P3.4') && previousStepData?.plan?.wbsItems && (
               <div style={{ width: '100%', marginTop: '1rem' }}>
@@ -5513,12 +5500,34 @@ export default function TaskDetailPage() {
               </div>
             )}
 
-            {/* BOM Table — Editable for P2.1 (VT chính), P2.2 (VT hàn & sơn), P2.3 (VT phụ) */}
-            {(task.stepCode === 'P2.1' || task.stepCode === 'P2.2' || task.stepCode === 'P2.3') && (
+            {/* P2.1: PR Upload — parse Engineering's PR Excel, auto-match inventory */}
+            {task.stepCode === 'P2.1' && (
+              <BomPrUploadUI
+                isEditable={isActive}
+                bomPrData={formData['bomPrItems'] as string | undefined}
+                onChange={(val) => handleFieldChange('bomPrItems', val)}
+                projectCode={task.project?.projectCode}
+              />
+            )}
+
+            {/* P2.2: Welding & Paint PR Upload */}
+            {task.stepCode === 'P2.2' && (
+              <WeldPaintUploadUI
+                isEditable={isActive}
+                weldData={formData['weldPrItems'] as string | undefined}
+                paintData={formData['paintPrItems'] as string | undefined}
+                onChangeWeld={(val) => handleFieldChange('weldPrItems', val)}
+                onChangePaint={(val) => handleFieldChange('paintPrItems', val)}
+                projectCode={task.project?.projectCode}
+              />
+            )}
+
+            {/* P2.3: BOM Table (VT phụ) — kept as manual entry */}
+            {task.stepCode === 'P2.3' && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: `2px solid ${(task.stepCode as string) === 'P3.3' ? '#f59e0b' : 'var(--accent)'}`, paddingBottom: 8, flex: 1 }}>
-                    {(task.stepCode as string) === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, flex: 1 }}>
+                    📦 Đề xuất vật tư <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>
                   </h3>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" onClick={exportBomExcel}
@@ -5543,7 +5552,6 @@ export default function TaskDetailPage() {
                     )}
                   </div>
                 </div>
-                {/* Table Header */}
                 <div style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 0.7fr 0.7fr 40px', gap: 8, marginBottom: 6, padding: '0 4px' }}>
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>#</span>
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tên VT *</span>
@@ -5553,7 +5561,6 @@ export default function TaskDetailPage() {
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>ĐVT</span>
                   <span></span>
                 </div>
-                {/* Table Rows */}
                 {bomItems.map((item, idx) => (
                   <div key={idx} style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 0.7fr 0.7fr 40px', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                     <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{idx + 1}</span>
@@ -5568,16 +5575,9 @@ export default function TaskDetailPage() {
                     <select className="input" value={item.unit} disabled={!isActive}
                       onChange={e => updateBomItem(idx, 'unit', e.target.value)} style={{ fontSize: '0.85rem', padding: '3px 2px' }}>
                       <option value="">-ĐVT-</option>
-                      <option value="kg">kg</option>
-                      <option value="tấn">tấn</option>
-                      <option value="m">m</option>
-                      <option value="m2">m2</option>
-                      <option value="m3">m3</option>
-                      <option value="cái">cái</option>
-                      <option value="bộ">bộ</option>
-                      <option value="lít">lít</option>
-                      <option value="tháng">tháng</option>
-                      <option value="giờ">giờ</option>
+                      <option value="kg">kg</option><option value="tấn">tấn</option><option value="m">m</option>
+                      <option value="m2">m2</option><option value="m3">m3</option><option value="cái">cái</option>
+                      <option value="bộ">bộ</option><option value="lít">lít</option>
                     </select>
                     {isActive && (
                       <button type="button" onClick={() => removeBomItem(idx)}
@@ -5588,55 +5588,11 @@ export default function TaskDetailPage() {
                 ))}
                 <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
                   Đã nhập: <strong>{bomItems.filter(b => b.name.trim()).length}</strong> / {bomItems.length} mục
-                  {task.stepCode === 'P2.1' && bomItems.filter(b => b.name.trim() && b.code.trim()).length < 3 && (
-                    <span style={{ color: '#dc2626', marginLeft: 10 }}>⚠️ Cần ít nhất 3 mục có tên + mã VT</span>
-                  )}
                 </div>
               </div>
             )}
 
-            {/* P2.4: Show read-only BOM data from P2.1 */}
-            {task.stepCode === 'P2.4' && previousStepData?.bom && (
-              <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
-                  📦 Danh sách vật tư BOM <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>(từ P2.1 - Thiết kế)</span>
-                </h3>
-                {previousStepData.bom.bomNotes && (
-                  <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 8, fontSize: '0.85rem' }}>
-                    <strong>Ghi chú BOM:</strong> {String(previousStepData.bom.bomNotes)}
-                  </div>
-                )}
-                {previousStepData.bom.bomItems && (previousStepData.bom.bomItems as Array<{name: string; code: string; spec: string; quantity: string; unit: string}>).length > 0 ? (
-                  <>
-                    {/* Table Header */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 0.7fr 0.7fr', gap: 8, marginBottom: 6, padding: '0 4px' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>#</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tên VT</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Mã VT</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Quy chuẩn</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Số lượng</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>ĐVT</span>
-                    </div>
-                    {/* Table Rows */}
-                    {(previousStepData.bom.bomItems as Array<{name: string; code: string; spec: string; quantity: string; unit: string}>).map((item: {name: string; code: string; spec: string; quantity: string; unit: string}, idx: number) => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 0.7fr 0.7fr', gap: 8, padding: '8px 4px', background: idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent', borderRadius: 6, fontSize: '0.85rem' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{idx + 1}</span>
-                        <span>{item.name}</span>
-                        <span style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>{item.code}</span>
-                        <span>{item.spec || '—'}</span>
-                        <span style={{ fontWeight: 600 }}>{item.quantity || '—'}</span>
-                        <span>{item.unit || '—'}</span>
-                      </div>
-                    ))}
-                    <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-                      Tổng: <strong>{(previousStepData.bom.bomItems as Array<{name: string}>).length}</strong> mục vật tư
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu BOM</div>
-                )}
-              </div>
-            )}
+            {/* P2.4 BOM data is now rendered above via bomMain/bomWeldPaint/bomSupply sections */}
 
             {/* P3.4: Production Order - now handled via WBS LSX workflow */}
 
@@ -5820,8 +5776,8 @@ export default function TaskDetailPage() {
                   <div key={att.key} style={{ paddingBottom: '10px', borderBottom: '1px solid var(--border)', marginBottom: '10px' }}>
                     <MultiFileUpload
                       label={att.label + (att.required ? ' *' : '')}
-                      entityType={task.stepCode === 'P1.1' ? 'Project' : 'Task'}
-                      entityId={task.stepCode === 'P1.1' ? `${task.projectId}_${att.key}` : `${task.id}_${att.key}`}
+                      entityType={['P1.1', 'P1.1B'].includes(task.stepCode) ? 'Project' : 'Task'}
+                      entityId={['P1.1', 'P1.1B'].includes(task.stepCode) ? `${task.projectId}_${att.key}` : `${task.id}_${att.key}`}
                       accept={att.accept || undefined}
                       disabled={!isActive}
                       compact
@@ -6055,9 +6011,10 @@ function TaskAssignModal({ task, userList, onClose, onSubmit }: {
   task: TaskData
   userList: { id: string; fullName: string; roleCode: string }[]
   onClose: () => void
-  onSubmit: (userId: string) => void
+  onSubmit: (userId: string) => Promise<void> | void
 }) {
   const [selectedUser, setSelectedUser] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const baseRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
   const relevantUsers = userList.filter(u => u.roleCode.startsWith(baseRole))
 
@@ -6093,14 +6050,19 @@ function TaskAssignModal({ task, userList, onClose, onSubmit }: {
         )}
 
         <div className="flex justify-end gap-3 mt-4">
-          <button onClick={onClose} className="px-4 py-2 font-semibold rounded-lg hover:opacity-80 transition" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>Hủy</button>
+          <button onClick={onClose} disabled={submitting} className="px-4 py-2 font-semibold rounded-lg hover:opacity-80 transition" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>Hủy</button>
           <button
-            onClick={() => { if (selectedUser) onSubmit(selectedUser) }}
+            onClick={async () => {
+              if (selectedUser && !submitting) {
+                setSubmitting(true)
+                try { await onSubmit(selectedUser) } finally { setSubmitting(false) }
+              }
+            }}
             className="px-5 py-2 font-bold rounded-lg transition hover:opacity-90 disabled:opacity-50"
             style={{ background: '#3b82f6', color: 'white' }}
-            disabled={relevantUsers.length === 0 || !selectedUser}
+            disabled={relevantUsers.length === 0 || !selectedUser || submitting}
           >
-            Lưu / Giao việc
+            {submitting ? 'Đang giao...' : 'Lưu / Giao việc'}
           </button>
         </div>
       </div>

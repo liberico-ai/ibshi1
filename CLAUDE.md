@@ -22,6 +22,9 @@ Before modifying any file, check what depends on it:
 | `src/lib/types/cross-step-data.ts` | ~280 | HIGH | Single source of truth for ALL cross-step types |
 | `src/lib/data-fetchers.ts` | ~230 | HIGH | Shared data fetch helpers (BOM, estimate, supplier) |
 | `src/lib/schemas/cross-step.schema.ts` | ~120 | MEDIUM | Zod runtime validation for cross-step data |
+| `src/lib/telegram.ts` | ~80 | MEDIUM | Telegram bot singleton, sendGroupMessage |
+| `src/lib/telegram-notifications.ts` | ~110 | LOW | Notification formatters (activated, rejected, overdue) |
+| `src/lib/telegram-commands.ts` | ~340 | LOW | 12 bot commands (/mytasks, /status, etc.) |
 
 ### 3. Post-change Verification
 After every change, run in order:
@@ -78,6 +81,14 @@ errorResponse('message', 400) // { ok: false, error: 'message' }
 2. Add entry to `PreviousStepDataMap`
 3. Use data fetcher helpers from `src/lib/data-fetchers.ts` (never duplicate fetch logic)
 4. Add integration test in `src/lib/__tests__/cross-step-flow.test.ts`
+
+### Telegram Bot Setup
+1. Create bot via @BotFather → get `TELEGRAM_BOT_TOKEN`
+2. Generate random `TELEGRAM_WEBHOOK_SECRET`
+3. Add bot to company group → get chat ID → set `TELEGRAM_GROUP_CHAT_ID`
+4. Set `NEXT_PUBLIC_APP_URL` (e.g., `https://erp.ibs.vn`)
+5. Call `POST /api/telegram/setup` with R01/R10 admin token to register webhook
+6. Bot is live — tasks auto-notify to group, commands respond to users
 
 ### Modifying workflow transitions
 1. Edit `workflow-constants.ts` — update `next`, `gate`, `rejectTo`

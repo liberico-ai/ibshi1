@@ -610,6 +610,11 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
     const task = await prisma.workflowTask.findUnique({ where: { id } })
     if (!task) return errorResponse('Task không tồn tại', 404)
 
+    // Skip if already assigned to this user (prevent double notification)
+    if (task.assignedTo === body.assignToUserId) {
+      return successResponse({ task }, 'Task đã được phân công cho người này')
+    }
+
     // Strict role check: PM (R02, R02a) and Admin (R00, R01) can bypass, otherwise assigner must match task role
     const userBaseRole = payload.roleCode.replace(/[a-z]$/i, '')
     const taskBaseRole = task.assignedRole.replace(/[a-z]$/i, '')
@@ -620,6 +625,41 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
     }
 
     const updated = await assignTask(id, body.assignToUserId)
+
+    // Send Telegram group notification + tag assigned user
+    try {
+      const { notifyTaskAssigned } = await import('@/lib/telegram-notifications')
+      const [fullTask, assigner, assignee] = await Promise.all([
+        prisma.workflowTask.findUnique({
+          where: { id },
+          select: {
+            id: true, stepCode: true, stepName: true, deadline: true,
+            project: { select: { projectCode: true, projectName: true } },
+          },
+        }),
+        prisma.user.findUnique({ where: { id: payload.userId }, select: { fullName: true } }),
+        prisma.user.findUnique({ where: { id: body.assignToUserId }, select: { fullName: true, telegramChatId: true } }),
+      ])
+      if (fullTask?.project && assigner && assignee) {
+        console.log(`📌 Telegram assign: ${assigner.fullName} → ${assignee.fullName} [${fullTask.stepCode}] ${fullTask.project.projectCode}`)
+        await notifyTaskAssigned({
+          assignedUser: { fullName: assignee.fullName, telegramChatId: assignee.telegramChatId },
+          assignedByName: assigner.fullName,
+          stepCode: fullTask.stepCode,
+          stepName: fullTask.stepName,
+          projectCode: fullTask.project.projectCode,
+          projectName: fullTask.project.projectName,
+          deadline: fullTask.deadline,
+          taskId: fullTask.id,
+        })
+        console.log('📌 Telegram assign: sent OK')
+      } else {
+        console.warn('📌 Telegram assign SKIPPED:', { task: !!fullTask, project: !!fullTask?.project, assigner: !!assigner, assignee: !!assignee })
+      }
+    } catch (err) {
+      console.error('📌 Telegram assign ERROR:', err)
+    }
+
     return successResponse({ task: updated }, 'Đã phân công task')
   }
 

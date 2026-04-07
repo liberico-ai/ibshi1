@@ -14,6 +14,16 @@ interface SystemConfig {
   email_notifications_enabled: string; system_maintenance_mode: string
 }
 
+interface TelegramConfigItem {
+  value: string; masked: string; configured: boolean
+}
+
+interface TelegramConfig {
+  telegram_bot_token: TelegramConfigItem
+  telegram_webhook_secret: TelegramConfigItem
+  telegram_group_chat_id: TelegramConfigItem
+}
+
 const DEFAULT_CONFIG: SystemConfig = {
   company_name: 'IBS - Công ty CP Đóng tàu và Công nghiệp Hàng hải Sài Gòn',
   company_address: '', company_phone: '', company_email: '',
@@ -32,7 +42,15 @@ export default function SettingsPage() {
   const [configSaving, setConfigSaving] = useState(false)
   const [toast, setToast] = useState('')
 
+  // Telegram config state
+  const [tgConfig, setTgConfig] = useState<TelegramConfig | null>(null)
+  const [tgLoading, setTgLoading] = useState(false)
+  const [tgSaving, setTgSaving] = useState(false)
+  const [tgRestarting, setTgRestarting] = useState(false)
+  const [tgForm, setTgForm] = useState({ telegram_bot_token: '', telegram_webhook_secret: '', telegram_group_chat_id: '' })
+
   const isAdmin = authUser?.roleCode === 'R10'
+  const isTgAdmin = authUser?.roleCode === 'R01' || authUser?.roleCode === 'R10'
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
@@ -50,6 +68,21 @@ export default function SettingsPage() {
         if (res.ok && res.config) setConfig({ ...DEFAULT_CONFIG, ...res.config })
         setConfigLoading(false)
       }).catch(() => setConfigLoading(false))
+    }
+
+    if (authUser?.roleCode === 'R01' || authUser?.roleCode === 'R10') {
+      setTgLoading(true)
+      apiFetch('/api/admin/telegram').then(res => {
+        if (res.ok && res.config) {
+          setTgConfig(res.config)
+          setTgForm({
+            telegram_bot_token: '',
+            telegram_webhook_secret: '',
+            telegram_group_chat_id: res.config.telegram_group_chat_id?.value || '',
+          })
+        }
+        setTgLoading(false)
+      }).catch(() => setTgLoading(false))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -76,6 +109,44 @@ export default function SettingsPage() {
     setConfigSaving(false)
     if (res.ok) showToast(res.message || 'Đã lưu cấu hình')
     else showToast('Lỗi: ' + (res.error || 'Không thể lưu'))
+  }
+
+  const saveTelegramConfig = async () => {
+    const payload: Record<string, string> = {}
+    if (tgForm.telegram_bot_token) payload.telegram_bot_token = tgForm.telegram_bot_token
+    if (tgForm.telegram_webhook_secret) payload.telegram_webhook_secret = tgForm.telegram_webhook_secret
+    if (tgForm.telegram_group_chat_id) payload.telegram_group_chat_id = tgForm.telegram_group_chat_id
+
+    if (Object.keys(payload).length === 0) {
+      showToast('Không có giá trị nào để cập nhật')
+      return
+    }
+
+    setTgSaving(true)
+    const res = await apiFetch('/api/admin/telegram', {
+      method: 'PUT', body: JSON.stringify({ config: payload }),
+    })
+    setTgSaving(false)
+
+    if (res.ok) {
+      showToast(res.message || 'Đã lưu cấu hình Telegram')
+      // Reload config to show updated masked values
+      const refreshed = await apiFetch('/api/admin/telegram')
+      if (refreshed.ok && refreshed.config) {
+        setTgConfig(refreshed.config)
+        setTgForm({ telegram_bot_token: '', telegram_webhook_secret: '', telegram_group_chat_id: refreshed.config.telegram_group_chat_id?.value || '' })
+      }
+    } else {
+      showToast('Lỗi: ' + (res.error || 'Không thể lưu'))
+    }
+  }
+
+  const restartTelegramBot = async () => {
+    setTgRestarting(true)
+    const res = await apiFetch('/api/admin/telegram', { method: 'POST' })
+    setTgRestarting(false)
+    if (res.ok) showToast(res.message || 'Bot đã khởi động lại')
+    else showToast('Lỗi: ' + (res.error || 'Không thể khởi động bot'))
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
@@ -193,6 +264,63 @@ export default function SettingsPage() {
             </Button>
           </div>
         </>
+      )}
+
+      {/* Telegram Config — R01 + R10 */}
+      {isTgAdmin && (
+        <Card padding="default">
+          <h2 className="section-title" style={{ fontSize: 'var(--text-sm)', marginBottom: 'var(--space-md)' }}>Cấu hình Telegram Bot</h2>
+          {tgLoading ? (
+            <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-9 skeleton rounded-lg" />)}</div>
+          ) : (
+            <div className="space-y-4">
+              {/* Bot Token */}
+              <div>
+                <InputField
+                  label="Bot Token"
+                  type="password"
+                  placeholder={tgConfig?.telegram_bot_token?.configured ? `Hiện tại: ${tgConfig.telegram_bot_token.masked}` : 'Chưa cấu hình — nhập token từ @BotFather'}
+                  value={tgForm.telegram_bot_token}
+                  onChange={e => setTgForm({ ...tgForm, telegram_bot_token: e.target.value })}
+                />
+                {tgConfig?.telegram_bot_token?.configured && (
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>Đã cấu hình. Để trống nếu không thay đổi.</p>
+                )}
+              </div>
+
+              {/* Webhook Secret */}
+              <div>
+                <InputField
+                  label="Webhook Secret"
+                  type="password"
+                  placeholder={tgConfig?.telegram_webhook_secret?.configured ? `Hiện tại: ${tgConfig.telegram_webhook_secret.masked}` : 'Chưa cấu hình — nhập chuỗi bí mật tùy ý'}
+                  value={tgForm.telegram_webhook_secret}
+                  onChange={e => setTgForm({ ...tgForm, telegram_webhook_secret: e.target.value })}
+                />
+                {tgConfig?.telegram_webhook_secret?.configured && (
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>Đã cấu hình. Để trống nếu không thay đổi.</p>
+                )}
+              </div>
+
+              {/* Group Chat ID */}
+              <InputField
+                label="Group Chat ID"
+                placeholder="Ví dụ: -1001234567890"
+                value={tgForm.telegram_group_chat_id}
+                onChange={e => setTgForm({ ...tgForm, telegram_group_chat_id: e.target.value })}
+              />
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" onClick={restartTelegramBot} loading={tgRestarting}>
+                  Khởi động lại Bot
+                </Button>
+                <Button variant="accent" onClick={saveTelegramConfig} loading={tgSaving}>
+                  Lưu cấu hình Telegram
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* System Info */}

@@ -9,6 +9,8 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
+    volumes:
+      - uploads-data:/app/public/uploads
     depends_on:
       - redis
 
@@ -22,3 +24,4 @@ services:
 
 volumes:
   redis-data:
+  uploads-data:
