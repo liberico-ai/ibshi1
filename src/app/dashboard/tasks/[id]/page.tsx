@@ -36,6 +36,7 @@ interface TaskData {
   deadline: string | null
   startedAt: string | null
   completedAt: string | null
+  createdAt: string | null
   project: {
     projectCode: string; projectName: string; clientName: string;
     productType?: string; contractValue?: string | number; currency?: string;
@@ -1379,7 +1380,7 @@ export default function TaskDetailPage() {
   const [inventoryLoading, setInventoryLoading] = useState(false)
   const [inventorySearch, setInventorySearch] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
-  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; lsxTeamData?: { teamName: string; volume: string; startDate: string; endDate: string; stageKey: string }; departmentEstimates?: any; budgetTotal?: any } | null>(null)
+  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; lsxTeamData?: { teamName: string; volume: string; startDate: string; endDate: string; stageKey: string; hangMuc?: string; phamVi?: string; rowIdx?: number; teamIdx?: number; sourceP51TaskId?: string }; departmentEstimates?: any; budgetTotal?: any } | null>(null)
   const [previousStepFiles, setPreviousStepFiles] = useState<PrevStepFile[]>([])
   // P1.2A WBS expanded rows
   const [wbsExpandedRows, setWbsExpandedRows] = useState<Set<number>>(new Set())
@@ -2466,6 +2467,7 @@ export default function TaskDetailPage() {
                       placeholder="Nhập khối lượng đã hoàn thành..."
                       value={formData.completedQuantity as string || ''}
                       onChange={(e) => handleFieldChange('completedQuantity', e.target.value)}
+                      disabled={!isActive}
                       style={{ maxWidth: 300, fontSize: '1.1rem', fontWeight: 700, padding: '10px 14px' }}
                     />
                   </div>

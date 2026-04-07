@@ -12,7 +12,7 @@ export type { WorkflowStep } from './workflow-constants'
 // ── Workflow Engine Core Functions (Server-only) ──
 
 // Steps that are created dynamically (multi-instance), not during project init
-const DYNAMIC_STEPS = ['P5.1', 'P5.3', 'P5.4']
+const DYNAMIC_STEPS = ['P5.1', 'P5.2', 'P5.3', 'P5.4']
 
 export async function initializeProjectWorkflow(projectId: string): Promise<void> {
   const steps = Object.values(WORKFLOW_RULES).filter(s => !DYNAMIC_STEPS.includes(s.code))
@@ -359,8 +359,8 @@ async function createP53AndP54ForP51(
             userId: u.id,
             title: `Công việc mới: ${step.name}`,
             message: `${step.code} của dự án ${project.projectCode} — ${project.projectName} đã sẵn sàng.`,
-            type: 'TASK' as const,
-            relatedTaskId: newTask.id,
+            type: 'task_assigned',
+            linkUrl: `/dashboard/tasks/${newTask.id}`,
           })),
         })
       }
