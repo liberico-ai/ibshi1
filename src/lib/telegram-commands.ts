@@ -485,7 +485,7 @@ export function registerCommands(bot: Bot): void {
         where: { status: 'ACTIVE' },
         include: { tasks: { select: { status: true, deadline: true } } },
         orderBy: { updatedAt: 'desc' },
-        take: 10,
+        take: 30,
       }),
       prisma.workflowTask.count({
         where: { status: 'IN_PROGRESS', deadline: { lt: new Date() } },
