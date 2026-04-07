@@ -61,6 +61,6 @@ describe('RATE_PRESETS', () => {
   })
 
   it('defines API_UPLOAD preset', () => {
-    expect(RATE_PRESETS.API_UPLOAD).toEqual({ maxRequests: 10, windowMs: 60_000 })
+    expect(RATE_PRESETS.API_UPLOAD).toEqual({ maxRequests: 50, windowMs: 60_000 })
   })
 })

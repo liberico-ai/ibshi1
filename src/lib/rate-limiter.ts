@@ -42,5 +42,5 @@ export function resetRateLimitStore(): void {
 // ── Presets ──
 export const RATE_PRESETS = {
   API_GENERAL: { maxRequests: 100, windowMs: 60_000 },
-  API_UPLOAD: { maxRequests: 10, windowMs: 60_000 },
+  API_UPLOAD: { maxRequests: 50, windowMs: 60_000 },
 } as const
