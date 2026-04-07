@@ -475,6 +475,11 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
     const task = await prisma.workflowTask.findUnique({ where: { id } })
     if (!task) return errorResponse('Task không tồn tại', 404)
 
+    // Skip if already assigned to this user (prevent double notification)
+    if (task.assignedTo === body.assignToUserId) {
+      return successResponse({ task }, 'Task đã được phân công cho người này')
+    }
+
     // Strict role check: PM (R02, R02a) and Admin (R00, R01) can bypass, otherwise assigner must match task role
     const userBaseRole = payload.roleCode.replace(/[a-z]$/i, '')
     const taskBaseRole = task.assignedRole.replace(/[a-z]$/i, '')
