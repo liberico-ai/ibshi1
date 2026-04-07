@@ -1394,18 +1394,26 @@ export default function TaskDetailPage() {
     return userBase === taskBase
   })()
 
+  const [assigning, setAssigning] = useState(false)
+
   async function handleAssignTask(userId: string) {
-    const res = await apiFetch(`/api/tasks/${taskId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ action: 'assign', assignToUserId: userId }),
-    })
-    if (res.ok || res.success) {
-      setSuccessMsg('✅ Đã phân công thành công')
-      setShowAssignModal(false)
-      loadTask()
-      setTimeout(() => setSuccessMsg(''), 3000)
-    } else {
-      setError(res.error || 'Lỗi khi phân công')
+    if (assigning) return
+    setAssigning(true)
+    try {
+      const res = await apiFetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ action: 'assign', assignToUserId: userId }),
+      })
+      if (res.ok || res.success) {
+        setSuccessMsg('✅ Đã phân công thành công')
+        setShowAssignModal(false)
+        loadTask()
+        setTimeout(() => setSuccessMsg(''), 3000)
+      } else {
+        setError(res.error || 'Lỗi khi phân công')
+      }
+    } finally {
+      setAssigning(false)
     }
   }
 
@@ -1458,7 +1466,7 @@ export default function TaskDetailPage() {
         }
       }
       // Load inventory for steps that need real-time stock
-      if (['P2.1', 'P2.2', 'P2.3', 'P4.5'].includes(res.task.stepCode)) {
+      if (['P4.5'].includes(res.task.stepCode)) {
         loadInventory()
       }
       // Auto-generate WO number for P3.4
@@ -5201,87 +5209,6 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {['P2.1', 'P2.2', 'P2.3'].includes(task.stepCode) && (
-              <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0ea5e9' }}>
-                    📋 Vật tư tồn kho hiện trường (Tất cả)
-                  </h3>
-                  <div style={{ position: 'relative', width: 280 }}>
-                    <input type="text" className="input" placeholder="🔍 Tìm kiếm mã/tên VT..." 
-                      value={inventorySearch} onChange={e => setInventorySearch(e.target.value)}
-                      style={{ width: '100%', fontSize: '0.85rem', padding: '6px 12px 6px 30px', borderRadius: 20, border: '1px solid var(--border)' }} />
-                    <span style={{ position: 'absolute', left: 10, top: 7, fontSize: '0.8rem' }}>🔍</span>
-                  </div>
-                </div>
-                {inventoryLoading ? (
-                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>⏳ Đang tải dữ liệu tồn kho...</div>
-                ) : (() => {
-                  const searchLower = inventorySearch.toLowerCase().trim()
-                  const filtered = inventoryMaterials.filter(m => {
-                    if (!searchLower) return true
-                    return m.name.toLowerCase().includes(searchLower) ||
-                      m.materialCode.toLowerCase().includes(searchLower) ||
-                      (m.specification || '').toLowerCase().includes(searchLower) ||
-                      m.category.toLowerCase().includes(searchLower) ||
-                      m.unit.toLowerCase().includes(searchLower)
-                  })
-
-                  if (filtered.length === 0) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border)', borderRadius: 10 }}>Chưa có vật tư nào phù hợp trong kho.</div>
-
-                  return (
-                    <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '40px 100px 1.5fr 1.2fr 80px 60px 50px', gap: 6, padding: '8px 4px', borderBottom: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>#</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Mã VT</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tên vật tư</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Quy chuẩn</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'right' }}>Tồn kho</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>ĐVT</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>Thêm</span>
-                      </div>
-                      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                        {filtered.map((m, idx) => (
-                          <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '40px 100px 1.5fr 1.2fr 80px 60px 50px', gap: 6, padding: '5px 4px', background: idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', alignItems: 'center' }}>
-                            <span style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75rem' }}>{idx + 1}</span>
-                            <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.75rem' }}>{m.materialCode}</span>
-                            <span style={{ fontWeight: 600 }}>{m.name}</span>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>{m.specification || '—'}</span>
-                            <span style={{ fontWeight: 700, color: m.currentStock > 100 ? '#16a34a' : '#dc2626', textAlign: 'right' }}>{m.currentStock.toLocaleString()}</span>
-                            <span style={{ color: 'var(--text-secondary)', textAlign: 'center', fontSize: '0.75rem' }}>{m.unit}</span>
-                            <button type="button" onClick={() => {
-                              if (task.stepCode === 'P2.1' || task.stepCode === 'P2.2' || task.stepCode === 'P2.3') {
-                                setBomItems(prev => {
-                                  // Find first empty row to replace, or append if none
-                                  const idx = prev.findIndex(r => !r.name.trim() && !r.code.trim())
-                                  if (idx >= 0) {
-                                    const next = [...prev]
-                                    next[idx] = { ...next[idx], name: m.name, code: m.materialCode, spec: m.specification || '', unit: m.unit }
-                                    return next
-                                  }
-                                  return [...prev, { name: m.name, code: m.materialCode, spec: m.specification || '', quantity: '', unit: m.unit }]
-                                })
-                                setSuccessMsg('Đã thêm ' + m.materialCode + ' vào danh sách dưới.')
-                                setTimeout(() => setSuccessMsg(''), 2000)
-                              }
-                            }}
-                              disabled={!isActive}
-                              title="Thêm vào BOM bên dưới"
-                              style={{ background: '#0ea5e9', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 0', width: '100%', cursor: isActive ? 'pointer' : 'not-allowed', fontSize: '0.85rem', fontWeight: 700, opacity: isActive ? 1 : 0.5 }}>
-                              +
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: 8 }}>
-                        Hiển thị <strong>{filtered.length}</strong> / {inventoryMaterials.length} vật tư tham khảo.
-                      </div>
-                    </>
-                  )
-                })()}
-              </div>
-            )}
-
             {/* P3.3 & P3.4: WBS with LSX action buttons */}
             {(task.stepCode === 'P3.3' || task.stepCode === 'P3.4') && previousStepData?.plan?.wbsItems && (
               <div style={{ width: '100%', marginTop: '1rem' }}>
@@ -5958,9 +5885,10 @@ function TaskAssignModal({ task, userList, onClose, onSubmit }: {
   task: TaskData
   userList: { id: string; fullName: string; roleCode: string }[]
   onClose: () => void
-  onSubmit: (userId: string) => void
+  onSubmit: (userId: string) => Promise<void> | void
 }) {
   const [selectedUser, setSelectedUser] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const baseRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
   const relevantUsers = userList.filter(u => u.roleCode.startsWith(baseRole))
 
@@ -5996,14 +5924,19 @@ function TaskAssignModal({ task, userList, onClose, onSubmit }: {
         )}
 
         <div className="flex justify-end gap-3 mt-4">
-          <button onClick={onClose} className="px-4 py-2 font-semibold rounded-lg hover:opacity-80 transition" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>Hủy</button>
+          <button onClick={onClose} disabled={submitting} className="px-4 py-2 font-semibold rounded-lg hover:opacity-80 transition" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>Hủy</button>
           <button
-            onClick={() => { if (selectedUser) onSubmit(selectedUser) }}
+            onClick={async () => {
+              if (selectedUser && !submitting) {
+                setSubmitting(true)
+                try { await onSubmit(selectedUser) } finally { setSubmitting(false) }
+              }
+            }}
             className="px-5 py-2 font-bold rounded-lg transition hover:opacity-90 disabled:opacity-50"
             style={{ background: '#3b82f6', color: 'white' }}
-            disabled={relevantUsers.length === 0 || !selectedUser}
+            disabled={relevantUsers.length === 0 || !selectedUser || submitting}
           >
-            Lưu / Giao việc
+            {submitting ? 'Đang giao...' : 'Lưu / Giao việc'}
           </button>
         </div>
       </div>
