@@ -494,55 +494,64 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
             {/* Category items */}
             {isExpanded && (
               <div style={{ overflowX: 'auto' }}>
-                {/* Table header */}
-                <div style={{ display: 'grid', gridTemplateColumns: '40px 160px minmax(120px,1fr) minmax(180px,1.5fr) 100px 50px 80px 100px 100px 100px', gap: 4, padding: '6px 10px', background: 'var(--bg-tertiary, #f0f0f0)', borderBottom: '1px solid var(--border)', minWidth: 1000 }}>
-                  {['#', 'Mã VT', 'Chi tiết', 'Profile / Vật tư', 'Mác VL', 'ĐVT', 'Số lượng', 'KL (kg)', 'Tồn kho', 'Trạng thái'].map(h => (
-                    <span key={h} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{h}</span>
-                  ))}
-                </div>
-                {/* Rows */}
-                {catItems.map((item, catIdx) => {
-                  const globalIdx = items.indexOf(item)
-                  const match = stockMatches.get(globalIdx)
-                  const hasStock = match?.matched && match.currentStock > 0
-                  const stockSufficient = hasStock && match!.currentStock >= item.quantity
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 960 }}>
+                  <colgroup>
+                    <col style={{ width: 36 }} />
+                    <col style={{ width: 150 }} />
+                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: 80 }} />
+                    <col style={{ width: 44 }} />
+                    <col style={{ width: 80 }} />
+                    <col style={{ width: 90 }} />
+                    <col style={{ width: 80 }} />
+                    <col style={{ width: 80 }} />
+                  </colgroup>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-tertiary, #f0f0f0)' }}>
+                      {['#', 'Mã VT', 'Chi tiết', 'Profile / Vật tư', 'Mác VL', 'ĐVT', 'Số lượng', 'KL (kg)', 'Tồn kho', 'Trạng thái'].map(h => (
+                        <th key={h} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', padding: '6px 8px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {catItems.map((item, catIdx) => {
+                      const globalIdx = items.indexOf(item)
+                      const match = stockMatches.get(globalIdx)
+                      const hasStock = match?.matched && match.currentStock > 0
+                      const stockSufficient = hasStock && match!.currentStock >= item.quantity
+                      const cellPad = '5px 8px'
 
-                  return (
-                    <div key={item.stt} style={{
-                      display: 'grid', gridTemplateColumns: '40px 160px minmax(120px,1fr) minmax(180px,1.5fr) 100px 50px 80px 100px 100px 100px',
-                      gap: 4, padding: '5px 10px', fontSize: '0.8rem', alignItems: 'center',
-                      borderBottom: '1px solid var(--border)',
-                      background: catIdx % 2 === 0 ? 'transparent' : 'var(--bg-secondary)',
-                      minWidth: 1000,
-                    }}>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{catIdx + 1}</span>
-                      <span style={{ fontFamily: 'monospace', fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)' }} title={item.stt}>{item.stt}</span>
-                      <span style={{ fontWeight: 600 }}>{item.description}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }} title={item.profile}>{item.profile}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{item.grade}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center' }}>{item.unit}</span>
-                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{fmtNum(item.quantity, 2)}</span>
-                      <span style={{ fontWeight: 600, textAlign: 'right', color: '#1e40af' }}>{item.weight > 0 ? fmtNum(item.weight, 1) : '—'}</span>
-                      {/* Stock column */}
-                      <span style={{ textAlign: 'right', fontWeight: 600, color: hasStock ? '#16a34a' : '#9ca3af' }}>
-                        {match?.matched ? (
-                          <span title={`${match.inventoryCode} — ${match.inventoryName}`}>
-                            {fmtNum(match.currentStock, 0)}
-                          </span>
-                        ) : '—'}
-                      </span>
-                      {/* Status */}
-                      <span style={{
-                        fontSize: '0.7rem', fontWeight: 700, textAlign: 'center',
-                        padding: '2px 6px', borderRadius: 6,
-                        background: stockSufficient ? '#dcfce7' : match?.matched ? '#fef9c3' : '#fee2e2',
-                        color: stockSufficient ? '#166534' : match?.matched ? '#854d0e' : '#991b1b',
-                      }}>
-                        {stockSufficient ? 'Đủ kho' : match?.matched ? 'Thiếu' : 'Cần mua'}
-                      </span>
-                    </div>
-                  )
-                })}
+                      return (
+                        <tr key={item.stt} style={{ borderBottom: '1px solid var(--border)', background: catIdx % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                          <td style={{ padding: cellPad, color: 'var(--text-muted)', fontSize: '0.7rem' }}>{catIdx + 1}</td>
+                          <td style={{ padding: cellPad, fontFamily: 'monospace', fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)' }} title={item.stt}>{item.stt}</td>
+                          <td style={{ padding: cellPad, fontWeight: 600 }}>{item.description}</td>
+                          <td style={{ padding: cellPad, fontSize: '0.75rem', color: 'var(--text-secondary)' }} title={item.profile}>{item.profile}</td>
+                          <td style={{ padding: cellPad, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{item.grade}</td>
+                          <td style={{ padding: cellPad, fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center' }}>{item.unit}</td>
+                          <td style={{ padding: cellPad, fontWeight: 600, textAlign: 'right' }}>{fmtNum(item.quantity, 2)}</td>
+                          <td style={{ padding: cellPad, fontWeight: 600, textAlign: 'right', color: '#1e40af' }}>{item.weight > 0 ? fmtNum(item.weight, 1) : '—'}</td>
+                          <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 600, color: hasStock ? '#16a34a' : '#9ca3af' }}>
+                            {match?.matched ? (
+                              <span title={`${match.inventoryCode} — ${match.inventoryName}`}>{fmtNum(match.currentStock, 0)}</span>
+                            ) : '—'}
+                          </td>
+                          <td style={{ padding: cellPad, textAlign: 'center' }}>
+                            <span style={{
+                              fontSize: '0.7rem', fontWeight: 700,
+                              padding: '2px 8px', borderRadius: 6, display: 'inline-block',
+                              background: stockSufficient ? '#dcfce7' : match?.matched ? '#fef9c3' : '#fee2e2',
+                              color: stockSufficient ? '#166534' : match?.matched ? '#854d0e' : '#991b1b',
+                            }}>
+                              {stockSufficient ? 'Đủ kho' : match?.matched ? 'Thiếu' : 'Cần mua'}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
