@@ -84,6 +84,22 @@ export async function completeTask(
 
   if (!rule) return { nextSteps: [] }
 
+  // Parallel multi-user approval check for P1.3
+  if (task.stepCode === 'P1.3') {
+    const pendingCount = await prisma.workflowTask.count({
+      where: {
+        projectId: task.projectId,
+        stepCode: task.stepCode,
+        status: { not: TASK_STATUS.DONE }
+      }
+    })
+    
+    if (pendingCount > 0) {
+      // Not all P1.3 tasks are completed yet, stop propagation here
+      return { nextSteps: [] }
+    }
+  }
+
   const activatedSteps: string[] = []
 
   // Try to activate next steps
@@ -417,7 +433,8 @@ export async function rejectTask(
   taskId: string,
   userId: string,
   reason: string,
-  overrideRejectTo?: string
+  overrideRejectTo?: string,
+  failedContext?: Record<string, any>
 ): Promise<{ returnedTo: string }> {
   const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
   if (!task) throw new Error('Task not found')
@@ -439,6 +456,22 @@ export async function rejectTask(
     },
   })
 
+  // Parallel multi-user rejection logic for P1.3
+  if (task.stepCode === 'P1.3') {
+    await prisma.workflowTask.updateMany({
+      where: {
+        projectId: task.projectId,
+        stepCode: task.stepCode,
+        id: { not: taskId },
+        status: { not: TASK_STATUS.REJECTED }
+      },
+      data: {
+        status: TASK_STATUS.REJECTED,
+        notes: `Auto-rejected due to rejection by another user: ${reason}`
+      }
+    })
+  }
+
   // 2. Reset intermediate steps between rejectTo and current step
   //    Skip this when using overrideRejectTo (selective reject — don't reset siblings)
   if (!overrideRejectTo) {
@@ -448,6 +481,8 @@ export async function rejectTask(
 
     const stepsToReset = allSteps.filter((code) => {
       const r = WORKFLOW_RULES[code]
+      // DO NOT globally reset parallel production steps, as it destroys independent job cards
+      if (['P5.2', 'P5.3', 'P5.4'].includes(code)) return false;
       return r && r.phase >= rejectToPhase && r.phase <= currentPhase
         && code !== task.stepCode && code !== rejectTo
     })
@@ -467,6 +502,23 @@ export async function rejectTask(
 
   // 3. Reactivate the target step
   await activateTask(task.projectId, rejectTo)
+
+  // Append failedContext if provided
+  if (failedContext) {
+    const targetTask = await prisma.workflowTask.findFirst({
+      where: { projectId: task.projectId, stepCode: rejectTo },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (targetTask) {
+      const rd = (targetTask.resultData || {}) as Record<string, any>;
+      rd.qcFailedAssignments = rd.qcFailedAssignments || [];
+      rd.qcFailedAssignments.push(failedContext);
+      await prisma.workflowTask.update({
+        where: { id: targetTask.id },
+        data: { resultData: rd }
+      });
+    }
+  }
 
   // 4. Run reverse sync hooks
   await runReverseHooks(task.projectId, task.stepCode, userId, reason)
@@ -841,6 +893,54 @@ export async function activateTask(projectId: string, stepCode: string): Promise
         : null,
     },
   })
+
+  // Handling multiple parallel approval required logic for P1.3
+  if (stepCode === 'P1.3') {
+    const roleUsers = await prisma.user.findMany({
+      where: { roleCode: rule.role, isActive: true },
+    })
+
+    if (roleUsers.length > 0) {
+      const existingTasks = await prisma.workflowTask.findMany({
+        where: { projectId, stepCode },
+        orderBy: { createdAt: 'asc' }
+      })
+
+      if (existingTasks.length > 0) {
+        // Find users that don't have a specific task assigned to them yet
+        const assignedUserIds = existingTasks.map(t => t.assignedTo).filter(Boolean) as string[]
+        const unassignedUsers = roleUsers.filter(u => !assignedUserIds.includes(u.id))
+        
+        let firstUnassignedTask = existingTasks.find(t => !t.assignedTo)
+
+        for (const user of unassignedUsers) {
+          if (firstUnassignedTask) {
+            await prisma.workflowTask.update({
+              where: { id: firstUnassignedTask.id },
+              data: { assignedTo: user.id }
+            })
+            firstUnassignedTask = undefined // used up
+          } else {
+            await prisma.workflowTask.create({
+              data: {
+                projectId,
+                stepCode,
+                stepName: rule.name,
+                stepNameEn: rule.nameEn,
+                assignedRole: rule.role,
+                assignedTo: user.id,
+                status: TASK_STATUS.IN_PROGRESS,
+                startedAt: new Date(),
+                deadline: rule.deadlineDays
+                  ? new Date(Date.now() + rule.deadlineDays * 24 * 60 * 60 * 1000)
+                  : null,
+              }
+            })
+          }
+        }
+      }
+    }
+  }
 
   // Create notifications for users with matching role
   try {

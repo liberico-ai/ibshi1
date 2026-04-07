@@ -378,6 +378,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
         }
 
         let hangMucName = ''
+        let phamVi = ''
         if (sourceRow !== null) {
           const planData = await fetchPlanData(task.projectId)
           try {
@@ -385,6 +386,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
             const wbsList = wbsRaw ? JSON.parse(wbsRaw) : []
             if (wbsList[Number(sourceRow)]) {
               hangMucName = wbsList[Number(sourceRow)].hangMuc || ''
+              phamVi = wbsList[Number(sourceRow)].phamVi || ''
             }
           } catch { /* ignore */ }
         }
@@ -399,6 +401,9 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
               endDate: teamData.endDate,
               stageKey,
               hangMuc: hangMucName,
+              phamVi,
+              rowIdx: sourceRow,
+              teamIdx
             },
           }
           found = true
@@ -408,6 +413,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       // Fallback: use team data stored directly in P4.5 materialIssueRequests
       if (!found && p45TeamData) {
         let hangMucName = ''
+        let phamVi = ''
         if (sourceRow !== null) {
           const planData = await fetchPlanData(task.projectId)
           try {
@@ -415,6 +421,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
             const wbsList = wbsRaw ? JSON.parse(wbsRaw) : []
             if (wbsList[Number(sourceRow)]) {
               hangMucName = wbsList[Number(sourceRow)].hangMuc || ''
+              phamVi = wbsList[Number(sourceRow)].phamVi || ''
             }
           } catch { /* ignore */ }
         }
@@ -428,6 +435,9 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
             endDate: p45TeamData.endDate || '',
             stageKey,
             hangMuc: hangMucName,
+            phamVi,
+            rowIdx: sourceRow,
+            teamIdx
           },
         }
       }

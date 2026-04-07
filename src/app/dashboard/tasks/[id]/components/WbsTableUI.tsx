@@ -5,7 +5,7 @@ import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, Material
 export type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow }
 
 
-function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void }) {
+function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave, qcFailedAssignments, onCloneRework }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void; qcFailedAssignments?: any[]; onCloneRework?: (rowIdx: number, stageKey: string, teamIdx: number) => void }) {
   const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
 
   let rows: WbsRow[] = [];
@@ -367,10 +367,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           // 3 states: full (green), partial (blue), none (yellow)
                           const isFull = assignCount > 0 && assignedKL >= totalKL;
                           const isPartial = assignCount > 0 && assignedKL < totalKL;
-                          const borderColor = isFull ? '#16a34a' : isPartial ? '#2563eb' : '#fde68a';
-                          const bgColor = isFull ? '#d1fae5' : isPartial ? '#dbeafe' : '#fef3c7';
-                          const badgeColor = isFull ? '#16a34a' : '#2563eb';
-                          const tooltipText = isFull
+                          const isFailed = qcFailedAssignments?.some(q => q.rowIdx === ri && q.stageKey === c.key);
+                          const borderColor = isFailed ? '#dc2626' : isFull ? '#16a34a' : isPartial ? '#2563eb' : '#fde68a';
+                          const bgColor = isFailed ? '#fef2f2' : isFull ? '#d1fae5' : isPartial ? '#dbeafe' : '#fef3c7';
+                          const badgeColor = isFailed ? '#dc2626' : isFull ? '#16a34a' : '#2563eb';
+                          const tooltipText = isFailed ? '❌ Bị QC TỪ CHỐI — Click để Xử lý' :
+                            isFull
                             ? `✅ Đã phân giao đủ (${assignedKL.toLocaleString('vi-VN')}/${totalKL.toLocaleString('vi-VN')} ${row.dvt || 'kg'} • ${assignCount} tổ)`
                             : isPartial
                             ? `⏳ Chưa phân giao đủ (${assignedKL.toLocaleString('vi-VN')}/${totalKL.toLocaleString('vi-VN')} ${row.dvt || 'kg'} • còn ${(totalKL - assignedKL).toLocaleString('vi-VN')})`
@@ -380,8 +382,8 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                               <button type="button" onClick={() => openAssignPanel(ri, c.key)}
                                 title={tooltipText}
                                 style={{ ...inputS, cursor: 'pointer', border: `2px solid ${borderColor}`, background: bgColor, fontWeight: 600, textAlign: 'center', borderRadius: 5, position: 'relative' }}>
-                                {cellVal}
-                                {assignCount > 0 && <span style={{ position: 'absolute', top: -6, right: -6, background: badgeColor, color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{assignCount}</span>}
+                                {isFailed ? '❌ LỖI' : cellVal}
+                                {assignCount > 0 && !isFailed && <span style={{ position: 'absolute', top: -6, right: -6, background: badgeColor, color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{assignCount}</span>}
                               </button>
                             </td>
                           );
@@ -468,17 +470,19 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           <span style={{ fontSize: '0.75rem', color: '#b45309' }}>{teams.length} tổ</span>
                         </div>
                         {/* Table header */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.7fr 0.7fr 120px 100px', gap: 8, padding: '8px 12px 4px', background: '#fafafa' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.5fr 0.5fr 140px 100px', gap: 8, padding: '8px 12px 4px', background: '#fafafa' }}>
                           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tổ THỰC HIỆN</span>
                           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>KHỐI LƯỢNG</span>
                           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>TỪ NGÀY</span>
                           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>ĐẾN NGÀY</span>
-                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>PHÁT HÀNH</span>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>NGHIỆP VỤ QC/PM</span>
                           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>DNC VẬT TƯ</span>
                         </div>
                         {/* Team rows */}
                         {teams.map((team, ti) => {
                           const issued = lsxIssuedDetails?.[idx]?.[stage.key]?.[ti] || false;
+                          const qcFailed = qcFailedAssignments?.find(q => q.rowIdx === idx && q.stageKey === stage.key && q.teamIdx === ti);
+                          const isCloned = team.rework_cloned;
                           const teamVol = Number(team.volume || 0);
                           const teamMatTotal = getTeamMaterialTotal(idx, stage.key, ti);
                           const teamMatCount = (materialRequests?.[idx]?.[stage.key]?.[ti] || []).length;
@@ -486,20 +490,30 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           const maxAllowed = teamVol * (limitPct / 100);
                           const atLimit = teamMatTotal >= maxAllowed && teamVol > 0;
                           const hasMats = teamMatCount > 0;
-                          const canIssue = hasMats && !issued;
+                          const canIssue = hasMats && !issued && !qcFailed && !isCloned;
                           return (
-                            <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.7fr 0.7fr 120px 100px', gap: 8, padding: '8px 12px', alignItems: 'center', background: ti % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
-                              <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{team.teamName || `Tổ ${ti + 1}`}</span>
+                            <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.5fr 0.5fr 140px 100px', gap: 8, padding: '8px 12px', alignItems: 'center', background: qcFailed ? '#fef2f2' : isCloned ? '#f1f5f9' : ti % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', opacity: isCloned ? 0.6 : 1 }}>
+                              <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{team.teamName || `Tổ ${ti + 1}`} {isCloned ? '(Đã Rework)' : ''}</span>
                               <span style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.88rem' }}>{teamVol.toLocaleString('vi-VN')} {row.dvt || 'kg'}</span>
                               <span style={{ fontSize: '0.82rem' }}>{fmtDate(team.startDate) || '—'}</span>
                               <span style={{ fontSize: '0.82rem' }}>{fmtDate(team.endDate) || '—'}</span>
-                              <div style={{ textAlign: 'center' }}>
-                                <button type="button" disabled={!canIssue}
-                                  title={!hasMats ? 'Cần lập DNC Vật tư trước khi phát hành' : issued ? 'Đã phát hành' : 'Phát hành LSX'}
-                                  onClick={() => onIssueSingleTeam?.(idx, stage.key, ti)}
-                                  style={{ padding: '6px 16px', fontSize: '0.8rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: canIssue ? 'pointer' : 'default', background: issued ? '#d1fae5' : canIssue ? '#f59e0b' : '#e2e8f0', color: issued ? '#16a34a' : canIssue ? '#fff' : '#94a3b8', opacity: issued ? 0.9 : 1, transition: 'all 0.2s' }}>
-                                  {issued ? '✅ Đã PH' : !hasMats ? '🔒 Phát hành' : '📤 Phát hành'}
-                                </button>
+                              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {!qcFailed ? (
+                                  <button type="button" disabled={!canIssue || isCloned}
+                                    title={!hasMats ? 'Cần lập DNC Vật tư' : issued ? 'Đã phát hành' : 'Phát hành LSX'}
+                                    onClick={() => onIssueSingleTeam?.(idx, stage.key, ti)}
+                                    style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: (canIssue && !isCloned) ? 'pointer' : 'default', background: issued ? '#d1fae5' : canIssue ? '#f59e0b' : '#e2e8f0', color: issued ? '#16a34a' : canIssue ? '#fff' : '#94a3b8', transition: 'all 0.2s' }}>
+                                    {issued ? '✅ Đã PH' : !hasMats ? '🔒 Phát hành' : '📤 Phát hành'}
+                                  </button>
+                                ) : (
+                                  <>
+                                    <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 800 }}>❌ FAIL</div>
+                                    <button type="button" onClick={() => { if(confirm('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
+                                      style={{ padding: '4px 8px', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
+                                      🔄 Tạo Rework
+                                    </button>
+                                  </>
+                                )}
                               </div>
                               <div style={{ textAlign: 'center' }}>
                                 <button type="button" disabled={atLimit}

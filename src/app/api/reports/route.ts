@@ -93,7 +93,10 @@ export async function GET(req: NextRequest) {
       })
       const planMap = new Map<string, any>()
       for (const pt of planTasks) {
-        if (!planMap.has(pt.projectId)) planMap.set(pt.projectId, pt.resultData)
+        const rd = (pt.resultData as any) || {}
+        if (rd.wbsItems && !planMap.has(pt.projectId)) {
+          planMap.set(pt.projectId, rd)
+        }
       }
 
       const getWbsItemName = (projectId: string, sourceRow: number | null): string => {

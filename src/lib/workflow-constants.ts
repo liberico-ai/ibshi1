@@ -58,7 +58,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
     role: 'R05', next: [], deadlineDays: 5, phase: 2,
   },
   'P2.1A': {
-    code: 'P2.1A', name: 'TCKT lập dự toán', nameEn: 'Finance Estimate Preparation',
+    code: 'P2.1A', name: 'Lập kế hoạch dòng tiền', nameEn: 'Cashflow Plan Preparation',
     role: 'R08', next: [], deadlineDays: 7, phase: 2,
   },
   'P2.4': {
