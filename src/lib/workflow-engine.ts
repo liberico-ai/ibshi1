@@ -3,7 +3,7 @@ import { TASK_STATUS } from './constants'
 import { WORKFLOW_RULES } from './workflow-constants'
 import { syncBOMtoBudget, syncPOtoBudget, syncGRNtoBudget, logChangeEvent, runReverseHooks } from './sync-engine'
 import { runValidationRules } from './validation-rules'
-import { notifyTaskActivated, notifyTaskRejected, notifyUsersTaskActivated } from './telegram-notifications'
+import { notifyTaskActivated, notifyTaskRejected } from './telegram-notifications'
 
 // Re-export client-safe items for backward compatibility
 export { WORKFLOW_RULES, PHASE_LABELS, getWorkflowProgress } from './workflow-constants'
@@ -666,7 +666,7 @@ export async function activateTask(projectId: string, stepCode: string): Promise
     })
     const users = await prisma.user.findMany({
       where: { roleCode: rule.role, isActive: true },
-      select: { id: true, telegramChatId: true },
+      select: { id: true, fullName: true, telegramChatId: true },
     })
     // Find the task ID for this step+project to link notifications correctly
     const task = await prisma.workflowTask.findFirst({
@@ -684,26 +684,15 @@ export async function activateTask(projectId: string, stepCode: string): Promise
           linkUrl: `/dashboard/tasks/${task.id}`,
         })),
       })
-      // Push to Telegram group (fire-and-forget — never blocks workflow)
+      // Push to Telegram group + tag users (fire-and-forget)
       notifyTaskActivated({
         stepCode, stepName: rule.name,
         projectCode: project.projectCode, projectName: project.projectName,
         assignedRole: rule.role,
         deadline,
         taskId: task.id,
+        mentionUsers: users.map(u => ({ fullName: u.fullName, telegramChatId: u.telegramChatId })),
       }).catch(err => console.error('Telegram activateTask error:', err))
-      // Push DM to each user with Telegram linked (fire-and-forget)
-      const tgUserIds = users.filter(u => u.telegramChatId).map(u => u.id)
-      if (tgUserIds.length > 0) {
-        notifyUsersTaskActivated({
-          stepCode, stepName: rule.name,
-          projectCode: project.projectCode, projectName: project.projectName,
-          assignedRole: rule.role,
-          deadline,
-          taskId: task.id,
-          userIds: tgUserIds,
-        }).catch(err => console.error('Telegram DM activateTask error:', err))
-      }
     }
   } catch (err) {
     console.error('Notification creation error:', err)

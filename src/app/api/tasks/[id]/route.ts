@@ -486,23 +486,23 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
 
     const updated = await assignTask(id, body.assignToUserId)
 
-    // Send Telegram DM to assigned user (fire-and-forget)
+    // Send Telegram group notification + tag assigned user (fire-and-forget)
     try {
       const { notifyTaskAssigned } = await import('@/lib/telegram-notifications')
-      const fullTask = await prisma.workflowTask.findUnique({
-        where: { id },
-        select: {
-          id: true, stepCode: true, stepName: true, deadline: true,
-          project: { select: { projectCode: true, projectName: true } },
-        },
-      })
-      const assigner = await prisma.user.findUnique({
-        where: { id: payload.userId },
-        select: { fullName: true },
-      })
-      if (fullTask?.project && assigner) {
+      const [fullTask, assigner, assignee] = await Promise.all([
+        prisma.workflowTask.findUnique({
+          where: { id },
+          select: {
+            id: true, stepCode: true, stepName: true, deadline: true,
+            project: { select: { projectCode: true, projectName: true } },
+          },
+        }),
+        prisma.user.findUnique({ where: { id: payload.userId }, select: { fullName: true } }),
+        prisma.user.findUnique({ where: { id: body.assignToUserId }, select: { fullName: true, telegramChatId: true } }),
+      ])
+      if (fullTask?.project && assigner && assignee) {
         notifyTaskAssigned({
-          userId: body.assignToUserId,
+          assignedUser: { fullName: assignee.fullName, telegramChatId: assignee.telegramChatId },
           assignedByName: assigner.fullName,
           stepCode: fullTask.stepCode,
           stepName: fullTask.stepName,
@@ -510,7 +510,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
           projectName: fullTask.project.projectName,
           deadline: fullTask.deadline,
           taskId: fullTask.id,
-        }).catch(err => console.error('Telegram DM assign error:', err))
+        }).catch(err => console.error('Telegram assign notify error:', err))
       }
     } catch (err) {
       console.error('Telegram assign notification error:', err)

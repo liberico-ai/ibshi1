@@ -4,7 +4,7 @@
 // ALL calls are fire-and-forget — errors never block workflow
 // ══════════════════════════════════════════════════════════════
 
-import { sendGroupMessage, sendDirectMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
+import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { ROLES } from '@/lib/constants'
 
 // ── Shared helpers ──────────────────────────────────────────
@@ -17,7 +17,12 @@ function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || ''
 }
 
-// ── Task Activated → Group notification ─────────────────────
+/** Build Telegram mention: <a href="tg://user?id=123">Name</a> */
+function mention(telegramChatId: string, fullName: string): string {
+  return `<a href="tg://user?id=${telegramChatId}">${escapeHtml(fullName)}</a>`
+}
+
+// ── Task Activated → Group notification + tag users ─────────
 
 interface TaskNotifyData {
   stepCode: string
@@ -29,24 +34,41 @@ interface TaskNotifyData {
   taskId: string
 }
 
-export async function notifyTaskActivated(data: TaskNotifyData): Promise<void> {
+interface MentionUser {
+  fullName: string
+  telegramChatId: string | null
+}
+
+export async function notifyTaskActivated(data: TaskNotifyData & {
+  mentionUsers?: MentionUser[]
+}): Promise<void> {
   const url = appUrl()
+
+  // Build mention line: tag users who have linked Telegram
+  const mentions = (data.mentionUsers || [])
+    .filter(u => u.telegramChatId)
+    .map(u => mention(u.telegramChatId!, u.fullName))
+  const mentionLine = mentions.length > 0
+    ? `👥 Giao cho: ${mentions.join(', ')}`
+    : null
+
   const msg = [
     '📋 <b>CÔNG VIỆC MỚI</b>',
     '━━━━━━━━━━━━━━━━',
     `📁 Dự án: <b>${escapeHtml(data.projectCode)}</b> — ${escapeHtml(data.projectName)}`,
     `📌 Bước: <b>${escapeHtml(data.stepCode)}</b> — ${escapeHtml(data.stepName)}`,
     `👤 Phụ trách: ${escapeHtml(data.assignedRole)} (${escapeHtml(roleName(data.assignedRole))})`,
+    mentionLine,
     `⏰ Deadline: ${formatDeadline(data.deadline)}`,
     url ? `🔗 <a href="${url}/dashboard/tasks/${data.taskId}">Xem chi tiết</a>` : '',
   ].filter(Boolean).join('\n')
   await sendGroupMessage(msg)
 }
 
-// ── Task Assigned → DM to assigned user ─────────────────────
+// ── Task Assigned (L1→L2) → Group notification + tag ────────
 
 export async function notifyTaskAssigned(data: {
-  userId: string
+  assignedUser: MentionUser
   assignedByName: string
   stepCode: string
   stepName: string
@@ -56,34 +78,21 @@ export async function notifyTaskAssigned(data: {
   taskId: string
 }): Promise<void> {
   const url = appUrl()
+  const tag = data.assignedUser.telegramChatId
+    ? mention(data.assignedUser.telegramChatId, data.assignedUser.fullName)
+    : `<b>${escapeHtml(data.assignedUser.fullName)}</b>`
+
   const msg = [
-    '📌 <b>BẠN ĐƯỢC PHÂN CÔNG VIỆC MỚI</b>',
+    '📌 <b>PHÂN CÔNG CÔNG VIỆC</b>',
     '━━━━━━━━━━━━━━━━━━━━━',
     `📁 Dự án: <b>${escapeHtml(data.projectCode)}</b> — ${escapeHtml(data.projectName)}`,
     `🔧 Công việc: <b>${escapeHtml(data.stepCode)}</b> — ${escapeHtml(data.stepName)}`,
-    `👤 Phân công bởi: ${escapeHtml(data.assignedByName)}`,
+    `👤 Giao cho: ${tag}`,
+    `📝 Phân công bởi: ${escapeHtml(data.assignedByName)}`,
     `⏰ Deadline: <b>${formatDeadline(data.deadline)}</b>`,
     url ? `🔗 <a href="${url}/dashboard/tasks/${data.taskId}">Xem chi tiết</a>` : '',
   ].filter(Boolean).join('\n')
-  await sendDirectMessage(data.userId, msg)
-}
-
-// ── Task Activated → DM to all role-matched users ───────────
-
-export async function notifyUsersTaskActivated(data: TaskNotifyData & {
-  userIds: string[]
-}): Promise<void> {
-  const url = appUrl()
-  const msg = [
-    '📋 <b>CÔNG VIỆC MỚI CHO BẠN</b>',
-    '━━━━━━━━━━━━━━━━━━━━━',
-    `📁 Dự án: <b>${escapeHtml(data.projectCode)}</b> — ${escapeHtml(data.projectName)}`,
-    `🔧 Công việc: <b>${escapeHtml(data.stepCode)}</b> — ${escapeHtml(data.stepName)}`,
-    `👤 Phụ trách: ${escapeHtml(data.assignedRole)} (${escapeHtml(roleName(data.assignedRole))})`,
-    `⏰ Deadline: <b>${formatDeadline(data.deadline)}</b>`,
-    url ? `🔗 <a href="${url}/dashboard/tasks/${data.taskId}">Xem chi tiết</a>` : '',
-  ].filter(Boolean).join('\n')
-  await Promise.allSettled(data.userIds.map(uid => sendDirectMessage(uid, msg)))
+  await sendGroupMessage(msg)
 }
 
 // ── Task Rejected → Group notification ──────────────────────
