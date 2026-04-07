@@ -161,12 +161,16 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
         <table className="data-table" style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#1e293b', color: 'white' }}>
-              <th style={{ width: '25%', padding: '12px 16px', fontWeight: 600 }}>Cấu trúc Hình cây (WBS)</th>
-              {weekKeys.map(w => <th key={w} className="text-right" style={{ width: '8%', padding: '12px 16px', fontWeight: 600 }}>{w}</th>)}
-              <th className="text-right whitespace-nowrap" style={{ padding: '12px 16px', fontWeight: 800, color: '#38bdf8', borderLeft: '1px solid #334155' }}>Nghiệm thu (P5.4)</th>
-              <th className="text-right whitespace-nowrap" style={{ padding: '12px 16px', fontWeight: 600, color: '#f8fafc' }}>Phân giao (WBS)</th>
-              <th className="text-right whitespace-nowrap" style={{ padding: '12px 16px', fontWeight: 600, color: '#f8fafc' }}>Sản xuất (P5.1)</th>
-              <th className="text-right whitespace-nowrap" style={{ padding: '12px 16px', fontWeight: 600, color: '#fde047' }}>Còn lại</th>
+              <th rowSpan={2} style={{ width: '25%', padding: '12px 16px', fontWeight: 600, verticalAlign: 'middle' }}>Cấu trúc Hình cây (WBS)</th>
+              {weekKeys.map(w => <th key={w} rowSpan={2} className="text-right" style={{ width: '8%', padding: '12px 16px', fontWeight: 600, verticalAlign: 'middle' }}>{w}</th>)}
+              <th className="text-center whitespace-nowrap" style={{ padding: '10px 16px 4px', fontWeight: 800, color: '#38bdf8', borderLeft: '1px solid #334155' }}>Nghiệm thu</th>
+              <th colSpan={3} className="text-center whitespace-nowrap" style={{ padding: '10px 16px 4px', fontWeight: 700, color: '#94a3b8', borderLeft: '1px solid #334155' }}>Tổng hợp khối lượng</th>
+            </tr>
+            <tr style={{ background: '#334155' }}>
+              <th className="text-right whitespace-nowrap" style={{ padding: '4px 16px 10px', fontWeight: 700, color: '#1e293b', background: '#e0f2fe', fontSize: '0.7rem', borderLeft: '1px solid #475569' }}>KL xác nhận (P5.4)</th>
+              <th className="text-right whitespace-nowrap" style={{ padding: '4px 16px 10px', fontWeight: 700, color: '#1e293b', background: '#f1f5f9', fontSize: '0.7rem', borderLeft: '1px solid #475569' }}>SL phân giao (WBS)</th>
+              <th className="text-right whitespace-nowrap" style={{ padding: '4px 16px 10px', fontWeight: 700, color: '#1e293b', background: '#dcfce7', fontSize: '0.7rem' }}>SL sản xuất (P5.1)</th>
+              <th className="text-right whitespace-nowrap" style={{ padding: '4px 16px 10px', fontWeight: 700, color: '#1e293b', background: '#fef9c3', fontSize: '0.7rem' }}>Còn lại cần TH</th>
             </tr>
           </thead>
           <tbody>

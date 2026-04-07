@@ -31,61 +31,73 @@ export async function GET(req: NextRequest) {
 
     // ──── P-02: Project Progress (Weekly Volume from P5.4) ────
     if (type === 'project-progress') {
+      // 1. Get all completed P5.4 tasks
       const p54Tasks = await prisma.workflowTask.findMany({
         where: { stepCode: 'P5.4', status: 'DONE' },
         include: { project: { select: { projectCode: true, projectName: true } } },
         orderBy: { completedAt: 'asc' },
       })
 
-      // Extract P4.5 IDs and Project IDs to build the WBS context
-      const p45Ids = [...new Set(p54Tasks.map(t => ((t.resultData as any)?.sourceP45TaskId as string)).filter(Boolean))]
+      // 2. Get all P5.1 tasks to read lsxData (hangMuc, volume, stageLabel) and completedQuantity
+      const p51Ids = [...new Set(p54Tasks.map(t => ((t.resultData as any)?.sourceP51TaskId as string)).filter(Boolean))]
       const projectIds = [...new Set(p54Tasks.map(t => t.projectId))]
 
-      const [p45Tasks, planTasks] = await Promise.all([
+      const [p51Tasks, allP51Tasks] = await Promise.all([
         prisma.workflowTask.findMany({
-          where: { id: { in: p45Ids } },
-          select: { id: true, resultData: true },
+          where: { id: { in: p51Ids } },
+          select: { id: true, resultData: true, projectId: true },
         }),
         prisma.workflowTask.findMany({
-          where: { projectId: { in: projectIds }, stepCode: { in: ['P1.3', 'P1.2A'] } },
-          select: { projectId: true, resultData: true },
-          orderBy: { createdAt: 'desc' },
-        })
+          where: { projectId: { in: projectIds }, stepCode: 'P5.1', status: 'DONE' },
+          select: { id: true, resultData: true, projectId: true },
+        }),
       ])
+      const p51Map = new Map(p51Tasks.map(t => [t.id, t.resultData as any]))
 
-      const p45Map = new Map(p45Tasks.map(t => [t.id, t.resultData as any]))
-      const planMap = new Map<string, any>()
-      for (const pt of planTasks) {
-        if (!planMap.has(pt.projectId)) planMap.set(pt.projectId, pt.resultData)
-      }
-
+      // 3. Get P3.3/P3.4 cellAssignments for totalAssigned volume per stage
       const p3Tasks = await prisma.workflowTask.findMany({
         where: { projectId: { in: projectIds }, stepCode: { in: ['P3.3', 'P3.4'] } },
         select: { projectId: true, resultData: true },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
       })
       const p3Map = new Map<string, any>()
       for (const pt of p3Tasks) {
         if (!p3Map.has(pt.projectId)) p3Map.set(pt.projectId, pt.resultData)
       }
 
-      const allP51Tasks = await prisma.workflowTask.findMany({
-        where: { projectId: { in: projectIds }, stepCode: 'P5.1', status: 'DONE' },
-        select: { projectId: true, resultData: true }
+      // 4. Get P4.5 tasks for sourceRow lookup
+      const allP45Ids = [...new Set([
+        ...p54Tasks.map(t => ((t.resultData as any)?.sourceP45TaskId as string)),
+        ...allP51Tasks.map(t => ((t.resultData as any)?.sourceP45TaskId as string)),
+      ].filter(Boolean))]
+      const p45Tasks = await prisma.workflowTask.findMany({
+        where: { id: { in: allP45Ids } },
+        select: { id: true, resultData: true },
       })
-      
-      const p51_p45Ids = [...new Set(allP51Tasks.map(t => ((t.resultData as any)?.sourceP45TaskId as string)).filter(Boolean))]
-      const missingP45Ids = p51_p45Ids.filter(id => !p45Map.has(id))
-      if (missingP45Ids.length > 0) {
-        const extraP45 = await prisma.workflowTask.findMany({
-          where: { id: { in: missingP45Ids } },
-          select: { id: true, resultData: true }
-        })
-        for (const t of extraP45) p45Map.set(t.id, t.resultData as any)
+      const p45Map = new Map(p45Tasks.map(t => [t.id, t.resultData as any]))
+
+      // 5. Helper: get sourceRow from P4.5
+      const getSourceRow = (p45Id: string | undefined): number | null => {
+        if (!p45Id) return null
+        const p45Data = p45Map.get(p45Id)
+        if (!p45Data) return null
+        const req = (p45Data.materialIssueRequests as Array<any>)?.[0]
+        return req?.sourceRow ?? null
       }
 
-      const getWbsItemName = (projectId: string, sourceRow: number | null | undefined): string => {
-        if (sourceRow == null || sourceRow === undefined) return 'Hạng mục chung'
+      // 6. Get plan data for WBS hang muc names
+      const planTasks = await prisma.workflowTask.findMany({
+        where: { projectId: { in: projectIds }, stepCode: { in: ['P1.3', 'P1.2A'] } },
+        select: { projectId: true, resultData: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      const planMap = new Map<string, any>()
+      for (const pt of planTasks) {
+        if (!planMap.has(pt.projectId)) planMap.set(pt.projectId, pt.resultData)
+      }
+
+      const getWbsItemName = (projectId: string, sourceRow: number | null): string => {
+        if (sourceRow == null) return 'Hạng mục chung'
         const planData = planMap.get(projectId) || {}
         try {
           const wbsRaw = planData.wbsItems as string | undefined
@@ -97,8 +109,6 @@ export async function GET(req: NextRequest) {
         return 'Hạng mục chung'
       }
 
-      const weeklyDataMap = new Map<string, any>()
-
       const STAGE_LABELS: Record<string, string> = {
         cutting: 'Pha cắt', fitup: 'Gá lắp', welding: 'Hàn',
         machining: 'Gia công cơ khí', tryAssembly: 'Thử lắp ráp',
@@ -106,6 +116,8 @@ export async function GET(req: NextRequest) {
         painting: 'Sơn phủ', insulation: 'Bảo ôn', packing: 'Đóng kiện',
         delivery: 'Giao hàng',
       }
+
+      const weeklyDataMap = new Map<string, any>()
 
       const getWeek = (d: Date) => {
         const date = new Date(d.getTime())
@@ -115,23 +127,34 @@ export async function GET(req: NextRequest) {
         return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
       }
 
+      // Helper: parse volume string like "2000 kg" or "2,268.93 kg" to number
+      const parseVolumeStr = (v: any): number => {
+        if (typeof v === 'number') return v
+        if (!v || typeof v !== 'string') return 0
+        return Number(String(v).replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
+      }
+
       for (const t of p54Tasks) {
         if (!t.completedAt) continue
         const rd = (t.resultData as any) || {}
-        // Use PM confirmed volume if available, fallback to completedQuantity
         const vol = Number(rd.pmConfirmedVolume ?? rd.completedQuantity) || 0
         if (vol <= 0) continue
 
-        const p45Id = rd.sourceP45TaskId
-        const p45Data = p45Id ? p45Map.get(p45Id) : null
-        const req = (p45Data?.materialIssueRequests as Array<any>)?.[0]
-        const sourceRow = req?.sourceRow
+        // Read P5.1 data for this P5.4
+        const p51Id = rd.sourceP51TaskId as string
+        const p51Data = p51Id ? p51Map.get(p51Id) : null
+        const lsxData = p51Data?.lsxData || {}
+        const stageKey = rd.stageKey || p51Data?.stageKey || ''
+        const p45Id = rd.sourceP45TaskId || p51Data?.sourceP45TaskId
+        const sourceRow = getSourceRow(p45Id)
 
         const pCode = t.project.projectCode
         const pName = t.project.projectName
-        const hangMuc = getWbsItemName(t.projectId, sourceRow)
-        const stageKey = req?.stageKey || rd.stageKey || ''
-        const stageName = STAGE_LABELS[stageKey] || stageKey || 'Công đoạn chung'
+
+        // Hang muc: prefer lsxData items, fallback to WBS lookup
+        const lsxHangMuc = lsxData.items?.[0]?.hangMuc
+        const hangMuc = (lsxHangMuc && lsxHangMuc !== '—') ? lsxHangMuc : getWbsItemName(t.projectId, sourceRow)
+        const stageName = STAGE_LABELS[stageKey] || lsxData.stageLabel || stageKey || 'Công đoạn chung'
         
         const weekKey = `Tuần ${getWeek(new Date(t.completedAt))}`
 
@@ -147,25 +170,33 @@ export async function GET(req: NextRequest) {
         const hmNode = projNode.hangMucs.get(hangMuc)
         hmNode.totalHm += vol
 
-        // Ensure stage node exists
         if (!hmNode.stages.has(stageName)) {
-          // Calculate one-time metrics for this stage when first created
-          const p3rd = p3Map.get(t.projectId) || {}
-          let cells: any = {}
-          try { cells = typeof p3rd.cellAssignments === 'string' ? JSON.parse(p3rd.cellAssignments) : (p3rd.cellAssignments || {}) } catch {}
-          const assigns = sourceRow != null && stageKey ? (cells[String(sourceRow)]?.[stageKey] || []) : []
-          const totalAssigned = assigns.reduce((sum: number, a: any) => sum + (Number(a.volume) || 0), 0)
+          // totalAssigned: sum all team volumes from cellAssignments for this sourceRow + stageKey
+          let totalAssigned = 0
+          if (sourceRow != null && stageKey) {
+            const p3rd = p3Map.get(t.projectId) || {}
+            let cells: any = {}
+            try { cells = typeof p3rd.cellAssignments === 'string' ? JSON.parse(p3rd.cellAssignments) : (p3rd.cellAssignments || {}) } catch {}
+            const assigns = cells[String(sourceRow)]?.[stageKey] || []
+            totalAssigned = assigns.reduce((sum: number, a: any) => sum + (Number(a.volume) || 0), 0)
+          }
+          // Fallback: if cellAssignments gave 0, use lsxData volume from P5.1
+          if (totalAssigned === 0 && lsxData.items?.[0]?.volume) {
+            totalAssigned = parseVolumeStr(lsxData.items[0].volume)
+          }
 
-          const totalProduced = sourceRow != null && stageKey ? allP51Tasks.filter(p51 => {
-             if (p51.projectId !== t.projectId) return false
-             const p51rd = (p51.resultData as any) || {}
-             if (p51rd.stageKey !== stageKey) return false
-             const p51_45Id = p51rd.sourceP45TaskId
-             if (!p51_45Id) return false
-             const p51_45Data = p45Map.get(p51_45Id)
-             const preq = (p51_45Data?.materialIssueRequests as Array<any>)?.[0]
-             return preq?.sourceRow === sourceRow
-          }).reduce((s, p) => s + (Number((p.resultData as any)?.completedQuantity) || 0), 0) : 0
+          // totalProduced: sum completedQuantity from all P5.1 tasks with same stageKey + sourceRow
+          const totalProduced = allP51Tasks.filter(p51 => {
+            if (p51.projectId !== t.projectId) return false
+            const p51rd = (p51.resultData as any) || {}
+            if (p51rd.stageKey !== stageKey) return false
+            // If we have sourceRow, match on it via P4.5
+            if (sourceRow != null) {
+              const p51SourceRow = getSourceRow(p51rd.sourceP45TaskId)
+              return p51SourceRow === sourceRow
+            }
+            return true // same project + same stage
+          }).reduce((s, p51) => s + (Number((p51.resultData as any)?.completedQuantity) || 0), 0)
 
           hmNode.stages.set(stageName, { name: stageName, weeks: {}, total: 0, totalAssigned, totalProduced, totalRemaining: 0 })
         }
