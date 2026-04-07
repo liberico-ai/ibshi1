@@ -7,6 +7,7 @@ import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
+import BomPrUploadUI from './components/BomPrUploadUI'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
@@ -1773,11 +1774,13 @@ export default function TaskDetailPage() {
       return
     }
 
-    // Validate BOM items for P2.1 (VT chính) — P2.2 is optional
+    // Validate PR data for P2.1 (VT chính) — must have uploaded PR
     if (task.stepCode === 'P2.1' && action === 'complete') {
-      const filledBomItems = bomItems.filter(b => b.name.trim() && b.code.trim())
-      if (filledBomItems.length < 3) {
-        setError('Danh sách vật tư phải có tối thiểu 3 mục (đã nhập tên + mã VT)')
+      const prData = formData['bomPrItems']
+      let prItems: unknown[] = []
+      try { prItems = prData ? JSON.parse(String(prData)) : [] } catch { prItems = [] }
+      if (!Array.isArray(prItems) || prItems.length < 1) {
+        setError('Vui lòng upload file PR Excel từ phòng Thiết kế trước khi hoàn thành')
         setSubmitting(false)
         return
       }
@@ -3576,7 +3579,20 @@ export default function TaskDetailPage() {
                   { key: 'bomSupply', label: '📋 VT phụ — Kho (P2.3)', color: '#10b981' },
                 ].map(section => {
                   const data = previousStepData[section.key as keyof typeof previousStepData] as Record<string, unknown> | null
-                  const items = (data?.bomItems as { name: string; code: string; spec: string; quantity: string; unit: string }[]) || []
+                  // P2.1 stores PR data as bomPrItems (new format), fallback to old bomItems
+                  let items: { name: string; code: string; spec: string; quantity: string; unit: string }[] = []
+                  if (section.key === 'bomMain' && data?.bomPrItems) {
+                    try {
+                      const prRaw = typeof data.bomPrItems === 'string' ? JSON.parse(data.bomPrItems as string) : data.bomPrItems
+                      items = (prRaw as { stt: string; description: string; profile: string; quantity: number; unit: string }[]).map(
+                        (pr: { stt: string; description: string; profile: string; quantity: number; unit: string }) => ({
+                          name: pr.description, code: pr.stt, spec: pr.profile, quantity: String(pr.quantity), unit: pr.unit
+                        })
+                      )
+                    } catch { items = [] }
+                  } else {
+                    items = (data?.bomItems as typeof items) || []
+                  }
                   const filledItems = items.filter(b => b.name?.trim())
                   return (
                     <div key={section.key} className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${section.color}` }}>
@@ -3730,7 +3746,20 @@ export default function TaskDetailPage() {
                   { key: 'bomSupply', label: '📋 VT phụ — Kho (P2.3)', color: '#10b981' },
                 ].map(section => {
                   const data = previousStepData[section.key as keyof typeof previousStepData] as Record<string, unknown> | null
-                  const items = (data?.bomItems as { name: string; code: string; spec: string; quantity: string; unit: string }[]) || []
+                  // P2.1 stores PR data as bomPrItems (new format), fallback to old bomItems
+                  let items: { name: string; code: string; spec: string; quantity: string; unit: string }[] = []
+                  if (section.key === 'bomMain' && data?.bomPrItems) {
+                    try {
+                      const prRaw = typeof data.bomPrItems === 'string' ? JSON.parse(data.bomPrItems as string) : data.bomPrItems
+                      items = (prRaw as { stt: string; description: string; profile: string; quantity: number; unit: string }[]).map(
+                        (pr: { stt: string; description: string; profile: string; quantity: number; unit: string }) => ({
+                          name: pr.description, code: pr.stt, spec: pr.profile, quantity: String(pr.quantity), unit: pr.unit
+                        })
+                      )
+                    } catch { items = [] }
+                  } else {
+                    items = (data?.bomItems as typeof items) || []
+                  }
                   const filledItems = items.filter(b => b.name?.trim())
                   if (filledItems.length === 0) return null
                   return (
@@ -5355,12 +5384,22 @@ export default function TaskDetailPage() {
               </div>
             )}
 
-            {/* BOM Table — Editable for P2.1 (VT chính), P2.2 (VT hàn & sơn), P2.3 (VT phụ) */}
-            {(task.stepCode === 'P2.1' || task.stepCode === 'P2.2' || task.stepCode === 'P2.3') && (
+            {/* P2.1: PR Upload — parse Engineering's PR Excel, auto-match inventory */}
+            {task.stepCode === 'P2.1' && (
+              <BomPrUploadUI
+                isEditable={isActive}
+                bomPrData={formData['bomPrItems'] as string | undefined}
+                onChange={(val) => handleFieldChange('bomPrItems', val)}
+                projectCode={task.project?.projectCode}
+              />
+            )}
+
+            {/* BOM Table — Editable for P2.2 (VT hàn & sơn), P2.3 (VT phụ) */}
+            {(task.stepCode === 'P2.2' || task.stepCode === 'P2.3') && (
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: `2px solid ${(task.stepCode as string) === 'P3.3' ? '#f59e0b' : 'var(--accent)'}`, paddingBottom: 8, flex: 1 }}>
-                    {(task.stepCode as string) === 'P3.3' ? '📋 Đề nghị cấp VT cho thầu phụ' : task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : `📦 Danh sách vật tư ${task.stepCode === 'P2.1' ? '(BOM)' : '(Hàn & Sơn)'}`} {task.stepCode === 'P2.1' ? <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 mục)</span> : <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>}
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, flex: 1 }}>
+                    {task.stepCode === 'P2.3' ? '📦 Đề xuất vật tư' : '📦 Danh sách vật tư (Hàn & Sơn)'} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>
                   </h3>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" onClick={exportBomExcel}
@@ -5430,55 +5469,11 @@ export default function TaskDetailPage() {
                 ))}
                 <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
                   Đã nhập: <strong>{bomItems.filter(b => b.name.trim()).length}</strong> / {bomItems.length} mục
-                  {task.stepCode === 'P2.1' && bomItems.filter(b => b.name.trim() && b.code.trim()).length < 3 && (
-                    <span style={{ color: '#dc2626', marginLeft: 10 }}>⚠️ Cần ít nhất 3 mục có tên + mã VT</span>
-                  )}
                 </div>
               </div>
             )}
 
-            {/* P2.4: Show read-only BOM data from P2.1 */}
-            {task.stepCode === 'P2.4' && previousStepData?.bom && (
-              <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
-                  📦 Danh sách vật tư BOM <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>(từ P2.1 - Thiết kế)</span>
-                </h3>
-                {previousStepData.bom.bomNotes && (
-                  <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 8, fontSize: '0.85rem' }}>
-                    <strong>Ghi chú BOM:</strong> {String(previousStepData.bom.bomNotes)}
-                  </div>
-                )}
-                {previousStepData.bom.bomItems && (previousStepData.bom.bomItems as Array<{name: string; code: string; spec: string; quantity: string; unit: string}>).length > 0 ? (
-                  <>
-                    {/* Table Header */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 0.7fr 0.7fr', gap: 8, marginBottom: 6, padding: '0 4px' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>#</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tên VT</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Mã VT</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Quy chuẩn</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Số lượng</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>ĐVT</span>
-                    </div>
-                    {/* Table Rows */}
-                    {(previousStepData.bom.bomItems as Array<{name: string; code: string; spec: string; quantity: string; unit: string}>).map((item: {name: string; code: string; spec: string; quantity: string; unit: string}, idx: number) => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 0.7fr 0.7fr', gap: 8, padding: '8px 4px', background: idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent', borderRadius: 6, fontSize: '0.85rem' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{idx + 1}</span>
-                        <span>{item.name}</span>
-                        <span style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>{item.code}</span>
-                        <span>{item.spec || '—'}</span>
-                        <span style={{ fontWeight: 600 }}>{item.quantity || '—'}</span>
-                        <span>{item.unit || '—'}</span>
-                      </div>
-                    ))}
-                    <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-                      Tổng: <strong>{(previousStepData.bom.bomItems as Array<{name: string}>).length}</strong> mục vật tư
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu BOM</div>
-                )}
-              </div>
-            )}
+            {/* P2.4 BOM data is now rendered above via bomMain/bomWeldPaint/bomSupply sections */}
 
             {/* P3.4: Production Order - now handled via WBS LSX workflow */}
 
