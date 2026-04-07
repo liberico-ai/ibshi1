@@ -42,6 +42,7 @@ export interface TeamAssign {
   startDate: string
   endDate: string
   notes?: string
+  rework_cloned?: boolean
 }
 
 export type CellAssignMap = Record<number, Record<string, TeamAssign[]>>

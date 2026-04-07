@@ -23,7 +23,7 @@ export async function POST(
 
     const bodyResult = await validateBody(request, rejectTaskSchema)
     if (!bodyResult.success) return bodyResult.response
-    const { reason, overrideRejectTo } = bodyResult.data
+    const { reason, overrideRejectTo, failedContext } = bodyResult.data
 
     // Verify task exists and is in-progress
     const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
@@ -55,7 +55,7 @@ export async function POST(
     }
 
     // Use userId from JWT token, not from body
-    const result = await rejectTask(taskId, payload.userId, reason, overrideRejectTo)
+    const result = await rejectTask(taskId, payload.userId, reason, overrideRejectTo, failedContext)
 
     // Invalidate dashboard and task caches after rejection
     await Promise.all([

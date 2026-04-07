@@ -4,6 +4,7 @@ import { z } from 'zod'
 export const rejectTaskSchema = z.object({
   reason: z.string().min(1, 'Lý do từ chối là bắt buộc'),
   overrideRejectTo: z.string().optional(),
+  failedContext: z.record(z.string(), z.any()).optional(),
 })
 
 export type RejectTaskInput = z.infer<typeof rejectTaskSchema>
