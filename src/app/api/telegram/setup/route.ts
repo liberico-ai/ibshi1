@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { getBot } from '@/lib/telegram'
+import { getBot, getWebhookSecret, getGroupChatId } from '@/lib/telegram'
 
 // POST /api/telegram/setup — Register webhook with Telegram (admin only)
 export async function POST(req: NextRequest) {
@@ -11,23 +11,25 @@ export async function POST(req: NextRequest) {
       return errorResponse('Chỉ BGĐ/Admin mới được cấu hình Telegram', 403)
     }
 
-    const bot = getBot()
+    const bot = await getBot()
     if (!bot) return errorResponse('TELEGRAM_BOT_TOKEN chưa được cấu hình', 500)
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL
     if (!appUrl) return errorResponse('NEXT_PUBLIC_APP_URL chưa được cấu hình', 500)
 
+    const secret = await getWebhookSecret()
+
     // Register webhook with Telegram
     await bot.api.setWebhook(`${appUrl}/api/telegram/webhook`, {
-      secret_token: process.env.TELEGRAM_WEBHOOK_SECRET,
+      secret_token: secret || undefined,
     })
 
-    const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID
+    const groupChatId = await getGroupChatId()
 
     return successResponse({
       webhookSet: true,
       webhookUrl: `${appUrl}/api/telegram/webhook`,
-      groupChatId: groupChatId || 'Chưa cấu hình — thêm TELEGRAM_GROUP_CHAT_ID vào .env',
+      groupChatId: groupChatId || 'Chưa cấu hình — thêm telegram_group_chat_id vào Cài đặt',
     }, 'Telegram webhook đã được đăng ký')
   } catch (err) {
     console.error('POST /api/telegram/setup error:', err)

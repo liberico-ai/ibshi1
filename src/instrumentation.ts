@@ -4,8 +4,9 @@
 // ══════════════════════════════════════════════════════════════
 
 export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs' && process.env.TELEGRAM_BOT_TOKEN) {
-    // Delay to let the server fully initialize
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Delay to let the server + DB fully initialize
+    // Bot token can be in env OR in database (SystemConfig)
     setTimeout(async () => {
       try {
         const { startPolling } = await import('@/lib/telegram')

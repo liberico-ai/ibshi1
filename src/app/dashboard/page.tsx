@@ -231,21 +231,21 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
         <div>
-          <span className="mono-label" style={{ color: 'var(--accent)' }}>{p.projectCode}</span>
-          <h4 style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-heading)', marginTop: 4 }}>{p.projectName}</h4>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>{p.clientName}</p>
+          <span className="mono-label" style={{ color: '#f06876' }}>{p.projectCode}</span>
+          <h4 style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: '#f0f4f8', marginTop: 4 }}>{p.projectName}</h4>
+          <p style={{ fontSize: 'var(--text-sm)', color: '#94a3b8', marginTop: 2 }}>{p.clientName}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <span className="stat-value" style={{ fontSize: 'var(--text-2xl)', color: p.progress > 50 ? 'var(--success)' : 'var(--text-heading)' }}>{p.progress}%</span>
-          <p style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--text-muted)', marginTop: 2 }}>{p.completedTasks}/{p.totalTasks} tasks</p>
+          <span className="stat-value" style={{ fontSize: 'var(--text-2xl)', color: p.progress > 50 ? '#34d399' : '#e2e8f0' }}>{p.progress}%</span>
+          <p style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: '#94a3b8', marginTop: 2 }}>{p.completedTasks}/{p.totalTasks} tasks</p>
         </div>
       </div>
 
       {/* Task progress bar */}
       <div style={{ marginBottom: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', width: 100 }}>Tiến độ C.Việc</span>
-          <div className="progress-bar" style={{ flex: 1 }}>
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#94a3b8', width: 100 }}>Tiến độ C.Việc</span>
+          <div className="progress-bar" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }}>
             <div className={`progress-bar-fill ${getProgressColor(p.progress)}`} style={{ width: `${p.progress}%` }} />
           </div>
         </div>
@@ -254,14 +254,14 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
       {/* Volume progress bar */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', width: 100 }}>Khối lượng T.Tế</span>
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#94a3b8', width: 100 }}>Khối lượng T.Tế</span>
           {vol.estimatedKg > 0 ? (
-            <div style={{ flex: 1, height: 8, borderRadius: 4, background: '#e8ecf1', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.1)', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(vol.completedPercent, 100)}%`, background: '#93c5fd', borderRadius: 4, transition: 'width 0.6s ease' }} />
               <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(vol.acceptedPercent, 100)}%`, background: '#2563eb', borderRadius: 4, transition: 'width 0.6s ease' }} />
             </div>
           ) : (
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu KL (BOM)</span>
+            <span style={{ fontSize: 'var(--text-xs)', color: '#64748b', fontStyle: 'italic' }}>Chưa có dữ liệu KL (BOM)</span>
           )}
         </div>
       </div>
@@ -271,15 +271,15 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {depts.slice(0, 6).map(([dept, v]) => (
             <span key={dept} className="dept-tag" style={{
-              background: `${DEPT_COLORS[dept] || '#64748b'}18`,
-              color: DEPT_COLORS[dept] || '#64748b',
+              background: `${DEPT_COLORS[dept] || '#64748b'}30`,
+              color: DEPT_COLORS[dept] || '#94a3b8',
             }}>
               {dept}:{v.done}/{v.total}
             </span>
           ))}
         </div>
         {vol.estimatedKg > 0 && (
-          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#2563eb', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#60a5fa', whiteSpace: 'nowrap' }}>
             ⚖️ {(vol.acceptedKg / 1000).toFixed(1)}/{(vol.estimatedKg / 1000).toFixed(1)}T ({vol.acceptedPercent}% NT)
           </span>
         )}
