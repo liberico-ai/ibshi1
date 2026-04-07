@@ -37,15 +37,50 @@ export async function GET(req: NextRequest) {
         orderBy: { completedAt: 'asc' },
       })
 
-      // Extract P5.1 IDs to get lsxData (hangMuc, stageLabel)
-      const p51Ids = [...new Set(p54Tasks.map(t => ((t.resultData as any)?.sourceP51TaskId as string)).filter(Boolean))]
-      const p51Tasks = await prisma.workflowTask.findMany({
-        where: { id: { in: p51Ids } },
-        select: { id: true, resultData: true },
-      })
-      const p51Map = new Map(p51Tasks.map(t => [t.id, t.resultData as any]))
+      // Extract P4.5 IDs and Project IDs to build the WBS context
+      const p45Ids = [...new Set(p54Tasks.map(t => ((t.resultData as any)?.sourceP45TaskId as string)).filter(Boolean))]
+      const projectIds = [...new Set(p54Tasks.map(t => t.projectId))]
+
+      const [p45Tasks, planTasks] = await Promise.all([
+        prisma.workflowTask.findMany({
+          where: { id: { in: p45Ids } },
+          select: { id: true, resultData: true },
+        }),
+        prisma.workflowTask.findMany({
+          where: { projectId: { in: projectIds }, stepCode: { in: ['P1.3', 'P1.2A'] } },
+          select: { projectId: true, resultData: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      ])
+
+      const p45Map = new Map(p45Tasks.map(t => [t.id, t.resultData as any]))
+      const planMap = new Map<string, any>()
+      for (const pt of planTasks) {
+        if (!planMap.has(pt.projectId)) planMap.set(pt.projectId, pt.resultData)
+      }
+
+      const getWbsItemName = (projectId: string, sourceRow: number | null | undefined): string => {
+        if (sourceRow == null || sourceRow === undefined) return 'Hạng mục chung'
+        const planData = planMap.get(projectId) || {}
+        try {
+          const wbsRaw = planData.wbsItems as string | undefined
+          if (wbsRaw) {
+            const wbsList = JSON.parse(wbsRaw)
+            return wbsList[Number(sourceRow)]?.hangMuc || 'Hạng mục chung'
+          }
+        } catch { /* ignore */ }
+        return 'Hạng mục chung'
+      }
 
       const weeklyDataMap = new Map<string, any>()
+
+      const STAGE_LABELS: Record<string, string> = {
+        cutting: 'Pha cắt', fitup: 'Gá lắp', welding: 'Hàn',
+        machining: 'Gia công cơ khí', tryAssembly: 'Thử lắp ráp',
+        dismantle: 'Tháo dỡ', blasting: 'Bắn bi / Làm sạch',
+        painting: 'Sơn phủ', insulation: 'Bảo ôn', packing: 'Đóng kiện',
+        delivery: 'Giao hàng',
+      }
 
       const getWeek = (d: Date) => {
         const date = new Date(d.getTime())
@@ -58,16 +93,21 @@ export async function GET(req: NextRequest) {
       for (const t of p54Tasks) {
         if (!t.completedAt) continue
         const rd = (t.resultData as any) || {}
-        const vol = Number(rd.completedQuantity) || 0
+        // Use PM confirmed volume if available, fallback to completedQuantity
+        const vol = Number(rd.pmConfirmedVolume ?? rd.completedQuantity) || 0
         if (vol <= 0) continue
 
-        const p51Data = rd.sourceP51TaskId ? p51Map.get(rd.sourceP51TaskId) : null
-        const lsxData = p51Data?.lsxData || {}
-        
+        const p45Id = rd.sourceP45TaskId
+        const p45Data = p45Id ? p45Map.get(p45Id) : null
+        const req = (p45Data?.materialIssueRequests as Array<any>)?.[0]
+        const sourceRow = req?.sourceRow
+
         const pCode = t.project.projectCode
         const pName = t.project.projectName
-        const hangMuc = lsxData.items?.[0]?.hangMuc || 'Hạng mục chung'
-        const stageName = lsxData.stageLabel || rd.stageKey || 'Công đoạn chung'
+        const hangMuc = getWbsItemName(t.projectId, sourceRow)
+        const stageKey = req?.stageKey || rd.stageKey || ''
+        const stageName = STAGE_LABELS[stageKey] || stageKey || 'Công đoạn chung'
+        
         const weekKey = `Tuần ${getWeek(new Date(t.completedAt))}`
 
         if (!weeklyDataMap.has(pCode)) {

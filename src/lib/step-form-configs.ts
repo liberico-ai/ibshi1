@@ -563,7 +563,9 @@ const P5_4: StepFormConfig = {
   formType: 'input',
   title: 'PM nghiệm thu khối lượng thực hiện',
   description: 'PM xác nhận KL hoàn thành của tổ và thầu phụ. Dữ liệu cập nhật WBS progress%, tính lương khoán, trigger milestone billing.',
-  fields: [],
+  fields: [
+    { key: 'pmConfirmedVolume', label: 'Khối lượng xác nhận', labelEn: 'Confirmed Volume', type: 'number', required: true },
+  ],
   checklist: [
     { key: 'volume_confirmed', label: 'Xác nhận đã hoàn thành đủ khối lượng', required: true },
     { key: 'volume_verified', label: 'Đã xác nhận KL hoàn thành', required: true },
