@@ -545,7 +545,6 @@ const P5_3: StepFormConfig = {
   title: 'QC nghiệm thu sản phẩm trong quá trình SX',
   description: 'QC kiểm tra theo ITP tại Hold Point và Witness Point. Pass → tiếp, Fail → NCR, gắn WBS và job card.',
   fields: [
-    { key: 'itpCode', label: 'Kế hoạch kiểm tra và nghiệm thu (ITP)', labelEn: 'ITP Code', type: 'text', required: true },
     // Multi QC inspection items form rendered dynamically in page.tsx
     { key: 'inspectionNotes', label: 'Ghi chú nghiệm thu', labelEn: 'Inspection Notes', type: 'textarea', fullWidth: true },
   ],
