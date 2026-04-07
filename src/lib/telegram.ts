@@ -146,9 +146,9 @@ export async function getWebhookSecret(): Promise<string | null> {
 
 export async function sendGroupMessage(text: string): Promise<void> {
   const bot = await getBot()
-  if (!bot) return
+  if (!bot) { console.warn('🤖 sendGroupMessage: no bot (token missing)'); return }
   const chatId = await getGroupChatId()
-  if (!chatId) return
+  if (!chatId) { console.warn('🤖 sendGroupMessage: no groupChatId'); return }
   try {
     await bot.api.sendMessage(chatId, text, { parse_mode: 'HTML' })
   } catch (err) {

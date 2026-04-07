@@ -486,7 +486,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
 
     const updated = await assignTask(id, body.assignToUserId)
 
-    // Send Telegram group notification + tag assigned user (fire-and-forget)
+    // Send Telegram group notification + tag assigned user
     try {
       const { notifyTaskAssigned } = await import('@/lib/telegram-notifications')
       const [fullTask, assigner, assignee] = await Promise.all([
@@ -501,7 +501,8 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
         prisma.user.findUnique({ where: { id: body.assignToUserId }, select: { fullName: true, telegramChatId: true } }),
       ])
       if (fullTask?.project && assigner && assignee) {
-        notifyTaskAssigned({
+        console.log(`📌 Telegram assign: ${assigner.fullName} → ${assignee.fullName} [${fullTask.stepCode}] ${fullTask.project.projectCode}`)
+        await notifyTaskAssigned({
           assignedUser: { fullName: assignee.fullName, telegramChatId: assignee.telegramChatId },
           assignedByName: assigner.fullName,
           stepCode: fullTask.stepCode,
@@ -510,10 +511,13 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
           projectName: fullTask.project.projectName,
           deadline: fullTask.deadline,
           taskId: fullTask.id,
-        }).catch(err => console.error('Telegram assign notify error:', err))
+        })
+        console.log('📌 Telegram assign: sent OK')
+      } else {
+        console.warn('📌 Telegram assign SKIPPED:', { task: !!fullTask, project: !!fullTask?.project, assigner: !!assigner, assignee: !!assignee })
       }
     } catch (err) {
-      console.error('Telegram assign notification error:', err)
+      console.error('📌 Telegram assign ERROR:', err)
     }
 
     return successResponse({ task: updated }, 'Đã phân công task')
