@@ -988,6 +988,9 @@ aside:hover .sidebar-toggle-btn {
   color: #e2e8f0;
   transition: all var(--duration-normal) var(--ease-out);
 }
+.project-row h4 {
+  color: #f0f4f8;
+}
 .project-row:hover {
   background: var(--ibs-navy-light);
   border-color: #2d5a8a;
