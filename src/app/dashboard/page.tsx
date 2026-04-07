@@ -227,24 +227,24 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
   const DEPT_COLORS: Record<string, string> = { SX: '#e74c3c', QC: '#2ecc71', KHO: '#f39c12', TK: '#3498db', PM: '#9b59b6', KTKH: '#1abc9c', TM: '#e67e22', KT: '#34495e', 'BGĐ': '#8e44ad', HT: '#95a5a6' }
 
   return (
-    <a href={`/dashboard/projects/${p.id}`} className="project-row" style={{ display: 'block', textDecoration: 'none' }}>
+    <a href={`/dashboard/projects/${p.id}`} className="project-row bg-ibs-navy hover:bg-ibs-navy-light text-ibs-navy-100 no-underline block">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-sm)' }}>
         <div>
-          <span className="mono-label pr-code">{p.projectCode}</span>
-          <div className="pr-name" style={{ fontSize: 'var(--text-base)', marginTop: 4 }}>{p.projectName}</div>
-          <p className="pr-client" style={{ fontSize: 'var(--text-sm)', marginTop: 2 }}>{p.clientName}</p>
+          <span className="text-xs font-mono font-bold text-ibs-red-light">{p.projectCode}</span>
+          <div className="text-base font-semibold text-white" style={{ marginTop: 4 }}>{p.projectName}</div>
+          <p className="text-sm text-ibs-navy-100" style={{ marginTop: 2 }}>{p.clientName}</p>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <span className={`stat-value ${p.progress > 50 ? 'pr-stat--done' : 'pr-stat'}`} style={{ fontSize: 'var(--text-2xl)' }}>{p.progress}%</span>
-          <p className="pr-muted" style={{ fontSize: 'var(--text-xs)', fontWeight: 500, marginTop: 2 }}>{p.completedTasks}/{p.totalTasks} tasks</p>
+        <div className="text-right">
+          <span className={`text-2xl font-bold ${p.progress > 50 ? 'text-success' : 'text-white'}`}>{p.progress}%</span>
+          <p className="text-xs font-medium text-ibs-navy-100" style={{ marginTop: 2 }}>{p.completedTasks}/{p.totalTasks} tasks</p>
         </div>
       </div>
 
       {/* Task progress bar */}
       <div style={{ marginBottom: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span className="pr-muted" style={{ fontSize: 'var(--text-xs)', fontWeight: 600, width: 100 }}>Tiến độ C.Việc</span>
+        <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+          <span className="text-xs font-semibold text-ibs-navy-100" style={{ width: 100 }}>Tiến độ C.Việc</span>
           <div className="progress-bar" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }}>
             <div className={`progress-bar-fill ${getProgressColor(p.progress)}`} style={{ width: `${p.progress}%` }} />
           </div>
@@ -253,22 +253,22 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
 
       {/* Volume progress bar */}
       <div style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="pr-muted" style={{ fontSize: 'var(--text-xs)', fontWeight: 600, width: 100 }}>Khối lượng T.Tế</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-ibs-navy-100" style={{ width: 100 }}>Khối lượng T.Tế</span>
           {vol.estimatedKg > 0 ? (
             <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.1)', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(vol.completedPercent, 100)}%`, background: '#93c5fd', borderRadius: 4, transition: 'width 0.6s ease' }} />
               <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(vol.acceptedPercent, 100)}%`, background: '#2563eb', borderRadius: 4, transition: 'width 0.6s ease' }} />
             </div>
           ) : (
-            <span style={{ fontSize: 'var(--text-xs)', fontStyle: 'italic' }} className="pr-muted">Chưa có dữ liệu KL (BOM)</span>
+            <span className="text-xs italic text-ibs-navy-100">Chưa có dữ liệu KL (BOM)</span>
           )}
         </div>
       </div>
 
       {/* Summary row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px var(--space-sm)' }}>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      <div className="flex items-center justify-between flex-wrap" style={{ gap: '4px var(--space-sm)' }}>
+        <div className="flex gap-1 flex-wrap">
           {depts.slice(0, 6).map(([dept, v]) => (
             <span key={dept} className="dept-tag" style={{
               background: `${DEPT_COLORS[dept] || '#64748b'}30`,
@@ -279,7 +279,7 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
           ))}
         </div>
         {vol.estimatedKg > 0 && (
-          <span className="pr-weight" style={{ fontSize: 'var(--text-xs)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+          <span className="text-xs font-semibold text-info whitespace-nowrap">
             ⚖️ {(vol.acceptedKg / 1000).toFixed(1)}/{(vol.estimatedKg / 1000).toFixed(1)}T ({vol.acceptedPercent}% NT)
           </span>
         )}
