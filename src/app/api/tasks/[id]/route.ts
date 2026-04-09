@@ -638,12 +638,12 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
           },
         }),
         prisma.user.findUnique({ where: { id: payload.userId }, select: { fullName: true } }),
-        prisma.user.findUnique({ where: { id: body.assignToUserId }, select: { fullName: true, telegramChatId: true } }),
+        prisma.user.findUnique({ where: { id: body.assignToUserId }, select: { fullName: true } }),
       ])
       if (fullTask?.project && assigner && assignee) {
         console.log(`📌 Telegram assign: ${assigner.fullName} → ${assignee.fullName} [${fullTask.stepCode}] ${fullTask.project.projectCode}`)
         await notifyTaskAssigned({
-          assignedUser: { fullName: assignee.fullName, telegramChatId: assignee.telegramChatId },
+          assignedUser: { fullName: assignee.fullName, telegramChatId: null },
           assignedByName: assigner.fullName,
           stepCode: fullTask.stepCode,
           stepName: fullTask.stepName,

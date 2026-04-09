@@ -131,19 +131,23 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
     code: 'P5.1', name: 'Yêu cầu nghiệm thu LSX', nameEn: 'LSX Acceptance Request',
     role: 'R06b', next: ['P5.3', 'P5.4'], phase: 5,
   },
+  'P5.1.1': {
+    code: 'P5.1.1', name: 'Yêu cầu nghiệm thu chất lượng hạng mục', nameEn: 'Item Quality Acceptance',
+    role: 'R09', next: [], phase: 5,
+  },
   'P5.2': {
     code: 'P5.2', name: 'Tổ SX báo cáo khối lượng hoàn thành theo tuần', nameEn: 'Weekly Production Volume Report',
     role: 'R06b', next: ['P5.3'], phase: 5,
   },
   'P5.3': {
-    code: 'P5.3', name: 'QC nghiệm thu sản phẩm trong quá trình SX', nameEn: 'QC In-Process Inspection',
+    code: 'P5.3', name: 'Nghiệm thu khối lượng tuần (QC)', nameEn: 'Weekly Volume Acceptance (QC)',
     role: 'R09', next: ['P5.4'], phase: 5,
-    rejectTo: 'P5.1', // QC fail → rework
+    // Created by CronJob Saturday morning -> leads to P5.4 when submitted
   },
   'P5.4': {
-    code: 'P5.4', name: 'PM nghiệm thu khối lượng thực hiện', nameEn: 'PM Volume Acceptance',
-    role: 'R02', next: ['P5.5'], phase: 5,
-    rejectTo: 'P5.1', // PM fail → trả về P5.1
+    code: 'P5.4', name: 'Nghiệm thu khối lượng tuần (PM)', nameEn: 'Weekly Volume Acceptance (PM)',
+    role: 'R02', next: [], phase: 5,
+    // Created by CronJob Saturday morning — identical content to P5.3
   },
   'P5.5': {
     code: 'P5.5', name: 'Tổng hợp và tính lương khoán', nameEn: 'Piece-rate Salary Calculation',
