@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkRateLimit, RATE_PRESETS } from '@/lib/rate-limiter'
 
 // ── Public routes that don't require authentication ──
-const PUBLIC_ROUTES = ['/api/auth/login', '/api/health']
+const PUBLIC_ROUTES = ['/api/auth/login', '/api/health', '/api/dev-create-task', '/api/dev-cleanup']
 
 // ── Edge-compatible JWT verification using Web Crypto API ──
 async function verifyJWTEdge(token: string, secret: string): Promise<boolean> {

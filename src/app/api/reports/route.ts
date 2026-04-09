@@ -31,86 +31,35 @@ export async function GET(req: NextRequest) {
 
     // ──── P-02: Project Progress (Weekly Volume from P5.4) ────
     if (type === 'project-progress') {
-      // 1. Get all completed P5.4 tasks
-      const p54Tasks = await prisma.workflowTask.findMany({
-        where: { stepCode: 'P5.4', status: 'DONE' },
-        include: { project: { select: { projectCode: true, projectName: true } } },
-        orderBy: { completedAt: 'asc' },
+      // 1. Lấy tất cả dự án đang chạy
+      const projects = await prisma.project.findMany({
+        where: { status: { not: 'CLOSED' } },
+        select: { id: true, projectCode: true, projectName: true },
+        orderBy: { createdAt: 'desc' }
       })
+      const projectIds = projects.map(p => p.id)
 
-      // 2. Get all P5.1 tasks to read lsxData (hangMuc, volume, stageLabel) and completedQuantity
-      const p51Ids = [...new Set(p54Tasks.map(t => ((t.resultData as any)?.sourceP51TaskId as string)).filter(Boolean))]
-      const projectIds = [...new Set(p54Tasks.map(t => t.projectId))]
-
-      const [p51Tasks, allP51Tasks] = await Promise.all([
-        prisma.workflowTask.findMany({
-          where: { id: { in: p51Ids } },
-          select: { id: true, resultData: true, projectId: true },
-        }),
-        prisma.workflowTask.findMany({
-          where: { projectId: { in: projectIds }, stepCode: 'P5.1', status: 'DONE' },
-          select: { id: true, resultData: true, projectId: true },
-        }),
-      ])
-      const p51Map = new Map(p51Tasks.map(t => [t.id, t.resultData as any]))
-
-      // 3. Get P3.3/P3.4 cellAssignments for totalAssigned volume per stage
-      const p3Tasks = await prisma.workflowTask.findMany({
-        where: { projectId: { in: projectIds }, stepCode: { in: ['P3.3', 'P3.4'] } },
+      // 2. Lấy dữ liệu WBS từ P1.2A (plan step) — đây là nơi lưu wbsItems
+      const p12aTasks = await prisma.workflowTask.findMany({
+        where: { projectId: { in: projectIds }, stepCode: 'P1.2A' },
         select: { projectId: true, resultData: true },
         orderBy: { createdAt: 'desc' },
       })
       const p3Map = new Map<string, any>()
-      for (const pt of p3Tasks) {
-        if (!p3Map.has(pt.projectId)) p3Map.set(pt.projectId, pt.resultData)
+      for (const pt of p12aTasks) {
+        if (!p3Map.has(pt.projectId)) p3Map.set(pt.projectId, pt.resultData) // Keep most recent
       }
 
-      // 4. Get P4.5 tasks for sourceRow lookup
-      const allP45Ids = [...new Set([
-        ...p54Tasks.map(t => ((t.resultData as any)?.sourceP45TaskId as string)),
-        ...allP51Tasks.map(t => ((t.resultData as any)?.sourceP45TaskId as string)),
-      ].filter(Boolean))]
-      const p45Tasks = await prisma.workflowTask.findMany({
-        where: { id: { in: allP45Ids } },
-        select: { id: true, resultData: true },
+
+      // 3. Lấy báo cáo hàng ngày (T2-T6) để CỘNG DỒN SL Sản xuất
+      const dailyLogs = await (prisma as any).dailyProductionLog.findMany({
+        where: { projectId: { in: projectIds } }
       })
-      const p45Map = new Map(p45Tasks.map(t => [t.id, t.resultData as any]))
 
-      // 5. Helper: get sourceRow from P4.5
-      const getSourceRow = (p45Id: string | undefined): number | null => {
-        if (!p45Id) return null
-        const p45Data = p45Map.get(p45Id)
-        if (!p45Data) return null
-        const req = (p45Data.materialIssueRequests as Array<any>)?.[0]
-        return req?.sourceRow ?? null
-      }
-
-      // 6. Get plan data for WBS hang muc names
-      const planTasks = await prisma.workflowTask.findMany({
-        where: { projectId: { in: projectIds }, stepCode: { in: ['P1.3', 'P1.2A'] } },
-        select: { projectId: true, resultData: true },
-        orderBy: { createdAt: 'desc' },
+      // 4. Lấy nhật ký nghiệm thu tuần để CỘNG DỒN KL Xác nhận
+      const weeklyLogs = await (prisma as any).weeklyAcceptanceLog.findMany({
+        where: { projectId: { in: projectIds }, role: 'PM' } // Chốt cuối cùng là số của PM
       })
-      const planMap = new Map<string, any>()
-      for (const pt of planTasks) {
-        const rd = (pt.resultData as any) || {}
-        if (rd.wbsItems && !planMap.has(pt.projectId)) {
-          planMap.set(pt.projectId, rd)
-        }
-      }
-
-      const getWbsItemName = (projectId: string, sourceRow: number | null): string => {
-        if (sourceRow == null) return 'Hạng mục chung'
-        const planData = planMap.get(projectId) || {}
-        try {
-          const wbsRaw = planData.wbsItems as string | undefined
-          if (wbsRaw) {
-            const wbsList = JSON.parse(wbsRaw)
-            return wbsList[Number(sourceRow)]?.hangMuc || 'Hạng mục chung'
-          }
-        } catch { /* ignore */ }
-        return 'Hạng mục chung'
-      }
 
       const STAGE_LABELS: Record<string, string> = {
         cutting: 'Pha cắt', fitup: 'Gá lắp', welding: 'Hàn',
@@ -120,98 +69,84 @@ export async function GET(req: NextRequest) {
         delivery: 'Giao hàng',
       }
 
-      const weeklyDataMap = new Map<string, any>()
-
-      const getWeek = (d: Date) => {
-        const date = new Date(d.getTime())
-        date.setHours(0, 0, 0, 0)
-        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7)
-        const week1 = new Date(date.getFullYear(), 0, 4)
-        return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
-      }
-
-      // Helper: parse volume string like "2000 kg" or "2,268.93 kg" to number
       const parseVolumeStr = (v: any): number => {
         if (typeof v === 'number') return v
         if (!v || typeof v !== 'string') return 0
         return Number(String(v).replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
       }
 
-      for (const t of p54Tasks) {
-        if (!t.completedAt) continue
-        const rd = (t.resultData as any) || {}
-        const vol = Number(rd.pmConfirmedVolume ?? rd.completedQuantity) || 0
-        if (vol <= 0) continue
+      const weeklyDataMap = new Map<string, any>()
 
-        // Read P5.1 data for this P5.4
-        const p51Id = rd.sourceP51TaskId as string
-        const p51Data = p51Id ? p51Map.get(p51Id) : null
-        const lsxData = p51Data?.lsxData || {}
-        const stageKey = rd.stageKey || p51Data?.stageKey || ''
-        const p45Id = rd.sourceP45TaskId || p51Data?.sourceP45TaskId
-        const sourceRow = getSourceRow(p45Id)
+      for (const p of projects) {
+        const pCode = p.projectCode
+        let totalProj = 0
+        const hmMap = new Map<string, any>()
 
-        const pCode = t.project.projectCode
-        const pName = t.project.projectName
+        const p3Data = p3Map.get(p.id) || {}
+        let wbsItems: any[] = []
+        try { wbsItems = JSON.parse(p3Data.wbsItems as string || '[]') } catch { wbsItems = [] }
 
-        // Hang muc: prefer WBS plan data (correct category), fallback to lsxData
-        const wbsHangMuc = getWbsItemName(t.projectId, sourceRow)
-        const hangMuc = wbsHangMuc !== 'Hạng mục chung' ? wbsHangMuc : (lsxData.items?.[0]?.hangMuc || 'Hạng mục chung')
-        const stageName = STAGE_LABELS[stageKey] || lsxData.stageLabel || stageKey || 'Công đoạn chung'
-        
-        const weekKey = `Tuần ${getWeek(new Date(t.completedAt))}`
+        // Gộp tất cả mã lsxCode từ cả bảng daily lẫn weekly
+        const stageKeysSet = new Set<string>()
+        dailyLogs.filter((d: any) => d.projectId === p.id).forEach((d: any) => stageKeysSet.add(d.lsxCode))
+        weeklyLogs.filter((w: any) => w.projectId === p.id).forEach((w: any) => stageKeysSet.add(w.lsxCode))
 
-        if (!weeklyDataMap.has(pCode)) {
-          weeklyDataMap.set(pCode, { projectCode: pCode, projectName: pName, hangMucs: new Map(), totalProj: 0 })
-        }
-        const projNode = weeklyDataMap.get(pCode)
-        projNode.totalProj += vol
+        for (const lsxCode of Array.from(stageKeysSet)) {
+          const parts = lsxCode.split('_')
+          const wbsIndex = parseInt(parts[0] || '0')
+          const wbsInfo = wbsItems[wbsIndex] || {}
 
-        if (!projNode.hangMucs.has(hangMuc)) {
-          projNode.hangMucs.set(hangMuc, { name: hangMuc, stages: new Map(), totalHm: 0 })
-        }
-        const hmNode = projNode.hangMucs.get(hangMuc)
-        hmNode.totalHm += vol
-
-        if (!hmNode.stages.has(stageName)) {
-          // totalAssigned = WBS item's khoiLuong (total volume for this hang muc)
-          let totalAssigned = 0
-          if (sourceRow != null) {
-            const planData = planMap.get(t.projectId) || {}
-            try {
-              const wbsRaw = planData.wbsItems as string | undefined
-              if (wbsRaw) {
-                const wbsList = JSON.parse(wbsRaw)
-                totalAssigned = parseVolumeStr(wbsList[Number(sourceRow)]?.khoiLuong)
-              }
-            } catch { /* ignore */ }
+          const hangMucName = wbsInfo.hangMuc || 'Hạng mục chung'
+          const wbsStageKey = parts.slice(1).join('_') || ''
+          const stageLabelDetail = wbsInfo.congDoan?.find((c: any) => c.key === wbsStageKey)
+          const stageName = stageLabelDetail?.label || STAGE_LABELS[wbsStageKey] || wbsStageKey || 'Công đoạn chung'
+          
+          if (!hmMap.has(hangMucName)) {
+            hmMap.set(hangMucName, { name: hangMucName, stages: new Map(), totalHm: 0 })
           }
-          // Fallback: use lsxData volume from P5.1
-          if (totalAssigned === 0 && lsxData.items?.[0]?.volume) {
-            totalAssigned = parseVolumeStr(lsxData.items[0].volume)
+          const hmNode = hmMap.get(hangMucName)
+
+          if (!hmNode.stages.has(stageName)) {
+            hmNode.stages.set(stageName, {
+              name: stageName,
+              weeks: {},
+              total: 0,
+              totalAssigned: parseVolumeStr(wbsInfo.khoiLuong) || 0,
+              totalProduced: 0,
+              totalRemaining: 0
+            })
+          }
+          const stgNode = hmNode.stages.get(stageName)
+
+          // TÍNH LŨY KẾ SL SẢN XUẤT (Cộng Dồn tất cả T2-T6)
+          const allDaily = dailyLogs.filter((d: any) => d.projectId === p.id && d.lsxCode === lsxCode)
+          const sumDaily = allDaily.reduce((sum: number, d: any) => sum + Number(d.reportedVolume), 0)
+          // Since multiple lsxCodes might map to the SAME stageName (if they have different WBS rows but same stage string?),
+          // Wait, the maps are nested by HangMuc -> StageName. So we must accumulate totalProduced.
+          stgNode.totalProduced += sumDaily
+
+          // TÍNH LŨY KẾ NGHIỆM THU TUẦN
+          const allWeekly = weeklyLogs.filter((w: any) => w.projectId === p.id && w.lsxCode === lsxCode)
+          for (const w of allWeekly) {
+            const weekKey = `Tuần ${w.weekNumber}`
+            const acceptedVal = Number(w.acceptedVolume) || 0
+            stgNode.weeks[weekKey] = (stgNode.weeks[weekKey] || 0) + acceptedVal
+            stgNode.total += acceptedVal
+            hmNode.totalHm += acceptedVal
+            totalProj += acceptedVal
           }
 
-          // totalProduced: sum completedQuantity from all P5.1 tasks with same stageKey + sourceRow
-          const totalProduced = allP51Tasks.filter(p51 => {
-            if (p51.projectId !== t.projectId) return false
-            const p51rd = (p51.resultData as any) || {}
-            if (p51rd.stageKey !== stageKey) return false
-            // If we have sourceRow, match on it via P4.5
-            if (sourceRow != null) {
-              const p51SourceRow = getSourceRow(p51rd.sourceP45TaskId)
-              return p51SourceRow === sourceRow
-            }
-            return true // same project + same stage
-          }).reduce((s, p51) => s + (Number((p51.resultData as any)?.completedQuantity) || 0), 0)
-
-          hmNode.stages.set(stageName, { name: stageName, weeks: {}, total: 0, totalAssigned, totalProduced, totalRemaining: 0 })
+          stgNode.totalRemaining = Math.max(0, stgNode.totalAssigned - stgNode.total)
         }
 
-        const stgNode = hmNode.stages.get(stageName)
-        stgNode.total += vol
-        stgNode.weeks[weekKey] = (stgNode.weeks[weekKey] || 0) + vol
-        // Còn lại cần TH = SL phân giao (WBS) - KL xác nhận (P5.4)
-        stgNode.totalRemaining = stgNode.totalAssigned - stgNode.total
+        if (hmMap.size > 0) {
+          weeklyDataMap.set(pCode, {
+            projectCode: pCode,
+            projectName: p.projectName,
+            hangMucs: hmMap,
+            totalProj
+          })
+        }
       }
 
       // Convert Maps to Arrays for JSON response structure

@@ -9,6 +9,8 @@ import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
 import BomPrUploadUI from './components/BomPrUploadUI'
 import WeldPaintUploadUI from './components/WeldPaintUploadUI'
+import DailyProductionUI from './components/DailyProductionUI'
+import WeeklyAcceptanceUI from './components/WeeklyAcceptanceUI'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
@@ -2020,7 +2022,7 @@ export default function TaskDetailPage() {
       )}
 
       {/* Rejection reason banner — generic for any step rejection */}
-      {rejectionInfo && (() => {
+      {rejectionInfo && task?.stepName !== 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' && (() => {
         const fromStep = (rejectionInfo as { fromStep?: string }).fromStep
         const isQC = fromStep === 'P4.3' || fromStep === 'P5.3'
         const title = fromStep === 'P5.3' ? 'QC đã từ chối nghiệm thu sản phẩm SX'
@@ -2398,8 +2400,18 @@ export default function TaskDetailPage() {
               </>
             ) : (
               <>
+            {/* P5.1: BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY) - Persistent Task */}
+            {task.stepCode === 'P5.1' && task.stepName === 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' && (
+              <DailyProductionUI task={task} isActive={isActive} />
+            )}
+
+            {/* P5.3 / P5.4: NGHIỆM THU KHỐI LƯỢNG TUẦN — CronJob Saturday */}
+            {(task.stepCode === 'P5.3' || task.stepCode === 'P5.4') && (
+              <WeeklyAcceptanceUI task={task} isActive={isActive} />
+            )}
+
             {/* P5.1: Thông tin Lệnh sản xuất from P3.3/P3.4 (dynamic) */}
-            {task.stepCode === 'P5.1' && (() => {
+            {task.stepCode === 'P5.1' && task.stepName !== 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' && (() => {
               const STAGE_LABELS: Record<string, string> = {
                 cutting: 'Pha cắt', fitup: 'Gá lắp', welding: 'Hàn',
                 machining: 'Gia công cơ khí', tryAssembly: 'Thử lắp ráp',
@@ -4968,338 +4980,8 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {/* P5.3: Multi-item QC inspection form */}
-            {task.stepCode === 'P5.3' && (() => {
-              const lsx = previousStepData?.lsxTeamData as Record<string, unknown> | null;
-              const teamName = lsx?.teamName as string || '—';
-              const volume = lsx?.volume as string || '—';
-              const startDate = lsx?.startDate as string || '';
-              const endDate = lsx?.endDate as string || '';
-              const stageKey = lsx?.stageKey as string || '';
-              const hangMuc = lsx?.hangMuc as string || '—';
-              
-              const stageLabels: Record<string, string> = {
-                cutting: 'Cắt', machining: 'GCCK', fitup: 'Gá', welding: 'Hàn',
-                tryAssembly: 'Tổ hợp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch',
-                painting: 'Sơn', insulation: 'Bảo ôn', commissioning: 'Chạy thử',
-                packing: 'Đóng kiện', delivery: 'Giao hàng',
-              };
-              const stageName = stageLabels[stageKey] || stageKey || '—';
-              
-              const timeRange = startDate && endDate ? `${startDate} - ${endDate}` : (startDate || endDate || '—');
 
-              type QcItem = { task: string; result: string }
-              const raw = formData.qcItems as string | undefined
-              let qcItems: QcItem[] = []
-              try { qcItems = raw ? JSON.parse(raw) : [] } catch { qcItems = [] }
-              if (qcItems.length === 0) qcItems = [{ task: '', result: '' }]
-              const saveQc = (items: QcItem[]) => handleFieldChange('qcItems', JSON.stringify(items))
-              const hasFail = qcItems.some(q => q.result === 'FAIL')
-              const resultColors: Record<string, { bg: string; color: string; border: string }> = {
-                PASS: { bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' },
-                FAIL: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
-                CONDITIONAL: { bg: '#fef3c7', color: '#d97706', border: '#fde68a' },
-              }
-              return (
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${hasFail ? '#dc2626' : '#8b5cf6'}` }}>
-                  {lsx && (
-                    <div style={{ marginBottom: 16, padding: '12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                      <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: '#475569' }}>📋 Lệnh nhận việc (P5.1)</h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1.5fr 1fr', gap: 12, fontSize: '0.8rem' }}>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)' }}>Hạng mục</span>
-                          <div style={{ fontWeight: 600 }}>{hangMuc}</div>
-                        </div>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)' }}>Tổ sản xuất</span>
-                          <div style={{ fontWeight: 600 }}>{teamName}</div>
-                        </div>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)' }}>Công đoạn</span>
-                          <div style={{ fontWeight: 600 }}>{stageName}</div>
-                        </div>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)' }}>KL giao</span>
-                          <div style={{ fontWeight: 600 }}>{volume}</div>
-                        </div>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)' }}>Thời gian thực hiện</span>
-                          <div style={{ fontWeight: 600 }}>{timeRange}</div>
-                        </div>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)' }}>Ngày YC</span>
-                          <div style={{ fontWeight: 700, color: '#f59e0b' }}>{task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : '—'}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
-                  {/* Phần tải lên ITP */}
-                  <div style={{ marginBottom: 16, padding: '16px', background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
-                    <MultiFileUpload 
-                      label="📥 Kế hoạch kiểm tra và nghiệm thu (ITP)"
-                      entityType="Task_ITP"
-                      entityId={task.id}
-                      disabled={!isActive}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem', color: hasFail ? '#dc2626' : '#8b5cf6' }}>
-                      🔍 Danh sách công việc nghiệm thu ({qcItems.length})
-                    </h3>
-                    {isActive && (
-                      <button type="button" onClick={() => saveQc([...qcItems, { task: '', result: '' }])}
-                        style={{ fontSize: '0.75rem', color: '#8b5cf6', background: 'none', border: '1px dashed #8b5cf6', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}>
-                        + Thêm
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr 30px', gap: 6, padding: '4px 0', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
-                    {['#', 'Công việc kiểm tra', 'Kết quả', ''].map(h => (
-                      <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                    ))}
-                  </div>
-                  {qcItems.map((item, idx) => {
-                    const rc = resultColors[item.result]
-                    return (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr 30px', gap: 6, padding: '4px 0', alignItems: 'center', background: rc?.bg || 'transparent', borderRadius: 6, marginBottom: 2, paddingLeft: 4, paddingRight: 4 }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{idx + 1}</span>
-                        <input className="input" placeholder="Mô tả công việc cần kiểm tra" value={item.task} disabled={!isActive}
-                          onChange={e => { const next = [...qcItems]; next[idx] = { ...next[idx], task: e.target.value }; saveQc(next) }}
-                          style={{ fontSize: '0.8rem', padding: '5px 8px' }} />
-                        <select className="input" value={item.result} disabled={!isActive}
-                          onChange={e => { const next = [...qcItems]; next[idx] = { ...next[idx], result: e.target.value }; saveQc(next) }}
-                          style={{ fontSize: '0.8rem', padding: '5px 8px', fontWeight: 700, color: rc?.color, background: rc?.bg, border: rc ? `1px solid ${rc.border}` : undefined }}>
-                          <option value="">-- Chọn --</option>
-                          <option value="PASS">✅ PASS</option>
-                          <option value="FAIL">❌ FAIL</option>
-                          <option value="CONDITIONAL">⚠️ CONDITIONAL</option>
-                        </select>
-                        {isActive && qcItems.length > 1 && (
-                          <button type="button" onClick={() => saveQc(qcItems.filter((_, i) => i !== idx))}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700, padding: 0 }}>−</button>
-                        )}
-                      </div>
-                    )
-                  })}
-                  {/* Summary */}
-                  <div style={{ marginTop: 10, padding: '8px 12px', background: hasFail ? '#fef2f2' : '#f0fdf4', borderRadius: 8, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {hasFail ? (
-                      <>
-                        <span style={{ color: '#dc2626', fontWeight: 700 }}>⚠️ Có {qcItems.filter(q => q.result === 'FAIL').length} hạng mục FAIL</span>
-                        <span style={{ color: '#dc2626' }}>— Chỉ có thể Từ chối → trả về P5.1</span>
-                      </>
-                    ) : (
-                      <span style={{ color: '#16a34a', fontWeight: 600 }}>✅ {qcItems.filter(q => q.result === 'PASS').length} PASS, {qcItems.filter(q => q.result === 'CONDITIONAL').length} CONDITIONAL</span>
-                    )}
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* P5.4: Show SX report from P5.1 + P5.2 for PM review */}
-            {task.stepCode === 'P5.4' && previousStepData && (() => {
-              const jd = previousStepData.jobCardData as Record<string, unknown> | null
-              const vd = previousStepData.volumeData as Record<string, unknown> | null
-              if (!jd && !vd) return null
-
-              // P5.1 data
-              const lsx = previousStepData?.lsxTeamData as Record<string, unknown> | null;
-              const teamName = lsx?.teamName as string || '—';
-              const volume = lsx?.volume as string || '—';
-              const startDate = lsx?.startDate as string || '';
-              const endDate = lsx?.endDate as string || '';
-              const stageKey = lsx?.stageKey as string || '';
-              const hangMuc = lsx?.hangMuc as string || '—';
-              const timeRange = startDate && endDate ? `${startDate} - ${endDate}` : (startDate || endDate || '—');
-              
-              const stageLabels: Record<string, string> = {
-                cutting: 'Pha cắt', machining: 'Gia công CK', fitup: 'Gá lắp', welding: 'Hàn',
-                tryAssembly: 'Tử lắp ráp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch',
-                painting: 'Sơn', insulation: 'Bảo ôn', commissioning: 'Chạy thử',
-                packing: 'Đóng kiện', delivery: 'Giao hàng',
-              };
-              const stageName = stageLabels[stageKey] || stageKey || '—';
-
-              const p51CompletedVolume = jd?.completedQuantity as string || '';
-
-              // P5.2 data — multi job cards
-              const weekNumber = vd?.weekNumber as string || ''
-              type Stage = { hangMuc: string; volume: string; unit: string; team: string }
-              type JobCard = { code: string; stages: Stage[] }
-              let jobCards: JobCard[] = []
-              try { jobCards = vd?.jobCards ? JSON.parse(vd.jobCards as string) : [] } catch { jobCards = [] }
-              const cardColors = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444']
-              
-              return (
-                <>
-                  {/* P5.2: Volume Report — Job Cards */}
-                  {vd && (
-                    <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
-                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>📊 Báo cáo khối lượng SX — Tuần {weekNumber || '—'} (P5.2)</h3>
-                      {jobCards.length === 0 ? (
-                        <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border)', borderRadius: 8, fontSize: '0.85rem' }}>
-                          Chưa có dữ liệu báo cáo
-                        </div>
-                      ) : (
-                        jobCards.map((card, ci) => (
-                          <div key={ci} style={{ border: `1px solid ${cardColors[ci % cardColors.length]}30`, borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
-                            <div style={{ background: `${cardColors[ci % cardColors.length]}10`, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${cardColors[ci % cardColors.length]}25` }}>
-                              <span style={{ fontWeight: 700, fontSize: '0.85rem', color: cardColors[ci % cardColors.length] }}>JC #{ci + 1}</span>
-                              <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{card.code || '—'}</span>
-                            </div>
-                            <div style={{ padding: '6px 12px' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: '30px 2fr 1.2fr 100px 80px', gap: 8, padding: '3px 0', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
-                                {['#', 'Hạng mục', 'Tổ SX', 'KL', 'ĐVT'].map(h => (
-                                  <span key={h} style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{h}</span>
-                                ))}
-                              </div>
-                              {card.stages.map((stage, si) => (
-                                <div key={si} style={{ display: 'grid', gridTemplateColumns: '30px 2fr 1.2fr 100px 80px', gap: 8, padding: '3px 0', fontSize: '0.8rem' }}>
-                                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{si + 1}</span>
-                                  <span style={{ fontWeight: 600 }}>{stage.hangMuc || '—'}</span>
-                                  <span style={{ color: 'var(--text-secondary)' }}>{stage.team || '—'}</span>
-                                  <span style={{ fontWeight: 700 }}>{stage.volume || '—'}</span>
-                                  <span style={{ color: 'var(--text-muted)' }}>{stage.unit || '—'}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </>
-              )
-            })()}
-
-            {/* P5.4: Job Card summary + Pass/Fail + Form Fields */}
-            {task.stepCode === 'P5.4' && (() => {
-              const jd = previousStepData?.jobCardData as Record<string, string> | null
-              const lsx = previousStepData?.lsxTeamData as Record<string, unknown> | null;
-              const p51CompletedVolume = jd?.completedQuantity as string || '';
-              const acceptResult = (formData.acceptanceResult as string) || ''
-              
-              const teamName = lsx?.teamName as string || '—';
-              const volume = lsx?.volume as string || '—';
-              const startDate = lsx?.startDate as string || '';
-              const endDate = lsx?.endDate as string || '';
-              const stageKey = lsx?.stageKey as string || '';
-              const hangMuc = lsx?.hangMuc as string || '—';
-              const timeRange = startDate && endDate ? `${startDate} - ${endDate}` : (startDate || endDate || '—');
-              
-              const stageLabels: Record<string, string> = {
-                cutting: 'Pha cắt', machining: 'Gia công CK', fitup: 'Gá lắp', welding: 'Hàn',
-                tryAssembly: 'Tổ hợp', dismantle: 'Tháo dỡ', blasting: 'Làm sạch',
-                painting: 'Sơn', insulation: 'Bảo ôn', commissioning: 'Chạy thử',
-                packing: 'Đóng kiện', delivery: 'Giao hàng',
-              };
-              const stageName = stageLabels[stageKey] || stageKey || '—';
-
-              const resultColors: Record<string, { bg: string; border: string }> = {
-                PASS: { bg: '#f0fdf4', border: '#bbf7d0' },
-                FAIL: { bg: '#fef2f2', border: '#fecaca' },
-                CONDITIONAL: { bg: '#fffbeb', border: '#fde68a' },
-              }
-              const rc = resultColors[acceptResult] || { bg: 'var(--bg-secondary)', border: 'var(--border)' }
-              return (
-                <>
-                  {/* Job Card Summary */}
-                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #10b981', background: rc.bg, border: `1px solid ${rc.border}` }}>
-                    <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#10b981' }}>📋 Thông tin Lệnh sản xuất (P5.1)</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1.5fr 1fr', gap: 12, fontSize: '0.8rem', marginBottom: '20px' }}>
-                      <div>
-                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Hạng mục</span>
-                        <div style={{ fontWeight: 800, fontSize: '1.1rem', marginTop: 4 }}>{hangMuc}</div>
-                      </div>
-                      <div>
-                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Tổ sản xuất</span>
-                        <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0ea5e9', marginTop: 4 }}>{teamName}</div>
-                      </div>
-                      <div>
-                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Công đoạn</span>
-                        <div style={{ fontWeight: 600, fontSize: '0.95rem', marginTop: 4 }}>{stageName}</div>
-                      </div>
-                      <div>
-                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>KL giao</span>
-                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#16a34a', marginTop: 4 }}>{volume} kg</div>
-                      </div>
-                      <div>
-                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Thời gian thực hiện</span>
-                        <div style={{ fontWeight: 600, fontSize: '0.95rem', marginTop: 4 }}>{timeRange}</div>
-                      </div>
-                      <div>
-                        <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>Ngày YC</span>
-                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f59e0b', marginTop: 4 }}>{task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : '—'}</div>
-                      </div>
-                    </div>
-
-                    <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                      <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 4 }}>Khối lượng hoàn thành từ P5.1:</div>
-                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#16a34a' }}>
-                          {p51CompletedVolume} {p51CompletedVolume ? 'kg' : '—'}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div>
-                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Khối lượng xác nhận (PM) <span style={{ color: '#ef4444' }}>*</span></label>
-                          <input
-                            type="number"
-                            className="input"
-                            placeholder="Nhập khối lượng PM xác nhận..."
-                            value={formData.pmConfirmedVolume as string || ''}
-                            disabled={!isActive}
-                            onChange={(e) => handleFieldChange('pmConfirmedVolume', e.target.value)}
-                            style={{ width: '100%', padding: '8px 12px', fontSize: '0.95rem', fontWeight: 700, borderRadius: 8 }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Kết quả nghiệm thu <span style={{ color: '#ef4444' }}>*</span></label>
-                          <select
-                            className="input"
-                            value={acceptResult}
-                            disabled={!isActive}
-                            onChange={e => handleFieldChange('acceptanceResult', e.target.value)}
-                            style={{ width: '100%', padding: '8px 12px', fontSize: '0.9rem', fontWeight: 700, borderRadius: 8, border: `2px solid ${acceptResult === 'PASS' ? '#16a34a' : acceptResult === 'FAIL' ? '#dc2626' : acceptResult === 'CONDITIONAL' ? '#f59e0b' : 'var(--border)'}`, color: acceptResult === 'PASS' ? '#16a34a' : acceptResult === 'FAIL' ? '#dc2626' : acceptResult === 'CONDITIONAL' ? '#d97706' : undefined }}
-                          >
-                            <option value="">-- Chọn --</option>
-                            <option value="PASS">✅ PASS — Đạt</option>
-                            <option value="FAIL">❌ FAIL — Không đạt</option>
-                            <option value="CONDITIONAL">⚠️ CONDITIONAL — Đạt có điều kiện</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Original form fields below — hidden for P3.3/P3.4 which use WBS-only workflow */}
-                  {(task.stepCode as string) !== 'P3.3' && (task.stepCode as string) !== 'P3.4' && (
-                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-                    <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
-                      📝 Thông tin nhập liệu
-                    </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                      {config.fields.map(field => (
-                        field.type === 'section' ? (
-                          <div key={field.key} style={{ gridColumn: '1 / -1', marginTop: 12, paddingBottom: 6, borderBottom: '2px solid var(--accent-light, #c7d2fe)' }}>
-                            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent)' }}>{field.label}</span>
-                          </div>
-                        ) : (
-                          <div key={field.key} style={{ gridColumn: field.fullWidth ? '1 / -1' : undefined }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
-                              {field.label} {field.required && <span style={{ color: '#e74c3c' }}>*</span>}
-                            </label>
-                            {renderField(field, formData[field.key] ?? '', (v) => handleFieldChange(field.key, v), isActive)}
-                          </div>
-                        )
-                      ))}
-                    </div>
-                  </div>
-                  )}
-                </>
-              )
-            })()}
 
             {/* P3.3 & P3.4: WBS with LSX action buttons */}
             {(task.stepCode === 'P3.3' || task.stepCode === 'P3.4') && previousStepData?.plan?.wbsItems && (
@@ -5333,12 +5015,59 @@ export default function TaskDetailPage() {
                       })
                     } catch { /* silent */ }
                   }}
-                  onIssueLSX={(ri, row) => {
+                  onIssueLSX={async (ri, row) => {
                     const existing = (formData as Record<string, unknown>).lsxStatus as Record<number, { lsx?: boolean; vt?: boolean }> || {}
                     const newStatus = { ...existing, [ri]: { ...existing[ri], lsx: true } }
+                    
+                    // PLUS we must mark all teams in this row as issued!
+                    const cellsRaw = (formData as Record<string, unknown>).cellAssignments
+                    let ca: CellAssignMap = {}
+                    try { ca = cellsRaw ? (typeof cellsRaw === 'string' ? JSON.parse(cellsRaw as string) : ca) : {} } catch { /* */ }
+                    
+                    const rd = formData as Record<string, unknown>
+                    let issuedDetails: LsxIssuedMap = {}
+                    try { issuedDetails = rd.lsxIssuedDetails ? (typeof rd.lsxIssuedDetails === 'string' ? JSON.parse(rd.lsxIssuedDetails as string) : issuedDetails) : {} } catch { /* */ }
+                    
+                    if (ca[ri]) {
+                      if (!issuedDetails[ri]) issuedDetails[ri] = {}
+                      Object.keys(ca[ri]).forEach(stageKey => {
+                        if (!issuedDetails[ri][stageKey]) issuedDetails[ri][stageKey] = {}
+                        ca[ri][stageKey].forEach((_, tIdx) => {
+                          issuedDetails[ri][stageKey][tIdx] = true
+                        })
+                      })
+                    }
+
                     handleFieldChange('lsxStatus', JSON.stringify(newStatus))
-                    setSuccessMsg(`✅ Đã phát hành LSX cho: ${row.hangMuc || 'Hạng mục #' + (ri + 1)}`)
+                    handleFieldChange('lsxIssuedDetails', JSON.stringify(issuedDetails))
+                    setSuccessMsg(`✅ Đã phát hành LSX cho toàn bộ Hạng mục: ${row.hangMuc || '#' + (ri + 1)}`)
                     setTimeout(() => setSuccessMsg(''), 3000)
+
+                    // Auto-persist to DB
+                    try {
+                      await apiFetch(`/api/tasks/${task.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ action: 'save', resultData: { ...formData, lsxStatus: JSON.stringify(newStatus), lsxIssuedDetails: JSON.stringify(issuedDetails) } }),
+                      })
+                    } catch { /* silent */ }
+
+                    // CALL check-p511 here!
+                    try {
+                      const checkRes = await apiFetch('/api/tasks/check-p511', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          projectId: task.projectId,
+                          sourceStep: task.stepCode,
+                          rowIdx: ri,
+                          taskId: task.id,
+                        }),
+                      })
+                      const checkData = await checkRes.json()
+                      if (checkData.data?.created) {
+                        setSuccessMsg(`🎉 ${checkData.data.reason}`)
+                        setTimeout(() => setSuccessMsg(''), 6000)
+                      }
+                    } catch { /* silent */ }
                   }}
                   onRequestMaterial={(ri, row) => {
                     const existing = (formData as Record<string, unknown>).lsxStatus as Record<number, { lsx?: boolean; vt?: boolean }> || {}
@@ -5407,6 +5136,24 @@ export default function TaskDetailPage() {
                         method: 'PUT',
                         body: JSON.stringify({ action: 'save', resultData: { ...formData, lsxIssuedDetails: JSON.stringify(updated) } }),
                       })
+                    } catch { /* silent */ }
+
+                    // Check P5.1.1: Kiểm tra hạng mục này đã phát hành đủ 100% công đoạn chưa
+                    try {
+                      const checkRes = await apiFetch('/api/tasks/check-p511', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          projectId: task.projectId,
+                          sourceStep: task.stepCode,
+                          rowIdx: ri,
+                          taskId: task.id,
+                        }),
+                      })
+                      const checkData = await checkRes.json()
+                      if (checkData.data?.created) {
+                        setSuccessMsg(`🎉 ${checkData.data.reason}`)
+                        setTimeout(() => setSuccessMsg(''), 6000)
+                      }
                     } catch { /* silent */ }
                   }}
                   materialRequests={(() => {
@@ -5866,8 +5613,8 @@ export default function TaskDetailPage() {
               </div>
             )}
 
-            {/* Actions — hidden for P1.1B and P1.3 since they have inline actions in main area */}
-            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && (() => {
+            {/* Actions — hidden for P1.1B, P1.3, P3.3, P3.4, and persistent P5.1 since they have inline actions or stay open */}
+            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && !(task.stepCode === 'P5.1' && task.stepName === 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)') && (() => {
               const p53QcRaw = formData.qcItems as string | undefined;
               let p53QcItems: {result: string}[] = [];
               try { p53QcItems = p53QcRaw ? JSON.parse(p53QcRaw) : []; } catch { p53QcItems = []; }

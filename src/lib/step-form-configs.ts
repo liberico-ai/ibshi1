@@ -523,6 +523,29 @@ const P5_1: StepFormConfig = {
   attachments: [],
 }
 
+const P5_1_1: StepFormConfig = {
+  stepCode: 'P5.1.1',
+  formType: 'input',
+  title: 'Yêu cầu nghiệm thu chất lượng hạng mục',
+  description: 'Ghi nhận kết quả nghiệm thu chất lượng hạng mục sau khi đi kiểm tra với chủ đầu tư / đơn vị thứ 3.',
+  fields: [
+    { key: 'projectName', label: 'Tên dự án', labelEn: 'Project Name', type: 'readonly', fullWidth: true },
+    { key: 'hangMucName', label: 'Hạng mục', labelEn: 'WBS Item', type: 'readonly', fullWidth: true },
+    { key: 'totalKL', label: 'Tổng khối lượng thiết kế', labelEn: 'Total Design Volume', type: 'readonly', fullWidth: true },
+    { key: 'ngayNghiemThu', label: 'Ngày nghiệm thu', labelEn: 'Acceptance Date', type: 'date', required: true },
+    { key: 'ketQua', label: 'Kết quả nghiệm thu', labelEn: 'Inspection Result', type: 'select', required: true, options: [
+      { value: 'PASS', label: 'Đạt (PASS)' },
+      { value: 'FAIL', label: 'Không đạt (FAIL)' },
+    ]},
+  ],
+  checklist: [
+    { key: 'result_verified', label: 'Đã xác nhận kết quả nghiệm thu thực tế', required: true },
+  ],
+  attachments: [
+    { key: 'itpFile', label: 'Upload biên bản ITP (Bắt buộc)', accept: ACCEPT.DOCS_PLUS, required: true },
+  ],
+}
+
 const P5_2: StepFormConfig = {
   stepCode: 'P5.2',
   formType: 'input',
@@ -552,9 +575,7 @@ const P5_3: StepFormConfig = {
     { key: 'hold_point_checked', label: 'Đã kiểm tra tại Hold Point', required: true },
     { key: 'witness_point_checked', label: 'Đã kiểm tra tại Witness Point' },
   ],
-  attachments: [
-    { key: 'itpReport', label: 'Báo cáo ITP', accept: ACCEPT.DOCS },
-  ],
+  attachments: [],
 }
 
 const P5_4: StepFormConfig = {
@@ -723,7 +744,7 @@ export const STEP_FORM_CONFIGS: Record<string, StepFormConfig> = {
   'P3.1': P3_1, 'P3.2': P3_2, 'P3.3': P3_3, 'P3.4': P3_4,
   'P3.5': P3_5, 'P3.6': P3_6, 'P3.7': P3_7,
   'P4.1': P4_1, 'P4.2': P4_2, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,
-  'P5.1': P5_1, 'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
+  'P5.1': P5_1, 'P5.1.1': P5_1_1, 'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
   'P6.1': P6_1, 'P6.2': P6_2, 'P6.3': P6_3, 'P6.4': P6_4, 'P6.5': P6_5,
 }
 
