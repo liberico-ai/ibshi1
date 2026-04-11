@@ -232,7 +232,7 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
       <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-sm)' }}>
         <div>
           <span className="text-xs font-mono font-bold text-ibs-red-light">{p.projectCode}</span>
-          <div className="text-base font-semibold text-white" style={{ marginTop: 4 }}>{p.projectName}</div>
+          <div className="text-base font-semibold" style={{ marginTop: 4, color: '#ffffff' }}>{p.projectName}</div>
           <p className="text-sm text-ibs-navy-100" style={{ marginTop: 2 }}>{p.clientName}</p>
         </div>
         <div className="text-right">
