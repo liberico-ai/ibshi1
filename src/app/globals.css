@@ -1063,3 +1063,8 @@ aside:hover .sidebar-toggle-btn {
 }
 
 } /* end @layer base */
+
+/* ── Overrides outside @layer — highest specificity ── */
+.project-row .project-name {
+  color: #ffffff !important;
+}
