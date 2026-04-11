@@ -1808,6 +1808,32 @@ export default function TaskDetailPage() {
       }
     }
 
+    // Validate PR data for P2.2 — must have uploaded at least one of weld or paint
+    if (task.stepCode === 'P2.2' && action === 'complete') {
+      let weldItems: unknown[] = []
+      let paintItems: unknown[] = []
+      try { weldItems = formData['weldPrItems'] ? JSON.parse(String(formData['weldPrItems'])) : [] } catch { weldItems = [] }
+      try { paintItems = formData['paintPrItems'] ? JSON.parse(String(formData['paintPrItems'])) : [] } catch { paintItems = [] }
+      if (weldItems.length < 1 && paintItems.length < 1) {
+        setError('Vui lòng upload ít nhất 1 trong 2 loại vật tư (hàn hoặc sơn) trước khi hoàn thành')
+        setSubmitting(false)
+        return
+      }
+      // Validate checklist only for uploaded types
+      const weldUploaded = weldItems.length > 0
+      const paintUploaded = paintItems.length > 0
+      if (weldUploaded && !checklistState['welding_spec_checked']) {
+        setError('Vui lòng xác nhận: Đã kiểm tra quy chuẩn vật tư hàn')
+        setSubmitting(false)
+        return
+      }
+      if (paintUploaded && !checklistState['paint_spec_checked']) {
+        setError('Vui lòng xác nhận: Đã kiểm tra quy chuẩn vật tư sơn')
+        setSubmitting(false)
+        return
+      }
+    }
+
     // Validate required checklist items
     const missingChecklist = config.checklist
       .filter(c => c.required && !checklistState[c.key])

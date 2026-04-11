@@ -210,8 +210,8 @@ const P2_2: StepFormConfig = {
     { key: 'specialNotes', label: 'Ghi chú đặc biệt', labelEn: 'Special Notes', type: 'textarea', fullWidth: true },
   ],
   checklist: [
-    { key: 'welding_spec_checked', label: 'Đã kiểm tra quy chuẩn vật tư hàn', required: true },
-    { key: 'paint_spec_checked', label: 'Đã kiểm tra quy chuẩn vật tư sơn', required: true },
+    { key: 'welding_spec_checked', label: 'Đã kiểm tra quy chuẩn vật tư hàn *' },
+    { key: 'paint_spec_checked', label: 'Đã kiểm tra quy chuẩn vật tư sơn *' },
   ],
   attachments: [
     { key: 'weldingPaintFile', label: 'File danh sách VT hàn & sơn', accept: ACCEPT.OFFICE_ARCHIVE },
