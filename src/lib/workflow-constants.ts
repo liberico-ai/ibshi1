@@ -67,7 +67,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P2.5': {
     code: 'P2.5', name: 'BGĐ phê duyệt KH SX và dự toán chính thức', nameEn: 'Approve Production Plan & Final Budget',
-    role: 'R01', next: ['P3.1', 'P3.4'], deadlineDays: 3, phase: 2,
+    role: 'R01', next: ['P3.1', 'P3.3', 'P3.4'], deadlineDays: 3, phase: 2,
     rejectTo: 'P2.4',
   },
 
@@ -78,7 +78,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P3.2': {
     code: 'P3.2', name: 'Kho kiểm tra tồn kho và phê duyệt từng item PR', nameEn: 'Stock Check & PR Item Approval',
-    role: 'R05', next: ['P3.3', 'P3.5'], deadlineDays: 3, phase: 3,
+    role: 'R05', next: ['P3.5'], deadlineDays: 3, phase: 3,
   },
   'P3.3': {
     code: 'P3.3', name: 'PM lập lệnh SX cho thầu phụ và đề nghị cấp VT', nameEn: 'PM Subcontractor WO & Material Request',
@@ -128,11 +128,19 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
 
   // ── Phase 5: Sản xuất (BRD#26-31) ──
   'P5.1': {
-    code: 'P5.1', name: 'Yêu cầu nghiệm thu LSX', nameEn: 'LSX Acceptance Request',
+    code: 'P5.1', name: 'Báo cáo khối lượng nội bộ (tổ thi công) theo ngày', nameEn: 'Daily Internal Production Report',
     role: 'R06b', next: ['P5.3', 'P5.4'], phase: 5,
   },
+  'P5.1A': {
+    code: 'P5.1A', name: 'Báo cáo khối lượng của thầu phụ theo ngày', nameEn: 'Daily Subcontractor Production Report',
+    role: 'R02', next: ['P5.3', 'P5.4'], phase: 5,
+  },
   'P5.1.1': {
-    code: 'P5.1.1', name: 'Yêu cầu nghiệm thu chất lượng hạng mục', nameEn: 'Item Quality Acceptance',
+    code: 'P5.1.1', name: 'Yêu cầu nghiệm thu chất lượng hạng mục', nameEn: 'Item Quality Acceptance Request',
+    role: 'R06b', next: ['P5.3A'], phase: 5,
+  },
+  'P5.3A': {
+    code: 'P5.3A', name: 'QAQC nghiệm thu chất lượng hạng mục', nameEn: 'QAQC Item Quality Acceptance',
     role: 'R09', next: [], phase: 5,
   },
   'P5.2': {

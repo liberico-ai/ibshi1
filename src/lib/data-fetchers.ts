@@ -75,14 +75,39 @@ export async function aggregateBomItems(
   ]
 
   for (const src of sources) {
-    const items = (src.data?.bomItems as BomEntry[]) || []
-    for (const item of items) {
-      if (item.name?.trim()) {
+    // Each step stores BOM under different keys:
+    // P2.1 → bomPrItems (VT chính from Design)
+    // P2.2 → weldPrItems + paintPrItems (Hàn & Sơn from PM)
+    // P2.3 → bomItems (VT tiêu hao from Kho)
+    let itemArrays: any[][] = []
+
+    const parseArr = (raw: unknown): any[] => {
+      if (!raw) return []
+      if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return [] } }
+      return Array.isArray(raw) ? raw : []
+    }
+
+    if (src.stepCode === 'P2.1') {
+      itemArrays = [parseArr(src.data?.bomPrItems)]
+    } else if (src.stepCode === 'P2.2') {
+      itemArrays = [parseArr(src.data?.weldPrItems), parseArr(src.data?.paintPrItems)]
+    } else {
+      itemArrays = [parseArr(src.data?.bomItems)]
+    }
+
+    for (const items of itemArrays) {
+      if (!Array.isArray(items)) continue
+      for (const item of items) {
+        // Normalize: P2.1/P2.2 use 'description' instead of 'name'
+        const itemName = item.name || item.description || ''
+        if (!itemName.trim()) continue
+
         allItems.push({
-          ...item,
-          // The `source` field uses the descriptive label for display in P3.3/P3.4,
-          // but the type requires the stepCode literal. We cast because route.ts
-          // originally used `string` — the descriptive labels are display-only.
+          name: itemName,
+          code: item.code || item.materialCode || '',
+          spec: item.spec || item.specification || '',
+          quantity: item.quantity || item.qty || 0,
+          unit: item.unit || '',
           source: labelMap[src.stepCode] as BomEntryWithSource['source'],
         })
       }

@@ -11,6 +11,7 @@ import BomPrUploadUI from './components/BomPrUploadUI'
 import WeldPaintUploadUI from './components/WeldPaintUploadUI'
 import DailyProductionUI from './components/DailyProductionUI'
 import WeeklyAcceptanceUI from './components/WeeklyAcceptanceUI'
+import QualityAcceptanceUI from './components/QualityAcceptanceUI'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
@@ -2427,13 +2428,73 @@ export default function TaskDetailPage() {
             ) : (
               <>
             {/* P5.1: BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY) - Persistent Task */}
-            {task.stepCode === 'P5.1' && task.stepName === 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' && (
+            {/* P5.1A: BÁO CÁO KHỐI LƯỢNG THẦU PHỤ (THEO NGÀY) - Persistent Task */}
+            {(task.stepCode === 'P5.1' || task.stepCode === 'P5.1A') && (
               <DailyProductionUI task={task} isActive={isActive} />
             )}
 
             {/* P5.3 / P5.4: NGHIỆM THU KHỐI LƯỢNG TUẦN — CronJob Saturday */}
             {(task.stepCode === 'P5.3' || task.stepCode === 'P5.4') && (
               <WeeklyAcceptanceUI task={task} isActive={isActive} />
+            )}
+
+            {/* P5.1.1: YÊU CẦU NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC (SX) */}
+            {task.stepCode === 'P5.1.1' && (() => {
+              const rd = task.resultData || {}
+              return (
+                <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderTop: '4px solid #0ea5e9' }}>
+                  <h3 style={{ marginTop: 0, fontSize: '1.2rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    📋 YÊU CẦU NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>
+                    Hạng mục này đã hoàn thành 100% khối lượng nghiệm thu. Gửi yêu cầu nghiệm thu chất lượng để QAQC tiến hành kiểm tra.
+                  </p>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600, width: '30%' }}>Dự án</td>
+                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{rd.projectName || project?.projectCode || ''}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600 }}>Hạng mục</td>
+                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0', fontWeight: 600, color: '#0369a1' }}>{rd.hangMucName || ''}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600 }}>Tổng KL thiết kế</td>
+                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{Number(rd.totalKL || 0).toLocaleString('vi-VN')} kg</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  {isActive && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        className="btn-primary"
+                        onClick={async () => {
+                          if (!confirm(`Xác nhận gửi yêu cầu nghiệm thu chất lượng cho hạng mục "${rd.hangMucName}"?`)) return
+                          try {
+                            await apiFetch(`/api/tasks/${task.id}/complete`, {
+                              method: 'POST',
+                              body: JSON.stringify({ userId: currentUser?.id, resultData: { ...rd, requestedAt: new Date().toISOString() } })
+                            })
+                            alert('✅ Đã gửi yêu cầu nghiệm thu chất lượng. Task QAQC sẽ được tạo tự động.')
+                            window.location.reload()
+                          } catch (err) {
+                            alert('Lỗi gửi yêu cầu: ' + (err as Error).message)
+                          }
+                        }}
+                        style={{ padding: '10px 24px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: '1rem' }}
+                      >
+                        📤 Gửi yêu cầu nghiệm thu
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* P5.3A: QAQC NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC */}
+            {task.stepCode === 'P5.3A' && (
+              <QualityAcceptanceUI task={task} isActive={isActive} project={project} currentUser={currentUser} />
             )}
 
             {/* P5.1: Thông tin Lệnh sản xuất from P3.3/P3.4 (dynamic) */}
@@ -5640,7 +5701,7 @@ export default function TaskDetailPage() {
             )}
 
             {/* Actions — hidden for P1.1B, P1.3, P3.3, P3.4, and persistent P5.1 since they have inline actions or stay open */}
-            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && !(task.stepCode === 'P5.1' && task.stepName === 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)') && (() => {
+            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && task.stepCode !== 'P5.1A' && !(task.stepCode === 'P5.1' && task.stepName === 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)') && (() => {
               const p53QcRaw = formData.qcItems as string | undefined;
               let p53QcItems: {result: string}[] = [];
               try { p53QcItems = p53QcRaw ? JSON.parse(p53QcRaw) : []; } catch { p53QcItems = []; }

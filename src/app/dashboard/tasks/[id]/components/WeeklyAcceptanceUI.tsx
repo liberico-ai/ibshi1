@@ -8,6 +8,8 @@ interface WeeklyItem {
   wbsItem: string
   stageKey: string
   stageLabel: string
+  teamName: string
+  phamVi: string
   unit: string
   totalLsx: number
   dailyVolumes: Record<string, number>
@@ -201,7 +203,9 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
           <thead>
             <tr style={{ background: '#f1f5f9' }}>
               <th style={thStyle} rowSpan={2}>Hạng Mục</th>
+              <th style={thStyle} rowSpan={2}>Phạm Vi</th>
               <th style={thStyle} rowSpan={2}>Công Đoạn</th>
+              <th style={thStyle} rowSpan={2}>Tổ Thực Hiện</th>
               <th style={thStyle} rowSpan={2}>Tổng LSX</th>
               <th style={{ ...thStyle, background: '#e0f2fe', textAlign: 'center' }} colSpan={5}>Báo Cáo Tổ SX (T2 → T6)</th>
               <th style={{ ...thStyle, background: '#fef3c7' }} rowSpan={2}>Tổng Tuần</th>
@@ -219,9 +223,9 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={12} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Đang tải dữ liệu...</td></tr>
+              <tr><td colSpan={13} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Đang tải dữ liệu...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={12} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Không có dữ liệu báo cáo trong tuần này.</td></tr>
+              <tr><td colSpan={13} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Không có dữ liệu báo cáo trong tuần này.</td></tr>
             ) : items.map((item, idx) => {
               const remaining = Math.max(0, item.totalLsx - item.cumulativeAccepted)
               const acceptedVal = Number(acceptanceInputs[item.lsxCode]) || 0
@@ -229,7 +233,9 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
               return (
                 <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                   <td style={{ ...tdStyle, fontWeight: 600, maxWidth: 200 }}>{item.wbsItem}</td>
+                  <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: item.phamVi === 'IBS' ? '#0ea5e9' : '#8b5cf6' }}>{item.phamVi}</td>
                   <td style={{ ...tdStyle, textAlign: 'center' }}>{item.stageLabel}</td>
+                  <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: '#f59e0b' }}>{item.teamName}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{fmtNum(item.totalLsx)}</td>
                   {DAY_KEYS.map(key => (
                     <td key={key} style={{ ...tdStyle, textAlign: 'center', background: '#fafbfc', fontSize: '0.8rem' }}>

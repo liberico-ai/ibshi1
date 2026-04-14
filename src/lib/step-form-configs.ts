@@ -523,6 +523,20 @@ const P5_1: StepFormConfig = {
   attachments: [],
 }
 
+const P5_1A: StepFormConfig = {
+  stepCode: 'P5.1A',
+  formType: 'input',
+  title: 'Báo cáo khối lượng của thầu phụ (theo ngày)',
+  description: 'Hiển thị Lệnh sản xuất tương ứng đã được đẩy xuống cho bộ phận và ghi nhận khối lượng hoàn thành.',
+  fields: [
+    { key: 'completedQuantity', label: 'Số lượng đã hoàn thành', labelEn: 'Completed Quantity', type: 'number', required: true },
+  ],
+  checklist: [
+    { key: 'volume_reported', label: 'Đã báo cáo SL hoàn thành', required: true }
+  ],
+  attachments: [],
+}
+
 const P5_1_1: StepFormConfig = {
   stepCode: 'P5.1.1',
   formType: 'input',
@@ -744,7 +758,7 @@ export const STEP_FORM_CONFIGS: Record<string, StepFormConfig> = {
   'P3.1': P3_1, 'P3.2': P3_2, 'P3.3': P3_3, 'P3.4': P3_4,
   'P3.5': P3_5, 'P3.6': P3_6, 'P3.7': P3_7,
   'P4.1': P4_1, 'P4.2': P4_2, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,
-  'P5.1': P5_1, 'P5.1.1': P5_1_1, 'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
+  'P5.1': P5_1, 'P5.1A': P5_1A, 'P5.1.1': P5_1_1, 'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
   'P6.1': P6_1, 'P6.2': P6_2, 'P6.3': P6_3, 'P6.4': P6_4, 'P6.5': P6_5,
 }
 
