@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { PHASE_LABELS, WORKFLOW_RULES } from '@/lib/workflow-constants'
+import { WORKFLOW_RULES } from '@/lib/workflow-constants'
+import { getStepFormConfig } from '@/lib/step-form-configs'
 import { getStatusBg, formatDate, formatCurrency } from '@/lib/utils'
 
 interface Task {
@@ -22,33 +23,11 @@ interface ProjectDetail {
   tasks: Task[];
 }
 
-// Steps that need contextual resultData
-const STEP_FIELDS: Record<string, { label: string; fields: { key: string; label: string; type: string; placeholder: string; required?: boolean }[] }> = {
-  'P3.4A': { label: 'Nghiệm thu vật tư nội bộ', fields: [
-    { key: 'materialId', label: 'Mã vật tư (ID)', type: 'text', placeholder: 'ID vật tư từ Kho', required: true },
-    { key: 'quantity', label: 'Số lượng', type: 'number', placeholder: '0', required: true },
-  ]},
-  'P3.4B': { label: 'Nghiệm thu vật tư khách hàng', fields: [
-    { key: 'materialId', label: 'Mã vật tư (ID)', type: 'text', placeholder: 'ID vật tư từ Kho', required: true },
-    { key: 'quantity', label: 'Số lượng', type: 'number', placeholder: '0', required: true },
-  ]},
-  'P4.1': { label: 'Phát lệnh sản xuất', fields: [
-    { key: 'woCode', label: 'Mã lệnh SX', type: 'text', placeholder: 'WO-2026-001', required: true },
-    { key: 'description', label: 'Nội dung SX', type: 'text', placeholder: 'Mô tả lệnh sản xuất' },
-    { key: 'teamCode', label: 'Tổ sản xuất', type: 'text', placeholder: 'TO-01', required: true },
-  ]},
-  'P4.2': { label: 'Cấp vật tư cho SX', fields: [
-    { key: 'materialId', label: 'Mã vật tư (ID)', type: 'text', placeholder: 'ID vật tư từ Kho', required: true },
-    { key: 'quantity', label: 'Số lượng xuất', type: 'number', placeholder: '0', required: true },
-    { key: 'workOrderId', label: 'Mã WO (ID)', type: 'text', placeholder: 'ID lệnh sản xuất' },
-  ]},
-}
-
 export default function ProjectDetailPage() {
   const params = useParams()
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [completingTask, setCompletingTask] = useState<Task | null>(null)
+  const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null)
   const [rejectingTask, setRejectingTask] = useState<Task | null>(null)
   const [assigningTask, setAssigningTask] = useState<Task | null>(null)
   const [closing, setClosing] = useState(false)
@@ -64,12 +43,13 @@ export default function ProjectDetailPage() {
   }, [params.id])
 
   async function handleComplete(taskId: string, resultData?: Record<string, unknown>, notes?: string) {
+    setLoadingTaskId(taskId)
     const res = await apiFetch(`/api/tasks/${taskId}`, {
       method: 'PUT',
       body: JSON.stringify({ action: 'complete', resultData, notes: notes || 'Completed' }),
     })
+    setLoadingTaskId(null)
     if (res.ok) {
-      setCompletingTask(null)
       const updated = await apiFetch(`/api/projects/${params.id}`)
       if (updated.ok) setProject(updated.project)
     } else {
@@ -94,9 +74,9 @@ export default function ProjectDetailPage() {
   }
 
   function onCompleteClick(task: Task) {
-    const stepConfig = STEP_FIELDS[task.stepCode]
-    if (stepConfig) {
-      setCompletingTask(task)
+    const stepConfig = getStepFormConfig(task.stepCode)
+    if (stepConfig && Object.keys(stepConfig).length > 0) {
+      window.location.href = `/dashboard/tasks/${task.id}`
     } else {
       handleComplete(task.id)
     }
@@ -142,14 +122,6 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Complete Task Modal */}
-      {completingTask && (
-        <CompleteTaskModal
-          task={completingTask}
-          onClose={() => setCompletingTask(null)}
-          onSubmit={(resultData, notes) => handleComplete(completingTask.id, resultData, notes)}
-        />
-      )}
       {/* Reject Task Modal */}
       {rejectingTask && (
         <RejectTaskModal
@@ -205,7 +177,7 @@ export default function ProjectDetailPage() {
           { label: 'Giá trị HĐ', value: formatCurrency(project.contractValue, project.currency), color: '#0a2540', icon: '💰' },
           { label: 'Bắt đầu', value: formatDate(project.startDate) || '—', color: '#0ea5e9', icon: '📅' },
           { label: 'Kết thúc', value: formatDate(project.endDate) || '—', color: '#f59e0b', icon: '🏁' },
-          { label: 'Giai đoạn', value: PHASE_LABELS[project.progress.currentPhase]?.name || `Phase ${project.progress.currentPhase}`, color: '#8b5cf6', icon: '📍' },
+          { label: 'Giai đoạn', value: `Phase ${project.progress.currentPhase}`, color: '#8b5cf6', icon: '📍' },
         ].map(s => (
           <div key={s.label} className="card p-5 relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: s.color }} />
@@ -245,34 +217,6 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* Phase Progress */}
-          <div className="card p-5">
-            <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-heading)', marginBottom: '14px' }}>📋 Tiến độ Phase</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {Object.entries(project.tasksByPhase).map(([phase, tasks]) => {
-                const pTasks = tasks as Task[]
-                const pDone = pTasks.filter(t => t.status === 'DONE').length
-                const pPct = pTasks.length > 0 ? Math.round((pDone / pTasks.length) * 100) : 0
-                const phaseNum = parseInt(phase)
-                const isCurrent = phaseNum === project.progress.currentPhase
-                return (
-                  <div key={phase} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', borderRadius: '8px', background: isCurrent ? '#eff6ff' : 'transparent' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, width: '22px', height: '22px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: pPct === 100 ? '#dcfce7' : isCurrent ? '#dbeafe' : 'var(--bg-secondary)',
-                      color: pPct === 100 ? '#16a34a' : isCurrent ? '#2563eb' : 'var(--text-muted)',
-                    }}>{pPct === 100 ? '✓' : `P${phaseNum}`}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ height: '4px', borderRadius: '2px', background: 'var(--bg-secondary)' }}>
-                        <div style={{ height: '100%', borderRadius: '2px', background: pPct === 100 ? '#16a34a' : isCurrent ? '#2563eb' : '#94a3b8', width: `${pPct}%` }} />
-                      </div>
-                    </div>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', minWidth: '28px', textAlign: 'right' }}>{pPct}%</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
           {/* Quick Actions */}
           {project.status !== 'CLOSED' && project.progress.percentage >= 90 && (
             <div className="card p-5">
@@ -309,7 +253,7 @@ export default function ProjectDetailPage() {
               <PhaseCard
                 key={phase}
                 phaseNum={phaseNum}
-                phaseName={PHASE_LABELS[phaseNum]?.name || `Phase ${phase}`}
+                phaseName={`Phase ${phaseNum}`}
                 tasks={phaseTasks}
                 doneCount={doneCount}
                 totalCount={phaseTasks.length}
@@ -323,6 +267,7 @@ export default function ProjectDetailPage() {
                 onAssignClick={(task: Task) => setAssigningTask(task)}
                 currentUserRole={currentUser?.roleCode || ''}
                 currentUserLevel={currentUser?.userLevel}
+                loadingTaskId={loadingTaskId}
               />
             )
           })}
@@ -332,11 +277,11 @@ export default function ProjectDetailPage() {
   )
 }
 
-function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, borderColor, isComplete, isActive, defaultExpanded, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, currentUserLevel }: {
+function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, borderColor, isComplete, isActive, defaultExpanded, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, currentUserLevel, loadingTaskId }: {
   phaseNum: number; phaseName: string; tasks: Task[]; doneCount: number; totalCount: number;
   pct: number; borderColor: string; isComplete: boolean; isActive: boolean; defaultExpanded: boolean;
   onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
-  currentUserRole: string; currentUserLevel?: number;
+  currentUserRole: string; currentUserLevel?: number; loadingTaskId: string | null;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   
@@ -352,7 +297,6 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
 
   return (
     <div className="card overflow-hidden" style={{ borderLeft: `4px solid ${borderColor}` }}>
-      {/* Phase Header — clickable */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors text-left"
@@ -372,7 +316,6 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {/* Mini progress bar */}
           <div className="hidden sm:flex items-center gap-2 min-w-[120px]">
             <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--bg-secondary)' }}>
               <div className="h-full rounded-full transition-all" style={{
@@ -382,7 +325,6 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
             </div>
             <span className="text-xs font-medium tabular-nums" style={{ color: 'var(--text-muted)', minWidth: '32px' }}>{pct}%</span>
           </div>
-          {/* Chevron */}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
             className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
             style={{ color: 'var(--text-muted)' }}>
@@ -391,7 +333,6 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
         </div>
       </button>
 
-      {/* Phase Steps — compact table with multi-instance grouping */}
       {expanded && (
         <div style={{ borderTop: '1px solid var(--border-light)' }}>
           <GroupedTaskList
@@ -401,6 +342,7 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
             onAssignClick={onAssignClick}
             currentUserRole={currentUserRole}
             hasAssignPerm={hasAssignPerm}
+            loadingTaskId={loadingTaskId}
           />
         </div>
       )}
@@ -408,12 +350,10 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
   )
 }
 
-// ── Grouped Task List (collapses multi-instance steps like P4.5) ──
-
-function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, indent }: {
+function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, indent, loadingTaskId }: {
   task: Task; isLast: boolean;
   onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
-  currentUserRole: string; hasAssignPerm: (task: Task) => boolean; indent?: boolean;
+  currentUserRole: string; hasAssignPerm: (task: Task) => boolean; indent?: boolean; loadingTaskId?: string | null;
 }) {
   return (
     <div
@@ -423,7 +363,6 @@ function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, 
         paddingLeft: indent ? '2.5rem' : undefined,
       }}
     >
-      {/* Status dot */}
       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
         task.status === 'DONE' ? 'bg-emerald-500' :
         task.status === 'IN_PROGRESS' ? 'bg-blue-500 animate-pulse' :
@@ -431,22 +370,17 @@ function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, 
         'bg-slate-300'
       }`} />
 
-      {/* Step code */}
       <span className="text-xs font-mono w-12 flex-shrink-0" style={{ color: 'var(--accent)' }}>{task.stepCode}</span>
 
-      {/* Step name */}
       <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
         {task.stepName}
-        {STEP_FIELDS[task.stepCode] && task.status === 'IN_PROGRESS' && (
-          <span className="text-xs ml-1.5 px-1.5 py-0.5 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>📋 Cần dữ liệu</span>
-        )}
       </span>
 
-      <span className="text-xs hidden md:block w-48 truncate flex items-center" style={{ color: 'var(--text-muted)' }} title={task.assignee ? `${task.assignedRole} - ${task.assignee.fullName}` : task.assignedRole}>
+      <span className="text-xs hidden md:block w-48 truncate flex items-center" style={{ color: 'var(--text-muted)' }}>
         <span className="font-mono text-[10px] mr-1 px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800" style={{ color: 'var(--text-primary)' }}>{task.assignedRole}</span>
         <span className="truncate flex-1">
           {task.assignee ? (
-            <span>{task.assignee.fullName} <span className="opacity-60">({task.assignee.username})</span></span>
+            <span>{task.assignee.fullName}</span>
           ) : (
             <span className="italic opacity-60">Chưa phân công</span>
           )}
@@ -463,19 +397,6 @@ function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, 
         )}
       </span>
 
-      {/* Deadline */}
-      {task.deadline && (
-        <span className="text-xs hidden lg:block" style={{ color: 'var(--text-muted)' }}>
-          {formatDate(task.deadline)}
-        </span>
-      )}
-
-      {/* Status badge */}
-      <span className={`badge text-[11px] ${getStatusBg(task.status)}`} style={{ borderWidth: '1px' }}>
-        {task.status === 'DONE' ? '✓ Xong' : task.status === 'IN_PROGRESS' ? 'Đang XL' : task.status === 'REJECTED' ? 'Từ chối' : 'Chờ'}
-      </span>
-
-      {/* Action buttons */}
       {task.status === 'IN_PROGRESS' && (
         currentUserRole && (currentUserRole === task.assignedRole || currentUserRole === 'R00') ? (
           <div className="flex items-center gap-1">
@@ -491,8 +412,9 @@ function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, 
             <button
               onClick={(e) => { e.stopPropagation(); onCompleteClick(task) }}
               className="btn-accent text-[11px] px-2.5 py-1"
+              disabled={loadingTaskId === task.id}
             >
-              ✓ Hoàn thành
+              {loadingTaskId === task.id ? '...' : '✓ Hoàn thành'}
             </button>
           </div>
         ) : (
@@ -505,77 +427,30 @@ function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, 
   )
 }
 
-function MultiInstanceGroup({ stepCode, tasks, isLastGroup, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm }: {
+function MultiInstanceGroup({ stepCode, tasks, isLastGroup, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, loadingTaskId }: {
   stepCode: string; tasks: Task[]; isLastGroup: boolean;
   onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
-  currentUserRole: string; hasAssignPerm: (task: Task) => boolean;
+  currentUserRole: string; hasAssignPerm: (task: Task) => boolean; loadingTaskId: string | null;
 }) {
   const [groupExpanded, setGroupExpanded] = useState(false)
   const doneCount = tasks.filter(t => t.status === 'DONE').length
   const inProgressCount = tasks.filter(t => t.status === 'IN_PROGRESS').length
-  const rejectedCount = tasks.filter(t => t.status === 'REJECTED').length
-  const pendingCount = tasks.length - doneCount - inProgressCount - rejectedCount
 
   return (
     <div style={{ borderBottom: isLastGroup ? 'none' : '1px solid var(--border-light)' }}>
-      {/* Group summary header */}
       <button
         onClick={() => setGroupExpanded(!groupExpanded)}
         className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/30 text-left"
       >
-        {/* Status dot — blue if any in progress, green if all done */}
-        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-          inProgressCount > 0 ? 'bg-blue-500 animate-pulse' :
-          doneCount === tasks.length ? 'bg-emerald-500' :
-          rejectedCount > 0 ? 'bg-red-500' :
-          'bg-slate-300'
-        }`} />
-
-        {/* Step code */}
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${inProgressCount > 0 ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`} />
         <span className="text-xs font-mono w-12 flex-shrink-0" style={{ color: 'var(--accent)' }}>{stepCode}</span>
-
-        {/* Group label + count */}
-        <span className="text-sm flex-1 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-          <span className="truncate">{tasks[0].stepName}</span>
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
-            style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-            {tasks.length} phiếu
-          </span>
-        </span>
-
-        {/* Status summary badges */}
-        <div className="flex items-center gap-1.5">
-          {doneCount > 0 && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>
-              {doneCount} xong
-            </span>
-          )}
-          {inProgressCount > 0 && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: '#dbeafe', color: '#2563eb' }}>
-              {inProgressCount} XL
-            </span>
-          )}
-          {pendingCount > 0 && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-              {pendingCount} chờ
-            </span>
-          )}
-          {rejectedCount > 0 && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>
-              {rejectedCount} TC
-            </span>
-          )}
-        </div>
-
-        {/* Chevron */}
+        <span className="text-sm flex-1">{tasks[0].stepName} ({tasks.length} phiếu)</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          className={`transition-transform flex-shrink-0 ${groupExpanded ? 'rotate-180' : ''}`}
+          className={`transition-transform ${groupExpanded ? 'rotate-180' : ''}`}
           style={{ color: 'var(--text-muted)' }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
-
-      {/* Expanded individual tasks */}
       {groupExpanded && (
         <div style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-light)' }}>
           {tasks.map((task, i) => (
@@ -588,6 +463,7 @@ function MultiInstanceGroup({ stepCode, tasks, isLastGroup, onCompleteClick, onR
               onAssignClick={onAssignClick}
               currentUserRole={currentUserRole}
               hasAssignPerm={hasAssignPerm}
+              loadingTaskId={loadingTaskId}
               indent
             />
           ))}
@@ -597,12 +473,11 @@ function MultiInstanceGroup({ stepCode, tasks, isLastGroup, onCompleteClick, onR
   )
 }
 
-function GroupedTaskList({ tasks, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm }: {
+function GroupedTaskList({ tasks, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, loadingTaskId }: {
   tasks: Task[];
   onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
-  currentUserRole: string; hasAssignPerm: (task: Task) => boolean;
+  currentUserRole: string; hasAssignPerm: (task: Task) => boolean; loadingTaskId: string | null;
 }) {
-  // Group consecutive tasks by stepCode, preserving order
   const groups: Array<{ stepCode: string; tasks: Task[] }> = []
   for (const task of tasks) {
     const last = groups[groups.length - 1]
@@ -617,7 +492,6 @@ function GroupedTaskList({ tasks, onCompleteClick, onRejectClick, onAssignClick,
     <>
       {groups.map((group, gi) => {
         const isLastGroup = gi === groups.length - 1
-        // Single-instance step → render normally
         if (group.tasks.length === 1) {
           return (
             <TaskRow
@@ -629,10 +503,10 @@ function GroupedTaskList({ tasks, onCompleteClick, onRejectClick, onAssignClick,
               onAssignClick={onAssignClick}
               currentUserRole={currentUserRole}
               hasAssignPerm={hasAssignPerm}
+              loadingTaskId={loadingTaskId}
             />
           )
         }
-        // Multi-instance step → collapsible group
         return (
           <MultiInstanceGroup
             key={`${group.stepCode}-${gi}`}
@@ -644,6 +518,7 @@ function GroupedTaskList({ tasks, onCompleteClick, onRejectClick, onAssignClick,
             onAssignClick={onAssignClick}
             currentUserRole={currentUserRole}
             hasAssignPerm={hasAssignPerm}
+            loadingTaskId={loadingTaskId}
           />
         )
       })}
@@ -651,69 +526,6 @@ function GroupedTaskList({ tasks, onCompleteClick, onRejectClick, onAssignClick,
   )
 }
 
-// ── Complete Task Modal ──
-
-function CompleteTaskModal({ task, onClose, onSubmit }: {
-  task: Task;
-  onClose: () => void;
-  onSubmit: (resultData: Record<string, unknown>, notes: string) => void;
-}) {
-  const config = STEP_FIELDS[task.stepCode]
-  const [formData, setFormData] = useState<Record<string, string>>({})
-  const [notes, setNotes] = useState('')
-
-  if (!config) return null
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const resultData: Record<string, unknown> = {}
-    for (const field of config.fields) {
-      const val = formData[field.key] || ''
-      resultData[field.key] = field.type === 'number' ? parseFloat(val) || 0 : val
-    }
-    onSubmit(resultData, notes)
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)' }}>
-      <div className="card p-6 w-full max-w-lg mx-4 animate-fade-in" style={{ boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Hoàn thành: {config.label}</h3>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Bước {task.stepCode} — {task.stepName}</p>
-          </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100" style={{ color: 'var(--text-muted)' }}>✕</button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {config.fields.map((field) => (
-            <div key={field.key}>
-              <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>
-                {field.label} {field.required && <span style={{ color: '#dc2626' }}>*</span>}
-              </label>
-              <input
-                className="input"
-                type={field.type}
-                placeholder={field.placeholder}
-                value={formData[field.key] || ''}
-                onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })}
-                required={field.required}
-              />
-            </div>
-          ))}
-          <div>
-            <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Ghi chú</label>
-            <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ghi chú hoàn thành..." />
-          </div>
-          <div className="flex gap-3 justify-end pt-2">
-            <button type="button" onClick={onClose} className="btn-primary" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Hủy</button>
-            <button type="submit" className="btn-accent">Xác nhận hoàn thành</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 // ── Reject Task Modal ──
 

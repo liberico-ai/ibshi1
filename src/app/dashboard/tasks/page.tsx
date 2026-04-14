@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { getStatusBg, getUrgencyLabel, formatDate } from '@/lib/utils'
+import { getStepFormConfig } from '@/lib/step-form-configs'
 import { SearchBar } from '@/components/SearchPagination'
 import { PageHeader, Card, Badge, Button } from '@/components/ui'
 import { Clock, CheckCircle } from 'lucide-react'
@@ -37,9 +38,15 @@ export default function TasksPage() {
     setLoading(false)
   }
 
-  async function handleComplete(taskId: string) {
-    setCompleting(taskId)
-    const res = await apiFetch(`/api/tasks/${taskId}`, {
+  async function handleComplete(task: Task) {
+    const stepConfig = getStepFormConfig(task.stepCode)
+    if (stepConfig && Object.keys(stepConfig).length > 0) {
+      window.location.href = `/dashboard/tasks/${task.id}`
+      return
+    }
+    
+    setCompleting(task.id)
+    const res = await apiFetch(`/api/tasks/${task.id}`, {
       method: 'PUT',
       body: JSON.stringify({ action: 'complete', notes: 'Completed from inbox' }),
     })
@@ -139,7 +146,7 @@ export default function TasksPage() {
 }
 
 function TaskSection({ title, tasks, onComplete, completing, dotColor }: {
-  title: string; tasks: Task[]; onComplete: (id: string) => void; completing: string | null; dotColor: string
+  title: string; tasks: Task[]; onComplete: (task: Task) => void; completing: string | null; dotColor: string
 }) {
   return (
     <div>
@@ -153,7 +160,7 @@ function TaskSection({ title, tasks, onComplete, completing, dotColor }: {
 }
 
 function TaskList({ tasks, onComplete, completing }: {
-  tasks: Task[]; onComplete: (id: string) => void; completing: string | null
+  tasks: Task[]; onComplete: (task: Task) => void; completing: string | null
 }) {
   return (
     <div className="space-y-2 stagger-children">
@@ -191,7 +198,7 @@ function TaskList({ tasks, onComplete, completing }: {
               <Button
                 variant="accent"
                 size="sm"
-                onClick={(e) => { e.stopPropagation(); onComplete(task.id) }}
+                onClick={(e) => { e.stopPropagation(); onComplete(task) }}
                 loading={completing === task.id}
               >
                 ✓ Xong

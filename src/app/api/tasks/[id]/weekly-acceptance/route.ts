@@ -75,8 +75,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       select: { resultData: true, stepCode: true },
     })
 
-    // Build totalVolume map from cellAssignments
+    // 3. Aggregate Total LSX from P3 tasks, and maintain teamName map
     const totalVolumeMap = new Map<string, number>()
+    const teamNameMap = new Map<string, string>()
+    const phamViMap = new Map<string, string>()
+
     for (const t of p3Tasks) {
       const pData = (t.resultData as Record<string, any>) || {}
       let cells: Record<string, Record<string, any[]>> = {}
@@ -93,18 +96,25 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       } catch { issued = {} }
 
       for (const rowKey of Object.keys(cells)) {
+        const rowIdx = isNaN(parseInt(rowKey)) ? parseInt(rowKey.replace(/\D/g, '')) : parseInt(rowKey)
+        let phamVi = String(wbsList[rowIdx]?.phamVi || '').trim()
+        if (!phamVi && String(wbsList[rowIdx]?.thauPhu || '').trim()) phamVi = 'TP'
+
         for (const stageKey of Object.keys(cells[rowKey])) {
           const assignments = cells[rowKey][stageKey]
           if (!Array.isArray(assignments)) continue
-          let totalVol = 0
+          
           for (let ti = 0; ti < assignments.length; ti++) {
             if (issued[rowKey]?.[stageKey]?.[String(ti)]) {
-              totalVol += parseFloat(assignments[ti].volume) || 0
+              const totalVol = parseFloat(assignments[ti].volume) || 0
+              if (totalVol > 0) {
+                const lsxCode = `${rowKey}_${stageKey}_${ti}`
+                const teamName = assignments[ti].teamName || `Tổ ${ti + 1}`
+                totalVolumeMap.set(lsxCode, (totalVolumeMap.get(lsxCode) || 0) + totalVol)
+                teamNameMap.set(lsxCode, teamName)
+                phamViMap.set(lsxCode, phamVi)
+              }
             }
-          }
-          if (totalVol > 0) {
-            const lsxCode = `${rowKey}_${stageKey}`
-            totalVolumeMap.set(lsxCode, (totalVolumeMap.get(lsxCode) || 0) + totalVol)
           }
         }
       }
@@ -121,6 +131,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       wbsItem: string
       stageKey: string
       stageLabel: string
+      teamName: string
+      phamVi: string
       unit: string
       totalLsx: number
       dailyVolumes: Record<string, number>
@@ -139,13 +151,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       const dayKey = dayKeys[dayOfWeek - 1] || 'mon'
 
       if (!matrixMap.has(lsxCode)) {
-        // Parse lsxCode: "rowIdx_stageKey"
+        // Parse lsxCode: "rowIdx_stageKey_teamIdx"
         const parts = lsxCode.split('_')
         const rowIdx = Number(parts[0]) || 0
-        const stageKey = parts.slice(1).join('_')
+        const stageKey = parts.slice(1, -1).join('_') || parts[1] // Works for both new (has ti) and old format
         const wbsName = wbsList[rowIdx]?.hangMuc || `Hạng mục #${rowIdx + 1}`
-        const phamVi = wbsList[rowIdx]?.phamVi || ''
+        const phamVi = phamViMap.get(lsxCode) || wbsList[rowIdx]?.phamVi || ''
         const unit = wbsList[rowIdx]?.dvt || 'kg'
+        const teamName = teamNameMap.get(lsxCode) || `Tổ (Chưa rõ)`
 
         // Cumulative accepted from previous weeks (before this week)
         const prevLogs = allAcceptanceLogs.filter((a: any) => a.lsxCode === lsxCode && (a.year < rd.year || (a.year === rd.year && a.weekNumber < rd.weekNumber)))
@@ -172,6 +185,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           wbsItem: wbsName + (phamVi ? ` (${phamVi})` : ''),
           stageKey,
           stageLabel: STAGE_LABELS[stageKey] || stageKey,
+          teamName,
+          phamVi,
           unit,
           totalLsx: totalVolumeMap.get(lsxCode) || 0,
           dailyVolumes: { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0 },
@@ -265,6 +280,121 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         },
       })
       savedLogs.push(log)
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  AUTO-TRIGGER P5.1.1: Check if any WBS item reached 100%
+    //  after saving these acceptance records
+    // ══════════════════════════════════════════════════════════════
+    try {
+      // Fetch ALL acceptance logs (including ones we just saved) grouped by lsxCode
+      const allLogs = await (prisma as any).weeklyAcceptanceLog.findMany({
+        where: { projectId: task.projectId, role },
+      })
+
+      // Get total volume map from P3.3/P3.4 for comparison
+      const p3Tasks = await prisma.workflowTask.findMany({
+        where: { projectId: task.projectId, stepCode: { in: ['P3.3', 'P3.4'] } },
+        select: { resultData: true },
+      })
+
+      const totalVolumeMap = new Map<string, number>()
+      const lsxToWbsRow = new Map<string, number>()  // lsxCode → WBS row index
+
+      for (const t of p3Tasks) {
+        const pData = (t.resultData as Record<string, any>) || {}
+        let cells: Record<string, Record<string, any[]>> = {}
+        try { cells = typeof pData.cellAssignments === 'string' ? JSON.parse(pData.cellAssignments) : (pData.cellAssignments || {}) } catch { cells = {} }
+        let issued: Record<string, Record<string, Record<string, boolean>>> = {}
+        try { issued = typeof pData.lsxIssuedDetails === 'string' ? JSON.parse(pData.lsxIssuedDetails) : (pData.lsxIssuedDetails || {}) } catch { issued = {} }
+
+        for (const rowKey of Object.keys(cells)) {
+          for (const stageKey of Object.keys(cells[rowKey])) {
+            const assignments = cells[rowKey][stageKey]
+            if (!Array.isArray(assignments)) continue
+            for (let ti = 0; ti < assignments.length; ti++) {
+              if (issued[rowKey]?.[stageKey]?.[String(ti)]) {
+                const totalVol = parseFloat(assignments[ti].volume) || 0
+                if (totalVol > 0) {
+                  const lsxCode = `${rowKey}_${stageKey}_${ti}`
+                  totalVolumeMap.set(lsxCode, (totalVolumeMap.get(lsxCode) || 0) + totalVol)
+                  lsxToWbsRow.set(lsxCode, Number(rowKey))
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Group by WBS row index to check if ALL stages within a WBS item are 100%
+      const wbsRows = new Map<number, { stages: string[]; allComplete: boolean }>()
+      for (const [lsxCode, totalVol] of totalVolumeMap) {
+        const rowIdx = lsxToWbsRow.get(lsxCode)!
+        if (!wbsRows.has(rowIdx)) wbsRows.set(rowIdx, { stages: [], allComplete: true })
+        const entry = wbsRows.get(rowIdx)!
+        entry.stages.push(lsxCode)
+
+        // Calculate cumulative accepted volume for this lsxCode
+        const cumAccepted = allLogs
+          .filter((a: any) => a.lsxCode === lsxCode)
+          .reduce((sum: number, a: any) => sum + Number(a.acceptedVolume || 0), 0)
+
+        if (cumAccepted < totalVol) {
+          entry.allComplete = false
+        }
+      }
+
+      // Check existing P5.1.1 tasks to avoid duplicates
+      const existingP511 = await prisma.workflowTask.findMany({
+        where: { projectId: task.projectId, stepCode: 'P5.1.1' },
+        select: { resultData: true },
+      })
+      const existingWbsRows = new Set<number>()
+      for (const t511 of existingP511) {
+        const rd511 = t511.resultData as Record<string, any> | null
+        if (rd511?.wbsRowIndex != null) existingWbsRows.add(Number(rd511.wbsRowIndex))
+      }
+
+      // Get WBS names for the task description
+      const p12aTask = await prisma.workflowTask.findFirst({
+        where: { projectId: task.projectId, stepCode: 'P1.2A' },
+        select: { resultData: true },
+      })
+      let wbsList: any[] = []
+      if (p12aTask?.resultData) {
+        const planData = p12aTask.resultData as Record<string, any>
+        try { wbsList = typeof planData.wbsItems === 'string' ? JSON.parse(planData.wbsItems) : (planData.wbsItems || []) } catch { wbsList = [] }
+      }
+
+      // Create P5.1.1 for newly completed WBS items
+      for (const [rowIdx, wbsInfo] of wbsRows) {
+        if (!wbsInfo.allComplete) continue
+        if (existingWbsRows.has(rowIdx)) continue // Already created
+
+        const wbsName = wbsList[rowIdx]?.hangMuc || `Hạng mục #${rowIdx + 1}`
+        const totalKL = wbsInfo.stages.reduce((sum, lsx) => sum + (totalVolumeMap.get(lsx) || 0), 0)
+
+        await prisma.workflowTask.create({
+          data: {
+            projectId: task.projectId,
+            stepCode: 'P5.1.1',
+            stepName: `Yêu cầu nghiệm thu CL: ${wbsName}`,
+            assignedRole: 'R06b',
+            status: 'IN_PROGRESS',
+            resultData: {
+              wbsRowIndex: rowIdx,
+              hangMucName: wbsName,
+              totalKL,
+              projectName: (task as any).project?.projectCode || '',
+              stages: wbsInfo.stages,
+            },
+          },
+        })
+        console.log(`[AUTO] Created P5.1.1 for WBS "${wbsName}" (row ${rowIdx}) — 100% accepted`)
+      }
+    } catch (err) {
+      console.error('[AUTO] P5.1.1 check error:', err)
+      // Don't fail the main request for this
     }
 
     // Mark task as DONE and trigger workflow engine hooks (like generating P5.4)

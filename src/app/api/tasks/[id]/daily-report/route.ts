@@ -11,7 +11,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     })
 
     if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
-    if (task.stepCode !== 'P5.1') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
+    if (task.stepCode !== 'P5.1' && task.stepCode !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
 
     // 1. Tìm TẤT CẢ các task P3.3/P3.4 của dự án (bất kể status)
     const p3Tasks = await prisma.workflowTask.findMany({
@@ -49,6 +49,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       delivery: 'Giao hàng', commissioning: 'Chạy thử',
     }
 
+    // Kiểm tra xem Kho đã xuất vật tư (P4.5 DONE) cho dự án này chưa
+    const p45DoneCount = await prisma.workflowTask.count({
+      where: {
+        projectId: task.projectId,
+        stepCode: 'P4.5',
+        status: 'DONE'
+      }
+    })
+    const warehouseHasIssued = p45DoneCount > 0
+
     const uniqueLsxItemsMap = new Map()
 
     for (const t of p3Tasks) {
@@ -72,44 +82,51 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
       // Duyệt từng hạng mục → từng công đoạn → từng tổ đội ĐÃ PHÁT HÀNH
       for (const rowKey of Object.keys(cells)) {
-        const rowIdx = Number(rowKey)
-        const wbsName = wbsList[rowIdx]?.hangMuc || `Hạng mục #${rowIdx + 1}`
-        const phamVi = wbsList[rowIdx]?.phamVi || ''
-
+        const rowIdx = isNaN(parseInt(rowKey)) ? parseInt(rowKey.replace(/\D/g, '')) : parseInt(rowKey)
+        const wbsName = wbsList[rowIdx]?.hangMuc || `Hạng mục ${rowKey}`
+        let phamVi = String(wbsList[rowIdx]?.phamVi || '').trim()
+        const thauPhu = String(wbsList[rowIdx]?.thauPhu || '').trim()
+        if (!phamVi && thauPhu) phamVi = 'TP'
         for (const stageKey of Object.keys(cells[rowKey])) {
           const assignments = cells[rowKey][stageKey]
           if (!Array.isArray(assignments)) continue
 
-          // Aggregate tất cả team đã phát hành cho cùng 1 công đoạn
-          let totalVol = 0
-          let hasIssuedTeam = false
+          // Filter theo giá trị ô WBS của từng công đoạn: IBS → P5.1, TP/khác → P5.1A
+          const cellValue = (wbsList[rowIdx]?.[stageKey] || '').toString().toUpperCase().trim()
+          const stageIsIBS = cellValue === 'IBS' || cellValue.includes('IBS')
+          if (task.stepCode === 'P5.1' && !stageIsIBS) continue
+          if ((task.stepCode as string) === 'P5.1A' && stageIsIBS) continue
+
+          // Chỉ hiển thị LSX khi Kho đã hoàn thành xuất vật tư (P4.5 DONE)
+          if (!warehouseHasIssued) continue
 
           for (let ti = 0; ti < assignments.length; ti++) {
             // Chỉ tính tổ đã được phát hành
             if (issued[rowKey]?.[stageKey]?.[String(ti)]) {
-              totalVol += parseFloat(assignments[ti].volume) || 0
-              hasIssuedTeam = true
+              const totalVol = parseFloat(assignments[ti].volume) || 0
+              if (totalVol <= 0) continue
+
+              const lsxCode = `${rowKey}_${stageKey}_${ti}`
+              const teamName = assignments[ti].teamName || `Tổ ${ti + 1}`
+
+              if (!uniqueLsxItemsMap.has(lsxCode)) {
+                uniqueLsxItemsMap.set(lsxCode, {
+                  lsxCode,
+                  projectName: project?.projectName || '',
+                  projectCode: project?.projectCode || '',
+                  wbsItem: wbsName,
+                  stageKey,
+                  stageLabel: STAGE_LABELS[stageKey] || stageKey,
+                  teamName, // Add teamName
+                  phamVi,   // Add phamVi explicitly
+                  totalLsx: totalVol,
+                  unit: wbsList[rowIdx]?.dvt || 'kg',
+                })
+              } else {
+                const existing = uniqueLsxItemsMap.get(lsxCode)
+                existing.totalLsx += totalVol // Should not happen with _ti suffix, but safe to keep
+              }
             }
-          }
-
-          if (!hasIssuedTeam) continue // Bỏ qua công đoạn chưa có tổ nào phát hành
-
-          const lsxCode = `${rowKey}_${stageKey}`
-
-          if (!uniqueLsxItemsMap.has(lsxCode)) {
-            uniqueLsxItemsMap.set(lsxCode, {
-              lsxCode,
-              projectName: project?.projectName || '',
-              projectCode: project?.projectCode || '',
-              wbsItem: wbsName + (phamVi ? ` (${phamVi})` : ''),
-              stageKey,
-              stageLabel: STAGE_LABELS[stageKey] || stageKey,
-              totalLsx: totalVol,
-              unit: wbsList[rowIdx]?.dvt || 'kg',
-            })
-          } else {
-            const existing = uniqueLsxItemsMap.get(lsxCode)
-            existing.totalLsx += totalVol
           }
         }
       }
@@ -201,7 +218,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     })
 
     if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
-    if (task.stepCode !== 'P5.1') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
+    if (task.stepCode !== 'P5.1' && task.stepCode !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
 
     const body = await request.json()
     const { items, date, userId } = body as {

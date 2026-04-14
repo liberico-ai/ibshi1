@@ -12,7 +12,7 @@ export type { WorkflowStep } from './workflow-constants'
 // ── Workflow Engine Core Functions (Server-only) ──
 
 // Steps that are created dynamically (multi-instance), not during project init
-const DYNAMIC_STEPS = ['P5.1', 'P5.2', 'P5.3', 'P5.4']
+const DYNAMIC_STEPS = ['P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A']
 
 export async function initializeProjectWorkflow(projectId: string): Promise<void> {
   const steps = Object.values(WORKFLOW_RULES).filter(s => !DYNAMIC_STEPS.includes(s.code))
@@ -76,6 +76,21 @@ export async function completeTask(
   // Auto-create P5.1 when a dynamic P4.5 completes
   if (task.stepCode === 'P4.5') {
     await checkAndCreateP51(taskId)
+  }
+
+  // Auto-create P5.3A when P5.1.1 (Yêu cầu nghiệm thu CL) completes
+  if (task.stepCode === 'P5.1.1') {
+    const rd = resultData || (task.resultData as Record<string, any>) || {}
+    await prisma.workflowTask.create({
+      data: {
+        projectId: task.projectId,
+        stepCode: 'P5.3A',
+        stepName: `QAQC nghiệm thu CL: ${rd.hangMucName || 'Hạng mục'}`,
+        assignedRole: WORKFLOW_RULES['P5.3A']?.role || 'R09',
+        status: TASK_STATUS.IN_PROGRESS,
+        resultData: rd,
+      }
+    })
   }
 
   if (!rule) return { nextSteps: [] }
@@ -200,6 +215,30 @@ async function checkAndCreateP51(taskId: string) {
         startedAt: new Date(),
       }
     })
+  }
+
+  // Also create P5.1A for PM (subcontractor daily report)
+  const ruleP51A = WORKFLOW_RULES['P5.1A']
+  if (ruleP51A) {
+    const existingP51A = await prisma.workflowTask.findFirst({
+      where: {
+        projectId: task.projectId,
+        stepCode: 'P5.1A',
+      }
+    })
+    if (!existingP51A) {
+      await prisma.workflowTask.create({
+        data: {
+          projectId: task.projectId,
+          stepCode: 'P5.1A',
+          stepName: 'BÁO CÁO KHỐI LƯỢNG CỦA THẦU PHỤ (THEO NGÀY)',
+          stepNameEn: 'Daily Subcontractor Production Report',
+          assignedRole: ruleP51A.role,
+          status: TASK_STATUS.IN_PROGRESS,
+          startedAt: new Date(),
+        }
+      })
+    }
   }
 
   // Mark P4.5 as processed
