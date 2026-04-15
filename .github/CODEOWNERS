@@ -1,0 +1,12 @@
+# Required reviewers for all changes to main.
+# GitHub blocks a PR from being approved by its own author when CODEOWNERS is set
+# and branch protection requires owner review.
+
+* @toanduc1993-cmd
+
+# Extra guard: security-sensitive paths require explicit owner approval.
+/.github/           @toanduc1993-cmd
+/src/middleware.ts  @toanduc1993-cmd
+/src/lib/auth.ts    @toanduc1993-cmd
+/prisma/            @toanduc1993-cmd
+/scripts/           @toanduc1993-cmd

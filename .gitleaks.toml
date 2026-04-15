@@ -1,0 +1,20 @@
+title = "IBS ERP gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "postgres-connection-string"
+description = "PostgreSQL connection URI with embedded password"
+regex = '''postgres(ql)?:\/\/[^\s:@\/]+:[^\s@\/]+@'''
+tags = ["secret", "postgres"]
+
+[allowlist]
+description = "Allow example placeholders"
+regexes = [
+  '''postgres(ql)?:\/\/user:password@''',
+  '''postgres(ql)?:\/\/[^\s:@\/]*:(placeholder|example|dummy|\*\*\*)@''',
+]
+paths = [
+  '''\.env\.example$''',
+]

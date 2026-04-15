@@ -2440,7 +2440,7 @@ export default function TaskDetailPage() {
 
             {/* P5.1.1: YÊU CẦU NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC (SX) */}
             {task.stepCode === 'P5.1.1' && (() => {
-              const rd = task.resultData || {}
+              const rd = (task.resultData as Record<string, any>) || {}
               return (
                 <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderTop: '4px solid #0ea5e9' }}>
                   <h3 style={{ marginTop: 0, fontSize: '1.2rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2453,7 +2453,7 @@ export default function TaskDetailPage() {
                     <tbody>
                       <tr>
                         <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600, width: '30%' }}>Dự án</td>
-                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{rd.projectName || project?.projectCode || ''}</td>
+                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{rd.projectName || task.project?.projectCode || ''}</td>
                       </tr>
                       <tr>
                         <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600 }}>Hạng mục</td>
@@ -2494,7 +2494,7 @@ export default function TaskDetailPage() {
 
             {/* P5.3A: QAQC NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC */}
             {task.stepCode === 'P5.3A' && (
-              <QualityAcceptanceUI task={task} isActive={isActive} project={project} currentUser={currentUser} />
+              <QualityAcceptanceUI task={task} isActive={isActive} project={task.project} currentUser={currentUser} />
             )}
 
             {/* P5.1: Thông tin Lệnh sản xuất from P3.3/P3.4 (dynamic) */}
