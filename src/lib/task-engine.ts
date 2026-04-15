@@ -84,13 +84,23 @@ export async function getDashboardStats(roleCode?: string) {
 }
 
 export async function getProjectsOverview() {
-  const projects = await prisma.project.findMany({
-    where: { status: 'ACTIVE' },
-    include: {
-      tasks: { select: { stepCode: true, status: true, deadline: true, assignedRole: true, resultData: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const [projects, dailyLogsGrouped, acceptanceLogsGrouped] = await Promise.all([
+    prisma.project.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        tasks: { select: { stepCode: true, status: true, deadline: true, assignedRole: true, resultData: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    (prisma as any).dailyProductionLog.groupBy({
+      by: ['projectId'],
+      _sum: { reportedVolume: true },
+    }).catch(() => []),
+    (prisma as any).weeklyAcceptanceLog.groupBy({
+      by: ['projectId', 'role'],
+      _sum: { acceptedVolume: true },
+    }).catch(() => []),
+  ])
 
   // Role → short department label
   const ROLE_DEPT: Record<string, string> = {
@@ -118,30 +128,42 @@ export async function getProjectsOverview() {
       if (t.status === TASK_STATUS.DONE) deptMap[dept].done++
     }
 
-    // ── Volume progress from resultData ──
+    // ── Actual Volume Progress Engine ──
     let estimatedKg = 0
     let completedKg = 0
     let acceptedKg = 0
 
-    for (const t of p.tasks) {
-      const rd = t.resultData as Record<string, unknown> | null
-      if (!rd) continue
+    // 1. Fetch Plan (Denominator) from P1.2A WBS Import
+    const p12aTask = p.tasks.find(t => t.stepCode === 'P1.2A');
+    if (p12aTask?.resultData) {
+      const planData = p12aTask.resultData as Record<string, any>;
+      try {
+        const wbsList = typeof planData.wbsItems === 'string' ? JSON.parse(planData.wbsItems) : (planData.wbsItems || []);
+        if (wbsList.length > 0) {
+          let totalKL = wbsList.reduce((s: number, r: any) => s + (Number(r.khoiLuong) || Number(r.volume) || 0), 0);
+          if (wbsList.length > 2) {
+            const firstKL = Number(wbsList[0].khoiLuong) || Number(wbsList[0].volume) || 0;
+            const restKL = totalKL - firstKL;
+            // If the first row is roughly equal to the sum of the rest, it's a summary row and shouldn't be double counted
+            if (firstKL > 0 && restKL > 0 && Math.abs(firstKL - restKL) / firstKL < 0.05) {
+              totalKL = restKL;
+            }
+          }
+          estimatedKg = totalKL;
+        }
+      } catch(e) {}
+    }
 
-      // P1.2: Dự toán → totalWeight
-      if (t.stepCode === 'P1.2' && rd.totalWeight) {
-        estimatedKg = Number(rd.totalWeight) || 0
-      }
+    // 2. Fetch reported volume from Daily Production Logs
+    const dLog = dailyLogsGrouped.find((g: any) => g.projectId === p.id);
+    if (dLog?._sum?.reportedVolume) {
+      completedKg = Number(dLog._sum.reportedVolume) || 0;
+    }
 
-      // P4.3: Gia công → completedQty = sản lượng SX hoàn thành
-      if (t.stepCode === 'P4.3' && rd.completedQty) {
-        completedKg = Number(rd.completedQty) || 0
-      }
-
-      // P4.8: FAT → nghiệm thu nhà máy
-      // P5.3: SAT → nghiệm thu tại công trường (higher priority)
-      if ((t.stepCode === 'P5.3' || t.stepCode === 'P4.8') && t.status === TASK_STATUS.DONE) {
-        acceptedKg = completedKg // If passed, accepted = completed
-      }
+    // 3. Fetch PM accepted volume from Weekly Acceptance Logs (P5.4)
+    const aLog = acceptanceLogsGrouped.find((g: any) => g.projectId === p.id && g.role === 'PM');
+    if (aLog?._sum?.acceptedVolume) {
+      acceptedKg = Number(aLog._sum.acceptedVolume) || 0;
     }
 
     const acceptedPercent = estimatedKg > 0 ? Math.round((acceptedKg / estimatedKg) * 100) : 0
