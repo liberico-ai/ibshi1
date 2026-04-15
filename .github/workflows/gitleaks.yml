@@ -22,5 +22,19 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
             | tar -xz -C /usr/local/bin gitleaks
 
-      - name: Run gitleaks
-        run: gitleaks detect --source . --config .gitleaks.toml --redact --verbose --no-banner
+      - name: Scan new commits (push)
+        if: github.event_name == 'push'
+        run: |
+          BEFORE="${{ github.event.before }}"
+          # First push to a branch can have zero-ref as "before" — fall back to HEAD~1.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE="HEAD~1"
+          fi
+          gitleaks detect --source . --config .gitleaks.toml --redact --verbose --no-banner \
+            --log-opts="${BEFORE}..HEAD"
+
+      - name: Scan PR diff
+        if: github.event_name == 'pull_request'
+        run: |
+          gitleaks detect --source . --config .gitleaks.toml --redact --verbose --no-banner \
+            --log-opts="origin/${{ github.base_ref }}..HEAD"
