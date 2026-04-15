@@ -235,33 +235,58 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
           <div className="project-name text-base font-semibold" style={{ marginTop: 4 }}>{p.projectName}</div>
           <p className="text-sm text-ibs-navy-100" style={{ marginTop: 2 }}>{p.clientName}</p>
         </div>
-        <div className="text-right">
-          <span className={`text-2xl font-bold ${p.progress > 50 ? 'text-success' : 'text-white'}`}>{p.progress}%</span>
-          <p className="text-xs font-medium text-ibs-navy-100" style={{ marginTop: 2 }}>{p.completedTasks}/{p.totalTasks} tasks</p>
-        </div>
+        {/* Removed large percentage from here as requested */}
       </div>
 
-      {/* Task progress bar */}
-      <div style={{ marginBottom: 4 }}>
-        <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-          <span className="text-xs font-semibold text-ibs-navy-100" style={{ width: 100 }}>Tiến độ C.Việc</span>
-          <div className="progress-bar" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }}>
-            <div className={`progress-bar-fill ${getProgressColor(p.progress)}`} style={{ width: `${p.progress}%` }} />
+      <div className="space-y-4 mb-4 pr-2">
+        {/* Task progress bar */}
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-ibs-navy-100" style={{ width: 100 }}>Tiến độ C.Việc</span>
+            <div className="progress-bar flex-1" style={{ background: 'rgba(255,255,255,0.1)' }}>
+              <div className={`progress-bar-fill ${getProgressColor(p.progress)}`} style={{ width: `${p.progress}%` }} />
+            </div>
+            <span className={`text-[11px] font-bold w-9 text-right ${getProgressColor(p.progress).replace('bg-', 'text-')}`}>
+              {p.progress}%
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-1.5">
+            <div style={{ width: 100 }} className="flex-shrink-0"></div>
+            <div className="flex-1 flex gap-1.5 text-[10px] text-ibs-navy-100 items-center font-mono">
+              <span className={`font-bold ${getProgressColor(p.progress).replace('bg-', 'text-')}`}>{p.completedTasks}</span>
+              <span className="opacity-50 text-[9px]">/</span>
+              <span>{p.totalTasks} <span className="font-sans opacity-70">tasks</span></span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Volume progress bar */}
-      <div style={{ marginBottom: 10 }}>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-ibs-navy-100" style={{ width: 100 }}>Khối lượng T.Tế</span>
-          {vol.estimatedKg > 0 ? (
-            <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.1)', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(vol.completedPercent, 100)}%`, background: '#93c5fd', borderRadius: 4, transition: 'width 0.6s ease' }} />
-              <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(vol.acceptedPercent, 100)}%`, background: '#2563eb', borderRadius: 4, transition: 'width 0.6s ease' }} />
+        {/* Volume display */}
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-ibs-navy-100" style={{ width: 100 }}>Khối lượng T.Tế</span>
+            {vol.estimatedKg > 0 ? (
+              <>
+                <div className="progress-bar flex-1" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                  <div className="progress-bar-fill bg-blue-500" style={{ width: `${Math.round((vol.acceptedKg / vol.estimatedKg) * 100)}%` }} />
+                </div>
+                <span className="text-[11px] font-bold text-blue-400 w-9 text-right">
+                  {Math.round((vol.acceptedKg / vol.estimatedKg) * 100)}%
+                </span>
+              </>
+            ) : (
+              <span className="text-xs italic text-ibs-navy-100 flex-1">Chưa có dữ liệu KL</span>
+            )}
+          </div>
+          {vol.estimatedKg > 0 && (
+            <div className="flex items-center gap-2 mt-1.5">
+              <div style={{ width: 100 }} className="flex-shrink-0"></div>
+              <div className="flex-1 flex gap-1.5 text-[10px] text-ibs-navy-100 items-center font-mono">
+                {/* Removed completedKg (Báo cáo) from here */}
+                <span className="text-blue-400 font-bold">{vol.acceptedKg.toLocaleString()}</span>
+                <span className="opacity-50 text-[9px]">/</span>
+                <span>{vol.estimatedKg.toLocaleString()} <span className="font-sans opacity-70">kg</span></span>
+              </div>
             </div>
-          ) : (
-            <span className="text-xs italic text-ibs-navy-100">Chưa có dữ liệu KL (BOM)</span>
           )}
         </div>
       </div>
@@ -280,7 +305,7 @@ function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
         </div>
         {vol.estimatedKg > 0 && (
           <span className="text-xs font-semibold text-info whitespace-nowrap">
-            ⚖️ {(vol.acceptedKg / 1000).toFixed(1)}/{(vol.estimatedKg / 1000).toFixed(1)}T ({vol.acceptedPercent}% NT)
+            ⚖️ {(vol.acceptedKg / 1000).toFixed(1)}/{(vol.estimatedKg / 1000).toFixed(1)}T
           </span>
         )}
       </div>
