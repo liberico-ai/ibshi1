@@ -149,8 +149,8 @@ export default function ProjectDetailPage() {
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', opacity: 0.6, textTransform: 'uppercase' as const }}>{project.projectCode}</span>
-          <h1 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', marginTop: '4px' }}>{project.projectName}</h1>
-          <p style={{ fontSize: '14px', opacity: 0.7, marginTop: '4px' }}>{project.clientName}{project.description ? ` — ${project.description}` : ''}</p>
+          <h1 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', marginTop: '4px', color: '#ffffff' }}>{project.projectName}</h1>
+          <p style={{ fontSize: '14px', opacity: 0.7, marginTop: '4px', color: '#ffffff' }}>{project.clientName}{project.description ? ` — ${project.description}` : ''}</p>
           {project.status === 'CLOSED' && (
             <span style={{ display: 'inline-block', marginTop: '8px', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: 'rgba(22,163,74,0.2)', color: '#86efac' }}>🔒 ĐÃ ĐÓNG</span>
           )}
