@@ -7,7 +7,7 @@ export interface FormField {
   key: string
   label: string
   labelEn: string
-  type: 'text' | 'number' | 'textarea' | 'date' | 'select' | 'radio' | 'file' | 'readonly' | 'currency' | 'section'
+  type: 'text' | 'number' | 'textarea' | 'date' | 'select' | 'radio' | 'file' | 'readonly' | 'readonly_textarea' | 'currency' | 'section'
   required?: boolean
   placeholder?: string
   options?: { value: string; label: string }[]
@@ -371,7 +371,7 @@ const P3_5: StepFormConfig = {
   description: 'Nhập thông tin ít nhất 3 NCC với báo giá cho từng vật tư. Hệ thống tự động so sánh giá để xác định NCC tốt nhất.',
   fields: [
     { key: 'rfqCount', label: 'Số RFQ đã gửi', labelEn: 'RFQ Count', type: 'number' },
-    { key: 'longLeadFlags', label: 'Cảnh báo long-lead items', labelEn: 'Long-lead Flags', type: 'textarea', fullWidth: true },
+    { key: 'longLeadFlags', label: 'Cảnh báo long-lead items', labelEn: 'Long-lead Flags', type: 'readonly_textarea', fullWidth: true },
     // Supplier entries + comparison table rendered dynamically in page.tsx
   ],
   checklist: [

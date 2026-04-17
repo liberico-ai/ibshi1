@@ -12,6 +12,8 @@ import WeldPaintUploadUI from './components/WeldPaintUploadUI'
 import DailyProductionUI from './components/DailyProductionUI'
 import WeeklyAcceptanceUI from './components/WeeklyAcceptanceUI'
 import QualityAcceptanceUI from './components/QualityAcceptanceUI'
+import P3_5CommercialGroupUI from './components/P3_5CommercialGroupUI'
+import P3_6ApprovalUI from './components/P3_6ApprovalUI'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
@@ -1504,16 +1506,26 @@ export default function TaskDetailPage() {
       }
       if (res.previousStepData) {
         setPreviousStepData(res.previousStepData)
-        // P3.5: auto-fill default suppliers with PR items if no saved supplier data
-        if (res.task.stepCode === 'P3.5' && !(res.task.resultData as Record<string, unknown> | null)?.suppliers) {
-          const prRaw = (res.previousStepData as Record<string, unknown>)?.prItems
-          if (Array.isArray(prRaw) && prRaw.length > 0) {
-            const prQuotes = prRaw.filter((p: Record<string, string>) => p.name?.trim()).map((p: Record<string, string>) => ({ material: p.name, price: '' }))
-            setSuppliers([
-              { name: '', quotes: [...prQuotes] },
-              { name: '', quotes: [...prQuotes] },
-              { name: '', quotes: [...prQuotes] },
-            ])
+        if (res.task.stepCode === 'P3.5') {
+          const rd = (res.task.resultData as Record<string, unknown>) || {}
+          // Auto-fill default suppliers with PR items if no saved supplier data
+          if (!rd.suppliers) {
+            const prRaw = (res.previousStepData as Record<string, unknown>)?.prItems
+            if (Array.isArray(prRaw) && prRaw.length > 0) {
+              const prQuotes = prRaw.filter((p: Record<string, string>) => p.name?.trim()).map((p: Record<string, string>) => ({ material: p.name, price: '' }))
+              setSuppliers([
+                { name: '', quotes: [...prQuotes] },
+                { name: '', quotes: [...prQuotes] },
+                { name: '', quotes: [...prQuotes] },
+              ])
+            }
+          }
+          // Prefill Cảnh báo long-lead items from P3.1
+          if (!rd.longLeadFlags) {
+            const longLeadInfo = (res.previousStepData as Record<string, unknown>)?.longLeadInfo as string
+            if (longLeadInfo) {
+              setFormData(prev => ({ ...prev, longLeadFlags: longLeadInfo }))
+            }
           }
         }
       }
@@ -1846,6 +1858,14 @@ export default function TaskDetailPage() {
       return
     }
 
+    if (task.stepCode === 'P4.1' && action === 'complete') {
+      if (!formData.paymentMethod || !formData.paymentDate) {
+        setError('Vui lòng chọn Phương thức thanh toán và Ngày thực chi')
+        setSubmitting(false)
+        return
+      }
+    }
+
     // Check if this is a reject action
     if (action === 'reject') {
       const reason = formData.rejectReason as string || submitNotes
@@ -2049,7 +2069,7 @@ export default function TaskDetailPage() {
       )}
 
       {/* Rejection reason banner — generic for any step rejection */}
-      {rejectionInfo && task?.stepName !== 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' && (() => {
+      {rejectionInfo && task?.stepName !== 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' && task?.stepCode !== 'P3.5' && (() => {
         const fromStep = (rejectionInfo as { fromStep?: string }).fromStep
         const isQC = fromStep === 'P4.3' || fromStep === 'P5.3'
         const title = fromStep === 'P5.3' ? 'QC đã từ chối nghiệm thu sản phẩm SX'
@@ -3980,377 +4000,15 @@ export default function TaskDetailPage() {
               </>
             )}
 
-            {/* P3.5: Supplier Entries + Auto Price Comparison */}
-            {task.stepCode === 'P3.5' && (() => {
-              // Get PR materials from P2.1/P2.2/P2.3
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const prItemsRaw = (previousStepData as any)?.prItems
-              type PrItem = { name: string; code: string; spec: string; quantity: string; unit: string; source: string }
-              const prItems: PrItem[] = Array.isArray(prItemsRaw) ? prItemsRaw.filter((p: PrItem) => p.name?.trim()) : []
+            {/* P3.5: Group-based supplier routing */}
+            {task.stepCode === 'P3.5' && previousStepData && (
+               <P3_5CommercialGroupUI task={task} previousStepData={previousStepData} isActive={isActive} currentUser={currentUser} rejectionInfo={rejectionInfo} />
+            )}
 
-              return (
-                <>
-                  {/* Merged: NCC Cards with PR materials table inside */}
-                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid #8b5cf6', paddingBottom: 8 }}>
-                          🏭 Nhà cung cấp đề xuất <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>* (tối thiểu 3 NCC)</span>
-                        </h3>
-                        <p style={{ margin: '6px 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          {prItems.length > 0 ? `${prItems.length} vật tư PR từ BOM (P2.1/P2.2/P2.3) — TM chỉ điền giá cho từng NCC` : 'Chưa có vật tư PR — TM tự nhập vật tư'}
-                        </p>
-                      </div>
-                      {isActive && (
-                        <button type="button" onClick={() => setSuppliers(prev => [...prev, { name: '', quotes: prItems.length > 0 ? prItems.map(m => ({ material: m.name, price: '' })) : [{ material: '', price: '' }] }])}
-                          style={{ background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                          ➕ Thêm NCC
-                        </button>
-                      )}
-                    </div>
-                    {suppliers.length < 3 && (
-                      <div style={{ padding: '6px 12px', background: '#fef2f2', borderRadius: 8, fontSize: '0.8rem', color: '#dc2626', marginBottom: 12 }}>
-                        ⚠️ Cần tối thiểu 3 NCC. Hiện có: {suppliers.length}
-                      </div>
-                    )}
-                    {suppliers.map((supplier, sIdx) => (
-                      <div key={sIdx} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '1rem', marginBottom: 16, borderLeft: `4px solid hsl(${sIdx * 60 + 200}, 60%, 50%)` }}>
-                        {/* NCC header: name + capability file + delete */}
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)`, minWidth: 60 }}>NCC {sIdx + 1}</span>
-                          <input className="input" placeholder="Tên nhà cung cấp *" value={supplier.name} disabled={!isActive}
-                            onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, name: e.target.value } : s))}
-                            style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }} />
-                          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            📎 Năng lực NCC
-                            <input type="file" accept=".pdf,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={!isActive}
-                              onChange={e => {
-                                const file = e.target.files?.[0]
-                                if (file) {
-                                  const reader = new FileReader()
-                                  reader.onload = () => {
-                                    setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, capabilityFile: file.name, capabilityFileData: reader.result as string } : s))
-                                  }
-                                  reader.readAsDataURL(file)
-                                }
-                              }} />
-                          </label>
-                          {(supplier as unknown as { capabilityFile?: string; capabilityFileData?: string }).capabilityFile && (
-                            <a
-                              href={(supplier as unknown as { capabilityFileData?: string }).capabilityFileData || '#'}
-                              download={(supplier as unknown as { capabilityFile?: string }).capabilityFile}
-                              style={{ fontSize: '0.7rem', color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 6px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', textDecoration: 'none', cursor: 'pointer' }}
-                              title={`Tải về: ${(supplier as unknown as { capabilityFile?: string }).capabilityFile}`}>
-                              ✅ {(supplier as unknown as { capabilityFile?: string }).capabilityFile}
-                            </a>
-                          )}
-                          {isActive && suppliers.length > 3 && (
-                            <button type="button" onClick={() => setSuppliers(prev => prev.filter((_, i) => i !== sIdx))}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 700 }} title="Xóa NCC">×</button>
-                          )}
-                        </div>
-                        {/* Material quotes table — PR items with price column */}
-                        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
-                            <thead>
-                              <tr style={{ background: 'var(--bg-secondary)' }}>
-                                {['#', 'Tên vật tư', 'Mã VT', 'Quy cách', 'SL', 'ĐVT', 'Nguồn', 'Giá (VND)'].map(h => (
-                                  <th key={h} style={{ padding: '5px 6px', fontWeight: 700, color: h === 'Giá (VND)' ? '#dc2626' : 'var(--text-muted)', borderBottom: '2px solid var(--border)', textAlign: h === 'SL' || h === 'Giá (VND)' ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
-                                ))}
-                                {isActive && <th style={{ width: 24, borderBottom: '2px solid var(--border)' }} />}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {supplier.quotes.map((q, qIdx) => {
-                                // Try to match quote with PR item for readonly info
-                                const prMatch = prItems.find(p => p.name.toLowerCase() === q.material.toLowerCase())
-                                return (
-                                  <tr key={qIdx} style={{ borderBottom: '1px solid var(--border)' }}>
-                                    <td style={{ padding: '3px 6px', color: 'var(--text-muted)', textAlign: 'center' }}>{qIdx + 1}</td>
-                                    <td style={{ padding: '3px 6px', fontWeight: 500 }}>
-                                      {prMatch ? (
-                                        <span>{q.material}</span>
-                                      ) : (
-                                        <input className="input" value={q.material} disabled={!isActive}
-                                          onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.map((qq, j) => j === qIdx ? { ...qq, material: e.target.value } : qq) } : s))}
-                                          placeholder="Tên vật tư" style={{ fontSize: '0.72rem', padding: '2px 4px', width: '100%' }} />
-                                      )}
-                                    </td>
-                                    <td style={{ padding: '3px 6px', fontSize: '0.65rem', color: 'var(--text-muted)' }}>{prMatch?.code || ''}</td>
-                                    <td style={{ padding: '3px 6px', fontSize: '0.65rem' }}>{prMatch?.spec || ''}</td>
-                                    <td style={{ padding: '3px 6px', textAlign: 'right', fontSize: '0.68rem' }}>{prMatch?.quantity || ''}</td>
-                                    <td style={{ padding: '3px 6px', fontSize: '0.68rem' }}>{prMatch?.unit || ''}</td>
-                                    <td style={{ padding: '3px 6px' }}>
-                                      {prMatch?.source && <span style={{ padding: '1px 4px', borderRadius: 3, fontSize: '0.58rem', fontWeight: 600, background: '#dbeafe', color: '#1d4ed8' }}>{prMatch.source}</span>}
-                                    </td>
-                                    <td style={{ padding: '3px 6px' }}>
-                                      <input className="input" type="number" value={q.price} disabled={!isActive}
-                                        onChange={e => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.map((qq, j) => j === qIdx ? { ...qq, price: e.target.value } : qq) } : s))}
-                                        placeholder="0" style={{ fontSize: '0.75rem', padding: '3px 6px', width: '100%', textAlign: 'right', fontWeight: 600, color: '#dc2626' }} />
-                                    </td>
-                                    {isActive && (
-                                      <td style={{ textAlign: 'center', padding: '2px' }}>
-                                        <button type="button" onClick={() => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: s.quotes.filter((_, j) => j !== qIdx) } : s))}
-                                          style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, padding: 0 }}>−</button>
-                                      </td>
-                                    )}
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        {isActive && (
-                          <button type="button" onClick={() => setSuppliers(prev => prev.map((s, i) => i === sIdx ? { ...s, quotes: [...s.quotes, { material: '', price: '' }] } : s))}
-                            style={{ marginTop: 6, fontSize: '0.72rem', color: '#8b5cf6', background: 'none', border: '1px dashed #8b5cf6', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-                            + Thêm vật tư
-                          </button>
-                        )}
-                        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
-                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                            {supplier.quotes.filter(q => q.price && Number(q.price) > 0).length}/{supplier.quotes.length} vật tư đã có giá
-                          </span>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1d4ed8' }}>
-                            Tổng: {supplier.quotes.reduce((sum, q) => sum + (Number(q.price) || 0), 0).toLocaleString('vi-VN')} ₫
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                {/* Auto Price Comparison Table */}
-                {(() => {
-                  const namedSuppliers = suppliers.filter(s => s.name.trim())
-                  const allMaterials = [...new Set(namedSuppliers.flatMap(s => s.quotes.filter(q => q.material.trim()).map(q => q.material.trim().toLowerCase())))]
-                  if (namedSuppliers.length < 2 || allMaterials.length === 0) return null
-                  return (
-                    <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
-                      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>📊 So sánh báo giá NCC</h3>
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                          <thead>
-                            <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 700 }}>Vật tư</th>
-                              {namedSuppliers.map((s, i) => (
-                                <th key={i} style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 700, color: `hsl(${i * 60 + 200}, 60%, 40%)` }}>{s.name}</th>
-                              ))}
-                              <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 700 }}>Kết quả</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {allMaterials.map((mat, mIdx) => {
-                              const prices = namedSuppliers.map(s => {
-                                const q = s.quotes.find(q => q.material.trim().toLowerCase() === mat)
-                                return q ? Number(q.price) || 0 : 0
-                              })
-                              const validPrices = prices.filter(p => p > 0)
-                              const minP = validPrices.length > 0 ? Math.min(...validPrices) : 0
-                              const maxP = validPrices.length > 0 ? Math.max(...validPrices) : 0
-                              const cheapestIdx = prices.indexOf(minP)
-                              return (
-                                <tr key={mIdx} style={{ borderBottom: '1px solid var(--border)' }}>
-                                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{mat}</td>
-                                  {prices.map((p, pIdx) => (
-                                    <td key={pIdx} style={{
-                                      textAlign: 'right', padding: '6px 8px',
-                                      fontWeight: 700,
-                                      color: p === 0 ? 'var(--text-muted)' : p === minP ? '#16a34a' : p === maxP ? '#dc2626' : 'var(--text-primary)',
-                                      background: p === minP && p > 0 ? '#f0fdf4' : p === maxP && p > 0 ? '#fef2f2' : 'transparent',
-                                    }}>
-                                      {p > 0 ? p.toLocaleString('vi-VN') : '—'}
-                                      {p === minP && p > 0 && ' ✅'}
-                                      {p === maxP && p > 0 && validPrices.length > 1 && ' ⬆️'}
-                                    </td>
-                                  ))}
-                                  <td style={{ textAlign: 'center', padding: '6px 8px', fontSize: '0.75rem' }}>
-                                    {validPrices.length > 1 ? (
-                                      <span style={{ color: '#16a34a', fontWeight: 700 }}>🏆 {namedSuppliers[cheapestIdx]?.name}</span>
-                                    ) : validPrices.length === 1 ? '1 giá' : '—'}
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                            {/* Total row */}
-                            <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
-                              <td style={{ padding: '6px 8px', fontWeight: 700, fontSize: '0.85rem' }}>TỔNG</td>
-                              {namedSuppliers.map((s, sIdx) => {
-                                const total = s.quotes.reduce((sum, q) => sum + (Number(q.price) || 0), 0)
-                                const allTotals = namedSuppliers.map(ns => ns.quotes.reduce((sm, q) => sm + (Number(q.price) || 0), 0)).filter(t => t > 0)
-                                const minTotal = allTotals.length > 0 ? Math.min(...allTotals) : 0
-                                const maxTotal = allTotals.length > 0 ? Math.max(...allTotals) : 0
-                                return (
-                                  <td key={sIdx} style={{
-                                    textAlign: 'right', padding: '6px 8px', fontWeight: 700, fontSize: '0.85rem',
-                                    color: total === 0 ? 'var(--text-muted)' : total === minTotal ? '#16a34a' : total === maxTotal ? '#dc2626' : '#1d4ed8',
-                                    background: total === minTotal && total > 0 ? '#f0fdf4' : total === maxTotal && total > 0 ? '#fef2f2' : 'transparent',
-                                  }}>
-                                    {total > 0 ? total.toLocaleString('vi-VN') : '—'}
-                                    {total === minTotal && total > 0 && ' ✅'}
-                                    {total === maxTotal && total > 0 && allTotals.length > 1 && ' ⬆️'}
-                                  </td>
-                                )
-                              })}
-                              <td style={{ textAlign: 'center', padding: '6px 8px', fontSize: '0.75rem' }}>
-                                {(() => {
-                                  const totals = namedSuppliers.map(s => s.quotes.reduce((sm, q) => sm + (Number(q.price) || 0), 0))
-                                  const validT = totals.filter(t => t > 0)
-                                  if (validT.length < 2) return '—'
-                                  const minT = Math.min(...validT)
-                                  const cheapI = totals.indexOf(minT)
-                                  return <span style={{ color: '#16a34a', fontWeight: 700 }}>🏆 {namedSuppliers[cheapI]?.name}</span>
-                                })()}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                      <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        ✅ = Giá thấp nhất &nbsp; ⬆️ = Giá cao nhất &nbsp; 🏆 = NCC đề xuất
-                      </div>
-                    </div>
-                  )
-                })()}
-              </>
-              )
-            })()}
-
-            {/* P3.6: BGĐ review supplier data from P3.5 */}
-            {task.stepCode === 'P3.6' && previousStepData?.supplierData && (() => {
-              const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[]; [key: string]: unknown }
-              const supplierList = sd?.suppliers || []
-              if (supplierList.length === 0) return null
-              // Build comparison
-              const namedS = supplierList.filter(s => s.name?.trim())
-              const allMats = [...new Set(namedS.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim().toLowerCase())))]
-              return (
-                <>
-                  {/* Supplier list read-only */}
-                  <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
-                    <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#8b5cf6' }}>🏭 Danh sách NCC đề xuất từ Thương mại ({namedS.length} NCC)</h3>
-                    {namedS.map((s, sIdx) => (
-                      <div key={sIdx} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '0.75rem', marginBottom: 8, borderLeft: `3px solid hsl(${sIdx * 60 + 200}, 60%, 50%)` }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '0.9rem', marginBottom: 6, color: `hsl(${sIdx * 60 + 200}, 60%, 40%)` }}>
-                          NCC {sIdx + 1}: {s.name}
-                          {(s as unknown as { capabilityFile?: string; capabilityFileData?: string }).capabilityFile && (
-                            <a
-                              href={(s as unknown as { capabilityFileData?: string }).capabilityFileData || '#'}
-                              download={(s as unknown as { capabilityFile?: string }).capabilityFile}
-                              style={{ fontSize: '0.7rem', fontWeight: 500, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 6px', textDecoration: 'none', cursor: 'pointer' }}
-                              title={`Tải về: ${(s as unknown as { capabilityFile?: string }).capabilityFile}`}>
-                              📎 {(s as unknown as { capabilityFile?: string }).capabilityFile}
-                            </a>
-                          )}
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr', gap: 4, padding: '2px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-                          {['#', 'Vật tư', 'Giá (VND)'].map(h => (
-                            <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                          ))}
-                        </div>
-                        {(s.quotes || []).filter(q => q.material?.trim()).map((q, qIdx) => (
-                          <div key={qIdx} style={{ display: 'grid', gridTemplateColumns: '30px 1.5fr 1fr', gap: 4, padding: '2px', fontSize: '0.8rem' }}>
-                            <span style={{ color: 'var(--text-secondary)' }}>{qIdx + 1}</span>
-                            <span>{q.material}</span>
-                            <span style={{ textAlign: 'right', fontWeight: 600 }}>{Number(q.price).toLocaleString('vi-VN')} ₫</span>
-                          </div>
-                        ))}
-                        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end', padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1d4ed8' }}>
-                            Tổng: {(s.quotes || []).reduce((sum, q) => sum + (Number(q.price) || 0), 0).toLocaleString('vi-VN')} ₫
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Auto comparison table */}
-                  {namedS.length >= 2 && allMats.length > 0 && (
-                    <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
-                      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>📊 So sánh báo giá NCC</h3>
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                          <thead>
-                            <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 700 }}>Vật tư</th>
-                              {namedS.map((s, i) => (
-                                <th key={i} style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 700, color: `hsl(${i * 60 + 200}, 60%, 40%)` }}>{s.name}</th>
-                              ))}
-                              <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 700 }}>Kết quả</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {allMats.map((mat, mIdx) => {
-                              const prices = namedS.map(s => {
-                                const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat)
-                                return q ? Number(q.price) || 0 : 0
-                              })
-                              const validP = prices.filter(p => p > 0)
-                              const minP = validP.length > 0 ? Math.min(...validP) : 0
-                              const maxP = validP.length > 0 ? Math.max(...validP) : 0
-                              const cheapIdx = prices.indexOf(minP)
-                              return (
-                                <tr key={mIdx} style={{ borderBottom: '1px solid var(--border)' }}>
-                                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{mat}</td>
-                                  {prices.map((p, pIdx) => (
-                                    <td key={pIdx} style={{
-                                      textAlign: 'right', padding: '6px 8px', fontWeight: 700,
-                                      color: p === 0 ? 'var(--text-muted)' : p === minP ? '#16a34a' : p === maxP ? '#dc2626' : 'var(--text-primary)',
-                                      background: p === minP && p > 0 ? '#f0fdf4' : p === maxP && p > 0 ? '#fef2f2' : 'transparent',
-                                    }}>
-                                      {p > 0 ? `${p.toLocaleString('vi-VN')} ₫` : '—'}
-                                      {p === minP && p > 0 && ' ✅'}
-                                      {p === maxP && p > 0 && validP.length > 1 && ' ⬆️'}
-                                    </td>
-                                  ))}
-                                  <td style={{ textAlign: 'center', padding: '6px 8px', fontSize: '0.75rem' }}>
-                                    {validP.length > 1 ? (
-                                      <span style={{ color: '#16a34a', fontWeight: 700 }}>🏆 {namedS[cheapIdx]?.name}</span>
-                                    ) : validP.length === 1 ? '1 giá' : '—'}
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                            {/* Total row */}
-                            <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
-                              <td style={{ padding: '6px 8px', fontWeight: 700, fontSize: '0.85rem' }}>TỔNG HÓA ĐƠN</td>
-                              {namedS.map((s, sIdx) => {
-                                const total = (s.quotes || []).reduce((sum, q) => sum + (Number(q.price) || 0), 0)
-                                const allTotals = namedS.map(ns => (ns.quotes || []).reduce((sm, q) => sm + (Number(q.price) || 0), 0)).filter(t => t > 0)
-                                const minTotal = allTotals.length > 0 ? Math.min(...allTotals) : 0
-                                const maxTotal = allTotals.length > 0 ? Math.max(...allTotals) : 0
-                                return (
-                                  <td key={sIdx} style={{
-                                    textAlign: 'right', padding: '6px 8px', fontWeight: 700, fontSize: '0.9rem',
-                                    color: total === 0 ? 'var(--text-muted)' : total === minTotal ? '#16a34a' : total === maxTotal ? '#dc2626' : '#1d4ed8',
-                                    background: total === minTotal && total > 0 ? '#dcfce7' : total === maxTotal && total > 0 ? '#fee2e2' : 'transparent',
-                                  }}>
-                                    {total > 0 ? `${total.toLocaleString('vi-VN')} ₫` : '—'}
-                                    {total === minTotal && total > 0 && ' ✅'}
-                                    {total === maxTotal && total > 0 && allTotals.length > 1 && ' ⬆️'}
-                                  </td>
-                                )
-                              })}
-                              <td style={{ textAlign: 'center', padding: '6px 8px', fontSize: '0.78rem' }}>
-                                {(() => {
-                                  const totals = namedS.map(s => (s.quotes || []).reduce((sm, q) => sm + (Number(q.price) || 0), 0))
-                                  const validT = totals.filter(t => t > 0)
-                                  if (validT.length < 2) return '—'
-                                  const minT = Math.min(...validT)
-                                  const cheapI = totals.indexOf(minT)
-                                  return <span style={{ color: '#16a34a', fontWeight: 700 }}>🏆 {namedS[cheapI]?.name}</span>
-                                })()}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                      <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        ✅ = Giá thấp nhất &nbsp; ⬆️ = Giá cao nhất &nbsp; 🏆 = NCC được đề xuất
-                      </div>
-                    </div>
-                  )}
-                </>
-              )
-            })()}
+            {/* P3.6: Group-based approval decision */}
+            {task.stepCode === 'P3.6' && (
+               <P3_6ApprovalUI task={task} isActive={isActive} currentUser={currentUser} />
+            )}
 
             {/* P3.7: PO Finalization — Payment Terms + Delivery Plan */}
             {task.stepCode === 'P3.7' && (
@@ -4526,64 +4184,78 @@ export default function TaskDetailPage() {
             )}
 
             {/* P4.1: Kế toán — Payment milestone confirmation */}
-            {task.stepCode === 'P4.1' && previousStepData?.poData && (() => {
-              const pd = previousStepData.poData as { paymentType?: string; paymentMilestones?: { label: string; percent: string; date: string }[]; poNumber?: string; totalAmount?: string; [k: string]: unknown }
-              const pType = pd?.paymentType || 'full'
-              const milestonesList = pType === 'partial' && pd?.paymentMilestones ? pd.paymentMilestones : [{ label: 'Thanh toán toàn bộ', percent: '100', date: '' }]
-              // Initialize paymentConfirmations if empty
-              if (paymentConfirmations.length === 0 && milestonesList.length > 0) {
-                setTimeout(() => setPaymentConfirmations(milestonesList.map(() => ({ confirmed: false, method: '' }))), 0)
-              }
+            {task.stepCode === 'P4.1' && (() => {
+              const rd = task.resultData as any
+              if (!rd || !rd.prCode) return null
+
+              const items = rd.items || []
+              const totalVal = rd.totalValue || 0
+
               return (
                 <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: '#f59e0b' }}>💰 Các đợt thanh toán từ Thương mại</h3>
-                  {pd?.poNumber && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
-                      PO: <strong>{pd.poNumber as string}</strong>{pd?.totalAmount ? ` — Tổng: ${Number(pd.totalAmount).toLocaleString('vi-VN')} ₫` : ''}
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>Tiếp nhận Yêu cầu thanh toán PR</h3>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+                    <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 8 }}>
+                      <p style={{ margin: '0 0 6px 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Mã Đề Nghị (PR)</p>
+                      <p style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--accent)' }}>{rd.prCode}</p>
                     </div>
-                  )}
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                    {/* Header */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 0.5fr 0.8fr 1fr 0.8fr 30px', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                      {['', 'Đợt', '%', 'Ngày DK', 'PT thanh toán', 'Ngày TT', '✓'].map(h => (
-                        <span key={h} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                      ))}
+                    <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 8 }}>
+                      <p style={{ margin: '0 0 6px 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Tổng Giá Trị</p>
+                      <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#16a34a' }}>
+                        {totalVal > 0 ? Number(totalVal).toLocaleString('vi-VN') + ' ₫' : '—'}
+                      </p>
                     </div>
-                    {/* Rows */}
-                    {milestonesList.map((ms, idx) => {
-                      const conf = paymentConfirmations[idx] || { confirmed: false, method: '', paidDate: '' }
+                  </div>
+
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>Vật tư yêu cầu:</h4>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 150px', gap: 6, padding: '8px 12px', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Vật tư</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'right' }}>Số lượng</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'right' }}>Đơn giá</span>
+                    </div>
+                    {items.map((item: any, idx: number) => {
+                      const quote = item.quotes?.[item.selectedQuoteIndex || 0]
                       return (
-                        <div key={idx} style={{
-                          display: 'grid', gridTemplateColumns: '30px 1fr 0.5fr 0.8fr 1fr 0.8fr 30px', gap: 6, padding: '8px 10px',
-                          alignItems: 'center', borderBottom: idx < milestonesList.length - 1 ? '1px solid var(--border)' : 'none',
-                          background: conf.confirmed ? '#f0fdf4' : 'transparent'
-                        }}>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</span>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{ms.label}</span>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f59e0b' }}>{ms.percent}%</span>
-                          <span style={{ fontSize: '0.8rem' }}>{ms.date || '—'}</span>
-                          <select className="input" value={conf.method} disabled={!isActive}
-                            onChange={e => setPaymentConfirmations(prev => prev.map((c, i) => i === idx ? { ...c, method: e.target.value } : c))}
-                            style={{ fontSize: '0.8rem', padding: '4px 6px', cursor: 'pointer' }}>
-                            <option value="">-- Chọn --</option>
-                            <option value="transfer">Chuyển khoản</option>
-                            <option value="cash">Tiền mặt</option>
-                            <option value="lc">LC</option>
-                          </select>
-                          <input className="input" type="date" value={(conf as unknown as { paidDate?: string }).paidDate || ''} disabled={!isActive}
-                            onChange={e => setPaymentConfirmations(prev => prev.map((c, i) => i === idx ? { ...c, paidDate: e.target.value } : c))}
-                            style={{ fontSize: '0.75rem', padding: '4px 4px' }} />
-                          <input type="checkbox" checked={conf.confirmed} disabled={!isActive}
-                            onChange={e => setPaymentConfirmations(prev => prev.map((c, i) => i === idx ? { ...c, confirmed: e.target.checked } : c))}
-                            style={{ width: 18, height: 18, cursor: isActive ? 'pointer' : 'default' }} />
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 150px', gap: 6, padding: '10px 12px', alignItems: 'center', borderBottom: idx < items.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{item.name} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({item.materialCode})</span></span>
+                          <span style={{ fontSize: '0.85rem', textAlign: 'right' }}>{item.shortfall || item.quantity} {item.unit}</span>
+                          <span style={{ fontSize: '0.85rem', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                            {quote?.price ? Number(quote.price).toLocaleString('vi-VN') + ' ₫' : '—'}
+                          </span>
                         </div>
                       )
                     })}
                   </div>
-                  {/* Summary */}
-                  <div style={{ marginTop: 8, fontSize: '0.8rem', display: 'flex', gap: 16 }}>
-                    <span>Đã xác nhận: <strong style={{ color: '#16a34a' }}>{paymentConfirmations.filter(c => c.confirmed).length}/{milestonesList.length}</strong> đợt</span>
-                    <span>Tổng %: <strong>{milestonesList.filter((_, i) => paymentConfirmations[i]?.confirmed).reduce((s, m) => s + (Number(m.percent) || 0), 0)}%</strong></span>
+
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>Xác nhận thanh toán:</h4>
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: 16, borderRadius: 8, display: 'flex', gap: 20, alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Phương thức thanh toán <span style={{ color: '#ef4444' }}>*</span></label>
+                      <select 
+                        className="input" 
+                        disabled={!isActive}
+                        value={(formData.paymentMethod as string) || ''}
+                        onChange={e => setFormData(p => ({ ...p, paymentMethod: e.target.value }))}
+                        style={{ width: '100%', maxWidth: 300 }}
+                      >
+                        <option value="">-- Chọn phương thức --</option>
+                        <option value="transfer">Chuyển khoản</option>
+                        <option value="cash">Tiền mặt</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Ngày thực chi <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input 
+                        type="date" 
+                        className="input" 
+                        disabled={!isActive}
+                        value={(formData.paymentDate as string) || ''}
+                        onChange={e => setFormData(p => ({ ...p, paymentDate: e.target.value }))}
+                        style={{ width: '100%', maxWidth: 200 }}
+                      />
+                    </div>
                   </div>
                 </div>
               )
@@ -5700,8 +5372,8 @@ export default function TaskDetailPage() {
               </div>
             )}
 
-            {/* Actions — hidden for P1.1B, P1.3, P3.3, P3.4, and persistent P5.1 since they have inline actions or stay open */}
-            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && task.stepCode !== 'P5.1A' && !(task.stepCode === 'P5.1' && task.stepName === 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)') && (() => {
+            {/* Actions — hidden for P1.1B, P1.3, P3.3, P3.4, P3.5, P3.6, and persistent P5.1 since they have inline actions or stay open */}
+            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && task.stepCode !== 'P3.5' && task.stepCode !== 'P3.6' && task.stepCode !== 'P5.1A' && !(task.stepCode === 'P5.1' && task.stepName === 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)') && (() => {
               const p53QcRaw = formData.qcItems as string | undefined;
               let p53QcItems: {result: string}[] = [];
               try { p53QcItems = p53QcRaw ? JSON.parse(p53QcRaw) : []; } catch { p53QcItems = []; }
@@ -5929,6 +5601,20 @@ function renderField(
         fontWeight: isTotalRow ? 700 : 400, fontSize: isTotalRow ? '1.1rem' : undefined,
       }}>{display}</div>
     }
+
+    case 'readonly_textarea':
+      return (
+        <div style={{
+          ...baseStyle, 
+          minHeight: 80, 
+          whiteSpace: 'pre-wrap', 
+          color: 'var(--text-secondary)',
+          background: 'var(--bg-tertiary, #f5f5f5)',
+          overflowY: 'auto'
+        }}>
+          {value || '—'}
+        </div>
+      )
 
     case 'textarea':
       return (
