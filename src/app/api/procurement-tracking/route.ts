@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   try {
     const payload = await authenticateRequest(request)
-    // if (!payload?.userId) return unauthorizedResponse()
+    if (!payload?.userId) return unauthorizedResponse()
 
     // Find all P3.6 Tasks
     const tasks = await prisma.workflowTask.findMany({

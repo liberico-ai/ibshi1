@@ -534,7 +534,7 @@ async function runWorkflowHooks(
              const gIndex = rd.groups.findIndex((x: any) => x.id === groupId)
              if (gIndex >= 0) {
                rd.groups[gIndex].paymentStatus = 'PAID'
-               rd.groups[gIndex].paymentDate = resultData?.paymentDate ? new Date(resultData.paymentDate).toISOString() : new Date().toISOString()
+               rd.groups[gIndex].paymentDate = resultData?.paymentDate ? new Date(resultData.paymentDate as string).toISOString() : new Date().toISOString()
                rd.groups[gIndex].paymentMethod = resultData?.paymentMethod
                await prisma.workflowTask.update({
                  where: { id: p36Id },

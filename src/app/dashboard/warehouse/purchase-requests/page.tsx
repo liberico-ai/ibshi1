@@ -240,7 +240,7 @@ function ExpandableRow({ group, onReload, userRole }: { group: TrackingGroup, on
                         {group.supplier && group.supplier !== 'Chưa chốt NCC' && (
                           <td className="text-right py-1.5 text-slate-500">
                             <span className="text-slate-500 italic font-semibold">
-                              {item.quotes?.[item.selectedQuoteIndex || 0]?.price ? formatCurrency(item.quotes[item.selectedQuoteIndex || 0].price) : 'Theo báo giá'}
+                              {(item as any).quotes?.[(item as any).selectedQuoteIndex || 0]?.price ? formatCurrency((item as any).quotes[(item as any).selectedQuoteIndex || 0].price) : 'Theo báo giá'}
                             </span>
                           </td>
                         )}
