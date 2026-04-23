@@ -39,16 +39,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             data: { status: 'PAID', paidAmount: line.amountVnd, updatedAt: new Date() }
           })
 
-          // 2. Extract PO from description and update PO
+          // 2. Extract PO/PR Code from description and update PO & Procurement Tracking status
           const m = invoice.description?.match(/Đơn đặt hàng:\s*([^\s]+)/)
           if (m && m[1]) {
             const poCode = m[1].trim()
+            
+            // Update physical PO if exists
             const po = await tx.purchaseOrder.findUnique({ where: { poCode } })
             if (po) {
               await tx.purchaseOrder.update({
                 where: { id: po.id },
                 data: { status: 'PAID' }
               })
+            }
+            
+            // Update Procurement Tracking JSON Status (if it came from P3.6 PR)
+            const p36Tasks = await tx.workflowTask.findMany({ where: { stepCode: 'P3.6' } })
+            for (const t of p36Tasks) {
+              const rd = t.resultData as any
+              if (rd && Array.isArray(rd.groups)) {
+                let changed = false
+                for (const g of rd.groups) {
+                  if (g.prCode === poCode && g.paymentStatus !== 'PAID') {
+                    g.paymentStatus = 'PAID'
+                    g.paymentDate = new Date().toISOString()
+                    changed = true
+                  }
+                }
+                if (changed) {
+                  await tx.workflowTask.update({
+                    where: { id: t.id },
+                    data: { resultData: rd }
+                  })
+                }
+              }
             }
           }
         }

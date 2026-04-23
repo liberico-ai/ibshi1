@@ -105,6 +105,26 @@ export async function PUT(request: NextRequest) {
           startedAt: new Date(),
         }
       })
+
+      // 3. Auto-generate physical PO so Finance can select it for Drawdown
+      let vendor = await prisma.vendor.findFirst({ where: { name: actualSupplier } })
+      if (!vendor) {
+        vendor = await prisma.vendor.create({ data: { name: actualSupplier, taxCode: 'N/A', active: true } })
+      }
+      
+      const existingPo = await prisma.purchaseOrder.findUnique({ where: { poCode: g.prCode } })
+      if (!existingPo) {
+        await prisma.purchaseOrder.create({
+          data: {
+             poCode: g.prCode,
+             vendorId: vendor.id,
+             totalValue: actualTotalValue,
+             status: 'APPROVED',
+             createdBy: payload.userId,
+             deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+          }
+        })
+      }
     }
 
     // Save back to P3.6 task

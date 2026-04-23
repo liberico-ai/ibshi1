@@ -170,7 +170,7 @@ export default function CashflowPage() {
                       {e.type === 'INFLOW' ? '📥 Thu' : '📤 Chi'}
                     </span></td>
                     <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{CATEGORY_LABELS[e.category] || e.category}</td>
-                    <td className="text-xs" style={{ color: 'var(--accent)' }}>{e.project?.projectCode || '-'}</td>
+                    <td className="text-xs" style={{ color: 'var(--accent)' }}>{e.project?.projectName || e.project?.projectCode || '-'}</td>
                     <td className="text-right font-mono font-semibold" style={{ color: e.type === 'INFLOW' ? '#16a34a' : '#dc2626' }}>
                       {e.type === 'INFLOW' ? '+' : '-'}{fmt(Number(e.amount))}
                     </td>

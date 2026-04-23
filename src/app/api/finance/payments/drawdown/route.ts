@@ -87,6 +87,18 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < invoices.length; i++) {
         const invPayload = invoices[i]
         
+        let foundProjectId = invPayload.projectId || null;
+        if (!foundProjectId && invPayload.poCode) {
+           const prTasks = await tx.workflowTask.findMany({ where: { stepCode: 'P3.6' } });
+           for (const t of prTasks) {
+               const rd = t.resultData as any;
+               if (rd?.groups?.some((g: any) => g.prCode === invPayload.poCode)) {
+                   foundProjectId = t.projectId;
+                   break;
+               }
+           }
+        }
+
         // Auto-spawn Advance Invoice
         const newInvoice = await tx.invoice.create({
           data: {
@@ -95,7 +107,7 @@ export async function POST(req: NextRequest) {
             type: 'ADVANCE_PAYMENT',
             clientName: invPayload.vendorName,
             description: `Tạm ứng cho Đơn đặt hàng: ${invPayload.poCode}`,
-            projectId: invPayload.projectId || null,
+            projectId: foundProjectId,
             amount: Number(invPayload.totalAmount || 0),
             taxRate: 0,
             taxAmount: 0,
