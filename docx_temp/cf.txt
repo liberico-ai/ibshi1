@@ -1,0 +1,974 @@
+
+CÔNG TY CỔ PHẦN CÔNG NGHIỆP NẶNG IBS
+IBS Heavy Industry JSC — Feature Spec / Tài liệu nội bộ
+PROJECT CASHFLOW FEATURE
+Module Dòng Tiền Dự Án trong IBS One
+Dựa trên pattern từ Hồ sơ Dòng tiền 095 bank_17 (VOGT / V17565 Bison)
+Phiên bản
+v1.0 — Tháng 04/2026 — Feature Spec trình Builder team + Treasury Controller
+Tác giả
+Le Duy Huyen — Mentor cho Chủ tịch HĐQT (qua Cowork AI)
+Tài liệu mẹ
+IBS_HI_FA_Platform_Design_v1.0.docx (PHẦN I là addendum tương ứng)
+Nguồn pattern
+Phương án tài chính VOGT 095 • Bảng kê giải ngân/giải toả VPBank • UNC lương • Bảng tổng hợp nợ vay 2026
+Phân phối
+Chairman • CFO • Kế toán trưởng • Treasury Controller • Builder team (Phương, Linh)
+Trạng thái
+Feature spec — sẵn sàng cho Sprint planning
+
+MỤC LỤC
+1. Vấn đề &amp; Bằng chứng thực tế từ Hồ sơ 095
+2. Feature Overview (Scope, User Stories)
+3. Data Model — 10 Prisma Models mới (Planning / Banking / Execution)
+4. API Endpoints
+5. UI Wireframe
+6. Workflow + Excel Template Mapping
+7. Integration, Compliance &amp; Edge Cases
+8. Acceptance Criteria &amp; Testing
+9. Roadmap &amp; Open Questions
+10. Quyết định cần Chủ tịch / CFO
+1. Vấn đề &amp; Bằng chứng thực tế từ Hồ sơ 095
+1.1. Quan sát từ folder Hồ sơ Dòng tiền 095 bank_17
+Folder Hồ sơ Dòng tiền 095 bank_17 là ví dụ điển hình cách phòng TCKT hiện đang vận hành dòng tiền dự án VOGT 095 (V17565 Bison Energy Williston) — hợp đồng 169,8 tỷ VND, tổng chi phí dự toán 162,3 tỷ, biên LN gộp 4,4%, thanh toán NET 45 theo 5 milestone. Folder gồm 4 cụm file:
+Cụm
+File mẫu
+Vai trò kinh doanh
+Sheets / Fields chính
+A — Phương án tài chính
+1. Phương án tài chính VOGT 095 -ĐC - 31 03 2026.xlsx
+Master plan dòng tiền theo dự án: dự toán + kế hoạch theo tháng + payment milestone + forward view + backward view (trừ lùi) + payment ledger
+Dòng tiền và dự toán gốc; Dự toán Vật tư (QT30-DT03); Dự toán Nhân công (QT30-DT6); Dự toán Thuê ngoài (QT30-DT05); Dòng tiền trừ lùi; Chi tiết thanh toán các đợt
+B — Bảng kê giải ngân
+Vay 095 VPB 04 03 2026.xlsx / Giải toả VPB 095- 03 12 2025.xlsx
+Biểu mẫu gửi ngân hàng cho mỗi lần vay (drawdown) hoặc giải tỏa (liquidation) — liệt kê danh sách thụ hưởng + hoá đơn GTGT + số tiền + STK bên thụ hưởng
+STT | Bên thụ hưởng | Số HĐ | Ngày HĐ | Giá trị chứng từ | Giá trị cho vay lần này | STK | Tên NH
+C — UNC lương
+UNC lương T11 2025.xlsx
+Uỷ nhiệm chi lương tháng — biểu mẫu VPBank chuẩn để NH trích nợ tài khoản + trả lương CBCNV
+Header template VPBank + bảng danh sách CBCNV với STK, số tiền
+D — Bảng tổng hợp nợ vay (cấp công ty)
+3. Bảng tổng hợp nợ vay ngân hàng 2026.xlsx
+Group-level credit facility monitoring: 7 tài khoản tín dụng (TPBank, HDBank, VPBank, BABank, BIDV Thuê TC, Chailease, MB), mapping sang 8 dự án, USD/EUR rate
+TH Vay DA • Tổng Nợ Vay • 1 sheet/bank • TS đảm bảo
+
+1.2. Sáu điểm đau (pain points) từ cách làm hiện tại
+PAIN 1 — Phương án tài chính là Excel 97 sheet, 32 cột. Khi PM cập nhật dự toán, Treasury phải copy-paste sang Dòng tiền trừ lùi bằng tay → thường sai lệch 2–5% giữa 2 sheet.
+PAIN 2 — Mỗi drawdown (Vay) / liquidation (Giải tỏa) phải gõ thủ công vào 1 file Excel riêng, upload cho VPBank. Năm 2025 riêng dự án 095 có ≥25 file vay + 10 file giải tỏa. Không có audit trail ai tạo, ai duyệt.
+PAIN 3 — &quot;Chi tiết thanh toán các đợt&quot; (sheet trong Phương án) đang là 258 dòng giao dịch gõ tay, phân cột sang 11 cost bucket (Thép / Vật tư phụ / Vật liệu hàn / Sơn / …). Không reconcile tự động với Misa hay IBS One&apos;s PurchaseOrder/Invoice.
+PAIN 4 — Dòng tiền trừ lùi (còn phải chi theo tháng từ cut-off tới cuối dự án) đang làm Excel thủ công hàng tháng. Không ai biết khi nào hết tiền mua vật tư trước khi Treasury chạy số.
+PAIN 5 — Bảng tổng hợp nợ vay cấp công ty 2026 phải gom từ 7 file bank rời. Số &quot;Còn phải thu của KH&quot; và &quot;Dư nợ NH&quot; không link tự động với doanh thu / invoice → rủi ro double-count hoặc miss khoản.
+PAIN 6 — Không có realtime view: &quot;Nếu VOGT 094 delay 2 tuần thì VOGT 095 có đủ tiền vật tư U2 không?&quot; — hiện không trả lời được trong ngày.
+1.3. Cơ hội tự động hoá
+Folder 095 là dự án xuất khẩu trung bình (169,8 tỷ). IBS HI hiện có 28 dự án active (theo IBS One). Nếu pattern 095 này được automate và áp dụng cho 28 dự án, Treasury team sẽ tiết kiệm ≈4–6 giờ/dự án/tháng × 28 = 112–168 giờ/tháng (≈0,7–1,0 FTE). Ngoài ra, 3 bàn thanh toán nhanh hơn (approval drawdown trong giờ thay vì ngày) sẽ cải thiện DSO từ 173 → mục tiêu ≤90 ngày.
+2. Feature Overview
+2.1. Vị trí trong IBS One Platform
+Project Cashflow Feature nằm trong bounded context &quot;Treasury &amp; Cashflow&quot; (đã định nghĩa trong FA Platform Design PHẦN D.1). Feature extends 2 model có sẵn trong ibshi1 (CashflowEntry, Budget) và bổ sung 10 model mới chuyên trách cho nghiệp vụ dòng tiền dự án + quản lý khoản vay ngân hàng.
+2.2. Scope — In / Out
+Scope
+IN
+OUT (tách feature khác)
+Phạm vi
+Project Finance Plan (phương án tài chính) per project; Multi-bank drawdown &amp; liquidation workflow; Monthly cashflow plan vs actual; Backward-running view (trừ lùi); Company-level credit facility monitoring; Export Excel theo template NH
+AP reconciliation (đã có trong Cycle 1); Payroll calculation (đã có trong Cycle 5); Period close (đã có trong Cycle 6); Bank statement auto-match (đã có trong Cycle 3)
+User roles
+PM (xem), CEP (xem + edit plan), Treasury Controller (execute drawdown), Kế toán trưởng (approve), CFO (approve &gt; threshold), Chairman (xem dashboard)
+CBCNV cá nhân (không xem); khách hàng/NCC (không xem)
+Integration
+Misa (voucher posting), VPBank/VCB/HDBank (drawdown execution), Ngân hàng E-invoice portal
+Tekla (ngoài scope cashflow)
+
+2.3. User Stories (8 stories — prioritized)
+#
+As
+I want to
+So that
+Priority
+US-1
+Treasury Controller
+import &quot;Phương án tài chính&quot; Excel (QT30-DT03/DT05/DT6) thành ProjectFinancePlan 
+không phải gõ lại 97 sheet khi có dự án mới
+P0
+US-2
+Treasury Controller
+tạo Drawdown Request (Vay) từ danh sách PO/Invoice đã duyệt, chọn LoanContract + date
+xuất Excel đúng format VPBank + gửi bank trong 5 phút thay vì 30 phút
+P0
+US-3
+Treasury Controller
+tạo Liquidation Request (Giải tỏa) tương tự drawdown nhưng dành cho invoice đã escrow
+thống nhất workflow với drawdown
+P0
+US-4
+Kế toán trưởng
+xem và approve drawdown/liquidation qua dashboard (4-eye rule)
+tuân thủ SoD matrix F.2 — không 1 người tạo + duyệt + thanh toán
+P0
+US-5
+PM / CEP
+xem realtime Project P&amp;L với 3 khung: Dự toán / Đã chi / Còn lại (Trừ lùi) cập nhật mỗi đêm
+phát hiện dự án lỗ sớm thay vì cuối năm
+P0
+US-6
+CFO
+xem dashboard Credit Facility Utilization (7 bank × limit × drawn × available)
+biết được bank nào còn room vay trước khi ký PO lớn
+P1
+US-7
+Chairman
+hỏi MoltBot &quot;Dự án 095 còn bao nhiêu tiền vật tư cần mua?&quot; và nhận answer có citation trong 30 giây
+không phải đợi Treasury chạy report 2 ngày
+P1
+US-8
+Kế toán trưởng
+auto-post drawdown sang Misa (Dr 112-VP / Cr 341-LT) sau khi bank xác nhận giải ngân
+đồng bộ GL không lệch
+P1
+3. Data Model — 10 Prisma Models mới
+3.1. Tổng quan quan hệ
+10 model mới chia thành 3 cluster: (A) Planning — phương án tài chính + ngân sách; (B) Banking — khoản vay + hạn mức; (C) Execution — drawdown + liquidation + thanh toán chi tiết. Tất cả tuân thủ DB standards (UUID cuid, Decimal(15,2) cho money, TIMESTAMPTZ cho date).
+Cluster
+Model
+Cardinality
+Link chính
+A. Planning
+ProjectFinancePlan
+1 plan per project per version
+→ Project (ibshi1 existing)
+A. Planning
+ProjectBudgetLine
+many per plan, hierarchical
+→ ProjectFinancePlan, → Material/Activity (optional)
+A. Planning
+ProjectCashflowMonthly
+12–24 rows per plan (monthly bucket)
+→ ProjectFinancePlan
+A. Planning
+ContractPaymentMilestone
+3–6 rows per project
+→ Project, → Invoice (khi phát sinh)
+B. Banking
+CreditFacility
+1 row per bank × facility type
+→ Bank (master)
+B. Banking
+LoanContract
+1 row per khế ước
+→ CreditFacility, → Project (optional mapping)
+B. Banking
+LoanRepaymentSchedule
+many per loan contract
+→ LoanContract
+C. Execution
+LoanDrawdown
+1 row per lần vay
+→ LoanContract, → Project
+C. Execution
+LoanLiquidation
+1 row per lần giải tỏa
+→ LoanContract, → Project
+C. Execution
+DrawdownBeneficiaryLine
+many per drawdown/liquidation
+→ LoanDrawdown OR LoanLiquidation, → Invoice (nếu match), → Vendor
+
+3.2. Schema chi tiết (Prisma DSL)
+Model A.1 — ProjectFinancePlan
+model ProjectFinancePlan {
+  id                String    @id @default(cuid())
+  projectId         String
+  version           Int       @default(1)
+  cutoffDate        DateTime  @db.Timestamptz  // &quot;-ĐC - 31 03 2026&quot;
+  status            PlanStatus @default(DRAFT)  // DRAFT / APPROVED / SUPERSEDED
+
+  // Contract summary (from sheet &quot;Dòng tiền và dự toán gốc&quot;)
+  customerId        String?
+  scopeDescription  String?   @db.Text
+  contractValueVnd  Decimal   @db.Decimal(18, 2)
+  contractValueCcy  String?   // USD / EUR
+  contractValueFx   Decimal?  @db.Decimal(15, 2)
+  paymentTermDays   Int       // NET 45
+  grossMarginPct    Decimal   @db.Decimal(5, 4)
+
+  // Audit
+  createdById       String
+  approvedById      String?
+  approvedAt        DateTime?
+  createdAt         DateTime  @default(now())  @db.Timestamptz
+
+  project           Project   @relation(fields: [projectId], references: [id])
+  budgetLines       ProjectBudgetLine[]
+  monthlyCashflow   ProjectCashflowMonthly[]
+  milestones        ContractPaymentMilestone[]
+
+  @@unique([projectId, version])
+  @@index([status, cutoffDate])
+}
+Model A.2 — ProjectBudgetLine (hierarchical; map from 3 sheets DT03/DT05/DT6)
+model ProjectBudgetLine {
+  id              String   @id @default(cuid())
+  planId          String
+  parentId        String?  // hierarchical: A → 1 → 1.1
+  code            String   // &quot;VTC01&quot;, &quot;PC&quot;, &quot;DVT&quot; — mã dự toán từ Excel
+  sectionType     BudgetSection  // MATERIAL / LABOUR / SUBCONTRACT / OVERHEAD / GUARANTEE / VAT / CONTINGENCY
+  itemName        String
+  unit            String?  // kg / m2 / chuyến
+  quantity        Decimal? @db.Decimal(18, 4)
+  unitPrice       Decimal? @db.Decimal(18, 4)
+  amountVnd       Decimal  @db.Decimal(18, 2)
+  percentOfTotal  Decimal? @db.Decimal(5, 4)
+
+  // Optional dimensional links (allow fact-based allocation)
+  materialId      String?  // from ibshi1 Material master
+  activityCode    String?  // from BOM (Tekla operation)
+  costCenterId    String?
+
+  plan            ProjectFinancePlan @relation(fields: [planId], references: [id])
+  parent          ProjectBudgetLine? @relation(&quot;Hierarchy&quot;, fields: [parentId], references: [id])
+  children        ProjectBudgetLine[] @relation(&quot;Hierarchy&quot;)
+
+  @@index([planId, sectionType])
+  @@index([planId, code])
+}
+
+enum BudgetSection {
+  MATERIAL
+  LABOUR
+  SUBCONTRACT
+  OVERHEAD
+  GUARANTEE
+  VAT
+  CONTINGENCY
+}
+Model A.3 — ProjectCashflowMonthly
+model ProjectCashflowMonthly {
+  id                  String   @id @default(cuid())
+  planId              String
+  periodYm            String   // &quot;202604&quot; (YYYYMM)
+  periodIndex         Int      // 1 = Tháng 6 (contract start), 2, 3...
+
+  // Outflow (Dòng tiền ra) — grouped by section
+  outflowMaterial     Decimal  @db.Decimal(18, 2) @default(0)
+  outflowLabour       Decimal  @db.Decimal(18, 2) @default(0)
+  outflowSubcontract  Decimal  @db.Decimal(18, 2) @default(0)
+  outflowOverhead     Decimal  @db.Decimal(18, 2) @default(0)
+  outflowGuarantee    Decimal  @db.Decimal(18, 2) @default(0)
+  outflowVat          Decimal  @db.Decimal(18, 2) @default(0)
+  outflowTotal        Decimal  @db.Decimal(18, 2)
+
+  // Inflow (Dòng tiền vào) — linked to milestones
+  inflowTotal         Decimal  @db.Decimal(18, 2) @default(0)
+
+  // Computed
+  netCashflow         Decimal  @db.Decimal(18, 2)
+  ownEquityPortion    Decimal  @db.Decimal(18, 2) @default(0)  // Vốn tự có tự thu xếp
+  requiredLoanAmount  Decimal  @db.Decimal(18, 2) @default(0)  // Hạn mức vay vốn
+  estimatedInterest   Decimal  @db.Decimal(18, 2) @default(0)  // Lãi vay
+
+  plan                ProjectFinancePlan @relation(fields: [planId], references: [id])
+
+  @@unique([planId, periodYm])
+  @@index([planId, periodIndex])
+}
+Model A.4 — ContractPaymentMilestone
+model ContractPaymentMilestone {
+  id              String   @id @default(cuid())
+  planId          String
+  projectId       String
+
+  name            String   // &quot;Tạm ứng Hợp đồng&quot; / &quot;Sau khi mua đủ vật tư&quot; / &quot;Giao U1&quot; / &quot;Giao U2&quot; / &quot;Hoàn thành&quot;
+  code            String   // TUE / MV / U1 / U2 / HT — for short identifier
+  percentOfContract Decimal @db.Decimal(5, 4)
+  amountVndPlan   Decimal  @db.Decimal(18, 2)
+  amountCcyPlan   Decimal? @db.Decimal(15, 2)
+  plannedMonthYm  String   // when we expect to invoice
+  triggerCondition String  @db.Text  // &quot;Sau khi NCC giao đủ vật tư&quot;, &quot;DO Packaging U1&quot;
+
+  // Actuals
+  actualInvoiceId String?  @unique   // → Invoice (ibshi1 existing)
+  actualDate      DateTime?
+  actualAmountVnd Decimal? @db.Decimal(18, 2)
+  status          MilestoneStatus @default(PLANNED)  // PLANNED / INVOICED / COLLECTED
+
+  plan            ProjectFinancePlan @relation(fields: [planId], references: [id])
+  project         Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, status])
+}
+Model B.1 — CreditFacility (group-level, 7 rows for IBS HI)
+model CreditFacility {
+  id              String   @id @default(cuid())
+  bankId          String
+  facilityNo      String   // &quot;Số:BCLC-4314-01&quot;
+  facilityType    FacilityType   // SHORT_TERM_LOAN / GUARANTEE / LONG_TERM_LOAN / LEASING
+  signedDate      DateTime @db.Timestamptz
+  expiryDate      DateTime @db.Timestamptz
+  tenorMonths     Int      // 12, 36, 240
+
+  loanLimit       Decimal  @db.Decimal(18, 2)  // Hạn mức cho vay
+  guaranteeLimit  Decimal  @db.Decimal(18, 2)  // Hạn mức BL
+  totalLimit      Decimal  @db.Decimal(18, 2)  // Tổng
+
+  interestRateVnd Decimal? @db.Decimal(5, 4)   // %/năm VND
+  interestRateUsd Decimal? @db.Decimal(5, 4)   // %/năm USD
+
+  collateralNotes String?  @db.Text  // &quot;Tín chấp 70% quyền thu&quot;, &quot;TSĐB bằng 50%&quot;
+  isActive        Boolean  @default(true)
+
+  bank            Bank     @relation(fields: [bankId], references: [id])
+  loanContracts   LoanContract[]
+
+  @@index([bankId, facilityType, isActive])
+}
+
+enum FacilityType {
+  SHORT_TERM_LOAN
+  GUARANTEE
+  LONG_TERM_LOAN
+  LEASING
+}
+Model B.2 — LoanContract (khế ước vay)
+model LoanContract {
+  id              String   @id @default(cuid())
+  facilityId      String
+  contractNo      String   // số khế ước
+  primaryProjectId String? // project chính mapped
+  purpose         String   // &quot;Mua vật tư dự án 095&quot;
+
+  principalAmount Decimal  @db.Decimal(18, 2)
+  currency        String   @default(&quot;VND&quot;)
+  fxRate          Decimal? @db.Decimal(15, 4)
+  interestRate    Decimal  @db.Decimal(5, 4)
+
+  drawdownDate    DateTime @db.Timestamptz
+  maturityDate    DateTime @db.Timestamptz
+
+  outstandingPrincipal Decimal @db.Decimal(18, 2)
+  accruedInterest      Decimal @db.Decimal(18, 2) @default(0)
+
+  status          LoanStatus @default(ACTIVE)
+
+  facility        CreditFacility @relation(fields: [facilityId], references: [id])
+  drawdowns       LoanDrawdown[]
+  liquidations    LoanLiquidation[]
+  schedule        LoanRepaymentSchedule[]
+
+  @@index([facilityId, status])
+  @@index([primaryProjectId])
+}
+
+enum LoanStatus { ACTIVE PAID_OFF OVERDUE RESTRUCTURED }
+Model C.1 — LoanDrawdown + LoanLiquidation
+model LoanDrawdown {
+  id              String   @id @default(cuid())
+  loanContractId  String
+  projectId       String
+  drawdownNo      String   // &quot;Vay 095 VP bank 04 03 2026 đi 10 03 2026&quot;
+  requestDate     DateTime @db.Timestamptz
+  executionDate   DateTime? @db.Timestamptz  // ngày &quot;đi&quot; = bank disburses
+  totalAmountVnd  Decimal  @db.Decimal(18, 2)
+  totalAmountCcy  Decimal? @db.Decimal(15, 2)
+
+  status          DrawdownStatus @default(DRAFT)  // DRAFT / SUBMITTED / APPROVED_BY_BANK / EXECUTED / REJECTED
+  createdById     String
+  approvedById    String?
+  approvedAt      DateTime?
+
+  // Integration trace
+  misaVoucherId   String?
+  misaPostedAt    DateTime?
+
+  loanContract    LoanContract @relation(fields: [loanContractId], references: [id])
+  project         Project @relation(fields: [projectId], references: [id])
+  lines           DrawdownBeneficiaryLine[]
+
+  @@unique([drawdownNo])
+  @@index([projectId, status])
+}
+
+model LoanLiquidation {
+  id              String   @id @default(cuid())
+  loanContractId  String
+  projectId       String
+  liquidationNo   String   // &quot;Giải toả VPB 095- 03/12/2025 đi 10/12/2025&quot;
+  // ...identical shape to LoanDrawdown — status enum LiquidationStatus
+  requestDate     DateTime @db.Timestamptz
+  executionDate   DateTime? @db.Timestamptz
+  totalAmountVnd  Decimal  @db.Decimal(18, 2)
+  status          LiquidationStatus @default(DRAFT)
+  createdById     String
+  approvedById    String?
+  approvedAt      DateTime?
+  misaVoucherId   String?
+
+  loanContract    LoanContract @relation(fields: [loanContractId], references: [id])
+  project         Project @relation(fields: [projectId], references: [id])
+  lines           DrawdownBeneficiaryLine[]
+
+  @@unique([liquidationNo])
+  @@index([projectId, status])
+}
+
+enum DrawdownStatus { DRAFT SUBMITTED APPROVED_BY_BANK EXECUTED REJECTED }
+enum LiquidationStatus { DRAFT SUBMITTED APPROVED_BY_BANK EXECUTED REJECTED }
+Model C.2 — DrawdownBeneficiaryLine (detail rows)
+model DrawdownBeneficiaryLine {
+  id                  String   @id @default(cuid())
+  drawdownId          String?
+  liquidationId       String?
+
+  sequenceNo          Int
+  vendorId            String   // → Vendor (ibshi1)
+  invoiceId           String?  // → Invoice if matched
+  invoiceNumber       String   // &quot;6775&quot;, &quot;00000236&quot; — từ Excel
+  invoiceDate         DateTime? @db.Timestamptz
+  invoiceAmountVnd    Decimal  @db.Decimal(18, 2)   // &quot;Giá trị chứng từ&quot;
+  amountFundedVnd     Decimal  @db.Decimal(18, 2)   // &quot;Giá trị cho vay lần này&quot;
+
+  beneficiaryBankAcct String   // STK (mã số tài khoản NCC)
+  beneficiaryBankName String   // &quot;VP bank&quot;, &quot;MB Long Biên&quot;
+  contentDescription  String?  // &quot;Thép&quot;, &quot;Mạ kẽm&quot;
+
+  // Cost bucket (from sheet &quot;Chi tiết thanh toán các đợt&quot;)
+  costBucket          CostBucket?  // STEEL / MATERIAL_AUX / WELDING / PAINT / OVERHEAD / ...
+
+  drawdown            LoanDrawdown? @relation(fields: [drawdownId], references: [id])
+  liquidation         LoanLiquidation? @relation(fields: [liquidationId], references: [id])
+  vendor              Vendor @relation(fields: [vendorId], references: [id])
+  invoice             Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@index([drawdownId])
+  @@index([liquidationId])
+  @@index([vendorId])
+}
+
+enum CostBucket {
+  STEEL                // Thép
+  MATERIAL_AUX         // Vật liệu phụ
+  WELDING              // Vật liệu hàn
+  PAINT                // Sơn
+  INSULATION           // Bảo ôn
+  PACKAGING            // Vật tư đóng kiện, biện pháp
+  LABOUR               // Nhân công
+  SUBCONTRACT          // Thầu phụ
+  OVERHEAD             // Chi phí quản lý
+  INTEREST             // Chi phí lãi vay
+  CONTINGENCY          // Dự phòng
+}
+Model B.3 — LoanRepaymentSchedule
+model LoanRepaymentSchedule {
+  id              String   @id @default(cuid())
+  loanContractId  String
+  dueDate         DateTime @db.Timestamptz
+  principalAmount Decimal  @db.Decimal(18, 2)
+  interestAmount  Decimal  @db.Decimal(18, 2)
+  totalAmount     Decimal  @db.Decimal(18, 2)
+  status          RepaymentStatus @default(PLANNED)  // PLANNED / PAID / OVERDUE
+
+  actualPaidDate  DateTime?
+  actualPaidAmount Decimal? @db.Decimal(18, 2)
+
+  loanContract    LoanContract @relation(fields: [loanContractId], references: [id])
+
+  @@index([loanContractId, dueDate])
+  @@index([status, dueDate])  // for overdue alerts
+}
+4. API Endpoints
+Tuân thủ OpenAPI 3.1 + Zod validation (đã có trong ibshi1). Tên route đặt theo pattern ibshi1: /api/v1/...
+4.1. Planning endpoints
+Endpoint
+Method
+Mục đích
+Body / Params quan trọng
+/api/v1/finance-plans
+POST
+Tạo plan mới từ Excel upload (Phương án tài chính) — parser đọc 6 sheet và seed data
+multipart/form-data: file, projectId, cutoffDate
+/api/v1/finance-plans
+GET
+List plans (filter projectId, status, cutoff range)
+query params
+/api/v1/finance-plans/:id
+GET
+Get 1 plan với budget hierarchy + monthly cashflow + milestones
+—
+/api/v1/finance-plans/:id/approve
+POST
+Approve plan (CEP + CFO — 4-eye)
+body: approvalNote
+/api/v1/finance-plans/:id/supersede
+POST
+Archive plan cũ và active plan mới
+body: supersededById
+/api/v1/finance-plans/:id/budget-lines
+GET
+Hierarchical tree (A → 1 → 1.1)
+—
+/api/v1/finance-plans/:id/cashflow-monthly
+GET
+12–24 tháng outflow/inflow/net
+—
+/api/v1/finance-plans/:id/trừ-lùi
+GET
+Computed Dòng tiền trừ lùi: Dự toán / Đã chi / Còn lại, split monthly from cutoff to end
+query: asOfDate
+/api/v1/finance-plans/:id/actual-vs-plan
+GET
+Realtime variance: So sánh monthly actual (từ JournalEntry posted) vs plan
+—
+
+4.2. Drawdown / Liquidation endpoints
+Endpoint
+Method
+Mục đích
+Body / Params
+/api/v1/drawdowns
+POST
+Tạo drawdown draft từ list invoiceIds + chọn loanContractId
+body: loanContractId, projectId, invoiceIds[], requestDate
+/api/v1/drawdowns/:id/lines
+POST/PUT
+Thêm/sửa beneficiary line (vendor, invoice, amount, bank acct)
+body: line data
+/api/v1/drawdowns/:id/export-excel
+GET
+Xuất Excel đúng format VPBank (match cột với template Vay 095 VPB dd MM yyyy.xlsx)
+returns binary .xlsx
+/api/v1/drawdowns/:id/submit
+POST
+Chuyển status DRAFT → SUBMITTED (khoá edit, gửi cho KTT approve)
+—
+/api/v1/drawdowns/:id/approve
+POST
+KTT approve (SoD rule: creator ≠ approver)
+body: approvalNote
+/api/v1/drawdowns/:id/execute
+POST
+Sau khi bank disburse: status → EXECUTED; tạo JournalEntry (Dr 112-VP / Cr 341-LT) + queue sang Misa
+body: actualExecutionDate, bankTransactionRef
+/api/v1/liquidations/...
+POST/GET/...
+Giống drawdown với enum LiquidationStatus
+—
+
+4.3. Credit Facility + Loan endpoints
+Endpoint
+Method
+Mục đích
+/api/v1/credit-facilities
+GET/POST/PUT
+CRUD tín dụng (7 facility cấp công ty)
+/api/v1/credit-facilities/:id/utilization
+GET
+Realtime: Limit vs Drawn vs Available; tách loan vs guarantee
+/api/v1/loans
+GET/POST
+CRUD khế ước vay + link tới facility + project
+/api/v1/loans/:id/schedule
+GET
+LoanRepaymentSchedule
+/api/v1/loans/:id/accrual-job
+POST
+Manual trigger daily interest accrual (bình thường cron chạy tự động)
+/api/v1/loans/dashboard
+GET
+Bảng tổng hợp nợ vay cấp công ty (Ranh giới dựa trên TH Vay DA sheet): per project × per bank outstanding + receivable rights
+5. UI Wireframe (mô tả)
+5.1. 6 màn hình chính
+Màn hình
+Đường dẫn
+Nội dung chính
+Project Cashflow Landing
+/finance/cashflow
+Grid 28 dự án × 4 cột: Contract value, Outflow YTD, Inflow YTD, Net cashflow. Filter by status (Active/Closed), PM. Click → detail.
+Project Finance Plan Editor
+/finance/cashflow/project/:id/plan
+Tab layout: (1) Summary — contract info; (2) Budget Tree — hierarchical A/1/1.1 editable; (3) Monthly Cashflow — 24-month grid; (4) Milestones — 5 payment rows; (5) Import/Export — Excel upload/download. Save creates new version.
+Trừ lùi View
+/finance/cashflow/project/:id/tru-lui
+Horizontal 12-month table: Dự toán | Đã chi | Còn lại | Tháng N+1 | ... N+12. Color: red khi Còn lại &lt; dự toán monthly (sẽ thiếu tiền). Drill-down vào JournalEntry source.
+Drawdown/Liquidation Creator
+/finance/drawdowns/new or /liquidations/new
+Step 1: chọn Loan Contract + Project. Step 2: pick Invoices từ list (check-box, filter by vendor, date). Step 3: review auto-filled beneficiary lines (bank acct từ Vendor master). Step 4: preview Excel → Submit. Status pill: DRAFT → SUBMITTED → APPROVED → EXECUTED.
+Credit Facility Dashboard
+/finance/facilities
+7 card per facility: Bank name, Limit, Drawn, Available (progress bar). Click → history drawdowns + loans. Alert icon khi utilization &gt;85%.
+Loan Debt Dashboard
+/finance/loans
+Table: 8 project × 7 bank matrix (theo Bảng tổng hợp nợ vay 2026). Rows: Contract, Collected, Receivable, Outstanding loan. Color coded. Export to Excel same layout as current Bảng tổng hợp.
+5.2. Widget vào Chairman / CFO Dashboard
+Cashflow Heatmap (12 months × 5 categories): red = negative net, green = positive
+Upcoming Drawdowns (7 ngày tới): list + total required VND/USD
+Facility utilization gauge (overall: Drawn / Total Limit)
+Top 5 overdue Repayments
+Project cashflow variance alert (actual vs plan &gt; 10% variance)
+6. Workflow + Excel Template Mapping
+6.1. Drawdown full workflow (như folder 095 vận hành)
+Step
+Actor
+Action
+System effect
+1
+PM
+Confirm vật tư/thầu phụ cần thanh toán tuần này — list invoiceIds
+Filter Invoices WHERE project=095 AND status=APPROVED AND paid=false
+2
+Treasury
+Tạo Drawdown draft: chọn LoanContract (VPBank-095-BCLC-4314), ngày &quot;đi&quot; (execution date), chọn invoices
+INSERT LoanDrawdown (status=DRAFT), INSERT DrawdownBeneficiaryLine[] auto-filled từ Invoice + Vendor master
+3
+Treasury
+Review + edit amount cho vay lần này (có thể &lt; invoice full amount — khoản dư giữ cho lần sau)
+UPDATE DrawdownBeneficiaryLine.amountFundedVnd
+4
+Treasury
+Export Excel preview — hệ thống sinh file .xlsx match 100% cột với template VPBank (tên file: Vay 095 VPB dd MM yyyy.xlsx)
+Export endpoint trả binary; log audit
+5
+Treasury
+Submit → KTT queue
+UPDATE status=SUBMITTED, createdById (cannot self-approve)
+6
+Kế toán trưởng
+Review dashboard, approve hoặc reject
+UPDATE status=APPROVED, approvedById=KTT, approvedAt=now(); SoD check: createdById ≠ approvedById
+7
+Treasury
+Gửi Excel cho VPBank qua email / portal
+(manual hành động; system log)
+8
+VPBank
+Disburse; bank statement về
+Bank API fetch (Cycle 3 Bank rec) → match với Drawdown
+9
+System (auto)
+Match bank debit = Drawdown.totalAmountVnd → UPDATE status=EXECUTED, actualExecutionDate
+Trigger tạo JournalEntry: Dr 112-VP-095 + Cr 341-LT-VP (per line); sau đó per beneficiary Dr 331-NCC / Cr 112-VP-095
+10
+Misa sync (daily 23:00)
+Push voucher JournalEntry sang Misa
+INSERT MisaSyncLog, UPDATE JournalEntry.misa_voucher_id
+11
+Next day T+1
+Reconciliation report: Drawdown ibshi1 vs Misa voucher vs Bank debit
+Dashboard: 3-way tick ✓
+
+6.2. Excel template column mapping (Drawdown)
+Khi export Drawdown/Liquidation, hệ thống sinh file theo đúng layout của template hiện tại để VPBank không phải đào tạo lại:
+Cột Excel VPBank
+Field ibshi1
+Ghi chú
+STT
+DrawdownBeneficiaryLine.sequenceNo
+Auto-number 1..N
+Bên thụ hưởng
+Vendor.legalName
+Từ Vendor master
+Hoá đơn GTGT — Số
+DrawdownBeneficiaryLine.invoiceNumber hoặc Invoice.number
+Prefer Invoice.number nếu matched
+Hoá đơn GTGT — Ngày
+Invoice.issueDate hoặc invoiceDate
+format DD/MM/YYYY
+Giá trị chứng từ
+Invoice.totalAmountVnd hoặc invoiceAmountVnd
+full VAT-inclusive
+Giá trị cho vay lần này
+amountFundedVnd
+có thể &lt; Giá trị chứng từ
+STK
+Vendor.primaryBankAccount.number
+Pull từ vendor bank account master
+Tên ngân hàng
+Vendor.primaryBankAccount.bankName
+— cũng từ master
+Footer: Tên file + tổng
+LoanDrawdown.drawdownNo, totalAmountVnd
+Auto format: &quot;Vay 095 VP bank DD MM YYYY đi DD MM YYYY&quot;
+
+6.3. Import mapping (Phương án tài chính → ProjectFinancePlan)
+Parser đọc file 97-sheet theo quy ước tên sheet. Nếu sheet thiếu → warning nhưng vẫn import được phần có:
+Sheet trong Excel
+Map vào
+Rule xử lý
+Dòng tiền và dự toán gốc (rows 1–13)
+ProjectFinancePlan.{customerId, scopeDescription, contractValue, ...}
+Parse cell B2 (Project), B5 (Khách hàng), B6 (Giá trị HĐ), B7 (Tổng chi phí), B10 (Payment term)
+Dòng tiền và dự toán gốc (rows 14–68)
+ProjectBudgetLine[] + ProjectCashflowMonthly[]
+Col A = STT hierarchy; Col B = item; Col C = Dự toán; Col D-R = tháng 1-16 cashflow
+Dự toán Vật tư (QT30-DT03)
+ProjectBudgetLine WHERE sectionType=MATERIAL
+Col A=STT; B=Mã CP (VTC01); C=Danh mục; D=Unit; E=Qty; F=Price; G=Total
+Dự toán Nhân công (QT30-DT6)
+ProjectBudgetLine WHERE sectionType=LABOUR
+Col A=Section (A/B/…); B=Mã CP; C=Hoạt động; D-G=Unit/Qty/Price/Total
+Dự toán Thuê ngoài (QT30-DT05)
+ProjectBudgetLine WHERE sectionType=SUBCONTRACT
+Giống DT6
+Dòng tiền trừ lùi
+KHÔNG import — computed dynamically
+System tính realtime từ budget + actual JournalEntry
+Chi tiết thanh toán các đợt
+Reconciliation report — compare với JournalEntry existing
+Warn nếu có giao dịch Excel chưa có trong Misa/ibshi1
+7. Integration, Compliance &amp; Edge Cases
+7.1. Tích hợp với modules khác của IBS One
+Module
+Cách kết nối
+Event / Data flow
+Project (ibshi1 existing)
+FK ProjectFinancePlan.projectId
+Project.create → seed empty FinancePlan draft
+PurchaseOrder / Invoice (ibshi1)
+DrawdownBeneficiaryLine.invoiceId (optional FK)
+Invoice.approved → available in Drawdown Creator
+Vendor (ibshi1)
+Vendor.bankAccounts → default STK khi tạo Drawdown line
+Vendor.update banking → reflect in upcoming drawdowns
+JournalEntry (Operational Subledger — Part D)
+LoanDrawdown.execute → auto-create JournalEntry
+Dr 112 / Cr 341-LT + Dr 331 / Cr 112
+CashflowEntry (ibshi1 existing)
+Replace / extend — migration path: existing CashflowEntry rows → map vào ProjectCashflowMonthly
+Write migration script đầu Phase 2
+Bank API (Cycle 3)
+Bank statement match trigger Drawdown.execute
+Auto only when amount + date match ±1 day
+Misa AMIS
+MisaSyncLog queue drawdown JE
+Daily batch 23:00
+POC engine (Cycle 2)
+POC reads Budget + Actual cost for % completion
+ProjectFinancePlan.budgetLines = one of 2 sources for EAC
+
+7.2. SoD Matrix (extend F.2)
+Process
+Initiator
+Approver
+Approver 2 (&gt;threshold)
+Executor
+Reviewer
+Finance Plan create/approve
+CEP
+Kế toán trưởng
+CFO (nếu Plan &gt; 50 tỷ)
+—
+Internal Audit annual
+Credit Facility setup
+CFO
+Chairman
+—
+—
+Board minutes
+Loan Contract sign
+CFO
+Chairman + CEO
+—
+—
+Board quarterly
+Drawdown ≤ 500tr
+Treasury
+Kế toán trưởng
+—
+Treasury (send to bank)
+FP&amp;A sample 10%
+Drawdown &gt; 500tr
+Treasury
+Kế toán trưởng
+CFO
+Treasury
+Internal Audit quarterly
+Drawdown &gt; 5 tỷ
+Treasury
+Kế toán trưởng + CFO
+Chairman (ký số)
+Treasury
+Board + IA
+Liquidation ≤ 500tr
+Treasury
+Kế toán trưởng
+—
+Treasury
+FP&amp;A sample
+Liquidation &gt; 500tr
+Treasury
+Kế toán trưởng
+CFO
+Treasury
+IA quarterly
+
+7.3. Edge Cases &amp; Failure Modes
+E1 — Vendor không có bank account trong master: UI buộc Treasury nhập + save vào Vendor master trước khi tạo Drawdown line (không cho &quot;one-off&quot; BA).
+E2 — Invoice amount khác với số tiền cho vay: allow, nhưng tổng amountFundedVnd của tất cả drawdowns không được vượt invoiceAmount. System hard-check.
+E3 — Drawdown bị bank reject: status REJECTED → trigger alert cho Treasury + CFO; auto-create follow-up task
+E4 — Partial disburse (bank chỉ giải 80%): system ghi amountFunded theo thực tế; flag variance &gt; 5%
+E5 — LoanContract expire nhưng vẫn có outstanding: alert Treasury 30 ngày trước, 15 ngày, 7 ngày, 1 ngày
+E6 — Credit facility utilization &gt; 90%: alert CFO + block new drawdowns pending CFO over-ride
+E7 — Excel format VPBank thay đổi: config template trong code (không hard-code) để swap template mới nhanh
+E8 — Multi-currency: drawdown USD/EUR convert sang VND bằng FxRate (pull VCB Rate API) tại thời điểm execution
+7.4. Compliance touchpoints
+TT200 — hạch toán vay: Dr 112 / Cr 341 (ngắn hạn) hoặc 341-LT (dài hạn). Lãi vay: Dr 635 / Cr 335
+VAS 16 — Chi phí đi vay: capitalize vào 154 (WIP) nếu là vay cho sản xuất dự án specific — cần config per loan
+VAS 10 — Ảnh hưởng của tỷ giá hối đoái: FX reval monthly cho LoanContract USD/EUR outstanding
+ISA 315 — SoD matrix 7.2 phải được enforce bằng RBAC ở schema level (không chỉ UI)
+Luật các TCTD — hạn mức vay: system từ chối drawdown nếu vượt CreditFacility.loanLimit
+8. Acceptance Criteria &amp; Testing
+8.1. Acceptance Criteria (để QA team ký UAT)
+#
+Acceptance Criterion
+Test scenario
+AC-1
+Import &quot;Phương án tài chính VOGT 095 -ĐC - 31 03 2026.xlsx&quot; → tạo được FinancePlan với ≥95% data fidelity (contract value, cost, monthly cashflow, 5 milestones, ≈150 budget lines)
+Upload file thực tế; snapshot so sánh 15 key numbers
+AC-2
+Export Drawdown file Excel khớp 100% cột với template hiện tại — VPBank accept không yêu cầu sửa
+So sánh binary với 3 file sample (Vay 095 VPB 04 03 2026 / 12 01 2026 / 21 03 2026)
+AC-3
+Dòng tiền trừ lùi view tính đúng &quot;Còn lại&quot; = Dự toán − Đã chi cho 10 category × 12 tháng
+So với sheet &quot;Dòng tiền trừ lùi&quot; file gốc 095 tại cutoff 31/03/2026
+AC-4
+Credit Facility Dashboard hiện đúng 7 facility (TPBank 20bn, HDBank 40bn+54bn, VPBank 200bn+120bn, BABank 50bn+25bn, BIDV Thuê TC 15.27bn, Chailease 3.92bn, MB 1.6bn)
+Seed data + compare với Bảng tổng hợp nợ vay 2026 sheet Tổng Nợ Vay
+AC-5
+Drawdown approved → JournalEntry tự sinh đúng debit/credit theo chart of accounts (Dr 112-VP-095 / Cr 341-LT-VP)
+Unit test JE generator với 10 sample drawdown
+AC-6
+SoD rule enforced: user tạo drawdown KHÔNG approve được chính drawdown đó
+Integration test: same user try approve → expect 403
+AC-7
+Daily batch 23:00: drawdown với status=EXECUTED không có MisaSyncLog success → retry 3 lần → alert CFO
+Simulate Misa API down
+AC-8
+Bảng tổng hợp nợ vay dashboard reproduce đúng 8 project × 7 bank matrix như sheet TH Vay DA (31/12/2025)
+Snapshot compare
+AC-9
+Performance: list 28 projects cashflow landing page &lt; 2s với 1000 beneficiary lines total
+Load test
+AC-10
+MoltBot trả lời &quot;Dự án 095 còn bao nhiêu tiền vật tư cần mua?&quot; với citation SQL query + snapshot_id, latency &lt;30s
+E2E test với 20 query mẫu
+
+8.2. Test Strategy
+Test type
+Coverage target
+Tool
+Key scenarios
+Unit
+≥80% (business logic)
+Vitest
+JE generator, Drừ lùi calculator, Excel parser, SoD rule enforcement
+Integration
+≥50% (API)
+Vitest + Supertest
+Full drawdown lifecycle, Misa sync retry, Bank match automation
+E2E
+≥1 full happy path
+Playwright
+Import Plan → Create Drawdown → Approve → Execute → JE → Misa
+Excel fidelity
+100% cột match
+Custom diff tool
+Compare export bytes with VPBank template
+Load
+p95 &lt;2s on list
+k6
+28 projects × 50 drawdowns each
+Regression
+Mỗi bug fix kèm test
+Vitest
+Prevent drift — mandatory per coding standards
+9. Roadmap &amp; Open Questions
+9.1. Sprint plan (mapping vào IBS One v1.1)
+Sprint
+Deliverables
+Effort (tuần)
+Dependency
+Sprint 2–3 (Jun 2026)
+10 Prisma models + migration + seed; Credit Facility admin UI; LoanContract CRUD
+2.5
+Misa AMIS license (Sprint 0)
+Sprint 4–5 (Jul 2026)
+Excel parser (Phương án tài chính); FinancePlan API + UI editor; Budget Tree component
+3
+ProjectFinancePlan schema approved
+Sprint 6–7 (Aug 2026)
+Drawdown + Liquidation API + UI; Excel export (VPBank format); SoD enforcement; Trừ lùi calculator
+3.5
+Invoice model extension (Cycle 1 Part D)
+Sprint 8–9 (Sep 2026)
+Bank statement auto-match drawdown; Misa JE posting; MisaSyncLog
+2.5
+Bank API Cycle 3 live
+Sprint 10–11 (Oct 2026)
+Credit Facility Dashboard; Loan Debt Matrix dashboard; Overdue alerts
+2
+—
+Sprint 12–13 (Nov 2026)
+MoltBot Finance Bot tích hợp query cashflow; Weekly summary Telegram
+2
+AI Brain v0.5 (Phase 3)
+Total effort
+
+≈15.5 tuần dev (1 builder) hoặc 9 tuần (2 builders song song)
+
+
+9.2. Open questions cần quyết trước Sprint 2
+Q1 — Cách đánh số Drawdown: hiện tại &quot;Vay 095 VPB 04 03 2026&quot; là format ngôn ngữ; có cần đổi sang format technical như DRAW-2026-0001 để dễ query? Khuyến nghị: giữ format human-readable làm drawdownNo cho UI + bank; thêm id hệ thống (cuid) cho FK.
+Q2 — Template VPBank có phải file duy nhất không? Hay VCB/HDBank/ACB có template riêng? → Cần survey với từng bank trước Sprint 6.
+Q3 — Legacy data: có convert 25+ drawdown file 095 + 10+ liquidation 095 của năm 2025–2026 sang system không? Khuyến nghị: có, qua batch importer trong Sprint 6–7 để có đầy đủ audit trail.
+Q4 — Credit facility MB trung hạn 1.599 tỷ: schema treat là 1 LoanContract hay LoanContract con của Facility? → Với tài sản tín dụng mới nhận (tiers in tiers), khuyến nghị thêm enum FacilityTier thay vì phức tạp hoá hierarchy.
+Q5 — Multi-project loan allocation: vay 3 tỷ cho &quot;Mua vật tư chung&quot; không cụ thể 1 dự án → schema hiện có LoanContract.primaryProjectId nullable. Drawdown vẫn require projectId → cần allocation rule: allocate theo WIP proportion? CFO quyết.
+Q6 — Group level vs project level facility: Facility VPBank 200 tỷ là chung cho toàn công ty nhưng Drawdown gắn project. Có cần thêm &quot;project sub-limit&quot; không? Khuyến nghị: không trong v1.0, thêm trong v1.1 khi policy CFO rõ.
+9.3. Rủi ro triển khai
+Risk
+Likelihood
+Impact
+Mitigation
+Excel parser fail cho file Phương án từ dự án khác 095 (cấu trúc khác)
+Cao
+Trung bình
+Test với 5 file khác (078, 081, 090, 093, 094) trong Sprint 4; fallback to manual entry if parser miss
+VPBank thay đổi template Excel
+Trung bình
+Cao
+Config-driven template (YAML file); hot-swap không cần deploy
+Bank API không match được drawdown (amount + date lệch)
+Trung bình
+Trung bình
+Manual match UI fallback; exception queue
+Vendor master thiếu bank account cho 30% NCC
+Cao
+Trung bình
+Data cleanup task trong Sprint 0 (Wave 0 của IBS One v1.1); audit NCC list
+SoD enforcement bị by-pass khi 1 người kiêm nhiều role
+Trung bình
+Cao (audit qualification)
+Hard-coded rule ở schema level + monthly audit log review
+10. Quyết định cần Chủ tịch / CFO
+Để triển khai feature này mà không trôi tiếp 6 tháng như hiện tại, cần 4 quyết định sau trong Sprint 0 (tháng 5/2026):
+#
+Quyết định
+Người triển khai
+Tác động nếu chậm
+1
+Phê duyệt 10 Prisma models + enum mới vào ibshi1 schema (ADR-FA-002)
+Builder team (Phương) + Kế toán trưởng review trong 1 tuần
+Sprint 2 slip; cashflow feature không khởi động
+2
+Chính sách chuẩn hoá drawdownNo + liquidationNo (format human-readable hay technical ID)
+CFO + Kế toán trưởng + KT thanh toán
+Excel export không tương thích bank
+3
+Chỉ định Treasury Controller (role mới, ≈1 FTE từ chuyển đổi KT thanh toán cũ)
+CFO + HR
+Không có owner cho feature — drawdown/liquidation vẫn chạy Excel
+4
+Phân bổ vendor bank account master data cleanup (2 tuần work) cho KT thanh toán hiện tại trước Sprint 6
+Kế toán trưởng phân công
+AC-1 fail — feature go-live nhưng 30% NCC không có bank acct, phải nhập tay
+
+Hải Phòng, tháng 04/2026
+Le Duy Huyen
+Mentor cho Chủ tịch HĐQT — qua Cowork AI
+Feature spec v1.0 — sẵn sàng cho Sprint planning • Phân phối hạn chế

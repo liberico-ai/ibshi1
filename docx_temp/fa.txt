@@ -1,0 +1,1195 @@
+
+CÔNG TY CỔ PHẦN CÔNG NGHIỆP NẶNG IBS
+IBS Heavy Industry JSC — Tài liệu nội bộ / Trình Chủ tịch HĐQT
+THIẾT KẾ NỀN TẢNG TÀI CHÍNH — KẾ TOÁN
+Finance &amp; Accounting Module trong IBS One Platform
+Phản biện đề xuất ngày 04/2026 + Thiết kế chuẩn ngành
+Phiên bản
+v1.0 — Tháng 04/2026 — Draft trình BOM &amp; Chủ tịch HĐQT
+Người lập
+Le Duy Huyen — Mentor cho Chủ tịch HĐQT (qua Cowork AI)
+Tài liệu nguồn
+IBS_HI_He_thong_Bao_cao_QTri_TuDongHoa_KeToan_v1 (04/2026)
+Tham chiếu
+IBS One Plan v1.1 (15/04/2026) • TT200/2014/TT-BTC • VAS 15 • IFRS 15 • ISA 315 • ND-123/2020
+Phân loại
+Internal — Chairman Only — Cấm sao chụp ra ngoài
+Trạng thái
+Draft — chờ phản biện CFO + Kế toán trưởng + Builder team
+
+MỤC LỤC
+PHẦN A — Tóm tắt Chiến lược &amp; Kết luận trình Chủ tịch
+PHẦN B — Phản biện Đề xuất ngày 04/2026 (Red-Team Review)
+PHẦN C — Chức năng / Nhiệm vụ Phòng TCKT (As-Is → To-Be)
+PHẦN D — Thiết kế Module Finance trong IBS One Platform
+PHẦN E — Tích hợp Misa ↔ IBS One ↔ Data Warehouse (chuẩn ngành)
+PHẦN F — Compliance, Controls &amp; IPO Readiness
+PHẦN G — Roadmap Đồng bộ với IBS One v1.1
+PHẦN H — Quality Gates, KPI Thành công &amp; Quyết định cần Chủ tịch
+PHẦN I — Project Cashflow Feature (Addendum dựa trên pattern 095 bank_17)
+PHẦN A — TÓM TẮT CHIẾN LƯỢC
+A.1. Bối cảnh
+Đề xuất ngày 04/2026 (&quot;Hệ thống Báo cáo Quản trị &amp; Tự động hoá Kế toán&quot;) đã chỉ ra đúng bốn vấn đề cốt lõi: (1) biên LN gộp xói mòn xuống 4,5%, (2) bất thường vốn 1.173 tỷ đầu tư + 1.001 tỷ vay dài hạn cần tách lớp báo cáo, (3) lệch giữa báo cáo nội bộ (sản lượng 233 tỷ) và BCTC (doanh thu 186 tỷ) do hạch toán theo tiến độ, (4) khối lượng 36.354 bút toán/năm đủ ROI để tự động hoá. Tài liệu này không phủ định bốn phát hiện trên — mà phản biện, tinh chỉnh và đặt giải pháp vào đúng kiến trúc IBS One Platform v1.1 đã được audit (4/2026).
+A.2. Bốn điểm khác biệt cốt lõi của thiết kế này
+#
+Đề xuất ngày 04/2026
+Thiết kế trong tài liệu này
+Lý do thay đổi
+1
+Xây Data Warehouse mới trên Mac Mini M2 đặt cục bộ tại IBS HI
+Triển khai Z2 Analytics trên Postgres cloud (quản lý chuyên biệt) — IBS HI single-entity DW, có backup off-site
+Mac Mini cục bộ là single point of failure: mất điện 1 đêm = mất data; RAID không thay thế được off-site backup; không có SLA 99.9%. Postgres cloud có backup daily, HA, disaster recovery — chuẩn enterprise.
+2
+Coi Misa là master cho Khách hàng, NCC, Chart of Accounts
+IBS One là master cho Customer, Vendor, Project, Material, Employee. Misa chỉ master cho Legal Ledger (TT200) và TK chart
+ibshi1 đã có Vendor, Material, Employee, Department, Project models (Customer sẽ có trong Sale module Phase 2). Master data ownership principle (chuẩn ngành): mỗi canonical entity chỉ 1 hệ thống được tạo/sửa. Misa SME không có UX để quản lý master data tốt như IBS One.
+3
+Tự động sinh &quot;bút toán nháp&quot; trên Misa qua REST API từ IBS One
+Thêm Operational Subledger trong IBS One (mô hình double-entry tối thiểu cho 5 cycle: AP, AR, Bank, Project Cost, Inventory) → daily journal posting sang Misa
+Single-entry IBS One + double-entry Misa không reconcile được. Chuẩn IPO yêu cầu IBS One phải có sub-ledger có thể cross-foot với Misa GL. Đây là pattern chuẩn của Oracle/SAP/NetSuite.
+4
+AI Agent (Bot TCKT) đọc trực tiếp DW, có thể trả lời mọi câu hỏi tài chính
+AI Agent chỉ đọc Z2 Marts (read-only) + ghi Z4 Signals (write-only) — không bao giờ ghi Z1 operational; mọi cảnh báo phải có citation snapshot + người duyệt
+Tuân thủ Human-in-the-loop principle (NIST AI RMF + EU AI Act high-risk). Một câu trả lời sai về số tiền &gt;100M có thể gây ra quyết định sai ký HĐ — vì vậy AI write pattern phải bị hạn chế cứng ở tầng schema, không phải prompt-level.
+
+A.3. Bảy quyết định Chủ tịch cần thông qua trong 30 ngày
+#
+Quyết định
+Người triển khai
+Tác động nếu chậm
+1
+Phê duyệt nguyên tắc IBS One = Master cho Customer/Vendor/Project/Material/Employee. Misa chỉ master cho Legal Ledger.
+Kế toán trưởng + Trưởng phòng TM + Trưởng phòng KTKH
+Mọi automation tiếp theo phải lùi vì master data không có owner rõ ràng
+2
+Phê duyệt thêm Operational Subledger (5 cycle) vào ibshi1 schema — ước tính +14 Prisma models (Phụ lục D.2)
+Builder team (Phương) + Kế toán trưởng review
+Báo cáo P&amp;L theo dự án real-time không thực hiện được
+3
+Bắt buộc trường &quot;Mã DA&quot; (project_id) + &quot;Mã vụ việc&quot; + &quot;Mã phí&quot; trên 100% bút toán Misa từ kỳ T6/2026 (chính sách kế toán quản trị, KHÔNG phải IT)
+Kế toán trưởng phát hành QĐ; CFO giám sát compliance
+Project P&amp;L vẫn tiếp tục sai số 25% như hiện tại
+4
+Tách 2 ledger Hoạt động vs Đầu tư qua TK cấp 2/3 trên Misa (NOT qua DB tách)
+Kế toán trưởng + Misa partner
+BOM tiếp tục thấy P&amp;L hợp nhất bị méo bởi nghiệp vụ tài chính 1 lần
+5
+Phê duyệt nâng cấp Misa SME → Misa AMIS Cloud (≈30–50tr/năm) để có REST API đầy đủ; HOẶC build SQL Server reader (vi phạm EULA — KHÔNG khuyến nghị)
+CFO + IT
+Toàn bộ luồng integration phải giả lập bằng Excel export, không scale
+6
+Bổ sung POC Revenue Recognition (VAS 15 / IFRS 15) vào module Finance — bắt buộc cho IPO 2028 và để khớp &quot;sản lượng 233 tỷ&quot; với &quot;doanh thu BCTC 186 tỷ&quot;
+Kế toán trưởng + CFO + tư vấn audit Big4
+IPO 2028 phải làm lại 2 năm BCTC bằng IFRS — tốn 500–800tr tư vấn
+7
+Phê duyệt SoD Matrix (Segregation of Duties) chuẩn ISA 315 / SOX-lite — không 1 người vừa tạo vừa duyệt vừa thanh toán &gt;10tr
+CFO + Kế toán trưởng + Internal Audit
+Rủi ro fraud + audit qualification khi IPO
+
+A.4. Tổng đầu tư đã hiệu chỉnh
+Đề xuất gốc 800 triệu / 18 tháng. Sau hiệu chỉnh để khớp với IBS One v1.1 (đã có 53 models + 39+ API + workflow engine 36 bước) — phần lớn đã được kế hoạch trong roadmap IBS One; chỉ cần BỔ SUNG ngân sách cho 4 hạng mục riêng:
+Hạng mục bổ sung
+Chi phí (tr VND)
+Ghi chú
+Operational Subledger (14 models + workflow extension)
+120–180
+Builder team nội bộ, 6–8 tuần dev. Đã nằm 1 phần trong Phase 1 ibshi1 (F1–F4).
+Misa AMIS Cloud (license + migration)
+50–80/năm
+License gói doanh nghiệp + 1 lần migration ≈30 triệu
+Bank API connectors (4 NH chính: VCB, ACB, HDBank, VPBank) + RPA fallback (PGBank, Bắc Á)
+120–180
+REST API + Python ETL. RPA dùng Playwright open-source.
+E-invoice connector (MeInvoice / VNPT eInvoice)
+30–50
+License + 5 ngày integration
+OCR engine cho hoá đơn AP (Misa MeInvoice OCR hoặc Azure Form Recognizer)
+60–120/năm
+10.814 PN + 1.468 PC = ≈12.300 hoá đơn/năm × 1–2 USD/doc
+IFRS 15 / VAS 15 mapping consultancy (Big4 hoặc tier-2)
+150–250
+1 lần, cần thiết cho IPO readiness
+AI Signal layer (Z4) — Python pipeline + Claude API hoặc local DeepSeek
+100–150
+Đã planned trong Phase 3 ibshi1 (AI1–AI5)
+TỔNG bổ sung trên IBS One v1.1
+≈630–960
+Phần lớn đã có trong roadmap; chỉ Operational Subledger + Misa AMIS + Bank/E-invoice là cần phê duyệt riêng (≈400–610tr)
+
+Khuyến nghị Mentor
+Phê duyệt 7 quyết định trong A.3 ngay trong tháng 5/2026 — ĐÂY LÀ ĐIỀU KIỆN TIÊN QUYẾT. Sau đó dùng ngân sách 400–610tr bổ sung gắn vào Phase 1 (Sprint 6–7) và Phase 2 (Sprint 8–11) của IBS One v1.1 — KHÔNG mở thêm program mới song song. Tránh tạo 2 governance track sẽ gây xung đột priority với Builder team.
+PHẦN B — PHẢN BIỆN ĐỀ XUẤT NGÀY 04/2026
+Đây là red-team review trung thực. Đề xuất gốc có nhiều phát hiện đúng và 4 khuyến nghị có giá trị. Phần này chỉ ra 12 điểm cần điều chỉnh để khớp với (a) thực tế kiến trúc IBS One v1.1 đã audit và (b) chuẩn ngành kế toán quản trị + IFRS/VAS.
+B.1. Mười hai điểm cần phản biện
+#
+Điểm trong đề xuất gốc
+Vấn đề
+Khuyến nghị thay thế
+1
+L2 Data Warehouse trên Mac Mini M2 cục bộ
+Single point of failure (mất điện = mất data), không có HA/DR, khó backup off-site, không đạt SLA enterprise 99.9%
+Triển khai Z2 trên Postgres cloud (managed: Supabase/AWS RDS/Azure DB) với HA + daily backup off-site. Mac Mini có thể dùng làm edge cache khi mạng đứt — KHÔNG phải master.
+2
+&quot;Misa là master cho Khách hàng &amp; NCC&quot;
+ibshi1 đã có Vendor, Employee, Material, Project models. Nếu coi Misa là master, sẽ phải xoá master IBS One — phá vỡ 39+ API hiện đang chạy
+IBS One = master cho 5 entities (Customer/Vendor/Project/Material/Employee). Misa nhận sync 1 chiều, không cho tạo mới trong Misa.
+3
+&quot;Auto-sinh bút toán nháp trên Misa qua REST API&quot;
+Single-entry trong IBS One + double-entry trong Misa = không reconcile được. Khi sai, không biết sai ở đâu. Chuẩn IPO không chấp nhận
+Thêm Operational Subledger double-entry (tối thiểu) trong IBS One. Daily batch posting sang Misa với reconciliation report.
+4
+&quot;Bot TCKT đọc trực tiếp DW, trả lời mọi câu hỏi&quot;
+Vi phạm nguyên tắc Human-in-the-loop (NIST AI RMF). AI có thể bị prompt injection, hallucinate số tiền lớn → quyết định sai
+AI chỉ đọc Z2 Marts (read-only) + ghi Z4 Signals (write-only). Mọi câu trả lời PHẢI có citation snapshot ID + thời gian + link query SQL. Câu hỏi liên quan &gt;100M → bắt buộc human confirm.
+5
+&quot;OCR accuracy ≥92% là gate&quot;
+Còn 8% sai → 12.300 hoá đơn/năm × 8% ≈ 1.000 sai sót. Không có policy xử lý 8% này = audit qualification
+OCR accuracy ≥92% + 100% AP voucher &gt;50 triệu phải 4-eye review + monthly OCR error audit báo cáo CFO.
+6
+&quot;Bot TCKT ≥20 queries/ngày từ BOM&quot; làm KPI
+Vanity metric. 20 query có thể đều sai
+KPI thay thế: (a) Groundedness rate ≥95% (mỗi câu trả lời truy nguyên được data), (b) User trust score (BOM rate đúng/sai cuối tuần) ≥4.0/5, (c) Top-5 query pattern → tự động tạo dashboard chuẩn để giảm load AI.
+7
+Không có POC Revenue Recognition (VAS 15)
+IBS HI là contract manufacturer — phải dùng Percentage-of-Completion. &quot;Sản lượng 233 tỷ ≠ doanh thu 186 tỷ&quot; chính là vấn đề thiếu POC. IPO không qua nếu không có POC
+Thêm POC engine: Cost-to-cost method tính monthly. Doanh thu ghi nhận = (Cumulative cost / Estimated total cost) × Contract value. Điều chỉnh hồi tố cho 2024–2025.
+8
+Mã DA là dimension duy nhất trên Misa
+Manufacturing chuẩn cần 4–5 dimension: Project × Cost Center (Phân xưởng) × Activity (Cắt/Hàn/Sơn/Lắp) × Work Order × WBS Element
+Cấu hình Misa cấp 2/3: Mã DA + Mã vụ việc (đã có cho overhead) + Mã phí (đã có) + thêm Mã WO khi posting từ IBS One. Multi-dim GL là chuẩn SAP/Oracle.
+9
+&quot;Cấu hình Misa cấp 2/3 để tách 2 ledger&quot; không đủ chi tiết
+Tách 2 ledger không phải vấn đề kỹ thuật — là vấn đề Chart of Accounts. Cần ánh xạ TK 1 ↔ TK 2 ↔ Ledger ID
+Phụ lục E.3 đưa ra mapping cụ thể: TK 22x (đầu tư), TK 34x (vay dài hạn), TK 53x (TN từ đầu tư) → Ledger Investment. TK còn lại → Ledger Operations.
+10
+&quot;Đội TCKT 6 người chuyển từ nhập liệu sang phân tích&quot; — không nói rõ về SoD
+Chuẩn ISA 315 + SOX-lite: 1 người không được vừa tạo + vừa duyệt + vừa thanh toán cùng 1 voucher. Bot OCR auto-tạo voucher là CHUẨN nhưng phải kết hợp 4-eye review
+Phụ lục F.2 đưa ra SoD Matrix 12 vai trò × 8 cycle. Thấp nhất 2 người (creator + approver) cho voucher &lt;50 triệu; 3 người (creator + approver + executor) cho voucher &gt;50 triệu.
+11
+&quot;Bank API: Vietcombank / ACB / HDBank / Bắc Á&quot; — danh sách thực tế không match
+VCB Connect API đã chuyển sang VCB DigiBiz B2B (cần ký hợp đồng riêng). PGBank và Bắc Á chưa có Open API. Finhay là retail platform, không phải B2B payment connector
+Phụ lục E.4 đưa ra danh sách API thực tế 04/2026 + RPA fallback (Playwright) + SFTP cho NH không có API. ETL retry/backoff theo rate limit.
+12
+Không đề cập CBAM emission tracking
+EU CBAM bắt buộc khai báo emission per shipment cho thép xuất khẩu Q4/2025+. IBS HI xuất khẩu sang VOGT/Braden/Damen — đều là thị trường EU/US. Không có data → bị áp giá CBAM penalty 15–25 EUR/tấn CO2
+Thêm Emission Tracking model (Scope 1 từ máy hàn/cắt + Scope 2 từ điện) gắn vào Material Master. Calculator tự động cho mỗi shipment. Cần trước Q3/2026.
+
+B.2. Năm điểm đề xuất gốc đã đúng — giữ nguyên
+Tách báo cáo &quot;Ledger Hoạt động&quot; vs &quot;Ledger Đầu tư&quot; — đúng. Nghiệp vụ vốn 1.173 tỷ phải tách khỏi P&amp;L sản xuất.
+OCR + Auto-voucher cho 10.814 PN/năm — đúng. ROI rõ ràng, công nghệ đã chín.
+Bank API + reconciliation tự động — đúng. Đây là ROI cao nhất sau OCR.
+Phân bổ chi phí SXC theo dự án nightly thay vì 1 lần cuối năm — đúng và bắt buộc cho POC.
+AI Agent là trợ lý không phải trùm — đúng nguyên tắc human-in-the-loop.
+B.3. Sai số trong số liệu phân tích cần đính chính
+Bảng B.1 trong đề xuất gốc ghi LNST 2025 = 384 triệu, ROE thực = 0,16%/năm. Đúng. Tuy nhiên cần ghi rõ: VCSH bình quân 2025 = (101,1 + 234,0)/2 = 167,5 tỷ → ROE = 384/167.500 = 0,23%, không phải 0,16% (con số 0,16% là dùng VCSH cuối kỳ 234 tỷ — không chuẩn). Khi trình HĐQT, dùng ROE bình quân để tránh bị challenge.
+Bảng B.3 ghi DSO = 173 ngày. Tính lại: KPT cuối kỳ 2025 = 88,3 tỷ; Doanh thu 2025 = 186,6 tỷ → DSO = 88.3/186.6 × 365 = 172,8 ngày. Đúng — nhưng nên loại Doanh thu tài chính 100,7 tỷ vì không phát sinh KPT thương mại; DSO core = 88.3/186.6 × 365 = 173 (giữ nguyên vì 186 đã là DT thuần thương mại).
+PHẦN C — CHỨC NĂNG / NHIỆM VỤ PHÒNG TCKT
+C.1. Chức năng / Nhiệm vụ AS-IS (hiện tại — 6 nhân sự)
+Dựa trên file &quot;20251211 Noi dung hop ve bao cao phong TCKT.xlsx&quot; và bảng kê 36.354 bút toán 2025, mô hình chức năng hiện tại:
+Vai trò
+FTE
+Hoạt động chính (&gt;50% thời gian)
+Output chính
+Kế toán trưởng
+1.0
+Duyệt voucher, ký BCTC, làm việc với cơ quan thuế, tổng hợp báo cáo BOM
+BCTC năm/quý, báo cáo thuế, biên bản đối chiếu kiểm toán
+Kế toán tổng hợp
+1.0
+Hạch toán PKT điều chỉnh, lập báo cáo nội bộ, đối chiếu sản lượng vs doanh thu
+Báo cáo SXKD, mapping sản lượng-doanh thu, phân tích chi phí theo DA cuối năm
+Kế toán thanh toán
+1.0
+Lập UNC/PC, đối chiếu sao kê NH thủ công, theo dõi công nợ phải trả
+Sổ tiền gửi NH, báo cáo công nợ NCC, file UNC
+Kế toán kho/vật tư
+1.5
+Hạch toán PN/PX, đối chiếu kho-sổ, theo dõi vật tư xuất theo DA
+PN/PX (10.814+7.292/năm), báo cáo nhập-xuất-tồn, chi phí vật tư DA
+Kế toán lương/BHXH
+0.5
+Tính lương hành chính + BHXH, hạch toán TK 334/338
+Bảng lương hành chính, file gửi BHXH online, bút toán TK 334/338
+Thủ quỹ
+1.0
+Quản lý tiền mặt, ngân quỹ, lập PC/PT
+Sổ quỹ, biên bản kiểm quỹ tháng
+
+Vấn đề hệ thống của mô hình AS-IS
+≈80% thời gian nhập liệu thủ công (15–21 giờ/ngày toàn đội); 0 thời gian phân tích. Không ai phụ trách: (a) Cash forecast, (b) DSO management, (c) POC revenue, (d) Project profitability real-time, (e) IFRS readiness, (f) Tax planning chiến lược. Khi BOM hỏi &quot;DA này lãi/lỗ bao nhiêu?&quot; — không ai trả lời nhanh được.
+C.2. Chức năng / Nhiệm vụ TO-BE (sau triển khai — 6+1 nhân sự)
+Vai trò mới
+FTE
+Hoạt động cốt lõi (sau automation)
+Output mới + KPI
+Financial Controller (Kế toán trưởng)
+1.0
+Policy, internal control, kỳ kế toán close T+3, IFRS dual reporting, làm việc audit Big4 chuẩn IPO
+Monthly close T+3, IFRS package quarterly, SoD compliance report
+FP&amp;A Analyst (KT tổng hợp cũ)
+1.0
+Lập báo cáo quản trị (18 báo cáo MR Pack), variance analysis, budget vs actual, profitability per project
+Daily P&amp;L per project, monthly variance pack, ad-hoc analysis cho Chairman/BOM
+Treasury &amp; Credit Controller (KT TT cũ)
+1.0
+Cash forecast 90 ngày, đàm phán thu hồi công nợ, quản lý vay/trả NH, FX hedging strategy
+DSO ≤90 ngày (từ 173), Cash forecast accuracy ≥80%, FX exposure report
+Inventory Controller + Cost BA (KT kho cũ)
+1.5
+Audit ngẫu nhiên PN/PX auto, phân tích vòng quay HTK, cost per ton per project, đề xuất cải tiến BOM
+Inventory turnover ≥1.5 (từ 0.88), Cost/Ton benchmark per project, BOM accuracy report
+HR Business Partner (½ time + KT lương)
+0.5
+Kiểm soát chi phí nhân công, KPI design, anti-fraud lương, BHXH compliance
+Payroll variance &lt;2%, BHXH 100% on-time, headcount budget vs actual
+Thủ quỹ
+0.5 (giảm)
+Vai trò physical cash custody (giảm vì cashless), xử lý cash exception
+Tiền mặt &lt;100 triệu thường xuyên trong két (từ ≈500tr hiện tại)
++ Data/Finance Engineer (shared với Builder team)
+0.5
+Vận hành ETL Misa↔IBS One↔Z2, debug data quality issue, build new dashboard theo yêu cầu
+Data quality score ≥95%, Mean time to add new dashboard ≤3 ngày
+
+C.3. Tuyên bố không cắt giảm nhân sự
+Cam kết của Chairman với phòng TCKT
+Mục tiêu chuyển đổi KHÔNG phải giảm headcount. Tổng FTE giữ ở mức 6 (giảm Thủ quỹ 0.5, tăng Data Engineer 0.5). Chương trình &quot;reskill&quot; gồm: (a) SQL &amp; Power BI cho cả 6 người, (b) IFRS 1 month course cho Kế toán trưởng + FP&amp;A, (c) Treasury management cho Treasury Controller, (d) gắn bonus với KPI mới. Tuyên bố này phải được CFO + Chairman công bố trong meeting kickoff Phase 0 để mua buy-in.
+PHẦN D — THIẾT KẾ MODULE FINANCE TRONG IBS ONE
+ibshi1 hiện đã có 6 Prisma models (Invoice, Payment, Budget, CashflowEntry, PieceRateContract, MonthlyPieceRateOutput) + P6 workflow 5 bước (P6.1 Invoice → P6.2 Payment → P6.3 CashFlow → P6.4 Budget Reconciliation → P6.5 Final Settlement). Phần D mở rộng module này thành Finance Platform đầy đủ — KHÔNG xây mới, chỉ extend.
+D.1. Bốn bounded context của Finance Platform
+Bounded Context
+Mục đích
+Models hiện có (ibshi1)
+Models cần bổ sung
+1. Operational Subledger
+Sub-ledger double-entry tối thiểu cho 5 cycle (AP/AR/Bank/Project Cost/Inventory). Đẩy daily journal sang Misa GL
+Invoice, Payment, CashflowEntry
+JournalEntry, JournalLine, AccountMaster, CostCenter, ProjectCostLedger, BankReconciliation, BankStatementLine, FxRate, FxRevaluation
+2. Project Costing &amp; POC
+Tập hợp chi phí theo dự án (multi-dim), tính POC %, ghi nhận doanh thu/giá vốn theo VAS 15 / IFRS 15
+Budget, Project (35 fields), MaterialIssue, JobCard
+ProjectCostSnapshot (daily), POCRecognition, ContractMilestone, EstimatedCostAtCompletion (EAC), VarianceAnalysis
+3. Treasury &amp; Cashflow
+Cash position real-time, 90-day forecast, FX hedging, công nợ aging
+CashflowEntry, Payment
+CashPosition, CashflowForecast, ARAging, APAging, CreditLimit, FxExposure, BankAccountMaster
+4. Misa Integration &amp; Reporting
+Bridge tới Misa AMIS REST + 18 báo cáo MR Pack
+(none yet)
+MisaSyncLog, JournalPostingQueue, ReconciliationException, MRReportSchedule, ReportSubscription
+
+D.2. Bảng tóm tắt 14 Prisma model bổ sung
+#
+Model
+Bounded Context
+Mục đích
+FK quan trọng
+1
+JournalEntry
+Operational Subledger
+Header bút toán (date, description, source, status, posted_to_misa)
+project_id?, work_order_id?, period_id
+2
+JournalLine
+Operational Subledger
+Dòng debit/credit (account, amount, dimensions)
+journal_entry_id, account_id, cost_center_id, project_id?
+3
+AccountMaster
+Operational Subledger
+Mirror chart of accounts từ Misa (TT200)
+parent_account_id, ledger_type (Operations/Investment)
+4
+CostCenter
+Operational Subledger
+Phân xưởng / phòng ban (Cắt, Hàn, Sơn, Lắp, VP)
+department_id
+5
+ProjectCostLedger
+Project Costing
+Chi phí theo DA × Cost Center × Activity × Period
+project_id, cost_center_id, activity_code, period_id
+6
+ProjectCostSnapshot
+Project Costing
+Daily snapshot cho dashboard real-time
+project_id, snapshot_date
+7
+POCRecognition
+Project Costing
+Tính % hoàn thành theo cost-to-cost, ghi nhận DT/GV
+project_id, contract_id, period_id
+8
+EstimatedCostAtCompletion
+Project Costing
+EAC = Actual + Forecast remaining; tính variance vs budget
+project_id, version, prepared_by
+9
+BankReconciliation
+Treasury
+Match sao kê NH với UNC/BC/PC/PT
+bank_account_id, period_id
+10
+BankStatementLine
+Treasury
+Dòng sao kê từ Bank API
+bank_account_id, transaction_date
+11
+CashflowForecast
+Treasury
+Forecast 90 ngày từ milestone + PO + lương
+as_of_date, project_id?
+12
+ARAging / APAging
+Treasury
+Phân tích tuổi nợ 30/60/90/120+
+customer_id / vendor_id, as_of_date
+13
+MisaSyncLog
+Misa Integration
+Log mỗi lần push voucher sang Misa, status, retry
+journal_entry_id, sync_attempt_at
+14
+EmissionRecord
+(cross-cutting)
+Scope 1 + Scope 2 emission per WO/shipment cho CBAM
+work_order_id, material_id
+
+Tất cả 14 models tuân thủ chuẩn enterprise DB convention: PK = UUID via cuid(), Decimal(15,2) cho money (không dùng Float), TIMESTAMPTZ cho date (không dùng timezone-naive), migration qua Prisma versioned file (không ALTER trực tiếp production). Những convention này đã áp dụng nhất quán trong ibshi1 schema hiện tại theo audit v1.1.
+D.3. Luồng nghiệp vụ 6 cycle chính (data flow)
+Cycle 1 — AP (Hàng nhập + Hoá đơn NCC)
+Bước
+Trigger
+Hệ thống chủ
+Hoạt động
+Output
+1
+PO duyệt
+ibshi1
+PurchaseOrder.status = APPROVED, gửi notification
+PO PDF + email NCC
+2
+NCC giao hàng, Kho xác nhận
+ibshi1
+StockMovement IN + Material update + emit event PO.RECEIVED
+Phiếu nhập kho điện tử
+3
+OCR hoá đơn NCC (PDF/ảnh)
+OCR Engine (MeInvoice/Azure)
+Trích MST, số HĐ, ngày, mặt hàng, tiền, VAT; fuzzy match với PO
+Invoice draft (status=DRAFT)
+4
+Auto-create JournalEntry nháp
+ibshi1 Operational Subledger
+Dr 152x/153/213/642 etc / Cr 331x; gắn project_id, cost_center_id, activity_code
+JournalEntry status=DRAFT
+5
+Kế toán review + duyệt (4-eye nếu &gt;50tr)
+ibshi1 UI
+Approve / reject / amend; ký số
+JournalEntry status=APPROVED
+6
+Daily batch posting sang Misa
+ETL job 23:00
+REST POST /api/v1/vouchers; nhận voucher_id; lưu MisaSyncLog
+Voucher trên Misa + sync log
+7
+Reconciliation report sáng hôm sau
+ibshi1 dashboard
+So sánh JournalEntry IBS One vs voucher Misa, flag exceptions
+Reconciliation report T+1
+Cycle 2 — AR (Doanh thu + Phải thu KH)
+Logic POC quan trọng: doanh thu KHÔNG ghi theo invoice — ghi theo % completion. Mỗi cuối tháng:
+Bước 1: Tính cumulative cost YTD per project (từ ProjectCostLedger)
+Bước 2: Tính EAC (Estimated Cost at Completion) per project (do PM cập nhật)
+Bước 3: % POC = Cumulative cost / EAC
+Bước 4: Cumulative revenue ghi nhận = % POC × Contract value × (1 + change order)
+Bước 5: Revenue tháng = Cumulative revenue tháng này − Cumulative revenue tháng trước
+Bước 6: JournalEntry: Dr 131 (KH chưa lập HĐ) / Cr 511 (Doanh thu); GR 632 / Dr 154 (kết chuyển giá vốn)
+Bước 7: Khi phát hành invoice ND-123 (e-invoice): Dr 131 / Cr 131-chưa lập HĐ + VAT output 333
+Đây chính là nguyên nhân &quot;Sản lượng 233 tỷ ≠ Doanh thu 186 tỷ&quot; trong đề xuất gốc — là chuẩn POC, không phải lỗi. Khi triển khai POC engine, hai con số sẽ được giải thích tự động và audit-able.
+Cycle 3 — Bank (UNC/BC/PC/PT)
+Bước
+Trigger
+Hệ thống
+Hoạt động
+1
+Bank API pull sao kê 3h/lần
+ETL
+INSERT BankStatementLine; deduplicate theo bank_ref
+2
+Match engine chạy
+ibshi1
+Match theo: số UNC, số HĐ, MST, amount + date window ±2 ngày
+3
+Auto-clear
+ibshi1
+Match thành công → tạo JournalEntry tự động, status=APPROVED (low-risk)
+4
+Exception queue
+ibshi1 UI
+Match thất bại → KT thanh toán review trong dashboard
+5
+FX revaluation cuối tháng
+ibshi1
+Reval all USD/EUR balances at month-end rate; JE: 413 ↔ 1122/1112
+Cycle 4 — Project Cost &amp; POC
+Nightly job (02:00) chạy 4 bước:
+Aggregate raw costs từ JournalLine WHERE project_id IS NOT NULL (TK 621/622/623/627)
+Allocate overhead (TK 627 không gắn DA + 642) theo driver (machine hour từ DailyProductionLog hoặc direct labour hour)
+Insert ProjectCostSnapshot per project (1 row/day/project)
+Recompute POCRecognition; nếu thay đổi &gt;5% so với snapshot trước → tạo Z4 AI Signal cảnh báo CFO
+Cycle 5 — Payroll (Lương + BHXH)
+ibshi1 đã có PieceRateContract + MonthlyPieceRateOutput models. Mở rộng:
+Khoán lương: từ MonthlyPieceRateOutput → BUTTON &quot;Generate JE&quot; → tạo JournalEntry batch theo tổ × project (Dr 622 / Cr 334)
+Lương hành chính: Employee + SalaryRecord → JE batch (Dr 6421/6422 / Cr 334)
+BHXH: 21.5% CT + 10.5% NV → JE (Dr 6422+334 / Cr 3383/3384/3389)
+Output file gửi NH trả lương + tờ khai BHXH online (TS24)
+Posting sang Misa cùng batch hàng tháng — KHÔNG sync per record để tránh rate limit
+Cycle 6 — Period Close (Đóng kỳ T+3)
+Day
+Hoạt động
+Owner
+Output
+T+1 (sáng D+1)
+Auto-close: tỷ giá cuối kỳ; FX reval; depreciation auto; accruals auto
+System (ETL)
+Trial Balance preview
+T+2
+Bank rec hoàn tất; AR/AP aging finalize; POC tính cho mọi project
+Treasury + KT kho
+P&amp;L preview, PIVOT theo project
+T+3
+Kế toán trưởng review TB + JE adjustments cuối kỳ; ký số close period; sinh 18 báo cáo MR Pack
+Kế toán trưởng + FP&amp;A
+Báo cáo trình BOM ngày T+3
+D.4. Multi-Dimensional General Ledger
+Mỗi JournalLine PHẢI có các dimension sau (NOT NULL trừ cuối kỳ):
+Dimension
+Bắt buộc?
+Source
+Ví dụ
+Account (TK)
+Bắt buộc
+AccountMaster mirror Misa TT200
+6212
+Cost Center
+Bắt buộc
+CostCenter (Cắt/Hàn/Sơn/Lắp/VP/Kho)
+CC-HAN
+Project ID
+Bắt buộc nếu TK 154/621/622/623/627/632/511
+Project (ibshi1 35-field)
+25-VPI-I-095
+Activity Code
+Khuyến khích
+Tekla operation code
+WELD-FCAW
+Work Order
+Bắt buộc nếu source = ibshi1
+WorkOrder (ibshi1)
+WO-2026-0412
+Vụ việc / Mã phí
+Bắt buộc cho overhead
+Mirror Misa Mã vụ việc + Mã phí
+XEVP / 014
+Period
+Bắt buộc
+Period (YYYYMM)
+202604
+Currency + FX rate
+Bắt buộc nếu CCY ≠ VND
+FxRate
+USD @ 25.450
+Counterparty (KH/NCC)
+Bắt buộc nếu TK 131/331
+Customer / Vendor
+VOGT
+PHẦN E — TÍCH HỢP MISA ↔ IBS ONE ↔ DATA WAREHOUSE
+E.1. Kiến trúc 4 tầng dữ liệu (chuẩn ngành Data Warehousing)
+Mô hình 4 tầng dưới đây là chuẩn enterprise data architecture (Kimball/Inmon). Mỗi tầng có vai trò read/write riêng — tách biệt cứng để bảo vệ tính toàn vẹn của hệ thống nghiệp vụ.
+Tầng
+Vị trí
+Nội dung
+Write từ
+Read bởi
+Z1 Operational
+Misa AMIS Cloud + ibshi1 Postgres (managed)
+Misa: Legal Ledger TT200. ibshi1: Operations + Operational Subledger + Project Cost
+Phòng TCKT (Misa); IBS One workflows (KTKH/SX/QAQC)
+Chỉ chính platform đó — KHÔNG cho hệ thống khác query trực tiếp Z1 (chuẩn isolation)
+Z2 Analytics
+Postgres cloud managed (Supabase/AWS RDS/Azure DB) — IBS HI dedicated cluster
+Marts: Finance, Project, HR, Inventory. ETL từ Misa hourly + ibshi1 streaming. Star schema với fact + dimension tables
+ETL pipeline (Python + Airflow / Supabase Edge Functions)
+BI dashboards (Metabase/Superset), AI agents (read-only)
+Z3 Historical
+Cold storage off-site (S3-compatible / Backblaze B2)
+Snapshot quarterly, archive after 24 tháng. Lưu 10 năm theo Luật Kế toán + thuế
+ETL batch quarterly
+Audit query (rare), ML training
+Z4 Intelligence
+Z2 Postgres schema riêng = z4_signals
+AI Signals: cost forecast, anomaly score, project risk score, supplier risk
+AI pipeline (Claude API / local DeepSeek cho payroll-sensitive) — WRITE ONLY
+ibshi1 dashboards (read-only); BOM qua chatbot
+
+Lý do chọn cloud thay vì Mac Mini cục bộ
+Đề xuất gốc &quot;Mac Mini M2&quot; có 3 risk lớn: (1) Single point of failure — mất điện, hỏng SSD = mất data; (2) Không có HA/Disaster Recovery; (3) Backup off-site khó tự động. Khi IPO 2028, auditor Big4 sẽ flag ngay vì không đạt SLA enterprise. Mac Mini vẫn có thể dùng cho: (a) Local LLM xử lý payroll-sensitive workload (DeepSeek 32B), (b) Edge cache khi mạng văn phòng đứt. Nhưng KHÔNG phải Z2 master.
+E.2. Master Data Ownership Matrix (revised)
+Domain
+Master
+Sync targets
+Lý do
+Customer
+ibshi1 (sẽ build trong Sale module Phase 2)
+Misa (1 chiều, không cho tạo)
+ibshi1 sẽ có Customer model + RFQ + Quotation; Misa không cần UI quản lý KH
+Vendor / NCC
+ibshi1 (Vendor model — đã có)
+Misa (1 chiều)
+ibshi1 đã có Vendor + SubcontractorContract + scoring; Misa chỉ cần để lập UNC
+Project / Hợp đồng
+ibshi1 (Project 35 fields — đã có)
+Misa (mã vụ việc / Đối tượng tập hợp CP)
+Project là entity hub trong ibshi1 với 9 model liên quan
+Material / Vật tư
+ibshi1 (Material — đã có)
+Misa (sync khi có mã mới)
+ibshi1 quản BOM, định mức Tekla, mill cert
+Employee / Nhân sự
+ibshi1 (Employee 30 fields — đã có)
+Misa (lấy số tổng để hạch toán)
+ibshi1 có HR đầy đủ (Attendance, Timesheet, Salary, Cert)
+Chart of Accounts (TK)
+Misa (chuẩn TT200)
+ibshi1 AccountMaster mirror
+Misa là legal ledger, TK do Bộ Tài chính quy định
+Bank Accounts
+Misa
+ibshi1 BankAccountMaster mirror
+Misa lưu thông tin tài khoản pháp lý
+Currency + FX Rate
+ibshi1 (pull từ VCB Rate API)
+Misa (sync daily)
+ibshi1 cần real-time cho operations
+Period / Kỳ kế toán
+Misa
+ibshi1
+Misa kiểm soát period close pháp lý
+Tax Codes (VAT, TNCN)
+Misa
+ibshi1 mirror cho e-invoice
+Misa quản chính thức
+
+E.3. Chart of Accounts — Tách 2 Ledger qua phân loại TK
+Không cần tách DB. Tạo trường ledger_type trên AccountMaster (extend trên cả Misa qua TK cấp 2/3):
+Ledger
+TK chuẩn TT200 thuộc Ledger này
+Báo cáo dùng
+OPERATIONS (Hoạt động cốt lõi)
+111, 112 (trừ 1122-investment), 131, 152–158, 211–214, 241, 331, 333, 334, 338, 341 (vay &lt;1 năm), 411, 511, 515 (trừ thu nhập đầu tư), 621, 622, 623, 627, 632, 635 (trừ lãi vay đầu tư), 642, 711, 811, 911
+P&amp;L Operations (cho BOM); EBITDA core; Cost per Ton; Project P&amp;L
+INVESTMENT (Đầu tư &amp; Tài chính lớn)
+1122-INV (TK con USD đầu tư), 221, 222, 228 (đầu tư khác — bao gồm 1.173 tỷ), 341-LT (vay dài hạn — bao gồm 1.001 tỷ), 515-INV (TN từ đầu tư), 635-INV (lãi vay đầu tư — 87 tỷ)
+P&amp;L Investment (cho HĐQT); Investment Returns; Debt Service Coverage
+CONSOLIDATED
+Tất cả TK
+BCTC chính thức TT200; báo cáo trình cổ đông; BCTC IFRS
+
+Quyết định chính sách kế toán
+Chair phê duyệt: Misa AMIS sẽ enable TK cấp 3 cho 1122/341/515/635/228 với 2 hậu tố: -OPS và -INV. Mọi bút toán liên quan đến khoản đầu tư 1.173 tỷ + vay 1.001 tỷ phải post vào TK -INV. Báo cáo P&amp;L trình BOM từ T7/2026 sẽ chỉ filter ledger_type=&apos;OPERATIONS&apos;.
+E.4. Tích hợp Banking — danh sách thực tế 04/2026
+Ngân hàng
+Phương thức
+Cơ chế
+Latency
+Effort dev
+VPBank
+VPB Open API (B2B)
+REST OAuth2; pull statement + push payment
+Real-time
+10 ngày
+Vietcombank
+VCB DigiBiz B2B
+REST + cần ký HĐ riêng với VCB IB; sandbox sẵn
+Real-time
+10 ngày
+HDBank
+HDBank Open API
+REST OAuth2
+Real-time
+8 ngày
+ACB
+ACB Open API (qua eBanking Pro)
+REST + cần Premium account
+Real-time
+8 ngày
+PGBank
+RPA fallback (Playwright + 2FA)
+Headless browser scrape Internet Banking; lưu screenshot làm evidence
+Daily 09:00 + 16:00
+12 ngày + ongoing maintenance
+Bắc Á
+SFTP daily statement
+Yêu cầu NH cung cấp file CSV/MT940 hàng ngày
+T+1
+5 ngày
+BIDV / Techcombank (nếu có)
+RPA hoặc SFTP
+Tương tự PGBank/Bắc Á
+T+1
+8 ngày/NH
+
+E.5. Misa AMIS REST API contract (chính)
+Misa AMIS Cloud cung cấp REST endpoints theo nhóm. Phụ lục dưới đây là contract chính cần build:
+Endpoint
+Method
+Mục đích
+Tần suất
+Khối lượng/ngày
+/api/v1/vouchers/inventory-receipt
+POST
+Tạo PN từ ibshi1 → Misa
+Event-driven (khi Kho confirm)
+≈30
+/api/v1/vouchers/inventory-issue
+POST
+Tạo PX
+Event-driven
+≈20
+/api/v1/vouchers/journal
+POST
+Bút toán PKT (POC, depreciation, accrual, reversal, FX reval)
+Daily 23:00 batch
+≈50–100
+/api/v1/vouchers/payment
+POST
+UNC + PC từ ibshi1 sau khi auto-match Bank statement
+Event-driven
+≈25
+/api/v1/vouchers/receipt
+POST
+BC + PT khi KH thanh toán
+Event-driven
+≈4
+/api/v1/vouchers/payroll-batch
+POST
+Bảng lương tháng
+1/tháng
+1 batch
+/api/v1/master/customers
+GET
+Pull list KH (cho mapping)
+Daily 03:00
+tăng dần
+/api/v1/master/vendors
+GET
+Pull list NCC
+Daily 03:00
+tăng dần
+/api/v1/master/accounts
+GET
+Pull TK chart
+Weekly
+850 TK
+/api/v1/reports/trial-balance
+GET
+Pull TB cho reconciliation
+Daily 06:00
+1 file
+/api/v1/reports/general-ledger
+GET
+Pull GL detail cho audit trail
+Monthly close T+3
+1 file ≈100MB
+Rate limit Misa AMIS thường ≈10 req/s per tenant. ETL phải có exponential backoff + dead-letter queue. Sử dụng MisaSyncLog để track every attempt.
+E.6. Ba mẫu tích hợp chuẩn (Integration Patterns)
+Giữ bề mặt tích hợp gọn — chỉ dùng 3 pattern dưới đây. Mọi pattern khác (GraphQL, gRPC, Kafka, Webhooks server-side) PHẢI có Architecture Decision Record (ADR) được CFO/CTO ký trước khi triển khai. Đây là kỷ luật giúp tránh fragmentation khi team tăng từ 2 lên 5–7 builders.
+Pattern
+Use case
+Tool
+Khi nào dùng
+1. REST sync
+Master data sync (Customer, Vendor, Account); voucher posting (Misa)
+OpenAPI 3.1 + Zod validation (đã có trong ibshi1)
+Cần immediate response; volume &lt;100 req/min
+2. Queue (BullMQ + Redis)
+Async voucher posting; OCR jobs; bank match; report generation
+BullMQ (đã có trong stack ibshi1) + Redis
+Long-running; cần retry; có thể eventual consistency
+3. ETL (Airflow / Cron)
+Bank statement pull; Misa TB pull; Z2 mart refresh; Z3 archive
+Airflow trên Z2 cluster; hoặc Supabase Edge Functions cron
+Batch hourly/daily; volume lớn
+PHẦN F — COMPLIANCE, CONTROLS &amp; IPO READINESS
+F.1. Compliance Stack
+Chuẩn
+Phạm vi áp dụng
+Hiện trạng IBS HI
+Gap &amp; action
+TT200/2014/TT-BTC
+Chế độ kế toán doanh nghiệp VN
+Đang dùng qua Misa
+Add ledger_type tagging; multi-dim GL
+VAS 15 — Hợp đồng xây dựng
+Doanh thu dài hạn POC
+Không áp dụng đầy đủ → &quot;sản lượng ≠ doanh thu&quot;
+Triển khai POC engine (Cycle 2 trong D.3)
+VAS 17 — Thuế TNDN
+Hoãn lại thuế TNDN
+Có làm thủ công
+Auto-compute deferred tax từ JE engine
+VAS 25 — BCTC hợp nhất
+Khi có công ty con
+Khoản 1.173 tỷ đầu tư có thể là công ty con/liên kết
+Cần xác định bản chất + có thể phải lập BCTC hợp nhất 2026
+IFRS 15 — Revenue from Contracts
+IPO 2028 dual reporting
+0%
+POC engine đã đáp ứng phần lớn IFRS 15; cần thêm 5-step model + variable consideration
+IFRS 9 — Financial Instruments
+ECL allowance cho AR
+0%
+Add ECL calc engine (DSO 173 ngày = ECL provision lớn)
+IAS 2 — Inventory
+WIP valuation 152 tỷ
+Đang dùng phương pháp bình quân gia quyền
+Verify với IFRS; có thể cần FIFO cho IPO
+ND-123/2020 — E-invoice
+Bắt buộc từ 7/2022
+Đã dùng MeInvoice/VNPT
+Add full bidirectional integration; auto-archive
+EU CBAM (Q4/2023+)
+Steel xuất khẩu sang EU
+Chưa có data tracking
+Add EmissionRecord model (Cycle thiếu trong proposal gốc) — gấp
+Luật BHXH + TT05/2025
+Lương + BHXH 21.5/10.5%
+Đang làm thủ công
+Auto-payroll (Cycle 5)
+
+F.2. Segregation of Duties Matrix
+Tuân thủ ISA 315 / SOX-lite. Một người không được nắm cả 4 vai trò: Initiator, Approver, Custodian, Recorder cùng 1 transaction.
+Process
+Initiator
+Approver
+Custodian
+Recorder
+Reviewer (independent)
+Vendor master change
+KT thanh toán
+Kế toán trưởng
+—
+Hệ thống (audit log)
+FP&amp;A monthly
+PO duyệt &gt; 50tr
+TM/CEP
+CEO/COO
+—
+Hệ thống
+FP&amp;A monthly
+AP voucher &gt; 50tr
+OCR + KT kho
+Kế toán trưởng
+Thủ quỹ (nếu PC)
+Hệ thống
+FP&amp;A monthly
+AP voucher ≤ 50tr
+OCR + KT kho
+FP&amp;A hoặc Treasury
+—
+Hệ thống
+Sample 10% tháng
+Bank payment &gt; 100tr
+Treasury
+Kế toán trưởng + CFO (2 ký số)
+NH
+Hệ thống
+Internal Audit quý
+Bank payment ≤ 100tr
+Treasury
+Kế toán trưởng
+NH
+Hệ thống
+Sample 5% tháng
+Journal entry &gt; 100tr
+Bất kỳ KT nào
+Kế toán trưởng + CFO
+—
+Hệ thống
+Audit annual
+Period close
+FP&amp;A
+Kế toán trưởng
+—
+Hệ thống
+CFO sign-off
+
+F.3. Audit Trail Requirements
+Mọi JournalEntry: lưu created_by, created_at, approved_by, approved_at, posted_to_misa_at, misa_voucher_id
+Mọi master data change: AuditLog (đã có model trong ibshi1) — old_value, new_value, change_reason
+Mọi report export: ReportExportLog với snapshot_id (có thể replay query)
+Retention: 10 năm theo Luật Kế toán (Z3 cold storage)
+Immutability: JournalEntry sau khi posted_to_misa = WORM (write-once-read-many); chỉ adjust qua reversal entry
+F.4. IPO Readiness Scorecard (target Q4/2027)
+Tiêu chí
+Trọng số
+Hiện tại
+Mục tiêu Q4/2027
+Action
+Monthly close cadence
+10%
+T+15
+T+3
+Triển khai Cycle 6 D.3
+Segregation of Duties
+15%
+Yếu
+Đầy đủ matrix F.2
+RBAC enforcement + workflow ibshi1
+Audit trail completeness
+15%
+Misa có; ibshi1 partial
+100% transactions
+Mở rộng AuditLog cover Operational Subledger
+IFRS dual reporting
+15%
+0%
+≥80% (IFRS 15, IAS 2, IFRS 9)
+POC engine + ECL + FIFO; consultant Big4
+Internal controls testing
+10%
+Không
+Có (giống SOX 404 lite)
+Xây IC framework + testing schedule
+Quarterly close + review
+10%
+Không chuẩn
+T+15 quarterly
+Áp dụng monthly close logic cho quý
+Variance analysis culture
+5%
+Năm/lần
+Tháng/lần per project
+FP&amp;A function (C.2)
+Cash flow forecasting
+5%
+Không có
+90 ngày, accuracy ≥80%
+CashflowForecast model + Treasury Controller
+External audit-ready data
+10%
+Excel-based
+Database queryable + immutable
+Z3 historical archive
+ESG / CBAM disclosure
+5%
+Không có
+Có baseline
+EmissionRecord model
+TỔNG SCORE
+100%
+≈40/100
+≥85/100
+Đạt được trong 18 tháng nếu approve W0+W1 ngay
+PHẦN G — ROADMAP ĐỒNG BỘ VỚI IBS ONE v1.1
+G.1. Mapping vào Sprint hiện có
+KHÔNG mở Wave riêng cho Finance. Gắn vào Sprint sẵn có của IBS One v1.1 — tận dụng Builder team hiện tại + tránh xung đột priority.
+IBS One v1.1 Sprint
+Original scope
+BỔ SUNG cho Finance Platform
+Effort dev (tuần)
+Sprint 0–1 (May 2026)
+Phase 0: Zod + E2E + error tracking
+Add ledger_type vào AccountMaster mirror; design SoD matrix RBAC; commit COA tagging policy
+1 tuần
+Sprint 2–3 (Jun 2026)
+Production + Procurement UI
+Add Operational Subledger schema (14 models); seed data từ Misa snapshot
+3 tuần
+Sprint 4–5 (Jul 2026)
+Engineering + QA/QC UI
+Build POC engine (Cycle 2); ProjectCostSnapshot job; daily allocation
+3 tuần
+Sprint 6–7 (Aug 2026)
+Finance + Reporting (đã planned: F1–F4)
+Misa integration full (REST connector + sync queue); Bank API integration cho 4 NH chính; OCR engine for AP
+5 tuần
+Sprint 8–9 (Sep 2026)
+Sale platform build
+MR Pack 9/18 báo cáo trên dashboard; FP&amp;A workflows; Treasury aging reports
+3 tuần
+Sprint 10–11 (Oct 2026)
+Sale completion + HR merge
+Payroll batch posting; BHXH compliance; CashflowForecast engine
+3 tuần
+Sprint 12–13 (Nov 2026)
+HR advanced + Wave 3 (P.KD + P.TCKT + P.HCNS go-live)
+Period close T+3 workflow; Bank rec automation hoàn thiện; remaining 9 báo cáo
+3 tuần
+Sprint 14–15 (Dec 2026)
+AI Brain v0.5 + Tekla integration
+Z4 Finance signals: cost variance alert, project profit forecast, supplier risk score
+2 tuần
+Sprint 16–17 (Jan 2027)
+AI analytics + auto-reporting
+Finance chatbot (Telegram/Web qua AiSignal model); IFRS 15 dual-reporting layer
+3 tuần
+Sprint 18–19 (Feb–Mar 2027)
+Wave 4 + advanced QA/QC
+ECL engine (IFRS 9); FX hedging dashboard; CBAM emission tracking go-live
+3 tuần
+Sprint 20+ (Apr–Aug 2027)
+AI v1.0 → v2.0 + IPO Readiness
+Quarterly close T+15; SOX-lite IC testing; IPO readiness scorecard 85+
+ongoing
+
+G.2. Quality Gates (CI-enforced)
+Gate
+Threshold
+Lý do
+JournalEntry balance test
+Σ Debit = Σ Credit cho mỗi JE — 100%
+Double-entry bất biến
+Misa reconciliation test
+Daily TB diff &lt;0.01% giữa Misa GL và ibshi1 Operational Subledger
+Chứng minh không drift
+POC accuracy test
+Cumulative revenue % POC × Contract value (rounding tolerance ±100k)
+Tuân thủ VAS 15
+SoD test
+Không có user nào vừa creator + approver + executor cùng 1 voucher
+ISA 315 compliance
+OCR accuracy
+≥92% trên test set 200 hoá đơn pre-prod
+Đề xuất gốc
+Bank match rate
+≥85% auto-match (15% acceptable manual)
+Đề xuất gốc
+Domain logic unit test coverage
+≥60%
+Chuẩn ngành cho enterprise ERP
+API integration test coverage
+≥40%
+Chuẩn ngành cho enterprise ERP
+E2E full cycle (PO→PN→Invoice→Payment→POC→Close)
+1 test pass mỗi sprint
+Regression prevention
+
+G.3. Phụ thuộc &amp; rủi ro thực thi
+PHỤ THUỘC 1: Builder team hiện tại (2–3 người). Phase 1 ibshi1 đã &quot;Tight nhưng possible&quot; — bổ sung Finance scope yêu cầu +1 builder từ Aug 2026 (đã có trong v1.1 plan).
+PHỤ THUỘC 2: Misa AMIS license phải mua trong May 2026 (Sprint 0). Nếu chậm → Sprint 6–7 stuck.
+PHỤ THUỘC 3: Kế toán trưởng phải dedicate 0.3 FTE từ Sprint 0–7 cho COA mapping, SoD design, period close redesign.
+PHỤ THUỘC 4: Big4/tier-2 tư vấn IFRS 15 phải scope trong Q3/2026, deliver Sprint 14–15.
+RỦI RO: Workflow engine ibshi1 (562 lines) là HIGH-RISK code theo đánh giá v1.1 R10. Mọi extension phải qua pre-flight check + blast radius analysis + regression test trước khi merge.
+PHẦN H — KPI THÀNH CÔNG &amp; QUYẾT ĐỊNH CẦN CHỦ TỊCH
+H.1. KPI thành công 18 tháng (revised từ đề xuất gốc)
+#
+KPI
+Hiện tại
+Mục tiêu Q4/2027
+Cách đo
+1
+Monthly close cadence
+T+15 đến T+30
+T+3
+Snapshot timestamp khi Kế toán trưởng ký close
+2
+Thời gian nhập liệu TCKT
+15–21h/ngày toàn đội
+5–8h/ngày
+Time-tracking per role; OCR auto-create rate
+3
+P&amp;L per project freshness
+T+180 (cuối DA)
+T+1 (daily snapshot)
+ProjectCostSnapshot.snapshot_date
+4
+Cashflow forecast accuracy 30 ngày
+Không có
+≥80% (forecast vs actual)
+Compare CashflowForecast snapshot 30 ngày trước với actual
+5
+DSO (core trade)
+173 ngày
+≤90 ngày
+ARAging weighted avg
+6
+Aging alert coverage
+Không có
+Tự động 30/60/90 ngày
+ARAging alert delivery rate
+7
+Sổ sách Excel còn dùng
+15 sheet
+≤3 (transition only)
+Manual count + audit
+8
+AI Bot groundedness rate
+Không có
+≥95%
+Mỗi response có citation + spot-check 50/tháng
+9
+User trust score (BOM rate)
+Không có
+≥4.0/5.0
+Weekly survey 1 question
+10
+IPO readiness score (F.4)
+≈40/100
+≥85/100
+Self-assess quarterly + audit Big4
+11
+Vòng quay HTK
+0.88
+≥1.5
+COGS YTD / Avg Inventory
+12
+Misa-IBS One reconciliation diff
+Không đo
+&lt;0.01% TB daily
+Daily auto-reconciliation report
+13
+OCR auto-voucher rate (PN)
+0%
+≥70%
+Auto-created / Total PN
+14
+Bank statement auto-match rate
+0%
+≥85%
+Auto-matched lines / Total lines
+15
+Project cost forecast variance vs actual at completion
+Không có
+≤5% MAE trên 5 DA test
+EAC vs Final Cost
+16
+SoD compliance rate
+Không đo
+100%
+Audit log violations = 0
+17
+Period close blockers
+Frequent
+≤2/tháng
+Blocker count trên close dashboard
+18
+ESG/CBAM emission data coverage
+0%
+100% xuất khẩu
+EmissionRecord per shipment
+
+H.2. Bảy quyết định Chủ tịch cần ký trong tháng 5/2026 (recap A.3)
+#
+Quyết định
+Tài liệu cần ký
+1
+IBS One = Master cho 5 entities (Customer/Vendor/Project/Material/Employee)
+QĐ chính sách Master Data Ownership
+2
+Add Operational Subledger (14 models) vào ibshi1 schema
+ADR-FA-001 + Sprint plan
+3
+Mã DA bắt buộc trên 100% bút toán Misa từ T6/2026
+QĐ chính sách kế toán
+4
+Tách Ledger Operations vs Investment qua TK cấp 2/3 (-OPS / -INV)
+QĐ chính sách + chỉ thị Misa partner
+5
+Nâng cấp Misa SME → Misa AMIS Cloud (≈30–50tr/năm)
+Hợp đồng Misa AMIS
+6
+Bổ sung POC Revenue Recognition (VAS 15 + IFRS 15)
+QĐ chính sách + scope tư vấn Big4
+7
+Phê duyệt SoD Matrix (F.2) — không 1 người vừa tạo + duyệt + thanh toán
+QĐ phân quyền + workflow ibshi1 RBAC
++
+Cam kết KHÔNG cắt giảm nhân sự TCKT — chỉ chuyển đổi vai trò (C.2 + C.3)
+Tuyên bố chính thức gửi toàn TCKT
+
+H.3. Lời kết — Đề nghị cụ thể trình Chủ tịch
+Đề nghị triển khai
+1) Phê duyệt 7 quyết định trong A.3/H.2 ngay trong tháng 5/2026 (Sprint 0). Đây là quyết định CHÍNH SÁCH, không phải IT — không cần chờ Builder team.
+
+2) Phê duyệt budget bổ sung 400–610tr (ngoài budget IBS One v1.1 đã approve) cho: Operational Subledger dev + Misa AMIS license + Bank/E-invoice connectors + IFRS consultancy.
+
+3) Đồng ý KHÔNG mở wave/program riêng cho Finance. Gắn scope vào Sprint 0–20 của IBS One v1.1 với +1 builder từ Aug 2026.
+
+4) Tuyên bố cam kết với phòng TCKT: KHÔNG cắt giảm nhân sự, chuyển đổi vai trò, có chương trình reskill có chứng chỉ.
+
+5) Sau Sprint 7 (cuối Aug 2026) — review lại với Mentor + CFO trước khi go-live Wave 1. Đây là gate quyết định kéo dài hay điều chỉnh.
+
+
+Hải Phòng, tháng 04/2026
+Le Duy Huyen
+Mentor cho Chủ tịch HĐQT — qua Cowork AI
+Phân phối hạn chế: Chủ tịch HĐQT, BOM, Kế toán trưởng. Cấm sao chụp ra ngoài.
+PHẦN I — PROJECT CASHFLOW FEATURE (ADDENDUM 095)
+Phần này bổ sung vào thiết kế Finance chính dựa trên pattern thực tế từ folder &quot;Hồ sơ Dòng tiền 095 bank_17&quot;. Feature spec đầy đủ đã được tách thành tài liệu riêng: IBS_HI_Project_Cashflow_Feature_v1.0.docx — phần này chỉ tóm tắt tích hợp với thiết kế chính.
+I.1. Cơ sở — pattern thực tế từ dự án VOGT 095
+Dự án 095 (V17565 Bison Energy Williston, VOGT, 169,8 tỷ VND, NET 45, 5 milestone) đang vận hành với 4 cụm file Excel: (A) Phương án tài chính — master 7-sheet plan với Dự toán Vật tư/Nhân công/Thuê ngoài + 24-tháng cashflow + Trừ lùi + Chi tiết thanh toán 258 dòng; (B) Bảng kê giải ngân VPBank — 25+ file Vay + 10+ file Giải tỏa trong 2025–2026; (C) UNC lương tháng; (D) Bảng tổng hợp nợ vay NH 2026 cấp công ty. Pattern này replicable cho cả 28 dự án active.
+I.2. Bounded context extension
+Thêm vào bounded context &quot;Treasury &amp; Cashflow&quot; (đã định nghĩa D.1) thêm 10 model Prisma:
+Cluster
+Models mới
+Vai trò
+A. Planning
+ProjectFinancePlan, ProjectBudgetLine (hierarchical), ProjectCashflowMonthly, ContractPaymentMilestone
+Thay thế Excel 97-sheet &quot;Phương án tài chính&quot;. Import via Excel parser; xuất &quot;Dòng tiền trừ lùi&quot; computed realtime
+B. Banking
+CreditFacility, LoanContract, LoanRepaymentSchedule
+7 credit facility cấp công ty (TPBank 20bn, HDBank 40bn+54bn, VPBank 200bn+120bn, BABank 50bn+25bn, BIDV Leasing, Chailease, MB) — khế ước con + schedule trả nợ
+C. Execution
+LoanDrawdown, LoanLiquidation, DrawdownBeneficiaryLine (shared cho cả drawdown + liquidation)
+Thay file &quot;Vay 095 VPB dd MM yyyy.xlsx&quot; và &quot;Giải toả VPB 095- dd MM yyyy.xlsx&quot; — workflow tạo → duyệt → export Excel đúng format bank → match bank statement → JE auto → Misa sync
+I.3. User Stories ưu tiên (mapping vào Sprint IBS One v1.1)
+Sprint
+Deliverable chính từ Cashflow Feature
+Effort dev
+Sprint 2–3 (Jun 2026)
+10 Prisma models + migration + Credit Facility admin UI + LoanContract CRUD
+2.5 tuần
+Sprint 4–5 (Jul 2026)
+Excel parser (Phương án tài chính) + FinancePlan API + Budget Tree UI
+3 tuần
+Sprint 6–7 (Aug 2026)
+Drawdown + Liquidation workflow end-to-end + Excel export VPBank format + SoD enforcement + Trừ lùi calculator
+3.5 tuần
+Sprint 8–9 (Sep 2026)
+Bank match auto → JE auto → Misa sync + MisaSyncLog
+2.5 tuần
+Sprint 10–11 (Oct 2026)
+Credit Facility Dashboard + Loan Debt Matrix + Overdue alerts
+2 tuần
+Sprint 12–13 (Nov 2026)
+MoltBot Finance Bot queries cashflow + Telegram weekly summary
+2 tuần
+Tổng effort
+≈15.5 tuần × 1 builder HOẶC 9 tuần × 2 builders song song
+
+I.4. Bốn quyết định bổ sung cần Chủ tịch / CFO
+#
+Quyết định
+Người triển khai
+Deadline
+I-1
+Phê duyệt 10 Prisma models + enum (ADR-FA-002)
+Builder team + Kế toán trưởng review 1 tuần
+Đầu Sprint 2
+I-2
+Chỉ định Treasury Controller là owner của feature (chuyển đổi KT thanh toán hiện tại)
+CFO + HR
+Trước Sprint 0
+I-3
+Cleanup master data bank account của NCC — 30% NCC hiện thiếu STK trong master
+Kế toán trưởng phân công cho KT thanh toán 2 tuần
+Trước Sprint 6
+I-4
+Khảo sát Excel template từ 4 bank khác (VCB, ACB, HDBank, BIDV) ngoài VPBank → config-driven templates
+Treasury Controller + Builder
+Trước Sprint 6
+Tài liệu liên quan
+Feature spec đầy đủ (10 chương, data model chi tiết, API, UI wireframe, workflow, acceptance criteria, test strategy): xem IBS_HI_Project_Cashflow_Feature_v1.0.docx. Builder team bắt đầu đọc từ Chương 3 (Data Model) và Chương 8 (Acceptance Criteria). Treasury Controller bắt đầu từ Chương 1 (Pain points) và Chương 5 (UI Wireframe).

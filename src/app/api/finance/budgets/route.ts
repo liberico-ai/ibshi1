@@ -4,6 +4,16 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { createBudgetSchema } from '@/lib/schemas'
 
+// Map cashflow category to budget category
+const catMap: Record<string, string> = {
+  'MATERIAL_COST': 'MATERIAL',
+  'LABOR_COST': 'LABOR',
+  'EQUIPMENT_COST': 'EQUIPMENT',
+  'SUBCONTRACT_COST': 'SUBCONTRACT',
+  'OVERHEAD_COST': 'OVERHEAD',
+}
+const ALL_CATS = ['MATERIAL', 'LABOR', 'EQUIPMENT', 'SUBCONTRACT', 'OVERHEAD']
+
 // GET /api/finance/budgets — project budgets with variance analysis
 export async function GET(req: NextRequest) {
   try {
@@ -13,39 +23,91 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
 
-    const where: Record<string, unknown> = {}
-    if (projectId) where.projectId = projectId
-
-    const budgets = await prisma.budget.findMany({
-      where,
-      include: {
-        project: { select: { projectCode: true, projectName: true, contractValue: true } },
-      },
-      orderBy: [{ projectId: 'asc' }, { category: 'asc' }],
+    const pWhere = projectId ? { id: projectId } : { status: 'ACTIVE' }
+    
+    // Fetch base active projects
+    const dbProjects = await prisma.project.findMany({
+      where: pWhere,
+      select: { id: true, projectCode: true, projectName: true, contractValue: true }
     })
 
-    // Group by project for summary
-    const byProject: Record<string, { projectCode: string; projectName: string; contractValue: number; categories: typeof budgets }> = {}
-    for (const b of budgets) {
-      const pid = b.projectId
-      if (!byProject[pid]) {
-        byProject[pid] = {
-          projectCode: b.project.projectCode,
-          projectName: b.project.projectName,
-          contractValue: Number(b.project.contractValue || 0),
-          categories: [],
-        }
-      }
-      byProject[pid].categories.push(b)
+    // Fetch manual budget inputs (planned)
+    const bWhere = projectId ? { projectId } : {}
+    const manualBudgets = await prisma.budget.findMany({ where: bWhere })
+
+    // Fetch ACTUAL costs from CashflowEntry OUTFLOW
+    // Since prisma.groupBy cannot group by relations, we group by projectId directly
+    const cfRaw = await prisma.cashflowEntry.findMany({
+      where: { type: 'OUTFLOW', projectId: { in: dbProjects.map(p => p.id) } },
+      select: { projectId: true, category: true, amount: true }
+    })
+    const actualsMap: Record<string, Record<string, number>> = {}
+    for (const row of cfRaw) {
+       if (!row.projectId) continue;
+       const bCat = catMap[row.category] || row.category // fallback map
+       if (!actualsMap[row.projectId]) actualsMap[row.projectId] = {}
+       if (!actualsMap[row.projectId][bCat]) actualsMap[row.projectId][bCat] = 0
+       actualsMap[row.projectId][bCat] += Number(row.amount || 0)
     }
 
-    const projects = Object.entries(byProject).map(([id, data]) => {
-      const totalPlanned = data.categories.reduce((s, c) => s + Number(c.planned), 0)
-      const totalActual = data.categories.reduce((s, c) => s + Number(c.actual), 0)
-      const totalCommitted = data.categories.reduce((s, c) => s + Number(c.committed), 0)
+    // Fetch COMMITTED LABOR (PieceRate)
+    const laborCom = await prisma.pieceRateContract.groupBy({
+      by: ['projectId'], _sum: { contractValue: true },
+      where: { projectId: { in: dbProjects.map(p => p.id) } }
+    })
+
+    // Fetch COMMITTED SUBCONTRACT (Subcontractor)
+    const subCom = await prisma.subcontractorContract.groupBy({
+      by: ['projectId'], _sum: { contractValue: true },
+      where: { projectId: { in: dbProjects.map(p => p.id) } }
+    })
+
+    const projectsRes = dbProjects.map(p => {
+      const pid = p.id
+      
+      const pLaborCom = Number(laborCom.find(x => x.projectId === pid)?._sum?.contractValue || 0)
+      const pSubCom = Number(subCom.find(x => x.projectId === pid)?._sum?.contractValue || 0)
+      
+      const categoriesList = ALL_CATS.map(cat => {
+        // Find manual budget input if exists
+        const mb = manualBudgets.find(b => b.projectId === pid && b.category === cat)
+        
+        let actual = actualsMap[pid]?.[cat] || 0
+        let committed = 0
+        
+        // Auto-assign committed
+        if (cat === 'LABOR') committed = pLaborCom
+        else if (cat === 'SUBCONTRACT') committed = pSubCom
+
+        // If manual budget provided actuals/committed, we might merge or prefer dynamic. We prefer dynamic.
+        // Planned is always from manual budget for now
+        let planned = Number(mb?.planned || 0)
+
+        // For demo/UI sake if manual was typed but dynamic is 0 we can fallback, but dynamic should override
+        if (actual === 0 && mb?.actual) actual = Number(mb.actual)
+        if (committed === 0 && mb?.committed) committed = Number(mb.committed)
+
+        return {
+          id: mb?.id || `${pid}-${cat}`,
+          category: cat,
+          planned,
+          actual,
+          committed,
+          forecast: Number(mb?.forecast || 0),
+          notes: mb?.notes || null
+        }
+      })
+
+      const totalPlanned = categoriesList.reduce((s, c) => s + c.planned, 0)
+      const totalActual = categoriesList.reduce((s, c) => s + c.actual, 0)
+      const totalCommitted = categoriesList.reduce((s, c) => s + c.committed, 0)
+
       return {
-        projectId: id,
-        ...data,
+        projectId: pid,
+        projectCode: p.projectCode,
+        projectName: p.projectName,
+        contractValue: Number(p.contractValue || 0),
+        categories: categoriesList,
         totalPlanned,
         totalActual,
         totalCommitted,
@@ -55,12 +117,12 @@ export async function GET(req: NextRequest) {
     })
 
     const totals = {
-      planned: projects.reduce((s, p) => s + p.totalPlanned, 0),
-      actual: projects.reduce((s, p) => s + p.totalActual, 0),
-      committed: projects.reduce((s, p) => s + p.totalCommitted, 0),
+      planned: projectsRes.reduce((s, p) => s + p.totalPlanned, 0),
+      actual: projectsRes.reduce((s, p) => s + p.totalActual, 0),
+      committed: projectsRes.reduce((s, p) => s + p.totalCommitted, 0),
     }
 
-    return successResponse({ projects, totals })
+    return successResponse({ projects: projectsRes, totals })
   } catch (err) {
     console.error('GET /api/finance/budgets error:', err)
     return errorResponse('Lỗi hệ thống', 500)

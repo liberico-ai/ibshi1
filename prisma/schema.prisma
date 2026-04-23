@@ -86,6 +86,8 @@ model Project {
   wbsNodes           WbsNode[]
   workOrders         WorkOrder[]
   tasks              WorkflowTask[]
+  loanContracts      LoanContract[]
+  financePlan        ProjectFinancePlan?
 
   @@index([status])
   @@index([pmUserId])
@@ -230,24 +232,25 @@ model AuditLog {
 }
 
 model Vendor {
-  id             String                  @id @default(cuid())
-  vendorCode     String                  @unique @map("vendor_code")
+  id             String                    @id @default(cuid())
+  vendorCode     String                    @unique @map("vendor_code")
   name           String
-  contactName    String?                 @map("contact_name")
+  contactName    String?                   @map("contact_name")
   email          String?
   phone          String?
   address        String?
-  country        String                  @default("VN")
+  country        String                    @default("VN")
   category       String
-  rating         Decimal?                @default(0)
-  isActive       Boolean                 @default(true) @map("is_active")
+  rating         Decimal?                  @default(0)
+  isActive       Boolean                   @default(true) @map("is_active")
   notes          String?
-  createdAt      DateTime                @default(now()) @map("created_at")
-  updatedAt      DateTime                @updatedAt @map("updated_at")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
   invoices       Invoice[]
   millCerts      MillCertificate[]
   purchaseOrders PurchaseOrder[]
   subcontracts   SubcontractorContract[]
+  drawdownLines  DrawdownBeneficiaryLine[]
 
   @@index([category])
   @@map("vendors")
@@ -837,28 +840,29 @@ model SalaryRecord {
 }
 
 model Invoice {
-  id          String    @id @default(cuid())
-  invoiceCode String    @unique @map("invoice_code")
-  projectId   String?   @map("project_id")
-  vendorId    String?   @map("vendor_id")
-  type        String
-  clientName  String?   @map("client_name")
-  description String?
-  amount      Decimal
-  taxRate     Decimal   @default(10) @map("tax_rate")
-  taxAmount   Decimal   @default(0) @map("tax_amount")
-  totalAmount Decimal   @map("total_amount")
-  currency    String    @default("VND")
-  issueDate   DateTime  @default(now()) @map("issue_date")
-  dueDate     DateTime? @map("due_date")
-  paidAmount  Decimal   @default(0) @map("paid_amount")
-  status      String    @default("DRAFT")
-  notes       String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  project     Project?  @relation(fields: [projectId], references: [id])
-  vendor      Vendor?   @relation(fields: [vendorId], references: [id])
-  payments    Payment[]
+  id            String                    @id @default(cuid())
+  invoiceCode   String                    @unique @map("invoice_code")
+  projectId     String?                   @map("project_id")
+  vendorId      String?                   @map("vendor_id")
+  type          String
+  clientName    String?                   @map("client_name")
+  description   String?
+  amount        Decimal
+  taxRate       Decimal                   @default(10) @map("tax_rate")
+  taxAmount     Decimal                   @default(0) @map("tax_amount")
+  totalAmount   Decimal                   @map("total_amount")
+  currency      String                    @default("VND")
+  issueDate     DateTime                  @default(now()) @map("issue_date")
+  dueDate       DateTime?                 @map("due_date")
+  paidAmount    Decimal                   @default(0) @map("paid_amount")
+  status        String                    @default("DRAFT")
+  notes         String?
+  createdAt     DateTime                  @default(now()) @map("created_at")
+  updatedAt     DateTime                  @updatedAt @map("updated_at")
+  project       Project?                  @relation(fields: [projectId], references: [id])
+  vendor        Vendor?                   @relation(fields: [vendorId], references: [id])
+  payments      Payment[]
+  drawdownLines DrawdownBeneficiaryLine[]
 
   @@index([projectId])
   @@index([type])
@@ -1134,8 +1138,8 @@ model WeeklyAcceptanceLog {
   weekEndDate    DateTime @map("week_end_date")
   taskId         String   @map("task_id")
   role           String // 'QC' or 'PM'
-  reportedTotal  Decimal  @map("reported_total")  // Tổ SX reported this week
-  acceptedVolume Decimal  @map("accepted_volume")  // PM/QC confirmed (immutable audit)
+  reportedTotal  Decimal  @map("reported_total") // Tổ SX reported this week
+  acceptedVolume Decimal  @map("accepted_volume") // PM/QC confirmed (immutable audit)
   inspectorId    String   @map("inspector_id")
   notes          String?
   createdAt      DateTime @default(now()) @map("created_at")
@@ -1146,4 +1150,150 @@ model WeeklyAcceptanceLog {
   @@index([weekNumber, year])
   @@index([taskId])
   @@map("weekly_acceptance_logs")
+}
+
+// ── Finance & Accounting ──
+
+model CreditFacility {
+  id            String         @id @default(cuid())
+  facilityCode  String         @unique @map("facility_code")
+  bankName      String         @map("bank_name")
+  creditLimit   Decimal        @map("credit_limit")
+  currency      String         @default("VND")
+  startDate     DateTime       @map("start_date")
+  endDate       DateTime       @map("end_date")
+  status        String         @default("ACTIVE")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  loanContracts LoanContract[]
+
+  @@index([status])
+  @@map("credit_facilities")
+}
+
+model LoanContract {
+  id               String         @id @default(cuid())
+  contractCode     String         @unique @map("contract_code")
+  facilityId       String         @map("facility_id")
+  primaryProjectId String?        @map("primary_project_id")
+  loanAmount       Decimal        @map("loan_amount")
+  currency         String         @default("VND")
+  interestRate     Decimal        @map("interest_rate")
+  termMonths       Int            @map("term_months")
+  signDate         DateTime       @map("sign_date")
+  status           String         @default("ACTIVE")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  facility         CreditFacility @relation(fields: [facilityId], references: [id])
+  drawdowns        LoanDrawdown[]
+  project          Project?       @relation(fields: [primaryProjectId], references: [id])
+
+  @@index([facilityId])
+  @@index([primaryProjectId])
+  @@map("loan_contracts")
+}
+
+model LoanDrawdown {
+  id               String                    @id @default(cuid())
+  drawdownNo       String                    @unique @map("drawdown_no")
+  contractId       String                    @map("contract_id")
+  amountFundedVnd  Decimal                   @map("amount_funded_vnd")
+  requestDate      DateTime                  @map("request_date")
+  executionDate    DateTime?                 @map("execution_date")
+  dueDate          DateTime?                 @map("due_date")
+  status           String                    @default("DRAFT")
+  createdBy        String                    @map("created_by")
+  approvedBy       String?                   @map("approved_by")
+  executedBy       String?                   @map("executed_by")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  contract         LoanContract              @relation(fields: [contractId], references: [id])
+  beneficiaryLines DrawdownBeneficiaryLine[]
+
+  @@index([contractId])
+  @@index([status])
+  @@map("loan_drawdowns")
+}
+
+model DrawdownBeneficiaryLine {
+  id            String       @id @default(cuid())
+  drawdownId    String       @map("drawdown_id")
+  sequenceNo    Int          @map("sequence_no")
+  vendorId      String       @map("vendor_id")
+  invoiceId     String?      @map("invoice_id")
+  invoiceNumber String?      @map("invoice_number")
+  amountVnd     Decimal      @map("amount_vnd")
+  bankAccountNo String       @map("bank_account_no")
+  bankName      String       @map("bank_name")
+  notes         String?
+  createdAt     DateTime     @default(now()) @map("created_at")
+  drawdown      LoanDrawdown @relation(fields: [drawdownId], references: [id], onDelete: Cascade)
+  vendor        Vendor       @relation(fields: [vendorId], references: [id])
+  invoice       Invoice?     @relation(fields: [invoiceId], references: [id])
+
+  @@index([drawdownId])
+  @@index([vendorId])
+  @@map("drawdown_beneficiary_lines")
+}
+
+model ProjectFinancePlan {
+  id               String                   @id @default(cuid())
+  projectId        String                   @unique @map("project_id")
+  customerId       String?                  @map("customer_id")
+  scopeDescription String?                  @map("scope_description")
+  contractValue    Decimal?                 @map("contract_value")
+  status           String                   @default("DRAFT")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budgetLines      ProjectBudgetLine[]
+  monthlyCashflows ProjectCashflowMonthly[]
+
+  @@map("project_finance_plans")
+}
+
+model ProjectBudgetLine {
+  id           String             @id @default(cuid())
+  planId       String             @map("plan_id")
+  sectionType  String             @map("section_type")
+  categoryCode String             @map("category_code")
+  itemName     String             @map("item_name")
+  unit         String?
+  quantity     Decimal?
+  unitPrice    Decimal?           @map("unit_price")
+  totalBudget  Decimal            @map("total_budget")
+  plan         ProjectFinancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("project_budget_lines")
+}
+
+model ProjectCashflowMonthly {
+  id        String             @id @default(cuid())
+  planId    String             @map("plan_id")
+  month     Int
+  year      Int
+  amountVnd Decimal            @map("amount_vnd")
+  category  String
+  notes     String?
+  plan      ProjectFinancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, category, month, year])
+  @@index([planId])
+  @@map("project_cashflow_monthly")
+}
+
+model MisaSyncLog {
+  id           String    @id @default(cuid())
+  actionType   String    @map("action_type")
+  referenceId  String    @map("reference_id")
+  payload      Json?
+  status       String    @default("PENDING")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  syncedAt     DateTime? @map("synced_at")
+
+  @@index([status])
+  @@index([referenceId])
+  @@map("misa_sync_logs")
 }
