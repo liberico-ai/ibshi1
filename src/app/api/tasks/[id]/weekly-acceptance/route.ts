@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
 import prisma from '@/lib/db'
 
 /**
@@ -26,6 +27,8 @@ const STAGE_LABELS: Record<string, string> = {
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params
+  const payload = await authenticateRequest(request as any)
+  if (!payload) return unauthorizedResponse()
 
   try {
     const task = await prisma.workflowTask.findUnique({
@@ -147,8 +150,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     for (const log of dailyLogs) {
       const lsxCode = log.lsxCode
       const reportDate = log.reportDate instanceof Date ? log.reportDate : new Date(log.reportDate)
-      const dayOfWeek = reportDate.getDay() // 1=Mon through 5=Fri
-      const dayKey = dayKeys[dayOfWeek - 1] || 'mon'
+      const dayOfWeek = reportDate.getDay() // 0=Sun, 1=Mon ... 6=Sat
+      if (dayOfWeek === 0 || dayOfWeek === 6) continue // skip weekend
+      const dayKey = dayKeys[dayOfWeek - 1]
 
       if (!matrixMap.has(lsxCode)) {
         // Parse lsxCode: "rowIdx_stageKey_teamIdx"
@@ -215,12 +219,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     })
   } catch (err: any) {
     console.error('Weekly Acceptance GET error:', err)
-    return NextResponse.json({ success: false, error: err.message || 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Lỗi hệ thống khi tải dữ liệu nghiệm thu' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params
+  const payload = await authenticateRequest(request as any)
+  if (!payload) return unauthorizedResponse()
+  const authenticatedUserId = payload.userId
 
   try {
     const task = await prisma.workflowTask.findUnique({
@@ -236,14 +243,20 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     const body = await request.json()
-    const { acceptanceData, userId, notes } = body as {
+    const { acceptanceData, notes } = body as {
       acceptanceData: { lsxCode: string; reportedTotal: number; acceptedVolume: number; notes?: string }[]
-      userId: string
       notes?: string
     }
 
-    if (!acceptanceData || !Array.isArray(acceptanceData) || !userId) {
-      return NextResponse.json({ success: false, error: 'Missing acceptanceData or userId' }, { status: 400 })
+    if (!acceptanceData || !Array.isArray(acceptanceData)) {
+      return NextResponse.json({ success: false, error: 'Missing acceptanceData' }, { status: 400 })
+    }
+
+    const MAX_VOLUME = 1_000_000
+    for (const item of acceptanceData) {
+      if (typeof item.acceptedVolume !== 'number' || item.acceptedVolume < 0 || item.acceptedVolume > MAX_VOLUME) {
+        return NextResponse.json({ success: false, error: `Khối lượng nghiệm thu không hợp lệ cho ${item.lsxCode}` }, { status: 400 })
+      }
     }
 
     const rd = (task.resultData as Record<string, any>) || {}
@@ -258,29 +271,31 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     //  Each row is saved as an immutable WeeklyAcceptanceLog record.
     //  These records serve as the official financial audit trail.
     // ══════════════════════════════════════════════════════════════
-    const savedLogs = []
+    const savedLogs: any[] = []
 
-    for (const item of acceptanceData) {
-      if (item.acceptedVolume == null) continue
+    await prisma.$transaction(async (tx) => {
+      for (const item of acceptanceData) {
+        if (item.acceptedVolume == null) continue
 
-      const log = await (prisma as any).weeklyAcceptanceLog.create({
-        data: {
-          projectId: task.projectId,
-          lsxCode: item.lsxCode,
-          weekNumber,
-          year,
-          weekStartDate,
-          weekEndDate,
-          taskId: task.id,
-          role,
-          reportedTotal: item.reportedTotal || 0,
-          acceptedVolume: item.acceptedVolume,
-          inspectorId: userId,
-          notes: item.notes || null,
-        },
-      })
-      savedLogs.push(log)
-    }
+        const log = await (tx as any).weeklyAcceptanceLog.create({
+          data: {
+            projectId: task.projectId,
+            lsxCode: item.lsxCode,
+            weekNumber,
+            year,
+            weekStartDate,
+            weekEndDate,
+            taskId: task.id,
+            role,
+            reportedTotal: item.reportedTotal || 0,
+            acceptedVolume: item.acceptedVolume,
+            inspectorId: authenticatedUserId,
+            notes: item.notes || null,
+          },
+        })
+        savedLogs.push(log)
+      }
+    })
 
     // ══════════════════════════════════════════════════════════════
     //  AUTO-TRIGGER P5.1.1: Check if any WBS item reached 100%
@@ -409,7 +424,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     const finalNotes = notes || `${role} nghiệm thu tuần W${weekNumber} — ${savedLogs.length} hạng mục`
     
-    await completeTask(task.id, userId, finalResultData, finalNotes)
+    await completeTask(task.id, authenticatedUserId, finalResultData, finalNotes)
 
     return NextResponse.json({
       success: true,
@@ -425,6 +440,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }, { status: 409 })
     }
     console.error('Weekly Acceptance POST error:', err)
-    return NextResponse.json({ success: false, error: err.message || 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Lỗi hệ thống khi lưu nghiệm thu' }, { status: 500 })
   }
 }
