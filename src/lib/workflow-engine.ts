@@ -522,21 +522,45 @@ async function runWorkflowHooks(
       }
     }
 
-    // P4.1: Issue WO → auto WorkOrder
+    // P4.1: Receive Payment Request -> update PR tracking status
     if (stepCode === 'P4.1') {
-      const woCode = (resultData?.woCode as string) || `WO-${projCode}-${Date.now()}`
-      const teamCode = (resultData?.teamCode as string) || 'TO-01'
-      const description = (resultData?.description as string) || `Lệnh SX cho ${projCode}`
-      await prisma.workOrder.create({
-        data: {
-          woCode,
-          projectId,
-          description,
-          teamCode,
-          status: 'OPEN',
-          createdBy: userId,
-        },
-      })
+      const p36Id = resultData?.sourceP36Id as string
+      const groupId = resultData?.sourceGroupId as string
+      if (p36Id && groupId) {
+        const p36Task = await prisma.workflowTask.findUnique({ where: { id: p36Id } })
+        if (p36Task) {
+          const rd = (p36Task.resultData as any) || {}
+          if (rd.groups) {
+             const gIndex = rd.groups.findIndex((x: any) => x.id === groupId)
+             if (gIndex >= 0) {
+               rd.groups[gIndex].paymentStatus = 'PAID'
+               rd.groups[gIndex].paymentDate = resultData?.paymentDate ? new Date(resultData.paymentDate as string).toISOString() : new Date().toISOString()
+               rd.groups[gIndex].paymentMethod = resultData?.paymentMethod
+               await prisma.workflowTask.update({
+                 where: { id: p36Id },
+                 data: { resultData: rd }
+               })
+             }
+          }
+        }
+      }
+
+      // Legacy fallback logic for P4.1 Issue WO (if it still exists in other parts of the app)
+      const woCode = (resultData?.woCode as string)
+      if (woCode) {
+        const teamCode = (resultData?.teamCode as string) || 'TO-01'
+        const description = (resultData?.description as string) || `Lệnh SX cho ${projCode}`
+        await prisma.workOrder.create({
+          data: {
+            woCode,
+            projectId,
+            description,
+            teamCode,
+            status: 'OPEN',
+            createdBy: userId,
+          },
+        })
+      }
     }
 
     // P4.2: Material issue → auto StockMovement (OUT) + MaterialIssue

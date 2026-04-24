@@ -120,7 +120,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
   // For P3.2: fetch BOM items from P2.1/P2.2/P2.3 and compare with Materials stock
   let previousStepData: Record<string, unknown> | null = null
-  if (task.stepCode === 'P3.2') {
+  if (task.stepCode === 'P3.5') {
     const allPrItems = await aggregateBomItems(task.projectId)
 
     // Fetch all materials for stock comparison
@@ -165,8 +165,26 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
         })
       }
     }
+    // Fetch P3.1 for long-lead items info
+    const p31Task = await fetchStepResult(task.projectId, 'P3.1');
+    const rd31 = p31Task?.resultData as Record<string, unknown> | undefined;
+    let longLeadInfo = rd31?.timelineNotes ? `Ghi chú PM: ${rd31.timelineNotes}\n` : '';
+    
+    if (rd31?.longLeadItems) {
+      try {
+        const items = typeof rd31.longLeadItems === 'string' ? JSON.parse(rd31.longLeadItems) : rd31.longLeadItems;
+        if (Array.isArray(items) && items.length > 0) {
+          longLeadInfo += `\n🔴 DANH SÁCH VẬT TƯ LONG-LEAD TỪ PM (P3.1):\n`;
+          items.forEach((it: any, idx: number) => {
+             longLeadInfo += `${idx + 1}. [${it.priority || 'Cao'}] ${it.material || 'Không tên'} - Ngày cần: ${it.dateNeeded || 'Chưa rõ'} - Ghi chú: ${it.note || 'Không'}\n`;
+          });
+        }
+      } catch (e) {
+        // ignore parsing errors
+      }
+    }
 
-    previousStepData = { prItems: allPrItems, fromStock, toPurchase }
+    previousStepData = { prItems: allPrItems, fromStock, toPurchase, longLeadInfo: longLeadInfo.trim() }
   }
 
   // For P1.3: fetch both P1.2A (plan) and P1.2 (estimate) data
@@ -226,11 +244,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     const planData = await fetchPlanData(task.projectId)
     previousStepData = { plan: planData }
   }
-  // For P3.5: fetch BOM items from P2.1/P2.2/P2.3 (same PR list as P3.2)
-  if (task.stepCode === 'P3.5') {
-    const allPrItems = await aggregateBomItems(task.projectId)
-    previousStepData = { prItems: allPrItems }
-  }
+  // Block removed since P3.5 logic was moved up
 
   // For P3.3 and P3.4: fetch P1.2A (WBS plan) + BOM from P2.1/P2.2/P2.3
   if (task.stepCode === 'P3.3' || task.stepCode === 'P3.4') {
@@ -577,8 +591,165 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
     return successResponse({ isPartial: false, nextSteps: [] }, 'Đã xuất đủ 100%. Task hoàn thành!')
   }
 
+  if (action === 'p35_submit_groups') {
+    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    if (!task) return errorResponse('Task not found', 404)
+    
+    const { groupsToSubmit, totalItemsCount, submittedItemsCount } = body.resultData
+    // groupsToSubmit represents the groups being submitted right now.
+    
+    // Save these groups into P3.5 resultData and mark as submitted
+    const currentRd = (task.resultData as any) || {}
+    const existingSubmitted = currentRd.submittedGroups || []
+    
+    // If it's a resubmission of an originally rejected group, we replace it. Otherwise we append.
+    let updatedSubmitted = [...existingSubmitted]
+    for (const g of groupsToSubmit) {
+      const idx = updatedSubmitted.findIndex((x: any) => x.id === g.id)
+      if (idx >= 0) updatedSubmitted[idx] = { ...g, status: 'SUBMITTED', rejectedReason: null }
+      else updatedSubmitted.push({ ...g, id: g.id || Date.now().toString(), status: 'SUBMITTED' })
+    }
+    
+    const isComplete = submittedItemsCount >= totalItemsCount
+    
+    let updatedTask;
+    if (isComplete) {
+      // If 100% submitted, complete the P3.5 task
+      updatedTask = await prisma.workflowTask.update({
+        where: { id },
+        data: { 
+          status: 'DONE', 
+          completedAt: new Date(), 
+          completedBy: payload.userId,
+          resultData: { ...currentRd, submittedGroups: updatedSubmitted }
+        }
+      })
+    } else {
+      updatedTask = await prisma.workflowTask.update({
+        where: { id },
+        data: { resultData: { ...currentRd, submittedGroups: updatedSubmitted } }
+      })
+    }
+
+    // Now spawn P3.6 tasks. If "Báo giá tất cả" was used, groupsToSubmit length > 1, we spawn ONE P3.6 task containing all.
+    // If single submission, we spawn ONE P3.6 task containing 1 group.
+    const stepNameSuffix = groupsToSubmit.length > 1 ? `Nhiều nhóm (${groupsToSubmit.length})` : `Nhóm: ${groupsToSubmit[0].name}`
+    await prisma.workflowTask.create({
+      data: {
+        projectId: task.projectId,
+        stepCode: 'P3.6',
+        stepName: `BGĐ phê duyệt báo giá NCC - ${stepNameSuffix}`,
+        assignedRole: 'R01',
+        status: 'IN_PROGRESS',
+        resultData: {
+          groups: groupsToSubmit.map((g: any) => ({ ...g, status: 'PENDING' })),
+          sourceP35Id: id,
+        },
+        startedAt: new Date(),
+      }
+    })
+
+    return successResponse({ task: updatedTask, nextSteps: ['P3.6'] }, 'Đã đệ trình báo giá')
+  }
+
+  if (action === 'p36_evaluate_groups') {
+    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    if (!task) return errorResponse('Task not found', 404)
+
+    const { evaluations } = body.resultData 
+    // evaluations is [{ groupId, action: 'APPROVE' | 'REJECT', reason?: string }]
+    
+    const currentRd = (task.resultData as any) || {}
+    let groups = currentRd.groups || []
+    
+    let hasAnyRejected = false
+    let hasAnyApproved = false
+
+    // Update group statuses in this P3.6 task
+    for (const ev of evaluations) {
+      const g = groups.find((x: any) => x.id === ev.groupId)
+      if (g) {
+        if (ev.action === 'REJECT') {
+          g.status = 'REJECTED'
+          g.rejectedReason = ev.reason
+          hasAnyRejected = true
+        } else if (ev.action === 'APPROVE') {
+          g.status = 'APPROVED'
+          hasAnyApproved = true
+          // Initialize tracking fields for the Procurement Dashboard
+          if (!g.prCode) {
+            g.prCode = `PR-${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 90)}` // Tự render mã PR 
+            g.paymentStatus = 'PENDING'
+            g.deliveryDate = null
+            g.paymentDate = null
+          }
+        }
+      }
+    }
+
+    // Push decisions back to P3.5 source task
+    if (currentRd.sourceP35Id) {
+      const p35 = await prisma.workflowTask.findUnique({ where: { id: currentRd.sourceP35Id } })
+      if (p35) {
+        const p35rd = (p35.resultData as any) || {}
+        let p35submitted = p35rd.submittedGroups || []
+        let p35Reopened = false
+
+        for (const ev of evaluations) {
+          const pg = p35submitted.find((x: any) => x.id === ev.groupId)
+          if (pg) {
+            pg.status = ev.action === 'REJECT' ? 'REJECTED' : 'APPROVED'
+            if (ev.action === 'REJECT') {
+              pg.rejectedReason = ev.reason
+              if (p35.status === 'DONE') {
+                 p35Reopened = true // Need to reopen P3.5 so TM can fix it
+              }
+            }
+          }
+        }
+        
+        await prisma.workflowTask.update({
+          where: { id: p35.id },
+          data: {
+            resultData: { ...p35rd, submittedGroups: p35submitted },
+             ...(p35Reopened ? { status: 'IN_PROGRESS', completedAt: null, completedBy: null } : {})
+          }
+        })
+      }
+    }
+
+    // Check if the P3.6 task is fully complete (no pending groups)
+    const isAllEvaluated = groups.every((g: any) => g.status === 'APPROVED' || g.status === 'REJECTED')
+
+    let updatedTask;
+    if (isAllEvaluated) {
+       updatedTask = await prisma.workflowTask.update({
+         where: { id },
+         data: {
+            status: 'DONE',
+            completedAt: new Date(),
+            completedBy: payload.userId,
+            resultData: { ...currentRd, groups },
+            notes: hasAnyRejected ? 'Từ chối một số/toàn bộ nhóm báo giá' : 'Đã duyệt báo giá'
+         }
+       })
+
+       // NOTE: P3.7 has been architecturally removed. 
+       // Approved groups are now centrally managed in /dashboard/warehouse/procurement Dashboard
+    } else {
+       // Partial save, do not complete task
+       updatedTask = await prisma.workflowTask.update({
+         where: { id },
+         data: {
+            resultData: { ...currentRd, groups }
+         }
+       })
+    }
+
+    return successResponse({ task: updatedTask }, 'Đã xử lý quyết định nhóm')
+  }
+
   if (action === 'complete') {
-    // Role-based authorization: only the assigned role (or admin) can complete
     const task = await prisma.workflowTask.findUnique({ where: { id } })
     if (!task) return errorResponse('Task không tồn tại', 404)
     const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(payload.roleCode)

@@ -66,7 +66,7 @@ export default function InvoicesPage() {
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{inv.invoiceCode}</span></td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: inv.type === 'RECEIVABLE' ? '#16a34a20' : '#dc262620', color: inv.type === 'RECEIVABLE' ? '#16a34a' : '#dc2626' }}>{inv.type === 'RECEIVABLE' ? 'Thu' : 'Trả'}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{inv.clientName || '—'}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{inv.project?.projectCode || '—'}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{inv.project?.projectName || inv.project?.projectCode || '—'}</td>
                 <td className="text-right text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(inv.totalAmount)} ₫</td>
                 <td className="text-right text-xs" style={{ color: '#16a34a' }}>{fmt(inv.paidAmount)} ₫</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('vi-VN') : '—'}</td>
