@@ -74,11 +74,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   // ── Phase 3: Cung ứng Vật tư (BRD#11-17) ──
   'P3.1': {
     code: 'P3.1', name: 'PM điều chỉnh kế hoạch và đẩy tiến độ cấp hàng', nameEn: 'PM Adjust Plan & Push Material Schedule',
-    role: 'R02', next: ['P3.2'], deadlineDays: 3, phase: 3,
-  },
-  'P3.2': {
-    code: 'P3.2', name: 'Kho kiểm tra tồn kho và phê duyệt từng item PR', nameEn: 'Stock Check & PR Item Approval',
-    role: 'R05', next: ['P3.5'], deadlineDays: 3, phase: 3,
+    role: 'R02', next: ['P3.5'], deadlineDays: 3, phase: 3,
   },
   'P3.3': {
     code: 'P3.3', name: 'PM lập lệnh SX cho thầu phụ và đề nghị cấp VT', nameEn: 'PM Subcontractor WO & Material Request',

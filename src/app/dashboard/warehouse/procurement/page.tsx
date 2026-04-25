@@ -1,94 +1,65 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatCurrency } from '@/lib/utils'
-import { RBAC } from '@/lib/rbac-rules'
 
-interface PR {
-  id: string; prCode: string; status: string; urgency: string; notes: string | null;
-  createdAt: string; approvedAt: string | null; itemCount: number;
-  project: { projectCode: string; projectName: string };
-  items: Array<{ id: string; quantity: number; material: { materialCode: string; name: string; unit: string } }>;
+interface TrackingGroup {
+  taskId: string
+  projectId: string
+  projectName: string
+  projectCode: string
+  groupId: string
+  groupName: string
+  prCode: string
+  supplier: { id: string; name: string; total: string; reason?: string } | null
+  items: Array<{
+    materialId: string
+    materialCode: string
+    name: string
+    unit: string
+    quantity: number
+    unitPrice?: number
+    totalPrice?: number
+  }>
+  paymentStatus: string
+  deliveryDate: string | null
+  paymentDate: string | null
 }
 
-interface PO {
-  id: string; poCode: string; status: string; totalValue: number; currency: string;
-  orderDate: string | null; deliveryDate: string | null; createdAt: string; itemCount: number;
-  vendor: { code: string; name: string };
-  items: Array<{ id: string; quantity: number; unitPrice: number; receivedQty: number; material: { materialCode: string; name: string; unit: string } }>;
-}
-
-interface Material { id: string; materialCode: string; name: string; unit: string; currentStock: number }
-interface Project { id: string; projectCode: string; projectName: string }
-interface Vendor { id: string; code: string; name: string }
-
-const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
-  DRAFT: { label: 'Nháp', bg: '#f1f5f9', color: '#64748b' },
-  SUBMITTED: { label: 'Đã gửi', bg: '#dbeafe', color: '#2563eb' },
-  APPROVED: { label: 'Đã duyệt', bg: '#dcfce7', color: '#16a34a' },
-  REJECTED: { label: 'Từ chối', bg: '#fef2f2', color: '#dc2626' },
-  CONVERTED: { label: 'Đã chuyển PO', bg: '#f0fdf4', color: '#059669' },
-  SENT: { label: 'Đã gửi NCC', bg: '#dbeafe', color: '#2563eb' },
-  CONFIRMED: { label: 'NCC xác nhận', bg: '#dcfce7', color: '#16a34a' },
-  PARTIAL_RECEIVED: { label: 'Nhận 1 phần', bg: '#fef9c3', color: '#ca8a04' },
-  RECEIVED: { label: 'Đã nhận', bg: '#dcfce7', color: '#16a34a' },
-  CANCELLED: { label: 'Đã hủy', bg: '#fef2f2', color: '#dc2626' },
-}
-
-const URGENCY_MAP: Record<string, { label: string; color: string }> = {
-  NORMAL: { label: 'Bình thường', color: '#64748b' },
-  URGENT: { label: 'Khẩn', color: '#f59e0b' },
-  CRITICAL: { label: 'Rất khẩn', color: '#dc2626' },
+const PAYMENT_STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
+  PENDING: { label: 'Pending', bg: '#f1f5f9', color: '#64748b' },
+  PAYMENT_REQUESTED: { label: 'Đã yêu cầu', bg: '#fef9c3', color: '#ca8a04' },
+  PAID: { label: 'Đã thanh toán', bg: '#dcfce7', color: '#16a34a' },
 }
 
 export default function ProcurementPage() {
   const [tab, setTab] = useState<'pr' | 'po'>('pr')
-  const [prs, setPrs] = useState<PR[]>([])
-  const [pos, setPos] = useState<PO[]>([])
+  const [groups, setGroups] = useState<TrackingGroup[]>([])
   const [loading, setLoading] = useState(true)
-  const [showCreate, setShowCreate] = useState(false)
-  const [materials, setMaterials] = useState<Material[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [vendors, setVendors] = useState<Vendor[]>([])
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore(s => s.user)
 
   const loadData = async () => {
     setLoading(true)
-    const [prRes, poRes] = await Promise.all([
-      apiFetch('/api/purchase-requests'),
-      apiFetch('/api/purchase-orders'),
-    ])
-    if (prRes.ok) setPrs(prRes.purchaseRequests || [])
-    if (poRes.ok) setPos(poRes.purchaseOrders || [])
+    const res = await apiFetch('/api/procurement-tracking')
+    if (res.ok) {
+      setGroups(res.trackingList || [])
+    }
     setLoading(false)
   }
 
   useEffect(() => { loadData() }, [])
 
-  const openCreateForm = async () => {
-    const [matRes, projRes, vendRes] = await Promise.all([
-      apiFetch('/api/warehouse?limit=100'),
-      apiFetch('/api/projects'),
-      apiFetch('/api/vendors'),
-    ])
-    if (matRes.ok) setMaterials(matRes.materials || [])
-    if (projRes.ok) setProjects(projRes.projects || [])
-    if (vendRes.ok) setVendors(vendRes.vendors || [])
-    setShowCreate(true)
-  }
-
-  const handleAction = async (prId: string, action: string, extra?: Record<string, unknown>) => {
-    const res = await apiFetch(`/api/purchase-requests/${prId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ action, ...extra }),
-    })
-    if (res.ok) loadData()
-    else alert(res.error || res.message || 'Lỗi thao tác')
-  }
-
-  const canApprove = RBAC.PR_APPROVAL.includes(user?.roleCode || '')
-  const canCreate = ['R01', 'R02', 'R03', 'R05'].includes(user?.roleCode || '')
+  // Group the data by Project
+  const groupedByProject = useMemo(() => {
+    const map = new Map<string, { projectName: string, items: TrackingGroup[] }>()
+    for (const g of groups) {
+      const key = g.projectId
+      if (!map.has(key)) map.set(key, { projectName: g.projectName, items: [] })
+      map.get(key)!.items.push(g)
+    }
+    return Array.from(map.entries())
+  }, [groups])
 
   if (loading) {
     return (
@@ -100,323 +71,229 @@ export default function ProcurementPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Mua hàng</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Quản lý PR → PO → Nhận hàng</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Quản lý Đề nghị mua hàng (PR) & Thanh toán</p>
         </div>
-        {canCreate && (
-          <button onClick={openCreateForm}
-            className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:shadow-lg"
-            style={{ background: 'var(--accent)' }}>
-            + Tạo PR
-          </button>
-        )}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'var(--bg-primary)' }}>
-        {(['pr', 'po'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all"
-            style={{
-              background: tab === t ? 'var(--bg-card)' : 'transparent',
-              color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
-              boxShadow: tab === t ? 'var(--shadow-xs)' : 'none',
-            }}>
-            {t === 'pr' ? `Yêu cầu mua hàng (${prs.length})` : `Đơn đặt hàng (${pos.length})`}
-          </button>
-        ))}
+        <button onClick={() => setTab('pr')}
+          className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all"
+          style={{
+            background: tab === 'pr' ? 'var(--bg-card)' : 'transparent',
+            color: tab === 'pr' ? 'var(--text-primary)' : 'var(--text-muted)',
+            boxShadow: tab === 'pr' ? 'var(--shadow-xs)' : 'none',
+          }}>
+          Đề nghị mua hàng ({groups.length})
+        </button>
+        <button onClick={() => setTab('po')}
+          className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all"
+          style={{
+            background: tab === 'po' ? 'var(--bg-card)' : 'transparent',
+            color: tab === 'po' ? 'var(--text-primary)' : 'var(--text-muted)',
+            boxShadow: tab === 'po' ? 'var(--shadow-xs)' : 'none',
+          }}>
+          Đơn đặt hàng (0)
+        </button>
       </div>
 
-      {/* PR Tab */}
       {tab === 'pr' && (
-        <div className="space-y-3">
-          {prs.length === 0 && (
+        <div className="space-y-6">
+          {groupedByProject.length === 0 && (
             <div className="card p-12 text-center">
               <p className="text-4xl mb-3">📋</p>
-              <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Chưa có yêu cầu mua hàng</p>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Chưa có Đề nghị mua hàng nào được duyệt</p>
             </div>
           )}
-          {prs.map(pr => {
-            const st = STATUS_MAP[pr.status] || STATUS_MAP.DRAFT
-            const ug = URGENCY_MAP[pr.urgency] || URGENCY_MAP.NORMAL
-            return (
-              <div key={pr.id} className="card p-5 transition-all hover:shadow-md">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{pr.prCode}</span>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
-                        style={{ background: st.bg, color: st.color }}>{st.label}</span>
-                      {pr.urgency !== 'NORMAL' && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-bold"
-                          style={{ background: '#fef2f2', color: ug.color }}>⚡ {ug.label}</span>
-                      )}
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      DA: {pr.project.projectCode} — {pr.project.projectName}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{pr.itemCount}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>vật tư</p>
-                  </div>
-                </div>
 
-                {/* Items preview */}
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {pr.items.slice(0, 4).map(item => (
-                    <span key={item.id} className="text-[11px] px-2 py-1 rounded-lg"
-                      style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>
-                      {item.material.materialCode} × {Number(item.quantity)} {item.material.unit}
-                    </span>
-                  ))}
-                  {pr.items.length > 4 && (
-                    <span className="text-[11px] px-2 py-1 rounded-lg" style={{ color: 'var(--text-muted)' }}>
-                      +{pr.items.length - 4} khác
-                    </span>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid var(--border-light)' }}>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {new Date(pr.createdAt).toLocaleDateString('vi-VN')}
-                  </span>
-                  <div className="flex-1" />
-                  {pr.status === 'SUBMITTED' && canApprove && (
-                    <>
-                      <button onClick={() => handleAction(pr.id, 'approve')}
-                        className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white"
-                        style={{ background: '#16a34a' }}>✓ Duyệt</button>
-                      <button onClick={() => handleAction(pr.id, 'reject', { reason: 'Từ chối bởi quản lý' })}
-                        className="px-3 py-1.5 rounded-lg text-[11px] font-semibold"
-                        style={{ background: '#fef2f2', color: '#dc2626' }}>✗ Từ chối</button>
-                    </>
-                  )}
-                  {pr.status === 'SUBMITTED' && !canApprove && (
-                    <span className="text-xs text-slate-400 font-medium px-2 py-1 bg-slate-100 rounded">🔒 Chỉ BGĐ/PM</span>
-                  )}
-                  {pr.status === 'APPROVED' && (
-                    <button onClick={() => {
-                      const vendorId = vendors[0]?.id
-                      if (vendorId) handleAction(pr.id, 'convert', { vendorId })
-                      else alert('Chưa có nhà cung cấp')
-                    }}
-                      className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white"
-                      style={{ background: '#2563eb' }}>→ Chuyển PO</button>
-                  )}
-                </div>
+          {groupedByProject.map(([projectId, projectGrp]) => (
+            <div key={projectId} className="card overflow-hidden" style={{ borderRadius: 12 }}>
+              <div className="px-4 py-3" style={{ background: 'var(--bg-secondary)', borderBottom: '2px solid var(--accent)' }}>
+                <h3 className="font-bold text-[1rem]" style={{ color: 'var(--accent)' }}>Dự án: {projectGrp.projectName}</h3>
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* PO Tab */}
-      {tab === 'po' && (
-        <div className="space-y-3">
-          {pos.length === 0 && (
-            <div className="card p-12 text-center">
-              <p className="text-4xl mb-3">📦</p>
-              <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Chưa có đơn đặt hàng</p>
+              
+              <div className="p-0">
+                <table className="w-full text-sm text-left">
+                  <thead style={{ background: 'var(--bg-tertiary, #f8fafc)' }}>
+                    <tr>
+                      <th className="px-4 py-3 font-semibold text-xs tracking-wider" style={{ color: 'var(--text-secondary)' }}>Mã PR</th>
+                      <th className="px-4 py-3 font-semibold text-xs tracking-wider" style={{ color: 'var(--text-secondary)' }}>Tên Nhóm</th>
+                      <th className="px-4 py-3 font-semibold text-xs tracking-wider" style={{ color: 'var(--text-secondary)' }}>Trạng thái</th>
+                      <th className="px-4 py-3 font-semibold text-xs tracking-wider" style={{ color: 'var(--text-secondary)' }}>Giá trị</th>
+                      <th className="px-4 py-3 font-semibold text-xs tracking-wider" style={{ color: 'var(--text-secondary)' }}>Ngày thanh toán</th>
+                      <th className="px-4 py-3 font-semibold text-xs tracking-wider text-right" style={{ color: 'var(--text-secondary)' }}>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectGrp.items.map(g => (
+                      <ExpandableRow key={g.groupId} group={g} onReload={loadData} userRole={user?.roleCode} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          )}
-          {pos.map(po => {
-            const st = STATUS_MAP[po.status] || STATUS_MAP.DRAFT
-            return (
-              <div key={po.id} className="card p-5 transition-all hover:shadow-md">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-mono font-bold" style={{ color: '#2563eb' }}>{po.poCode}</span>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
-                        style={{ background: st.bg, color: st.color }}>{st.label}</span>
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      NCC: <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{po.vendor.name}</span>
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {formatCurrency(po.totalValue, po.currency)}
-                    </p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.itemCount} vật tư</p>
-                  </div>
-                </div>
-
-                {/* Items */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[11px]">
-                    <thead>
-                      <tr style={{ color: 'var(--text-muted)' }}>
-                        <th className="text-left py-1.5 font-medium">Vật tư</th>
-                        <th className="text-right py-1.5 font-medium">SL</th>
-                        <th className="text-right py-1.5 font-medium">Đơn giá</th>
-                        <th className="text-right py-1.5 font-medium">Đã nhận</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {po.items.map(item => (
-                        <tr key={item.id} style={{ borderTop: '1px solid var(--border-light)' }}>
-                          <td className="py-1.5" style={{ color: 'var(--text-primary)' }}>
-                            <span className="font-mono text-xs mr-1" style={{ color: 'var(--accent)' }}>{item.material.materialCode}</span>
-                            {item.material.name}
-                          </td>
-                          <td className="text-right py-1.5">{Number(item.quantity)} {item.material.unit}</td>
-                          <td className="text-right py-1.5">{formatCurrency(Number(item.unitPrice))}</td>
-                          <td className="text-right py-1.5">
-                            <span style={{ color: Number(item.receivedQty) >= Number(item.quantity) ? '#16a34a' : '#f59e0b' }}>
-                              {Number(item.receivedQty)}/{Number(item.quantity)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: '1px solid var(--border-light)' }}>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {po.orderDate ? new Date(po.orderDate).toLocaleDateString('vi-VN') : '—'}
-                    {po.deliveryDate && ` → ${new Date(po.deliveryDate).toLocaleDateString('vi-VN')}`}
-                  </span>
-                </div>
-              </div>
-            )
-          })}
+          ))}
         </div>
-      )}
-
-      {/* Create PR Modal */}
-      {showCreate && (
-        <CreatePRModal
-          projects={projects}
-          materials={materials}
-          onClose={() => setShowCreate(false)}
-          onCreated={() => { setShowCreate(false); loadData() }}
-        />
       )}
     </div>
   )
 }
 
-/* ═══ Create PR Modal ═══ */
-function CreatePRModal({ projects, materials, onClose, onCreated }: {
-  projects: Project[]; materials: Material[]; onClose: () => void; onCreated: () => void
-}) {
-  const [projectId, setProjectId] = useState('')
-  const [urgency, setUrgency] = useState('NORMAL')
-  const [notes, setNotes] = useState('')
-  const [items, setItems] = useState<Array<{ materialId: string; quantity: number }>>([{ materialId: '', quantity: 1 }])
-  const [submitting, setSubmitting] = useState(false)
+function ExpandableRow({ group, onReload, userRole }: { group: TrackingGroup, onReload: () => void, userRole?: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [deliveryDate, setDeliveryDate] = useState(group.deliveryDate ? group.deliveryDate.split('T')[0] : '')
+  const [saving, setSaving] = useState(false)
+  
+  const statusMenu = PAYMENT_STATUS_MAP[group.paymentStatus || 'PENDING']
 
-  const addItem = () => setItems([...items, { materialId: '', quantity: 1 }])
-  const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i))
-  const updateItem = (i: number, field: string, value: string | number) => {
-    const next = [...items]
-    next[i] = { ...next[i], [field]: value }
-    setItems(next)
-  }
-
-  const submit = async () => {
-    if (!projectId) return alert('Chọn dự án')
-    const validItems = items.filter(i => i.materialId && i.quantity > 0)
-    if (validItems.length === 0) return alert('Thêm ít nhất 1 vật tư')
-
-    setSubmitting(true)
-    const res = await apiFetch('/api/purchase-requests', {
-      method: 'POST',
-      body: JSON.stringify({ projectId, urgency, notes, items: validItems }),
+  const handleUpdateDelivery = async () => {
+    setSaving(true)
+    await apiFetch('/api/procurement-tracking', {
+      method: 'PUT',
+      body: JSON.stringify({ taskId: group.taskId, groupId: group.groupId, action: 'update_delivery', deliveryDate })
     })
-    setSubmitting(false)
-    if (res.ok) onCreated()
-    else alert(res.error || res.message || 'Lỗi tạo PR')
+    setSaving(false)
+    onReload()
   }
 
-  const inputStyle = {
-    width: '100%', padding: '10px 14px', borderRadius: '12px',
-    border: '1px solid var(--border-light)', background: 'var(--bg-primary)',
-    color: 'var(--text-primary)', fontSize: '14px', outline: 'none',
+  const handleRequestPayment = async () => {
+    if (!deliveryDate) {
+      alert('Vui lòng cập nhật Ngày hàng về trước khi Yêu cầu thanh toán!')
+      setExpanded(true)
+      return
+    }
+    
+    if (!confirm('Bạn có chắc muốn Yêu cầu thanh toán cho Nhóm báo giá này không? Kế toán sẽ nhận được Task thanh toán.')) return
+    
+    setSaving(true)
+    const res = await apiFetch('/api/procurement-tracking', {
+      method: 'PUT',
+      body: JSON.stringify({ taskId: group.taskId, groupId: group.groupId, action: 'request_payment' })
+    })
+    setSaving(false)
+    if (res.ok) {
+      alert('Đã gửi Yêu cầu thanh toán thành công!')
+      onReload()
+    } else {
+      alert('Lỗi: ' + res.error)
+    }
   }
+
+  const totalVal = Number(group.supplier?.total?.toString().replace(/,/g, '') || 0)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
-      <div className="card p-6 w-full max-w-xl max-h-[85vh] overflow-y-auto animate-fade-in" style={{ background: 'var(--bg-card)' }}>
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Tạo Yêu cầu Mua hàng</h2>
-          <button onClick={onClose} className="text-xl" style={{ color: 'var(--text-muted)' }}>✕</button>
-        </div>
-
-        {/* Project */}
-        <div className="mb-4">
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Dự án *</label>
-          <select value={projectId} onChange={e => setProjectId(e.target.value)} style={inputStyle}>
-            <option value="">Chọn dự án...</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
-          </select>
-        </div>
-
-        {/* Urgency */}
-        <div className="mb-4">
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Độ khẩn</label>
-          <div className="flex gap-2">
-            {Object.entries(URGENCY_MAP).map(([key, val]) => (
-              <button key={key} onClick={() => setUrgency(key)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{
-                  background: urgency === key ? val.color : 'var(--bg-primary)',
-                  color: urgency === key ? 'white' : 'var(--text-muted)',
-                }}>
-                {val.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Items */}
-        <div className="mb-4">
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Vật tư *</label>
-          {items.map((item, i) => (
-            <div key={i} className="flex gap-2 mb-2">
-              <select value={item.materialId} onChange={e => updateItem(i, 'materialId', e.target.value)}
-                style={{ ...inputStyle, flex: 2 }}>
-                <option value="">Chọn vật tư...</option>
-                {materials.map(m => (
-                  <option key={m.id} value={m.id}>{m.materialCode} — {m.name} (tồn: {m.currentStock})</option>
-                ))}
-              </select>
-              <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value))}
-                placeholder="SL" style={{ ...inputStyle, flex: 0.5, textAlign: 'right' as const }} />
-              {items.length > 1 && (
-                <button onClick={() => removeItem(i)} className="px-2 text-sm" style={{ color: '#dc2626' }}>✕</button>
-              )}
-            </div>
-          ))}
-          <button onClick={addItem} className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-            style={{ background: 'var(--bg-primary)', color: 'var(--accent)' }}>+ Thêm vật tư</button>
-        </div>
-
-        {/* Notes */}
-        <div className="mb-5">
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Ghi chú</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-            style={{ ...inputStyle, resize: 'none' as const }} placeholder="Lý do, yêu cầu đặc biệt..." />
-        </div>
-
-        {/* Submit */}
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
-            style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Hủy</button>
-          <button onClick={submit} disabled={submitting}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-            style={{ background: submitting ? '#94a3b8' : 'var(--accent)' }}>
-            {submitting ? 'Đang tạo...' : 'Gửi Yêu cầu'}
+    <>
+      {/* Main Row */}
+      <tr 
+        className="hover:bg-slate-50 cursor-pointer transition-colors" 
+        style={{ borderBottom: '1px solid var(--border-light)' }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <td className="px-4 py-3 font-mono font-bold" style={{ color: 'var(--accent)' }}>
+          {expanded ? '▼' : '▶'} {group.prCode}
+        </td>
+        <td className="px-4 py-3 font-medium flex items-center gap-2">
+          {group.groupName}
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-semibold border border-slate-200">
+            {group.supplier?.name || 'Chưa chốt NCC'}
+          </span>
+        </td>
+        <td className="px-4 py-3">
+          <span className="px-2 py-1 rounded-md text-[11px] font-bold shadow-sm" style={{ background: statusMenu.bg, color: statusMenu.color }}>
+            {statusMenu.label}
+          </span>
+        </td>
+        <td className="px-4 py-3 font-bold" style={{ color: 'var(--text-primary)' }}>
+          {totalVal > 0 ? formatCurrency(totalVal) : '—'}
+        </td>
+        <td className="px-4 py-3 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+          {group.paymentDate ? new Date(group.paymentDate).toLocaleDateString('vi-VN') : 'N/A'}
+        </td>
+        <td className="px-4 py-3 text-right">
+          <button 
+            disabled={group.paymentStatus !== 'PENDING' || saving}
+            onClick={(e) => { e.stopPropagation(); handleRequestPayment(); }}
+            className="px-3 py-1.5 rounded-md text-[11px] font-bold text-white transition-opacity disabled:opacity-50 shadow-sm"
+            style={{ background: group.paymentStatus === 'PENDING' ? '#0ea5e9' : '#94a3b8' }}
+          >
+            {group.paymentStatus === 'PENDING' ? 'YÊU CẦU THANH TOÁN' : (group.paymentStatus === 'PAID' ? 'ĐÃ HOÀN TẤT' : 'ĐANG CHỜ KT')}
           </button>
-        </div>
-      </div>
-    </div>
+        </td>
+      </tr>
+
+      {/* Expanded Details Form */}
+      {expanded && (
+        <tr style={{ background: 'var(--bg-tertiary, #f8fafc)', borderBottom: '2px solid var(--border)' }}>
+          <td colSpan={6} className="p-4 px-6 relative">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-sky-400"></div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+              <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-sm col-span-2">
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <span className="mr-2">📦</span> Chi tiết Vật Tư Nhập
+                </h4>
+                <table className="w-full text-[12px]">
+                  <thead className="text-slate-400">
+                    <tr>
+                      <th className="text-left font-semibold pb-2">Vật tư</th>
+                      <th className="text-right font-semibold pb-2">Số lượng</th>
+                      {group.supplier && <th className="text-right font-semibold pb-2">Đơn giá NCC</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.items.map((item, i) => (
+                      <tr key={i} className="border-t border-slate-50">
+                        <td className="py-1.5 text-slate-700">
+                          <strong className="text-sky-600 font-mono mr-2">{item.materialCode}</strong> 
+                          {item.name}
+                        </td>
+                        <td className="text-right py-1.5 font-medium">{item.quantity} {item.unit}</td>
+                        {group.supplier && (
+                          <td className="text-right py-1.5 text-slate-500">
+                            <span className="text-slate-300 italic">Theo báo giá</span>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-sm flex flex-col justify-center">
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                  <span className="mr-2">🚚</span> Thông tin Giao Hàng
+                </h4>
+                
+                <div className="mt-2">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Dự kiến ngày hàng về <span className="text-red-500">*</span></label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="date" 
+                      value={deliveryDate}
+                      onChange={e => setDeliveryDate(e.target.value)}
+                      className="border border-slate-300 rounded px-3 py-1.5 text-sm flex-1 focus:outline-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                    <button 
+                      onClick={handleUpdateDelivery}
+                      disabled={saving || deliveryDate === (group.deliveryDate ? group.deliveryDate.split('T')[0] : '')}
+                      className="px-3 py-1.5 bg-slate-800 text-white font-semibold text-[11px] rounded transition-opacity disabled:opacity-40"
+                    >
+                      Lưu
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2 italic">
+                    Vui lòng chốt Ngày hàng về trước khi tạo Yêu cầu thanh toán.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+          </td>
+        </tr>
+      )}
+    </>
   )
 }

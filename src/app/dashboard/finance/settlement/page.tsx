@@ -6,7 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 interface VarianceData {
   projectId: string; totalBudget: number; totalActualPO: number; totalPaid: number;
   variance: number; variancePercent: number; status: string;
-  budgetLines: { category: string; description: string; budgeted: number }[]
+  budgetLines: { category: string; planned: number; actual: number; variance: number; description?: string }[]
 }
 
 export default function SettlementPage() {
@@ -90,13 +90,14 @@ export default function SettlementPage() {
                 <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Chi tiết ngân sách</h3>
               </div>
               <table className="data-table">
-                <thead><tr><th>Hạng mục</th><th>Mô tả</th><th className="text-right">Ngân sách</th></tr></thead>
+                <thead><tr><th>Hạng mục</th><th className="text-right">Dự toán</th><th className="text-right">Thực tế</th><th className="text-right">Chênh lệch</th></tr></thead>
                 <tbody>
                   {data.budgetLines.map((b, i) => (
                     <tr key={i}>
                       <td className="text-xs font-bold" style={{ color: 'var(--primary)' }}>{b.category}</td>
-                      <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{b.description || '—'}</td>
-                      <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{b.budgeted.toLocaleString('vi-VN')} ₫</td>
+                      <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{(b.planned || 0).toLocaleString('vi-VN')} ₫</td>
+                      <td className="text-right text-xs font-bold" style={{ color: '#f59e0b' }}>{(b.actual || 0).toLocaleString('vi-VN')} ₫</td>
+                      <td className="text-right text-xs font-bold" style={{ color: (b.variance >= 0) ? '#16a34a' : '#dc2626' }}>{(b.variance || 0).toLocaleString('vi-VN')} ₫</td>
                     </tr>
                   ))}
                 </tbody>
