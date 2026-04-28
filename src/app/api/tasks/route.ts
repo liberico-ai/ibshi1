@@ -9,8 +9,19 @@ export async function GET(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const data = await withCache(`tasks:inbox:${payload.userId}`, 30, async () => {
-      const tasks = await getTaskInbox(payload.userId, payload.roleCode)
+    const { searchParams } = new URL(req.url)
+    const stepCode = searchParams.get('stepCode')
+    const excludeStep = searchParams.get('excludeStep')
+
+    const data = await withCache(`tasks:inbox:${payload.userId}:${stepCode}:${excludeStep}`, 30, async () => {
+      let tasks = await getTaskInbox(payload.userId, payload.roleCode)
+      
+      if (stepCode) {
+        tasks = tasks.filter(t => t.stepCode === stepCode)
+      }
+      if (excludeStep) {
+        tasks = tasks.filter(t => t.stepCode !== excludeStep)
+      }
 
       // Categorize by urgency
       const now = new Date()

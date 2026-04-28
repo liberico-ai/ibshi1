@@ -14,6 +14,17 @@ export function formatCurrency(value: string | number | null | undefined, curren
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(num)
 }
 
+export function formatCompactVND(value: number | null | undefined): string {
+  if (!value) return '0'
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(num)) return '0'
+  
+  if (num >= 1e9) return parseFloat((num / 1e9).toFixed(2)) + ' Tỷ'
+  if (num >= 1e6) return parseFloat((num / 1e6).toFixed(1)) + ' Tr'
+  if (num >= 1e3) return parseFloat((num / 1e3).toFixed(1)) + ' K'
+  return num.toString()
+}
+
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '-'
   // Use 'en-GB' (DD/MM/YYYY) — safe in Alpine minimal ICU unlike 'vi-VN'

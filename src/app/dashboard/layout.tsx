@@ -26,6 +26,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [ready, setReady] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [taskCount, setTaskCount] = useState(0)
+  const [p45TaskCount, setP45TaskCount] = useState(0)
 
   useEffect(() => {
     hydrate()
@@ -43,7 +44,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!ready || !isAuthenticated) return
     const fetchCount = () => {
       apiFetch('/api/tasks').then(res => {
-        if (res.ok) setTaskCount(res.tasks?.length ?? 0)
+        if (res.ok) {
+          const allTasks = res.tasks || []
+          const p45 = allTasks.filter((t: any) => t.stepCode === 'P4.5').length
+          setTaskCount(allTasks.length - p45)
+          setP45TaskCount(p45)
+        }
       })
     }
     fetchCount()
@@ -179,6 +185,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 padding: '0 4px', lineHeight: 1,
                               }}>{taskCount > 99 ? '99+' : taskCount}</span>
                             )}
+                            {item.key === 'material-issue' && p45TaskCount > 0 && sidebarCollapsed && (
+                              <span style={{
+                                position: 'absolute', top: -6, right: -8,
+                                minWidth: 16, height: 16, borderRadius: 8,
+                                background: '#e63946', color: 'white',
+                                fontSize: 10, fontWeight: 700,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                padding: '0 4px', lineHeight: 1,
+                              }}>{p45TaskCount > 99 ? '99+' : p45TaskCount}</span>
+                            )}
                           </span>
                           {!sidebarCollapsed && (
                             <>
@@ -192,6 +208,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   padding: '0 6px', lineHeight: 1,
                                 }}>{taskCount > 99 ? '99+' : taskCount}</span>
+                              )}
+                              {item.key === 'material-issue' && p45TaskCount > 0 && (
+                                <span style={{
+                                  marginLeft: 'auto',
+                                  minWidth: 20, height: 20, borderRadius: 10,
+                                  background: '#e63946', color: 'white',
+                                  fontSize: 11, fontWeight: 700,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  padding: '0 6px', lineHeight: 1,
+                                }}>{p45TaskCount > 99 ? '99+' : p45TaskCount}</span>
                               )}
                             </>
                           )}

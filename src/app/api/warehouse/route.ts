@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       availableStock: Number(m.currentStock) - Number(m.reservedStock || 0),
       unitPrice: m.unitPrice ? Number(m.unitPrice) : null,
       currency: m.currency,
-      lowStock: Number(m.currentStock) < Number(m.minStock),
+      lowStock: Number(m.minStock) >= 0 ? Number(m.currentStock) < Number(m.minStock) : false,
       recentMovements: m.stockMovements.map((sm: Record<string, unknown>) => ({
         ...sm,
         quantity: Number(sm.quantity),

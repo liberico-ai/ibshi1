@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatCompactVND } from '@/lib/utils'
 import { RBAC } from '@/lib/rbac-rules'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Button } from '@/components/ui'
@@ -84,7 +84,7 @@ export default function WarehousePage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 stagger-children">
           <StatCard label="Tổng vật tư" value={stats.totalMaterials} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>📦</span>} />
           <StatCard label="Thiếu hàng" value={stats.lowStockCount} color={stats.lowStockCount > 0 ? '#dc2626' : '#16a34a'} icon={<span style={{ fontSize: 20 }}>⚠️</span>} accent={stats.lowStockCount > 0} />
-          <StatCard label="Giá trị tồn" value={`${(stats.totalValue / 1e6).toFixed(1)}M`} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>💰</span>} />
+          <StatCard label="Giá trị tồn" value={formatCompactVND(stats.totalValue)} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>💰</span>} />
           <StatCard label="PR chờ duyệt" value={stats.prPending} color="#8b5cf6" icon={<span style={{ fontSize: 20 }}>📋</span>} />
           <StatCard label="PO đang xử lý" value={stats.poActive} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>🚚</span>} />
         </div>
@@ -149,11 +149,15 @@ export default function WarehousePage() {
                 <td style={{ color: 'var(--text-muted)' }}>{m.unit}</td>
                 <td className="text-right" style={{ color: 'var(--text-secondary)' }}>{m.unitPrice ? formatCurrency(m.unitPrice, m.currency) : '-'}</td>
                 <td>
-                  <span className="badge" style={{
-                    background: m.lowStock ? '#fef2f2' : '#f0fdf4',
-                    color: m.lowStock ? '#dc2626' : '#16a34a',
-                    borderColor: m.lowStock ? '#fecaca' : '#bbf7d0', borderWidth: '1px',
-                  }}>{m.lowStock ? '⚠ Thiếu hàng' : '✓ Đủ'}</span>
+                  {m.minStock >= 0 ? (
+                    <span className="badge" style={{
+                      background: m.lowStock ? '#fef2f2' : '#f0fdf4',
+                      color: m.lowStock ? '#dc2626' : '#16a34a',
+                      borderColor: m.lowStock ? '#fecaca' : '#bbf7d0', borderWidth: '1px',
+                    }}>{m.lowStock ? '⚠ Thiếu hàng' : '✓ Đủ'}</span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>-</span>
+                  )}
                 </td>
                 <td>
                   <ChevronRight size={16} stroke="var(--text-muted)" />
