@@ -7,8 +7,9 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!['R01', 'R02', 'R02a', 'R08', 'R08a', 'R10'].includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Không có quyền xem giải ngân' }, { status: 403 })
+    const FINANCE_ROLES = ['R01', 'R02', 'R02a', 'R08', 'R08a', 'R10']
+    if (!FINANCE_ROLES.includes(user.roleCode)) {
+      return NextResponse.json({ error: 'Forbidden. Chỉ bộ phận Tài chính mới có quyền truy cập.' }, { status: 403 })
     }
 
     // Build the query to get all drawdowns with relations
@@ -37,9 +38,9 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json({ ok: true, drawdowns: drawdownsWithSync })
-  } catch (err: any) {
+  } catch (err) {
     console.error('Fetch Drawdowns error:', err)
-    return NextResponse.json({ error: 'Lỗi hệ thống khi tải giải ngân' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }
 
@@ -48,8 +49,9 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!['R01', 'R08', 'R08a', 'R10'].includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Chỉ Kế toán mới có quyền tạo giải ngân' }, { status: 403 })
+    const FINANCE_ROLES = ['R01', 'R08', 'R08a', 'R10']
+    if (!FINANCE_ROLES.includes(user.roleCode)) {
+      return NextResponse.json({ error: 'Forbidden. Chỉ Kế toán mới có quyền tạo hồ sơ giải ngân.' }, { status: 403 })
     }
 
     const body = await req.json()
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     const totalAmount = invoices.reduce((sum: number, inv: any) => sum + Number(inv.totalAmount || 0), 0)
 
-    const drawdownNo = `DD-${new Date().toISOString().slice(0,10).replace(/-/g, '')}-${Date.now().toString(36).slice(-4)}${Math.floor(Math.random() * 1000)}`
+    const drawdownNo = `DD-${new Date().toISOString().slice(0,10).replace(/-/g, '')}-${Math.floor(Math.random() * 1000)}`
 
     // Generate drawdown and its beneficiary lines
     const result = await prisma.$transaction(async (tx) => {
@@ -162,8 +164,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, drawdown: result })
 
-  } catch (err: any) {
+  } catch (err) {
     console.error('Create Drawdown error:', err)
-    return NextResponse.json({ error: 'Lỗi hệ thống khi tạo giải ngân' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }

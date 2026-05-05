@@ -14,8 +14,8 @@ export const createInvoiceSchema = z.object({
   totalAmount: z.number().positive('Tổng tiền phải > 0'),
   currency: z.string().default('VND'),
   issueDate: z.string().optional(),
-  dueDate: z.string().optional(),
-  notes: z.string().optional(),
+  dueDate: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
 })
 
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>
@@ -28,7 +28,7 @@ export const updateInvoiceSchema = z.object({
   totalAmount: z.number().positive().optional(),
   dueDate: z.string().optional(),
   status: z.enum(['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED']).optional(),
-  notes: z.string().optional(),
+  notes: z.string().nullable().optional(),
 })
 
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>
@@ -40,8 +40,8 @@ export const createPaymentSchema = z.object({
   amount: z.number().positive('Số tiền phải > 0'),
   paymentDate: z.string().min(1, 'Ngày thanh toán là bắt buộc'),
   method: z.enum(['BANK_TRANSFER', 'CASH', 'CHECK']).default('BANK_TRANSFER'),
-  reference: z.string().optional(),
-  notes: z.string().optional(),
+  reference: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
 })
 
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>
@@ -57,7 +57,7 @@ export const createBudgetSchema = z.object({
   forecast: z.number().min(0).default(0),
   month: z.number().int().min(1).max(12).optional(),
   year: z.number().int().min(2020).max(2100).optional(),
-  notes: z.string().optional(),
+  notes: z.string().nullable().optional(),
 })
 
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>
@@ -67,7 +67,7 @@ export const updateBudgetSchema = z.object({
   actual: z.number().min(0).optional(),
   committed: z.number().min(0).optional(),
   forecast: z.number().min(0).optional(),
-  notes: z.string().optional(),
+  notes: z.string().nullable().optional(),
 })
 
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>

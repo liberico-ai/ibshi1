@@ -33,7 +33,7 @@ export default function TasksPage() {
   useEffect(() => { loadTasks() }, [])
 
   async function loadTasks() {
-    const res = await apiFetch('/api/tasks')
+    const res = await apiFetch('/api/tasks?excludeStep=P4.5')
     if (res.ok) setAllTasks(res.tasks)
     setLoading(false)
   }

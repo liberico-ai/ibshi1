@@ -7,8 +7,9 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!['R01', 'R02', 'R02a', 'R07', 'R07a', 'R08', 'R08a', 'R10'].includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Không có quyền xem đơn đặt hàng' }, { status: 403 })
+    const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R08', 'R08a', 'R10']
+    if (!ALLOWED_ROLES.includes(user.roleCode)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Fetch PurchaseOrders that are APPROVED and not yet fully PAID

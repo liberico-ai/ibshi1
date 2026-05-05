@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
-import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
+const MAX_VOLUME = 1_000_000
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params
-  const payload = await authenticateRequest(request as any)
-  if (!payload) return unauthorizedResponse()
 
   try {
+    const payload = await authenticateRequest(request as any)
+    if (!payload) return unauthorizedResponse()
     const task = await prisma.workflowTask.findUnique({
       where: { id: params.id },
       select: { projectId: true, stepCode: true }
@@ -160,12 +163,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       // Schema may not be synced
     }
 
-    // Parse date from query with validation
+    // Parse date from query
     const url = new URL(request.url)
     const dateParam = url.searchParams.get('date')
-    const todayDateStr = (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && !isNaN(Date.parse(dateParam)))
-      ? dateParam
-      : new Date().toISOString().split('T')[0]
+    const todayDateStr = dateParam || new Date().toISOString().split('T')[0]
 
     uniqueLsxItems = uniqueLsxItems.map(item => {
       const itemLogs = logs.filter((l: any) => l.lsxCode === item.lsxCode)
@@ -207,19 +208,19 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     return NextResponse.json({ success: true, items: uniqueLsxItems })
 
-  } catch (err: any) {
+  } catch (err) {
     console.error('Daily Report fetch error:', err)
-    return NextResponse.json({ success: false, error: 'Lỗi hệ thống khi tải báo cáo' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params
-  const payload = await authenticateRequest(request as any)
-  if (!payload) return unauthorizedResponse()
-  const authenticatedUserId = payload.userId
 
   try {
+    const payload = await authenticateRequest(request as any)
+    if (!payload) return unauthorizedResponse()
+
     const task = await prisma.workflowTask.findUnique({
       where: { id: params.id },
       select: { projectId: true, stepCode: true }
@@ -233,19 +234,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       items: { lsxCode: string; wbsStage: string; reportedVolume: number }[]
       date: string
     }
+    const userId = payload.userId
 
     if (!items || !Array.isArray(items) || !date) {
       return NextResponse.json({ success: false, error: 'Dữ liệu không hợp lệ' }, { status: 400 })
     }
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) {
-      return NextResponse.json({ success: false, error: 'Ngày không hợp lệ (YYYY-MM-DD)' }, { status: 400 })
+    if (!DATE_REGEX.test(date)) {
+      return NextResponse.json({ success: false, error: 'Định dạng ngày không hợp lệ (YYYY-MM-DD)' }, { status: 400 })
     }
 
-    const MAX_VOLUME = 1_000_000
     for (const item of items) {
-      if (typeof item.reportedVolume !== 'number' || item.reportedVolume < 0 || item.reportedVolume > MAX_VOLUME) {
-        return NextResponse.json({ success: false, error: `Khối lượng không hợp lệ cho ${item.lsxCode}: phải từ 0 đến ${MAX_VOLUME.toLocaleString()}` }, { status: 400 })
+      if (item.reportedVolume > MAX_VOLUME) {
+        return NextResponse.json({ success: false, error: `Khối lượng vượt giới hạn cho phép (${MAX_VOLUME})` }, { status: 400 })
       }
     }
 
@@ -275,7 +276,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             where: { id: existingLog.id },
             data: {
               reportedVolume: item.reportedVolume,
-              teamUserId: authenticatedUserId
+              teamUserId: userId
             }
           })
         } else {
@@ -287,7 +288,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
               wbsStage: item.wbsStage,
               reportDate: reportDate,
               reportedVolume: item.reportedVolume,
-              teamUserId: authenticatedUserId
+              teamUserId: userId
             }
           })
         }
@@ -296,9 +297,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     })
 
     return NextResponse.json({ success: true, savedCount, message: `Đã lưu báo cáo cho ${savedCount} công đoạn.` })
-  } catch (err: any) {
+  } catch (err) {
     console.error('Daily Report save error:', err)
-    return NextResponse.json({ success: false, error: 'Lỗi server khi lưu báo cáo' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Lỗi máy chủ khi lưu báo cáo' }, { status: 500 })
   }
 }
 

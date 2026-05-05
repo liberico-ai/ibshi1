@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
-import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { notifyTaskActivated } from '@/lib/telegram-notifications'
+import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
+
+const MAX_VOLUME = 1_000_000
 
 /**
  * GET /api/tasks/[id]/weekly-acceptance
@@ -27,10 +30,10 @@ const STAGE_LABELS: Record<string, string> = {
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params
-  const payload = await authenticateRequest(request as any)
-  if (!payload) return unauthorizedResponse()
 
   try {
+    const payload = await authenticateRequest(request as any)
+    if (!payload) return unauthorizedResponse()
     const task = await prisma.workflowTask.findUnique({
       where: { id: params.id },
       select: { projectId: true, stepCode: true, resultData: true },
@@ -219,20 +222,20 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     })
   } catch (err: any) {
     console.error('Weekly Acceptance GET error:', err)
-    return NextResponse.json({ success: false, error: 'Lỗi hệ thống khi tải dữ liệu nghiệm thu' }, { status: 500 })
+    return NextResponse.json({ success: false, error: err.message || 'Internal Server Error' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params
-  const payload = await authenticateRequest(request as any)
-  if (!payload) return unauthorizedResponse()
-  const authenticatedUserId = payload.userId
 
   try {
+    const payload = await authenticateRequest(request as any)
+    if (!payload) return unauthorizedResponse()
+
     const task = await prisma.workflowTask.findUnique({
       where: { id: params.id },
-      include: { project: { select: { projectCode: true } } },
+      include: { project: { select: { projectCode: true, projectName: true } } },
     })
     if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
     if (!['P5.3', 'P5.4'].includes(task.stepCode)) {
@@ -247,18 +250,23 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       acceptanceData: { lsxCode: string; reportedTotal: number; acceptedVolume: number; notes?: string }[]
       notes?: string
     }
+    const userId = payload.userId
 
     if (!acceptanceData || !Array.isArray(acceptanceData)) {
       return NextResponse.json({ success: false, error: 'Missing acceptanceData' }, { status: 400 })
     }
 
-    const MAX_VOLUME = 1_000_000
     for (const item of acceptanceData) {
-      if (typeof item.acceptedVolume !== 'number' || item.acceptedVolume < 0 || item.acceptedVolume > MAX_VOLUME) {
-        return NextResponse.json({ success: false, error: `Khối lượng nghiệm thu không hợp lệ cho ${item.lsxCode}` }, { status: 400 })
+      if (item.acceptedVolume != null && item.acceptedVolume > MAX_VOLUME) {
+        return NextResponse.json({ success: false, error: `Khối lượng vượt giới hạn cho phép (${MAX_VOLUME})` }, { status: 400 })
       }
     }
 
+    // ══════════════════════════════════════════════════════════════
+    //  BẢO VỆ DỮ LIỆU BẤT KHẢ XÂM PHẠM — atomic $transaction
+    //  Each row is saved as an immutable WeeklyAcceptanceLog record.
+    //  These records serve as the official financial audit trail.
+    // ══════════════════════════════════════════════════════════════
     const rd = (task.resultData as Record<string, any>) || {}
     const weekNumber = rd.weekNumber || 0
     const year = rd.year || new Date().getFullYear()
@@ -266,36 +274,28 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const weekEndDate = rd.weekEndDate ? new Date(rd.weekEndDate) : new Date()
     const role = task.stepCode === 'P5.3' ? 'QC' : 'PM'
 
-    // ══════════════════════════════════════════════════════════════
-    //  BẢO VỆ DỮ LIỆU BẤT KHẢ XÂM PHẠM
-    //  Each row is saved as an immutable WeeklyAcceptanceLog record.
-    //  These records serve as the official financial audit trail.
-    // ══════════════════════════════════════════════════════════════
-    const savedLogs: any[] = []
-
-    await prisma.$transaction(async (tx) => {
-      for (const item of acceptanceData) {
-        if (item.acceptedVolume == null) continue
-
-        const log = await (tx as any).weeklyAcceptanceLog.create({
-          data: {
-            projectId: task.projectId,
-            lsxCode: item.lsxCode,
-            weekNumber,
-            year,
-            weekStartDate,
-            weekEndDate,
-            taskId: task.id,
-            role,
-            reportedTotal: item.reportedTotal || 0,
-            acceptedVolume: item.acceptedVolume,
-            inspectorId: authenticatedUserId,
-            notes: item.notes || null,
-          },
-        })
-        savedLogs.push(log)
-      }
-    })
+    const savedLogs = await (prisma as any).$transaction(
+      acceptanceData
+        .filter(item => item.acceptedVolume != null)
+        .map(item =>
+          (prisma as any).weeklyAcceptanceLog.create({
+            data: {
+              projectId: task.projectId,
+              lsxCode: item.lsxCode,
+              weekNumber,
+              year,
+              weekStartDate,
+              weekEndDate,
+              taskId: task.id,
+              role,
+              reportedTotal: item.reportedTotal || 0,
+              acceptedVolume: item.acceptedVolume,
+              inspectorId: userId,
+              notes: item.notes || null,
+            },
+          })
+        )
+    )
 
     // ══════════════════════════════════════════════════════════════
     //  AUTO-TRIGGER P5.1.1: Check if any WBS item reached 100%
@@ -389,7 +389,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         const wbsName = wbsList[rowIdx]?.hangMuc || `Hạng mục #${rowIdx + 1}`
         const totalKL = wbsInfo.stages.reduce((sum, lsx) => sum + (totalVolumeMap.get(lsx) || 0), 0)
 
-        await prisma.workflowTask.create({
+        const newP511 = await prisma.workflowTask.create({
           data: {
             projectId: task.projectId,
             stepCode: 'P5.1.1',
@@ -400,12 +400,36 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
               wbsRowIndex: rowIdx,
               hangMucName: wbsName,
               totalKL,
-              projectName: (task as any).project?.projectCode || '',
+              projectName: (task as any).project?.projectName || '',
+              projectCode: (task as any).project?.projectCode || '',
               stages: wbsInfo.stages,
             },
           },
         })
         console.log(`[AUTO] Created P5.1.1 for WBS "${wbsName}" (row ${rowIdx}) — 100% accepted`)
+
+        // Notify users
+        try {
+          const users = await prisma.user.findMany({ where: { roleCode: 'R06b', isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+          const projCode = (task as any).project?.projectCode || ''
+          const projName = (task as any).project?.projectName || ''
+          
+          if (users.length > 0) {
+            await prisma.notification.createMany({
+              data: users.map(u => ({
+                userId: u.id, title: `📋 Yêu cầu nghiệm thu mới: ${projCode}`,
+                message: `Đã tự động tạo Yêu cầu nghiệm thu cho hạng mục: ${wbsName}.`,
+                type: 'task_assigned', linkUrl: `/dashboard/tasks/${newP511.id}`,
+              }))
+            })
+            await notifyTaskActivated({
+              stepCode: 'P5.1.1', stepName: newP511.stepName,
+              projectCode: projCode, projectName: projName,
+              assignedRole: 'R06b', deadline: null, taskId: newP511.id,
+              mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
+            }).catch(console.error)
+          }
+        } catch (e) { console.error('[AUTO] P5.1.1 notification error:', e) }
       }
     } catch (err) {
       console.error('[AUTO] P5.1.1 check error:', err)
@@ -424,7 +448,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     const finalNotes = notes || `${role} nghiệm thu tuần W${weekNumber} — ${savedLogs.length} hạng mục`
     
-    await completeTask(task.id, authenticatedUserId, finalResultData, finalNotes)
+    await completeTask(task.id, userId, finalResultData, finalNotes)
 
     return NextResponse.json({
       success: true,
@@ -432,7 +456,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       savedCount: savedLogs.length,
     })
   } catch (err: any) {
-    // Handle unique constraint violation (duplicate submission)
     if (err.code === 'P2002') {
       return NextResponse.json({
         success: false,
@@ -440,6 +463,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }, { status: 409 })
     }
     console.error('Weekly Acceptance POST error:', err)
-    return NextResponse.json({ success: false, error: 'Lỗi hệ thống khi lưu nghiệm thu' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }

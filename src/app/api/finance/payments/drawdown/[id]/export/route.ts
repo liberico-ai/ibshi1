@@ -31,8 +31,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }))
 
     return NextResponse.json({ ok: true, data: vpbankData, filename: `VPBank_Export_${drawdown.drawdownNo}.xlsx` })
-  } catch (err: any) {
+  } catch (err) {
     console.error('Export Drawdown error:', err)
-    return NextResponse.json({ error: 'Lỗi hệ thống khi export giải ngân' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }

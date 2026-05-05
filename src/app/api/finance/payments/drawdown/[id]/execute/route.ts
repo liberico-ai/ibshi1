@@ -81,8 +81,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     return NextResponse.json({ ok: true, drawdown: updated })
-  } catch (err: any) {
+  } catch (err) {
     console.error('Execute Drawdown error:', err)
-    return NextResponse.json({ error: 'Lỗi hệ thống khi chốt giải ngân' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }

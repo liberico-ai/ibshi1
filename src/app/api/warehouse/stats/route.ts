@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
         }),
       ])
 
-      const lowStockCount = materials.filter(m => Number(m.currentStock) <= Number(m.minStock)).length
+      const lowStockCount = materials.filter(m => Number(m.minStock) >= 0 && Number(m.currentStock) <= Number(m.minStock)).length
       const totalValue = materials.reduce((sum, m) => sum + (m.unitPrice ? Number(m.unitPrice) * Number(m.currentStock) : 0), 0)
       const byCategory = materials.reduce((acc: Record<string, number>, m) => {
         acc[m.category] = (acc[m.category] || 0) + 1
