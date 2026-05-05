@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       })
 
       // Create Invoices on the fly for these PO Advance Payments and create Beneficiary Lines
-      const createdInvoices = []
+      const createdInvoices: any[] = []
       
       for (let i = 0; i < invoices.length; i++) {
         const invPayload = invoices[i]

@@ -316,7 +316,7 @@ export default function MaterialIssuePage() {
                           </Badge>
                         </td>
                         <td className="text-right">
-                          <Button variant={isExpanded ? 'default' : 'accent'} size="sm" onClick={(e) => { e.stopPropagation(); setExpandedTaskId(isExpanded ? null : task.id) }}>
+                          <Button variant={isExpanded ? 'outline' : 'primary'} size="sm" onClick={(e) => { e.stopPropagation(); setExpandedTaskId(isExpanded ? null : task.id) }}>
                             {isExpanded ? 'Thu gọn ✕' : 'Mở rộng ↓'}
                           </Button>
                         </td>

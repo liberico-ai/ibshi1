@@ -15,7 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     })
     
     if (!drawdown) return NextResponse.json({ error: 'Hồ sơ không tồn tại' }, { status: 404 })
-    if (drawdown.status !== 'APPROVED' && drawdown.status !== 'DISBURSED') {
+    if (drawdown.status !== 'APPROVED' && drawdown.status !== 'EXECUTED') {
       return NextResponse.json({ error: 'Hồ sơ phải được phê duyệt trước khi export' }, { status: 400 })
     }
 

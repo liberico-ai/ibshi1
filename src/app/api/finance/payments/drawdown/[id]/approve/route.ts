@@ -48,6 +48,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ ok: true, drawdown: updated })
   } catch (err: any) {
     console.error('Approve Drawdown error:', err)
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi hệ thống khi phê duyệt giải ngân' }, { status: 500 })
   }
 }
