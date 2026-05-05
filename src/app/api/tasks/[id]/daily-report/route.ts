@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
+const MAX_VOLUME = 1_000_000
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params
 
   try {
+    const payload = await authenticateRequest(request as any)
+    if (!payload) return unauthorizedResponse()
     const task = await prisma.workflowTask.findUnique({
       where: { id: params.id },
       select: { projectId: true, stepCode: true }
@@ -202,9 +208,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     return NextResponse.json({ success: true, items: uniqueLsxItems })
 
-  } catch (err: any) {
+  } catch (err) {
     console.error('Daily Report fetch error:', err)
-    return NextResponse.json({ success: false, error: err.message || 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }
 
@@ -212,6 +218,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const params = await context.params
 
   try {
+    const payload = await authenticateRequest(request as any)
+    if (!payload) return unauthorizedResponse()
+
     const task = await prisma.workflowTask.findUnique({
       where: { id: params.id },
       select: { projectId: true, stepCode: true }
@@ -221,14 +230,24 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (task.stepCode !== 'P5.1' && task.stepCode !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
 
     const body = await request.json()
-    const { items, date, userId } = body as {
+    const { items, date } = body as {
       items: { lsxCode: string; wbsStage: string; reportedVolume: number }[]
       date: string
-      userId: string
+    }
+    const userId = payload.userId
+
+    if (!items || !Array.isArray(items) || !date) {
+      return NextResponse.json({ success: false, error: 'Dữ liệu không hợp lệ' }, { status: 400 })
     }
 
-    if (!items || !Array.isArray(items) || !date || !userId) {
-      return NextResponse.json({ success: false, error: 'Dữ liệu không hợp lệ' }, { status: 400 })
+    if (!DATE_REGEX.test(date)) {
+      return NextResponse.json({ success: false, error: 'Định dạng ngày không hợp lệ (YYYY-MM-DD)' }, { status: 400 })
+    }
+
+    for (const item of items) {
+      if (item.reportedVolume > MAX_VOLUME) {
+        return NextResponse.json({ success: false, error: `Khối lượng vượt giới hạn cho phép (${MAX_VOLUME})` }, { status: 400 })
+      }
     }
 
     const reportDate = new Date(date)
@@ -278,9 +297,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     })
 
     return NextResponse.json({ success: true, savedCount, message: `Đã lưu báo cáo cho ${savedCount} công đoạn.` })
-  } catch (err: any) {
+  } catch (err) {
     console.error('Daily Report save error:', err)
-    return NextResponse.json({ success: false, error: err.message || 'Lỗi server khi lưu báo cáo' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Lỗi máy chủ khi lưu báo cáo' }, { status: 500 })
   }
 }
 

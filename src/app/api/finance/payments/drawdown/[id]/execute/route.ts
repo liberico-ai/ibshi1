@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const updated = await prisma.$transaction(async (tx) => {
       const res = await tx.loanDrawdown.update({
         where: { id },
-        data: { status: 'EXECUTED', executedBy: user.id || 'SYSTEM', executionDate: new Date() }
+        data: { status: 'EXECUTED', executedBy: user.userId || 'SYSTEM', executionDate: new Date() }
       })
       
       for (const line of drawdown.beneficiaryLines) {
@@ -81,8 +81,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     return NextResponse.json({ ok: true, drawdown: updated })
-  } catch (err: any) {
+  } catch (err) {
     console.error('Execute Drawdown error:', err)
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }

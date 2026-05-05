@@ -109,7 +109,14 @@ export async function PUT(request: NextRequest) {
       // 3. Auto-generate physical PO so Finance can select it for Drawdown
       let vendor = await prisma.vendor.findFirst({ where: { name: actualSupplier } })
       if (!vendor) {
-        vendor = await prisma.vendor.create({ data: { name: actualSupplier, taxCode: 'N/A', active: true } })
+        vendor = await prisma.vendor.create({
+          data: {
+            vendorCode: `VND-AUTO-${Date.now()}`,
+            name: actualSupplier,
+            category: 'SUPPLIER',
+            isActive: true,
+          }
+        })
       }
       
       const existingPo = await prisma.purchaseOrder.findUnique({ where: { poCode: g.prCode } })
@@ -135,8 +142,8 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json({ success: true, message: 'Đã cập nhật thành công' })
-  } catch (error: any) {
+  } catch (error) {
     console.error('procurement-tracking PUT ERROR:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
   }
 }
