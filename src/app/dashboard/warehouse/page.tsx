@@ -20,12 +20,11 @@ interface PaginationData { page: number; limit: number; total: number; totalPage
 
 const CATEGORIES = [
   { value: '', label: 'Tất cả' },
-  { value: 'steel', label: 'Thép' },
-  { value: 'pipe', label: 'Ống' },
-  { value: 'valve', label: 'Van' },
-  { value: 'bolt', label: 'Bu-lông' },
-  { value: 'paint', label: 'Sơn' },
-  { value: 'welding', label: 'Que hàn' },
+  { value: 'VLC', label: 'Thép' },
+  { value: 'VLP', label: 'Ống/Van' },
+  { value: 'BL', label: 'Bu-lông' },
+  { value: 'VTS', label: 'Sơn' },
+  { value: 'VLH', label: 'Que hàn' },
 ]
 
 interface WarehouseStats {
@@ -178,7 +177,7 @@ export default function WarehousePage() {
 }
 
 function CreateMaterialForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ materialCode: '', name: '', unit: 'kg', category: 'steel', minStock: '0', unitPrice: '' })
+  const [form, setForm] = useState({ materialCode: '', name: '', unit: 'kg', category: 'VLC', minStock: '0', unitPrice: '' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
