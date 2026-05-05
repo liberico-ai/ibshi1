@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { notifyTaskActivated } from '@/lib/telegram-notifications'
 
 /**
  * GET /api/tasks/[id]/weekly-acceptance
@@ -374,7 +375,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         const wbsName = wbsList[rowIdx]?.hangMuc || `Hạng mục #${rowIdx + 1}`
         const totalKL = wbsInfo.stages.reduce((sum, lsx) => sum + (totalVolumeMap.get(lsx) || 0), 0)
 
-        await prisma.workflowTask.create({
+        const newP511 = await prisma.workflowTask.create({
           data: {
             projectId: task.projectId,
             stepCode: 'P5.1.1',
@@ -385,12 +386,36 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
               wbsRowIndex: rowIdx,
               hangMucName: wbsName,
               totalKL,
-              projectName: (task as any).project?.projectCode || '',
+              projectName: (task as any).project?.projectName || '',
+              projectCode: (task as any).project?.projectCode || '',
               stages: wbsInfo.stages,
             },
           },
         })
         console.log(`[AUTO] Created P5.1.1 for WBS "${wbsName}" (row ${rowIdx}) — 100% accepted`)
+
+        // Notify users
+        try {
+          const users = await prisma.user.findMany({ where: { roleCode: 'R06b', isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+          const projCode = (task as any).project?.projectCode || ''
+          const projName = (task as any).project?.projectName || ''
+          
+          if (users.length > 0) {
+            await prisma.notification.createMany({
+              data: users.map(u => ({
+                userId: u.id, title: `📋 Yêu cầu nghiệm thu mới: ${projCode}`,
+                message: `Đã tự động tạo Yêu cầu nghiệm thu cho hạng mục: ${wbsName}.`,
+                type: 'task_assigned', linkUrl: `/dashboard/tasks/${newP511.id}`,
+              }))
+            })
+            await notifyTaskActivated({
+              stepCode: 'P5.1.1', stepName: newP511.stepName,
+              projectCode: projCode, projectName: projName,
+              assignedRole: 'R06b', deadline: null, taskId: newP511.id,
+              mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
+            }).catch(console.error)
+          }
+        } catch (e) { console.error('[AUTO] P5.1.1 notification error:', e) }
       }
     } catch (err) {
       console.error('[AUTO] P5.1.1 check error:', err)

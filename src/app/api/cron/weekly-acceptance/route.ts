@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import { TASK_STATUS } from '@/lib/constants'
+import { notifyTaskActivated } from '@/lib/telegram-notifications'
 
 /**
  * WEEKLY ACCEPTANCE CRON JOB
@@ -128,7 +129,7 @@ export async function GET(request: Request) {
         try {
           const users = await prisma.user.findMany({
             where: { roleCode: rule.role, isActive: true },
-            select: { id: true },
+            select: { id: true, username: true, telegramChatId: true },
           })
           if (users.length > 0) {
             await prisma.notification.createMany({
@@ -140,6 +141,25 @@ export async function GET(request: Request) {
                 linkUrl: `/dashboard/tasks/${newTask.id}`,
               })),
             })
+            
+            // Telegram notification
+            try {
+              await notifyTaskActivated({
+                stepCode: step.code,
+                stepName: newTask.stepName,
+                projectCode: project.projectCode,
+                projectName: project.projectName,
+                assignedRole: rule.role,
+                deadline: newTask.deadline,
+                taskId: newTask.id,
+                mentionUsers: users.map(u => ({
+                  fullName: u.username,
+                  telegramChatId: u.telegramChatId
+                }))
+              })
+            } catch (err) {
+              console.error('[CRON] Telegram notification error:', err)
+            }
           }
         } catch (err) {
           console.error(`[CRON] ${step.code} notification error:`, err)

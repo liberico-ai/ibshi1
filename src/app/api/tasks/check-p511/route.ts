@@ -3,6 +3,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import prisma from '@/lib/db'
 import { TASK_STATUS } from '@/lib/constants'
+import { notifyTaskActivated } from '@/lib/telegram-notifications'
 
 /**
  * POST /api/tasks/check-p511
@@ -185,6 +186,49 @@ export async function POST(req: NextRequest) {
           },
         },
       })
+
+      // Notify users
+      const notifyRole = rule?.role || 'R06'
+      try {
+        const users = await prisma.user.findMany({
+          where: { roleCode: notifyRole, isActive: true },
+          select: { id: true, username: true, telegramChatId: true },
+        })
+
+        if (users.length > 0) {
+          // In-app notifications
+          await prisma.notification.createMany({
+            data: users.map(u => ({
+              userId: u.id,
+              title: `📋 Yêu cầu nghiệm thu mới: ${project?.projectCode}`,
+              message: `Đã tự động tạo Yêu cầu nghiệm thu cho hạng mục: ${hangMucName}.`,
+              type: 'task_assigned',
+              linkUrl: `/dashboard/tasks/${newTask.id}`,
+            }))
+          })
+
+          // Telegram notifications
+          try {
+            await notifyTaskActivated({
+              stepCode: 'P5.1.1',
+              stepName: newTask.stepName,
+              projectCode: project?.projectCode || '',
+              projectName: project?.projectName || '',
+              assignedRole: notifyRole,
+              deadline: newTask.deadline,
+              taskId: newTask.id,
+              mentionUsers: users.map(u => ({
+                fullName: u.username,
+                telegramChatId: u.telegramChatId
+              }))
+            })
+          } catch (err) {
+            console.error('[P5.1.1] Telegram notification error:', err)
+          }
+        }
+      } catch (err) {
+        console.error('[P5.1.1] Notification creation error:', err)
+      }
 
       return successResponse({
         allIssued: true,

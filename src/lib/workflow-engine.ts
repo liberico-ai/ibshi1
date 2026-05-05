@@ -91,6 +91,33 @@ export async function completeTask(
         resultData: rd,
       }
     })
+
+    // Notify for P5.3A
+    const roleCode = WORKFLOW_RULES['P5.3A']?.role || 'R09'
+    try {
+      const users = await prisma.user.findMany({ where: { roleCode, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+      if (users.length > 0) {
+        const project = await prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } })
+        const p53aTask = await prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P5.3A' }, orderBy: { createdAt: 'desc' } })
+        if (project && p53aTask) {
+          await prisma.notification.createMany({
+            data: users.map(u => ({
+              userId: u.id,
+              title: `Công việc mới: QAQC nghiệm thu CL`,
+              message: `Bước P5.3A của dự án ${project.projectCode} đã sẵn sàng.`,
+              type: 'task_assigned',
+              linkUrl: `/dashboard/tasks/${p53aTask.id}`,
+            }))
+          })
+          await notifyTaskActivated({
+            stepCode: 'P5.3A', stepName: p53aTask.stepName,
+            projectCode: project.projectCode, projectName: project.projectName,
+            assignedRole: roleCode, deadline: null, taskId: p53aTask.id,
+            mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
+          }).catch(console.error)
+        }
+      }
+    } catch (e) { console.error(e) }
   }
 
   if (!rule) return { nextSteps: [] }
@@ -215,6 +242,28 @@ async function checkAndCreateP51(taskId: string) {
         startedAt: new Date(),
       }
     })
+
+    // Notify for P5.1
+    try {
+      const users = await prisma.user.findMany({ where: { roleCode: rule.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+      const project = await prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } })
+      const p51Task = await prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P5.1' }, orderBy: { createdAt: 'desc' } })
+      if (users.length > 0 && project && p51Task) {
+        await prisma.notification.createMany({
+          data: users.map(u => ({
+            userId: u.id, title: `Công việc mới: Báo cáo SX Hàng ngày`,
+            message: `Bước P5.1 của dự án ${project.projectCode} đã sẵn sàng.`,
+            type: 'task_assigned', linkUrl: `/dashboard/tasks/${p51Task.id}`,
+          }))
+        })
+        await notifyTaskActivated({
+          stepCode: 'P5.1', stepName: p51Task.stepName,
+          projectCode: project.projectCode, projectName: project.projectName,
+          assignedRole: rule.role, deadline: null, taskId: p51Task.id,
+          mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
+        }).catch(console.error)
+      }
+    } catch (e) { console.error(e) }
   }
 
   // Also create P5.1A for PM (subcontractor daily report)
@@ -238,6 +287,28 @@ async function checkAndCreateP51(taskId: string) {
           startedAt: new Date(),
         }
       })
+
+      // Notify for P5.1A
+      try {
+        const users = await prisma.user.findMany({ where: { roleCode: ruleP51A.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+        const project = await prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } })
+        const p51ATask = await prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P5.1A' }, orderBy: { createdAt: 'desc' } })
+        if (users.length > 0 && project && p51ATask) {
+          await prisma.notification.createMany({
+            data: users.map(u => ({
+              userId: u.id, title: `Công việc mới: Báo cáo SX Thầu phụ`,
+              message: `Bước P5.1A của dự án ${project.projectCode} đã sẵn sàng.`,
+              type: 'task_assigned', linkUrl: `/dashboard/tasks/${p51ATask.id}`,
+            }))
+          })
+          await notifyTaskActivated({
+            stepCode: 'P5.1A', stepName: p51ATask.stepName,
+            projectCode: project.projectCode, projectName: project.projectName,
+            assignedRole: ruleP51A.role, deadline: null, taskId: p51ATask.id,
+            mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
+          }).catch(console.error)
+        }
+      } catch (e) { console.error(e) }
     }
   }
 
