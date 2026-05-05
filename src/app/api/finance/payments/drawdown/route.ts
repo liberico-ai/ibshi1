@@ -7,6 +7,10 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    if (!['R01', 'R02', 'R02a', 'R08', 'R08a', 'R10'].includes(user.roleCode)) {
+      return NextResponse.json({ error: 'Không có quyền xem giải ngân' }, { status: 403 })
+    }
+
     // Build the query to get all drawdowns with relations
     const drawdowns = await prisma.loanDrawdown.findMany({
       orderBy: { createdAt: 'desc' },
@@ -44,6 +48,10 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    if (!['R01', 'R08', 'R08a', 'R10'].includes(user.roleCode)) {
+      return NextResponse.json({ error: 'Chỉ Kế toán mới có quyền tạo giải ngân' }, { status: 403 })
+    }
+
     const body = await req.json()
     const { contractId, invoices, notes } = body 
 
@@ -53,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     const totalAmount = invoices.reduce((sum: number, inv: any) => sum + Number(inv.totalAmount || 0), 0)
 
-    const drawdownNo = `DD-${new Date().toISOString().slice(0,10).replace(/-/g, '')}-${Math.floor(Math.random() * 1000)}`
+    const drawdownNo = `DD-${new Date().toISOString().slice(0,10).replace(/-/g, '')}-${Date.now().toString(36).slice(-4)}${Math.floor(Math.random() * 1000)}`
 
     // Generate drawdown and its beneficiary lines
     const result = await prisma.$transaction(async (tx) => {

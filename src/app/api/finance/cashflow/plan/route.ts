@@ -97,6 +97,11 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const allowedRoles = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a']
+    if (!allowedRoles.includes(user.roleCode)) {
+      return NextResponse.json({ error: 'Không có quyền xem kế hoạch tài chính' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
 

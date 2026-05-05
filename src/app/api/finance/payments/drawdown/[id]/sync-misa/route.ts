@@ -84,6 +84,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   } catch (error: any) {
     console.error('Misa Sync Error:', error)
-    return NextResponse.json({ error: error.message || 'Lỗi hệ thống' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi hệ thống khi đồng bộ Misa' }, { status: 500 })
   }
 }

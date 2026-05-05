@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error: any) {
     console.error('procurement-tracking GET ERROR:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi hệ thống khi tải theo dõi mua sắm' }, { status: 500 })
   }
 }
 
@@ -137,6 +137,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true, message: 'Đã cập nhật thành công' })
   } catch (error: any) {
     console.error('procurement-tracking PUT ERROR:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi hệ thống khi cập nhật mua sắm' }, { status: 500 })
   }
 }

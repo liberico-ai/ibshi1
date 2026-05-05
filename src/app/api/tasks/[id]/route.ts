@@ -592,9 +592,15 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
   }
 
   if (action === 'p35_submit_groups') {
+    if (!['R01', 'R07', 'R07a'].includes(payload.roleCode)) {
+      return errorResponse('Chỉ Thương mại mới có quyền đệ trình báo giá', 403)
+    }
     const task = await prisma.workflowTask.findUnique({ where: { id } })
     if (!task) return errorResponse('Task not found', 404)
-    
+
+    if (!body.resultData?.groupsToSubmit || !Array.isArray(body.resultData.groupsToSubmit)) {
+      return errorResponse('Dữ liệu nhóm không hợp lệ', 400)
+    }
     const { groupsToSubmit, totalItemsCount, submittedItemsCount } = body.resultData
     // groupsToSubmit represents the groups being submitted right now.
     
@@ -653,10 +659,16 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
   }
 
   if (action === 'p36_evaluate_groups') {
+    if (!['R01', 'R02'].includes(payload.roleCode)) {
+      return errorResponse('Chỉ BGĐ/PM mới có quyền phê duyệt báo giá', 403)
+    }
     const task = await prisma.workflowTask.findUnique({ where: { id } })
     if (!task) return errorResponse('Task not found', 404)
 
-    const { evaluations } = body.resultData 
+    if (!body.resultData?.evaluations || !Array.isArray(body.resultData.evaluations)) {
+      return errorResponse('Dữ liệu đánh giá không hợp lệ', 400)
+    }
+    const { evaluations } = body.resultData
     // evaluations is [{ groupId, action: 'APPROVE' | 'REJECT', reason?: string }]
     
     const currentRd = (task.resultData as any) || {}
