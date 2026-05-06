@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest } from '@/lib/auth'
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -88,11 +88,11 @@ export async function POST(req: Request) {
 
   } catch (err: any) {
     console.error('Save Finance Plan error:', err)
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi hệ thống khi lưu kế hoạch tài chính' }, { status: 500 })
   }
 }
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -119,6 +119,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, plan })
 
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Error fetching plan' }, { status: 500 })
+    return NextResponse.json({ error: 'Lỗi hệ thống khi tải kế hoạch tài chính' }, { status: 500 })
   }
 }

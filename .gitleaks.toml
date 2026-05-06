@@ -10,11 +10,15 @@ regex = '''postgres(ql)?:\/\/[^\s:@\/]+:[^\s@\/]+@'''
 tags = ["secret", "postgres"]
 
 [allowlist]
-description = "Allow example placeholders"
+description = "Allow example placeholders and deleted audit scripts"
 regexes = [
   '''postgres(ql)?:\/\/user:password@''',
   '''postgres(ql)?:\/\/[^\s:@\/]*:(placeholder|example|dummy|\*\*\*)@''',
 ]
 paths = [
   '''\.env\.example$''',
+  '''^audit/''',
+]
+commits = [
+  "e98fb16610d6d9ff00377c47d7645c633866881c",
 ]

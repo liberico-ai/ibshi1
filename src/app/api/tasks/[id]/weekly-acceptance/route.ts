@@ -153,8 +153,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     for (const log of dailyLogs) {
       const lsxCode = log.lsxCode
       const reportDate = log.reportDate instanceof Date ? log.reportDate : new Date(log.reportDate)
-      const dayOfWeek = reportDate.getDay() // 1=Mon through 5=Fri
-      const dayKey = dayKeys[dayOfWeek - 1] || 'mon'
+      const dayOfWeek = reportDate.getDay() // 0=Sun, 1=Mon ... 6=Sat
+      if (dayOfWeek === 0 || dayOfWeek === 6) continue
+      const dayKey = dayKeys[dayOfWeek - 1]
 
       if (!matrixMap.has(lsxCode)) {
         // Parse lsxCode: "rowIdx_stageKey_teamIdx"
