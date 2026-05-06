@@ -53,10 +53,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = pResult.data
     const result = await validateBody(req, updateUserSchema)
     if (!result.success) return result.response
-    const { fullName, email, roleCode, userLevel, departmentCode, isActive } = result.data
+    const { username, fullName, email, roleCode, userLevel, departmentCode, isActive } = result.data
 
     const existing = await prisma.user.findUnique({ where: { id } })
     if (!existing) return errorResponse('User không tồn tại', 404)
+
+    // Username change: check uniqueness
+    if (username !== undefined && username !== existing.username) {
+      const dup = await prisma.user.findUnique({ where: { username } })
+      if (dup) return errorResponse(`Username "${username}" đã tồn tại`, 409)
+    }
 
     let departmentId: string | undefined | null = undefined
     if (departmentCode !== undefined) {
@@ -69,6 +75,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const data: Record<string, unknown> = {}
+    if (username !== undefined) data.username = username
     if (fullName !== undefined) data.fullName = fullName
     if (email !== undefined) data.email = email || null
     if (roleCode !== undefined) data.roleCode = roleCode
@@ -95,7 +102,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-// DELETE /api/users/[id] — Soft delete (deactivate)
+// DELETE /api/users/[id] — Hard delete (only inactive users without audit logs)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const payload = await authenticateRequest(req)
@@ -106,18 +113,36 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!pResult2.success) return pResult2.response
     const { id } = pResult2.data
 
-    if (id === payload.userId) return errorResponse('Không thể vô hiệu hóa chính mình')
+    if (id === payload.userId) return errorResponse('Không thể xoá chính mình')
 
     const existing = await prisma.user.findUnique({ where: { id } })
     if (!existing) return errorResponse('User không tồn tại', 404)
 
-    await prisma.user.update({ where: { id }, data: { isActive: false } })
+    if (existing.isActive) {
+      return errorResponse('Chỉ có thể xoá user đã ở trạng thái Inactive. Hãy vô hiệu hoá trước.', 400)
+    }
 
-    await logAudit(payload.userId, 'DEACTIVATE', 'User', id, {
+    // Block hard-delete if user has any audit log (preserve audit trail)
+    const auditCount = await prisma.auditLog.count({ where: { userId: id } })
+    if (auditCount > 0) {
+      return errorResponse(`Không thể xoá: user đã có ${auditCount} bản ghi nhật ký hoạt động. Chỉ xoá được tài khoản chưa từng hoạt động.`, 400)
+    }
+
+    // Log BEFORE delete (audit log references admin's userId, not target's)
+    await logAudit(payload.userId, 'DELETE', 'User', id, {
       targetUser: existing.username,
+      targetFullName: existing.fullName,
     }, getClientIP(req))
 
-    return successResponse({}, 'Đã vô hiệu hóa user')
+    // Clean up dependents that don't cascade automatically
+    await prisma.$transaction([
+      prisma.notification.deleteMany({ where: { userId: id } }),
+      prisma.workflowTask.updateMany({ where: { assignedTo: id }, data: { assignedTo: null } }),
+      prisma.employee.updateMany({ where: { userId: id }, data: { userId: null } }),
+      prisma.user.delete({ where: { id } }),
+    ])
+
+    return successResponse({}, `Đã xoá user ${existing.username}`)
   } catch (err) {
     console.error('DELETE /api/users/[id] error:', err)
     return errorResponse('Lỗi hệ thống', 500)

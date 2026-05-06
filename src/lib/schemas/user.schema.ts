@@ -15,6 +15,7 @@ export type CreateUserInput = z.infer<typeof createUserSchema>
 
 // PATCH /api/users/[id] — Update user
 export const updateUserSchema = z.object({
+  username: z.string().regex(/^[a-z0-9._-]{3,32}$/, 'Username chỉ chấp nhận chữ thường, số và . _ - (3-32 ký tự)').optional(),
   fullName: z.string().min(1).optional(),
   roleCode: z.string().min(1).optional(),
   userLevel: z.number().int().min(1).max(3).optional(),

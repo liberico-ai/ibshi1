@@ -58,6 +58,17 @@ export default function UsersPage() {
     if (res.ok) { reload(); showToast(`${user.username}: ${!user.isActive ? 'Đã kích hoạt' : 'Đã vô hiệu hóa'}`) }
   }
 
+  const deleteUser = async (user: UserItem) => {
+    if (!confirm(`Xoá vĩnh viễn tài khoản "${user.username}" (${user.fullName})?\n\nHành động này KHÔNG THỂ hoàn tác.`)) return
+    const res = await apiFetch(`/api/users/${user.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      reload()
+      showToast(`Đã xoá ${user.username}`)
+    } else {
+      alert(res.error || 'Không xoá được user')
+    }
+  }
+
   const filtered = allUsers.filter((u) => {
     if (roleFilter && u.roleCode !== roleFilter && !u.roleCode.startsWith(roleFilter)) return false
     if (search) {
@@ -174,6 +185,14 @@ export default function UsersPage() {
                     <button onClick={() => setResetUser(u)} title="Reset mật khẩu"
                       className="w-7 h-7 rounded-lg flex items-center justify-center text-xs cursor-pointer transition-all hover:scale-110"
                       style={{ background: '#fef3c7', color: '#d97706' }}>🔑</button>
+                    <button onClick={() => deleteUser(u)} disabled={u.isActive}
+                      title={u.isActive ? 'Vô hiệu hoá user trước khi xoá' : 'Xoá vĩnh viễn'}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all ${u.isActive ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110'}`}
+                      style={{
+                        background: u.isActive ? '#f3f4f6' : '#fee2e2',
+                        color: u.isActive ? '#9ca3af' : '#dc2626',
+                        opacity: u.isActive ? 0.4 : 1,
+                      }}>🗑️</button>
                   </div>
                 </td>
               </tr>
@@ -193,6 +212,7 @@ export default function UsersPage() {
 /* ── Edit User Modal ── */
 function EditUserModal({ user, onClose, onSaved }: { user: UserItem; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
+    username: user.username,
     fullName: user.fullName,
     email: user.email || '',
     roleCode: user.roleCode,
@@ -205,7 +225,10 @@ function EditUserModal({ user, onClose, onSaved }: { user: UserItem; onClose: ()
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSubmitting(true)
-    const res = await apiFetch(`/api/users/${user.id}`, { method: 'PUT', body: JSON.stringify(form) })
+    // Only send username if changed (avoid unnecessary uniqueness check)
+    const payload: Record<string, unknown> = { ...form }
+    if (form.username === user.username) delete payload.username
+    const res = await apiFetch(`/api/users/${user.id}`, { method: 'PUT', body: JSON.stringify(payload) })
     setSubmitting(false)
     if (res.ok) onSaved()
     else setError(res.error || 'Lỗi cập nhật')
@@ -218,6 +241,13 @@ function EditUserModal({ user, onClose, onSaved }: { user: UserItem; onClose: ()
         <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>ID: {user.id}</p>
         {error && <div className="mb-3 p-2 rounded-lg text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>{error}</div>}
         <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+          <div className="col-span-2"><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Tên đăng nhập (username)</label>
+            <input className="input font-mono" value={form.username}
+              onChange={e => setForm({ ...form, username: e.target.value.toLowerCase().trim() })}
+              pattern="[a-z0-9._-]{3,32}"
+              title="Chỉ chữ thường, số và . _ - (3-32 ký tự)"
+              required />
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Chỉ chữ thường, số và <code>. _ -</code> (3-32 ký tự)</p></div>
           <div className="col-span-2"><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Họ tên</label>
             <input className="input" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} required /></div>
           <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Email</label>
