@@ -154,7 +154,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       const lsxCode = log.lsxCode
       const reportDate = log.reportDate instanceof Date ? log.reportDate : new Date(log.reportDate)
       const dayOfWeek = reportDate.getDay() // 0=Sun, 1=Mon ... 6=Sat
-      if (dayOfWeek === 0 || dayOfWeek === 6) continue // skip weekend
+      if (dayOfWeek === 0 || dayOfWeek === 6) continue
       const dayKey = dayKeys[dayOfWeek - 1]
 
       if (!matrixMap.has(lsxCode)) {

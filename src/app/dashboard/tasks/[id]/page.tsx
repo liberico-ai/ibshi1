@@ -1033,6 +1033,7 @@ function MomSectionsUI({ isEditable, attendantsData, sectionsData, onAttendantsC
       if (!file) return
       const reader = new FileReader()
       reader.onload = (evt) => {
+        try {
         const wb = XLSX.read(evt.target?.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[wb.SheetNames.length - 1]] // Last sheet is usually the target
         const data: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
@@ -1154,6 +1155,13 @@ function MomSectionsUI({ isEditable, attendantsData, sectionsData, onAttendantsC
         if (parsedAttendants.length > 0) updateAttendants(parsedAttendants)
         if (parsedSections.length > 0) updateSections(parsedSections)
         if (onHeaderImport && Object.keys(header).length > 0) onHeaderImport(header)
+        if (parsedAttendants.length === 0 && parsedSections.length === 0 && Object.keys(header).length === 0) {
+          alert('Không đọc được dữ liệu từ file BB họp. Kiểm tra lại định dạng file.')
+        }
+        } catch (err) {
+          console.error('Import MOM Excel error:', err)
+          alert(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
+        }
       }
       reader.readAsBinaryString(file)
     }
@@ -1677,53 +1685,75 @@ export default function TaskDetailPage() {
       if (!file) return
       const reader = new FileReader()
       reader.onload = (evt) => {
-        const wb = XLSX.read(evt.target?.result, { type: 'binary' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })
-        if (jsonData.length < 2) return
-        const headerRow = jsonData[0].map(h => String(h || '').trim().toLowerCase())
-        const keyMap: Record<string, string> = {
-          'tên milestone': 'name', 'tên': 'name', 'hạng mục': 'name', 'milestone': 'name',
-          'bắt đầu': 'startDate', 'start': 'startDate', 'ngày bắt đầu': 'startDate',
-          'kết thúc': 'endDate', 'end': 'endDate', 'ngày kết thúc': 'endDate',
-          'người phụ trách': 'assigneeId', 'pic': 'assigneeId', 'assignee': 'assigneeId'
-        }
-        const colMapping = headerRow.map(h => keyMap[h] || '')
-        const imported: typeof milestones = []
-        for (let i = 1; i < jsonData.length; i++) {
-          const rowData = jsonData[i]
-          if (!rowData || rowData.every(c => !c)) continue
-          const newRow = { name: '', startDate: '', endDate: '', assigneeId: '' }
-          colMapping.forEach((key, ci) => {
-            if (key && rowData[ci] != null) {
-              let val = String(rowData[ci])
-              if (key === 'assigneeId') {
-                const matchedUser = userList.find(u => u.fullName.toLowerCase() === val.toLowerCase() || u.id === val)
-                if (matchedUser) val = matchedUser.id
-              }
-              if (key === 'startDate' || key === 'endDate') {
-                if (val && val.includes('/')) {
-                  const parts = val.split('/')
-                  if (parts.length === 3) val = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+        try {
+          const wb = XLSX.read(evt.target?.result, { type: 'binary' })
+          const ws = wb.Sheets[wb.SheetNames[0]]
+          const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' })
+          if (jsonData.length < 2) {
+            setError('File không có dữ liệu.')
+            return
+          }
+          const keyMap: Record<string, string> = {
+            'tên milestone': 'name', 'tên': 'name', 'hạng mục': 'name', 'milestone': 'name',
+            'bắt đầu': 'startDate', 'start': 'startDate', 'ngày bắt đầu': 'startDate',
+            'kết thúc': 'endDate', 'end': 'endDate', 'ngày kết thúc': 'endDate',
+            'người phụ trách': 'assigneeId', 'pic': 'assigneeId', 'assignee': 'assigneeId'
+          }
+          // Auto-detect header row (scan first 15 rows)
+          let headerIdx = 0
+          let bestMatch = 0
+          for (let r = 0; r < Math.min(15, jsonData.length); r++) {
+            const row = jsonData[r] || []
+            const matchCount = row.filter(c => keyMap[String(c || '').trim().toLowerCase()]).length
+            if (matchCount > bestMatch) { bestMatch = matchCount; headerIdx = r }
+          }
+          if (bestMatch < 1) {
+            setError('Không tìm thấy header hợp lệ. Cần có cột: Tên/Hạng mục, Bắt đầu, Kết thúc, PIC.')
+            return
+          }
+          const headerRow = jsonData[headerIdx].map(h => String(h || '').trim().toLowerCase())
+          const colMapping = headerRow.map(h => keyMap[h] || '')
+          const imported: typeof milestones = []
+          for (let i = headerIdx + 1; i < jsonData.length; i++) {
+            const rowData = jsonData[i]
+            if (!rowData || rowData.every(c => !c)) continue
+            const newRow = { name: '', startDate: '', endDate: '', assigneeId: '' }
+            colMapping.forEach((key, ci) => {
+              if (key && rowData[ci] != null) {
+                let val = String(rowData[ci])
+                if (key === 'assigneeId') {
+                  const matchedUser = userList.find(u => u.fullName.toLowerCase() === val.toLowerCase() || u.id === val)
+                  if (matchedUser) val = matchedUser.id
                 }
-                if (!isNaN(Number(val)) && Number(val) > 40000) {
-                   const date = new Date(Math.round((Number(val) - 25569) * 86400 * 1000))
-                   val = date.toISOString().split('T')[0]
+                if (key === 'startDate' || key === 'endDate') {
+                  if (val && val.includes('/')) {
+                    const parts = val.split('/')
+                    if (parts.length === 3) val = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+                  }
+                  if (!isNaN(Number(val)) && Number(val) > 40000) {
+                     const date = new Date(Math.round((Number(val) - 25569) * 86400 * 1000))
+                     val = date.toISOString().split('T')[0]
+                  }
                 }
+                // @ts-expect-error dynamic
+                newRow[key] = val
               }
-              // @ts-expect-error dynamic
-              newRow[key] = val
-            }
-          })
-          if (newRow.name) imported.push(newRow)
-        }
-        if (imported.length > 0) {
-          setMilestones(prev => {
-            const cleanPrev = prev.filter(r => r.name.trim() || r.startDate || r.endDate)
-            return [...cleanPrev, ...imported]
-          })
-          setSuccessMsg(`✅ Đã import ${imported.length} milestones`)
-          setTimeout(() => setSuccessMsg(''), 3000)
+            })
+            if (newRow.name) imported.push(newRow)
+          }
+          if (imported.length > 0) {
+            setMilestones(prev => {
+              const cleanPrev = prev.filter(r => r.name.trim() || r.startDate || r.endDate)
+              return [...cleanPrev, ...imported]
+            })
+            setSuccessMsg(`✅ Đã import ${imported.length} milestones`)
+            setTimeout(() => setSuccessMsg(''), 3000)
+          } else {
+            setError('Không có dòng dữ liệu hợp lệ trong file.')
+          }
+        } catch (err) {
+          console.error('Import Milestones Excel error:', err)
+          setError(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
         }
       }
       reader.readAsBinaryString(file)
@@ -1753,39 +1783,61 @@ export default function TaskDetailPage() {
       if (!file) return
       const reader = new FileReader()
       reader.onload = (evt) => {
-        const wb = XLSX.read(evt.target?.result, { type: 'binary' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })
-        if (jsonData.length < 2) return
-        const headerRow = jsonData[0].map(h => String(h || '').trim().toLowerCase())
-        const keyMap: Record<string, string> = {
-          'mã vật tư': 'code', 'mã vt': 'code', 'code': 'code', 'mã': 'code',
-          'tên vật tư': 'name', 'tên vt': 'name', 'name': 'name', 'tên': 'name',
-          'quy chuẩn': 'spec', 'quy cách': 'spec', 'spec': 'spec', 'specification': 'spec',
-          'số lượng': 'quantity', 'khối lượng': 'quantity', 'kl': 'quantity', 'sl': 'quantity', 'qty': 'quantity', 'quantity': 'quantity',
-          'đvt': 'unit', 'đv': 'unit', 'unit': 'unit'
-        }
-        const colMapping = headerRow.map(h => keyMap[h] || '')
-        const imported: typeof bomItems = []
-        for (let i = 1; i < jsonData.length; i++) {
-          const rowData = jsonData[i]
-          if (!rowData || rowData.every(c => !c)) continue
-          const newRow = { name: '', code: '', spec: '', quantity: '', unit: '' }
-          colMapping.forEach((key, ci) => {
-            if (key && rowData[ci] != null) {
-              // @ts-expect-error dynamic assignment
-              newRow[key] = String(rowData[ci])
-            }
-          })
-          if (newRow.name || newRow.code) imported.push(newRow)
-        }
-        if (imported.length > 0) {
-          setBomItems(prev => {
-            const cleanPrev = prev.filter(r => r.name.trim() || r.code.trim())
-            return [...cleanPrev, ...imported]
-          })
-          setSuccessMsg(`✅ Đã import ${imported.length} vật tư`)
-          setTimeout(() => setSuccessMsg(''), 3000)
+        try {
+          const wb = XLSX.read(evt.target?.result, { type: 'binary' })
+          const ws = wb.Sheets[wb.SheetNames[0]]
+          const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' })
+          if (jsonData.length < 2) {
+            setError('File không có dữ liệu.')
+            return
+          }
+          const keyMap: Record<string, string> = {
+            'mã vật tư': 'code', 'mã vt': 'code', 'code': 'code', 'mã': 'code',
+            'tên vật tư': 'name', 'tên vt': 'name', 'name': 'name', 'tên': 'name',
+            'quy chuẩn': 'spec', 'quy cách': 'spec', 'spec': 'spec', 'specification': 'spec',
+            'số lượng': 'quantity', 'khối lượng': 'quantity', 'kl': 'quantity', 'sl': 'quantity', 'qty': 'quantity', 'quantity': 'quantity',
+            'đvt': 'unit', 'đv': 'unit', 'unit': 'unit'
+          }
+          // Auto-detect header row
+          let headerIdx = 0
+          let bestMatch = 0
+          for (let r = 0; r < Math.min(15, jsonData.length); r++) {
+            const row = jsonData[r] || []
+            const matchCount = row.filter(c => keyMap[String(c || '').trim().toLowerCase()]).length
+            if (matchCount > bestMatch) { bestMatch = matchCount; headerIdx = r }
+          }
+          if (bestMatch < 1) {
+            setError('Không tìm thấy header hợp lệ. Cần có cột: Mã VT, Tên VT, Quy cách, Số lượng, ĐVT.')
+            return
+          }
+          const headerRow = jsonData[headerIdx].map(h => String(h || '').trim().toLowerCase())
+          const colMapping = headerRow.map(h => keyMap[h] || '')
+          const imported: typeof bomItems = []
+          for (let i = headerIdx + 1; i < jsonData.length; i++) {
+            const rowData = jsonData[i]
+            if (!rowData || rowData.every(c => !c)) continue
+            const newRow = { name: '', code: '', spec: '', quantity: '', unit: '' }
+            colMapping.forEach((key, ci) => {
+              if (key && rowData[ci] != null) {
+                // @ts-expect-error dynamic assignment
+                newRow[key] = String(rowData[ci])
+              }
+            })
+            if (newRow.name || newRow.code) imported.push(newRow)
+          }
+          if (imported.length > 0) {
+            setBomItems(prev => {
+              const cleanPrev = prev.filter(r => r.name.trim() || r.code.trim())
+              return [...cleanPrev, ...imported]
+            })
+            setSuccessMsg(`✅ Đã import ${imported.length} vật tư`)
+            setTimeout(() => setSuccessMsg(''), 3000)
+          } else {
+            setError('Không có dòng dữ liệu hợp lệ trong file.')
+          }
+        } catch (err) {
+          console.error('Import BOM Excel error:', err)
+          setError(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
         }
       }
       reader.readAsBinaryString(file)
@@ -2783,6 +2835,7 @@ export default function TaskDetailPage() {
                   if (!file) return
                   const reader = new FileReader()
                   reader.onload = (evt) => {
+                    try {
                     const wb = XLSX.read(evt.target?.result, { type: 'binary' })
                     const sheetNames = wb.SheetNames
 
@@ -2844,6 +2897,10 @@ export default function TaskDetailPage() {
                       setTimeout(() => setSuccessMsg(''), 4000)
                     } else {
                       setError('Không đọc được dữ liệu DT02. Kiểm tra file Excel có đúng định dạng.')
+                    }
+                    } catch (err) {
+                      console.error('Import DT02 Excel error:', err)
+                      setError(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
                     }
                   }
                   reader.readAsBinaryString(file)
@@ -3165,29 +3222,89 @@ export default function TaskDetailPage() {
                     if (!file) return
                     const reader = new FileReader()
                     reader.onload = (evt) => {
-                      const wb = XLSX.read(evt.target?.result, { type: 'binary' })
-                      const ws = wb.Sheets[wb.SheetNames[0]]
-                      const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 })
-                      if (jsonData.length < 2) return
-                      const headerRow = jsonData[0].map(h => String(h || '').trim().toLowerCase())
-                      const colMapping = headerRow.map(h => {
-                        const col = columns.find(c => c.label.toLowerCase() === h)
-                        return col ? col.key : ''
-                      })
-                      const imported: EstRow[] = []
-                      for (let i = 1; i < jsonData.length; i++) {
-                        const rowData = jsonData[i]
-                        if (!rowData || rowData.every(c => !c)) continue
-                        const newRow: EstRow = Object.fromEntries(columns.map(c => [c.key, '']))
-                        colMapping.forEach((key, ci) => {
-                          if (key && rowData[ci] != null) newRow[key] = String(rowData[ci])
-                        })
-                        if (Object.values(newRow).some(v => String(v).trim())) imported.push(newRow)
-                      }
-                      if (imported.length > 0) {
-                        save([...rows, ...imported])
-                        setSuccessMsg(`✅ Đã import ${imported.length} mục cho ${code}`)
-                        setTimeout(() => setSuccessMsg(''), 3000)
+                      try {
+                        const wb = XLSX.read(evt.target?.result, { type: 'binary' })
+                        const norm = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/[%():,\.]/g, '').replace(/\s+/g, ' ')
+                        const colKeys = columns.map(c => c.key)
+                        const hasMaCP = colKeys.includes('maCP')
+
+                        // Search every sheet for the header row that best matches our columns
+                        let bestSheet = ''
+                        let bestHeaderIdx = -1
+                        let bestData: (string | number | null)[][] = []
+                        let bestMapping: string[] = []
+                        let bestSttIdx = -1
+                        let bestMatchCount = 0
+
+                        for (const sheetName of wb.SheetNames) {
+                          const ws = wb.Sheets[sheetName]
+                          const data = XLSX.utils.sheet_to_json<(string | number | null)[]>(ws, { header: 1, defval: '' })
+                          const scanLimit = Math.min(40, data.length)
+                          for (let r = 0; r < scanLimit; r++) {
+                            const row = data[r] || []
+                            const normalized = row.map(c => norm(c))
+                            const mapping = normalized.map(h => {
+                              const col = columns.find(c => norm(c.label) === h)
+                              return col ? col.key : ''
+                            })
+                            const matchCount = mapping.filter(Boolean).length
+                            if (matchCount > bestMatchCount) {
+                              bestMatchCount = matchCount
+                              bestSheet = sheetName
+                              bestHeaderIdx = r
+                              bestData = data
+                              bestMapping = mapping
+                              bestSttIdx = normalized.findIndex(h => h === 'stt')
+                            }
+                          }
+                        }
+
+                        if (bestMatchCount < 2) {
+                          setError(`Không tìm thấy header trong file Excel. Cần các cột: ${columns.map(c => c.label).join(', ')}.`)
+                          return
+                        }
+
+                        const imported: EstRow[] = []
+                        for (let i = bestHeaderIdx + 1; i < bestData.length; i++) {
+                          const rowData = bestData[i] || []
+                          if (rowData.every(c => !String(c ?? '').trim())) continue
+
+                          // Skip total/summary/footer rows
+                          const allText = rowData.map(c => String(c ?? '')).join(' ').toLowerCase()
+                          if (/tổng (hợp|cộng|chi phí)|grand total|người (tổng hợp|lập)|ngày.*tháng.*năm/.test(allText)) continue
+
+                          const newRow: EstRow = Object.fromEntries(columns.map(c => [c.key, '']))
+                          bestMapping.forEach((key, ci) => {
+                            if (!key) return
+                            const raw = rowData[ci]
+                            if (raw == null || String(raw).trim() === '') return
+                            // Percentage columns (e.g. tyLe): Excel stores 44.7% as 0.447 → multiply
+                            if (key === 'tyLe' && typeof raw === 'number' && raw > 0 && raw <= 1) {
+                              newRow[key] = String(+(raw * 100).toFixed(2))
+                            } else {
+                              newRow[key] = String(raw).trim()
+                            }
+                          })
+
+                          // Fallback: empty Mã CP → use STT (e.g. row "I" in DT02 has STT='I', Mã CP empty)
+                          if (hasMaCP && !newRow.maCP && bestSttIdx >= 0) {
+                            const sttVal = rowData[bestSttIdx]
+                            if (sttVal != null && String(sttVal).trim()) newRow.maCP = String(sttVal).trim()
+                          }
+
+                          if (Object.values(newRow).some(v => String(v).trim())) imported.push(newRow)
+                        }
+
+                        if (imported.length > 0) {
+                          save(imported)
+                          setSuccessMsg(`✅ Đã import ${imported.length} dòng cho ${code} (sheet "${bestSheet}")`)
+                          setTimeout(() => setSuccessMsg(''), 3000)
+                        } else {
+                          setError(`Sheet "${bestSheet}" không có dòng dữ liệu hợp lệ.`)
+                        }
+                      } catch (err) {
+                        console.error('Import Excel error:', err)
+                        setError(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
                       }
                     }
                     reader.readAsBinaryString(file)

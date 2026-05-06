@@ -98,6 +98,9 @@ schema-expansion.md
 ibs-erp-20260322
 /Dữ liệu HI sau migrate/
 
+# Audit/scratch tooling
+/audit/
+
 # Scratch seeds
 tmp_seed.ts
 tmp_seed.js
