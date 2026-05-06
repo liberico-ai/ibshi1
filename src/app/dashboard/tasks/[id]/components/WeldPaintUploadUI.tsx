@@ -220,8 +220,15 @@ function MaterialSection({ label, icon, color, category, data, onChange, isEdita
           const ws = wb.Sheets[wb.SheetNames[0]]
           const raw = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1 })
           const parsed = parsePrExcel(raw, category)
-          if (parsed.length > 0) onChange(JSON.stringify(parsed))
-        } catch (err) { console.error(`${category} parse error:`, err) }
+          if (parsed.length > 0) {
+            onChange(JSON.stringify(parsed))
+          } else {
+            alert(`Không đọc được dữ liệu vật tư ${category === 'weld' ? 'hàn' : 'sơn'} từ file. Kiểm tra lại định dạng (cần có cột STT/Item, Description, Grade/Color, Unit, Q.ty).`)
+          }
+        } catch (err) {
+          console.error(`${category} parse error:`, err)
+          alert(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
+        }
         setUploading(false)
       }
       reader.readAsBinaryString(file)
