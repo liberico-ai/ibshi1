@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
@@ -3224,7 +3224,7 @@ export default function TaskDetailPage() {
                     reader.onload = (evt) => {
                       try {
                         const wb = XLSX.read(evt.target?.result, { type: 'binary' })
-                        const norm = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/[%():,\.]/g, '').replace(/\s+/g, ' ')
+                        const norm = (s: unknown) => String(s ?? '').normalize('NFC').trim().toLowerCase().replace(/[%():,\.]/g, '').replace(/\s+/g, ' ').trim()
                         const colKeys = columns.map(c => c.key)
                         const hasMaCP = colKeys.includes('maCP')
 
@@ -3278,12 +3278,47 @@ export default function TaskDetailPage() {
                             if (!key) return
                             const raw = rowData[ci]
                             if (raw == null || String(raw).trim() === '') return
-                            // Percentage columns (e.g. tyLe): Excel stores 44.7% as 0.447 → multiply
-                            if (key === 'tyLe' && typeof raw === 'number' && raw > 0 && raw <= 1) {
-                              newRow[key] = String(+(raw * 100).toFixed(2))
-                            } else {
-                              newRow[key] = String(raw).trim()
+
+                            // Percentage column: handle "44.7%" text, 44.7 number, or 0.447 decimal
+                            if (key === 'tyLe') {
+                              let pct: number
+                              if (typeof raw === 'number') {
+                                pct = raw > 0 && raw <= 1 ? raw * 100 : raw
+                              } else {
+                                const cleaned = String(raw).replace(/[%\s]/g, '').replace(',', '.')
+                                pct = parseFloat(cleaned)
+                                if (!isNaN(pct) && pct > 0 && pct <= 1) pct = pct * 100
+                              }
+                              if (!isNaN(pct)) newRow[key] = String(+pct.toFixed(2))
+                              return
                             }
+
+                            // Currency columns: round to integer (Excel formulas may have decimal residue)
+                            if (['giaTri', 'donGia', 'thanhTien'].includes(key)) {
+                              let num: number
+                              if (typeof raw === 'number') {
+                                num = Math.round(raw)
+                              } else {
+                                // Strip thousand seps, normalize decimal
+                                const cleaned = String(raw).replace(/[\s₫đ%]/g, '')
+                                  .replace(/\.(?=\d{3}(\D|$))/g, '') // drop dots that look like thousand separators
+                                  .replace(',', '.')
+                                num = Math.round(parseFloat(cleaned))
+                              }
+                              if (!isNaN(num)) newRow[key] = String(num)
+                              return
+                            }
+
+                            // Quantity-like number columns: parse but keep precision
+                            if (['kl', 'sl'].includes(key)) {
+                              const numVal = typeof raw === 'number'
+                                ? raw
+                                : parseFloat(String(raw).replace(/[\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'))
+                              if (!isNaN(numVal)) newRow[key] = String(+numVal.toFixed(3))
+                              return
+                            }
+
+                            newRow[key] = String(raw).trim()
                           })
 
                           // Fallback: empty Mã CP → use STT (e.g. row "I" in DT02 has STT='I', Mã CP empty)
@@ -3371,12 +3406,28 @@ export default function TaskDetailPage() {
                                 </select>
                               )
                             }
-                            const isNumber = c.type === 'number' || ['kl', 'sl', 'dongia', 'thanhtien'].includes(c.key.toLowerCase())
+                            const keyLower = c.key.toLowerCase()
+                            const isCurrency = ['giatri', 'dongia', 'thanhtien'].includes(keyLower)
+                            const isPercent = keyLower === 'tyle'
+                            const isQty = ['kl', 'sl'].includes(keyLower)
+                            const isNumber = c.type === 'number' || isCurrency || isPercent || isQty
+                            if (isNumber) {
+                              return (
+                                <FormattedNumericInput key={c.key}
+                                  className="input"
+                                  value={row[c.key] || ''}
+                                  disabled={!isActive}
+                                  kind={isCurrency ? 'currency' : isPercent ? 'percent' : 'number'}
+                                  onChange={v => update(ri, c.key, v)}
+                                  placeholder={c.label}
+                                  style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: 'right' }} />
+                              )
+                            }
                             return (
-                              <input key={c.key} type={isNumber ? 'number' : 'text'} className="input" value={row[c.key] || ''} disabled={!isActive}
+                              <input key={c.key} type="text" className="input" value={row[c.key] || ''} disabled={!isActive}
                                 onChange={e => update(ri, c.key, e.target.value)}
                                 placeholder={c.label}
-                                style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: isNumber ? 'right' : 'left' }} />
+                                style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: 'left' }} />
                             )
                           })}
                           {isActive && rows.length > 1 && (
@@ -3667,12 +3718,28 @@ export default function TaskDetailPage() {
                                 </select>
                               )
                             }
-                            const isNumber = c.type === 'number' || ['kl', 'sl', 'dongia', 'thanhtien'].includes(c.key.toLowerCase())
+                            const keyLower = c.key.toLowerCase()
+                            const isCurrency = ['giatri', 'dongia', 'thanhtien'].includes(keyLower)
+                            const isPercent = keyLower === 'tyle'
+                            const isQty = ['kl', 'sl'].includes(keyLower)
+                            const isNumber = c.type === 'number' || isCurrency || isPercent || isQty
+                            if (isNumber) {
+                              return (
+                                <FormattedNumericInput key={c.key}
+                                  className="input"
+                                  value={row[c.key] || ''}
+                                  disabled={!isActive}
+                                  kind={isCurrency ? 'currency' : isPercent ? 'percent' : 'number'}
+                                  onChange={v => update(ri, c.key, v)}
+                                  placeholder={c.label}
+                                  style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: 'right' }} />
+                              )
+                            }
                             return (
-                              <input key={c.key} type={isNumber ? 'number' : 'text'} className="input" value={row[c.key] || ''} disabled={!isActive}
+                              <input key={c.key} type="text" className="input" value={row[c.key] || ''} disabled={!isActive}
                                 onChange={e => update(ri, c.key, e.target.value)}
                                 placeholder={c.label}
-                                style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: isNumber ? 'right' : 'left' }} />
+                                style={{ fontSize: '0.75rem', padding: '3px 6px', textAlign: 'left' }} />
                             )
                           })}
                           {isActive && rows.length > 1 && (
@@ -5695,6 +5762,66 @@ function TaskAssignModal({ task, userList, onClose, onSubmit }: {
   )
 }
 
+// Vietnamese-formatted numeric input: shows "902.169.931" / "44,7" when blurred,
+// allows free typing while focused, normalizes to canonical (US-style) on blur.
+function FormattedNumericInput({
+  value, onChange, kind = 'number', disabled, placeholder, style, className,
+}: {
+  value: string | number
+  onChange: (v: string) => void
+  kind?: 'currency' | 'percent' | 'number'
+  disabled?: boolean
+  placeholder?: string
+  style?: React.CSSProperties
+  className?: string
+}) {
+  const initial = value == null ? '' : String(value)
+  const [internal, setInternal] = React.useState(initial)
+  const [focused, setFocused] = React.useState(false)
+
+  // Sync from external value when not focused (e.g. after import / formula recalc)
+  React.useEffect(() => {
+    if (!focused) setInternal(value == null ? '' : String(value))
+  }, [value, focused])
+
+  const formatted = React.useMemo(() => {
+    if (internal === '' || internal == null) return ''
+    const num = parseFloat(internal.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'))
+    if (isNaN(num)) return internal
+    if (kind === 'currency') return Math.round(num).toLocaleString('vi-VN')
+    if (kind === 'percent') return num.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
+    return num.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
+  }, [internal, kind])
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      className={className}
+      value={focused ? internal : formatted}
+      disabled={disabled}
+      placeholder={placeholder}
+      style={style}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false)
+        const num = parseFloat(internal.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'))
+        if (isNaN(num)) {
+          onChange(internal === '' ? '' : internal)
+        } else {
+          const canonical = kind === 'currency' ? String(Math.round(num)) : String(+num.toFixed(3))
+          setInternal(canonical)
+          onChange(canonical)
+        }
+      }}
+      onChange={e => {
+        const cleaned = e.target.value.replace(/[^\d.,\-]/g, '')
+        setInternal(cleaned)
+      }}
+    />
+  )
+}
+
 function renderField(
   field: FormField,
   value: string | number,
@@ -5775,15 +5902,13 @@ function renderField(
     case 'number':
     case 'currency':
       return (
-        <input
-          type="number"
-          value={value === 0 ? '0' : (value || '')}
-          onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+        <FormattedNumericInput
+          value={value === 0 ? '0' : (value ?? '')}
+          onChange={v => onChange(v === '' ? '' : Number(v))}
+          kind={field.type === 'currency' ? 'currency' : 'number'}
           disabled={!enabled}
-          min={field.min}
-          max={field.max}
           placeholder={field.placeholder}
-          style={baseStyle}
+          style={{ ...baseStyle, textAlign: 'right' }}
         />
       )
 
