@@ -42,7 +42,9 @@ export async function GET() {
     const tasksByProject = new Map<string, typeof tasks>()
     for (const t of tasks) {
       const list = tasksByProject.get(t.projectId) || []
-      list.push(t)
+      if (!list.some(existing => existing.stepCode === t.stepCode)) {
+        list.push(t)
+      }
       tasksByProject.set(t.projectId, list)
     }
 
