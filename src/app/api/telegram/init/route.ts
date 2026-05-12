@@ -1,11 +1,16 @@
 import { startPolling, isPolling } from '@/lib/telegram'
+import { startScheduler, isSchedulerRunning } from '@/lib/cron-scheduler'
 
-// Called by Docker HEALTHCHECK to start bot polling
-// This runs INSIDE the container (localhost:3000), bypasses nginx
 export async function GET() {
-  if (isPolling()) {
-    return Response.json({ ok: true, status: 'already_running' })
+  let botStatus = 'already_running'
+  if (!isPolling()) {
+    const started = await startPolling()
+    botStatus = started ? 'started' : 'failed'
   }
-  const started = await startPolling()
-  return Response.json({ ok: started, status: started ? 'started' : 'failed' })
+
+  if (!isSchedulerRunning()) {
+    startScheduler()
+  }
+
+  return Response.json({ ok: true, bot: botStatus, cron: isSchedulerRunning() ? 'running' : 'failed' })
 }

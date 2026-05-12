@@ -48,6 +48,9 @@ COPY --from=builder /app/node_modules/whatwg-url        ./node_modules/whatwg-ur
 COPY --from=builder /app/node_modules/tr46              ./node_modules/tr46
 COPY --from=builder /app/node_modules/webidl-conversions ./node_modules/webidl-conversions
 
+# node-cron (in-app scheduler for project status report)
+COPY --from=builder /app/node_modules/node-cron          ./node_modules/node-cron
+
 # Create uploads directory with correct ownership BEFORE switching to nextjs user
 # This allows the app to write uploaded files at runtime
 RUN mkdir -p /app/public/uploads && \
