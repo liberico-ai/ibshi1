@@ -26,7 +26,9 @@ export function startScheduler() {
 async function triggerProjectStatusReport() {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/cron/project-status-report`)
+    const res = await fetch(`${baseUrl}/api/cron/project-status-report`, {
+      headers: { 'x-cron-secret': process.env.CRON_SECRET || '' }
+    })
     const data = await res.json()
     console.log('[CronScheduler] Project status report sent:', data)
   } catch (err) {
