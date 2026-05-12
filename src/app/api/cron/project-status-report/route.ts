@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { successResponse, errorResponse } from '@/lib/auth'
 import { sendGroupMessage, escapeHtml } from '@/lib/telegram'
@@ -6,8 +7,12 @@ import { ROLES } from '@/lib/constants'
 
 const DYNAMIC_STEPS = new Set(['P5.1', 'P5.1A', 'P5.1.1', 'P5.2', 'P5.3', 'P5.3A', 'P5.4'])
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const authHeader = req.headers.get('authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return errorResponse('Unauthorized', 401)
+    }
     const now = new Date()
 
     const projects = await prisma.project.findMany({
