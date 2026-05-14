@@ -533,19 +533,34 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     const taskIds = otherTasks.map(t => t.id)
     const allFiles = await prisma.fileAttachment.findMany({
       where: {
-        entityType: 'Task',
-        OR: taskIds.map(tid => ({ entityId: { startsWith: tid } })),
+        OR: [
+          {
+            entityType: 'Task',
+            OR: taskIds.map(tid => ({ entityId: { startsWith: tid } })),
+          },
+          {
+            entityType: 'Project',
+            entityId: { startsWith: task.projectId },
+          }
+        ]
       },
-      select: { id: true, entityId: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true },
+      select: { id: true, entityId: true, entityType: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     })
 
     // Group files by task ID (entityId format: "{taskId}_{attachmentKey}")
     const filesByTaskId = new Map<string, typeof allFiles>()
+    const p11Task = otherTasks.find(t => ['P1.1', 'P1.1B'].includes(t.stepCode))
+
     for (const f of allFiles) {
-      const tid = f.entityId.split('_')[0]
-      if (!filesByTaskId.has(tid)) filesByTaskId.set(tid, [])
-      filesByTaskId.get(tid)!.push(f)
+      if (f.entityType === 'Project' && p11Task) {
+        if (!filesByTaskId.has(p11Task.id)) filesByTaskId.set(p11Task.id, [])
+        filesByTaskId.get(p11Task.id)!.push(f)
+      } else if (f.entityType === 'Task') {
+        const tid = f.entityId.split('_')[0]
+        if (!filesByTaskId.has(tid)) filesByTaskId.set(tid, [])
+        filesByTaskId.get(tid)!.push(f)
+      }
     }
 
     previousStepFiles = otherTasks

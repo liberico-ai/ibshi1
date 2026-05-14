@@ -51,10 +51,8 @@ COPY --from=builder /app/node_modules/webidl-conversions ./node_modules/webidl-c
 # node-cron (in-app scheduler for project status report)
 COPY --from=builder /app/node_modules/node-cron          ./node_modules/node-cron
 
-# Create uploads directory with correct ownership BEFORE switching to nextjs user
-# This allows the app to write uploaded files at runtime
-RUN mkdir -p /app/public/uploads && \
-    chown -R nextjs:nodejs /app/public/uploads
+RUN mkdir -p /app/public/uploads /app/.next/cache && \
+    chown -R nextjs:nodejs /app/public/uploads /app/.next
 
 # Startup script: starts Next.js server, then triggers Telegram bot init
 RUN printf '#!/bin/sh\nnode server.js &\nSERVER_PID=$!\nsleep 5\nwget -qO- http://localhost:3000/api/telegram/init || true\nwait $SERVER_PID\n' > /app/start.sh && \

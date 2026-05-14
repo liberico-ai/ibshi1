@@ -241,8 +241,8 @@ const P2_3: StepFormConfig = {
 const P2_1A: StepFormConfig = {
   stepCode: 'P2.1A',
   formType: 'input',
-  title: 'TCKT lập dự toán',
-  description: 'R08 (Kế toán) lập dự toán chi phí chung, chi phí tài chính, chi phí quản lý cho dự án.',
+  title: 'Lập kế hoạch dòng tiền',
+  description: 'R08 (TCKT) lập kế hoạch dòng tiền: chi phí chung, chi phí tài chính, chi phí quản lý cho dự án.',
   fields: [
     { key: 'estimateNotes', label: 'Ghi chú dự toán', labelEn: 'Estimate Notes', type: 'textarea', fullWidth: true },
   ],
