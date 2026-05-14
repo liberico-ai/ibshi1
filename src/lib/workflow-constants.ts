@@ -90,20 +90,15 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P3.6': {
     code: 'P3.6', name: 'BGĐ phê duyệt báo giá NCC', nameEn: 'Approve Supplier Quotation',
-    role: 'R01', next: ['P3.7'], deadlineDays: 3, phase: 3,
+    role: 'R01', next: ['P4.2'], deadlineDays: 3, phase: 3,
     rejectTo: 'P3.5',
   },
-  'P3.7': {
-    code: 'P3.7', name: 'Thương mại chốt hàng, ĐK thanh toán, kế hoạch về', nameEn: 'Finalize PO, Payment Terms & Delivery Plan',
-    role: 'R07', next: ['P4.1', 'P4.2'], deadlineDays: 5, phase: 3,
-  },
+  // P3.7 (Thương mại chốt PO) đã chuyển sang trang sidebar "Đề nghị mua hàng"
+  // (Thương mại) — luồng PR/PO chạy status-driven, không còn là bước workflow.
 
   // ── Phase 4: Mua hàng & Nhập kho (BRD#18-25) ──
-  // BRD#18,19,24 are automated — handled via syncOnComplete hooks
-  'P4.1': {
-    code: 'P4.1', name: 'Kế toán nhận yêu cầu và thực hiện thanh toán', nameEn: 'Finance Process Payment',
-    role: 'R08', next: [], deadlineDays: 5, phase: 4,
-  },
+  // P4.1 (Kế toán thanh toán) đã chuyển sang tab sidebar "Thanh toán" (Kế toán)
+  // — luồng giải ngân chạy status-driven, không còn là bước workflow.
   'P4.2': {
     code: 'P4.2', name: 'Thương mại theo dõi hàng về và nghiệm thu', nameEn: 'Commercial Track Delivery & Receipt',
     role: 'R07', next: ['P4.3'], deadlineDays: 10, phase: 4,
@@ -111,7 +106,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   'P4.3': {
     code: 'P4.3', name: 'QC nghiệm thu chất lượng nhập kho', nameEn: 'QC Incoming Quality Inspection',
     role: 'R09', next: ['P4.4'], deadlineDays: 3, phase: 4,
-    rejectTo: 'P3.7', // QC fail → return to commercial
+    rejectTo: 'P3.5', // QC fail → commercial sources a new supplier
   },
   'P4.4': {
     code: 'P4.4', name: 'Kho nghiệm thu số lượng và nhập kho', nameEn: 'Warehouse Quantity Check & Stock In',

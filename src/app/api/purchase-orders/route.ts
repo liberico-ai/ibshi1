@@ -18,7 +18,11 @@ export async function GET(req: NextRequest) {
     const limit = 20
 
     const where: Record<string, unknown> = {}
-    if (status) where.status = status
+    if (status) {
+      // Support comma-separated statuses, e.g. ?status=PAID,PARTIAL_RECEIVED
+      const statuses = status.split(',').map(s => s.trim()).filter(Boolean)
+      where.status = statuses.length > 1 ? { in: statuses } : statuses[0]
+    }
 
     const [total, pos] = await Promise.all([
       prisma.purchaseOrder.count({ where }),

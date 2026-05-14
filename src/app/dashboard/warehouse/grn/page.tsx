@@ -39,7 +39,9 @@ export default function GRNPage() {
   useEffect(() => { loadReceipts() }, [])
 
   const openReceiveForm = async () => {
-    const res = await apiFetch('/api/purchase-orders?status=APPROVED,PARTIAL_RECEIVED,SENT')
+    // POs that Finance has PAID are ready for goods receiving;
+    // PARTIAL_RECEIVED ones can continue receiving remaining items.
+    const res = await apiFetch('/api/purchase-orders?status=PAID,PARTIAL_RECEIVED')
     if (res.ok) {
       setPOList(res.purchaseOrders || res.data || [])
     }
