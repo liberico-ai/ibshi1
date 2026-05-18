@@ -184,6 +184,9 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
   // Step filter helpers (P3.3 vs P3.4 IBS routing)
   const _isIBS = (val: string) => (val || '').trim().toUpperCase().includes('IBS');
   const _isEmpty = (val: string) => !(val || '').trim();
+  // "N/A" means "công đoạn này không áp dụng cho hạng mục" — treat as empty for routing
+  const _isNA = (val: string) => (val || '').trim().toUpperCase() === 'N/A';
+  const _isActiveValue = (val: string) => !_isEmpty(val) && !_isNA(val);
   const isRowVisibleForStep = (row: WbsRow): boolean => {
     if (!stepFilter || (stepFilter !== 'P3.3' && stepFilter !== 'P3.4')) return true;
     const nonEmptyCells = subCols.filter(c => !_isEmpty(row[c.key] || ''));
@@ -195,6 +198,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
   const isCellActiveForStep = (cellVal: string): boolean => {
     if (!stepFilter || (stepFilter !== 'P3.3' && stepFilter !== 'P3.4')) return true;
     if (_isEmpty(cellVal)) return true;
+    if (_isNA(cellVal)) return false; // N/A is never an active cell for either step
     if (stepFilter === 'P3.4') return _isIBS(cellVal);
     if (stepFilter === 'P3.3') return !_isIBS(cellVal);
     return true;
@@ -4102,85 +4106,6 @@ export default function TaskDetailPage() {
                     </div>
                   )
                 })}
-              </>
-            )}
-
-            {/* P3.2: Stock Check — auto compare PR items vs inventory */}
-            {task.stepCode === 'P3.2' && previousStepData && (
-              <>
-                {/* Summary bar */}
-                <div className="card" style={{ padding: '1rem 1.5rem', marginTop: '1rem', display: 'flex', gap: 24, alignItems: 'center', background: 'linear-gradient(135deg, #f0fdf4, #ecfdf5)' }}>
-                  <div style={{ fontSize: '0.85rem' }}>
-                    📊 Tổng PR: <strong>{(previousStepData.prItems as unknown[])?.length || 0}</strong> mục
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#16a34a' }}>
-                    ✅ Xuất kho: <strong>{(previousStepData.fromStock as unknown[])?.length || 0}</strong>
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#dc2626' }}>
-                    🛒 Cần mua: <strong>{(previousStepData.toPurchase as unknown[])?.length || 0}</strong>
-                  </div>
-                </div>
-
-                {/* From Stock — items that can be issued from warehouse */}
-                <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #16a34a' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#16a34a' }}>✅ Xuất từ kho (Tồn đủ + Quy chuẩn OK)</h3>
-                  {(previousStepData.fromStock as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; matchedMaterial: { code: string; name: string; spec: string | null; stock: number } | null }[])?.length > 0 ? (
-                    <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.6fr 0.6fr 0.5fr', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 2 }}>
-                        {['#', 'Tên VT', 'Mã VT', 'Quy chuẩn', 'Yêu cầu', 'Tồn kho', 'ĐVT', 'Nguồn'].map(h => (
-                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                        ))}
-                      </div>
-                      {(previousStepData.fromStock as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number }[]).map((item, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.6fr 0.6fr 0.5fr', gap: 4, padding: '4px 2px', background: idx % 2 === 0 ? '#f0fdf4' : 'transparent', borderRadius: 4, fontSize: '0.8rem' }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>{idx + 1}</span>
-                          <span style={{ fontWeight: 600 }}>{item.name}</span>
-                          <span style={{ color: 'var(--accent)' }}>{item.code}</span>
-                          <span style={{ color: 'var(--text-secondary)' }}>{item.spec || '—'}</span>
-                          <span style={{ fontWeight: 700 }}>{item.requestedQty}</span>
-                          <span style={{ color: '#16a34a', fontWeight: 700 }}>{item.inStock}</span>
-                          <span>{item.unit}</span>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.source}</span>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border)', borderRadius: 8 }}>
-                      Không có mục nào đủ điều kiện xuất kho
-                    </div>
-                  )}
-                </div>
-
-                {/* To Purchase — items that need to be bought */}
-                <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #dc2626' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#dc2626' }}>🛒 Cần mua (Không đủ tồn / Quy chuẩn không đạt)</h3>
-                  {(previousStepData.toPurchase as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; shortfall: number; specMatch: boolean; matchedMaterial: { code: string; name: string; spec: string | null } | null }[])?.length > 0 ? (
-                    <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.5fr 0.5fr 0.5fr 0.5fr 0.5fr', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 2 }}>
-                        {['#', 'Tên VT', 'Mã VT', 'Quy chuẩn', 'Yêu cầu', 'Tồn kho', 'Thiếu', 'Spec', 'Nguồn'].map(h => (
-                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                        ))}
-                      </div>
-                      {(previousStepData.toPurchase as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; shortfall: number; specMatch: boolean; matchedMaterial: { code: string; name: string; spec: string | null } | null }[]).map((item, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.5fr 0.5fr 0.5fr 0.5fr 0.5fr', gap: 4, padding: '4px 2px', background: idx % 2 === 0 ? '#fef2f2' : 'transparent', borderRadius: 4, fontSize: '0.8rem' }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>{idx + 1}</span>
-                          <span style={{ fontWeight: 600 }}>{item.name}</span>
-                          <span style={{ color: 'var(--accent)' }}>{item.code}</span>
-                          <span style={{ color: 'var(--text-secondary)' }}>{item.spec || '—'}</span>
-                          <span style={{ fontWeight: 700 }}>{item.requestedQty}</span>
-                          <span style={{ color: item.inStock > 0 ? '#f59e0b' : '#dc2626', fontWeight: 700 }}>{item.inStock}</span>
-                          <span style={{ color: '#dc2626', fontWeight: 700 }}>{item.shortfall > 0 ? `−${item.shortfall}` : '—'}</span>
-                          <span style={{ fontSize: '0.7rem' }}>{item.matchedMaterial ? (item.specMatch ? '✅' : '❌ Sai') : '⚠️ N/A'}</span>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.source}</span>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', border: '2px dashed #bbf7d0', borderRadius: 8, fontWeight: 600 }}>
-                      🎉 Tất cả vật tư đều sẵn có trong kho!
-                    </div>
-                  )}
-                </div>
               </>
             )}
 

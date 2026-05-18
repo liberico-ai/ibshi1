@@ -118,7 +118,8 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     }
   }
 
-  // For P3.2: fetch BOM items from P2.1/P2.2/P2.3 and compare with Materials stock
+  // For P3.5: aggregate BOM items from P2.1/P2.2/P2.3 + compare with Materials stock
+  // (Note: P3.2 — Kho check tồn kho — has been removed from the workflow; logic merged into P3.5.)
   let previousStepData: Record<string, unknown> | null = null
   if (task.stepCode === 'P3.5') {
     const allPrItems = await aggregateBomItems(task.projectId)

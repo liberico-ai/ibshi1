@@ -301,25 +301,6 @@ const P3_1: StepFormConfig = {
   attachments: [],
 }
 
-const P3_2: StepFormConfig = {
-  stepCode: 'P3.2',
-  formType: 'input',
-  title: 'Kho kiểm tra tồn kho và phê duyệt từng item PR',
-  description: 'Hệ thống tự động so sánh danh sách vật tư PR (từ P2.1/P2.2/P2.3) với tồn kho. Vật tư đủ + quy chuẩn OK → Xuất kho. Không đạt → Cần mua.',
-  fields: [
-    // Stock check tables rendered dynamically in page.tsx from previousStepData
-    { key: 'stockCheckNotes', label: 'Ghi chú kiểm tra tồn kho', labelEn: 'Stock Check Notes', type: 'textarea', fullWidth: true },
-  ],
-  checklist: [
-    { key: 'stock_checked', label: 'Đã kiểm tra tồn kho từng item', required: true },
-    { key: 'quality_verified', label: 'Đã kiểm tra chất lượng tồn kho', required: true },
-    { key: 'pr_consolidated', label: 'Đã tạo consolidated PR', required: true },
-  ],
-  attachments: [
-    { key: 'prFile', label: 'File PR tổng hợp', accept: ACCEPT.SHEETS_PLUS },
-  ],
-}
-
 const P3_3: StepFormConfig = {
   stepCode: 'P3.3',
   formType: 'input',
@@ -755,7 +736,7 @@ const P6_5: StepFormConfig = {
 export const STEP_FORM_CONFIGS: Record<string, StepFormConfig> = {
   'P1.1': P1_1, 'P1.1B': P1_1B, 'P1.2A': P1_2A, 'P1.2': P1_2, 'P1.3': P1_3,
   'P2.1': P2_1, 'P2.2': P2_2, 'P2.3': P2_3, 'P2.1A': P2_1A, 'P2.4': P2_4, 'P2.5': P2_5,
-  'P3.1': P3_1, 'P3.2': P3_2, 'P3.3': P3_3, 'P3.4': P3_4,
+  'P3.1': P3_1, 'P3.3': P3_3, 'P3.4': P3_4,
   'P3.5': P3_5, 'P3.6': P3_6, 'P3.7': P3_7,
   'P4.1': P4_1, 'P4.2': P4_2, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,
   'P5.1': P5_1, 'P5.1A': P5_1A, 'P5.1.1': P5_1_1, 'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
