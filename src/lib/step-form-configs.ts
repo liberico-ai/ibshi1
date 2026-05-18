@@ -346,8 +346,8 @@ const P3_3: StepFormConfig = {
 const P3_4: StepFormConfig = {
   stepCode: 'P3.4',
   formType: 'input',
-  title: 'Quản lý SX lập lệnh sản xuất cho tổ nội bộ',
-  description: 'R06 lập Lệnh sản xuất cho tổ nội bộ. Sổ lệnh được hệ thống tự động tạo. Nhập danh sách chi tiết nội dung công việc cần phân giao.',
+  title: 'Quản lý SX lập lệnh sản xuất cho tổ nội bộ và thầu phụ',
+  description: 'R06 lập Lệnh sản xuất cho tổ nội bộ và các ô có thầu phụ làm tại nhà máy IBS (ví dụ "IBS TP Giang Sơn"). Sổ lệnh được hệ thống tự động tạo. Nhập danh sách chi tiết nội dung công việc cần phân giao.',
   fields: [
     { key: 'woNumber', label: 'Sổ lệnh', labelEn: 'WO Number', type: 'readonly', fullWidth: false },
     { key: 'estimateRef', label: 'Dự toán', labelEn: 'Estimate Ref', type: 'text', required: true },

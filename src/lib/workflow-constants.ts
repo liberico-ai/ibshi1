@@ -81,7 +81,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
     role: 'R02', next: [], deadlineDays: 5, phase: 3,
   },
   'P3.4': {
-    code: 'P3.4', name: 'Quản lý SX lập lệnh sản xuất cho tổ nội bộ', nameEn: 'Production Manager Internal WO',
+    code: 'P3.4', name: 'Quản lý SX lập lệnh sản xuất cho tổ nội bộ và thầu phụ', nameEn: 'Production Manager Create Internal & Subcontractor WO',
     role: 'R06', next: [], deadlineDays: 5, phase: 3,
   },
   'P3.5': {
