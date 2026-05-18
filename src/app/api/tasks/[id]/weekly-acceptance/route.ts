@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { notifyTaskActivated } from '@/lib/telegram-notifications'
 import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
+import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 
 const MAX_VOLUME = 1_000_000
 
@@ -433,6 +434,100 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
     } catch (err) {
       console.error('[AUTO] P5.1.1 check error:', err)
+      // Don't fail the main request for this
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  AUTO-OPEN P5.5: when both QC (P5.3) and PM (P5.4) cumulative
+    //  acceptance reach the planned total. QC and PM are tracked
+    //  INDEPENDENTLY — we must NOT sum them.
+    // ══════════════════════════════════════════════════════════════
+    try {
+      // Re-fetch QC + PM logs separately for the whole project so we don't
+      // depend on which role just submitted.
+      const [qcLogs, pmLogs] = await Promise.all([
+        (prisma as any).weeklyAcceptanceLog.findMany({
+          where: { projectId: task.projectId, role: 'QC' },
+          select: { acceptedVolume: true },
+        }),
+        (prisma as any).weeklyAcceptanceLog.findMany({
+          where: { projectId: task.projectId, role: 'PM' },
+          select: { acceptedVolume: true },
+        }),
+      ])
+
+      // Planned total = sum of all volumes from P3.3/P3.4 cellAssignments where LSX issued.
+      // Recompute here (small + self-contained) instead of relying on totalVolumeMap above,
+      // which lives inside the P5.1.1 try-block scope.
+      const p3TasksForP55 = await prisma.workflowTask.findMany({
+        where: { projectId: task.projectId, stepCode: { in: ['P3.3', 'P3.4'] } },
+        select: { resultData: true },
+      })
+      let plannedTotal = 0
+      for (const t of p3TasksForP55) {
+        const pData = (t.resultData as Record<string, any>) || {}
+        let cells: Record<string, Record<string, any[]>> = {}
+        try { cells = typeof pData.cellAssignments === 'string' ? JSON.parse(pData.cellAssignments) : (pData.cellAssignments || {}) } catch { cells = {} }
+        let issued: Record<string, Record<string, Record<string, boolean>>> = {}
+        try { issued = typeof pData.lsxIssuedDetails === 'string' ? JSON.parse(pData.lsxIssuedDetails) : (pData.lsxIssuedDetails || {}) } catch { issued = {} }
+        for (const rowKey of Object.keys(cells)) {
+          for (const stageKey of Object.keys(cells[rowKey])) {
+            const assignments = cells[rowKey][stageKey]
+            if (!Array.isArray(assignments)) continue
+            for (let ti = 0; ti < assignments.length; ti++) {
+              if (issued[rowKey]?.[stageKey]?.[String(ti)]) {
+                plannedTotal += parseFloat(assignments[ti].volume) || 0
+              }
+            }
+          }
+        }
+      }
+
+      const qcTotal = qcLogs.reduce((s: number, l: any) => s + Number(l.acceptedVolume || 0), 0)
+      const pmTotal = pmLogs.reduce((s: number, l: any) => s + Number(l.acceptedVolume || 0), 0)
+      const threshold = plannedTotal * 0.995  // 0.5% tolerance for rounding
+      const reached = plannedTotal > 0 && qcTotal >= threshold && pmTotal >= threshold
+
+      if (reached) {
+        const activated = await prisma.workflowTask.updateMany({
+          where: { projectId: task.projectId, stepCode: 'P5.5', status: 'PENDING' },
+          data: {
+            status: 'IN_PROGRESS',
+            startedAt: new Date(),
+            deadline: WORKFLOW_RULES['P5.5'].deadlineDays
+              ? new Date(Date.now() + WORKFLOW_RULES['P5.5'].deadlineDays * 24 * 60 * 60 * 1000)
+              : null,
+          },
+        })
+        if (activated.count > 0) {
+          console.log(`[AUTO] P5.5 activated — QC ${qcTotal.toFixed(2)} & PM ${pmTotal.toFixed(2)} ≥ planned ${plannedTotal.toFixed(2)}`)
+          try {
+            const users = await prisma.user.findMany({ where: { roleCode: 'R03', isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+            const projCode = (task as any).project?.projectCode || ''
+            const projName = (task as any).project?.projectName || ''
+            const p55 = await prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P5.5' }, select: { id: true, stepName: true } })
+            if (users.length > 0 && p55) {
+              await prisma.notification.createMany({
+                data: users.map(u => ({
+                  userId: u.id,
+                  title: `🧮 P5.5 — Tính lương khoán: ${projCode}`,
+                  message: `Dự án đã nghiệm thu đủ 100% khối lượng. Bạn có thể bắt đầu tổng hợp và tính lương khoán.`,
+                  type: 'task_assigned',
+                  linkUrl: `/dashboard/tasks/${p55.id}`,
+                })),
+              })
+              await notifyTaskActivated({
+                stepCode: 'P5.5', stepName: p55.stepName,
+                projectCode: projCode, projectName: projName,
+                assignedRole: 'R03', deadline: null, taskId: p55.id,
+                mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
+              }).catch(console.error)
+            }
+          } catch (e) { console.error('[AUTO] P5.5 notification error:', e) }
+        }
+      }
+    } catch (err) {
+      console.error('[AUTO] P5.5 check error:', err)
       // Don't fail the main request for this
     }
 
