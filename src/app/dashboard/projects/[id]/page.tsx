@@ -271,6 +271,7 @@ export default function ProjectDetailPage() {
               />
             )
           })}
+
         </div>
       </div>
     </div>
@@ -335,15 +336,21 @@ function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, bor
 
       {expanded && (
         <div style={{ borderTop: '1px solid var(--border-light)' }}>
-          <GroupedTaskList
-            tasks={tasks}
-            onCompleteClick={onCompleteClick}
-            onRejectClick={onRejectClick}
-            onAssignClick={onAssignClick}
-            currentUserRole={currentUserRole}
-            hasAssignPerm={hasAssignPerm}
-            loadingTaskId={loadingTaskId}
-          />
+          {tasks.length === 0 ? (
+            <div style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Chưa có task. Các task của phase này sẽ tự sinh khi luồng nghiệp vụ tới (ví dụ: P4.3/P4.4 sinh khi Thương mại xác nhận nhận hàng từ PO).
+            </div>
+          ) : (
+            <GroupedTaskList
+              tasks={tasks}
+              onCompleteClick={onCompleteClick}
+              onRejectClick={onRejectClick}
+              onAssignClick={onAssignClick}
+              currentUserRole={currentUserRole}
+              hasAssignPerm={hasAssignPerm}
+              loadingTaskId={loadingTaskId}
+            />
+          )}
         </div>
       )}
     </div>

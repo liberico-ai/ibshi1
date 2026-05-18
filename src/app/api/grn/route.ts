@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createGrnSchema } from '@/lib/schemas'
+import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 
 // GET /api/grn — List goods received (stock movements with type=IN, reason=po_receipt)
 export async function GET(req: NextRequest) {
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
-  if (!requireRoles(user.roleCode, ['R01', 'R02', 'R05', 'R05a', 'R07'])) {
+  if (!requireRoles(user.roleCode, ['R01', 'R02', 'R02a', 'R05', 'R05a', 'R07', 'R07a'])) {
     return errorResponse('Không có quyền nhận hàng', 403)
   }
 
@@ -124,6 +125,36 @@ export async function POST(req: NextRequest) {
 
     return { movements, poStatus: newStatus }
   })
+
+  // After GRN: create dynamic P4.3 (QC nghiệm thu CL) for this PO, once.
+  // Skip if PO has no projectId (legacy/orphan) — QC task only makes sense within a project.
+  if (po.projectId) {
+    const existingP43 = await prisma.workflowTask.findFirst({
+      where: {
+        projectId: po.projectId,
+        stepCode: 'P4.3',
+        resultData: { path: ['poId'], equals: po.id },
+      },
+      select: { id: true },
+    })
+
+    if (!existingP43) {
+      const rule = WORKFLOW_RULES['P4.3']
+      await prisma.workflowTask.create({
+        data: {
+          projectId: po.projectId,
+          stepCode: 'P4.3',
+          stepName: `Nghiệm thu hàng về theo PO ${po.poCode}`,
+          stepNameEn: `Incoming QC for PO ${po.poCode}`,
+          assignedRole: rule.role,
+          status: 'IN_PROGRESS',
+          startedAt: new Date(),
+          deadline: rule.deadlineDays ? new Date(Date.now() + rule.deadlineDays * 24 * 60 * 60 * 1000) : null,
+          resultData: { poId: po.id, poCode: po.poCode },
+        },
+      })
+    }
+  }
 
   return successResponse({
     message: `Đã nhận ${result.movements.length} mục`,

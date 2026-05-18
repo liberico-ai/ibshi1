@@ -12,7 +12,12 @@ export type { WorkflowStep } from './workflow-constants'
 // ── Workflow Engine Core Functions (Server-only) ──
 
 // Steps that are created dynamically (multi-instance), not during project init
-const DYNAMIC_STEPS = ['P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A']
+// Dynamic = NOT created in initializeProjectWorkflow + skipped by next-step activation
+// (created on-demand by their own triggers: GRN handler, daily/weekly cronjobs, etc.)
+const DYNAMIC_STEPS = [
+  'P4.3', 'P4.4',                                             // per-PO, created by api/grn POST
+  'P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A', // production reports + acceptance
+]
 
 export async function initializeProjectWorkflow(projectId: string): Promise<void> {
   const steps = Object.values(WORKFLOW_RULES).filter(s => !DYNAMIC_STEPS.includes(s.code))
@@ -76,6 +81,40 @@ export async function completeTask(
   // Auto-create P5.1 when a dynamic P4.5 completes
   if (task.stepCode === 'P4.5') {
     await checkAndCreateP51(taskId)
+  }
+
+  // Dynamic P4.4 creation — when a per-PO P4.3 (QC nghiệm thu CL) completes,
+  // spawn the matching per-PO P4.4 (Kho nghiệm thu SL + nhập kho) for the same PO.
+  if (task.stepCode === 'P4.3') {
+    const rd = (resultData || task.resultData) as { poId?: string; poCode?: string } | null
+    if (rd?.poId && rd?.poCode) {
+      const existingP44 = await prisma.workflowTask.findFirst({
+        where: {
+          projectId: task.projectId,
+          stepCode: 'P4.4',
+          resultData: { path: ['poId'], equals: rd.poId },
+        },
+        select: { id: true },
+      })
+      if (!existingP44) {
+        const p44Rule = WORKFLOW_RULES['P4.4']
+        await prisma.workflowTask.create({
+          data: {
+            projectId: task.projectId,
+            stepCode: 'P4.4',
+            stepName: `Nhập kho theo PO ${rd.poCode}`,
+            stepNameEn: `Stock-in for PO ${rd.poCode}`,
+            assignedRole: p44Rule?.role || 'R05',
+            status: TASK_STATUS.IN_PROGRESS,
+            startedAt: new Date(),
+            deadline: p44Rule?.deadlineDays
+              ? new Date(Date.now() + p44Rule.deadlineDays * 24 * 60 * 60 * 1000)
+              : null,
+            resultData: { poId: rd.poId, poCode: rd.poCode },
+          },
+        })
+      }
+    }
   }
 
   // Auto-create P5.3A when P5.1.1 (Yêu cầu nghiệm thu CL) completes
@@ -631,36 +670,6 @@ async function runWorkflowHooks(
             createdBy: userId,
           },
         })
-      }
-    }
-
-    // P4.2: Material issue → auto StockMovement (OUT) + MaterialIssue
-    if (stepCode === 'P4.2' && resultData) {
-      const materialId = resultData.materialId as string | undefined
-      const quantity = resultData.quantity as number | undefined
-      const workOrderId = resultData.workOrderId as string | undefined
-      if (materialId && quantity && quantity > 0 && workOrderId) {
-        await prisma.$transaction([
-          prisma.materialIssue.create({
-            data: { workOrderId, materialId, quantity, issuedBy: userId },
-          }),
-          prisma.stockMovement.create({
-            data: {
-              materialId,
-              projectId,
-              type: 'OUT',
-              quantity,
-              reason: 'production_issue',
-              referenceNo: `${projCode}-P4.2`,
-              performedBy: userId,
-              notes: 'Auto: workflow P4.2 completed',
-            },
-          }),
-          prisma.material.update({
-            where: { id: materialId },
-            data: { currentStock: { decrement: quantity } },
-          }),
-        ])
       }
     }
 

@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
       const statuses = status.split(',').map(s => s.trim()).filter(Boolean)
       where.status = statuses.length > 1 ? { in: statuses } : statuses[0]
     }
+    // Optional ?projectId=... for project-scoped views (e.g. Mua hàng section in project detail)
+    const projectId = new URL(req.url).searchParams.get('projectId')
+    if (projectId) where.projectId = projectId
 
     const [total, pos] = await Promise.all([
       prisma.purchaseOrder.count({ where }),

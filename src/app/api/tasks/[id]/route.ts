@@ -277,36 +277,31 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     previousStepData = { poData }
   }
 
-  // For P4.2: fetch P3.7 (delivery plan) + P3.5 (supplier quotes) for tracking
-  if (task.stepCode === 'P4.2') {
-    const [poData, supplierData] = await Promise.all([
-      fetchPoData(task.projectId),
-      fetchSupplierData(task.projectId),
-    ])
-    previousStepData = { poData, supplierData }
-  }
-
-  // For P4.3: fetch P3.7 (PO + delivery data) + P3.5 (supplier quotes) for QC to see incoming goods
-  if (task.stepCode === 'P4.3') {
-    const [poData, supplierData] = await Promise.all([
-      fetchPoData(task.projectId),
-      fetchSupplierData(task.projectId),
-    ])
-    previousStepData = { poData, supplierData }
-  }
-
-  // For P4.4: fetch P4.3 (QC result) + P3.5 (supplier materials) + BOM (PR quantities) for Kho
-  if (task.stepCode === 'P4.4') {
-    const [p43Task, supplierData, allBomItems] = await Promise.all([
-      fetchStepResult(task.projectId, 'P4.3'),
-      fetchSupplierData(task.projectId),
-      aggregateBomItems(task.projectId),
-    ])
-    previousStepData = {
-      qcData: p43Task?.resultData || null,
-      supplierData,
-      prItems: allBomItems,
+  // For P4.3 / P4.4 (dynamic, per-PO): fetch the specific PO + items + GRN history.
+  // poId is stored in task.resultData when GRN handler / completeTask spawns the task.
+  if (task.stepCode === 'P4.3' || task.stepCode === 'P4.4') {
+    const rd = (task.resultData as { poId?: string; poCode?: string } | null) || null
+    let poData: unknown = null
+    let grnHistory: unknown[] = []
+    if (rd?.poId) {
+      const [po, grns] = await Promise.all([
+        prisma.purchaseOrder.findUnique({
+          where: { id: rd.poId },
+          include: {
+            vendor: { select: { name: true, vendorCode: true } },
+            items: { include: { material: { select: { name: true, materialCode: true, unit: true, specification: true } } } },
+          },
+        }),
+        prisma.stockMovement.findMany({
+          where: { reason: 'po_receipt', referenceNo: rd.poCode || undefined },
+          orderBy: { createdAt: 'desc' },
+          include: { material: { select: { name: true, materialCode: true } } },
+        }),
+      ])
+      poData = po
+      grnHistory = grns
     }
+    previousStepData = { poData, grnHistory, poId: rd?.poId, poCode: rd?.poCode }
   }
 
   // For P4.5: fetch P3.3 (subcontractor LSX) + P3.4 WO items + Materials inventory for material issue
@@ -647,23 +642,51 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
       })
     }
 
-    // Now spawn P3.6 tasks. If "Báo giá tất cả" was used, groupsToSubmit length > 1, we spawn ONE P3.6 task containing all.
-    // If single submission, we spawn ONE P3.6 task containing 1 group.
-    const stepNameSuffix = groupsToSubmit.length > 1 ? `Nhiều nhóm (${groupsToSubmit.length})` : `Nhóm: ${groupsToSubmit[0].name}`
-    await prisma.workflowTask.create({
-      data: {
+    // Consolidate into a SINGLE P3.6 task per project — BGĐ sees all groups in one ticket.
+    // Strategy: find any P3.6 still open for this project (PENDING/IN_PROGRESS) and merge groups in.
+    // Only create a fresh task if none open (e.g. previous round fully approved/closed).
+    const newGroups = groupsToSubmit.map((g: any) => ({ ...g, status: 'PENDING' }))
+    const openP36 = await prisma.workflowTask.findFirst({
+      where: {
         projectId: task.projectId,
         stepCode: 'P3.6',
-        stepName: `BGĐ phê duyệt báo giá NCC - ${stepNameSuffix}`,
-        assignedRole: 'R01',
-        status: 'IN_PROGRESS',
-        resultData: {
-          groups: groupsToSubmit.map((g: any) => ({ ...g, status: 'PENDING' })),
-          sourceP35Id: id,
-        },
-        startedAt: new Date(),
-      }
+        status: { in: ['PENDING', 'IN_PROGRESS'] },
+      },
+      orderBy: { createdAt: 'asc' }, // prefer the original init-spawned one
     })
+
+    if (openP36) {
+      const rd = (openP36.resultData as any) || {}
+      const existingGroups = Array.isArray(rd.groups) ? rd.groups : []
+      // Merge by group id — replace if same id resubmitted, else append
+      const merged = [...existingGroups]
+      for (const g of newGroups) {
+        const idx = merged.findIndex((x: any) => x.id === g.id)
+        if (idx >= 0) merged[idx] = g
+        else merged.push(g)
+      }
+      await prisma.workflowTask.update({
+        where: { id: openP36.id },
+        data: {
+          stepName: `BGĐ phê duyệt báo giá NCC (${merged.length} nhóm)`,
+          status: 'IN_PROGRESS',
+          startedAt: openP36.startedAt || new Date(),
+          resultData: { ...rd, groups: merged, sourceP35Id: id },
+        },
+      })
+    } else {
+      await prisma.workflowTask.create({
+        data: {
+          projectId: task.projectId,
+          stepCode: 'P3.6',
+          stepName: `BGĐ phê duyệt báo giá NCC (${newGroups.length} nhóm)`,
+          assignedRole: 'R01',
+          status: 'IN_PROGRESS',
+          resultData: { groups: newGroups, sourceP35Id: id },
+          startedAt: new Date(),
+        },
+      })
+    }
 
     return successResponse({ task: updatedTask, nextSteps: ['P3.6'] }, 'Đã đệ trình báo giá')
   }
