@@ -90,8 +90,11 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P3.6': {
     code: 'P3.6', name: 'BGĐ phê duyệt báo giá NCC', nameEn: 'Approve Supplier Quotation',
-    role: 'R01', next: ['P4.2'], deadlineDays: 3, phase: 3,
+    role: 'R01', next: [], deadlineDays: 3, phase: 3,
     rejectTo: 'P3.5',
+    // After P3.6 approval: groups appear in sidebar "Đề nghị mua hàng" (TM) →
+    // "Thanh toán" (KT) → "Nhận hàng" (TM). P4.3 is created dynamically per-PO
+    // when TM confirms goods receipt (see api/grn).
   },
   // P3.7 (Thương mại chốt PO) đã chuyển sang trang sidebar "Đề nghị mua hàng"
   // (Thương mại) — luồng PR/PO chạy status-driven, không còn là bước workflow.
@@ -99,18 +102,19 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   // ── Phase 4: Mua hàng & Nhập kho (BRD#18-25) ──
   // P4.1 (Kế toán thanh toán) đã chuyển sang tab sidebar "Thanh toán" (Kế toán)
   // — luồng giải ngân chạy status-driven, không còn là bước workflow.
-  'P4.2': {
-    code: 'P4.2', name: 'Thương mại theo dõi hàng về và nghiệm thu', nameEn: 'Commercial Track Delivery & Receipt',
-    role: 'R07', next: ['P4.3'], deadlineDays: 10, phase: 4,
-  },
+  // P4.2 (Thương mại theo dõi hàng về) đã chuyển sang tab sidebar "Nhận hàng" (Thương mại)
+  // — TM xác nhận GRN ở sidebar, không còn là bước workflow.
   'P4.3': {
     code: 'P4.3', name: 'QC nghiệm thu chất lượng nhập kho', nameEn: 'QC Incoming Quality Inspection',
     role: 'R09', next: ['P4.4'], deadlineDays: 3, phase: 4,
     rejectTo: 'P3.5', // QC fail → commercial sources a new supplier
+    // Dynamic: 1 task per PO. Created by api/grn POST when TM confirms first GRN for that PO.
+    // stepName: "Nghiệm thu hàng về theo PO {poCode}". resultData carries { poId, poCode }.
   },
   'P4.4': {
     code: 'P4.4', name: 'Kho nghiệm thu số lượng và nhập kho', nameEn: 'Warehouse Quantity Check & Stock In',
     role: 'R05', next: [], deadlineDays: 3, phase: 4,
+    // Dynamic: 1 task per PO. Created when its P4.3 (same PO) completes.
   },
   'P4.5': {
     code: 'P4.5', name: 'Kho đề nghị cấp vật tư cho PM và QLSX', nameEn: 'Warehouse Issue Material to PM & Production',

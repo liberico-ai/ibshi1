@@ -248,12 +248,12 @@ export interface PrevDataP41 {
   poData: (PoData & Record<string, unknown>) | null
 }
 
-export interface PrevDataP42 {
+export interface PrevDataP43 {
   poData: (PoData & Record<string, unknown>) | null
   supplierData: ({ suppliers?: SupplierEntry[] } & Record<string, unknown>) | null
+  poId?: string
+  poCode?: string
 }
-
-export interface PrevDataP43 extends PrevDataP42 {}
 
 export interface PrevDataP44 {
   qcData: ({ inspectionResult?: string; qcItems?: QcItem[] } & Record<string, unknown>) | null
@@ -310,7 +310,6 @@ export type PreviousStepDataMap = {
   'P3.6': PrevDataP36
   'P3.7': PrevDataP37
   'P4.1': PrevDataP41
-  'P4.2': PrevDataP42
   'P4.3': PrevDataP43
   'P4.4': PrevDataP44
   'P4.5': PrevDataP45

@@ -198,52 +198,6 @@ export async function reverseStockMovement(projectId: string, stepCode: string, 
   })
 }
 
-/** Reverse material issue — mark voided + return to stock */
-export async function reverseMaterialIssue(projectId: string, triggeredBy: string): Promise<void> {
-  const wo = await prisma.workOrder.findFirst({
-    where: { projectId, status: { not: 'CANCELLED' } },
-    orderBy: { createdAt: 'desc' },
-  })
-  if (!wo) return
-
-  const lastIssue = await prisma.materialIssue.findFirst({
-    where: { workOrderId: wo.id },
-    orderBy: { issuedAt: 'desc' },
-  })
-  if (!lastIssue) return
-
-  const qty = Number(lastIssue.quantity)
-
-  await prisma.$transaction([
-    prisma.stockMovement.create({
-      data: {
-        materialId: lastIssue.materialId,
-        projectId,
-        type: 'IN',
-        quantity: qty,
-        reason: 'return',
-        referenceNo: `RET-P4.2-${Date.now()}`,
-        performedBy: triggeredBy,
-        notes: `Return: material issue voided`,
-      },
-    }),
-    prisma.material.update({
-      where: { id: lastIssue.materialId },
-      data: { currentStock: { increment: qty } },
-    }),
-  ])
-
-  await logChangeEvent({
-    projectId, sourceStep: 'P4.2', sourceModel: 'MaterialIssue',
-    sourceId: lastIssue.id, eventType: 'REJECT',
-    targetModel: 'Material', targetId: lastIssue.materialId,
-    dataBefore: { issued: qty },
-    dataAfter: { returned: qty },
-    reason: 'Material issue reversed',
-    triggeredBy,
-  })
-}
-
 /** Reverse delivery — mark as RETURNED */
 export async function reverseDelivery(projectId: string, triggeredBy: string): Promise<void> {
   const delivery = await prisma.deliveryRecord.findFirst({
@@ -336,10 +290,6 @@ export async function runReverseHooks(
     // Material receipt rejected → undo stock IN
     if (['P3.4A', 'P3.4B'].includes(stepCode)) {
       await reverseStockMovement(projectId, stepCode, triggeredBy)
-    }
-    // Material issue rejected → return material
-    if (stepCode === 'P4.2') {
-      await reverseMaterialIssue(projectId, triggeredBy)
     }
     // QC/Test reject → WO → REWORK
     if (['P4.6', 'P4.7', 'P4.8'].includes(stepCode)) {
