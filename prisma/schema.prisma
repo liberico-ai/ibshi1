@@ -79,6 +79,7 @@ model Project {
   milestones         Milestone[]
   ncrs               NonConformanceReport[]
   pieceRateContracts PieceRateContract[]
+  purchaseOrders     PurchaseOrder[]
   purchaseReqs       PurchaseRequest[]
   safetyIncidents    SafetyIncident[]
   subcontracts       SubcontractorContract[]
@@ -346,6 +347,7 @@ model PurchaseRequestItem {
 model PurchaseOrder {
   id           String              @id @default(cuid())
   poCode       String              @unique @map("po_code")
+  projectId    String?             @map("project_id")
   vendorId     String              @map("vendor_id")
   status       String              @default("DRAFT")
   totalValue   Decimal?            @map("total_value")
@@ -358,8 +360,10 @@ model PurchaseOrder {
   createdAt    DateTime            @default(now()) @map("created_at")
   updatedAt    DateTime            @updatedAt @map("updated_at")
   items        PurchaseOrderItem[]
+  project      Project?            @relation(fields: [projectId], references: [id])
   vendor       Vendor              @relation(fields: [vendorId], references: [id])
 
+  @@index([projectId])
   @@index([vendorId])
   @@index([status])
   @@map("purchase_orders")

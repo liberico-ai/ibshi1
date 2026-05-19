@@ -15,7 +15,6 @@ import {
   syncGRNtoBudget,
   syncECOcascade,
   reverseStockMovement,
-  reverseMaterialIssue,
   reverseDelivery,
   reverseWOstatus,
   recalcBudgetActual,
@@ -293,33 +292,6 @@ describe('reverseStockMovement', () => {
   })
 })
 
-// ── reverseMaterialIssue ──
-
-describe('reverseMaterialIssue', () => {
-  it('returns material to stock when work order and issue exist', async () => {
-    prismaMock.workOrder.findFirst.mockResolvedValue({ id: 'wo-1' } as any)
-    prismaMock.materialIssue.findFirst.mockResolvedValue({
-      id: 'mi-1',
-      materialId: 'mat-1',
-      quantity: 50,
-    } as any)
-    prismaMock.$transaction.mockResolvedValue([{}, {}] as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
-
-    await reverseMaterialIssue(PROJECT_ID, USER)
-
-    expect(prismaMock.$transaction).toHaveBeenCalledOnce()
-  })
-
-  it('does nothing when no work order found', async () => {
-    prismaMock.workOrder.findFirst.mockResolvedValue(null)
-
-    await reverseMaterialIssue(PROJECT_ID, USER)
-
-    expect(prismaMock.materialIssue.findFirst).not.toHaveBeenCalled()
-  })
-})
-
 // ── reverseDelivery ──
 
 describe('reverseDelivery', () => {
@@ -469,18 +441,4 @@ describe('runReverseHooks', () => {
     consoleSpy.mockRestore()
   })
 
-  it('calls reverseMaterialIssue for P4.2', async () => {
-    prismaMock.workOrder.findFirst.mockResolvedValue({ id: 'wo-1' } as any)
-    prismaMock.materialIssue.findFirst.mockResolvedValue({
-      id: 'mi-1',
-      materialId: 'mat-1',
-      quantity: 25,
-    } as any)
-    prismaMock.$transaction.mockResolvedValue([{}, {}] as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
-
-    await runReverseHooks(PROJECT_ID, 'P4.2', USER, 'material reject')
-
-    expect(prismaMock.$transaction).toHaveBeenCalled()
-  })
 })

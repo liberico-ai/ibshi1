@@ -142,6 +142,7 @@ export async function PUT(request: NextRequest) {
         await prisma.purchaseOrder.create({
           data: {
             poCode: g.prCode,
+            projectId: task.projectId, // traceability: PO → workflow project
             vendorId: vendor.id,
             totalValue: actualTotalValue,
             status: 'APPROVED',
@@ -150,11 +151,20 @@ export async function PUT(request: NextRequest) {
             items: poItemsData.length > 0 ? { create: poItemsData } : undefined,
           }
         })
-      } else if (existingPo.items.length === 0 && poItemsData.length > 0) {
-        // PO exists but has no items (legacy data) — backfill items
-        await prisma.purchaseOrderItem.createMany({
-          data: poItemsData.map(d => ({ ...d, poId: existingPo.id })),
-        })
+      } else {
+        // PO exists — backfill projectId if missing (legacy data)
+        if (!existingPo.projectId) {
+          await prisma.purchaseOrder.update({
+            where: { id: existingPo.id },
+            data: { projectId: task.projectId },
+          })
+        }
+        if (existingPo.items.length === 0 && poItemsData.length > 0) {
+          // PO exists but has no items (legacy data) — backfill items
+          await prisma.purchaseOrderItem.createMany({
+            data: poItemsData.map(d => ({ ...d, poId: existingPo.id })),
+          })
+        }
       }
 
       // 5. Notify accountants (R08) — they process payment from the "Thanh toán" tab,

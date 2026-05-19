@@ -226,12 +226,6 @@ export interface PrevDataP31 {
   plan: ({ wbsItems?: string } & Record<string, unknown>) | null
 }
 
-export interface PrevDataP32 {
-  prItems: BomEntryWithSource[]
-  fromStock: Array<BomEntryWithSource & { requestedQty: number; inStock: number; matchedMaterial: unknown }>
-  toPurchase: Array<BomEntryWithSource & { requestedQty: number; inStock: number; shortfall: number; specMatch: boolean; matchedMaterial: unknown }>
-}
-
 export interface PrevDataP33P34 {
   plan: ({ wbsItems?: string } & Record<string, unknown>) | null
   bomItems: BomEntryWithSource[]
@@ -254,12 +248,12 @@ export interface PrevDataP41 {
   poData: (PoData & Record<string, unknown>) | null
 }
 
-export interface PrevDataP42 {
+export interface PrevDataP43 {
   poData: (PoData & Record<string, unknown>) | null
   supplierData: ({ suppliers?: SupplierEntry[] } & Record<string, unknown>) | null
+  poId?: string
+  poCode?: string
 }
-
-export interface PrevDataP43 extends PrevDataP42 {}
 
 export interface PrevDataP44 {
   qcData: ({ inspectionResult?: string; qcItems?: QcItem[] } & Record<string, unknown>) | null
@@ -310,14 +304,12 @@ export type PreviousStepDataMap = {
   'P2.4': PrevDataP24
   'P2.5': PrevDataP25
   'P3.1': PrevDataP31
-  'P3.2': PrevDataP32
   'P3.3': PrevDataP33P34
   'P3.4': PrevDataP33P34
   'P3.5': PrevDataP35
   'P3.6': PrevDataP36
   'P3.7': PrevDataP37
   'P4.1': PrevDataP41
-  'P4.2': PrevDataP42
   'P4.3': PrevDataP43
   'P4.4': PrevDataP44
   'P4.5': PrevDataP45

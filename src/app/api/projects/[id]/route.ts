@@ -31,8 +31,10 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
   const progress = getWorkflowProgress(project.tasks)
 
-  // Group tasks by phase
-  const tasksByPhase: Record<number, typeof project.tasks> = {}
+  // Group tasks by phase. Always seed phases 1..6 (even if empty) so the timeline
+  // UI shows every phase as a placeholder — phases with only dynamic-spawned tasks
+  // (e.g. Phase 4 P4.3/P4.4 per PO, Phase 5 P5.1/P5.2/...) should not vanish.
+  const tasksByPhase: Record<number, typeof project.tasks> = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }
   for (const task of project.tasks) {
     const rule = WORKFLOW_RULES[task.stepCode]
     const phase = rule?.phase ?? 0

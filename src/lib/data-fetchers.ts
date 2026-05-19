@@ -153,9 +153,7 @@ export async function fetchEstimateData(
 
 /**
  * Fetch P3.5 supplier quotes resultData.
- * Used by P3.6, P3.7, P4.2, P4.3, P4.4.
- *
- * Matches route.ts lines 399-406 (P3.6), 417-420 (P3.7), 439-446 (P4.2), 457-464 (P4.3), 480-483 (P4.4)
+ * Used by P3.6, P3.7, P4.3, P4.4.
  */
 export async function fetchSupplierData(
   projectId: string,
@@ -168,9 +166,7 @@ export async function fetchSupplierData(
 
 /**
  * Fetch P3.7 PO + payment terms + delivery plan resultData.
- * Used by P4.1, P4.2, P4.3.
- *
- * Matches route.ts lines 428-432 (P4.1), 439-443 (P4.2), 457-461 (P4.3)
+ * Used by P4.1, P4.3.
  */
 export async function fetchPoData(
   projectId: string,

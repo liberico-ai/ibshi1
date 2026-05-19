@@ -301,25 +301,6 @@ const P3_1: StepFormConfig = {
   attachments: [],
 }
 
-const P3_2: StepFormConfig = {
-  stepCode: 'P3.2',
-  formType: 'input',
-  title: 'Kho kiểm tra tồn kho và phê duyệt từng item PR',
-  description: 'Hệ thống tự động so sánh danh sách vật tư PR (từ P2.1/P2.2/P2.3) với tồn kho. Vật tư đủ + quy chuẩn OK → Xuất kho. Không đạt → Cần mua.',
-  fields: [
-    // Stock check tables rendered dynamically in page.tsx from previousStepData
-    { key: 'stockCheckNotes', label: 'Ghi chú kiểm tra tồn kho', labelEn: 'Stock Check Notes', type: 'textarea', fullWidth: true },
-  ],
-  checklist: [
-    { key: 'stock_checked', label: 'Đã kiểm tra tồn kho từng item', required: true },
-    { key: 'quality_verified', label: 'Đã kiểm tra chất lượng tồn kho', required: true },
-    { key: 'pr_consolidated', label: 'Đã tạo consolidated PR', required: true },
-  ],
-  attachments: [
-    { key: 'prFile', label: 'File PR tổng hợp', accept: ACCEPT.SHEETS_PLUS },
-  ],
-}
-
 const P3_3: StepFormConfig = {
   stepCode: 'P3.3',
   formType: 'input',
@@ -346,8 +327,8 @@ const P3_3: StepFormConfig = {
 const P3_4: StepFormConfig = {
   stepCode: 'P3.4',
   formType: 'input',
-  title: 'Quản lý SX lập lệnh sản xuất cho tổ nội bộ',
-  description: 'R06 lập Lệnh sản xuất cho tổ nội bộ. Sổ lệnh được hệ thống tự động tạo. Nhập danh sách chi tiết nội dung công việc cần phân giao.',
+  title: 'Quản lý SX lập lệnh sản xuất cho tổ nội bộ và thầu phụ',
+  description: 'R06 lập Lệnh sản xuất cho tổ nội bộ và các ô có thầu phụ làm tại nhà máy IBS (ví dụ "IBS TP Giang Sơn"). Sổ lệnh được hệ thống tự động tạo. Nhập danh sách chi tiết nội dung công việc cần phân giao.',
   fields: [
     { key: 'woNumber', label: 'Sổ lệnh', labelEn: 'WO Number', type: 'readonly', fullWidth: false },
     { key: 'estimateRef', label: 'Dự toán', labelEn: 'Estimate Ref', type: 'text', required: true },
@@ -430,25 +411,6 @@ const P4_1: StepFormConfig = {
   ],
   attachments: [
     { key: 'paymentProof', label: 'Chứng từ thanh toán', accept: ACCEPT.DOCS_IMAGE },
-  ],
-}
-
-const P4_2: StepFormConfig = {
-  stepCode: 'P4.2',
-  formType: 'input',
-  title: 'Thương mại theo dõi hàng về và nghiệm thu',
-  description: 'R07 cập nhật trạng thái PO khi hàng về thực tế, xác nhận lô hàng, bàn giao cho QC.',
-  fields: [
-    { key: 'actualDeliveryDate', label: 'Ngày hàng về thực tế', labelEn: 'Actual Delivery Date', type: 'date', required: true },
-    { key: 'deliveryStatus', label: 'Tình trạng giao hàng', labelEn: 'Delivery Status', type: 'select', options: [{ value: 'on_time', label: 'Đúng hạn' }, { value: 'late', label: 'Trễ' }, { value: 'partial', label: 'Giao từng phần' }], required: true },
-    { key: 'lotInfo', label: 'Thông tin lô hàng', labelEn: 'Lot Info', type: 'textarea', fullWidth: true },
-  ],
-  checklist: [
-    { key: 'delivery_confirmed', label: 'Đã xác nhận hàng về', required: true },
-    { key: 'qc_handover', label: 'Đã bàn giao cho QC nghiệm thu', required: true },
-  ],
-  attachments: [
-    { key: 'deliveryNote', label: 'Phiếu giao hàng', accept: ACCEPT.DOCS },
   ],
 }
 
@@ -755,9 +717,9 @@ const P6_5: StepFormConfig = {
 export const STEP_FORM_CONFIGS: Record<string, StepFormConfig> = {
   'P1.1': P1_1, 'P1.1B': P1_1B, 'P1.2A': P1_2A, 'P1.2': P1_2, 'P1.3': P1_3,
   'P2.1': P2_1, 'P2.2': P2_2, 'P2.3': P2_3, 'P2.1A': P2_1A, 'P2.4': P2_4, 'P2.5': P2_5,
-  'P3.1': P3_1, 'P3.2': P3_2, 'P3.3': P3_3, 'P3.4': P3_4,
+  'P3.1': P3_1, 'P3.3': P3_3, 'P3.4': P3_4,
   'P3.5': P3_5, 'P3.6': P3_6, 'P3.7': P3_7,
-  'P4.1': P4_1, 'P4.2': P4_2, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,
+  'P4.1': P4_1, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,
   'P5.1': P5_1, 'P5.1A': P5_1A, 'P5.1.1': P5_1_1, 'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
   'P6.1': P6_1, 'P6.2': P6_2, 'P6.3': P6_3, 'P6.4': P6_4, 'P6.5': P6_5,
 }

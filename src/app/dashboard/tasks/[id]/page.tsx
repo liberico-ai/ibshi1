@@ -184,6 +184,9 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
   // Step filter helpers (P3.3 vs P3.4 IBS routing)
   const _isIBS = (val: string) => (val || '').trim().toUpperCase().includes('IBS');
   const _isEmpty = (val: string) => !(val || '').trim();
+  // "N/A" means "công đoạn này không áp dụng cho hạng mục" — treat as empty for routing
+  const _isNA = (val: string) => (val || '').trim().toUpperCase() === 'N/A';
+  const _isActiveValue = (val: string) => !_isEmpty(val) && !_isNA(val);
   const isRowVisibleForStep = (row: WbsRow): boolean => {
     if (!stepFilter || (stepFilter !== 'P3.3' && stepFilter !== 'P3.4')) return true;
     const nonEmptyCells = subCols.filter(c => !_isEmpty(row[c.key] || ''));
@@ -195,6 +198,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
   const isCellActiveForStep = (cellVal: string): boolean => {
     if (!stepFilter || (stepFilter !== 'P3.3' && stepFilter !== 'P3.4')) return true;
     if (_isEmpty(cellVal)) return true;
+    if (_isNA(cellVal)) return false; // N/A is never an active cell for either step
     if (stepFilter === 'P3.4') return _isIBS(cellVal);
     if (stepFilter === 'P3.3') return !_isIBS(cellVal);
     return true;
@@ -1393,7 +1397,7 @@ export default function TaskDetailPage() {
   const [inventoryLoading, setInventoryLoading] = useState(false)
   const [inventorySearch, setInventorySearch] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic workflow JSON from DB, shape varies per step
-  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; lsxTeamData?: { teamName: string; volume: string; startDate: string; endDate: string; stageKey: string; hangMuc?: string; phamVi?: string; rowIdx?: number; teamIdx?: number; sourceP51TaskId?: string }; departmentEstimates?: any; budgetTotal?: any } | null>(null)
+  const [previousStepData, setPreviousStepData] = useState<{ plan?: any; estimate?: any; bom?: any; bomMain?: any; bomWeldPaint?: any; bomSupply?: any; prItems?: any; fromStock?: any; toPurchase?: any; inventory?: any; supplierData?: any; poData?: any; qcData?: any; grnHistory?: any; poId?: any; poCode?: any; jobCardData?: any; volumeData?: any; woData?: any; lsxData?: any; lsxTeamData?: { teamName: string; volume: string; startDate: string; endDate: string; stageKey: string; hangMuc?: string; phamVi?: string; rowIdx?: number; teamIdx?: number; sourceP51TaskId?: string }; departmentEstimates?: any; budgetTotal?: any } | null>(null)
   const [previousStepFiles, setPreviousStepFiles] = useState<PrevStepFile[]>([])
   // P1.2A WBS expanded rows
   const [wbsExpandedRows, setWbsExpandedRows] = useState<Set<number>>(new Set())
@@ -3898,6 +3902,13 @@ export default function TaskDetailPage() {
                     items = (data?.bomItems as typeof items) || []
                   }
                   const filledItems = items.filter(b => b.name?.trim())
+                  if (section.key === 'bomSupply' && filledItems.length === 0) {
+                    return (
+                      <div key={section.key} className="card" style={{ padding: '0.75rem 1rem', marginTop: '1rem', borderLeft: `4px solid ${section.color}`, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                        📋 Kho xác nhận chưa cần mua vật tư tiêu hao
+                      </div>
+                    )
+                  }
                   return (
                     <div key={section.key} className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${section.color}` }}>
                       <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: section.color }}>{section.label}</h3>
@@ -4080,6 +4091,13 @@ export default function TaskDetailPage() {
                     items = (data?.bomItems as typeof items) || []
                   }
                   const filledItems = items.filter(b => b.name?.trim())
+                  if (section.key === 'bomSupply' && filledItems.length === 0) {
+                    return (
+                      <div key={section.key} className="card" style={{ padding: '0.75rem 1rem', marginTop: '0.75rem', borderLeft: `4px solid ${section.color}`, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        📋 Kho xác nhận chưa cần mua vật tư tiêu hao
+                      </div>
+                    )
+                  }
                   if (filledItems.length === 0) return null
                   return (
                     <div key={section.key} className="card" style={{ padding: '1.25rem', marginTop: '0.75rem', borderLeft: `4px solid ${section.color}` }}>
@@ -4102,85 +4120,6 @@ export default function TaskDetailPage() {
                     </div>
                   )
                 })}
-              </>
-            )}
-
-            {/* P3.2: Stock Check — auto compare PR items vs inventory */}
-            {task.stepCode === 'P3.2' && previousStepData && (
-              <>
-                {/* Summary bar */}
-                <div className="card" style={{ padding: '1rem 1.5rem', marginTop: '1rem', display: 'flex', gap: 24, alignItems: 'center', background: 'linear-gradient(135deg, #f0fdf4, #ecfdf5)' }}>
-                  <div style={{ fontSize: '0.85rem' }}>
-                    📊 Tổng PR: <strong>{(previousStepData.prItems as unknown[])?.length || 0}</strong> mục
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#16a34a' }}>
-                    ✅ Xuất kho: <strong>{(previousStepData.fromStock as unknown[])?.length || 0}</strong>
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#dc2626' }}>
-                    🛒 Cần mua: <strong>{(previousStepData.toPurchase as unknown[])?.length || 0}</strong>
-                  </div>
-                </div>
-
-                {/* From Stock — items that can be issued from warehouse */}
-                <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #16a34a' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#16a34a' }}>✅ Xuất từ kho (Tồn đủ + Quy chuẩn OK)</h3>
-                  {(previousStepData.fromStock as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; matchedMaterial: { code: string; name: string; spec: string | null; stock: number } | null }[])?.length > 0 ? (
-                    <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.6fr 0.6fr 0.5fr', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 2 }}>
-                        {['#', 'Tên VT', 'Mã VT', 'Quy chuẩn', 'Yêu cầu', 'Tồn kho', 'ĐVT', 'Nguồn'].map(h => (
-                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                        ))}
-                      </div>
-                      {(previousStepData.fromStock as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number }[]).map((item, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.6fr 0.6fr 0.6fr 0.5fr', gap: 4, padding: '4px 2px', background: idx % 2 === 0 ? '#f0fdf4' : 'transparent', borderRadius: 4, fontSize: '0.8rem' }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>{idx + 1}</span>
-                          <span style={{ fontWeight: 600 }}>{item.name}</span>
-                          <span style={{ color: 'var(--accent)' }}>{item.code}</span>
-                          <span style={{ color: 'var(--text-secondary)' }}>{item.spec || '—'}</span>
-                          <span style={{ fontWeight: 700 }}>{item.requestedQty}</span>
-                          <span style={{ color: '#16a34a', fontWeight: 700 }}>{item.inStock}</span>
-                          <span>{item.unit}</span>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.source}</span>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border)', borderRadius: 8 }}>
-                      Không có mục nào đủ điều kiện xuất kho
-                    </div>
-                  )}
-                </div>
-
-                {/* To Purchase — items that need to be bought */}
-                <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #dc2626' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#dc2626' }}>🛒 Cần mua (Không đủ tồn / Quy chuẩn không đạt)</h3>
-                  {(previousStepData.toPurchase as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; shortfall: number; specMatch: boolean; matchedMaterial: { code: string; name: string; spec: string | null } | null }[])?.length > 0 ? (
-                    <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.5fr 0.5fr 0.5fr 0.5fr 0.5fr', gap: 4, padding: '4px 2px', borderBottom: '2px solid var(--border)', marginBottom: 2 }}>
-                        {['#', 'Tên VT', 'Mã VT', 'Quy chuẩn', 'Yêu cầu', 'Tồn kho', 'Thiếu', 'Spec', 'Nguồn'].map(h => (
-                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                        ))}
-                      </div>
-                      {(previousStepData.toPurchase as { name: string; code: string; spec: string; quantity: string; unit: string; source: string; inStock: number; requestedQty: number; shortfall: number; specMatch: boolean; matchedMaterial: { code: string; name: string; spec: string | null } | null }[]).map((item, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '30px 1.2fr 0.8fr 0.8fr 0.5fr 0.5fr 0.5fr 0.5fr 0.5fr', gap: 4, padding: '4px 2px', background: idx % 2 === 0 ? '#fef2f2' : 'transparent', borderRadius: 4, fontSize: '0.8rem' }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>{idx + 1}</span>
-                          <span style={{ fontWeight: 600 }}>{item.name}</span>
-                          <span style={{ color: 'var(--accent)' }}>{item.code}</span>
-                          <span style={{ color: 'var(--text-secondary)' }}>{item.spec || '—'}</span>
-                          <span style={{ fontWeight: 700 }}>{item.requestedQty}</span>
-                          <span style={{ color: item.inStock > 0 ? '#f59e0b' : '#dc2626', fontWeight: 700 }}>{item.inStock}</span>
-                          <span style={{ color: '#dc2626', fontWeight: 700 }}>{item.shortfall > 0 ? `−${item.shortfall}` : '—'}</span>
-                          <span style={{ fontSize: '0.7rem' }}>{item.matchedMaterial ? (item.specMatch ? '✅' : '❌ Sai') : '⚠️ N/A'}</span>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.source}</span>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', border: '2px dashed #bbf7d0', borderRadius: 8, fontWeight: 600 }}>
-                      🎉 Tất cả vật tư đều sẵn có trong kho!
-                    </div>
-                  )}
-                </div>
               </>
             )}
 
@@ -4445,206 +4384,185 @@ export default function TaskDetailPage() {
               )
             })()}
 
-            {/* P4.2: Delivery tracking — materials + NCC + received qty */}
-            {task.stepCode === 'P4.2' && previousStepData && (() => {
-              const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
-              const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
-              if (nccList.length === 0) return null
-              // Build materials list with best NCC
-              const allMats = [...new Set(nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim())))]
-              const matItems = allMats.map(mat => {
-                const prices = nccList.map(s => {
-                  const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat.toLowerCase())
-                  return { ncc: s.name, price: q ? Number(q.price) || 0 : 0 }
-                }).filter(p => p.price > 0)
-                const best = prices.length > 0 ? prices.reduce((a, b) => a.price <= b.price ? a : b) : { ncc: '—', price: 0 }
-                return { material: mat, ncc: best.ncc }
-              })
-              // receivedQty stored in formData as receivedQty_0, receivedQty_1, etc.
+            {/* P4.3 (dynamic per PO): QC inspection of incoming goods */}
+            {task.stepCode === 'P4.3' && previousStepData && (() => {
+              type PoItem = { id: string; quantity: unknown; receivedQty: unknown; unitPrice: unknown; material: { name: string; materialCode: string; unit: string; specification: string | null } }
+              type PoFull = { poCode: string; status: string; totalValue: unknown; vendor: { name: string; vendorCode: string }; items: PoItem[] }
+              type Grn = { id: string; quantity: unknown; heatNumber: string | null; lotNumber: string | null; createdAt: string; notes: string | null; material: { name: string; materialCode: string } }
+              const po = previousStepData.poData as PoFull | null
+              const grns = (previousStepData.grnHistory as Grn[]) || []
+              const poCode = previousStepData.poCode as string | undefined
+              if (!po) {
+                return (
+                  <div className="card" style={{ padding: '1rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    ⚠️ Không tìm thấy thông tin PO {poCode ? `(${poCode})` : ''} — PO có thể đã bị xóa.
+                  </div>
+                )
+              }
               return (
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #16a34a' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#16a34a' }}>📦 Danh sách vật tư theo dõi giao hàng</h3>
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#0ea5e9' }}>📦 Nghiệm thu chất lượng hàng về — PO {po.poCode}</h3>
+                  <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>🏢 NCC: <strong>{po.vendor?.name || '—'}</strong></div>
+                    <div>💰 Tổng PO: <strong>{po.totalValue ? Number(po.totalValue).toLocaleString('vi-VN') : '—'} ₫</strong></div>
+                    <div>📌 Trạng thái: <strong>{po.status}</strong></div>
+                    <div>📦 Số lần nhận hàng: <strong>{grns.length}</strong></div>
+                  </div>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                       <thead>
                         <tr style={{ background: 'var(--bg-secondary)' }}>
                           <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)', width: 30 }}>#</th>
                           <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Vật tư</th>
-                          <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>NCC cung cấp</th>
-                          <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, borderBottom: '2px solid var(--border)', color: '#f59e0b' }}>SL thực nhận</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Quy chuẩn</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>SL PO</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>SL đã nhận</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>ĐVT</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {matItems.map((item, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                            <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{idx + 1}</td>
-                            <td style={{ padding: '6px 8px', fontWeight: 500 }}>{item.material}</td>
-                            <td style={{ padding: '6px 8px' }}>
-                              <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: '#dbeafe', color: '#1d4ed8' }}>{item.ncc}</span>
-                            </td>
-                            <td style={{ padding: '4px 8px', textAlign: 'center' }}>
-                              <input
-                                className="input"
-                                type="text"
-                                placeholder="Nhập SL"
-                                disabled={!isActive}
-                                value={(formData[`receivedQty_${idx}`] as string) || ''}
-                                onChange={e => setFormData(prev => ({ ...prev, [`receivedQty_${idx}`]: e.target.value }))}
-                                style={{ width: 90, fontSize: '0.8rem', padding: '4px 6px', textAlign: 'center' }}
-                              />
-                            </td>
-                          </tr>
-                        ))}
+                        {po.items.map((it, idx) => {
+                          const qty = Number(it.quantity) || 0
+                          const recv = Number(it.receivedQty) || 0
+                          const full = recv >= qty
+                          return (
+                            <tr key={it.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                              <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{idx + 1}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 500 }}>{it.material?.name || '—'}</td>
+                              <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{it.material?.specification || '—'}</td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{qty.toLocaleString('vi-VN')}</td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: full ? '#16a34a' : '#f59e0b' }}>{recv.toLocaleString('vi-VN')}</td>
+                              <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{it.material?.unit || '—'}</td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
-                </div>
-              )
-            })()}
 
-            {/* P4.3: QC inspection — show approved PO (best price per material) */}
-            {task.stepCode === 'P4.3' && previousStepData && (() => {
-              const pd = previousStepData.poData as { poNumber?: string; totalAmount?: string; [k: string]: unknown } | null
-              const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
-              const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
-              if (!pd && nccList.length === 0) return null
-              // Build best-price materials (approved PO)
-              const allMats = [...new Set(nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim())))]
-              const bestItems = allMats.map(mat => {
-                const prices = nccList.map(s => {
-                  const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat.toLowerCase())
-                  return { ncc: s.name, price: q ? Number(q.price) || 0 : 0 }
-                }).filter(p => p.price > 0)
-                const best = prices.length > 0 ? prices.reduce((a, b) => a.price <= b.price ? a : b) : { ncc: '—', price: 0 }
-                return { material: mat, bestPrice: best.price, bestNCC: best.ncc }
-              })
-              const grandTotal = bestItems.reduce((sum, item) => sum + item.bestPrice, 0)
-              return (
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#0ea5e9' }}>📦 Vật tư cần nghiệm thu</h3>
-                  {pd?.poNumber && (
-                    <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '8px 14px', marginBottom: 10, fontSize: '0.85rem' }}>
-                      📋 PO: <strong>{pd.poNumber as string}</strong>
-                      {pd?.totalAmount && <> — 💰 Tổng PO: <strong>{Number(pd.totalAmount).toLocaleString('vi-VN')} ₫</strong></>}
-                    </div>
-                  )}
-                  {bestItems.length > 0 && (
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                        <thead>
-                          <tr style={{ background: 'var(--bg-secondary)' }}>
-                            <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)', width: 30 }}>#</th>
-                            <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Vật tư</th>
-                            <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>NCC</th>
-                            <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid var(--border)' }}>Giá (VND)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {bestItems.map((item, idx) => (
-                            <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                              <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{idx + 1}</td>
-                              <td style={{ padding: '6px 8px', fontWeight: 500 }}>{item.material}</td>
-                              <td style={{ padding: '6px 8px' }}>
-                                <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: '#dbeafe', color: '#1d4ed8' }}>{item.bestNCC}</span>
-                              </td>
-                              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{item.bestPrice > 0 ? `${item.bestPrice.toLocaleString('vi-VN')} ₫` : '—'}</td>
+                  {grns.length > 0 && (
+                    <details style={{ marginTop: 12 }}>
+                      <summary style={{ cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        📋 Lịch sử {grns.length} phiếu nhận hàng (GRN)
+                      </summary>
+                      <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-secondary)' }}>
+                              <th style={{ padding: '5px 8px', textAlign: 'left' }}>Ngày</th>
+                              <th style={{ padding: '5px 8px', textAlign: 'left' }}>Vật tư</th>
+                              <th style={{ padding: '5px 8px', textAlign: 'right' }}>SL</th>
+                              <th style={{ padding: '5px 8px', textAlign: 'left' }}>Heat No.</th>
+                              <th style={{ padding: '5px 8px', textAlign: 'left' }}>Lot No.</th>
                             </tr>
-                          ))}
-                          <tr style={{ borderTop: '2px solid var(--border)', background: '#f0f9ff' }}>
-                            <td colSpan={3} style={{ padding: '8px', fontWeight: 700, fontSize: '0.85rem', color: '#0369a1' }}>TỔNG GIÁ TRỊ PO</td>
-                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, fontSize: '0.9rem', color: '#0369a1' }}>{grandTotal.toLocaleString('vi-VN')} ₫</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {grns.map(g => (
+                              <tr key={g.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{new Date(g.createdAt).toLocaleDateString('vi-VN')}</td>
+                                <td style={{ padding: '4px 8px' }}>{g.material?.name || '—'}</td>
+                                <td style={{ padding: '4px 8px', textAlign: 'right' }}>{Number(g.quantity).toLocaleString('vi-VN')}</td>
+                                <td style={{ padding: '4px 8px', color: 'var(--text-secondary)' }}>{g.heatNumber || '—'}</td>
+                                <td style={{ padding: '4px 8px', color: 'var(--text-secondary)' }}>{g.lotNumber || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
                   )}
                 </div>
               )
             })()}
 
-            {/* P4.4: Warehouse receipt — per-material qty + storage location */}
+            {/* P4.4 (dynamic per PO): Warehouse stock-in confirmation + storage location per item */}
             {task.stepCode === 'P4.4' && previousStepData && (() => {
-              const qd = previousStepData.qcData as { inspectionResult?: string; [k: string]: unknown } | null
-              const sd = previousStepData.supplierData as { suppliers?: { name: string; quotes: { material: string; price: string }[] }[] } | null
-              const prItems = (previousStepData.prItems as { name: string; quantity: string; unit: string }[]) || []
-              const qcResult = qd?.inspectionResult || 'N/A'
-              const nccList = (sd?.suppliers || []).filter(s => s.name?.trim())
-              // Build best-price materials (QAQC approved)
-              const allMats = [...new Set(nccList.flatMap(s => (s.quotes || []).filter(q => q.material?.trim()).map(q => q.material.trim())))]
-              const materials = allMats.map(mat => {
-                const prices = nccList.map(s => {
-                  const q = (s.quotes || []).find(q => q.material?.trim().toLowerCase() === mat.toLowerCase())
-                  return { ncc: s.name, price: q ? Number(q.price) || 0 : 0 }
-                }).filter(p => p.price > 0)
-                const best = prices.length > 0 ? prices.reduce((a, b) => a.price <= b.price ? a : b) : { ncc: '—', price: 0 }
-                // Find PR qty for this material (fuzzy match: exact, then includes)
-                const matLower = mat.toLowerCase()
-                const prItem = prItems.find(p => p.name?.trim().toLowerCase() === matLower)
-                  || prItems.find(p => p.name?.trim().toLowerCase().includes(matLower) || matLower.includes(p.name?.trim().toLowerCase()))
-                const prQty = prItem ? Number(prItem.quantity) || 0 : 0
-                return { material: mat, ncc: best.ncc, price: String(best.price), prQty }
-              })
-              // Init warehouseItems if empty
-              if (warehouseItems.length === 0 && materials.length > 0) {
-                setTimeout(() => setWarehouseItems(materials.map(m => ({ ...m, receivedQty: '', storageLocation: '' }))), 0)
+              type PoItem = { id: string; quantity: unknown; receivedQty: unknown; material: { name: string; materialCode: string; unit: string; specification: string | null } }
+              type PoFull = { poCode: string; status: string; vendor: { name: string; vendorCode: string }; items: PoItem[] }
+              type Grn = { id: string; quantity: unknown; heatNumber: string | null; lotNumber: string | null; createdAt: string; material: { name: string; materialCode: string } }
+              const po = previousStepData.poData as PoFull | null
+              const grns = (previousStepData.grnHistory as Grn[]) || []
+              const poCode = previousStepData.poCode as string | undefined
+              if (!po) {
+                return (
+                  <div className="card" style={{ padding: '1rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    ⚠️ Không tìm thấy thông tin PO {poCode ? `(${poCode})` : ''} — PO có thể đã bị xóa.
+                  </div>
+                )
+              }
+              // Storage locations stored as JSON string in formData (handleFieldChange only takes scalars).
+              let storageMap: Record<string, string> = {}
+              try {
+                const raw = formData.storageLocations
+                if (typeof raw === 'string' && raw.trim()) storageMap = JSON.parse(raw) || {}
+              } catch { storageMap = {} }
+              const updateLocation = (itemId: string, val: string) => {
+                handleFieldChange('storageLocations', JSON.stringify({ ...storageMap, [itemId]: val }))
               }
               return (
-                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: `4px solid ${qcResult === 'PASS' ? '#16a34a' : qcResult === 'CONDITIONAL' ? '#f59e0b' : '#dc2626'}` }}>
-                  <h3 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: qcResult === 'PASS' ? '#16a34a' : '#f59e0b' }}>
-                    📦 Vật tư cần nghiệm thu — <span style={{ background: qcResult === 'PASS' ? '#dcfce7' : '#fef3c7', padding: '2px 10px', borderRadius: 6, fontSize: '0.8rem' }}>{qcResult}</span>
-                  </h3>
-                  {materials.length === 0 ? (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>Chưa có dữ liệu vật tư.</div>
-                  ) : (
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginTop: 8 }}>
-                      {/* Header */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 0.8fr 0.6fr 0.7fr 1fr', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                        {['#', 'Vật tư', 'NCC', 'Giá', 'SL thực nhận', 'Vị trí lưu trữ'].map(h => (
-                          <span key={h} style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
-                        ))}
-                      </div>
-                      {/* Rows */}
-                      {materials.map((m, idx) => {
-                        const wi = warehouseItems[idx] || { receivedQty: '', storageLocation: '' }
-                        const receivedNum = Number(wi.receivedQty) || 0
-                        const isOverQty = m.prQty > 0 && receivedNum > m.prQty
-                        return (
-                          <div key={idx}>
-                            <div style={{
-                              display: 'grid', gridTemplateColumns: '30px 1fr 0.8fr 0.6fr 0.7fr 1fr', gap: 6, padding: '8px 10px',
-                              alignItems: 'center', borderBottom: isOverQty ? 'none' : (idx < materials.length - 1 ? '1px solid var(--border)' : 'none'),
-                              background: isOverQty ? '#fef2f2' : (wi.receivedQty && wi.storageLocation ? '#f0fdf4' : 'transparent')
-                            }}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</span>
-                              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{m.material}</span>
-                              <span style={{ fontSize: '0.8rem' }}>
-                                <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: '#dbeafe', color: '#1d4ed8' }}>{m.ncc}</span>
-                              </span>
-                              <span style={{ fontSize: '0.8rem', textAlign: 'right' }}>{Number(m.price).toLocaleString('vi-VN')} ₫</span>
-
-                              <input className="input" type="number" placeholder="SL" disabled={!isActive}
-                                value={wi.receivedQty}
-                                onChange={e => setWarehouseItems(prev => prev.map((w, i) => i === idx ? { ...w, receivedQty: e.target.value } : w))}
-                                style={{ fontSize: '0.8rem', padding: '4px 6px', width: '100%', borderColor: isOverQty ? '#dc2626' : undefined }} />
-                              <input className="input" type="text" placeholder="Vị trí..." disabled={!isActive}
-                                value={wi.storageLocation}
-                                onChange={e => setWarehouseItems(prev => prev.map((w, i) => i === idx ? { ...w, storageLocation: e.target.value } : w))}
-                                style={{ fontSize: '0.8rem', padding: '4px 6px', width: '100%' }} />
-                            </div>
-                            {isOverQty && (
-                              <div style={{ padding: '2px 10px 6px 36px', fontSize: '0.72rem', color: '#dc2626', fontWeight: 600, background: '#fef2f2', borderBottom: idx < materials.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                                ⚠️ SL thực nhận ({receivedNum}) vượt quá SL PR đã chốt ({m.prQty})
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                  {/* Summary */}
-                  <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Đã nhập: <strong style={{ color: '#16a34a' }}>{warehouseItems.filter(w => w.receivedQty && w.storageLocation).length}/{materials.length}</strong> vật tư
+                <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #16a34a' }}>
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: '#16a34a' }}>📦 Nhập kho — PO {po.poCode}</h3>
+                  <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem' }}>
+                    🏢 NCC: <strong>{po.vendor?.name || '—'}</strong>
+                    {' · '}📌 Trạng thái: <strong>{po.status}</strong>
+                    {' · '}📦 GRN: <strong>{grns.length}</strong> phiếu
                   </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px 1.4fr 0.8fr 0.6fr 0.6fr 0.5fr 1.2fr', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)' }}>
+                      {['#', 'Vật tư', 'Quy chuẩn', 'SL PO', 'SL nhận', 'ĐVT', 'Vị trí lưu trữ'].map(h => (
+                        <span key={h} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{h}</span>
+                      ))}
+                    </div>
+                    {po.items.map((it, idx) => {
+                      const qty = Number(it.quantity) || 0
+                      const recv = Number(it.receivedQty) || 0
+                      return (
+                        <div key={it.id} style={{ display: 'grid', gridTemplateColumns: '30px 1.4fr 0.8fr 0.6fr 0.6fr 0.5fr 1.2fr', gap: 6, padding: '6px 10px', alignItems: 'center', borderTop: '1px solid var(--border)', fontSize: '0.82rem' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{idx + 1}</span>
+                          <span style={{ fontWeight: 500 }}>{it.material?.name || '—'}</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>{it.material?.specification || '—'}</span>
+                          <span style={{ textAlign: 'right' }}>{qty.toLocaleString('vi-VN')}</span>
+                          <span style={{ textAlign: 'right', fontWeight: 600, color: recv >= qty ? '#16a34a' : '#f59e0b' }}>{recv.toLocaleString('vi-VN')}</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>{it.material?.unit || '—'}</span>
+                          <input className="input" type="text" placeholder="Vị trí..." disabled={!isActive}
+                            value={storageMap[it.id] || ''}
+                            onChange={e => updateLocation(it.id, e.target.value)}
+                            style={{ fontSize: '0.78rem', padding: '3px 6px', width: '100%' }} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {grns.length > 0 && (
+                    <details style={{ marginTop: 12 }}>
+                      <summary style={{ cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        📋 Lịch sử {grns.length} phiếu GRN
+                      </summary>
+                      <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-secondary)' }}>
+                              <th style={{ padding: '5px 8px', textAlign: 'left' }}>Ngày</th>
+                              <th style={{ padding: '5px 8px', textAlign: 'left' }}>Vật tư</th>
+                              <th style={{ padding: '5px 8px', textAlign: 'right' }}>SL</th>
+                              <th style={{ padding: '5px 8px', textAlign: 'left' }}>Heat No.</th>
+                              <th style={{ padding: '5px 8px', textAlign: 'left' }}>Lot No.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {grns.map(g => (
+                              <tr key={g.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{new Date(g.createdAt).toLocaleDateString('vi-VN')}</td>
+                                <td style={{ padding: '4px 8px' }}>{g.material?.name || '—'}</td>
+                                <td style={{ padding: '4px 8px', textAlign: 'right' }}>{Number(g.quantity).toLocaleString('vi-VN')}</td>
+                                <td style={{ padding: '4px 8px', color: 'var(--text-secondary)' }}>{g.heatNumber || '—'}</td>
+                                <td style={{ padding: '4px 8px', color: 'var(--text-secondary)' }}>{g.lotNumber || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  )}
                 </div>
               )
             })()}
