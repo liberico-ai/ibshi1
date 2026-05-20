@@ -72,7 +72,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
     return `${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')}/${dt.getFullYear()}`;
   };
 
-  const [assignCell, setAssignCell] = useState<{ ri: number; col: string } | null>(null);
+  const [assignCell, setAssignCell] = useState<{ ri: number; col: string; savedFull?: boolean } | null>(null);
   const [tempAssigns, setTempAssigns] = useState<TeamAssign[]>([]);
   const [tempMaterials, setTempMaterials] = useState<MaterialReqItem[]>([]);
   const [dncRow, setDncRow] = useState<{ idx: number; row: Record<string, string>; stageKey: string; teamIdx: number; teamVolume: number } | null>(null);
@@ -133,8 +133,13 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
 
   const openAssignPanel = (ri: number, colKey: string) => {
     const existing = cellAssignments?.[ri]?.[colKey];
+    // Lock "Lưu phân giao" if this cell was ALREADY saved with full volume (≥ KL hạng mục).
+    // Captured at open-time so first/partial saves stay editable; only a finalized 100% cell locks.
+    const savedKL = (existing || []).reduce((s, a) => s + (Number(a.volume) || 0), 0);
+    const totalKL = Number(rows[ri]?.khoiLuong) || 0;
+    const savedFull = !!(existing && existing.length > 0 && totalKL > 0 && savedKL >= totalKL);
     setTempAssigns(existing && existing.length > 0 ? JSON.parse(JSON.stringify(existing)) : [{ teamName: '', volume: '', startDate: '', endDate: '' }]);
-    setAssignCell({ ri, col: colKey });
+    setAssignCell({ ri, col: colKey, savedFull });
   };
 
   const saveAssign = () => {
@@ -639,7 +644,10 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           const maxAllowed = teamVol * (limitPct / 100);
                           const atLimit = teamMatTotal >= maxAllowed && teamVol > 0;
                           const hasMats = teamMatCount > 0;
-                          const canIssue = hasMats && !issued && !qcFailed && !isCloned;
+                          // OLD (giữ lại): bắt buộc phải có DNC vật tư mới được phát hành LSX.
+                          // const canIssue = hasMats && !issued && !qcFailed && !isCloned;
+                          // NEW: bỏ phụ thuộc DNC vật tư — công đoạn không cần VT vẫn phát hành được.
+                          const canIssue = !issued && !qcFailed && !isCloned;
                           return (
                             <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.5fr 0.5fr 140px 100px', gap: 8, padding: '8px 12px', alignItems: 'center', background: qcFailed ? '#fef2f2' : isCloned ? '#f1f5f9' : ti % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', opacity: isCloned ? 0.6 : 1 }}>
                               <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{team.teamName || `Tổ ${ti + 1}`} {isCloned ? '(Đã Rework)' : ''}</span>
@@ -649,10 +657,10 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                               <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 {!qcFailed ? (
                                   <button type="button" disabled={!canIssue || isCloned}
-                                    title={!hasMats ? 'Cần lập DNC Vật tư' : issued ? 'Đã phát hành' : 'Phát hành LSX'}
+                                    title={issued ? 'Đã phát hành' : 'Phát hành LSX'}
                                     onClick={() => onIssueSingleTeam?.(idx, stage.key, ti)}
                                     style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: (canIssue && !isCloned) ? 'pointer' : 'default', background: issued ? '#d1fae5' : canIssue ? '#f59e0b' : '#e2e8f0', color: issued ? '#16a34a' : canIssue ? '#fff' : '#94a3b8', transition: 'all 0.2s' }}>
-                                    {issued ? '✅ Đã PH' : !hasMats ? '🔒 Phát hành' : '📤 Phát hành'}
+                                    {issued ? '✅ Đã PH' : '📤 Phát hành'}
                                   </button>
                                 ) : (
                                   <>
@@ -950,9 +958,10 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10, background: '#fafafa' }}>
                 <button type="button" onClick={() => setAssignCell(null)}
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#f1f5f9', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Hủy</button>
-                <button type="button" onClick={saveAssign}
-                  style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                  💾 Lưu phân giao
+                <button type="button" onClick={saveAssign} disabled={assignCell.savedFull}
+                  title={assignCell.savedFull ? 'Hạng mục đã phân giao đủ khối lượng — đã khóa' : 'Lưu phân giao'}
+                  style={{ padding: '10px 24px', fontSize: '0.9rem', background: assignCell.savedFull ? '#e2e8f0' : '#0ea5e9', color: assignCell.savedFull ? '#94a3b8' : '#fff', border: 'none', borderRadius: 8, cursor: assignCell.savedFull ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+                  {assignCell.savedFull ? '🔒 Đã phân giao đủ' : '💾 Lưu phân giao'}
                 </button>
               </div>
             </div>
@@ -4996,6 +5005,15 @@ export default function TaskDetailPage() {
                       await apiFetch(`/api/tasks/${task.id}`, {
                         method: 'PUT',
                         body: JSON.stringify({ action: 'save', resultData: { ...formData, lsxIssuedDetails: JSON.stringify(updated) } }),
+                      })
+                    } catch { /* silent */ }
+
+                    // Phát hành LSX → đảm bảo task P5.1 (Báo cáo ngày) tồn tại ngay,
+                    // không chờ Kho hoàn thành P4.5 (phục vụ công đoạn không cần vật tư).
+                    try {
+                      await apiFetch('/api/tasks/ensure-daily-report', {
+                        method: 'POST',
+                        body: JSON.stringify({ projectId: task.projectId }),
                       })
                     } catch { /* silent */ }
 

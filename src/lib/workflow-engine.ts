@@ -245,6 +245,92 @@ export async function completeTask(
   return { nextSteps: activatedSteps }
 }
 
+// ── Ensure the persistent daily-report tasks (P5.1 + P5.1A) exist for a project ──
+// Idempotent: safe to call multiple times — only creates each task once.
+// Triggered by: (1) first P4.5 completion (Kho cấp VT xong); (2) PM/QLSX phát hành LSX
+// (api/tasks/ensure-daily-report) — so material-less stages still get a daily report.
+export async function ensureDailyReportTasks(projectId: string): Promise<void> {
+  const rule = WORKFLOW_RULES['P5.1']
+  if (!rule) return
+
+  // P5.1 — single persistent "Daily Report" task
+  const existingDailyTask = await prisma.workflowTask.findFirst({
+    where: { projectId, stepCode: 'P5.1', stepName: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' },
+  })
+  if (!existingDailyTask) {
+    await prisma.workflowTask.create({
+      data: {
+        projectId,
+        stepCode: 'P5.1',
+        stepName: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)',
+        stepNameEn: 'Daily Production Volume Report',
+        assignedRole: rule.role,
+        status: TASK_STATUS.IN_PROGRESS,
+        startedAt: new Date(),
+      },
+    })
+    try {
+      const users = await prisma.user.findMany({ where: { roleCode: rule.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+      const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
+      const p51Task = await prisma.workflowTask.findFirst({ where: { projectId, stepCode: 'P5.1' }, orderBy: { createdAt: 'desc' } })
+      if (users.length > 0 && project && p51Task) {
+        await prisma.notification.createMany({
+          data: users.map(u => ({
+            userId: u.id, title: `Công việc mới: Báo cáo SX Hàng ngày`,
+            message: `Bước P5.1 của dự án ${project.projectCode} đã sẵn sàng.`,
+            type: 'task_assigned', linkUrl: `/dashboard/tasks/${p51Task.id}`,
+          })),
+        })
+        await notifyTaskActivated({
+          stepCode: 'P5.1', stepName: p51Task.stepName,
+          projectCode: project.projectCode, projectName: project.projectName,
+          assignedRole: rule.role, deadline: null, taskId: p51Task.id,
+          mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
+        }).catch(console.error)
+      }
+    } catch (e) { console.error(e) }
+  }
+
+  // P5.1A — subcontractor daily report (PM updates on behalf of external subcontractors)
+  const ruleP51A = WORKFLOW_RULES['P5.1A']
+  if (ruleP51A) {
+    const existingP51A = await prisma.workflowTask.findFirst({ where: { projectId, stepCode: 'P5.1A' } })
+    if (!existingP51A) {
+      await prisma.workflowTask.create({
+        data: {
+          projectId,
+          stepCode: 'P5.1A',
+          stepName: 'BÁO CÁO KHỐI LƯỢNG CỦA THẦU PHỤ (THEO NGÀY)',
+          stepNameEn: 'Daily Subcontractor Production Report',
+          assignedRole: ruleP51A.role,
+          status: TASK_STATUS.IN_PROGRESS,
+          startedAt: new Date(),
+        },
+      })
+      try {
+        const users = await prisma.user.findMany({ where: { roleCode: ruleP51A.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+        const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
+        const p51ATask = await prisma.workflowTask.findFirst({ where: { projectId, stepCode: 'P5.1A' }, orderBy: { createdAt: 'desc' } })
+        if (users.length > 0 && project && p51ATask) {
+          await prisma.notification.createMany({
+            data: users.map(u => ({
+              userId: u.id, title: `Công việc mới: Báo cáo SX Thầu phụ`,
+              message: `Bước P5.1A của dự án ${project.projectCode} đã sẵn sàng.`,
+              type: 'task_assigned', linkUrl: `/dashboard/tasks/${p51ATask.id}`,
+            })),
+          })
+          await notifyTaskActivated({
+            stepCode: 'P5.1A', stepName: p51ATask.stepName,
+            projectCode: project.projectCode, projectName: project.projectName,
+            assignedRole: ruleP51A.role, deadline: null, taskId: p51ATask.id,
+            mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
+          }).catch(console.error)
+        }
+      } catch (e) { console.error(e) }
+    }
+  }
+}
+
 // ── Auto-create persistent P5.1 "Daily Report" task when first P4.5 completes ──
 // P5.1.1 (Yêu cầu nghiệm thu) is NOT handled here anymore.
 // It is triggered by /api/tasks/check-p511 when PM/QLSX Phát hành đủ 100% công đoạn.
@@ -257,99 +343,7 @@ async function checkAndCreateP51(taskId: string) {
   if (data._p51Created || !data.sourceStep) return
   if (task.status !== TASK_STATUS.DONE) return
 
-  const rule = WORKFLOW_RULES['P5.1']
-  if (!rule) return
-
-  // Ensure the single persistent "Daily Report" task exists
-  const existingDailyTask = await prisma.workflowTask.findFirst({
-    where: {
-      projectId: task.projectId,
-      stepCode: 'P5.1',
-      stepName: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)'
-    }
-  })
-
-  if (!existingDailyTask) {
-    await prisma.workflowTask.create({
-      data: {
-        projectId: task.projectId,
-        stepCode: 'P5.1',
-        stepName: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)',
-        stepNameEn: 'Daily Production Volume Report',
-        assignedRole: rule.role,
-        status: TASK_STATUS.IN_PROGRESS,
-        startedAt: new Date(),
-      }
-    })
-
-    // Notify for P5.1
-    try {
-      const users = await prisma.user.findMany({ where: { roleCode: rule.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
-      const project = await prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } })
-      const p51Task = await prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P5.1' }, orderBy: { createdAt: 'desc' } })
-      if (users.length > 0 && project && p51Task) {
-        await prisma.notification.createMany({
-          data: users.map(u => ({
-            userId: u.id, title: `Công việc mới: Báo cáo SX Hàng ngày`,
-            message: `Bước P5.1 của dự án ${project.projectCode} đã sẵn sàng.`,
-            type: 'task_assigned', linkUrl: `/dashboard/tasks/${p51Task.id}`,
-          }))
-        })
-        await notifyTaskActivated({
-          stepCode: 'P5.1', stepName: p51Task.stepName,
-          projectCode: project.projectCode, projectName: project.projectName,
-          assignedRole: rule.role, deadline: null, taskId: p51Task.id,
-          mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
-        }).catch(console.error)
-      }
-    } catch (e) { console.error(e) }
-  }
-
-  // Also create P5.1A for PM (subcontractor daily report)
-  const ruleP51A = WORKFLOW_RULES['P5.1A']
-  if (ruleP51A) {
-    const existingP51A = await prisma.workflowTask.findFirst({
-      where: {
-        projectId: task.projectId,
-        stepCode: 'P5.1A',
-      }
-    })
-    if (!existingP51A) {
-      await prisma.workflowTask.create({
-        data: {
-          projectId: task.projectId,
-          stepCode: 'P5.1A',
-          stepName: 'BÁO CÁO KHỐI LƯỢNG CỦA THẦU PHỤ (THEO NGÀY)',
-          stepNameEn: 'Daily Subcontractor Production Report',
-          assignedRole: ruleP51A.role,
-          status: TASK_STATUS.IN_PROGRESS,
-          startedAt: new Date(),
-        }
-      })
-
-      // Notify for P5.1A
-      try {
-        const users = await prisma.user.findMany({ where: { roleCode: ruleP51A.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
-        const project = await prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } })
-        const p51ATask = await prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P5.1A' }, orderBy: { createdAt: 'desc' } })
-        if (users.length > 0 && project && p51ATask) {
-          await prisma.notification.createMany({
-            data: users.map(u => ({
-              userId: u.id, title: `Công việc mới: Báo cáo SX Thầu phụ`,
-              message: `Bước P5.1A của dự án ${project.projectCode} đã sẵn sàng.`,
-              type: 'task_assigned', linkUrl: `/dashboard/tasks/${p51ATask.id}`,
-            }))
-          })
-          await notifyTaskActivated({
-            stepCode: 'P5.1A', stepName: p51ATask.stepName,
-            projectCode: project.projectCode, projectName: project.projectName,
-            assignedRole: ruleP51A.role, deadline: null, taskId: p51ATask.id,
-            mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
-          }).catch(console.error)
-        }
-      } catch (e) { console.error(e) }
-    }
-  }
+  await ensureDailyReportTasks(task.projectId)
 
   // Mark P4.5 as processed
   await prisma.workflowTask.update({
