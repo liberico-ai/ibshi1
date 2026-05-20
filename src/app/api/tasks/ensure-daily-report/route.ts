@@ -17,6 +17,6 @@ export async function POST(req: NextRequest) {
     return successResponse({ ok: true }, 'Đã đảm bảo task báo cáo ngày tồn tại')
   } catch (err) {
     console.error('POST /api/tasks/ensure-daily-report error:', err)
-    return errorResponse((err as Error).message || 'Lỗi hệ thống', 500)
+    return errorResponse('Lỗi hệ thống khi tạo task báo cáo ngày', 500)
   }
 }
