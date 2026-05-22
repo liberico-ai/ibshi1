@@ -12,6 +12,8 @@ interface P3_5Props {
   rejectionInfo?: { reason: string; rejectedBy: string; rejectedAt: string; fromStep?: string } | null
 }
 
+const fmtQty = (n: number | string) => parseFloat(Number(n).toFixed(3)).toString()
+
 export default function P3_5CommercialGroupUI({ task, previousStepData, isActive, currentUser, rejectionInfo }: P3_5Props) {
   const router = useRouter()
   const prItems = previousStepData?.prItems || []
@@ -236,8 +238,8 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                           <td className="px-4 py-2.5 font-medium text-slate-800">
                             {item.name} {item.spec && <span className="text-slate-400 font-normal block text-xs mt-0.5">{item.spec}</span>}
                           </td>
-                          <td className="px-4 py-2.5 text-right text-slate-600">{item.requestedQty} {item.unit}</td>
-                          <td className="px-4 py-2.5 text-right font-bold text-emerald-600">{item.inStock} {item.unit}</td>
+                          <td className="px-4 py-2.5 text-right text-slate-600">{fmtQty(item.requestedQty)} {item.unit}</td>
+                          <td className="px-4 py-2.5 text-right font-bold text-emerald-600">{fmtQty(item.inStock)} {item.unit}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -268,7 +270,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                         <td className="px-4 py-2.5 font-medium text-slate-800">
                           {item.name} {item.spec && <span className="text-slate-400 font-normal block text-xs mt-0.5">{item.spec}</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-right text-rose-500 font-bold">{item.shortfall} {item.unit}</td>
+                        <td className="px-4 py-2.5 text-right text-rose-500 font-bold">{fmtQty(item.shortfall)} {item.unit}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -441,7 +443,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                                   {details && <div className="text-[11px] text-slate-500 mt-1.5 font-medium truncate">{details}</div>}
                                </div>
                                <div className="text-right whitespace-nowrap shrink-0 bg-rose-50 px-2 py-1 rounded-md border border-rose-100">
-                                  <span className="font-bold text-rose-600 text-[13px]">{item.shortfall} <span className="text-xs font-normal text-rose-500">{item.unit}</span></span>
+                                  <span className="font-bold text-rose-600 text-[13px]">{fmtQty(item.shortfall)} <span className="text-xs font-normal text-rose-500">{item.unit}</span></span>
                                </div>
                             </div>
                          </div>
@@ -509,7 +511,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                                          </td>
                                          <td className="px-4 py-2.5 text-right flex justify-end items-center gap-2">
                                             <span className="text-xs uppercase font-semibold text-slate-400">Số lượng:</span>
-                                            <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">{item.shortfall} {item.unit}</span>
+                                            <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">{fmtQty(item.shortfall)} {item.unit}</span>
                                          </td>
                                          <td colSpan={2} className="px-4 py-2.5 text-right">
                                             <button onClick={() => toggleItemSelection(item)} className="text-rose-500 hover:text-white font-semibold px-3 py-1 border border-rose-200 hover:bg-rose-500 bg-white rounded shadow-sm text-xs transition-colors flex items-center justify-center gap-1 ml-auto">
