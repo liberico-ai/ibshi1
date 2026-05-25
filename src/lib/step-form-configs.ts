@@ -262,8 +262,8 @@ const P2_4: StepFormConfig = {
   description: 'Tổng hợp dữ liệu dự toán từ TCKT, Thương mại, Sản xuất. KTKH điều chỉnh và lập kế hoạch SX tổng thể.',
   fields: [],
   checklist: [
-    { key: 'bom_reconciled', label: 'Đã đối chiếu BOM thực tế với dự toán' },
-    { key: 'sx_plan_complete', label: 'Kế hoạch SX đã hoàn chỉnh' },
+    { key: 'bom_reconciled', label: 'Đã đối chiếu BOM thực tế với dự toán', required: true },
+    { key: 'sx_plan_complete', label: 'Kế hoạch SX đã hoàn chỉnh', required: true },
     { key: 'wbs_updated', label: 'WBS budget đã cập nhật' },
   ],
   attachments: [

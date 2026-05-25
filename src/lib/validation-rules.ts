@@ -243,14 +243,38 @@ async function validateSufficientStock(
   return { valid: errors.length === 0, errors, warnings: [] }
 }
 
+// ── Required Attachment Validator ──
+// Factory: returns a validator that blocks completion if a required FileAttachment slot is empty.
+function makeAttachmentValidator(stepCode: string, slots: { key: string; label: string }[]) {
+  return async (projectId: string): Promise<ValidationResult> => {
+    const task = await prisma.workflowTask.findFirst({
+      where: { projectId, stepCode },
+      select: { id: true },
+    })
+    if (!task) return EMPTY_OK
+
+    const errors: string[] = []
+    for (const slot of slots) {
+      const file = await prisma.fileAttachment.findFirst({
+        where: { entityId: `${task.id}_${slot.key}` },
+        select: { id: true },
+      })
+      if (!file) errors.push(`Chưa đính kèm tài liệu bắt buộc: "${slot.label}"`)
+    }
+    return { valid: errors.length === 0, errors, warnings: [] }
+  }
+}
+
 // ── Rule Registry: maps step codes to their validation functions ──
 
 const STEP_VALIDATION_MAP: Record<string, (projectId: string, resultData?: Record<string, unknown>) => Promise<ValidationResult>> = {
-  'P2.1': validateBOMConsistency,   // TC-02-03
-  // TC-02-05: IFC stamp — applies when P2.1 includes IFC release
+  'P2.1': async (projectId, resultData) => {
+    const r1 = await validateBOMConsistency(projectId, resultData)   // TC-02-03
+    const r2 = await makeAttachmentValidator('P2.1', [{ key: 'drawings', label: 'File bản vẽ (DWG/PDF)' }])(projectId)
+    return { valid: r1.valid && r2.valid, errors: [...r1.errors, ...r2.errors], warnings: r1.warnings }
+  },
   'P3.5': validateMinQuotes,        // TC-03-04
   'P3.7': async (projectId, resultData) => {
-    // Run both TC-03-05 and TC-03-06 at PO finalization
     const r1 = await validateBudgetOverrun(projectId, resultData)
     const r2 = await validatePOValueGate(projectId, resultData)
     return {
@@ -261,7 +285,10 @@ const STEP_VALIDATION_MAP: Record<string, (projectId: string, resultData?: Recor
   },
   'P3.4': validateLSXBOMLink,       // TC-04-02
   'P4.5': validateSufficientStock,  // Strict stock check to prevent negative inventory
-  'P6.1': validateProofOfDelivery,  // TC-05-02: proof of delivery at QC dossier compilation
+  'P5.1.1': makeAttachmentValidator('P5.1.1', [{ key: 'itpFile', label: 'Biên bản ITP' }]),
+  'P6.1': async (projectId) => {
+    return makeAttachmentValidator('P6.1', [{ key: 'qcDossier', label: 'File QC Dossier tổng hợp' }])(projectId)
+  },
 }
 
 // ── Main Entry Point ──
