@@ -14,7 +14,8 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 
 const APPLY = process.argv.includes('--apply')
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ibs_erp_test?schema=public'
+if (!process.env.DATABASE_URL) { console.error('❌ DATABASE_URL not set'); process.exit(1) }
+const connectionString: string = process.env.DATABASE_URL
 
 async function main() {
   const pool = new pg.Pool({ connectionString })

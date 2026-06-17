@@ -40,7 +40,8 @@ const REPORT = val('--report', path.resolve(process.cwd(), `material-sync-report
 const SYSTEM_USER = val('--system-user', 'SYSTEM_CATALOG_SYNC')
 const SHEET = 'DANH MỤC ĐẦY ĐỦ'
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/ibs_erp?schema=public'
+if (!process.env.DATABASE_URL) { console.error('❌ DATABASE_URL not set'); process.exit(1) }
+const connectionString: string = process.env.DATABASE_URL
 
 const norm = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }

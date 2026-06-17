@@ -25,7 +25,8 @@ const APPLY = args.includes('--apply')
 const RESET = args.includes('--reset')
 const FILE = (args.find((a) => a.startsWith('--file=')) || '').split('=')[1]
   || path.resolve(process.cwd(), 'Ton_Kho_SKU_Theo_DuAn.xlsx')
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ibs_erp_test?schema=public'
+if (!process.env.DATABASE_URL) { console.error('❌ DATABASE_URL not set'); process.exit(1) }
+const connectionString: string = process.env.DATABASE_URL
 
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const str = (v: unknown) => (v == null ? '' : String(v).trim())

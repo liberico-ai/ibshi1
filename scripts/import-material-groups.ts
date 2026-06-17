@@ -8,7 +8,8 @@ import * as fs from 'fs'
 
 const FILE = path.resolve(process.cwd(), 'data/Danh mục nhóm VTHH.xlsx')
 const SHEET = 'Nhom_vat_tu__hang_hoa__dich_vu'
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ibs_erp_test'
+if (!process.env.DATABASE_URL) { console.error('❌ DATABASE_URL not set'); process.exit(1) }
+const connectionString: string = process.env.DATABASE_URL
 
 if (/103\.141\.177\.194/.test(connectionString)) {
   console.error('❌ PRODUCTION DB detected — aborting!')
