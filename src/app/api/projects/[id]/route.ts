@@ -16,97 +16,64 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   if (!pResult.success) return pResult.response
   const { id } = pResult.data
 
-  const [project, templateSteps] = await Promise.all([
-    prisma.project.findUnique({
-      where: { id },
-      include: {
-        dynamicTasks: {
-          include: { assignees: { select: { role: true, userId: true, isPrimary: true } } },
-          orderBy: { createdAt: 'asc' },
-        },
-        wbsNodes: { orderBy: { sortOrder: 'asc' } },
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: {
+      dynamicTasks: {
+        include: { assignees: { select: { role: true, userId: true, isPrimary: true } } },
+        orderBy: { createdAt: 'asc' },
       },
-    }),
-    prisma.templateStep.findMany({
-      where: { template: { code: 'SX-PROD' } },
-      orderBy: { orderIndex: 'asc' },
-    }),
-  ])
+      wbsNodes: { orderBy: { sortOrder: 'asc' } },
+    },
+  })
 
   if (!project) return errorResponse('Dự án không tồn tại', 404)
 
   const ACTIVE = ['OPEN', 'IN_PROGRESS', 'RETURNED']
-  const taskByCode = new Map<string, typeof project.dynamicTasks[0]>()
-  for (const t of project.dynamicTasks) {
-    const existing = taskByCode.get(t.taskType)
-    if (!existing || ACTIVE.includes(t.status) || (!ACTIVE.includes(existing.status) && t.completedAt && existing.completedAt && t.completedAt > existing.completedAt)) {
-      taskByCode.set(t.taskType, t)
-    }
-  }
 
-  const legacyTasks = templateSteps.map(step => {
-    const t = taskByCode.get(step.code)
-    const rule = WORKFLOW_RULES[step.code]
-    if (t) {
-      const primary = t.assignees?.find(a => a.isPrimary) || t.assignees?.[0]
-      const status = t.status === 'DONE' ? 'DONE' : ACTIVE.includes(t.status) ? 'IN_PROGRESS' : 'PENDING'
-      return {
-        id: t.id,
-        stepCode: t.taskType,
-        stepName: t.title,
-        stepNameEn: rule?.nameEn || '',
-        assignedRole: primary?.role || rule?.role || '',
-        assignedTo: primary?.userId || null,
-        status,
-        priority: 0,
-        deadline: t.deadline,
-        startedAt: t.startedAt,
-        completedAt: t.completedAt,
-        completedBy: t.completedBy,
-        resultData: t.resultData,
-        notes: null,
-        assignee: null as { id: string; fullName: string; username: string } | null,
-      }
-    }
+  const tasks = project.dynamicTasks.map(t => {
+    const rule = WORKFLOW_RULES[t.taskType]
+    const primary = t.assignees?.find(a => a.isPrimary) || t.assignees?.[0]
+    const status = t.status === 'OPEN' || t.status === 'RETURNED' ? 'IN_PROGRESS' : t.status
     return {
-      id: `placeholder-${step.code}`,
-      stepCode: step.code,
-      stepName: step.title,
+      id: t.id,
+      stepCode: t.taskType,
+      stepName: t.title,
       stepNameEn: rule?.nameEn || '',
-      assignedRole: step.roleCode || rule?.role || '',
-      assignedTo: null,
-      status: 'PENDING',
-      priority: 0,
-      deadline: null,
-      startedAt: null,
-      completedAt: null,
-      completedBy: null,
-      resultData: null,
+      assignedRole: primary?.role || rule?.role || '',
+      assignedTo: primary?.userId || null,
+      status,
+      deadline: t.deadline,
+      startedAt: t.startedAt,
+      completedAt: t.completedAt,
+      completedBy: t.completedBy,
+      resultData: t.resultData,
       notes: null,
-      assignee: null,
+      assignee: null as { id: string; fullName: string; username: string } | null,
     }
   })
 
-  const userIds = legacyTasks.map(t => t.assignedTo).filter(Boolean) as string[]
+  const userIds = tasks.map(t => t.assignedTo).filter(Boolean) as string[]
   if (userIds.length) {
     const users = await prisma.user.findMany({
       where: { id: { in: [...new Set(userIds)] } },
       select: { id: true, fullName: true, username: true },
     })
     const userMap = new Map(users.map(u => [u.id, u]))
-    for (const t of legacyTasks) {
+    for (const t of tasks) {
       if (t.assignedTo) t.assignee = userMap.get(t.assignedTo) || null
     }
   }
 
-  const progress = getWorkflowProgress(legacyTasks)
+  const total = tasks.length
+  const completed = tasks.filter(t => t.status === 'DONE').length
+  const inProgress = tasks.filter(t => ACTIVE.includes(t.status)).length
 
-  const tasksByPhase: Record<number, typeof legacyTasks> = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }
-  for (const task of legacyTasks) {
-    const rule = WORKFLOW_RULES[task.stepCode]
-    const phase = rule?.phase ?? 0
-    if (!tasksByPhase[phase]) tasksByPhase[phase] = []
-    tasksByPhase[phase].push(task)
+  let currentPhase = 1
+  const activeTask = tasks.find(t => ACTIVE.includes(t.status))
+  if (activeTask) {
+    const rule = WORKFLOW_RULES[activeTask.stepCode]
+    if (rule) currentPhase = rule.phase
   }
 
   const { dynamicTasks: _dt, ...projectData } = project
@@ -114,10 +81,15 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   return successResponse({
     project: {
       ...projectData,
-      tasks: legacyTasks,
+      tasks,
       contractValue: project.contractValue?.toString(),
-      progress,
-      tasksByPhase,
+      progress: {
+        total,
+        completed,
+        inProgress,
+        percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+        currentPhase,
+      },
     },
   })
 })

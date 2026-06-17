@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import { ROLES } from '@/lib/constants'
 import { getStepFormConfig } from '@/lib/step-form-configs'
-import { getStatusBg, formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency } from '@/lib/utils'
 
 interface Task {
   id: string; stepCode: string; stepName: string; stepNameEn: string;
@@ -20,9 +20,14 @@ interface ProjectDetail {
   productType: string; status: string; contractValue: string; currency: string;
   startDate: string; endDate: string; description: string;
   progress: { total: number; completed: number; inProgress: number; percentage: number; currentPhase: number };
-  tasksByPhase: Record<string, Task[]>;
   tasks: Task[];
 }
+
+const COLUMNS = [
+  { key: 'IN_PROGRESS', label: 'Đang thực hiện', color: '#2563eb', dot: 'bg-blue-500 animate-pulse' },
+  { key: 'RETURNED', label: 'Trả lại', color: '#f59e0b', dot: 'bg-amber-500' },
+  { key: 'DONE', label: 'Hoàn thành', color: '#16a34a', dot: 'bg-emerald-500' },
+] as const
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -33,6 +38,11 @@ export default function ProjectDetailPage() {
   const [assigningTask, setAssigningTask] = useState<Task | null>(null)
   const [closing, setClosing] = useState(false)
   const { user: currentUser } = useAuthStore()
+
+  async function reload() {
+    const res = await apiFetch(`/api/projects/${params.id}`)
+    if (res.ok) setProject(res.project)
+  }
 
   useEffect(() => {
     if (params.id) {
@@ -50,12 +60,8 @@ export default function ProjectDetailPage() {
       body: JSON.stringify({ action: 'complete', resultData, notes: notes || 'Completed' }),
     })
     setLoadingTaskId(null)
-    if (res.ok) {
-      const updated = await apiFetch(`/api/projects/${params.id}`)
-      if (updated.ok) setProject(updated.project)
-    } else {
-      alert(res.error || 'Lỗi hoàn thành task')
-    }
+    if (res.ok) await reload()
+    else alert(res.error || 'Lỗi hoàn thành task')
   }
 
   async function handleCloseProject() {
@@ -65,9 +71,8 @@ export default function ProjectDetailPage() {
       method: 'PATCH', body: JSON.stringify({ action: 'CLOSE' }),
     })
     if (res.ok) {
-      alert(res.message || 'Dự án đã đóng thành công ✅')
-      const updated = await apiFetch(`/api/projects/${params.id}`)
-      if (updated.ok) setProject(updated.project)
+      alert(res.message || 'Dự án đã đóng thành công')
+      await reload()
     } else {
       alert(res.error || 'Lỗi đóng dự án')
     }
@@ -91,8 +96,7 @@ export default function ProjectDetailPage() {
     })
     if (res.ok || res.success) {
       setRejectingTask(null)
-      const updated = await apiFetch(`/api/projects/${params.id}`)
-      if (updated.ok) setProject(updated.project)
+      await reload()
     } else {
       alert(res.error || 'Lỗi từ chối task')
     }
@@ -105,8 +109,7 @@ export default function ProjectDetailPage() {
     })
     if (res.ok) {
       setAssigningTask(null)
-      const updated = await apiFetch(`/api/projects/${params.id}`)
-      if (updated.ok) setProject(updated.project)
+      await reload()
     } else {
       alert(res.error || 'Lỗi phân công task')
     }
@@ -115,15 +118,31 @@ export default function ProjectDetailPage() {
   if (loading) return <div className="h-64 rounded-xl animate-pulse" style={{ background: 'var(--bg-card)' }} />
   if (!project) return <p style={{ color: 'var(--text-muted)' }}>Dự án không tồn tại</p>
 
-  const totalTasks = project.progress.total
+  const currentUserRole = currentUser?.roleCode || ''
+  const currentUserLevel = currentUser?.userLevel
+  const canAssignLevel = currentUserLevel === 1 || ['R00', 'R01', 'R02'].includes(currentUserRole)
+  const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(currentUserRole)
+
+  function hasAssignPerm(task: Task) {
+    if (!canAssignLevel) return false
+    if (isGlobalAdmin) return true
+    const userBase = currentUserRole.replace(/[a-zA-Z]$/, '')
+    const taskBase = task.assignedRole.replace(/[a-zA-Z]$/, '')
+    return userBase === taskBase
+  }
+
+  const tasksByStatus: Record<string, Task[]> = { IN_PROGRESS: [], RETURNED: [], DONE: [] }
+  for (const t of project.tasks) {
+    const col = t.status === 'DONE' ? 'DONE' : t.status === 'RETURNED' || t.status === 'REJECTED' ? 'RETURNED' : 'IN_PROGRESS'
+    tasksByStatus[col].push(t)
+  }
+
   const doneTasks = project.progress.completed
+  const totalTasks = project.progress.total
   const inProgTasks = project.progress.inProgress
-  const pendingTasks = totalTasks - doneTasks - inProgTasks
-  const rejectedTasks = project.tasks.filter(t => t.status === 'REJECTED').length
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Reject Task Modal */}
       {rejectingTask && (
         <RejectTaskModal
           task={rejectingTask}
@@ -131,8 +150,6 @@ export default function ProjectDetailPage() {
           onSubmit={(reason) => handleReject(rejectingTask.id, reason)}
         />
       )}
-
-      {/* Assign Task Modal */}
       {assigningTask && (
         <AssignTaskModal
           task={assigningTask}
@@ -141,7 +158,7 @@ export default function ProjectDetailPage() {
         />
       )}
 
-      {/* ═══ Hero Header — Gradient bar ═══ */}
+      {/* Hero Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '24px 28px', borderRadius: '16px',
@@ -153,10 +170,9 @@ export default function ProjectDetailPage() {
           <h1 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', marginTop: '4px', color: '#ffffff' }}>{project.projectName}</h1>
           <p style={{ fontSize: '14px', opacity: 0.7, marginTop: '4px', color: '#ffffff' }}>{project.clientName}{project.description ? ` — ${project.description}` : ''}</p>
           {project.status === 'CLOSED' && (
-            <span style={{ display: 'inline-block', marginTop: '8px', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: 'rgba(22,163,74,0.2)', color: '#86efac' }}>🔒 ĐÃ ĐÓNG</span>
+            <span style={{ display: 'inline-block', marginTop: '8px', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: 'rgba(22,163,74,0.2)', color: '#86efac' }}>ĐÃ ĐÓNG</span>
           )}
         </div>
-        {/* Circular Progress */}
         <div style={{ textAlign: 'center', flexShrink: 0, marginLeft: '24px' }}>
           <div style={{ position: 'relative', width: '88px', height: '88px' }}>
             <svg viewBox="0 0 36 36" style={{ width: '88px', height: '88px', transform: 'rotate(-90deg)' }}>
@@ -172,7 +188,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* ═══ Stats Row — 4 metric cards ═══ */}
+      {/* Stats Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }} className="stagger-children">
         {[
           { label: 'Giá trị HĐ', value: formatCurrency(project.contractValue, project.currency), color: '#0a2540', icon: '💰' },
@@ -191,360 +207,164 @@ export default function ProjectDetailPage() {
         ))}
       </div>
 
-      {/* ═══ 2-Column Layout: Overview + Workflow ═══ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '16px' }}>
-        {/* Left Sidebar — Overview */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {/* Task Breakdown */}
-          <div className="card p-5">
-            <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-heading)', marginBottom: '16px' }}>📊 Phân tích Task</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {[
-                { label: 'Hoàn thành', count: doneTasks, color: '#16a34a', pct: totalTasks > 0 ? (doneTasks / totalTasks * 100) : 0 },
-                { label: 'Đang xử lý', count: inProgTasks, color: '#2563eb', pct: totalTasks > 0 ? (inProgTasks / totalTasks * 100) : 0 },
-                { label: 'Chờ xử lý', count: pendingTasks, color: '#94a3b8', pct: totalTasks > 0 ? (pendingTasks / totalTasks * 100) : 0 },
-                ...(rejectedTasks > 0 ? [{ label: 'Từ chối', count: rejectedTasks, color: '#dc2626', pct: totalTasks > 0 ? (rejectedTasks / totalTasks * 100) : 0 }] : []),
-              ].map(item => (
-                <div key={item.label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>{item.label}</span>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: item.color }}>{item.count}</span>
-                  </div>
-                  <div style={{ height: '6px', borderRadius: '3px', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: '3px', background: item.color, width: `${item.pct}%`, transition: 'width 0.4s ease' }} />
-                  </div>
+      {/* Kanban Board */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', alignItems: 'start' }}>
+        {COLUMNS.map(col => {
+          const colTasks = tasksByStatus[col.key] || []
+          return (
+            <div key={col.key} className="card" style={{ borderTop: `3px solid ${col.color}`, minHeight: '200px' }}>
+              <div style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className={`w-2.5 h-2.5 rounded-full ${col.dot}`} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-heading)' }}>{col.label}</span>
                 </div>
-              ))}
+                <span style={{ fontSize: '12px', fontWeight: 700, color: col.color, background: `${col.color}12`, padding: '2px 8px', borderRadius: '10px' }}>
+                  {colTasks.length}
+                </span>
+              </div>
+
+              <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {colTasks.length === 0 && (
+                  <div style={{ padding: '20px 10px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    Không có task
+                  </div>
+                )}
+                {colTasks.map(task => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onCompleteClick={onCompleteClick}
+                    onRejectClick={(t) => setRejectingTask(t)}
+                    onAssignClick={(t) => setAssigningTask(t)}
+                    currentUserRole={currentUserRole}
+                    hasAssignPerm={hasAssignPerm(task)}
+                    loadingTaskId={loadingTaskId}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-
-          {/* Quick Actions */}
-          {project.status !== 'CLOSED' && project.progress.percentage >= 90 && (
-            <div className="card p-5">
-              <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-heading)', marginBottom: '12px' }}>⚡ Hành động</h3>
-              <button
-                onClick={handleCloseProject}
-                disabled={closing}
-                className="w-full text-xs px-3 py-2.5 rounded-lg font-semibold transition-all"
-                style={{ background: '#dc262615', color: '#dc2626', border: '1px solid #dc262625', opacity: closing ? 0.5 : 1 }}
-              >
-                🔒 Đóng dự án
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Right — Workflow Timeline */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            🔄 Quy trình {project.progress.total} bước
-          </h2>
-
-          {Object.entries(project.tasksByPhase).map(([phase, tasks]) => {
-            const phaseTasks = tasks as Task[]
-            const doneCount = phaseTasks.filter(t => t.status === 'DONE').length
-            const inProgressCount = phaseTasks.filter(t => t.status === 'IN_PROGRESS').length
-            const pct = phaseTasks.length > 0 ? Math.round((doneCount / phaseTasks.length) * 100) : 0
-            const isComplete = doneCount === phaseTasks.length
-            const isActive = inProgressCount > 0
-            const borderColor = isComplete ? '#16a34a' : isActive ? '#2563eb' : 'var(--border)'
-            const phaseNum = parseInt(phase)
-
-            return (
-              <PhaseCard
-                key={phase}
-                phaseNum={phaseNum}
-                phaseName={`Phase ${phaseNum}`}
-                tasks={phaseTasks}
-                doneCount={doneCount}
-                totalCount={phaseTasks.length}
-                pct={pct}
-                borderColor={borderColor}
-                isComplete={isComplete}
-                isActive={isActive}
-                defaultExpanded={isActive || (!isComplete && phaseNum === project.progress.currentPhase)}
-                onCompleteClick={onCompleteClick}
-                onRejectClick={(task: Task) => setRejectingTask(task)}
-                onAssignClick={(task: Task) => setAssigningTask(task)}
-                currentUserRole={currentUser?.roleCode || ''}
-                currentUserLevel={currentUser?.userLevel}
-                loadingTaskId={loadingTaskId}
-              />
-            )
-          })}
-
-        </div>
+          )
+        })}
       </div>
-    </div>
-  )
-}
 
-function PhaseCard({ phaseNum, phaseName, tasks, doneCount, totalCount, pct, borderColor, isComplete, isActive, defaultExpanded, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, currentUserLevel, loadingTaskId }: {
-  phaseNum: number; phaseName: string; tasks: Task[]; doneCount: number; totalCount: number;
-  pct: number; borderColor: string; isComplete: boolean; isActive: boolean; defaultExpanded: boolean;
-  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
-  currentUserRole: string; currentUserLevel?: number; loadingTaskId: string | null;
-}) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
-  
-  const canAssignLevel = currentUserLevel === 1 || currentUserRole === 'R00' || currentUserRole === 'R01' || currentUserRole === 'R02'
-  const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(currentUserRole)
-  const hasAssignPerm = (task: Task) => {
-    if (!canAssignLevel) return false
-    if (isGlobalAdmin) return true
-    const userBase = currentUserRole.replace(/[a-zA-Z]$/, '')
-    const taskBase = task.assignedRole.replace(/[a-zA-Z]$/, '')
-    return userBase === taskBase
-  }
-
-  return (
-    <div className="card overflow-hidden" style={{ borderLeft: `4px solid ${borderColor}` }}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors text-left"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-bold px-2.5 py-1 rounded-md" style={{
-            background: isComplete ? '#dcfce7' : isActive ? '#dbeafe' : 'var(--bg-secondary)',
-            color: isComplete ? '#16a34a' : isActive ? '#2563eb' : 'var(--text-muted)',
-          }}>
-            {isComplete ? '✓' : `P${phaseNum}`}
-          </span>
-          <div>
-            <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{phaseName}</span>
-            <span className="text-xs ml-2" style={{ color: 'var(--text-muted)' }}>
-              {doneCount}/{totalCount} hoàn thành
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-2 min-w-[120px]">
-            <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--bg-secondary)' }}>
-              <div className="h-full rounded-full transition-all" style={{
-                width: `${pct}%`,
-                background: isComplete ? '#16a34a' : isActive ? '#2563eb' : '#94a3b8',
-              }} />
-            </div>
-            <span className="text-xs font-medium tabular-nums" style={{ color: 'var(--text-muted)', minWidth: '32px' }}>{pct}%</span>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-            className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
-            style={{ color: 'var(--text-muted)' }}>
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </div>
-      </button>
-
-      {expanded && (
-        <div style={{ borderTop: '1px solid var(--border-light)' }}>
-          {tasks.length === 0 ? (
-            <div style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              Chưa có task. Các task của phase này sẽ tự sinh khi luồng nghiệp vụ tới (ví dụ: P4.3/P4.4 sinh khi Thương mại xác nhận nhận hàng từ PO).
-            </div>
-          ) : (
-            <GroupedTaskList
-              tasks={tasks}
-              onCompleteClick={onCompleteClick}
-              onRejectClick={onRejectClick}
-              onAssignClick={onAssignClick}
-              currentUserRole={currentUserRole}
-              hasAssignPerm={hasAssignPerm}
-              loadingTaskId={loadingTaskId}
-            />
-          )}
+      {/* Quick Actions */}
+      {project.status !== 'CLOSED' && project.progress.percentage >= 90 && (
+        <div className="card p-5" style={{ maxWidth: '300px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-heading)', marginBottom: '12px' }}>Hành động</h3>
+          <button
+            onClick={handleCloseProject}
+            disabled={closing}
+            className="w-full text-xs px-3 py-2.5 rounded-lg font-semibold transition-all"
+            style={{ background: '#dc262615', color: '#dc2626', border: '1px solid #dc262625', opacity: closing ? 0.5 : 1 }}
+          >
+            Đóng dự án
+          </button>
         </div>
       )}
     </div>
   )
 }
 
-function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, indent, loadingTaskId }: {
-  task: Task; isLast: boolean;
-  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
-  currentUserRole: string; hasAssignPerm: (task: Task) => boolean; indent?: boolean; loadingTaskId?: string | null;
+function TaskCard({ task, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, loadingTaskId }: {
+  task: Task;
+  onCompleteClick: (task: Task) => void;
+  onRejectClick: (task: Task) => void;
+  onAssignClick: (task: Task) => void;
+  currentUserRole: string;
+  hasAssignPerm: boolean;
+  loadingTaskId: string | null;
 }) {
+  const rule = WORKFLOW_RULES[task.stepCode]
+  const isActive = task.status === 'IN_PROGRESS'
+  const canAct = isActive && (currentUserRole === task.assignedRole || currentUserRole === 'R00')
+  const isOverdue = isActive && task.deadline && new Date(task.deadline) < new Date()
+
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/30"
+      className="rounded-lg transition-all hover:shadow-md"
       style={{
-        borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
-        paddingLeft: indent ? '2.5rem' : undefined,
+        padding: '12px',
+        background: 'var(--bg-primary)',
+        border: `1px solid ${isOverdue ? '#fca5a5' : 'var(--border-light)'}`,
       }}
     >
-      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-        task.status === 'DONE' ? 'bg-emerald-500' :
-        task.status === 'IN_PROGRESS' ? 'bg-blue-500 animate-pulse' :
-        task.status === 'REJECTED' ? 'bg-red-500' :
-        'bg-slate-300'
-      }`} />
+      {/* Header: code + role */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent)', background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px' }}>
+          {task.stepCode}
+        </span>
+        <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px' }}>
+          {(ROLES as Record<string, { name: string }>)[task.assignedRole]?.name || task.assignedRole}
+        </span>
+      </div>
 
-      <span className="text-xs font-mono w-12 flex-shrink-0" style={{ color: 'var(--accent)' }}>{task.stepCode}</span>
-
-      <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
+      {/* Title */}
+      <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, marginBottom: '8px' }}>
         {task.stepName}
-      </span>
+      </p>
 
-      <div className="hidden md:flex items-center gap-2 w-72 flex-shrink-0 justify-end">
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border" style={{ borderColor: '#e2e8f0', backgroundColor: '#f8fafc', color: '#0a2540' }}>
-          <span className="font-mono opacity-60">{task.assignedRole}</span>
-          <span className="mx-0.5 opacity-30">|</span>
-          <span>{(ROLES as Record<string, { name: string }>)[task.assignedRole]?.name || task.assignedRole}</span>
-        </span>
-        <span className="text-xs truncate max-w-[100px]" style={{ color: 'var(--text-muted)' }}>
+      {/* Meta row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', fontSize: '11px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
           {task.assignee ? (
-            <span style={{ color: 'var(--text-primary)' }}>{task.assignee.fullName}</span>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {task.assignee.fullName}
+            </span>
           ) : (
-            <span className="italic opacity-50">Chưa phân công</span>
+            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa phân công</span>
           )}
-        </span>
-        {hasAssignPerm(task) && task.status !== 'DONE' && task.status !== 'REJECTED' && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onAssignClick(task); }}
-            className="flex items-center justify-center rounded hover:bg-slate-200 transition w-6 h-6"
-            title="Phân công công việc"
-            style={{ fontSize: '12px' }}
-          >
-            👤
-          </button>
+          {hasAssignPerm && task.status !== 'DONE' && (
+            <button
+              onClick={() => onAssignClick(task)}
+              className="flex-shrink-0 rounded hover:bg-slate-200 transition"
+              style={{ padding: '2px 4px', fontSize: '11px' }}
+              title="Phân công"
+            >
+              👤
+            </button>
+          )}
+        </div>
+
+        {task.deadline && (
+          <span style={{ color: isOverdue ? '#dc2626' : 'var(--text-muted)', fontWeight: isOverdue ? 600 : 400, flexShrink: 0 }}>
+            {formatDate(task.deadline)}
+          </span>
+        )}
+        {task.completedAt && task.status === 'DONE' && (
+          <span style={{ color: '#16a34a', flexShrink: 0 }}>
+            {formatDate(task.completedAt)}
+          </span>
         )}
       </div>
 
-      {task.status === 'IN_PROGRESS' && (
-        currentUserRole && (currentUserRole === task.assignedRole || currentUserRole === 'R00') ? (
-          <div className="flex items-center gap-1">
-            {WORKFLOW_RULES[task.stepCode]?.rejectTo && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onRejectClick(task) }}
-                className="text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all hover:opacity-80"
-                style={{ background: '#dc262612', color: '#dc2626', border: '1px solid #dc262625' }}
-              >
-                Từ chối
-              </button>
-            )}
+      {/* Action buttons */}
+      {canAct && (
+        <div style={{ display: 'flex', gap: '6px', marginTop: '10px', justifyContent: 'flex-end' }}>
+          {rule?.rejectTo && (
             <button
-              onClick={(e) => { e.stopPropagation(); onCompleteClick(task) }}
-              className="btn-accent text-[11px] px-2.5 py-1"
-              disabled={loadingTaskId === task.id}
+              onClick={() => onRejectClick(task)}
+              className="text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all hover:opacity-80"
+              style={{ background: '#dc262612', color: '#dc2626', border: '1px solid #dc262625' }}
             >
-              {loadingTaskId === task.id ? '...' : '✓ Hoàn thành'}
+              Từ chối
             </button>
-          </div>
-        ) : (
-          <span className="text-[10px] px-2 py-1 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>
-            🔒 {task.assignedRole}
-          </span>
-        )
-      )}
-    </div>
-  )
-}
-
-function MultiInstanceGroup({ stepCode, tasks, isLastGroup, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, loadingTaskId }: {
-  stepCode: string; tasks: Task[]; isLastGroup: boolean;
-  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
-  currentUserRole: string; hasAssignPerm: (task: Task) => boolean; loadingTaskId: string | null;
-}) {
-  const [groupExpanded, setGroupExpanded] = useState(false)
-  const doneCount = tasks.filter(t => t.status === 'DONE').length
-  const inProgressCount = tasks.filter(t => t.status === 'IN_PROGRESS').length
-
-  return (
-    <div style={{ borderBottom: isLastGroup ? 'none' : '1px solid var(--border-light)' }}>
-      <button
-        onClick={() => setGroupExpanded(!groupExpanded)}
-        className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/30 text-left"
-      >
-        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${inProgressCount > 0 ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`} />
-        <span className="text-xs font-mono w-12 flex-shrink-0" style={{ color: 'var(--accent)' }}>{stepCode}</span>
-        <span className="text-sm flex-1">{tasks[0].stepName} ({tasks.length} phiếu)</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          className={`transition-transform ${groupExpanded ? 'rotate-180' : ''}`}
-          style={{ color: 'var(--text-muted)' }}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {groupExpanded && (
-        <div style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-light)' }}>
-          {tasks.map((task, i) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              isLast={i === tasks.length - 1}
-              onCompleteClick={onCompleteClick}
-              onRejectClick={onRejectClick}
-              onAssignClick={onAssignClick}
-              currentUserRole={currentUserRole}
-              hasAssignPerm={hasAssignPerm}
-              loadingTaskId={loadingTaskId}
-              indent
-            />
-          ))}
+          )}
+          <button
+            onClick={() => onCompleteClick(task)}
+            className="btn-accent text-[11px] px-2.5 py-1"
+            disabled={loadingTaskId === task.id}
+          >
+            {loadingTaskId === task.id ? '...' : 'Hoàn thành'}
+          </button>
         </div>
       )}
     </div>
   )
 }
 
-function GroupedTaskList({ tasks, onCompleteClick, onRejectClick, onAssignClick, currentUserRole, hasAssignPerm, loadingTaskId }: {
-  tasks: Task[];
-  onCompleteClick: (task: Task) => void; onRejectClick: (task: Task) => void; onAssignClick: (task: Task) => void;
-  currentUserRole: string; hasAssignPerm: (task: Task) => boolean; loadingTaskId: string | null;
-}) {
-  const groups: Array<{ stepCode: string; tasks: Task[] }> = []
-  for (const task of tasks) {
-    const last = groups[groups.length - 1]
-    if (last && last.stepCode === task.stepCode) {
-      last.tasks.push(task)
-    } else {
-      groups.push({ stepCode: task.stepCode, tasks: [task] })
-    }
-  }
-
-  return (
-    <>
-      {groups.map((group, gi) => {
-        const isLastGroup = gi === groups.length - 1
-        if (group.tasks.length === 1) {
-          return (
-            <TaskRow
-              key={group.tasks[0].id}
-              task={group.tasks[0]}
-              isLast={isLastGroup}
-              onCompleteClick={onCompleteClick}
-              onRejectClick={onRejectClick}
-              onAssignClick={onAssignClick}
-              currentUserRole={currentUserRole}
-              hasAssignPerm={hasAssignPerm}
-              loadingTaskId={loadingTaskId}
-            />
-          )
-        }
-        return (
-          <MultiInstanceGroup
-            key={`${group.stepCode}-${gi}`}
-            stepCode={group.stepCode}
-            tasks={group.tasks}
-            isLastGroup={isLastGroup}
-            onCompleteClick={onCompleteClick}
-            onRejectClick={onRejectClick}
-            onAssignClick={onAssignClick}
-            currentUserRole={currentUserRole}
-            hasAssignPerm={hasAssignPerm}
-            loadingTaskId={loadingTaskId}
-          />
-        )
-      })}
-    </>
-  )
-}
-
-
 // ── Reject Task Modal ──
-
 function RejectTaskModal({ task, onClose, onSubmit }: {
-  task: Task;
-  onClose: () => void;
-  onSubmit: (reason: string) => void;
+  task: Task; onClose: () => void; onSubmit: (reason: string) => void;
 }) {
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -563,7 +383,7 @@ function RejectTaskModal({ task, onClose, onSubmit }: {
       <div className="card p-6 w-full max-w-lg mx-4 animate-fade-in" style={{ boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-base font-semibold" style={{ color: '#dc2626' }}>⚠️ Từ chối: {task.stepName}</h3>
+            <h3 className="text-base font-semibold" style={{ color: '#dc2626' }}>Từ chối: {task.stepName}</h3>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Bước {task.stepCode}</p>
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-slate-100" style={{ color: 'var(--text-muted)' }}>✕</button>
@@ -602,7 +422,6 @@ function RejectTaskModal({ task, onClose, onSubmit }: {
 }
 
 // ── Assign Task Modal ──
-
 function AssignTaskModal({ task, onClose, onSubmit }: { task: Task; onClose: () => void; onSubmit: (userId: string) => void }) {
   const [users, setUsers] = useState<any[]>([])
   const [selectedUser, setSelectedUser] = useState('')
@@ -623,14 +442,14 @@ function AssignTaskModal({ task, onClose, onSubmit }: { task: Task; onClose: () 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
       <div className="card w-full max-w-md bg-[var(--bg-card)] rounded-2xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>👤 Phân công công việc</h2>
+          <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>Phân công công việc</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--bg-secondary)]" style={{ color: 'var(--text-muted)' }}>&times;</button>
         </div>
         <p className="text-sm text-[var(--text-muted)] mb-5">
           Bước <strong>{task.stepCode} - {task.stepName}</strong><br/>
-          Vai trò phụ trách: <span className="font-mono bg-[var(--bg-secondary)] px-1 rounded">{task.assignedRole}</span>
+          Vai trò: <span className="font-mono bg-[var(--bg-secondary)] px-1 rounded">{task.assignedRole}</span>
         </p>
-        
+
         {loading ? (
           <div className="py-8 text-center opacity-60">Đang tải danh sách nhân sự...</div>
         ) : users.length === 0 ? (
@@ -640,43 +459,34 @@ function AssignTaskModal({ task, onClose, onSubmit }: { task: Task; onClose: () 
         ) : (
           <div className="mb-6">
             <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>CHỌN NHÂN SỰ {task.assignedRole}</label>
-            <select 
-              className="w-full p-2.5 rounded-xl border" 
+            <select
+              className="w-full p-2.5 rounded-xl border"
               style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', outline: 'none' }}
-              value={selectedUser} 
+              value={selectedUser}
               onChange={(e) => setSelectedUser(e.target.value)}
             >
               <option value="">-- Click để chọn --</option>
               {users.map(u => (
                 <option key={u.id} value={u.id}>
-                  {u.fullName} ({u.username}) {u.userLevel === 1 ? '🌟' : ''}
+                  {u.fullName} ({u.username}) {u.userLevel === 1 ? '⭐' : ''}
                 </option>
               ))}
             </select>
           </div>
         )}
-        
+
         <div className="flex justify-end gap-3 mt-4">
           <button onClick={onClose} className="px-4 py-2 font-semibold rounded-lg hover:opacity-80 transition" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>Hủy</button>
-          <button 
-            onClick={() => { if(selectedUser) onSubmit(selectedUser) }} 
+          <button
+            onClick={() => { if(selectedUser) onSubmit(selectedUser) }}
             className="px-5 py-2 font-bold rounded-lg transition hover:opacity-90 disabled:opacity-50"
             style={{ background: '#3b82f6', color: 'white' }}
             disabled={loading || users.length === 0 || !selectedUser}
           >
-            Lưu / Giao việc
+            Giao việc
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>{value}</p>
     </div>
   )
 }
