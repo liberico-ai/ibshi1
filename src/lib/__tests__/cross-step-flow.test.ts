@@ -91,11 +91,11 @@ describe('BOM cross-step flow', () => {
       makeBomEntry({ name: 'Bu long M16', code: 'VT-020', quantity: '200' }),
     ]
 
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P2.1') return makeStepResult({ bomItems: p21Bom }) as never
-      if (where.stepCode === 'P2.2') return makeStepResult({ bomItems: p22Bom }) as never
-      if (where.stepCode === 'P2.3') return makeStepResult({ bomItems: p23Bom }) as never
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P2.1') return makeStepResult({ bomItems: p21Bom }) as never
+      if (where.taskType === 'P2.2') return makeStepResult({ bomItems: p22Bom }) as never
+      if (where.taskType === 'P2.3') return makeStepResult({ bomItems: p23Bom }) as never
       return null as never
     })
 
@@ -115,9 +115,9 @@ describe('BOM cross-step flow', () => {
   })
 
   it('BOM item with empty name is filtered by aggregateBomItems (regression)', async () => {
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P2.1') {
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P2.1') {
         return makeStepResult({
           bomItems: [
             makeBomEntry({ name: 'Valid' }),

@@ -16,7 +16,7 @@ const PROJECT_ID = 'proj-test-001'
 
 // ── Helpers ──────────────────────────────────────────────────
 
-/** Build a mock WorkflowTask row with resultData */
+/** Build a mock Task row with resultData */
 function makeStepResult(resultData: Record<string, unknown> | null, status = 'DONE') {
   return { resultData, status }
 }
@@ -40,19 +40,19 @@ function makeBomItem(overrides: Record<string, string> = {}) {
 describe('aggregateBomItems', () => {
   beforeEach(() => {
     // Default: use mockImplementation to differentiate by stepCode
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P2.1') {
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P2.1') {
         return makeStepResult({
           bomItems: [makeBomItem({ name: 'Thep tam', code: 'VT-001' })],
         }) as never
       }
-      if (where.stepCode === 'P2.2') {
+      if (where.taskType === 'P2.2') {
         return makeStepResult({
           bomItems: [makeBomItem({ name: 'Son epoxy', code: 'VT-010' })],
         }) as never
       }
-      if (where.stepCode === 'P2.3') {
+      if (where.taskType === 'P2.3') {
         return makeStepResult({
           bomItems: [makeBomItem({ name: 'Bu long M16', code: 'VT-020' })],
         }) as never
@@ -86,15 +86,15 @@ describe('aggregateBomItems', () => {
   })
 
   it('skips step with empty bomItems array', async () => {
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P2.1') {
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P2.1') {
         return makeStepResult({ bomItems: [makeBomItem()] }) as never
       }
-      if (where.stepCode === 'P2.2') {
+      if (where.taskType === 'P2.2') {
         return makeStepResult({ bomItems: [] }) as never
       }
-      if (where.stepCode === 'P2.3') {
+      if (where.taskType === 'P2.3') {
         return makeStepResult({ bomItems: [makeBomItem({ name: 'Bu long' })] }) as never
       }
       return null as never
@@ -107,9 +107,9 @@ describe('aggregateBomItems', () => {
   })
 
   it('filters out items with empty/whitespace-only names', async () => {
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P2.1') {
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P2.1') {
         return makeStepResult({
           bomItems: [
             makeBomItem({ name: 'Valid item' }),
@@ -128,15 +128,15 @@ describe('aggregateBomItems', () => {
   })
 
   it('handles step with null resultData gracefully', async () => {
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P2.1') {
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P2.1') {
         return makeStepResult(null) as never // null resultData
       }
-      if (where.stepCode === 'P2.2') {
+      if (where.taskType === 'P2.2') {
         return null as never // step not found at all
       }
-      if (where.stepCode === 'P2.3') {
+      if (where.taskType === 'P2.3') {
         return makeStepResult({ bomItems: [makeBomItem({ name: 'Only item' })] }) as never
       }
       return null as never
@@ -150,7 +150,7 @@ describe('aggregateBomItems', () => {
   })
 
   it('returns empty array when no steps have BOM data', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(null as never)
+    prismaMock.task.findFirst.mockResolvedValue(null as never)
 
     const items = await aggregateBomItems(PROJECT_ID)
 
@@ -159,9 +159,9 @@ describe('aggregateBomItems', () => {
 
   it('preserves all BomEntry fields in returned BomEntryWithSource', async () => {
     const original = makeBomItem({ name: 'Detailed', code: 'C-99', spec: '20mm', quantity: '500', unit: 'tam' })
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P2.1') {
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P2.1') {
         return makeStepResult({ bomItems: [original] }) as never
       }
       return makeStepResult({ bomItems: [] }) as never
@@ -187,7 +187,7 @@ describe('aggregateBomItems', () => {
 
 describe('fetchEstimateData', () => {
   it('returns P1.2 data only when mergeP21A is not set', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(
+    prismaMock.task.findFirst.mockResolvedValue(
       makeStepResult({ totalMaterial: '100000', totalEstimate: '500000' }) as never
     )
 
@@ -197,7 +197,7 @@ describe('fetchEstimateData', () => {
   })
 
   it('returns null when P1.2 not found', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(null as never)
+    prismaMock.task.findFirst.mockResolvedValue(null as never)
 
     const result = await fetchEstimateData(PROJECT_ID)
 
@@ -207,12 +207,12 @@ describe('fetchEstimateData', () => {
   it('merges P1.2 + P2.1A data when mergeP21A=true', async () => {
     // fetchEstimateData with mergeP21A calls both fetchStepResult (findFirst for P1.2)
     // and a direct prisma call (findFirst for P2.1A) in parallel
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P1.2') {
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P1.2') {
         return makeStepResult({ totalMaterial: '100', totalLabor: '200', totalEstimate: '300' }) as never
       }
-      if (where.stepCode === 'P2.1A') {
+      if (where.taskType === 'P2.1A') {
         // P2.1A overrides totalLabor
         return { resultData: { totalLabor: '999', dt07Items: [{ maCP: 'DT07-1' }] } } as never
       }
@@ -229,9 +229,9 @@ describe('fetchEstimateData', () => {
   })
 
   it('returns P1.2 data when mergeP21A=true but P2.1A not found', async () => {
-    prismaMock.workflowTask.findFirst.mockImplementation((args: unknown) => {
-      const { where } = args as { where: { stepCode: string } }
-      if (where.stepCode === 'P1.2') {
+    prismaMock.task.findFirst.mockImplementation((args: unknown) => {
+      const { where } = args as { where: { taskType: string } }
+      if (where.taskType === 'P1.2') {
         return makeStepResult({ totalEstimate: '500' }) as never
       }
       return null as never // P2.1A not found
@@ -243,7 +243,7 @@ describe('fetchEstimateData', () => {
   })
 
   it('returns empty object when mergeP21A=true but both steps have no data', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(null as never)
+    prismaMock.task.findFirst.mockResolvedValue(null as never)
 
     const result = await fetchEstimateData(PROJECT_ID, { mergeP21A: true })
 
@@ -258,7 +258,7 @@ describe('fetchEstimateData', () => {
 
 describe('fetchSupplierData', () => {
   it('returns P3.5 resultData', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(
+    prismaMock.task.findFirst.mockResolvedValue(
       makeStepResult({ suppliers: [{ name: 'ABC Corp', quotes: [] }] }) as never
     )
 
@@ -268,7 +268,7 @@ describe('fetchSupplierData', () => {
   })
 
   it('returns null when P3.5 not found', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(null as never)
+    prismaMock.task.findFirst.mockResolvedValue(null as never)
 
     const result = await fetchSupplierData(PROJECT_ID)
 
@@ -282,7 +282,7 @@ describe('fetchSupplierData', () => {
 
 describe('fetchPoData', () => {
   it('returns P3.7 resultData', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(
+    prismaMock.task.findFirst.mockResolvedValue(
       makeStepResult({ poNumber: 'PO-2026-001', totalAmount: '1000000' }) as never
     )
 
@@ -292,7 +292,7 @@ describe('fetchPoData', () => {
   })
 
   it('returns null when P3.7 not found', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(null as never)
+    prismaMock.task.findFirst.mockResolvedValue(null as never)
 
     const result = await fetchPoData(PROJECT_ID)
 
@@ -307,7 +307,7 @@ describe('fetchPoData', () => {
 describe('fetchPlanData', () => {
   it('returns P1.2A resultData', async () => {
     const wbsItems = JSON.stringify([{ stt: '1', hangMuc: 'Column' }])
-    prismaMock.workflowTask.findFirst.mockResolvedValue(
+    prismaMock.task.findFirst.mockResolvedValue(
       makeStepResult({ wbsItems, momSections: '[]' }) as never
     )
 
@@ -317,7 +317,7 @@ describe('fetchPlanData', () => {
   })
 
   it('returns null when P1.2A not found', async () => {
-    prismaMock.workflowTask.findFirst.mockResolvedValue(null as never)
+    prismaMock.task.findFirst.mockResolvedValue(null as never)
 
     const result = await fetchPlanData(PROJECT_ID)
 

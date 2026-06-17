@@ -23,9 +23,10 @@ export async function fetchStepResult(
   projectId: string,
   stepCode: string,
 ): Promise<StepResult> {
-  return prisma.workflowTask.findFirst({
-    where: { projectId, stepCode },
+  return prisma.task.findFirst({
+    where: { projectId, taskType: stepCode },
     select: { resultData: true, status: true },
+    orderBy: { completedAt: 'desc' },
   })
 }
 
@@ -133,9 +134,10 @@ export async function fetchEstimateData(
   if (options?.mergeP21A) {
     const [p12Task, p21aTask] = await Promise.all([
       fetchStepResult(projectId, 'P1.2'),
-      prisma.workflowTask.findFirst({
-        where: { projectId, stepCode: 'P2.1A' },
+      prisma.task.findFirst({
+        where: { projectId, taskType: 'P2.1A' },
         select: { resultData: true },
+        orderBy: { completedAt: 'desc' },
       }),
     ])
     const est12 = (p12Task?.resultData as Record<string, unknown>) || {}

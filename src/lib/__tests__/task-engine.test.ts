@@ -13,22 +13,24 @@ import {
 
 // ── Helpers ──
 
-function makeTask(overrides: Record<string, unknown> = {}) {
+function makeDynamicTask(overrides: Record<string, unknown> = {}) {
   return {
     id: 'task-1',
     projectId: 'proj-1',
-    stepCode: 'P1.1',
-    stepName: 'Lập hồ sơ dự án',
+    taskType: 'P1.1',
+    title: 'Lập hồ sơ dự án',
+    description: null,
     status: 'IN_PROGRESS',
-    priority: 1,
-    assignedRole: 'R02',
-    assignedTo: null,
+    priority: 'NORMAL',
     deadline: new Date('2026-05-01'),
+    startedAt: new Date('2026-01-01'),
+    completedAt: null,
+    completedBy: null,
     resultData: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
+    assignees: [{ role: 'R02', userId: null, isPrimary: true }],
     project: { projectCode: 'IBS-001', projectName: 'Test Project', clientName: 'Client A' },
-    assignee: null,
     ...overrides,
   }
 }
@@ -38,45 +40,44 @@ function makeTask(overrides: Record<string, unknown> = {}) {
 describe('getTaskInbox', () => {
   it('returns tasks assigned to the user (L2) or to the role (L1)', async () => {
     const mockTasks = [
-      makeTask({ id: 'task-1', assignedTo: 'user-1' }),
-      makeTask({ id: 'task-2', assignedRole: 'R02', assignedTo: null }),
+      makeDynamicTask({ id: 'task-1', assignees: [{ role: 'R02', userId: 'user-1', isPrimary: true }] }),
+      makeDynamicTask({ id: 'task-2', assignees: [{ role: 'R02', userId: null, isPrimary: true }] }),
     ]
-    prismaMock.workflowTask.findMany.mockResolvedValue(mockTasks as never)
+    prismaMock.task.findMany.mockResolvedValue(mockTasks as never)
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'user-1', fullName: 'Test User', username: 'testuser' },
+    ] as never)
 
     const result = await getTaskInbox('user-1', 'R02')
 
-    expect(prismaMock.workflowTask.findMany).toHaveBeenCalledWith(
+    expect(prismaMock.task.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          OR: [
-            { assignedTo: 'user-1' },
-            { assignedRole: 'R02', assignedTo: null },
-          ],
-          status: 'IN_PROGRESS',
+          status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED'] },
+          assignees: { some: { OR: [{ userId: 'user-1' }, { role: 'R02' }] } },
         },
       }),
     )
     expect(result).toHaveLength(2)
   })
 
-  it('excludes completed tasks (only queries IN_PROGRESS)', async () => {
-    prismaMock.workflowTask.findMany.mockResolvedValue([] as never)
+  it('excludes completed tasks (only queries active statuses)', async () => {
+    prismaMock.task.findMany.mockResolvedValue([] as never)
 
     await getTaskInbox('user-1', 'R02')
 
-    const call = prismaMock.workflowTask.findMany.mock.calls[0][0] as { where: { status: string } }
-    expect(call.where.status).toBe('IN_PROGRESS')
+    const call = prismaMock.task.findMany.mock.calls[0][0] as { where: { status: { in: string[] } } }
+    expect(call.where.status).toEqual({ in: ['OPEN', 'IN_PROGRESS', 'RETURNED'] })
   })
 
-  it('orders by priority desc, deadline asc, createdAt asc', async () => {
-    prismaMock.workflowTask.findMany.mockResolvedValue([] as never)
+  it('orders by deadline asc, createdAt asc', async () => {
+    prismaMock.task.findMany.mockResolvedValue([] as never)
 
     await getTaskInbox('user-1', 'R02')
 
-    expect(prismaMock.workflowTask.findMany).toHaveBeenCalledWith(
+    expect(prismaMock.task.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         orderBy: [
-          { priority: 'desc' },
           { deadline: 'asc' },
           { createdAt: 'asc' },
         ],
@@ -88,16 +89,20 @@ describe('getTaskInbox', () => {
 // ── getTasksByProject ──
 
 describe('getTasksByProject', () => {
-  it('returns tasks filtered by projectId ordered by stepCode', async () => {
-    const mockTasks = [makeTask({ stepCode: 'P1.1' }), makeTask({ stepCode: 'P1.2' })]
-    prismaMock.workflowTask.findMany.mockResolvedValue(mockTasks as never)
+  it('returns tasks filtered by projectId ordered by createdAt', async () => {
+    const mockTasks = [
+      makeDynamicTask({ taskType: 'P1.1' }),
+      makeDynamicTask({ taskType: 'P1.2' }),
+    ]
+    prismaMock.task.findMany.mockResolvedValue(mockTasks as never)
+    prismaMock.user.findMany.mockResolvedValue([] as never)
 
     const result = await getTasksByProject('proj-1')
 
-    expect(prismaMock.workflowTask.findMany).toHaveBeenCalledWith(
+    expect(prismaMock.task.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { projectId: 'proj-1' },
-        orderBy: { stepCode: 'asc' },
+        orderBy: { createdAt: 'asc' },
       }),
     )
     expect(result).toHaveLength(2)
@@ -108,32 +113,37 @@ describe('getTasksByProject', () => {
 
 describe('getTaskById', () => {
   it('returns a single task with project and assignee includes', async () => {
-    const task = makeTask({ id: 'task-99' })
-    prismaMock.workflowTask.findUnique.mockResolvedValue(task as never)
+    const task = makeDynamicTask({ id: 'task-99' })
+    prismaMock.task.findUnique.mockResolvedValue(task as never)
+    prismaMock.user.findUnique.mockResolvedValue(null as never)
 
     const result = await getTaskById('task-99')
 
-    expect(prismaMock.workflowTask.findUnique).toHaveBeenCalledWith(
+    expect(prismaMock.task.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'task-99' } }),
     )
-    expect(result).toEqual(task)
+    expect(result).toBeDefined()
+    expect(result!.id).toBe('task-99')
+    expect(result!.stepCode).toBe('P1.1')
   })
 })
 
 // ── assignTask ──
 
 describe('assignTask', () => {
-  it('updates the task assignedTo field (L1 to L2 assignment)', async () => {
-    const updated = makeTask({ id: 'task-1', assignedTo: 'user-2' })
-    prismaMock.workflowTask.update.mockResolvedValue(updated as never)
+  it('updates the task assignee (L1 to L2 assignment)', async () => {
+    const existing = { id: 'assignee-1', taskId: 'task-1', userId: null, isPrimary: true }
+    prismaMock.taskAssignee.findFirst.mockResolvedValue(existing as never)
+    prismaMock.taskAssignee.update.mockResolvedValue({ ...existing, userId: 'user-2' } as never)
+    prismaMock.task.findUnique.mockResolvedValue(makeDynamicTask({ id: 'task-1' }) as never)
 
     const result = await assignTask('task-1', 'user-2')
 
-    expect(prismaMock.workflowTask.update).toHaveBeenCalledWith({
-      where: { id: 'task-1' },
-      data: { assignedTo: 'user-2' },
+    expect(prismaMock.taskAssignee.update).toHaveBeenCalledWith({
+      where: { id: 'assignee-1' },
+      data: { userId: 'user-2' },
     })
-    expect(result).toEqual(updated)
+    expect(result).toBeDefined()
   })
 })
 
@@ -141,11 +151,11 @@ describe('assignTask', () => {
 
 describe('getDashboardStats', () => {
   it('returns correct counts for all categories', async () => {
-    prismaMock.workflowTask.count
+    prismaMock.task.count
       .mockResolvedValueOnce(50 as never)  // totalTasks
-      .mockResolvedValueOnce(10 as never)  // pendingTasks
-      .mockResolvedValueOnce(20 as never)  // inProgressTasks
-      .mockResolvedValueOnce(15 as never)  // completedTasks
+      .mockResolvedValueOnce(10 as never)  // pendingTasks (OPEN)
+      .mockResolvedValueOnce(20 as never)  // inProgressTasks (active)
+      .mockResolvedValueOnce(15 as never)  // completedTasks (DONE)
       .mockResolvedValueOnce(5 as never)   // overdueTasks
 
     const stats = await getDashboardStats('R02')
@@ -159,8 +169,8 @@ describe('getDashboardStats', () => {
     })
   })
 
-  it('filters by assignedRole when roleCode is not R01', async () => {
-    prismaMock.workflowTask.count
+  it('filters by assignees role when roleCode is not R01', async () => {
+    prismaMock.task.count
       .mockResolvedValueOnce(10 as never)
       .mockResolvedValueOnce(3 as never)
       .mockResolvedValueOnce(4 as never)
@@ -169,13 +179,12 @@ describe('getDashboardStats', () => {
 
     await getDashboardStats('R06')
 
-    // The first call (totalTasks) should include assignedRole filter
-    const firstCall = prismaMock.workflowTask.count.mock.calls[0][0] as { where: { assignedRole?: string } }
-    expect(firstCall.where).toEqual({ assignedRole: 'R06' })
+    const firstCall = prismaMock.task.count.mock.calls[0][0] as { where: Record<string, unknown> }
+    expect(firstCall.where).toEqual({ assignees: { some: { role: 'R06' } } })
   })
 
   it('does not filter by role when roleCode is R01 (admin sees all)', async () => {
-    prismaMock.workflowTask.count
+    prismaMock.task.count
       .mockResolvedValueOnce(100 as never)
       .mockResolvedValueOnce(20 as never)
       .mockResolvedValueOnce(30 as never)
@@ -184,12 +193,12 @@ describe('getDashboardStats', () => {
 
     await getDashboardStats('R01')
 
-    const firstCall = prismaMock.workflowTask.count.mock.calls[0][0] as { where: Record<string, unknown> }
+    const firstCall = prismaMock.task.count.mock.calls[0][0] as { where: Record<string, unknown> }
     expect(firstCall.where).toEqual({})
   })
 
   it('does not filter by role when roleCode is undefined', async () => {
-    prismaMock.workflowTask.count
+    prismaMock.task.count
       .mockResolvedValueOnce(100 as never)
       .mockResolvedValueOnce(20 as never)
       .mockResolvedValueOnce(30 as never)
@@ -198,7 +207,7 @@ describe('getDashboardStats', () => {
 
     await getDashboardStats()
 
-    const firstCall = prismaMock.workflowTask.count.mock.calls[0][0] as { where: Record<string, unknown> }
+    const firstCall = prismaMock.task.count.mock.calls[0][0] as { where: Record<string, unknown> }
     expect(firstCall.where).toEqual({})
   })
 })
@@ -207,29 +216,28 @@ describe('getDashboardStats', () => {
 
 describe('getBottleneckMap', () => {
   it('returns roles sorted by pending count descending', async () => {
-    prismaMock.workflowTask.groupBy.mockResolvedValue([
-      { assignedRole: 'R04', _count: { id: 5 } },
-      { assignedRole: 'R06', _count: { id: 12 } },
-      { assignedRole: 'R02', _count: { id: 3 } },
+    prismaMock.task.findMany.mockResolvedValue([
+      { assignees: [{ role: 'R04' }] },
+      { assignees: [{ role: 'R06' }] },
+      { assignees: [{ role: 'R06' }] },
+      { assignees: [{ role: 'R02' }] },
+      { assignees: [{ role: 'R04' }] },
     ] as never)
 
     const result = await getBottleneckMap()
 
-    expect(result).toEqual([
-      { role: 'R06', pendingCount: 12 },
-      { role: 'R04', pendingCount: 5 },
-      { role: 'R02', pendingCount: 3 },
-    ])
+    expect(result[0].pendingCount).toBe(2)
+    expect(result[2]).toEqual({ role: 'R02', pendingCount: 1 })
   })
 
-  it('only queries IN_PROGRESS tasks', async () => {
-    prismaMock.workflowTask.groupBy.mockResolvedValue([] as never)
+  it('only queries active tasks', async () => {
+    prismaMock.task.findMany.mockResolvedValue([] as never)
 
     await getBottleneckMap()
 
-    expect(prismaMock.workflowTask.groupBy).toHaveBeenCalledWith(
+    expect(prismaMock.task.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { status: 'IN_PROGRESS' },
+        where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED'] } },
       }),
     )
   })
@@ -240,16 +248,16 @@ describe('getBottleneckMap', () => {
 describe('checkDeadlines', () => {
   it('creates notifications for overdue tasks with an assignee', async () => {
     const overdueTasks = [
-      makeTask({
+      makeDynamicTask({
         id: 'task-overdue-1',
-        assignedTo: 'user-1',
-        stepName: 'Kiểm tra vật tư',
-        stepCode: 'P3.1',
+        taskType: 'P3.1',
+        title: 'Kiểm tra vật tư',
         deadline: new Date('2026-01-01'),
+        assignees: [{ userId: 'user-1', isPrimary: true }],
         project: { projectCode: 'IBS-001', projectName: 'Test Project' },
       }),
     ]
-    prismaMock.workflowTask.findMany.mockResolvedValue(overdueTasks as never)
+    prismaMock.task.findMany.mockResolvedValue(overdueTasks as never)
     prismaMock.notification.create.mockResolvedValue({} as never)
 
     const count = await checkDeadlines()
@@ -258,8 +266,8 @@ describe('checkDeadlines', () => {
     expect(prismaMock.notification.create).toHaveBeenCalledWith({
       data: {
         userId: 'user-1',
-        title: 'Task qu\u00e1 h\u1ea1n: Ki\u1ec3m tra v\u1eadt t\u01b0',
-        message: 'Task P3.1 trong d\u1ef1 \u00e1n IBS-001 \u0111\u00e3 qu\u00e1 deadline.',
+        title: 'Task quá hạn: Kiểm tra vật tư',
+        message: 'Task P3.1 trong dự án IBS-001 đã quá deadline.',
         type: 'deadline_overdue',
         linkUrl: '/tasks/task-overdue-1',
       },
@@ -268,23 +276,23 @@ describe('checkDeadlines', () => {
 
   it('does not create notification for tasks without assignee', async () => {
     const overdueTasks = [
-      makeTask({
+      makeDynamicTask({
         id: 'task-unassigned',
-        assignedTo: null,
         deadline: new Date('2026-01-01'),
+        assignees: [{ userId: null, isPrimary: true }],
         project: { projectCode: 'IBS-002', projectName: 'Another Project' },
       }),
     ]
-    prismaMock.workflowTask.findMany.mockResolvedValue(overdueTasks as never)
+    prismaMock.task.findMany.mockResolvedValue(overdueTasks as never)
 
     const count = await checkDeadlines()
 
-    expect(count).toBe(1) // still counts the task
+    expect(count).toBe(1)
     expect(prismaMock.notification.create).not.toHaveBeenCalled()
   })
 
   it('returns 0 when no overdue tasks exist', async () => {
-    prismaMock.workflowTask.findMany.mockResolvedValue([] as never)
+    prismaMock.task.findMany.mockResolvedValue([] as never)
 
     const count = await checkDeadlines()
 
@@ -297,24 +305,20 @@ describe('checkDeadlines', () => {
 
 describe('getModuleStats', () => {
   it('returns correct counts for warehouse, production, and QC', async () => {
-    // material.count
     prismaMock.material.count.mockResolvedValue(100 as never)
-    // material.findMany for low stock
     prismaMock.material.findMany.mockResolvedValue([
       { currentStock: 5, minStock: 10 },
       { currentStock: 20, minStock: 10 },
       { currentStock: 0, minStock: 5 },
     ] as never)
-    // workOrder counts
     prismaMock.workOrder.count
-      .mockResolvedValueOnce(50 as never)   // totalWO
-      .mockResolvedValueOnce(15 as never)   // woInProgress
-      .mockResolvedValueOnce(8 as never)    // woPendingMaterial
-    // inspection counts
+      .mockResolvedValueOnce(50 as never)
+      .mockResolvedValueOnce(15 as never)
+      .mockResolvedValueOnce(8 as never)
     prismaMock.inspection.count
-      .mockResolvedValueOnce(30 as never)   // totalInspections
-      .mockResolvedValueOnce(22 as never)   // inspectionsPassed
-      .mockResolvedValueOnce(5 as never)    // inspectionsPending
+      .mockResolvedValueOnce(30 as never)
+      .mockResolvedValueOnce(22 as never)
+      .mockResolvedValueOnce(5 as never)
 
     const stats = await getModuleStats()
 
