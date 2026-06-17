@@ -52,9 +52,19 @@ export {
   createMaterialSchema,
   updateMaterialSchema,
   stockMovementSchema,
+  materialQuerySchema,
+  addAliasSchema,
+  quickCreateMaterialSchema,
+  mergeMaterialsSchema,
+  resolveBatchSchema,
   type CreateMaterialInput,
   type UpdateMaterialInput,
   type StockMovementInput,
+  type MaterialQueryInput,
+  type AddAliasInput,
+  type QuickCreateMaterialInput,
+  type MergeMaterialsInput,
+  type ResolveBatchInput,
 } from './material.schema'
 
 // ── Procurement ──
@@ -178,3 +188,23 @@ export {
   type CreateCashflowInput,
   type UpdateCashflowInput,
 } from './finance.schema'
+
+// ── Dynamic Workflow (Phase 1) ──
+export {
+  createTaskSchema,
+  updateTaskSchema,
+  returnTaskSchema,
+  completeWorkTaskSchema,
+  reassignTaskSchema,
+  commentSchema,
+  inboxQuerySchema,
+  createMeetingSchema,
+  respondMeetingSchema,
+  closeMeetingSchema,
+  type CreateTaskInput,
+  type ReturnTaskInput,
+  type CompleteWorkTaskInput,
+  type ReassignTaskInput,
+  type CommentInput,
+  type InboxQueryInput,
+} from './work.schema'

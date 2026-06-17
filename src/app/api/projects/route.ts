@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP, getUserProjectIds } from '@/lib/auth'
-import { initializeProjectWorkflow, completeTask } from '@/lib/workflow-engine'
 import { withCache, cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { validateQuery, validateBody } from '@/lib/api-helpers'
 import { projectListQuerySchema, createProjectSchema } from '@/lib/schemas'
@@ -91,7 +90,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
 
   const result = await validateBody(req, createProjectSchema)
   if (!result.success) return result.response
-  const { projectCode, projectName, clientName, productType,
+  const { projectCode, projectName, clientName, productType, projectType,
           contractValue, currency, startDate, endDate, description,
           draftId } = result.data
 
@@ -104,6 +103,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
       projectName,
       clientName,
       productType,
+      projectType,
       contractValue: contractValue ? parseFloat(String(contractValue)) : null,
       currency: currency || 'VND',
       startDate: startDate ? new Date(startDate) : null,
@@ -135,17 +135,8 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
     }
   }
 
-  // Auto-initialize 32-step workflow
-  await initializeProjectWorkflow(project.id)
-
-  // P1.1 = "Tạo dự án" — auto-complete since creating the project IS step P1.1
-  const p1Task = await prisma.workflowTask.findFirst({
-    where: { projectId: project.id, stepCode: 'P1.1' },
-  })
-  if (p1Task) {
-    const resultData = linkedCount > 0 ? { linkedFiles: linkedCount } : undefined
-    await completeTask(p1Task.id, payload.userId, resultData, 'Tự động hoàn thành khi tạo dự án')
-  }
+  // [Thuần ad-hoc] KHÔNG auto-sinh task khi tạo dự án — mọi việc do người dùng tự tạo & giao
+  // (đúng user story US4). Template chỉ dùng để GỢI Ý phòng ban + áp thủ công ở trang "Quy trình & Template".
 
   await logAudit(payload.userId, 'CREATE', 'Project', project.id, { projectCode, projectName, linkedFiles: linkedCount }, getClientIP(req))
 

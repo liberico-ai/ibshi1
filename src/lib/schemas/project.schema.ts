@@ -14,6 +14,7 @@ export const createProjectSchema = z.object({
   projectName: z.string().min(1, 'Tên dự án là bắt buộc'),
   clientName: z.string().min(1, 'Tên khách hàng là bắt buộc'),
   productType: z.string().min(1, 'Loại sản phẩm là bắt buộc'),
+  projectType: z.enum(['EXTERNAL_PROD', 'INTERNAL_PROD', 'OTHER']).default('OTHER'),
   contractValue: z.union([z.string(), z.number()]).optional(),
   currency: z.string().default('VND'),
   startDate: z.string().optional(),

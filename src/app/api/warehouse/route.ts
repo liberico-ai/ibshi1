@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
 
     const where: Record<string, unknown> = {}
-    if (category) where.category = category
+    if (category) where.category = { contains: category, mode: 'insensitive' }
     if (search) {
       where.OR = [
         { materialCode: { contains: search, mode: 'insensitive' } },
@@ -36,6 +36,10 @@ export async function GET(req: NextRequest) {
             take: 5,
             select: { id: true, type: true, quantity: true, reason: true, createdAt: true },
           },
+          stocks: {
+            where: { quantity: { gt: 0 } },
+            select: { quantity: true, warehouse: { select: { projectCode: true } } },
+          },
         },
         orderBy: { materialCode: 'asc' },
         skip: (page - 1) * limit,
@@ -43,27 +47,34 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
-    const result = materials.map((m: Record<string, unknown> & { stockMovements: Array<Record<string, unknown>> }) => ({
-      id: m.id,
-      materialCode: m.materialCode,
-      name: m.name,
-      nameEn: m.nameEn || '',
-      unit: m.unit,
-      category: m.category,
-      specification: m.specification || '',
-      grade: m.grade || '',
-      minStock: Number(m.minStock),
-      currentStock: Number(m.currentStock),
-      reservedStock: Number(m.reservedStock || 0),
-      availableStock: Number(m.currentStock) - Number(m.reservedStock || 0),
-      unitPrice: m.unitPrice ? Number(m.unitPrice) : null,
-      currency: m.currency,
-      lowStock: Number(m.minStock) >= 0 ? Number(m.currentStock) < Number(m.minStock) : false,
-      recentMovements: m.stockMovements.map((sm: Record<string, unknown>) => ({
-        ...sm,
-        quantity: Number(sm.quantity),
-      })),
-    }))
+    const result = materials.map((m: Record<string, unknown> & { stockMovements: Array<Record<string, unknown>>; stocks: Array<{ warehouse: { projectCode: string | null } }> }) => {
+      const projects = Array.from(new Set((m.stocks || [])
+        .map((s) => s.warehouse?.projectCode)
+        .filter((p): p is string => !!p)))
+      return {
+        id: m.id,
+        materialCode: m.materialCode,
+        name: m.name,
+        nameEn: m.nameEn || '',
+        unit: m.unit,
+        category: m.category,
+        specification: m.specification || '',
+        grade: m.grade || '',
+        minStock: Number(m.minStock),
+        currentStock: Number(m.currentStock),
+        reservedStock: Number(m.reservedStock || 0),
+        availableStock: Number(m.currentStock) - Number(m.reservedStock || 0),
+        unitPrice: m.unitPrice ? Number(m.unitPrice) : null,
+        currency: m.currency,
+        lowStock: Number(m.minStock) >= 0 ? Number(m.currentStock) < Number(m.minStock) : false,
+        projects,
+        projectCount: projects.length,
+        recentMovements: m.stockMovements.map((sm: Record<string, unknown>) => ({
+          ...sm,
+          quantity: Number(sm.quantity),
+        })),
+      }
+    })
 
     return successResponse({
       materials: result,

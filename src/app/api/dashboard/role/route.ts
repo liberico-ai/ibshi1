@@ -22,9 +22,10 @@ async function fetchRoleWidgets(user: { userId: string; roleCode: string }) {
     const role = user.roleCode
     const widgets: Record<string, unknown> = { role }
 
-    // Common widgets for all roles
+    // Common widgets for all roles — đọc từ Task ĐỘNG (theo userId HOẶC role)
+    const mineDyn = { assignees: { some: { OR: [{ userId: user.userId }, { role }] } } }
     const [taskCount, notifCount] = await Promise.all([
-      prisma.workflowTask.count({ where: { OR: [{ assignedTo: user.userId }, { assignedRole: role }], status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+      prisma.task.count({ where: { ...mineDyn, status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] } } }),
       prisma.notification.count({ where: { userId: user.userId, isRead: false } }),
     ])
     widgets.pendingTasks = taskCount
@@ -35,7 +36,7 @@ async function fetchRoleWidgets(user: { userId: string; roleCode: string }) {
       // BGĐ / PM — project overview
       const [projects, overdueCount] = await Promise.all([
         prisma.project.count({ where: { status: { not: 'CLOSED' } } }),
-        prisma.workflowTask.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] }, deadline: { lt: new Date() } } }),
+        prisma.task.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED'] }, deadline: { lt: new Date() } } }),
       ])
       widgets.activeProjects = projects
       widgets.overdueTasks = overdueCount

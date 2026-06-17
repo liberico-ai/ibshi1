@@ -23,6 +23,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           orderBy: { createdAt: 'desc' },
           take: 50,
         },
+        stocks: {
+          orderBy: { quantity: 'desc' },
+          include: { warehouse: { select: { code: true, name: true, projectCode: true, kind: true } } },
+        },
       },
     })
 
@@ -37,6 +41,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         stockMovements: material.stockMovements.map((sm) => ({
           ...sm,
           quantity: Number(sm.quantity),
+        })),
+        stocks: material.stocks.map((s) => ({
+          warehouseCode: s.warehouse.code,
+          warehouseName: s.warehouse.name,
+          projectCode: s.warehouse.projectCode,
+          kind: s.warehouse.kind,
+          quantity: Number(s.quantity),
+          value: Number(s.value),
         })),
       },
     })

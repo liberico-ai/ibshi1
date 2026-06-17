@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     if (!user) return unauthorizedResponse()
 
     const data = await withCache('warehouse:stats', 60, async () => {
-      const [totalMaterials, materials, prPending, poActive, recentMovements] = await Promise.all([
+      const [totalMaterials, materials, prPending, poActive, recentMovements, stockValueAgg] = await Promise.all([
         prisma.material.count(),
         prisma.material.findMany({
           select: { currentStock: true, minStock: true, unitPrice: true, category: true },
@@ -24,10 +24,15 @@ export async function GET(req: NextRequest) {
             material: { select: { materialCode: true, name: true } },
           },
         }),
+        // Tổng giá trị tồn chuẩn = tổng value của tồn theo kho (gồm cả SKU tồn = 0 nhưng còn giá trị)
+        prisma.materialStock.aggregate({ _sum: { value: true } }),
       ])
 
       const lowStockCount = materials.filter(m => Number(m.minStock) >= 0 && Number(m.currentStock) <= Number(m.minStock)).length
-      const totalValue = materials.reduce((sum, m) => sum + (m.unitPrice ? Number(m.unitPrice) * Number(m.currentStock) : 0), 0)
+      // Ưu tiên tổng từ MaterialStock (per-kho); nếu chưa có dữ liệu thì fallback unitPrice×currentStock
+      const stockValue = Number(stockValueAgg._sum.value || 0)
+      const fallbackValue = materials.reduce((sum, m) => sum + (m.unitPrice ? Number(m.unitPrice) * Number(m.currentStock) : 0), 0)
+      const totalValue = stockValue > 0 ? stockValue : fallbackValue
       const byCategory = materials.reduce((acc: Record<string, number>, m) => {
         acc[m.category] = (acc[m.category] || 0) + 1
         return acc

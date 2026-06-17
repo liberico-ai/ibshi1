@@ -247,8 +247,9 @@ export async function getModuleStats() {
     totalWO, woInProgress, woPendingMaterial,
     totalInspections, inspectionsPassed, inspectionsPending,
   ] = await Promise.all([
-    prisma.material.count(),
-    prisma.material.findMany({ select: { currentStock: true, minStock: true } })
+    // Chỉ đếm mã CHÍNH THỨC (loại mã tạm provisional đang chờ chuẩn hoá)
+    prisma.material.count({ where: { isProvisional: false } }),
+    prisma.material.findMany({ where: { isProvisional: false }, select: { currentStock: true, minStock: true } })
       .then((mats: Array<{ currentStock: unknown; minStock: unknown }>) => mats.filter(m => Number(m.currentStock) < Number(m.minStock)).length),
     prisma.workOrder.count(),
     prisma.workOrder.count({ where: { status: 'IN_PROGRESS' } }),

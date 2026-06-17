@@ -37,6 +37,13 @@ export const DEPARTMENTS = [
   { code: 'HCNS', name: 'Hành chính Nhân sự', nameEn: 'HR & Admin' },
 ] as const
 
+// ── Project Types (loại dự án — quyết định luồng) ──
+export const PROJECT_TYPES = [
+  { value: 'EXTERNAL_PROD', label: 'Dự án sản xuất cho khách hàng ngoài' },
+  { value: 'INTERNAL_PROD', label: 'Dự án sản xuất nội bộ' },
+  { value: 'OTHER', label: 'Dự án khác (không sản xuất)' },
+] as const
+
 // ── Product Types ──
 export const PRODUCT_TYPES = [
   { value: 'pressure_vessel', label: 'Bình chịu áp & Trao đổi nhiệt', labelEn: 'Pressure Vessel & Heat Exchanger' },
@@ -121,7 +128,14 @@ export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
 export const MENU_ITEMS = [
   // ── Overview ──
   { key: 'dashboard', label: 'Bảng điều khiển', labelEn: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard', roles: 'all', group: 'overview' },
-  { key: 'tasks', label: 'Công việc', labelEn: 'Tasks', icon: 'ClipboardList', href: '/dashboard/tasks', roles: 'all', group: 'overview' },
+  // [ẨN: luồng 36 bước cũ — đang test hệ động. Bật lại bằng cách bỏ comment dòng dưới]
+  // { key: 'tasks', label: 'Công việc (cũ)', labelEn: 'Tasks (legacy)', icon: 'ClipboardList', href: '/dashboard/tasks', roles: 'all', group: 'overview' },
+  { key: 'work', label: 'Công việc', labelEn: 'Work Inbox', icon: 'Inbox', href: '/dashboard/work', roles: 'all', group: 'overview' },
+  { key: 'work-team', label: 'Phòng của tôi', labelEn: 'My Department', icon: 'Users', href: '/dashboard/work/team', roles: ['R01', 'R02', 'R03', 'R04', 'R06', 'R08', 'R09', 'R10'], group: 'overview' },
+  { key: 'work-meetings', label: 'Lịch họp', labelEn: 'Meetings', icon: 'CalendarCheck', href: '/dashboard/work/meetings', roles: 'all', group: 'overview' },
+  { key: 'work-overview', label: 'Tổng quan dự án', labelEn: 'Project Overview', icon: 'PieChart', href: '/dashboard/work/overview', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'overview' },
+  { key: 'work-perf', label: 'Hiệu suất & KPI', labelEn: 'Performance', icon: 'BarChart3', href: '/dashboard/work/performance', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'], group: 'overview' },
+  { key: 'work-templates', label: 'Quy trình & Template', labelEn: 'Templates', icon: 'Settings', href: '/dashboard/work/templates', roles: ['R01', 'R02', 'R10'], group: 'overview' },
   { key: 'notifications', label: 'Thông báo', labelEn: 'Notifications', icon: 'Bell', href: '/dashboard/notifications', roles: 'all', group: 'overview' },
 
   // ── Project ──
@@ -139,6 +153,7 @@ export const MENU_ITEMS = [
 
   // ── Warehouse ──
   { key: 'warehouse', label: 'Kho', labelEn: 'Warehouse', icon: 'Package', href: '/dashboard/warehouse', roles: ['R01', 'R03', 'R03a', 'R05', 'R05a'], group: 'warehouse' },
+  { key: 'material-codes', label: 'Quản lý mã vật tư', labelEn: 'Material Codes', icon: 'Barcode', href: '/dashboard/warehouse/material-codes', roles: ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R10'], group: 'warehouse' },
   { key: 'procurement', label: 'Mua hàng', labelEn: 'Procurement', icon: 'ShoppingCart', href: '/dashboard/warehouse/procurement', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a'], group: 'warehouse' },
   { key: 'purchase-requests', label: 'Đề nghị mua hàng', labelEn: 'PR', icon: 'FileInput', href: '/dashboard/warehouse/purchase-requests', roles: ['R01', 'R07', 'R07a'], group: 'warehouse' },
   { key: 'purchase-orders', label: 'Đơn đặt hàng', labelEn: 'PO', icon: 'FileOutput', href: '/dashboard/warehouse/purchase-orders', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a'], group: 'warehouse' },

@@ -15,7 +15,8 @@
     "deploy": "bash scripts/deploy.sh",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "import:catalog": "tsx scripts/import-material-groups.ts && tsx scripts/import-materials.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

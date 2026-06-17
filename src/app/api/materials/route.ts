@@ -1,10 +1,73 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, logAudit, getClientIP } from '@/lib/auth'
+import { validateBody } from '@/lib/api-helpers'
+import { createMaterialSchema } from '@/lib/schemas'
+import { RBAC } from '@/lib/rbac-rules'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+const MGMT_PARAMS = ['page', 'q', 'status', 'category', 'provisional']
+const PAGE_SIZE = 20
+
+export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url)
+    const isMgmt = MGMT_PARAMS.some((p) => url.searchParams.has(p))
+
+    // ── Management / search mode (material-code admin UI) ──
+    if (isMgmt) {
+      const payload = await authenticateRequest(req)
+      if (!payload) return unauthorizedResponse()
+
+      const page = Math.max(1, Number(url.searchParams.get('page') || 1))
+      const q = url.searchParams.get('q')?.trim()
+      const status = url.searchParams.get('status') || undefined
+      const category = url.searchParams.get('category') || undefined
+      const provisional = url.searchParams.get('provisional')
+
+      const where: Record<string, unknown> = {}
+      if (status) where.status = status
+      if (category) where.category = category
+      if (provisional === 'true') where.isProvisional = true
+      if (provisional === 'false') where.isProvisional = false
+      if (q) {
+        where.OR = [
+          { name: { contains: q, mode: 'insensitive' } },
+          { materialCode: { contains: q, mode: 'insensitive' } },
+          { specification: { contains: q, mode: 'insensitive' } },
+          { aliases: { some: { aliasCode: { contains: q, mode: 'insensitive' } } } },
+        ]
+      }
+
+      const [total, materials] = await Promise.all([
+        prisma.material.count({ where }),
+        prisma.material.findMany({
+          where,
+          select: {
+            id: true, materialCode: true, name: true, unit: true, category: true, groupCode: true,
+            specification: true, grade: true, currentStock: true, unitPrice: true,
+            currency: true, status: true, isProvisional: true, createdByUnit: true,
+            _count: { select: { aliases: true } },
+          },
+          orderBy: [{ isProvisional: 'desc' }, { materialCode: 'asc' }],
+          skip: (page - 1) * PAGE_SIZE,
+          take: PAGE_SIZE,
+        }),
+      ])
+
+      return successResponse({
+        materials: materials.map((m) => ({
+          ...m,
+          currentStock: Number(m.currentStock),
+          unitPrice: m.unitPrice == null ? null : Number(m.unitPrice),
+          aliasCount: m._count.aliases,
+        })),
+        pagination: { page, limit: PAGE_SIZE, total, totalPages: Math.ceil(total / PAGE_SIZE) },
+      })
+    }
+
+    // ── Legacy mode (unchanged): flat list of in-stock materials for autocompletes ──
     const materials = await prisma.material.findMany({
       where: { currentStock: { gt: 0 } },
       select: {
@@ -21,7 +84,7 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      materials: materials.map(m => ({
+      materials: materials.map((m) => ({
         ...m,
         currentStock: Number(m.currentStock),
       })),
@@ -29,5 +92,45 @@ export async function GET() {
   } catch (err) {
     console.error('Materials API error:', err)
     return NextResponse.json({ ok: false, error: 'Lỗi khi tải danh sách vật tư' }, { status: 500 })
+  }
+}
+
+// POST /api/materials — Create canonical material code (admin / KTKH / warehouse)
+export async function POST(req: NextRequest) {
+  try {
+    const payload = await authenticateRequest(req)
+    if (!payload) return unauthorizedResponse()
+    if (!RBAC.MATERIAL_CODE_ADMIN.includes(payload.roleCode)) {
+      return forbiddenResponse('Bạn không có quyền tạo mã vật tư')
+    }
+
+    const result = await validateBody(req, createMaterialSchema)
+    if (!result.success) return result.response
+    const data = result.data
+
+    const dup = await prisma.material.findUnique({ where: { materialCode: data.materialCode } })
+    if (dup) return errorResponse(`Mã vật tư "${data.materialCode}" đã tồn tại`, 409)
+
+    const material = await prisma.material.create({
+      data: {
+        materialCode: data.materialCode,
+        name: data.name,
+        nameEn: data.nameEn,
+        unit: data.unit,
+        category: data.category,
+        specification: data.specification,
+        grade: data.grade,
+        minStock: data.minStock,
+        unitPrice: data.unitPrice,
+        currency: data.currency,
+        status: 'ACTIVE',
+      },
+    })
+
+    await logAudit(payload.userId, 'CREATE', 'Material', material.id, { materialCode: data.materialCode }, getClientIP(req))
+    return successResponse({ material }, 'Đã tạo mã vật tư', 201)
+  } catch (err) {
+    console.error('POST /api/materials error:', err)
+    return errorResponse('Lỗi hệ thống', 500)
   }
 }

@@ -13,4 +13,10 @@ export const RBAC = {
   
   // Thầu phụ: Giám đốc (R01), Thương mại (R07), TCKT (R08)
   SUBCONTRACT_ACTION: ['R01', 'R07', 'R08', 'R00'],
+
+  // Quản lý danh mục mã vật tư (tạo/sửa/duyệt mã, alias): BGĐ, KTKH, Kho, Admin
+  MATERIAL_CODE_ADMIN: ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R10', 'R00'],
+
+  // Gộp mã trùng — thao tác rủi ro cao, chỉ BGĐ + Admin
+  MATERIAL_CODE_MERGE: ['R01', 'R10', 'R00'],
 }

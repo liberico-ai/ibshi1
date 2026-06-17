@@ -1,22 +1,24 @@
 import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { getDashboardStats, getProjectsOverview, getBottleneckMap, getModuleStats } from '@/lib/task-engine'
+import { getProjectsOverview, getModuleStats } from '@/lib/task-engine'
+import { getDynamicDashboardStats, getDynamicBottleneck, getMyDynamicTasks } from '@/lib/work-analytics'
 import { withCache } from '@/lib/cache'
 
-// GET /api/dashboard — Dashboard data (role-based)
+// GET /api/dashboard — Dashboard data (hệ động). Stats/bottleneck/myTasks đọc từ Task động.
 export async function GET(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const data = await withCache(`dashboard:${payload.userId}`, 60, async () => {
-      const [stats, projects, bottleneck, modules] = await Promise.all([
-        getDashboardStats(payload.roleCode),
+    const data = await withCache(`dashboard:v2:${payload.userId}`, 60, async () => {
+      const [stats, projects, bottleneck, modules, myTasks] = await Promise.all([
+        getDynamicDashboardStats(payload.userId, payload.roleCode),
         getProjectsOverview(),
-        getBottleneckMap(),
+        getDynamicBottleneck(),
         getModuleStats(),
+        getMyDynamicTasks(payload.userId, payload.roleCode),
       ])
-      return { stats, projects, bottleneck, modules }
+      return { stats, projects, bottleneck, modules, myTasks }
     })
 
     return successResponse(data)
