@@ -16,35 +16,105 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   if (!pResult.success) return pResult.response
   const { id } = pResult.data
 
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      tasks: {
-        include: { assignee: { select: { id: true, fullName: true, username: true } } },
-        orderBy: { stepCode: 'asc' },
+  const [project, templateSteps] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id },
+      include: {
+        dynamicTasks: {
+          include: { assignees: { select: { role: true, userId: true, isPrimary: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+        wbsNodes: { orderBy: { sortOrder: 'asc' } },
       },
-      wbsNodes: { orderBy: { sortOrder: 'asc' } },
-    },
-  })
+    }),
+    prisma.templateStep.findMany({
+      where: { template: { code: 'SX-PROD' } },
+      orderBy: { orderIndex: 'asc' },
+    }),
+  ])
 
   if (!project) return errorResponse('Dự án không tồn tại', 404)
 
-  const progress = getWorkflowProgress(project.tasks)
+  const ACTIVE = ['OPEN', 'IN_PROGRESS', 'RETURNED']
+  const taskByCode = new Map<string, typeof project.dynamicTasks[0]>()
+  for (const t of project.dynamicTasks) {
+    const existing = taskByCode.get(t.taskType)
+    if (!existing || ACTIVE.includes(t.status) || (!ACTIVE.includes(existing.status) && t.completedAt && existing.completedAt && t.completedAt > existing.completedAt)) {
+      taskByCode.set(t.taskType, t)
+    }
+  }
 
-  // Group tasks by phase. Always seed phases 1..6 (even if empty) so the timeline
-  // UI shows every phase as a placeholder — phases with only dynamic-spawned tasks
-  // (e.g. Phase 4 P4.3/P4.4 per PO, Phase 5 P5.1/P5.2/...) should not vanish.
-  const tasksByPhase: Record<number, typeof project.tasks> = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }
-  for (const task of project.tasks) {
+  const legacyTasks = templateSteps.map(step => {
+    const t = taskByCode.get(step.code)
+    const rule = WORKFLOW_RULES[step.code]
+    if (t) {
+      const primary = t.assignees?.find(a => a.isPrimary) || t.assignees?.[0]
+      const status = t.status === 'DONE' ? 'DONE' : ACTIVE.includes(t.status) ? 'IN_PROGRESS' : 'PENDING'
+      return {
+        id: t.id,
+        stepCode: t.taskType,
+        stepName: t.title,
+        stepNameEn: rule?.nameEn || '',
+        assignedRole: primary?.role || rule?.role || '',
+        assignedTo: primary?.userId || null,
+        status,
+        priority: 0,
+        deadline: t.deadline,
+        startedAt: t.startedAt,
+        completedAt: t.completedAt,
+        completedBy: t.completedBy,
+        resultData: t.resultData,
+        notes: null,
+        assignee: null as { id: string; fullName: string; username: string } | null,
+      }
+    }
+    return {
+      id: `placeholder-${step.code}`,
+      stepCode: step.code,
+      stepName: step.title,
+      stepNameEn: rule?.nameEn || '',
+      assignedRole: step.roleCode || rule?.role || '',
+      assignedTo: null,
+      status: 'PENDING',
+      priority: 0,
+      deadline: null,
+      startedAt: null,
+      completedAt: null,
+      completedBy: null,
+      resultData: null,
+      notes: null,
+      assignee: null,
+    }
+  })
+
+  const userIds = legacyTasks.map(t => t.assignedTo).filter(Boolean) as string[]
+  if (userIds.length) {
+    const users = await prisma.user.findMany({
+      where: { id: { in: [...new Set(userIds)] } },
+      select: { id: true, fullName: true, username: true },
+    })
+    const userMap = new Map(users.map(u => [u.id, u]))
+    for (const t of legacyTasks) {
+      if (t.assignedTo) t.assignee = userMap.get(t.assignedTo) || null
+    }
+  }
+
+  const progress = getWorkflowProgress(legacyTasks)
+
+  const tasksByPhase: Record<number, typeof legacyTasks> = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }
+  for (const task of legacyTasks) {
     const rule = WORKFLOW_RULES[task.stepCode]
     const phase = rule?.phase ?? 0
     if (!tasksByPhase[phase]) tasksByPhase[phase] = []
     tasksByPhase[phase].push(task)
   }
 
+  const { dynamicTasks: _dt, ...projectData } = project
+
   return successResponse({
     project: {
-      ...project,
+      ...projectData,
+      tasks: legacyTasks,
       contractValue: project.contractValue?.toString(),
       progress,
       tasksByPhase,
@@ -104,13 +174,13 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
     }
 
     // Check gate: P6.1, P6.2, P6.3 must be DONE
-    const closureGate = await prisma.workflowTask.findMany({
-      where: { projectId: id, stepCode: { in: ['P6.1', 'P6.2', 'P6.3'] } },
+    const closureGate = await prisma.task.findMany({
+      where: { projectId: id, taskType: { in: ['P6.1', 'P6.2', 'P6.3'] } },
     })
 
     const allDone = closureGate.length === 3 && closureGate.every(t => t.status === 'DONE')
     if (!allDone) {
-      const pending = closureGate.filter(t => t.status !== 'DONE').map(t => t.stepCode)
+      const pending = closureGate.filter(t => t.status !== 'DONE').map(t => t.taskType)
       return errorResponse(`Chưa hoàn thành: ${pending.join(', ')}. Cần hoàn tất P6.1 (MRB), P6.2 (Quyết toán), P6.3 (Bài học) trước khi đóng dự án.`)
     }
 
@@ -121,8 +191,8 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
     })
 
     // Complete P6.4 task
-    await prisma.workflowTask.updateMany({
-      where: { projectId: id, stepCode: 'P6.4' },
+    await prisma.task.updateMany({
+      where: { projectId: id, taskType: 'P6.4' },
       data: { status: 'DONE', completedAt: new Date(), completedBy: payload.userId },
     })
 
@@ -145,21 +215,20 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
   // P5.4: Client acceptance
   if (body.action === 'ACCEPT') {
     // Verify P5.3 (SAT) is DONE
-    const satTask = await prisma.workflowTask.findFirst({
-      where: { projectId: id, stepCode: 'P5.3' },
+    const satTask = await prisma.task.findFirst({
+      where: { projectId: id, taskType: 'P5.3' },
     })
     if (!satTask || satTask.status !== 'DONE') {
       return errorResponse('Cần hoàn thành SAT (P5.3) trước khi KH xác nhận')
     }
 
     // Complete P5.4 task
-    await prisma.workflowTask.updateMany({
-      where: { projectId: id, stepCode: 'P5.4' },
+    await prisma.task.updateMany({
+      where: { projectId: id, taskType: 'P5.4' },
       data: {
         status: 'DONE',
         completedAt: new Date(),
         completedBy: payload.userId,
-        notes: `KH xác nhận: ${body.witnessName || '—'} — ${body.notes || ''}`,
       },
     })
 
