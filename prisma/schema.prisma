@@ -56,6 +56,7 @@ model Project {
   projectName        String                   @map("project_name")
   clientName         String                   @map("client_name")
   productType        String                   @map("product_type")
+  projectType        String                   @default("OTHER") @map("project_type") // EXTERNAL_PROD | INTERNAL_PROD | OTHER
   contractValue      Decimal?                 @map("contract_value")
   currency           String                   @default("VND")
   status             String                   @default("ACTIVE")
@@ -87,6 +88,8 @@ model Project {
   wbsNodes           WbsNode[]
   workOrders         WorkOrder[]
   tasks              WorkflowTask[]
+  dynamicTasks       Task[]                   @relation("ProjectDynamicTasks")
+  meetings           Meeting[]                @relation("ProjectMeetings")
   loanContracts      LoanContract[]
   financePlan        ProjectFinancePlan?
 
@@ -257,12 +260,23 @@ model Vendor {
   @@map("vendors")
 }
 
+model MaterialGroup {
+  code       String  @id
+  name       String
+  parentCode String? @map("parent_code")
+  level      Int
+  inactive   Boolean @default(false)
+
+  @@map("material_groups")
+}
+
 model Material {
   id             String                @id @default(cuid())
   materialCode   String                @unique @map("material_code")
   name           String
   unit           String
   category       String
+  groupCode      String?               @map("group_code")
   minStock       Decimal               @default(0) @map("min_stock")
   currentStock   Decimal               @default(0) @map("current_stock")
   unitPrice      Decimal?              @map("unit_price")
@@ -273,6 +287,11 @@ model Material {
   nameEn         String                @default("") @map("name_en")
   reservedStock  Decimal               @default(0) @map("reserved_stock")
   specification  String?
+  status         String                @default("ACTIVE") // ACTIVE | ARCHIVE | OBSOLETE
+  isProvisional  Boolean               @default(false) @map("is_provisional") // mã tạm, chờ chuẩn hóa
+  createdByUnit  String?               @map("created_by_unit") // phòng/đơn vị tạo mã tạm
+  aliases        MaterialCodeAlias[]
+  stocks         MaterialStock[]
   bomItems       BomItem[]
   materialIssues MaterialIssue[]
   millCerts      MillCertificate[]
@@ -282,7 +301,63 @@ model Material {
 
   @@index([category])
   @@index([specification])
+  @@index([status])
   @@map("materials")
+}
+
+model Warehouse {
+  id          String          @id @default(cuid())
+  code        String          @unique
+  name        String
+  projectCode String?         @map("project_code") // mã dự án nếu kho gắn dự án (vd 25-VPI-I-095)
+  kind        String          @default("OTHER") // PROJECT | CONSIGNED | COMMON | OTHER
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  stocks      MaterialStock[]
+
+  @@index([projectCode])
+  @@map("warehouses")
+}
+
+model MaterialStock {
+  id          String    @id @default(cuid())
+  materialId  String    @map("material_id")
+  warehouseId String    @map("warehouse_id")
+  quantity    Decimal   @default(0)
+  value       Decimal   @default(0)
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  material    Material  @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, warehouseId])
+  @@index([materialId])
+  @@index([warehouseId])
+  @@map("material_stocks")
+}
+
+model MaterialCodeAlias {
+  id         String   @id @default(cuid())
+  materialId String   @map("material_id")
+  aliasCode  String   @unique @map("alias_code") // mã cũ — duy nhất toàn hệ thống
+  source     String // KHO | KETOAN | LEGACY_DOT | TK | TM | MANUAL
+  note       String?
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@index([aliasCode])
+  @@map("material_code_aliases")
+}
+
+model MaterialCodeCounter {
+  prefix    String
+  subgroup  String
+  lastSeq   Int      @default(0) @map("last_seq")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([prefix, subgroup])
+  @@map("material_code_counters")
 }
 
 model StockMovement {
@@ -1300,4 +1375,206 @@ model MisaSyncLog {
   @@index([status])
   @@index([referenceId])
   @@map("misa_sync_logs")
+}
+
+// ── Dynamic Workflow (Phase 1) — Task động phân cấp, chạy song song WorkflowTask ──
+
+model Task {
+  id                   String              @id @default(cuid())
+  projectId            String?             @map("project_id")
+  parentId             String?             @map("parent_id")
+  level                Int                 @default(2)
+  taskType             String              @default("FREE") @map("task_type")
+  title                String
+  description          String?
+  status               String              @default("OPEN") // OPEN | IN_PROGRESS | DONE | RETURNED | CANCELLED
+  priority             String              @default("NORMAL") // NORMAL | HIGH | URGENT
+  deadline             DateTime?
+  createdBy            String              @map("created_by")
+  assignedAt           DateTime?           @map("assigned_at")
+  startedAt            DateTime?           @map("started_at")
+  completedAt          DateTime?           @map("completed_at")
+  completedBy          String?             @map("completed_by")
+  resultData           Json?               @map("result_data")
+  checklistTemplateKey String?             @map("checklist_template_key")
+  checklistState       Json?               @map("checklist_state")
+  hookKeys             String[]            @default([]) @map("hook_keys") // hook tự động chạy khi hoàn thành
+  templateStepId       String?             @map("template_step_id")
+  returnCount          Int                 @default(0) @map("return_count")
+  forwardedFromId      String?             @map("forwarded_from_id") // việc này được "chuyển tiếp" từ task nào (truy vết)
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  project              Project?            @relation("ProjectDynamicTasks", fields: [projectId], references: [id])
+  parent               Task?               @relation("TaskTree", fields: [parentId], references: [id])
+  children             Task[]              @relation("TaskTree")
+  forwardedFrom        Task?               @relation("TaskForward", fields: [forwardedFromId], references: [id])
+  forwards             Task[]              @relation("TaskForward")
+  assignees            TaskAssignee[]
+  docs                 TaskDocRequirement[]
+  history              TaskHistory[]
+
+  @@index([projectId, status])
+  @@index([parentId])
+  @@index([forwardedFromId])
+  @@index([status, deadline])
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  id         String    @id @default(cuid())
+  taskId     String    @map("task_id")
+  role       String?
+  userId     String?   @map("user_id")
+  isPrimary  Boolean   @default(false) @map("is_primary")
+  acceptedAt DateTime? @map("accepted_at")
+  done       Boolean   @default(false) // người này đã hoàn thành phần của mình chưa
+  doneAt     DateTime? @map("done_at")
+  doneBy     String?   @map("done_by") // user thực tế bấm hoàn thành (khi giao theo role)
+  outcome    String?   // RETURN_CREATOR | FORWARD — hướng người này chọn khi hoàn thành
+  createdAt  DateTime  @default(now()) @map("created_at")
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([role])
+  @@map("task_assignees")
+}
+
+model TaskDocRequirement {
+  id               String   @id @default(cuid())
+  taskId           String   @map("task_id")
+  kind             String // MUST_READ | MUST_RETURN
+  label            String
+  fileAttachmentId String?  @map("file_attachment_id")
+  note             String?  // nội dung trả lại (text) khi hoàn thành
+  fulfilled        Boolean  @default(false) // MUST_READ: tất cả người nhận đã đọc | MUST_RETURN: đã nộp
+  createdAt        DateTime @default(now()) @map("created_at")
+  task             Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  acks             TaskDocAck[]
+
+  @@index([taskId])
+  @@map("task_doc_requirements")
+}
+
+// ── Lịch họp (Meeting) ──
+model Meeting {
+  id            String          @id @default(cuid())
+  projectId     String?         @map("project_id")
+  taskId        String?         @map("task_id") // tạo trực tiếp từ 1 công việc (liên kết truy vết)
+  title         String
+  agenda        String?
+  location      String?
+  startsAt      DateTime        @map("starts_at")
+  endsAt        DateTime?       @map("ends_at")
+  momNumber     String?         @map("mom_number") // số biên bản
+  status        String          @default("SCHEDULED") // SCHEDULED | DONE | CANCELLED
+  minutesNote   String?         @map("minutes_note") // biên bản họp (tóm tắt/kết luận)
+  minutesData   Json?           @map("minutes_data") // MOM có cấu trúc: { preparedBy, place, items[] } — theo mẫu hệ cũ P1.2A
+  createdBy     String          @map("created_by")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  project       Project?        @relation("ProjectMeetings", fields: [projectId], references: [id])
+  invites       MeetingInvite[]
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([startsAt])
+  @@map("meetings")
+}
+
+model MeetingInvite {
+  id          String    @id @default(cuid())
+  meetingId   String    @map("meeting_id")
+  userId      String    @map("user_id")
+  status      String    @default("INVITED") // INVITED | ACCEPTED | DECLINED
+  respondedAt DateTime? @map("responded_at")
+  note        String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  meeting     Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([userId])
+  @@map("meeting_invites")
+}
+
+// Lưu vết: từng người nhận xác nhận đã đọc tài liệu MUST_READ
+model TaskDocAck {
+  id            String             @id @default(cuid())
+  requirementId String             @map("requirement_id")
+  userId        String             @map("user_id")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  requirement   TaskDocRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, userId])
+  @@index([requirementId])
+  @@map("task_doc_acks")
+}
+
+model TaskHistory {
+  id         String   @id @default(cuid())
+  taskId     String   @map("task_id")
+  action     String // CREATED|ASSIGNED|STARTED|COMPLETED|RETURNED|REASSIGNED|SUBTASK_CREATED|COMMENT
+  byUserId   String   @map("by_user_id")
+  fromUserId String?  @map("from_user_id")
+  toRole     String?  @map("to_role")
+  toUserId   String?  @map("to_user_id")
+  reason     String?
+  meta       Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([action, createdAt])
+  @@map("task_history")
+}
+
+model RoutingSuggestion {
+  id               String   @id @default(cuid())
+  fromContext      String   @map("from_context")
+  toRoleCode       String?  @map("to_role_code")
+  toDepartmentCode String?  @map("to_department_code")
+  reason           String
+  weight           Int      @default(1)
+  source           String   @default("WORKFLOW_SEED")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([fromContext])
+  @@map("routing_suggestions")
+}
+
+// ── Phase 3: Template quy trình theo loại dự án + version ──
+
+model WorkflowTemplate {
+  id          String         @id @default(cuid())
+  code        String         @unique
+  name        String
+  projectType String         @map("project_type") // EXTERNAL_PROD | INTERNAL_PROD | OTHER
+  version     Int            @default(1)
+  isActive    Boolean        @default(true) @map("is_active")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  steps       TemplateStep[]
+
+  @@index([projectType, isActive])
+  @@map("workflow_templates")
+}
+
+model TemplateStep {
+  id           String           @id @default(cuid())
+  templateId   String           @map("template_id")
+  code         String                                 // vd P2.1
+  title        String
+  roleCode     String?          @map("role_code")     // role được giao mặc định
+  deptCode     String?          @map("dept_code")     // phòng (suy từ role)
+  orderIndex   Int              @default(0) @map("order_index")
+  deadlineDays Int?             @map("deadline_days")
+  taskType     String           @default("FREE") @map("task_type")
+  hookKeys     String[]         @default([]) @map("hook_keys")
+  nextCodes    String[]         @default([]) @map("next_codes")   // bước kế tiếp (sinh theo chuỗi)
+  gateCodes    String[]         @default([]) @map("gate_codes")   // điều kiện: các bước phải xong trước
+  parentCode   String?          @map("parent_code")
+  template     WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+  @@map("template_steps")
 }

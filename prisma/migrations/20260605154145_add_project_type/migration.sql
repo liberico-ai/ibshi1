@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "project_type" TEXT NOT NULL DEFAULT 'OTHER';
