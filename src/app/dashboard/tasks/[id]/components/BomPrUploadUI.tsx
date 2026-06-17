@@ -1,20 +1,38 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import * as XLSX from 'xlsx'
+import QuickCreateMaterialDialog from './QuickCreateMaterialDialog'
+import { resolveCodes, type ResolvedLite } from './material-resolve-client'
 
 // ── Types ──────────────────────────────────────────────────
 
 export interface PrMaterialItem {
-  stt: string           // e.g. I104-VTC01-001
+  stt: string           // PR line reference e.g. I104-VTC01-001 (NOT a material code)
   description: string   // e.g. THÉP HÌNH C
   profile: string       // e.g. C100X50X5X7.5-12000L
   grade: string         // e.g. SS400
+  type: string          // e.g. "Thép đen", "Inox" (cột Loại)
+  thickness: number     // mm (cột Chiều dày) — from dedicated column, NOT parsed from profile
+  length: number        // mm (cột Chiều dài) — from dedicated column, NOT parsed from profile
+  width: number         // mm (cột Chiều rộng) — from dedicated column, NOT parsed from profile
   unit: string          // m, m2, cái, bộ, kg, etc.
   unitWeight: number    // kg per unit
-  quantity: number      // ordered quantity
-  weight: number        // total weight (kg)
+  netQty: number        // net quantity (BOM)
+  netWeight: number     // net weight
+  prevQty: number       // previously ordered qty
+  prevWeight: number    // previously ordered weight
+  quantity: number      // current ordered quantity
+  weight: number        // current ordered weight (kg)
+  totalQty: number      // total ordered qty
+  totalWeight: number   // total ordered weight
+  remarks: string       // ghi chú
   category: string      // e.g. VTC01, VTC03, VPK, VDK
   categoryName: string  // e.g. "Vật tư chính thép đen"
+  canonicalCode?: string // assigned material code (only set when user picks/creates)
+  materialId?: string    // linked Material.id once assigned
+  provisionalCode?: boolean // true = mã tạm (tạo mới), false/undefined = mã kho (chọn từ kho)
+  requiredDate?: string  // Ngày cần hàng về (YYYY-MM-DD) — PM điền để theo dõi tiến độ mua
+  procureStatus?: string // Tiến độ mua: '' | 'Chưa mua' | 'Đang mua' | 'Đã về'
 }
 
 interface InventoryItem {
@@ -23,6 +41,8 @@ interface InventoryItem {
   name: string
   unit: string
   specification: string | null
+  grade: string | null
+  groupCode: string | null
   currentStock: number
   category: string
 }
@@ -33,6 +53,7 @@ interface StockMatch {
   inventoryName: string | null
   currentStock: number
   matched: boolean
+  viaCode?: boolean   // matched by resolving the code (canonical or old alias)
 }
 
 // ── Props ──────────────────────────────────────────────────
@@ -89,35 +110,49 @@ function fmtNum(n: number, decimals = 1): string {
 // ── Parse PR Excel ─────────────────────────────────────────
 
 function parsePrExcel(data: any[][]): PrMaterialItem[] {
-  // Find header row: look for "Item" or "STT" in first column
+  const S = (v: unknown): string => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim())
+  const N = (v: unknown): number => { const n = Number(v); return isNaN(n) ? 0 : n }
+
+  // Find header row: require BOTH "Item/STT" AND "Description/Chi tiết/Vật tư" to avoid noise rows
   let headerIdx = -1
-  for (let i = 0; i < Math.min(15, data.length); i++) {
-    const cell = String(data[i]?.[0] || '').toLowerCase()
-    if (cell.includes('item') || cell.includes('stt')) {
-      headerIdx = i
-      break
-    }
+  for (let i = 0; i < Math.min(20, data.length); i++) {
+    const row = data[i] || []
+    const hasItem = row.some((c: any) => /\bitem\b|\bstt\b/i.test(S(c)))
+    const hasDesc = row.some((c: any) => /description|chi ti[ếê]t|di[ễê]n gi[ảa]i/i.test(S(c)))
+    if (hasItem && hasDesc) { headerIdx = i; break }
   }
   if (headerIdx < 0) return []
 
-  // Check if next row is sub-header (Q.Ty / Weight)
-  const subHeader = data[headerIdx + 1]
-  const hasSubHeader = subHeader && String(subHeader[6] || '').toLowerCase().includes('q.ty')
-  const dataStartIdx = hasSubHeader ? headerIdx + 2 : headerIdx + 1
+  // Dynamic column mapping from header text
+  const H = (data[headerIdx] || []).map(S)
+  const find = (re: RegExp) => H.findIndex(h => re.test(h))
+  const findAll = (re: RegExp) => H.map((h, i) => (re.test(h) ? i : -1)).filter(i => i >= 0)
 
-  // Skip number-only rows (like row [1,2,3,4,...])
-  let actualStart = dataStartIdx
-  if (data[actualStart]) {
-    const firstCell = data[actualStart][0]
-    if (typeof firstCell === 'number' && firstCell === 1 && typeof data[actualStart][1] === 'number') {
-      actualStart++
-    }
+  const cStt = Math.max(0, find(/\bitem\b|\bstt\b/i))
+  const cDesc = find(/description|chi ti[ếê]t|di[ễê]n gi[ảa]i/i)
+  const cProfile = find(/profile/i)
+  const cGrade = find(/grade|m[áa]c/i)
+  const cType = find(/^lo[ạa]i$/i)
+  const cThick = find(/chi[ềe]u\s*d[àa]y/i)
+  const cLength = find(/chi[ềe]u\s*d[àa]i/i)
+  const cWidth = find(/chi[ềe]u\s*r[ộo]ng/i)
+  const cUnit = find(/\bunit\b|[đd][ơo]n\s*v[ịi]|[đd]vt/i)
+  const cUnitWt = find(/u\.?\s*weight|[đd]\.?\s*tr[ọo]ng/i)
+  const cNetQty = find(/net\s*quantity|s[ốo]\s*l[ưượơ]ng\s*tinh/i)
+  const cPrev = find(/previous\s*ordered|[đd][ãa]\s*d[ựu]\s*tr[ùu]/i)
+  const cTotal = find(/total\s*ordered|t[ổo]ng\s*d[ựu]\s*tr[ùu]/i)
+  const cCurrentAll = findAll(/current\s*ordered|d[ựu]\s*tr[ùu]\s*l[ầa]n/i)
+  const cRemarks = find(/^remarks|ghi\s*ch[úu]/i)
+
+  // Data start: skip sub-header (Q.Ty/Weight) and number-index rows
+  let actualStart = headerIdx + 1
+  while (actualStart < data.length) {
+    const row = data[actualStart] || []
+    if (row.some((c: any) => /^q\.?ty|^weight|^s[ốo]\s*l[ưượơ]ng|^kh[ốo]i\s*l[ưượơ]ng/i.test(S(c)))) { actualStart++; continue }
+    if (typeof row[0] === 'number' && row[0] >= 1 && row[0] <= 20 && typeof row[1] === 'number') { actualStart++; continue }
+    break
   }
 
-  // Determine which columns hold "current ordered" qty & weight
-  // Standard format: col 6-7 = net, 8-9 = previous, 10-11 = current, 12-13 = total
-  // Some files: col 10-11 = current rev0, 12-13 = current this rev
-  // Strategy: prefer col 10 (current ordered qty), fallback to col 6 (net qty)
   const items: PrMaterialItem[] = []
   let currentCategory = ''
   let currentCategoryName = ''
@@ -126,46 +161,71 @@ function parsePrExcel(data: any[][]): PrMaterialItem[] {
     const row = data[i]
     if (!row || row.every((c: any) => c == null || c === '')) continue
 
-    const stt = String(row[0] || '').trim()
+    const stt = S(row[cStt])
     if (!stt) continue
     if (isFooterRow(stt)) break
 
-    const description = String(row[1] || '').trim()
-    const profile = String(row[2] || '').trim()
-    const grade = String(row[3] || '').trim()
-    const unit = String(row[4] || '').trim()
-    const unitWeight = Number(row[5]) || 0
+    const description = cDesc >= 0 ? S(row[cDesc]) : ''
+    const profile = cProfile >= 0 ? S(row[cProfile]) : ''
+    const grade = cGrade >= 0 ? S(row[cGrade]) : ''
+    const type = cType >= 0 ? S(row[cType]) : ''
+    const thickness = cThick >= 0 ? N(row[cThick]) : 0
+    const length = cLength >= 0 ? N(row[cLength]) : 0
+    const width = cWidth >= 0 ? N(row[cWidth]) : 0
+    const unit = cUnit >= 0 ? S(row[cUnit]) : ''
+    const unitWeight = cUnitWt >= 0 ? N(row[cUnitWt]) : 0
 
-    // Skip rows where description is purely numbers (e.g. number-index rows)
     if (description && !/[a-zA-ZÀ-ỹ]/.test(description)) continue
 
-    // Detect category header rows
     if (isCategoryRow(stt, unit)) {
       currentCategory = extractCategory(stt)
       currentCategoryName = description || currentCategory
       continue
     }
 
-    // Get quantity: prefer "current ordered" (col 10), then "total ordered" (col 12), then "net" (col 6)
-    let qty = Number(row[10]) || 0
-    let wt = Number(row[11]) || 0
-    if (qty === 0) {
-      qty = Number(row[12]) || Number(row[6]) || 0
-      wt = Number(row[13]) || Number(row[7]) || 0
+    // Quantities: each header column is Q.Ty, the next column (+1) is Weight
+    const netQty = cNetQty >= 0 ? N(row[cNetQty]) : 0
+    const netWeight = cNetQty >= 0 ? N(row[cNetQty + 1]) : 0
+    const prevQty = cPrev >= 0 ? N(row[cPrev]) : 0
+    const prevWeight = cPrev >= 0 ? N(row[cPrev + 1]) : 0
+    const totalQty = cTotal >= 0 ? N(row[cTotal]) : 0
+    const totalWeight = cTotal >= 0 ? N(row[cTotal + 1]) : 0
+
+    // Current ordered: find the last revision with a non-zero value
+    let curQty = 0, curWeight = 0
+    for (const ci of cCurrentAll) {
+      const q = N(row[ci])
+      if (q !== 0) { curQty = q; curWeight = N(row[ci + 1]) }
     }
-    if (qty === 0 && wt === 0) continue // skip empty rows
+
+    // Final quantity: prefer Total Ordered, then last Current, then Net
+    const quantity = totalQty || curQty || netQty
+    const weight = totalWeight || curWeight || netWeight
+    if (quantity === 0 && weight === 0) continue
 
     const cat = currentCategory || extractCategory(stt)
+    const remarks = cRemarks >= 0 ? S(row[cRemarks]) : ''
 
     items.push({
       stt,
       description,
       profile,
       grade,
+      type,
+      thickness,
+      length,
+      width,
       unit: unit.toLowerCase(),
-      unitWeight,
-      quantity: Math.round(qty * 1000) / 1000,
-      weight: Math.round(wt * 100) / 100,
+      unitWeight: Math.round(unitWeight * 100) / 100,
+      netQty: Math.round(netQty * 1000) / 1000,
+      netWeight: Math.round(netWeight * 100) / 100,
+      prevQty: Math.round(prevQty * 1000) / 1000,
+      prevWeight: Math.round(prevWeight * 100) / 100,
+      quantity: Math.round(quantity * 1000) / 1000,
+      weight: Math.round(weight * 100) / 100,
+      totalQty: Math.round(totalQty * 1000) / 1000,
+      totalWeight: Math.round(totalWeight * 100) / 100,
+      remarks,
       category: cat,
       categoryName: currentCategoryName || CATEGORY_LABELS[cat] || cat,
     })
@@ -176,27 +236,116 @@ function parsePrExcel(data: any[][]): PrMaterialItem[] {
 
 // ── Match with inventory ───────────────────────────────────
 
-function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[]): Map<number, StockMatch> {
+// Build a dimension-based search key from a steel profile so the dedupe dialog
+// finds catalog codes regardless of the section letter (Thiết kế gọi "C", kho gọi "U")
+// and of formatting. e.g. "C100X50X5X7.5-12000L" → "100x50x5x7.5"
+function profileSearchKey(it?: PrMaterialItem): string {
+  if (!it) return ''
+  const p = (it.profile || '').toLowerCase().replace(/[×*]/g, 'x').split('-')[0].replace(/^[a-z]+/, '').trim()
+  return p || it.description || ''
+}
+
+// Map PR description keywords → material group codes for detail matching
+const PR_TYPE_TO_GROUP: [RegExp, string[]][] = [
+  [/t[oô]n\s*t[aấ]m|th[eé]p\s*t[aấ]m/i, ['1.1', '2.1']],
+  [/th[eé]p\s*h[iì]nh/i, ['1.2', '2.2']],
+  [/grating/i, ['3.1']],
+  [/inox/i, ['2.1', '2.2']],
+  [/th[eé]p\s*[oô]ng/i, ['1.5']],
+  [/th[eé]p\s*x[eẹ]p|flat\s*bar/i, ['1.3']],
+  [/m[aạ]\s*k[eẽ]m/i, ['1.4']],
+  [/bu\s*l[oô]ng|[eê]\s*cu/i, ['4.1']],
+  [/b[ií]ch|c[uú]t/i, ['4.2']],
+]
+
+// Normalize a dimension string for fuzzy comparison: lowercase, collapse whitespace, unify separators
+const normDim = (s: string) => s.toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x')
+
+// Extract numeric dimensions from a material name like "Thép tấm 10" or "Thép H252x203x8x13.5"
+function extractDimsFromName(name: string): number[] {
+  const nums: number[] = []
+  const cleaned = name.replace(/[×*]/g, 'x')
+  for (const m of cleaned.matchAll(/(\d+(?:\.\d+)?)/g)) {
+    const n = parseFloat(m[1])
+    if (n > 0 && n < 100000) nums.push(n)
+  }
+  return nums
+}
+
+function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[], codeResolved?: Map<string, ResolvedLite>): Map<number, StockMatch> {
   const matches = new Map<number, StockMatch>()
+  const toMatch = (inv: InventoryItem): StockMatch => ({
+    inventoryId: inv.id, inventoryCode: inv.materialCode, inventoryName: inv.name,
+    currentStock: Number(inv.currentStock), matched: true,
+  })
 
   for (let i = 0; i < items.length; i++) {
     const pr = items[i]
     const noMatch: StockMatch = { inventoryId: null, inventoryCode: null, inventoryName: null, currentStock: 0, matched: false }
 
-    // Strategy 1: exact materialCode match on profile
+    // Strategy 0: resolve by assigned canonical code — highest priority.
+    const resolved = pr.canonicalCode ? codeResolved?.get(pr.canonicalCode) : undefined
+    if (resolved) {
+      matches.set(i, { inventoryId: resolved.id, inventoryCode: resolved.materialCode, inventoryName: resolved.name, currentStock: resolved.currentStock, matched: true, viaCode: true })
+      continue
+    }
+
+    // Strategy 1: exact specification match on profile
     let inv = inventory.find(m =>
       m.specification?.trim().toLowerCase() === pr.profile.toLowerCase() &&
       m.unit.toLowerCase() === pr.unit.toLowerCase()
     )
-    // Strategy 2: materialCode contains profile key parts
+
+    // Strategy 2: profile key contained in specification/name
     if (!inv && pr.profile) {
-      const profileKey = pr.profile.split('-')[0].toLowerCase() // e.g. C100X50X5X7.5
-      inv = inventory.find(m =>
-        (m.specification || '').toLowerCase().includes(profileKey) ||
-        m.name.toLowerCase().includes(profileKey)
-      )
+      const profileKey = normDim(pr.profile.split('-')[0])
+      if (profileKey) {
+        inv = inventory.find(m =>
+          normDim(m.specification || '').includes(profileKey) ||
+          normDim(m.name).includes(profileKey)
+        )
+      }
     }
-    // Strategy 3: name similarity
+
+    // Strategy 3: detail matching by group + dimensions (from columns, NOT profile) + grade
+    if (!inv && (pr.thickness > 0 || pr.width > 0 || pr.length > 0)) {
+      const descAndProfile = `${pr.description} ${pr.profile} ${pr.grade}`.toLowerCase()
+      const candidateGroups: string[] = []
+      for (const [re, groups] of PR_TYPE_TO_GROUP) {
+        if (re.test(descAndProfile)) candidateGroups.push(...groups)
+      }
+
+      if (candidateGroups.length > 0) {
+        const gradeNorm = normDim(pr.grade || '')
+        const groupInv = inventory.filter(m =>
+          m.groupCode && candidateGroups.includes(m.groupCode)
+        )
+
+        let bestMatch: InventoryItem | null = null
+        let bestScore = 0
+
+        for (const m of groupInv) {
+          const dims = extractDimsFromName(m.name + ' ' + (m.specification || ''))
+          let score = 0
+
+          if (pr.thickness > 0 && dims.includes(pr.thickness)) score += 3
+          if (pr.width > 0 && dims.includes(pr.width)) score += 2
+          if (pr.length > 0 && dims.includes(pr.length)) score += 1
+          if (gradeNorm && normDim(m.name + ' ' + (m.specification || '') + ' ' + (m.grade || '')).includes(gradeNorm)) score += 2
+
+          if (score > bestScore) {
+            bestScore = score
+            bestMatch = m
+          }
+        }
+
+        if (bestMatch && bestScore >= 3) {
+          inv = bestMatch
+        }
+      }
+    }
+
+    // Strategy 4: name similarity
     if (!inv && pr.description) {
       const descLower = pr.description.toLowerCase()
       inv = inventory.find(m =>
@@ -205,17 +354,7 @@ function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[]): Ma
       )
     }
 
-    if (inv) {
-      matches.set(i, {
-        inventoryId: inv.id,
-        inventoryCode: inv.materialCode,
-        inventoryName: inv.name,
-        currentStock: Number(inv.currentStock),
-        matched: true,
-      })
-    } else {
-      matches.set(i, noMatch)
-    }
+    matches.set(i, inv ? toMatch(inv) : noMatch)
   }
 
   return matches
@@ -237,6 +376,11 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [uploading, setUploading] = useState(false)
+  // Newly assigned material codes for unmatched rows (globalIdx → code + provisional flag)
+  const [newCodes, setNewCodes] = useState<Map<number, { code: string; provisional: boolean }>>(new Map())
+  const [dialogIdx, setDialogIdx] = useState<number | null>(null)
+  // Codes resolved via API (canonical or old/alias) → canonical material
+  const [codeResolved, setCodeResolved] = useState<Map<string, ResolvedLite>>(new Map())
 
   // Fetch inventory on mount
   useEffect(() => {
@@ -249,12 +393,22 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
     })()
   }, [])
 
-  // Re-match when items or inventory change
+  // Resolve assigned codes (canonical + old aliases) whenever they change
+  const codesKey = items.map((i) => i.canonicalCode || '').join('|')
   useEffect(() => {
-    if (items.length > 0 && inventory.length > 0) {
-      setStockMatches(matchInventory(items, inventory))
+    const codes = items.map((i) => i.canonicalCode).filter(Boolean) as string[]
+    if (codes.length === 0) { setCodeResolved(new Map()); return }
+    let cancelled = false
+    resolveCodes(codes).then((m) => { if (!cancelled) setCodeResolved(m) })
+    return () => { cancelled = true }
+  }, [codesKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-match when items, inventory, or resolved codes change
+  useEffect(() => {
+    if (items.length > 0) {
+      setStockMatches(matchInventory(items, inventory, codeResolved))
     }
-  }, [items.length, inventory.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items.length, inventory.length, codeResolved]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-expand all categories on first load
   useEffect(() => {
@@ -305,22 +459,36 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
   // ── Export handler ────────────────────────────────────────
   const handleExport = useCallback(() => {
     if (items.length === 0) return
-    const headers = ['STT', 'Mã VT', 'Chi tiết', 'Vật tư (Profile)', 'Mác VL', 'ĐVT', 'Đ.Trọng', 'Số lượng', 'Khối lượng (Kg)', 'Nhóm', 'Tồn kho', 'Trạng thái']
+    const headers = ['STT', 'Ref PR', 'Mã VT', 'Chi tiết', 'Profile / Vật tư', 'Mác VL', 'Loại', 'Chiều dày (mm)', 'Chiều dài (mm)', 'Chiều rộng (mm)', 'ĐVT', 'Đ.Trọng', 'SL tịnh', 'KL tịnh', 'Đã dự trù (SL)', 'Đã dự trù (KL)', 'Lần này (SL)', 'Lần này (KL)', 'Tổng DT (SL)', 'Tổng DT (KL)', 'Nhóm', 'Tồn kho', 'Ngày cần hàng', 'Tiến độ mua', 'Mã kho', 'Trạng thái', 'Ghi chú']
     const rows = items.map((m, idx) => {
       const match = stockMatches.get(idx)
       return [
-        m.stt, m.description, m.profile, m.grade, m.unit, m.unitWeight || '',
-        m.quantity, m.weight, m.category,
+        idx + 1, m.stt, m.canonicalCode || '', m.description, m.profile, m.grade,
+        m.type || '', m.thickness || '', m.length || '', m.width || '',
+        m.unit, m.unitWeight || '',
+        m.netQty || '', m.netWeight || '', m.prevQty || '', m.prevWeight || '',
+        m.quantity, m.weight, m.totalQty || m.quantity, m.totalWeight || m.weight,
+        m.category,
         match?.matched ? match.currentStock : 0,
-        match?.matched ? 'Có trong kho' : 'Cần mua',
+        m.requiredDate || '',
+        (match?.matched && match.currentStock >= m.quantity) ? 'Đủ kho · xuất kho' : (m.procureStatus || ''),
+        match?.matched ? match.inventoryCode : '',
+        match?.matched ? 'Có trong kho' : (m.canonicalCode ? (m.provisionalCode ? 'Mã tạm' : 'Mã kho') : 'Chưa có mã'),
+        m.remarks || '',
       ]
     })
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
-    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 25 }, { wch: 35 }, { wch: 12 }, { wch: 6 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 12 }]
+    ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 28 }, { wch: 28 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 15 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'BOM-PR')
     XLSX.writeFile(wb, `BOM-PR_${projectCode || 'P2.1'}.xlsx`)
   }, [items, stockMatches, projectCode])
+
+  // ── Cập nhật 1 dòng (Ngày cần hàng / Tiến độ mua) ─────────
+  const patchItem = useCallback((globalIdx: number, patch: Partial<PrMaterialItem>) => {
+    const next = items.map((it, i) => (i === globalIdx ? { ...it, ...patch } : it))
+    onChange(JSON.stringify(next))
+  }, [items, onChange])
 
   // ── Remove data ───────────────────────────────────────────
   const handleClear = useCallback(() => {
@@ -367,6 +535,46 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
       return next
     })
   }
+
+  // ── Duplicate detection ────────────────────────────────────
+  // Group by description+profile+grade to find duplicates within the PR
+  const duplicateMap = useMemo(() => {
+    const map = new Map<string, number[]>()
+    items.forEach((item, idx) => {
+      const key = `${item.description}||${item.profile}||${item.grade}`.toLowerCase()
+      const existing = map.get(key) || []
+      existing.push(idx)
+      map.set(key, existing)
+    })
+    const dupes = new Map<number, { count: number; indices: number[] }>()
+    for (const [, indices] of map) {
+      if (indices.length > 1) {
+        for (const idx of indices) {
+          dupes.set(idx, { count: indices.length, indices })
+        }
+      }
+    }
+    return dupes
+  }, [items])
+
+  const duplicateGroups = useMemo(() => {
+    const seen = new Set<string>()
+    const groups: { description: string; profile: string; grade: string; count: number; totalQty: number; unit: string; indices: number[] }[] = []
+    items.forEach((item, idx) => {
+      const key = `${item.description}||${item.profile}||${item.grade}`.toLowerCase()
+      if (duplicateMap.has(idx) && !seen.has(key)) {
+        seen.add(key)
+        const info = duplicateMap.get(idx)!
+        const totalQty = info.indices.reduce((s, i) => s + items[i].quantity, 0)
+        groups.push({ description: item.description, profile: item.profile, grade: item.grade, count: info.count, totalQty, unit: item.unit, indices: info.indices })
+      }
+    })
+    return groups
+  }, [items, duplicateMap])
+
+  // ── Table header styles (shared) ────────────────────────
+  const thStyle: React.CSSProperties = { fontSize: '0.66rem', fontWeight: 700, color: '#fff', padding: '6px 5px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #163a5f' }
+  const thSubStyle: React.CSSProperties = { fontSize: '0.62rem', fontWeight: 600, color: '#93c5fd', padding: '4px 5px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '2px solid #163a5f' }
 
   // ══════════════════════════════════════════════════════════
   // RENDER
@@ -425,6 +633,43 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
           )}
         </div>
       </div>
+
+      {/* ── Duplicate Warning ─────────────────────────────── */}
+      {duplicateGroups.length > 0 && (
+        <div style={{ marginBottom: 16, padding: '14px 18px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+            <span style={{ fontWeight: 700, color: '#991b1b', fontSize: '0.85rem' }}>
+              Phát hiện {duplicateGroups.length} nhóm vật tư trùng lặp ({duplicateGroups.reduce((s, g) => s + g.count, 0)} dòng)
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {duplicateGroups.map((g, gi) => (
+              <div key={gi} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: '#fff', border: '1px solid #fde8e8' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                  ×{g.count}
+                </span>
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1a202c' }}>
+                  {g.description}
+                </span>
+                <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#475569' }}>
+                  {g.profile}
+                </span>
+                {g.grade && <span style={{ fontSize: '0.68rem', color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: 3 }}>{g.grade}</span>}
+                <span style={{ fontSize: '0.72rem', color: '#991b1b', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+                  Tổng: {fmtNum(g.totalQty, 2)} {g.unit}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: '#9ca3af' }}>
+                  (dòng {g.indices.map(i => i + 1).join(', ')})
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 8, fontSize: '0.72rem', color: '#b91c1c' }}>
+            Kiểm tra lại file PR: có thể trùng giữa các đợt dự trù hoặc nhầm profile.
+          </div>
+        </div>
+      )}
 
       {/* ── Summary Cards ─────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
@@ -500,24 +745,37 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
             {/* Category items */}
             {isExpanded && (
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 960 }}>
-                  <colgroup>
-                    <col style={{ width: 36 }} />
-                    <col style={{ width: 150 }} />
-                    <col style={{ width: '15%' }} />
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: 80 }} />
-                    <col style={{ width: 44 }} />
-                    <col style={{ width: 80 }} />
-                    <col style={{ width: 90 }} />
-                    <col style={{ width: 80 }} />
-                    <col style={{ width: 80 }} />
-                  </colgroup>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', minWidth: 1650 }}>
                   <thead>
-                    <tr style={{ background: 'var(--bg-tertiary, #f0f0f0)' }}>
-                      {['#', 'Mã VT', 'Chi tiết', 'Profile / Vật tư', 'Mác VL', 'ĐVT', 'Số lượng', 'KL (kg)', 'Tồn kho', 'Trạng thái'].map(h => (
-                        <th key={h} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', padding: '6px 8px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>{h}</th>
-                      ))}
+                    {/* Group header row */}
+                    <tr style={{ background: '#0a2540' }}>
+                      <th rowSpan={2} style={thStyle}>#</th>
+                      <th rowSpan={2} style={thStyle}>Mã VT</th>
+                      <th rowSpan={2} style={thStyle}>Chi tiết</th>
+                      <th rowSpan={2} style={thStyle}>Profile / Vật tư</th>
+                      <th rowSpan={2} style={thStyle}>Mác VL</th>
+                      <th rowSpan={2} style={{ ...thStyle, textAlign: 'center' }}>ĐVT</th>
+                      <th rowSpan={2} style={thStyle}>Đ.Trọng</th>
+                      <th colSpan={2} style={{ ...thStyle, textAlign: 'center', borderLeft: '1px solid #1e3a5f', background: '#163a5f' }}>SL tịnh (Net)</th>
+                      <th colSpan={2} style={{ ...thStyle, textAlign: 'center', borderLeft: '1px solid #1e3a5f', background: '#1a4a6f' }}>Đã dự trù (Prev)</th>
+                      <th colSpan={2} style={{ ...thStyle, textAlign: 'center', borderLeft: '1px solid #1e3a5f', background: '#0d4f8a' }}>Dự trù lần này</th>
+                      <th colSpan={2} style={{ ...thStyle, textAlign: 'center', borderLeft: '1px solid #1e3a5f', background: '#163a5f' }}>Tổng dự trù</th>
+                      <th rowSpan={2} style={{ ...thStyle, borderLeft: '1px solid #1e3a5f' }}>Tồn kho</th>
+                      <th rowSpan={2} style={{ ...thStyle, borderLeft: '1px solid #1e3a5f', background: '#0d4f8a' }}>Ngày cần hàng</th>
+                      <th rowSpan={2} style={{ ...thStyle, background: '#0d4f8a' }}>Tiến độ mua</th>
+                      <th rowSpan={2} style={thStyle}>Ghi chú</th>
+                      <th rowSpan={2} style={thStyle}>Trạng thái</th>
+                    </tr>
+                    {/* Sub header row */}
+                    <tr style={{ background: '#122d47' }}>
+                      <th style={{ ...thSubStyle, borderLeft: '1px solid #1e3a5f' }}>SL</th>
+                      <th style={thSubStyle}>KL (kg)</th>
+                      <th style={{ ...thSubStyle, borderLeft: '1px solid #1e3a5f' }}>SL</th>
+                      <th style={thSubStyle}>KL (kg)</th>
+                      <th style={{ ...thSubStyle, borderLeft: '1px solid #1e3a5f', color: '#fbbf24' }}>SL</th>
+                      <th style={{ ...thSubStyle, color: '#fbbf24' }}>KL (kg)</th>
+                      <th style={{ ...thSubStyle, borderLeft: '1px solid #1e3a5f' }}>SL</th>
+                      <th style={thSubStyle}>KL (kg)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -529,29 +787,133 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                       const cellPad = '5px 8px'
 
                       return (
-                        <tr key={item.stt} style={{ borderBottom: '1px solid var(--border)', background: catIdx % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                          <td style={{ padding: cellPad, color: 'var(--text-muted)', fontSize: '0.7rem' }}>{catIdx + 1}</td>
-                          <td style={{ padding: cellPad, fontFamily: 'monospace', fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)' }} title={item.stt}>{item.stt}</td>
-                          <td style={{ padding: cellPad, fontWeight: 600 }}>{item.description}</td>
-                          <td style={{ padding: cellPad, fontSize: '0.75rem', color: 'var(--text-secondary)' }} title={item.profile}>{item.profile}</td>
-                          <td style={{ padding: cellPad, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{item.grade}</td>
-                          <td style={{ padding: cellPad, fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center' }}>{item.unit}</td>
-                          <td style={{ padding: cellPad, fontWeight: 600, textAlign: 'right' }}>{fmtNum(item.quantity, 2)}</td>
-                          <td style={{ padding: cellPad, fontWeight: 600, textAlign: 'right', color: '#1e40af' }}>{item.weight > 0 ? fmtNum(item.weight, 1) : '—'}</td>
+                        <tr key={globalIdx} style={{ borderBottom: '1px solid var(--border)', background: duplicateMap.has(globalIdx) ? '#fef2f2' : catIdx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                          <td style={{ padding: cellPad, color: 'var(--text-muted)', fontSize: '0.68rem', textAlign: 'center' }}>{catIdx + 1}</td>
+                          <td style={{ padding: cellPad, minWidth: 140 }}>
+                            {newCodes.has(globalIdx) ? (() => {
+                              const nc = newCodes.get(globalIdx)!
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
+                                  <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', whiteSpace: 'nowrap',
+                                    background: nc.provisional ? '#e0e7ff' : '#dcfce7', color: nc.provisional ? '#3730a3' : '#166534' }}>
+                                    {nc.code}
+                                  </span>
+                                  <span style={{ fontSize: '0.6rem', color: nc.provisional ? '#6366f1' : '#166534' }}>
+                                    {nc.provisional ? 'Mã tạm — chờ chuẩn hóa' : 'Mã kho'}
+                                  </span>
+                                </div>
+                              )
+                            })() : item.canonicalCode ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
+                                <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', whiteSpace: 'nowrap',
+                                  background: item.provisionalCode ? '#e0e7ff' : '#dcfce7', color: item.provisionalCode ? '#3730a3' : '#166534' }}>
+                                  {item.canonicalCode}
+                                </span>
+                                <span style={{ fontSize: '0.6rem', color: item.provisionalCode ? '#6366f1' : '#166534' }}>
+                                  {item.provisionalCode ? 'Mã tạm — chờ chuẩn hóa' : 'Mã kho'}
+                                </span>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+                                <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: '#f3f4f6', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                                  Chưa có mã
+                                </span>
+                                {isEditable && (
+                                  <button type="button" onClick={() => setDialogIdx(globalIdx)}
+                                    style={{ padding: '2px 8px', fontSize: '0.65rem', background: '#0a2540', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                    + Tạo / gán mã
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                            {duplicateMap.has(globalIdx) && (
+                              <span style={{ display: 'inline-block', marginTop: 2, fontSize: '0.6rem', fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '0 4px', borderRadius: 3 }}
+                                title={`Trùng ${duplicateMap.get(globalIdx)!.count} dòng`}>
+                                TRÙNG
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: cellPad, fontWeight: 600, fontSize: '0.75rem' }}>{item.description}</td>
+                          <td style={{ padding: cellPad, fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                            {item.profile}{item.type ? ` · ${item.type}` : ''}
+                            {(item.thickness > 0 || item.length > 0 || item.width > 0) && (
+                              <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#64748b', marginTop: 2 }}
+                                title="dày × rộng × dài (mm)">
+                                {[item.thickness, item.width, item.length].filter(v => v > 0).join('×')}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: cellPad, fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{item.grade}</td>
+                          <td style={{ padding: cellPad, fontSize: '0.72rem', color: 'var(--text-secondary)', textAlign: 'center' }}>{item.unit}</td>
+                          <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.unitWeight > 0 ? fmtNum(item.unitWeight, 2) : '—'}</td>
+                          {/* Net Qty + Weight */}
+                          <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', color: 'var(--text-muted)', borderLeft: '1px solid var(--border)' }}>{item.netQty > 0 ? fmtNum(item.netQty, 2) : '—'}</td>
+                          <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.netWeight > 0 ? fmtNum(item.netWeight, 1) : '—'}</td>
+                          {/* Previous Qty + Weight */}
+                          <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', color: '#9ca3af', borderLeft: '1px solid var(--border)' }}>{item.prevQty > 0 ? fmtNum(item.prevQty, 2) : '—'}</td>
+                          <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', color: '#9ca3af' }}>{item.prevWeight > 0 ? fmtNum(item.prevWeight, 1) : '—'}</td>
+                          {/* Current Qty + Weight (highlighted) */}
+                          <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 700, color: '#0a2540', borderLeft: '1px solid var(--border)' }}>{fmtNum(item.quantity, 2)}</td>
+                          <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 700, color: '#1e40af' }}>{item.weight > 0 ? fmtNum(item.weight, 1) : '—'}</td>
+                          {/* Total Qty + Weight */}
+                          <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', borderLeft: '1px solid var(--border)' }}>{item.totalQty > 0 ? fmtNum(item.totalQty, 2) : fmtNum(item.quantity, 2)}</td>
+                          <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{item.totalWeight > 0 ? fmtNum(item.totalWeight, 1) : (item.weight > 0 ? fmtNum(item.weight, 1) : '—')}</td>
                           <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 600, color: hasStock ? '#16a34a' : '#9ca3af' }}>
                             {match?.matched ? (
                               <span title={`${match.inventoryCode} — ${match.inventoryName}`}>{fmtNum(match.currentStock, 0)}</span>
                             ) : '—'}
                           </td>
-                          <td style={{ padding: cellPad, textAlign: 'center' }}>
-                            <span style={{
-                              fontSize: '0.7rem', fontWeight: 700,
-                              padding: '2px 8px', borderRadius: 6, display: 'inline-block',
-                              background: stockSufficient ? '#dcfce7' : match?.matched ? '#fef9c3' : '#fee2e2',
-                              color: stockSufficient ? '#166534' : match?.matched ? '#854d0e' : '#991b1b',
-                            }}>
-                              {stockSufficient ? 'Đủ kho' : match?.matched ? 'Thiếu' : 'Cần mua'}
-                            </span>
+                          {/* Ngày cần hàng về (PM điền để theo dõi tiến độ mua) */}
+                          <td style={{ padding: cellPad, borderLeft: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
+                            {isEditable
+                              ? <input type="date" value={item.requiredDate || ''} onChange={(e) => patchItem(globalIdx, { requiredDate: e.target.value })} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }} />
+                              : <span style={{ fontSize: '0.7rem', color: item.requiredDate ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{item.requiredDate ? new Date(item.requiredDate).toLocaleDateString('vi-VN') : '—'}</span>}
+                          </td>
+                          {/* Tiến độ mua — tự xử lý theo tồn kho */}
+                          <td style={{ padding: cellPad, whiteSpace: 'nowrap' }}>
+                            {(() => {
+                              // Đủ kho → không cần mua
+                              if (match?.matched && stockSufficient) {
+                                return <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>✓ Đủ kho · xuất kho</span>
+                              }
+                              const need = match?.matched ? Math.max(0, item.quantity - match.currentStock) : item.quantity
+                              const partial = !!(match?.matched && match.currentStock > 0)
+                              const stt = item.procureStatus || ''
+                              const cmap: Record<string, { c: string; b: string }> = { 'Đã về': { c: '#166534', b: '#dcfce7' }, 'Đang mua': { c: '#854d0e', b: '#fef9c3' }, 'Chưa mua': { c: '#991b1b', b: '#fee2e2' } }
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {partial && <span style={{ fontSize: '0.6rem', color: '#854d0e' }}>Kho {fmtNum(match!.currentStock, 0)} · mua {fmtNum(need, 1)}</span>}
+                                  {isEditable ? (
+                                    <select value={stt} onChange={(e) => patchItem(globalIdx, { procureStatus: e.target.value })} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }}>
+                                      <option value="">{partial ? '— mua phần thiếu —' : '— cần mua —'}</option><option>Chưa mua</option><option>Đang mua</option><option>Đã về</option>
+                                    </select>
+                                  ) : (cmap[stt] ? <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: cmap[stt].b, color: cmap[stt].c }}>{stt}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>)}
+                                </div>
+                              )
+                            })()}
+                          </td>
+                          <td style={{ padding: cellPad, fontSize: '0.68rem', color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.remarks}>{item.remarks || '—'}</td>
+                          <td style={{ padding: cellPad }}>
+                            {match?.matched ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <span style={{
+                                  fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                                  background: stockSufficient ? '#dcfce7' : '#fef9c3',
+                                  color: stockSufficient ? '#166534' : '#854d0e',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {stockSufficient ? 'Đủ kho' : 'Thiếu'}
+                                </span>
+                                <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 600, color: '#0a2540', whiteSpace: 'nowrap' }}
+                                  title={`${match.inventoryCode} — ${match.inventoryName}`}>
+                                  {match.inventoryCode}
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#fee2e2', color: '#991b1b', whiteSpace: 'nowrap' }}>
+                                Chưa khớp kho
+                              </span>
+                            )}
                           </td>
                         </tr>
                       )
@@ -570,6 +932,23 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
         Khớp kho: <strong>{matchedTypes}</strong> | Cần mua: <strong>{unmatchedTypes}</strong>
         {search && <span style={{ marginLeft: 8 }}> | Đang lọc: {filteredItems.length} kết quả</span>}
       </div>
+
+      <QuickCreateMaterialDialog
+        open={dialogIdx !== null}
+        initialName={dialogIdx !== null ? [items[dialogIdx]?.description, items[dialogIdx]?.profile].filter(Boolean).join(' ') : ''}
+        initialUnit={dialogIdx !== null ? items[dialogIdx]?.unit : ''}
+        initialSpec={dialogIdx !== null ? (items[dialogIdx]?.grade || items[dialogIdx]?.profile) : ''}
+        initialSearch={dialogIdx !== null ? profileSearchKey(items[dialogIdx]) : ''}
+        defaultPrefix="VLC"
+        onClose={() => setDialogIdx(null)}
+        onPicked={(m) => {
+          if (dialogIdx === null) return
+          const provisional = !!m.isProvisional
+          setNewCodes((prev) => new Map(prev).set(dialogIdx, { code: m.materialCode, provisional }))
+          const updated = items.map((it, i) => i === dialogIdx ? { ...it, canonicalCode: m.materialCode, materialId: m.id, provisionalCode: provisional || undefined } : it)
+          onChange(JSON.stringify(updated))
+        }}
+      />
     </div>
   )
 }

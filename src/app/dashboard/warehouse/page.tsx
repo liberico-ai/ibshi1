@@ -14,17 +14,21 @@ interface Material {
   category: string; specification: string; grade: string;
   minStock: number; currentStock: number; reservedStock: number; availableStock: number;
   unitPrice: number | null; currency: string; lowStock: boolean;
+  projects?: string[]; projectCount?: number;
 }
 
 interface PaginationData { page: number; limit: number; total: number; totalPages: number }
 
 const CATEGORIES = [
   { value: '', label: 'Tất cả' },
-  { value: 'VLC', label: 'Thép' },
-  { value: 'VLP', label: 'Ống/Van' },
-  { value: 'BL', label: 'Bu-lông' },
-  { value: 'VTS', label: 'Sơn' },
-  { value: 'VLH', label: 'Que hàn' },
+  { value: 'thép', label: 'Thép' },
+  { value: 'bu lông', label: 'Bu-lông' },
+  { value: 'inox', label: 'Inox' },
+  { value: 'grating', label: 'Grating' },
+  { value: 'sơn', label: 'Sơn' },
+  { value: 'hàn', label: 'Que hàn' },
+  { value: 'bảo hộ', label: 'Bảo hộ' },
+  { value: 'máy', label: 'Máy/TB' },
 ]
 
 interface WarehouseStats {
@@ -127,40 +131,72 @@ export default function WarehousePage() {
       </div>
 
       {/* Materials table */}
-      <div className="card overflow-hidden">
-        <table className="data-table">
+      <div className="card overflow-hidden" style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: 1100 }}>
+          <colgroup>
+            <col style={{ width: 115 }} />
+            <col />
+            <col style={{ width: 145 }} />
+            <col style={{ width: 110 }} />
+            <col style={{ width: 75 }} />
+            <col style={{ width: 36 }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: 44 }} />
+            <col style={{ width: 20 }} />
+          </colgroup>
           <thead>
-            <tr>
-              <th>Mã VT</th><th>Tên vật tư</th><th>Spec / Grade</th><th>Danh mục</th>
-              <th className="text-right">Tồn kho</th><th className="text-right">Khả dụng</th><th>ĐVT</th>
-              <th className="text-right">Đơn giá</th><th>Trạng thái</th><th></th>
+            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+              {[
+                { label: 'Mã VT', align: 'left' as const },
+                { label: 'Tên vật tư', align: 'left' as const },
+                { label: 'Profile', align: 'left' as const },
+                { label: 'Mác', align: 'left' as const },
+                { label: 'Dự án', align: 'left' as const },
+                { label: 'ĐVT', align: 'center' as const },
+                { label: 'Tồn kho', align: 'right' as const },
+                { label: 'Đơn giá', align: 'right' as const },
+                { label: '', align: 'center' as const },
+                { label: '', align: 'left' as const },
+              ].map((h, i) => (
+                <th key={i} style={{ color: '#64748b', fontSize: '0.68rem', fontWeight: 600, padding: '7px 8px', letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: h.align, whiteSpace: 'nowrap' }}>{h.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {materials.map((m) => (
-              <tr key={m.id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => router.push(`/dashboard/warehouse/${m.id}`)}>
-                <td><span className="font-mono text-xs font-semibold" style={{ color: 'var(--accent)' }}>{m.materialCode}</span></td>
-                <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{m.name}</td>
-                <td><span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{m.specification}{m.grade ? ` ${m.grade}` : ''}</span></td>
-                <td><span className="badge" style={{ background: 'var(--ibs-navy-50)', color: 'var(--ibs-navy)', borderColor: 'var(--ibs-navy-100)', borderWidth: '1px' }}>{CATEGORIES.find(c => c.value === m.category)?.label || m.category}</span></td>
-                <td className="text-right font-semibold" style={{ color: m.lowStock ? '#dc2626' : 'var(--text-primary)' }}>{m.currentStock.toLocaleString()}</td>
-                <td className="text-right" style={{ color: m.reservedStock > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>{m.availableStock.toLocaleString()}</td>
-                <td style={{ color: 'var(--text-muted)' }}>{m.unit}</td>
-                <td className="text-right" style={{ color: 'var(--text-secondary)' }}>{m.unitPrice ? formatCurrency(m.unitPrice, m.currency) : '-'}</td>
-                <td>
+            {materials.map((m, idx) => (
+              <tr key={m.id} className="cursor-pointer hover:bg-blue-50/40 transition-colors" style={{ borderTop: '1px solid #f1f5f9', background: idx % 2 === 1 ? '#fafbfc' : '#fff' }} onClick={() => router.push(`/dashboard/warehouse/${m.id}`)}>
+                <td style={{ padding: '8px 8px' }}><span className="font-mono text-[11px] font-bold" style={{ color: '#e63946' }}>{m.materialCode}</span></td>
+                <td style={{ padding: '8px 8px', color: '#1a202c', fontWeight: 500, fontSize: '0.82rem' }}>{m.name}</td>
+                <td style={{ padding: '8px 8px' }}>
+                  {m.specification ? <span className="font-mono text-[11px] font-semibold" style={{ color: '#0a2540' }}>{m.specification}</span> : null}
+                </td>
+                <td style={{ padding: '8px 8px' }}>
+                  {m.grade ? <span className="text-[11px] font-medium" style={{ color: '#475569', whiteSpace: 'nowrap' }}>{m.grade}</span> : null}
+                </td>
+                <td style={{ padding: '8px 8px' }}>
+                  {(m.projects && m.projects.length > 0) ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {m.projects.slice(0, 2).map((p) => (
+                        <span key={p} style={{ display: 'inline-block', fontSize: '0.7rem', fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: '#0a2540', color: '#fff', whiteSpace: 'nowrap' }}>{p}</span>
+                      ))}
+                      {m.projects.length > 2 && <span style={{ fontSize: '0.65rem', color: '#64748b' }}>+{m.projects.length - 2} DA</span>}
+                    </div>
+                  ) : <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Chung</span>}
+                </td>
+                <td style={{ padding: '8px 4px', textAlign: 'center', color: '#94a3b8', fontSize: '0.75rem' }}>{m.unit}</td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, fontSize: '0.85rem', fontVariantNumeric: 'tabular-nums', color: m.lowStock ? '#dc2626' : '#0f172a' }}>{m.currentStock.toLocaleString('vi-VN')}</td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', color: '#64748b', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
+                  {m.unitPrice ? `${Math.round(Number(m.unitPrice)).toLocaleString('vi-VN')} đ` : ''}
+                </td>
+                <td style={{ padding: '8px 4px', textAlign: 'center' }}>
                   {m.minStock >= 0 ? (
-                    <span className="badge" style={{
-                      background: m.lowStock ? '#fef2f2' : '#f0fdf4',
-                      color: m.lowStock ? '#dc2626' : '#16a34a',
-                      borderColor: m.lowStock ? '#fecaca' : '#bbf7d0', borderWidth: '1px',
-                    }}>{m.lowStock ? '⚠ Thiếu hàng' : '✓ Đủ'}</span>
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)' }}>-</span>
-                  )}
+                    <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: 99, fontWeight: 600, background: m.lowStock ? '#fef2f2' : '#ecfdf5', color: m.lowStock ? '#dc2626' : '#059669', whiteSpace: 'nowrap' }}>
+                      {m.lowStock ? 'Thiếu' : '✓ Đủ'}
+                    </span>
+                  ) : null}
                 </td>
-                <td>
-                  <ChevronRight size={16} stroke="var(--text-muted)" />
-                </td>
+                <td style={{ padding: '8px 2px' }}><ChevronRight size={13} stroke="#cbd5e1" /></td>
               </tr>
             ))}
             {materials.length === 0 && (

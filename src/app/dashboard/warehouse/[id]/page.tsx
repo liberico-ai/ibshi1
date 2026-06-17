@@ -10,6 +10,11 @@ interface Material {
   category: string; minStock: number; currentStock: number;
   unitPrice: number | null; currency: string;
   stockMovements: Movement[];
+  stocks?: StockLoc[];
+}
+
+interface StockLoc {
+  warehouseCode: string; warehouseName: string; projectCode: string | null; kind: string; quantity: number; value: number;
 }
 
 interface Movement {
@@ -86,6 +91,44 @@ export default function WarehouseDetailPage() {
           <div><span className="text-xs" style={{ color: 'var(--text-muted)' }}>Đơn giá</span><p className="font-medium" style={{ color: 'var(--text-primary)' }}>{material.unitPrice ? formatCurrency(material.unitPrice, material.currency) : '—'}</p></div>
           <div><span className="text-xs" style={{ color: 'var(--text-muted)' }}>Tổng giao dịch</span><p className="font-medium" style={{ color: 'var(--text-primary)' }}>{material.stockMovements.length}</p></div>
         </div>
+      </div>
+
+      {/* Tồn theo dự án / kho */}
+      <div className="card p-5">
+        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+          Tồn theo dự án / kho {material.stocks ? `(${material.stocks.length})` : ''}
+        </h3>
+        {material.stocks && material.stocks.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: 'var(--bg-secondary)' }}>
+                  {['Kho', 'Dự án', 'SL tồn', 'Giá trị'].map((h) => (
+                    <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {material.stocks.map((s, i) => (
+                  <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td className="px-3 py-2" style={{ color: 'var(--text-primary)' }} title={s.warehouseName}>
+                      <span className="font-mono text-xs">{s.warehouseCode}</span> <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.warehouseName}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {s.projectCode
+                        ? <span className="badge" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe', borderWidth: '1px' }}>{s.projectCode}</span>
+                        : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.kind === 'CONSIGNED' ? 'KH cấp' : 'Kho chung (chưa gắn DA)'}</span>}
+                    </td>
+                    <td className="px-3 py-2 font-semibold" style={{ color: 'var(--text-primary)' }}>{s.quantity.toLocaleString('vi-VN')}</td>
+                    <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{s.value ? formatCurrency(s.value, material.currency) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Chưa có dữ liệu tồn theo kho.</div>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-6">

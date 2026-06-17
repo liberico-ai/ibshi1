@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiFetch } from '@/hooks/useAuth'
-import { PRODUCT_TYPES } from '@/lib/constants'
+import { PRODUCT_TYPES, PROJECT_TYPES } from '@/lib/constants'
 import { formatCurrency, getProgressColor } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Badge, Button } from '@/components/ui'
@@ -149,8 +149,10 @@ export default function ProjectsPage() {
 function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCreated: (p: Project) => void }) {
   const [form, setForm] = useState({
     projectCode: '', projectName: '', clientName: '', productType: 'pressure_vessel',
+    projectType: 'EXTERNAL_PROD',
     contractValue: '', currency: 'VND', description: '', startDate: '', endDate: '',
   })
+  const isProduction = form.projectType === 'EXTERNAL_PROD' || form.projectType === 'INTERNAL_PROD'
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [draftId] = useState(() => `draft-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
@@ -183,6 +185,12 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
           <input className="input" placeholder="Tên dự án" value={form.projectName} onChange={(e) => setForm({ ...form, projectName: e.target.value })} required /></div>
         <div className="input-field"><label className="input-label">Khách hàng *</label>
           <input className="input" placeholder="Tên khách hàng" value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} required /></div>
+        <div className="input-field"><label className="input-label">Loại dự án *</label>
+          <select className="input" value={form.projectType} onChange={(e) => setForm({ ...form, projectType: e.target.value })}>
+            {PROJECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{isProduction ? 'Phòng được gợi ý theo quy trình SX khi tạo việc (tự tạo, không sinh sẵn).' : 'Dự án không sản xuất — tự tạo việc khi cần.'}</span>
+        </div>
         <div className="input-field"><label className="input-label">Loại sản phẩm *</label>
           <select className="input" value={form.productType} onChange={(e) => setForm({ ...form, productType: e.target.value })}>
             {PRODUCT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -205,7 +213,7 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
         {/* ── Đính kèm tài liệu (upload ngay vào temp, link khi tạo DA) ── */}
         <div className="md:col-span-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)', marginTop: 4 }}>
           <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
-            📎 Đính kèm tài liệu <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(tuỳ chọn — không giới hạn định dạng)</span>
+            📎 Tài liệu ban đầu <span style={{ fontWeight: 400, color: isProduction ? 'var(--danger)' : 'var(--text-muted)' }}>{isProduction ? '(nên có với dự án sản xuất)' : '(tuỳ chọn)'}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <MultiFileUpload label="RFQ / Inquiry" entityType="ProjectDraft" entityId={`${draftId}_rfq`} compact />

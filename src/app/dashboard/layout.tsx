@@ -14,7 +14,7 @@ import {
   CalendarCheck, Building2, Bell, ScrollText, FileInput, FileOutput, PackageCheck,
   Wrench, FileSpreadsheet, PackageMinus, SearchCheck, FileSignature, Contact,
   Settings, Hammer, BarChart, FileText, TestTube, FolderCheck, Calculator, Truck,
-  LogOut, ChevronDown, ChevronLeft, AlertCircle,
+  LogOut, ChevronDown, ChevronLeft, AlertCircle, Barcode, Inbox,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -28,6 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [taskCount, setTaskCount] = useState(0)
   const [p45TaskCount, setP45TaskCount] = useState(0)
   const [paymentCount, setPaymentCount] = useState(0)
+  const [meetingInviteCount, setMeetingInviteCount] = useState(0)
 
   useEffect(() => {
     hydrate()
@@ -45,12 +46,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!ready || !isAuthenticated) return
     const isAccountant = user?.roleCode === 'R08' || user?.roleCode === 'R08a'
     const fetchCount = () => {
-      apiFetch('/api/tasks').then(res => {
+      apiFetch('/api/work/inbox?tab=assigned').then(res => {
         if (res.ok) {
-          const allTasks = res.tasks || []
-          const p45 = allTasks.filter((t: any) => t.stepCode === 'P4.5').length
-          setTaskCount(allTasks.length - p45)
-          setP45TaskCount(p45)
+          const tasks = res.tasks || []
+          setTaskCount(tasks.length)
+          setP45TaskCount(0)
+        }
+      })
+      apiFetch('/api/work/meetings').then(res => {
+        if (res.ok) {
+          const meetings = res.meetings || []
+          const pending = meetings.filter((m: any) => m.myStatus === 'INVITED').length
+          setMeetingInviteCount(pending)
         }
       })
       // Accountants: count POs awaiting payment (status APPROVED) for the Thanh toán badge
@@ -68,7 +75,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const roleCode = user?.roleCode || 'R01'
   const roleName = ROLES[roleCode as keyof typeof ROLES]?.name || roleCode
 
+  // [ẨN tạm các menu gắn luồng 36 bước cũ để test hệ động — xóa Set này để bật lại]
+  const HIDDEN_MENU_KEYS = new Set<string>([
+    'design', 'bom', 'drawings', 'eco',                                   // Thiết kế (bước cũ)
+    'procurement', 'purchase-requests', 'purchase-orders', 'grn', 'material-issue', 'movements', // Mua hàng/PR/PO/GRN
+    'production', 'jobcards', 'workshops', 'delivery',                    // Sản xuất
+    'qc', 'inspections', 'itp', 'ncr', 'certificates', 'mill-certs', 'fat-sat', 'mrb', // QC
+  ])
   const filteredMenu = MENU_ITEMS.filter((item) => {
+    if (HIDDEN_MENU_KEYS.has(item.key)) return false
     if (item.roles === 'all') return true
     return (item.roles as readonly string[]).includes(roleCode)
   })
@@ -183,7 +198,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         >
                           <span style={{ position: 'relative', display: 'inline-flex' }}>
                             <MenuIcon name={item.icon} />
-                            {item.key === 'tasks' && taskCount > 0 && sidebarCollapsed && (
+                            {item.key === 'work' && taskCount > 0 && sidebarCollapsed && (
                               <span style={{
                                 position: 'absolute', top: -6, right: -8,
                                 minWidth: 16, height: 16, borderRadius: 8,
@@ -192,6 +207,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 padding: '0 4px', lineHeight: 1,
                               }}>{taskCount > 99 ? '99+' : taskCount}</span>
+                            )}
+                            {item.key === 'work-meetings' && meetingInviteCount > 0 && sidebarCollapsed && (
+                              <span style={{
+                                position: 'absolute', top: -6, right: -8,
+                                minWidth: 16, height: 16, borderRadius: 8,
+                                background: '#f59e0b', color: 'white',
+                                fontSize: 10, fontWeight: 700,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                padding: '0 4px', lineHeight: 1,
+                              }}>{meetingInviteCount}</span>
                             )}
                             {item.key === 'material-issue' && p45TaskCount > 0 && sidebarCollapsed && (
                               <span style={{
@@ -217,7 +242,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           {!sidebarCollapsed && (
                             <>
                               <span>{item.label}</span>
-                              {item.key === 'tasks' && taskCount > 0 && (
+                              {item.key === 'work' && taskCount > 0 && (
                                 <span style={{
                                   marginLeft: 'auto',
                                   minWidth: 20, height: 20, borderRadius: 10,
@@ -246,6 +271,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   padding: '0 6px', lineHeight: 1,
                                 }}>{paymentCount > 99 ? '99+' : paymentCount}</span>
+                              )}
+                              {item.key === 'work-meetings' && meetingInviteCount > 0 && (
+                                <span style={{
+                                  marginLeft: 'auto',
+                                  minWidth: 20, height: 20, borderRadius: 10,
+                                  background: '#f59e0b', color: 'white',
+                                  fontSize: 11, fontWeight: 700,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  padding: '0 6px', lineHeight: 1,
+                                }}>{meetingInviteCount}</span>
                               )}
                             </>
                           )}
@@ -311,7 +346,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }}>
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-heading)' }}>
-              {filteredMenu.find((m) => m.href === pathname)?.label || 'Dashboard'}
+              {/* khớp chính xác, nếu không thì khớp tiền tố dài nhất (cho trang chi tiết) */}
+              {filteredMenu.find((m) => m.href === pathname)?.label
+                || filteredMenu.filter((m) => m.href !== '/dashboard' && pathname.startsWith(m.href)).sort((a, b) => b.href.length - a.href.length)[0]?.label
+                || 'Bảng điều khiển'}
             </h2>
           </div>
 
@@ -343,7 +381,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   CreditCard, PieChart, Target, Handshake, BookOpen, Ruler, HardHat, Clock,
   CalendarCheck, Building2, Bell, ScrollText, FileInput, FileOutput, PackageCheck,
   Wrench, FileSpreadsheet, PackageMinus, SearchCheck, FileSignature, Contact,
-  Settings, Hammer, BarChart, FileText, TestTube, FolderCheck, Calculator, Truck,
+  Settings, Hammer, BarChart, FileText, TestTube, FolderCheck, Calculator, Truck, Barcode, Inbox,
 }
 
 function MenuIcon({ name }: { name: string }) {

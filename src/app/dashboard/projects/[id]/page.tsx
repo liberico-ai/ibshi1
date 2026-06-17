@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
+import { ROLES } from '@/lib/constants'
 import { getStepFormConfig } from '@/lib/step-form-configs'
 import { getStatusBg, formatDate, formatCurrency } from '@/lib/utils'
 
@@ -383,26 +384,30 @@ function TaskRow({ task, isLast, onCompleteClick, onRejectClick, onAssignClick, 
         {task.stepName}
       </span>
 
-      <span className="text-xs hidden md:block w-48 truncate flex items-center" style={{ color: 'var(--text-muted)' }}>
-        <span className="font-mono text-[10px] mr-1 px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800" style={{ color: 'var(--text-primary)' }}>{task.assignedRole}</span>
-        <span className="truncate flex-1">
+      <div className="hidden md:flex items-center gap-2 w-72 flex-shrink-0 justify-end">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border" style={{ borderColor: '#e2e8f0', backgroundColor: '#f8fafc', color: '#0a2540' }}>
+          <span className="font-mono opacity-60">{task.assignedRole}</span>
+          <span className="mx-0.5 opacity-30">|</span>
+          <span>{(ROLES as Record<string, { name: string }>)[task.assignedRole]?.name || task.assignedRole}</span>
+        </span>
+        <span className="text-xs truncate max-w-[100px]" style={{ color: 'var(--text-muted)' }}>
           {task.assignee ? (
-            <span>{task.assignee.fullName}</span>
+            <span style={{ color: 'var(--text-primary)' }}>{task.assignee.fullName}</span>
           ) : (
-            <span className="italic opacity-60">Chưa phân công</span>
+            <span className="italic opacity-50">Chưa phân công</span>
           )}
         </span>
         {hasAssignPerm(task) && task.status !== 'DONE' && task.status !== 'REJECTED' && (
           <button
             onClick={(e) => { e.stopPropagation(); onAssignClick(task); }}
-            className="ml-2 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+            className="flex items-center justify-center rounded hover:bg-slate-200 transition w-6 h-6"
             title="Phân công công việc"
-            style={{ padding: '2px 4px', fontSize: '12px' }}
+            style={{ fontSize: '12px' }}
           >
             👤
           </button>
         )}
-      </span>
+      </div>
 
       {task.status === 'IN_PROGRESS' && (
         currentUserRole && (currentUserRole === task.assignedRole || currentUserRole === 'R00') ? (

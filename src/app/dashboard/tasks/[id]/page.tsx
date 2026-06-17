@@ -9,6 +9,8 @@ import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
 import BomPrUploadUI from './components/BomPrUploadUI'
 import WeldPaintUploadUI from './components/WeldPaintUploadUI'
+import QuickCreateMaterialDialog from './components/QuickCreateMaterialDialog'
+import { resolveCodes } from './components/material-resolve-client'
 import DailyProductionUI from './components/DailyProductionUI'
 import WeeklyAcceptanceUI from './components/WeeklyAcceptanceUI'
 import QualityAcceptanceUI from './components/QualityAcceptanceUI'
@@ -1390,6 +1392,7 @@ export default function TaskDetailPage() {
   const [milestones, setMilestones] = useState<{ name: string; startDate: string; endDate: string; assigneeId: string }[]>([])
   const emptyBomItem = { name: '', code: '', spec: '', quantity: '', unit: '' }
   const [bomItems, setBomItems] = useState<{ name: string; code: string; spec: string; quantity: string; unit: string }[]>([{ ...emptyBomItem }, { ...emptyBomItem }, { ...emptyBomItem }])
+  const [p23CodeDialogIdx, setP23CodeDialogIdx] = useState<number | null>(null)
   const emptyWoItem = { costCode: '', content: '', jobCode: '', typeCode: '', unit: '', qty1: '', qty2: '', totalQty: '', startDate: '', endDate: '' }
   const [woItems, setWoItems] = useState<{ costCode: string; content: string; jobCode: string; typeCode: string; unit: string; qty1: string; qty2: string; totalQty: string; startDate: string; endDate: string }[]>([{ ...emptyWoItem }])
   // P3.5 supplier entries
@@ -1907,6 +1910,41 @@ export default function TaskDetailPage() {
       }
       if (paintUploaded && !checklistState['paint_spec_checked']) {
         setError('Vui lòng xác nhận: Đã kiểm tra quy chuẩn vật tư sơn')
+        setSubmitting(false)
+        return
+      }
+    }
+
+    // ── Gate (B): block loose/unknown material codes from flowing downstream ──
+    // For P2.1/P2.2/P2.3 every PR line must be linked to a canonical material:
+    // either already linked (canonicalCode), resolvable by its code/old-alias,
+    // or matched to existing inventory by name. Truly-new rows must get a code first.
+    if (action === 'complete' && ['P2.1', 'P2.2', 'P2.3'].includes(task.stepCode)) {
+      const parseArr = (raw: unknown): Record<string, unknown>[] => {
+        try { const v = typeof raw === 'string' ? JSON.parse(raw) : raw; return Array.isArray(v) ? v : [] } catch { return [] }
+      }
+      let rows: Record<string, unknown>[] = []
+      if (task.stepCode === 'P2.1') rows = parseArr(formData['bomPrItems'])
+      else if (task.stepCode === 'P2.2') rows = [...parseArr(formData['weldPrItems']), ...parseArr(formData['paintPrItems'])]
+      else rows = bomItems as unknown as Record<string, unknown>[]
+
+      const named = rows.filter(r => String(r.name || r.description || '').trim())
+      const codes = named.flatMap(r => [r.canonicalCode, r.code, r.stt].filter(Boolean).map(String))
+      const resolved = codes.length > 0 ? await resolveCodes(codes) : new Map()
+      const invNames = inventoryMaterials.map(m => (m.name || '').toLowerCase())
+
+      const unresolved = named.filter(r => {
+        if (r.canonicalCode || r.materialId) return false
+        const code = [r.canonicalCode, r.code, r.stt].filter(Boolean).map(String).find(c => resolved.has(c))
+        if (code) return false
+        const nl = String(r.name || r.description || '').trim().toLowerCase()
+        const nameMatch = invNames.some(n => n && (n === nl || n.includes(nl) || nl.includes(n)))
+        return !nameMatch
+      }).map(r => String(r.name || r.description || ''))
+
+      if (unresolved.length > 0) {
+        const sample = unresolved.slice(0, 3).join(', ')
+        setError(`${unresolved.length} vật tư chưa gắn mã chuẩn (vd: ${sample}${unresolved.length > 3 ? '…' : ''}). Dùng nút "Chọn/Tạo mã" để tra mã cũ hoặc tạo mã mới trước khi hoàn thành.`)
         setSubmitting(false)
         return
       }
@@ -5194,8 +5232,15 @@ export default function TaskDetailPage() {
                     <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{idx + 1}</span>
                     <input className="input" placeholder="Tên vật tư" value={item.name} disabled={!isActive}
                       onChange={e => updateBomItem(idx, 'name', e.target.value)} style={{ fontSize: '0.85rem' }} />
-                    <input className="input" placeholder="Mã VT" value={item.code} disabled={!isActive}
-                      onChange={e => updateBomItem(idx, 'code', e.target.value)} style={{ fontSize: '0.85rem', fontFamily: 'monospace' }} />
+                    <div>
+                      <input className="input" placeholder="Mã VT" value={item.code} disabled={!isActive}
+                        onChange={e => updateBomItem(idx, 'code', e.target.value)} style={{ fontSize: '0.85rem', fontFamily: 'monospace', width: '100%' }} />
+                      {isActive && (
+                        <button type="button" onClick={() => setP23CodeDialogIdx(idx)}
+                          style={{ marginTop: 3, padding: '1px 6px', fontSize: '0.62rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                          title="Tra mã trùng / tạo mã mới chuẩn">🔍 Chọn/Tạo mã</button>
+                      )}
+                    </div>
                     <input className="input" placeholder="Quy chuẩn" value={item.spec} disabled={!isActive}
                       onChange={e => updateBomItem(idx, 'spec', e.target.value)} style={{ fontSize: '0.85rem' }} />
                     <input className="input" type="number" placeholder="0" value={item.quantity} disabled={!isActive}
@@ -5217,6 +5262,24 @@ export default function TaskDetailPage() {
                 <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
                   Đã nhập: <strong>{bomItems.filter(b => b.name.trim()).length}</strong> / {bomItems.length} mục
                 </div>
+                <QuickCreateMaterialDialog
+                  open={p23CodeDialogIdx !== null}
+                  initialName={p23CodeDialogIdx !== null ? bomItems[p23CodeDialogIdx]?.name : ''}
+                  initialUnit={p23CodeDialogIdx !== null ? bomItems[p23CodeDialogIdx]?.unit : ''}
+                  initialSpec={p23CodeDialogIdx !== null ? bomItems[p23CodeDialogIdx]?.spec : ''}
+                  defaultPrefix="VTTH"
+                  onClose={() => setP23CodeDialogIdx(null)}
+                  onPicked={(m) => {
+                    if (p23CodeDialogIdx === null) return
+                    const i = p23CodeDialogIdx
+                    setBomItems(prev => prev.map((it, idx2) => idx2 === i ? {
+                      ...it,
+                      code: m.materialCode,
+                      name: it.name?.trim() ? it.name : m.name,
+                      unit: it.unit?.trim() ? it.unit : m.unit,
+                    } : it))
+                  }}
+                />
               </div>
             )}
 

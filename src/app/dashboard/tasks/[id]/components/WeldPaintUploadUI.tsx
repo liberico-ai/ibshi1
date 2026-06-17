@@ -1,6 +1,8 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
 import * as XLSX from 'xlsx'
+import QuickCreateMaterialDialog from './QuickCreateMaterialDialog'
+import { resolveCodes, type ResolvedLite } from './material-resolve-client'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -12,6 +14,8 @@ export interface PrMaterialItem {
   quantity: number
   weight: number
   category: string    // 'weld' | 'paint'
+  canonicalCode?: string // resolved/created canonical material code
+  materialId?: string    // linked Material.id once resolved
 }
 
 interface InventoryItem {
@@ -28,6 +32,7 @@ interface StockMatch {
   inventoryName: string | null
   currentStock: number
   matched: boolean
+  viaCode?: boolean   // matched by resolving the code (canonical or old alias)
 }
 
 // ── Props ──────────────────────────────────────────────────
@@ -154,11 +159,17 @@ function parsePrExcel(data: any[][], category: 'weld' | 'paint'): PrMaterialItem
 
 // ── Match with inventory ───────────────────────────────────
 
-function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[]): Map<number, StockMatch> {
+function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[], codeResolved?: Map<string, ResolvedLite>): Map<number, StockMatch> {
   const matches = new Map<number, StockMatch>()
   for (let i = 0; i < items.length; i++) {
     const pr = items[i]
     const noMatch: StockMatch = { inventoryCode: null, inventoryName: null, currentStock: 0, matched: false }
+    // Strategy 0: resolve by CODE (canonical or old/alias) — highest priority
+    const resolved = (pr.canonicalCode && codeResolved?.get(pr.canonicalCode)) || (pr.stt && codeResolved?.get(pr.stt))
+    if (resolved) {
+      matches.set(i, { inventoryCode: resolved.materialCode, inventoryName: resolved.name, currentStock: resolved.currentStock, matched: true, viaCode: true })
+      continue
+    }
     // Match by name similarity
     const descLower = pr.description.toLowerCase()
     const inv = inventory.find(m =>
@@ -198,12 +209,26 @@ function MaterialSection({ label, icon, color, category, data, onChange, isEdita
 
   const [stockMatches, setStockMatches] = useState<Map<number, StockMatch>>(new Map())
   const [uploading, setUploading] = useState(false)
+  // Newly created material codes for unmatched rows (idx → canonical code)
+  const [newCodes, setNewCodes] = useState<Map<number, string>>(new Map())
+  const [dialogIdx, setDialogIdx] = useState<number | null>(null)
+  const [codeResolved, setCodeResolved] = useState<Map<string, ResolvedLite>>(new Map())
+
+  // Resolve row codes (canonical + old aliases) whenever the set of codes changes
+  const codesKey = items.map((i) => i.canonicalCode || i.stt || '').join('|')
+  useEffect(() => {
+    const codes = items.flatMap((i) => [i.canonicalCode, i.stt].filter(Boolean) as string[])
+    if (codes.length === 0) { setCodeResolved(new Map()); return }
+    let cancelled = false
+    resolveCodes(codes).then((m) => { if (!cancelled) setCodeResolved(m) })
+    return () => { cancelled = true }
+  }, [codesKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (items.length > 0 && inventory.length > 0) {
-      setStockMatches(matchInventory(items, inventory))
+    if (items.length > 0) {
+      setStockMatches(matchInventory(items, inventory, codeResolved))
     }
-  }, [items.length, inventory.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items.length, inventory.length, codeResolved]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleImport = useCallback(() => {
     const input = document.createElement('input')
@@ -352,13 +377,27 @@ function MaterialSection({ label, icon, color, category, data, onChange, isEdita
                     {match?.matched ? <span title={`${match.inventoryCode} — ${match.inventoryName}`}>{fmtNum(match.currentStock, 0)}</span> : '—'}
                   </td>
                   <td style={{ padding: '5px 8px', textAlign: 'center' }}>
-                    <span style={{
-                      fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, display: 'inline-block',
-                      background: sufficient ? '#dcfce7' : match?.matched ? '#fef9c3' : '#fee2e2',
-                      color: sufficient ? '#166534' : match?.matched ? '#854d0e' : '#991b1b',
-                    }}>
-                      {sufficient ? 'Đủ kho' : match?.matched ? 'Thiếu' : 'Cần mua'}
-                    </span>
+                    {newCodes.has(idx) ? (
+                      <span title="Mã tạm vừa tạo (chờ chuẩn hóa)" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, display: 'inline-block', background: '#e0e7ff', color: '#3730a3', fontFamily: 'monospace' }}>
+                        🏷️ {newCodes.get(idx)}
+                      </span>
+                    ) : (
+                      <>
+                        <span style={{
+                          fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, display: 'inline-block',
+                          background: sufficient ? '#dcfce7' : match?.matched ? '#fef9c3' : '#fee2e2',
+                          color: sufficient ? '#166534' : match?.matched ? '#854d0e' : '#991b1b',
+                        }}>
+                          {sufficient ? 'Đủ kho' : match?.matched ? 'Thiếu' : 'Cần mua'}
+                        </span>
+                        {isEditable && !match?.matched && (
+                          <button type="button" onClick={() => setDialogIdx(idx)}
+                            style={{ display: 'block', margin: '4px auto 0', padding: '2px 8px', fontSize: '0.65rem', background: color, color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}>
+                            ＋ Tạo mã
+                          </button>
+                        )}
+                      </>
+                    )}
                   </td>
                 </tr>
               )
@@ -366,6 +405,22 @@ function MaterialSection({ label, icon, color, category, data, onChange, isEdita
           </tbody>
         </table>
       </div>
+
+      <QuickCreateMaterialDialog
+        open={dialogIdx !== null}
+        initialName={dialogIdx !== null ? items[dialogIdx]?.description : ''}
+        initialUnit={dialogIdx !== null ? items[dialogIdx]?.unit : ''}
+        initialSpec={dialogIdx !== null ? items[dialogIdx]?.spec : ''}
+        defaultPrefix={category === 'weld' ? 'VLH' : 'VLP'}
+        onClose={() => setDialogIdx(null)}
+        onPicked={(m) => {
+          if (dialogIdx === null) return
+          setNewCodes((prev) => new Map(prev).set(dialogIdx, m.materialCode))
+          // Persist canonical link into the saved item so downstream (P3.5) gets it
+          const updated = items.map((it, i) => i === dialogIdx ? { ...it, canonicalCode: m.materialCode, materialId: m.id } : it)
+          onChange(JSON.stringify(updated))
+        }}
+      />
     </div>
   )
 }
