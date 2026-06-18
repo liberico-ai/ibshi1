@@ -111,6 +111,20 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
     else showToast(res.error || 'Lỗi')
   }
 
+  const doReturnCreator = async () => {
+    setBusy(true)
+    const res = await apiFetch(`/api/work/tasks/${taskId}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'RETURN_CREATOR', acknowledgedDocIds: [], returnedDocs: [] }),
+    })
+    setBusy(false)
+    if (res.ok) {
+      if (res.allDone) showToast('Tất cả đã hoàn thành — đã trả người tạo')
+      else showToast('Đã ghi nhận hoàn thành phần của bạn')
+      setTimeout(() => window.location.reload(), 1500)
+    } else showToast(res.error || 'Lỗi')
+  }
+
   const doDelegate = async (userId: string, label: string) => {
     setBusy(true)
     const res = await apiFetch(`/api/work/tasks/${taskId}/reassign`, {
@@ -258,7 +272,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
       {!fwdOpen && (
         <div style={{ position: 'sticky', bottom: 0, paddingTop: 12, paddingBottom: 12, background: 'var(--bg, #f1f5f9)', zIndex: 10, marginTop: '1rem' }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={onComplete} disabled={busy} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#059669', color: '#fff', border: 'none', cursor: 'pointer' }}>
+            <button onClick={doReturnCreator} disabled={busy} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#059669', color: '#fff', border: 'none', cursor: 'pointer' }}>
               ✓ Hoàn thành & trả người tạo
             </button>
             <button onClick={() => { setFwdOpen(true); setDelOpen(false); setRejOpen(false); loadSourceDocs() }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#d97706', color: '#fff', border: 'none', cursor: 'pointer' }}>
