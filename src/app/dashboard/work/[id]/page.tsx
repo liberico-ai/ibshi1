@@ -86,11 +86,7 @@ export default function WorkDetailPage() {
   useEffect(() => { load() }, [load])
   useEffect(() => { apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) }) }, [])
 
-  useEffect(() => {
-    if (task?.taskType && /^P\d/.test(task.taskType)) {
-      router.replace(`/dashboard/tasks/${id}`)
-    }
-  }, [task?.taskType, id, router])
+  // Task migrate (P*.x) giờ chạy trực tiếp trên /work/ — không redirect
 
   if (loading) return <div className="p-6" style={{ color: 'var(--text-muted)' }}>Đang tải…</div>
   if (!task) return <div className="p-6">Không tìm thấy công việc</div>
