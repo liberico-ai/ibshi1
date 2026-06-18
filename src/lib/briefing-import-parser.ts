@@ -1,0 +1,150 @@
+import * as XLSX from 'xlsx'
+import { createHash } from 'crypto'
+
+export interface BriefingRow {
+  rowIndex: number
+  stt: string
+  taskType: string
+  projectCode: string
+  title: string
+  assigneeName: string
+  openDate: string
+  deadline: string
+  deadlineISO: string
+  daysOverdue: string
+  status: string
+  criteria: string
+  proposal: string
+  decision: string
+  notes: string
+  systemId: string
+}
+
+export type BriefingAction =
+  | { type: 'update'; row: BriefingRow; taskId: string }
+  | { type: 'create'; row: BriefingRow }
+  | { type: 'error'; row: BriefingRow; reason: string }
+
+const STATUS_MAP: Record<string, { status: string; blocked?: boolean }> = {
+  'mới': { status: 'OPEN' },
+  'đang xử lý': { status: 'IN_PROGRESS' },
+  'chờ kết thúc': { status: 'AWAITING_REVIEW' },
+  'bị trả lại': { status: 'RETURNED' },
+  'tắc': { status: 'IN_PROGRESS', blocked: true },
+  'xong': { status: 'DONE' },
+  'hủy': { status: 'CANCELLED' },
+}
+
+export function mapStatusLabel(label: string): { status: string; blocked: boolean } | null {
+  const key = label.trim().toLowerCase()
+  const m = STATUS_MAP[key]
+  if (!m) return null
+  return { status: m.status, blocked: !!m.blocked }
+}
+
+function serialToDateStr(n: number): string {
+  const ms = Math.round((n - 25569) * 86400 * 1000)
+  const d = new Date(ms)
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}/${d.getUTCFullYear()}`
+}
+
+function cell(v: unknown): string {
+  if (v == null) return ''
+  if (typeof v === 'number') return (v > 25569 && v < 80000) ? serialToDateStr(v) : String(v)
+  if (v instanceof Date) return serialToDateStr(Math.round(v.getTime() / 86400000) + 25569)
+  return String(v).replace(/\s+/g, ' ').trim()
+}
+
+export function parseDateDMY(s: string): string {
+  const m = /(\d{1,2})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{2,4})/.exec(s)
+  if (!m) return ''
+  const d = parseInt(m[1], 10), mo = parseInt(m[2], 10)
+  let y = parseInt(m[3], 10)
+  if (y < 100) y += 2000
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return ''
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+const EXPECTED_HEADERS = ['STT', 'Mã việc', 'Dự án', 'Nội dung', 'Người thực hiện', 'Ngày mở', 'Hạn',
+  'Số ngày quá hạn', 'Trạng thái', 'Tiêu chí xong', 'Đề xuất', 'Quyết định BGĐ', 'Ghi chú', 'ID hệ thống']
+
+export function parseBriefingXlsx(buffer: Buffer | ArrayBuffer): BriefingRow[] {
+  const wb = XLSX.read(buffer, { type: 'buffer' })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  if (!ws) return []
+  const raw: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: false })
+  if (raw.length < 2) return []
+
+  const hdr = raw[0].map((c) => cell(c))
+  const colIdx: Record<string, number> = {}
+  for (const expected of EXPECTED_HEADERS) {
+    const idx = hdr.findIndex((h) => h === expected)
+    if (idx >= 0) colIdx[expected] = idx
+  }
+
+  if (colIdx['Nội dung'] == null) {
+    const fuzzy = hdr.findIndex((h) => /nội dung/i.test(h))
+    if (fuzzy >= 0) colIdx['Nội dung'] = fuzzy
+  }
+
+  const col = (row: unknown[], name: string): string => {
+    const idx = colIdx[name]
+    return idx != null ? cell(row[idx]) : ''
+  }
+
+  const rows: BriefingRow[] = []
+  for (let i = 1; i < raw.length; i++) {
+    const r = raw[i]
+    const title = col(r, 'Nội dung')
+    const systemId = col(r, 'ID hệ thống')
+    if (!title && !systemId) continue
+
+    const deadlineRaw = col(r, 'Hạn')
+    const deadlineISO = parseDateDMY(deadlineRaw)
+
+    rows.push({
+      rowIndex: i + 1,
+      stt: col(r, 'STT'),
+      taskType: col(r, 'Mã việc'),
+      projectCode: col(r, 'Dự án'),
+      title,
+      assigneeName: col(r, 'Người thực hiện'),
+      openDate: col(r, 'Ngày mở'),
+      deadline: deadlineRaw,
+      deadlineISO,
+      daysOverdue: col(r, 'Số ngày quá hạn'),
+      status: col(r, 'Trạng thái'),
+      criteria: col(r, 'Tiêu chí xong'),
+      proposal: col(r, 'Đề xuất'),
+      decision: col(r, 'Quyết định BGĐ'),
+      notes: col(r, 'Ghi chú'),
+      systemId,
+    })
+  }
+  return rows
+}
+
+export function computeImportKey(title: string, projectId: string | null, deadlineISO: string, userId: string): string {
+  const raw = [title, projectId || '', deadlineISO, userId].join('|')
+  return createHash('sha1').update(raw).digest('hex')
+}
+
+export function classifyRows(rows: BriefingRow[]): BriefingAction[] {
+  return rows.map((row) => {
+    if (row.systemId.trim()) {
+      return { type: 'update' as const, row, taskId: row.systemId.trim() }
+    }
+    if (!row.assigneeName.trim()) {
+      return { type: 'error' as const, row, reason: 'Việc mới thiếu "Người thực hiện"' }
+    }
+    if (!row.deadlineISO) {
+      return { type: 'error' as const, row, reason: 'Việc mới thiếu "Hạn" hoặc ngày không hợp lệ' }
+    }
+    if (!row.criteria.trim()) {
+      return { type: 'error' as const, row, reason: 'Việc mới thiếu "Tiêu chí xong"' }
+    }
+    return { type: 'create' as const, row }
+  })
+}

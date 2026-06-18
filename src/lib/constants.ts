@@ -140,6 +140,7 @@ export const MENU_ITEMS = [
   { key: 'work-meetings', label: 'Lịch họp', labelEn: 'Meetings', icon: 'CalendarCheck', href: '/dashboard/work/meetings', roles: 'all', group: 'overview' },
   { key: 'work-overview', label: 'Tổng quan dự án', labelEn: 'Project Overview', icon: 'PieChart', href: '/dashboard/work/overview', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'overview' },
   { key: 'work-perf', label: 'Hiệu suất & KPI', labelEn: 'Performance', icon: 'BarChart3', href: '/dashboard/work/performance', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'], group: 'overview' },
+  { key: 'work-briefing', label: 'Giao ban tuần', labelEn: 'Weekly Briefing', icon: 'FileBarChart', href: '/dashboard/work/briefing', roles: ['R01', 'R02', 'R02a', 'R10'], group: 'overview' },
   { key: 'work-templates', label: 'Quy trình & Template', labelEn: 'Templates', icon: 'Settings', href: '/dashboard/work/templates', roles: ['R01', 'R02', 'R10'], group: 'overview' },
   { key: 'notifications', label: 'Thông báo', labelEn: 'Notifications', icon: 'Bell', href: '/dashboard/notifications', roles: 'all', group: 'overview' },
 
