@@ -175,7 +175,8 @@ export async function createTask(input: CreateTaskInput, userId: string, opts?: 
   return task
 }
 
-function isAssignee(task: { createdBy: string; assignees: { role: string | null; userId: string | null }[] }, userId: string, roleCode: string) {
+function isAssignee(task: { createdBy: string; status: string; assignees: { role: string | null; userId: string | null }[] }, userId: string, roleCode: string) {
+  if (task.status === 'RETURNED' && task.createdBy === userId) return true
   return task.assignees.some((a) => a.userId === userId || a.role === roleCode)
 }
 
