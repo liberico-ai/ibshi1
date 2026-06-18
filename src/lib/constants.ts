@@ -59,13 +59,14 @@ export const TASK_STATUS = {
   OPEN: 'OPEN',
   PENDING: 'OPEN',
   IN_PROGRESS: 'IN_PROGRESS',
+  AWAITING_REVIEW: 'AWAITING_REVIEW',
   DONE: 'DONE',
   RETURNED: 'RETURNED',
   REJECTED: 'RETURNED',
   CANCELLED: 'CANCELLED',
 } as const
 
-export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'RETURNED' | 'CANCELLED'
+export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'AWAITING_REVIEW' | 'DONE' | 'RETURNED' | 'CANCELLED'
 
 // ── Project Statuses ──
 export const PROJECT_STATUS = {
@@ -78,6 +79,9 @@ export const PROJECT_STATUS = {
 // ── Notification Types ──
 export const NOTIFICATION_TYPES = {
   TASK_ASSIGNED: 'task_assigned',
+  TASK_REVIEW: 'task_review',
+  TASK_PROGRESS: 'task_progress',
+  TASK_RETURNED: 'task_returned',
   DEADLINE_WARNING: 'deadline_warning',
   DEADLINE_OVERDUE: 'deadline_overdue',
   APPROVAL_NEEDED: 'approval_needed',

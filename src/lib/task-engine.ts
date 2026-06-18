@@ -5,7 +5,7 @@ import { WORKFLOW_RULES } from './workflow-constants'
 // ── Compatibility adapter: reads from Task (dynamic) table,
 // returns WorkflowTask-shaped objects so downstream routes work unchanged. ──
 
-const ACTIVE_STATUSES = ['OPEN', 'IN_PROGRESS', 'RETURNED']
+const ACTIVE_STATUSES = ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW']
 const PRIORITY_TO_INT: Record<string, number> = { NORMAL: 0, HIGH: 1, URGENT: 2 }
 
 interface LegacyTask {
@@ -66,8 +66,10 @@ function toLegacy(t: {
 export async function getTaskInbox(userId: string, roleCode: string) {
   const tasks = await prisma.task.findMany({
     where: {
-      status: { in: ACTIVE_STATUSES },
-      assignees: { some: { OR: [{ userId }, { role: roleCode }] } },
+      OR: [
+        { status: { in: ACTIVE_STATUSES }, assignees: { some: { OR: [{ userId }, { role: roleCode }] } } },
+        { status: 'AWAITING_REVIEW', createdBy: userId },
+      ],
     },
     include: {
       project: { select: { projectCode: true, projectName: true, clientName: true } },

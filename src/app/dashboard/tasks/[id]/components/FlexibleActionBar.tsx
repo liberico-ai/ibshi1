@@ -31,6 +31,20 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
   const [toast, setToast] = useState('')
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2600) }
 
+  // AWAITING_REVIEW: creator can finalize or create follow-up
+  const [workTaskStatus, setWorkTaskStatus] = useState('')
+  const [workTaskCreatedBy, setWorkTaskCreatedBy] = useState('')
+  useEffect(() => {
+    apiFetch(`/api/work/tasks/${taskId}`).then((r) => {
+      if (r.ok && r.task) {
+        setWorkTaskStatus(r.task.status || '')
+        setWorkTaskCreatedBy(r.task.createdBy || '')
+      }
+    }).catch(() => {})
+  }, [taskId])
+  const isAwaitingReview = workTaskStatus === 'AWAITING_REVIEW'
+  const isCreator = !!(user?.id && user.id === workTaskCreatedBy)
+
   // Forward state
   const [fwdOpen, setFwdOpen] = useState(false)
   const [fwdType, setFwdType] = useState('FREE')
@@ -74,7 +88,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
     setNewDocLabel(''); setNewDocFileId(''); setNewDocFileName('')
   }
 
-  if (!isActive) return null
+  if (!isActive && !(isAwaitingReview && isCreator)) return null
 
   const addFwdRole = (r: string) => {
     if (fwdPicks.some((p) => p.role === r)) return
@@ -141,6 +155,18 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
     if (!qd) return []
     const dept = delDept ? ROLE_TO_DEPT[delDept] : ''
     return users.filter((u) => (u.fullName || u.username || '').toLowerCase().includes(qd)).filter((u) => !dept || ROLE_TO_DEPT[u.roleCode] === dept).slice(0, 8)
+  }
+
+  const doFinalize = async () => {
+    setBusy(true)
+    const res = await apiFetch(`/api/work/tasks/${taskId}/finalize`, { method: 'POST' })
+    setBusy(false)
+    if (res.ok) { showToast('Đã kết thúc công việc'); setTimeout(() => window.location.reload(), 1500) }
+    else showToast(res.error || 'Lỗi')
+  }
+
+  const goCreateNext = () => {
+    router.push(`/dashboard/work/create?from=${taskId}`)
   }
 
   const submitReject = async () => {
@@ -268,8 +294,25 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
         </div>
       )}
 
-      {/* Sticky bottom action bar */}
-      {!fwdOpen && (
+      {/* AWAITING_REVIEW: creator sees finalize + create-next */}
+      {isAwaitingReview && isCreator && (
+        <div style={{ position: 'sticky', bottom: 0, paddingTop: 12, paddingBottom: 12, background: 'var(--bg, #f1f5f9)', zIndex: 10, marginTop: '1rem' }}>
+          <div style={{ fontSize: '0.82rem', padding: '8px 12px', marginBottom: 8, borderRadius: 8, background: '#fffbeb', border: '1px solid #fcd34d', color: '#b45309' }}>
+            Người nhận đã hoàn thành và trả lại. Bạn có thể kết thúc, hoặc tạo việc tiếp theo.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={doFinalize} disabled={busy} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#059669', color: '#fff', border: 'none', cursor: 'pointer' }}>
+              ✓ Hoàn thành & kết thúc
+            </button>
+            <button onClick={goCreateNext} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: 'var(--navy, #0a2540)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+              + Tạo việc tiếp theo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky bottom action bar (normal assignee actions) */}
+      {!fwdOpen && !isAwaitingReview && (
         <div style={{ position: 'sticky', bottom: 0, paddingTop: 12, paddingBottom: 12, background: 'var(--bg, #f1f5f9)', zIndex: 10, marginTop: '1rem' }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={doReturnCreator} disabled={busy} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#059669', color: '#fff', border: 'none', cursor: 'pointer' }}>

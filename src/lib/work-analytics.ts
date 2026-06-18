@@ -199,7 +199,7 @@ export async function getProjectOverview(projectId: string) {
 
   // Tổng hợp theo phòng ban
   const deptMap = new Map<string, { total: number; active: number; done: number; overdue: number }>()
-  const statusSummary = { OPEN: 0, IN_PROGRESS: 0, RETURNED: 0, DONE: 0 } as Record<string, number>
+  const statusSummary = { OPEN: 0, IN_PROGRESS: 0, AWAITING_REVIEW: 0, RETURNED: 0, DONE: 0 } as Record<string, number>
   for (const t of tasks) {
     statusSummary[t.status] = (statusSummary[t.status] || 0) + 1
     const d = taskDept(t)
