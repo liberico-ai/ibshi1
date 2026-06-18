@@ -61,6 +61,9 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
   const [rejOpen, setRejOpen] = useState(false)
   const [rejReason, setRejReason] = useState('')
 
+  // Forward deadline
+  const [fwdDeadline, setFwdDeadline] = useState('')
+
   // Forward docs state
   const [fwdDocs, setFwdDocs] = useState<FwdDoc[]>([])
   const [newDocLabel, setNewDocLabel] = useState('')
@@ -114,6 +117,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
         mode: 'FORWARD',
         forward: {
           taskType: fwdType, note: fwdNote.trim() || undefined,
+          deadline: fwdDeadline || undefined,
           assignees: fwdPicks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
           docs: selectedDocs.length ? selectedDocs : undefined,
         },
@@ -213,6 +217,11 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
             </div>
           </div>
           <textarea value={fwdNote} onChange={(e) => setFwdNote(e.target.value)} placeholder="Ghi chú chuyển tiếp (tùy chọn)…" rows={2} style={{ ...inp, marginTop: 8 }} />
+
+          <div style={{ marginTop: 8 }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Deadline cho người nhận</label>
+            <input type="date" value={fwdDeadline} onChange={(e) => setFwdDeadline(e.target.value)} style={{ ...inp, width: 'auto', minWidth: 180 }} />
+          </div>
 
           {/* ── Tài liệu bắt buộc chuyển tiếp ── */}
           <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a' }}>

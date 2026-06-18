@@ -67,6 +67,7 @@ export default function WorkDetailPage() {
   const [newFwdDocLabel, setNewFwdDocLabel] = useState('')
   const [newFwdDocKind, setNewFwdDocKind] = useState<'MUST_READ' | 'MUST_RETURN'>('MUST_READ')
   const [extraFwdDocs, setExtraFwdDocs] = useState<{ kind: string; label: string }[]>([])
+  const [fwdDeadline, setFwdDeadline] = useState('')
   // Chuyển giao (giao lại việc này cho người khác trong phòng)
   const [delOpen, setDelOpen] = useState(false)
   const [delDept, setDelDept] = useState('')
@@ -131,6 +132,7 @@ export default function WorkDetailPage() {
     ]
     await doComplete('FORWARD', {
       taskType: fwdType, note: fwdNote.trim() || undefined,
+      deadline: fwdDeadline || undefined,
       assignees: fwdPicks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
       docs: selectedDocs.length ? selectedDocs : undefined,
     })
@@ -417,6 +419,11 @@ export default function WorkDetailPage() {
             </div>
           </div>
           <textarea value={fwdNote} onChange={(e) => setFwdNote(e.target.value)} placeholder="Ghi chú chuyển tiếp (tùy chọn)…" rows={2} style={{ ...inp, marginTop: 8 }} />
+
+          <div style={{ marginTop: 8 }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Deadline cho người nhận</label>
+            <input type="date" value={fwdDeadline} onChange={(e) => setFwdDeadline(e.target.value)} style={{ ...inp, width: 'auto', minWidth: 180 }} />
+          </div>
 
           {/* Tài liệu bắt buộc chuyển kèm */}
           {(task.docs.length > 0 || extraFwdDocs.length > 0) && (
