@@ -5312,76 +5312,7 @@ export default function TaskDetailPage() {
 
 
 
-            {/* P1.1B: Inline action buttons */}
-            {task.stepCode === 'P1.1B' && isActive && (
-              <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>🚀 Hành động</h3>
-                <div style={{ display: 'flex', gap: 12, marginBottom: showRejectForm ? 16 : 0 }}>
-                  <button
-                    className="btn-accent"
-                    onClick={() => handleSubmit('complete')}
-                    disabled={submitting}
-                    style={{ flex: 1, padding: '12px 20px', fontSize: '1rem' }}
-                  >
-                    {submitting ? '⏳ Đang xử lý...' : '✅ Phê duyệt triển khai'}
-                  </button>
-                  <button
-                    onClick={() => setShowRejectForm(!showRejectForm)}
-                    disabled={submitting}
-                    style={{
-                      flex: 1, padding: '12px 20px', fontSize: '1rem',
-                      border: '2px solid #e74c3c', borderRadius: 10, background: showRejectForm ? '#fef2f2' : 'transparent',
-                      color: '#e74c3c', cursor: 'pointer', fontWeight: 600,
-                    }}
-                  >
-                    ❌ Từ chối / Yêu cầu chỉnh sửa
-                  </button>
-                </div>
-                {showRejectForm && (
-                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '1.25rem', animation: 'fadeIn 0.3s ease' }}>
-                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, marginBottom: 8, color: '#991b1b' }}>
-                      📝 Lý do từ chối / Yêu cầu chỉnh sửa *
-                    </label>
-                    <textarea
-                      value={rejectReason}
-                      onChange={e => setRejectReason(e.target.value)}
-                      placeholder="Nhập lý do từ chối hoặc yêu cầu PM chỉnh sửa thông tin dự án..."
-                      style={{
-                        width: '100%', minHeight: 100, borderRadius: 8, border: '1px solid #fca5a5',
-                        padding: '0.75rem', fontSize: '0.9rem', resize: 'vertical',
-                        background: '#fff',
-                      }}
-                    />
-                    <button
-                      onClick={async () => {
-                        if (!rejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return }
-                        setSubmitting(true)
-                        setError('')
-                        const res = await apiFetch(`/api/tasks/${taskId}/reject`, {
-                          method: 'POST',
-                          body: JSON.stringify({ reason: rejectReason }),
-                        })
-                        if (res.success) {
-                          setSuccessMsg(`✅ Đã từ chối. Quay về bước ${res.returnedTo}: ${res.returnedToName || ''}`)
-                          setTimeout(() => router.push('/dashboard/tasks'), 2000)
-                        } else {
-                          setError(res.error || 'Lỗi khi từ chối')
-                        }
-                        setSubmitting(false)
-                      }}
-                      disabled={submitting}
-                      style={{
-                        marginTop: 12, padding: '10px 24px', fontSize: '0.95rem',
-                        border: 'none', borderRadius: 8, background: '#dc2626',
-                        color: '#fff', cursor: 'pointer', fontWeight: 600,
-                      }}
-                    >
-                      {submitting ? '⏳...' : '⚠️ Xác nhận từ chối → Đẩy về PM chỉnh sửa'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* P1.1B actions removed — handled by FlexibleActionBar */}
           </div>
 
           {/* Sidebar */}
@@ -5560,98 +5491,7 @@ export default function TaskDetailPage() {
               </div>
             )}
 
-            {/* Actions — hidden for P1.1B, P1.3, P3.3, P3.4, P3.5, P3.6, and persistent P5.1 since they have inline actions or stay open */}
-            {isActive && task.stepCode !== 'P1.1B' && task.stepCode !== 'P1.3' && task.stepCode !== 'P3.3' && task.stepCode !== 'P3.4' && task.stepCode !== 'P3.5' && task.stepCode !== 'P3.6' && task.stepCode !== 'P5.1A' && !(task.stepCode === 'P5.1' && task.stepName === 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)') && (() => {
-              const p53QcRaw = formData.qcItems as string | undefined;
-              let p53QcItems: {result: string}[] = [];
-              try { p53QcItems = p53QcRaw ? JSON.parse(p53QcRaw) : []; } catch { p53QcItems = []; }
-              const p53HasFail = p53QcItems.some(q => q.result === 'FAIL');
-              const p53HasCond = p53QcItems.some(q => q.result === 'CONDITIONAL');
-
-              const canApprove = (task.stepCode !== 'P4.3' || !formData.inspectionResult || formData.inspectionResult === 'PASS' || formData.inspectionResult === 'CONDITIONAL') &&
-                                 (task.stepCode !== 'P5.3' || !p53HasFail) &&
-                                 (task.stepCode !== 'P5.4' || !formData.acceptanceResult || formData.acceptanceResult === 'PASS' || formData.acceptanceResult === 'CONDITIONAL') && isP45Valid;
-
-              const canReject = rule?.rejectTo &&
-                                (
-                                  (task.stepCode === 'P4.3' && (!formData.inspectionResult || formData.inspectionResult === 'FAIL' || formData.inspectionResult === 'CONDITIONAL')) ||
-                                  (task.stepCode === 'P5.3' && (p53HasFail || p53HasCond)) ||
-                                  (task.stepCode === 'P5.4' && (!formData.acceptanceResult || formData.acceptanceResult === 'FAIL' || formData.acceptanceResult === 'CONDITIONAL')) ||
-                                  (task.stepCode !== 'P4.3' && task.stepCode !== 'P5.3' && task.stepCode !== 'P5.4')
-                                );
-
-              return (
-              <div className="card" style={{ padding: '1.25rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>🚀 Hành động</h3>
-                {canApprove && (
-                <button
-                  className="btn-accent"
-                  onClick={() => handleSubmit('complete')}
-                  disabled={submitting}
-                  style={{ width: '100%', padding: '10px', fontSize: '0.95rem', marginBottom: 8 }}
-                >
-                  {submitting ? '⏳ Đang xử lý...' : '✅ Hoàn thành bước này'}
-                </button>
-                )}
-                {canReject && (
-                  <div>
-                    <button
-                      onClick={() => setShowRejectForm(!showRejectForm)}
-                      disabled={submitting}
-                      style={{
-                        width: '100%', padding: '10px', fontSize: '0.85rem',
-                        border: '1px solid #e74c3c', borderRadius: 8, background: showRejectForm ? '#fef2f2' : 'transparent',
-                        color: '#e74c3c', cursor: 'pointer',
-                      }}
-                    >
-                      ❌ Từ chối → {rule?.rejectTo}
-                    </button>
-                    {showRejectForm && (
-                      <div style={{ marginTop: 8 }}>
-                        <textarea
-                          value={rejectReason}
-                          onChange={e => setRejectReason(e.target.value)}
-                          placeholder="Nhập lý do từ chối..."
-                          rows={2}
-                          style={{
-                            width: '100%', borderRadius: 8, border: '1px solid #dc2626',
-                            padding: '0.5rem', fontSize: '0.85rem', resize: 'vertical',
-                            background: 'var(--bg-secondary)',
-                          }}
-                        />
-                        <button
-                          disabled={submitting}
-                          onClick={async () => {
-                            if (!rejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return }
-                            setSubmitting(true)
-                            setError('')
-                            const res = await apiFetch(`/api/tasks/${taskId}/reject`, {
-                              method: 'POST',
-                              body: JSON.stringify({ reason: rejectReason }),
-                            })
-                            if (res.success) {
-                              setSuccessMsg(`✅ Đã từ chối → ${rule?.rejectTo}`)
-                              setTimeout(() => router.push('/dashboard/tasks'), 2000)
-                            } else {
-                              setError(res.error || 'Lỗi khi từ chối')
-                            }
-                            setSubmitting(false)
-                          }}
-                          style={{
-                            marginTop: 6, width: '100%', padding: '8px', fontSize: '0.85rem',
-                            background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8,
-                            cursor: 'pointer', fontWeight: 600,
-                          }}
-                        >
-                          {submitting ? '⏳ Đang xử lý...' : '⚠️ Xác nhận từ chối'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-            })()}
+            {/* Generic sidebar actions removed — handled by FlexibleActionBar */}
 
             {/* Back button */}
             <button
@@ -5682,11 +5522,7 @@ export default function TaskDetailPage() {
               padding: '0.75rem', marginBottom: '1rem',
             }}
           />
-          {isActive && (
-            <button className="btn-accent" onClick={() => handleSubmit('complete')} disabled={submitting}>
-              {submitting ? '⏳...' : '✅ Hoàn thành'}
-            </button>
-          )}
+          {/* Fallback complete button removed — handled by FlexibleActionBar */}
         </div>
       )}
 
