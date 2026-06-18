@@ -1740,14 +1740,12 @@ export default function TaskDetailPage() {
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: '0.85rem', color: 'var(--text-muted, #64748b)' }}>
-          <span>Phase {rule?.phase}: {phaseName}</span>
-          <span>•</span>
           <span style={{ fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>{task.project.projectCode}</span>
           <span>•</span>
           <span>{task.project.projectName}</span>
         </div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)' }}>
-          {task.stepCode} — {displayTitle}
+          {displayTitle}
         </h1>
         <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary, #475569)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: isDone ? '#059669' : isActive ? '#2563eb' : 'inherit' }}>
@@ -1862,20 +1860,18 @@ export default function TaskDetailPage() {
             </div>
 
             {/* Dữ liệu kế thừa từ bước trước (estimate, MOM, PR...) — hiển thị read-only cho step phê duyệt */}
-            {!['P1.2', 'P1.2A', 'P1.3'].includes(task.stepCode) && task.resultData && (
+            {task.resultData && (
               <InheritedDataUI resultData={task.resultData as Record<string, unknown>} project={task.project} />
             )}
 
             {/* Template selector: chọn biểu mẫu + upload/parse cho mọi step (trừ step đã có UI riêng) */}
-            {!['P1.2', 'P1.2A', 'P1.3', 'P2.1', 'P2.2', 'P2.3'].includes(task.stepCode) && (
-              <div style={{ marginBottom: '1rem' }}>
-                <TemplateSelector
-                  taskId={taskId}
-                  isEditable={isActive}
-                  projectCode={task.project?.projectCode}
-                />
-              </div>
-            )}
+            <div style={{ marginBottom: '1rem' }}>
+              <TemplateSelector
+                taskId={taskId}
+                isEditable={isActive}
+                projectCode={task.project?.projectCode}
+              />
+            </div>
 
             {/* P1.3 Dual Approval UI */}
             {task.stepCode === 'P1.3' && previousStepData ? (
