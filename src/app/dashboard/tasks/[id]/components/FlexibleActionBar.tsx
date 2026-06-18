@@ -97,12 +97,16 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
 
   if (!isActive && !(isAwaitingReview && isCreator) && !(isReturned && isCreator)) return null
 
-  const addFwdRole = (r: string) => {
+  const addFwdRole = async (r: string) => {
     if (fwdPicks.some((p) => p.role === r)) return
-    setFwdPicks((prev) => [...prev, { role: r, label: `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)}` }])
+    const res = await apiFetch(`/api/work/dept-head?role=${r}`)
+    const headName = res.ok && res.head ? res.head.fullName : null
+    setFwdPicks((prev) => [...prev, { role: r, label: headName ? `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)} → ${headName}` : `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)}` }])
   }
   const addFwdUser = (u: Usr) => {
-    if (!fwdPicks.some((p) => p.userId === u.id)) setFwdPicks([...fwdPicks, { userId: u.id, label: `👤 ${u.fullName || u.username}` }])
+    if (fwdPicks.some((p) => p.userId === u.id)) { setFwdQuery(''); return }
+    const userDept = ROLE_TO_DEPT[u.roleCode]
+    setFwdPicks((prev) => [...prev.filter((p) => !(p.role && ROLE_TO_DEPT[p.role] === userDept)), { userId: u.id, label: `👤 ${u.fullName || u.username}` }])
     setFwdQuery('')
   }
   const fwdUsers = fwdQuery.trim()

@@ -178,13 +178,18 @@ export default function WorkDetailPage() {
     if (res.ok) { setComment(''); load() }
   }
 
-  // Chuyển tiếp cấp phòng: thêm chip "phòng"; khi xác nhận, hệ thống tự gắn trưởng phòng
-  // (trừ khi phòng đó đã chọn nhân sự cụ thể).
-  const addFwdRole = (r: string) => {
+  const addFwdRole = async (r: string) => {
     if (fwdPicks.some((p) => p.role === r)) return
-    setFwdPicks((prev) => [...prev, { role: r, label: `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)}` }])
+    const res = await apiFetch(`/api/work/dept-head?role=${r}`)
+    const headName = res.ok && res.head ? res.head.fullName : null
+    setFwdPicks((prev) => [...prev, { role: r, label: headName ? `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)} → ${headName}` : `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)}` }])
   }
-  const addFwdUser = (u: Usr) => { if (!fwdPicks.some((p) => p.userId === u.id)) setFwdPicks([...fwdPicks, { userId: u.id, label: `👤 ${u.fullName || u.username}` }]); setFwdQuery('') }
+  const addFwdUser = (u: Usr) => {
+    if (fwdPicks.some((p) => p.userId === u.id)) { setFwdQuery(''); return }
+    const userDept = ROLE_TO_DEPT[u.roleCode]
+    setFwdPicks((prev) => [...prev.filter((p) => !(p.role && ROLE_TO_DEPT[p.role] === userDept)), { userId: u.id, label: `👤 ${u.fullName || u.username}` }])
+    setFwdQuery('')
+  }
   const fwdUsers = fwdQuery.trim()
     ? users.filter((u) => (u.fullName || u.username || '').toLowerCase().includes(fwdQuery.toLowerCase())).filter((u) => !fwdPicks.some((p) => p.userId === u.id)).slice(0, 8)
     : []
