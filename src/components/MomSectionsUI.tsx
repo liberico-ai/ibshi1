@@ -231,10 +231,10 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (isEditable && projectId) {
+    if (isEditable) {
       apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) }).catch(() => {})
     }
-  }, [isEditable, projectId])
+  }, [isEditable])
 
   const rowKey = (secIdx: number, itemIdx: number) => `${secIdx}-${itemIdx}`
 
@@ -405,7 +405,7 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
                   const done = rowDone[key]
                   const sel = rowDept[key] || ''
                   const us = rowUsersFor(key)
-                  const showAssign = isEditable && projectId && item.noiDung?.trim()
+                  const showAssign = isEditable && item.noiDung?.trim()
                   return (
                     <tr key={itemIdx}>
                       <td style={{ ...cellStyle, textAlign: 'center', verticalAlign: 'top' }}>
