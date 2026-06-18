@@ -5,7 +5,7 @@ import { WORKFLOW_RULES } from './workflow-constants'
 // ── Compatibility adapter: reads from Task (dynamic) table,
 // returns WorkflowTask-shaped objects so downstream routes work unchanged. ──
 
-const ACTIVE_STATUSES = ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW']
+const ACTIVE_STATUSES = ['OPEN', 'IN_PROGRESS', 'AWAITING_REVIEW']
 const PRIORITY_TO_INT: Record<string, number> = { NORMAL: 0, HIGH: 1, URGENT: 2 }
 
 interface LegacyTask {

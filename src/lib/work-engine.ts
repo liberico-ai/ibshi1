@@ -413,7 +413,7 @@ export async function getDeptUsers(roleCode: string) {
 export async function getInbox(userId: string, roleCode: string, tab: string, page: number, opts?: { q?: string; projectId?: string }) {
   const PAGE = 20
   const deptRoles = rolesInSameDept(roleCode)
-  const active = { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS, TASK_STATUS.RETURNED] }
+  const active = { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS] }
   let where: Record<string, unknown>
   if (tab === 'created') where = { createdBy: userId }
   else if (tab === 'dept') where = { status: active, assignees: { some: { role: { in: deptRoles } } } }
