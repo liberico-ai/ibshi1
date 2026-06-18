@@ -90,7 +90,6 @@ export default function WorkDetailPage() {
 
   if (loading) return <div className="p-6" style={{ color: 'var(--text-muted)' }}>Đang tải…</div>
   if (!task) return <div className="p-6">Không tìm thấy công việc</div>
-  if (/^P\d/.test(task.taskType)) return <div className="p-6" style={{ color: 'var(--text-muted)' }}>Đang chuyển hướng…</div>
 
   const myRow = task.assignees.find((a) => a.userId === user?.id) || task.assignees.find((a) => a.role === user?.roleCode)
   const isAssignee = !!myRow
