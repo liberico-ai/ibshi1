@@ -4,7 +4,12 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_KEYS = ['bomPr', 'momAttendants', 'momSections', 'momHeader', 'templateType', 'weldData', 'paintData', 'totalMaterial', 'totalLabor', 'totalService', 'totalOverhead', 'totalEstimate', 'dt02Detail', 'estimateFileName']
+const ALLOWED_KEYS = [
+  'bomPr', 'momAttendants', 'momSections', 'momHeader', 'templateType',
+  'weldData', 'paintData',
+  'totalMaterial', 'totalLabor', 'totalService', 'totalOverhead', 'totalEstimate', 'dt02Detail', 'estimateFileName',
+  'wbsItems', 'milestones', 'bomItemsList',
+]
 
 // POST /api/work/tasks/[id]/result-data  { key, value }
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
