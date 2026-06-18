@@ -59,6 +59,7 @@ export default function WorkDetailPage() {
   // Chuyển tiếp
   const [fwdOpen, setFwdOpen] = useState(false)
   const [fwdType, setFwdType] = useState('FREE')
+  const [fwdTitle, setFwdTitle] = useState('')
   const [fwdNote, setFwdNote] = useState('')
   const [fwdPicks, setFwdPicks] = useState<{ role?: string; userId?: string; label: string }[]>([])
   const [users, setUsers] = useState<Usr[]>([])
@@ -129,6 +130,7 @@ export default function WorkDetailPage() {
       ...extraFwdDocs,
     ]
     await doComplete('FORWARD', {
+      title: fwdTitle.trim() || undefined,
       taskType: fwdType, note: fwdNote.trim() || undefined,
       deadline: fwdDeadline || undefined,
       assignees: fwdPicks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
@@ -415,6 +417,10 @@ export default function WorkDetailPage() {
           <div className="text-sm font-semibold mb-2" style={{ color: '#b45309' }}>↗ Hoàn thành & chuyển tiếp sang bộ phận khác</div>
           <label className="text-xs font-semibold">Loại việc chuyển tiếp</label>
           <select value={fwdType} onChange={(e) => setFwdType(e.target.value)} style={inp}>{TASK_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</select>
+          <div className="mt-2">
+            <label className="text-xs font-semibold">Tên công việc</label>
+            <input value={fwdTitle} onChange={(e) => setFwdTitle(e.target.value)} placeholder="Nhập tên công việc chuyển tiếp…" style={inp} />
+          </div>
           <div className="my-2">{fwdPicks.map((p, i) => (
             <span key={i} className="inline-flex items-center gap-2 text-sm mr-2 mb-2 px-3 py-1.5 rounded-full" style={{ background: '#eef2ff', color: '#3730a3', border: '1px solid #c7d2fe' }}>
               {p.label} <span className="cursor-pointer opacity-60" onClick={() => setFwdPicks(fwdPicks.filter((_, idx) => idx !== i))}>✕</span>

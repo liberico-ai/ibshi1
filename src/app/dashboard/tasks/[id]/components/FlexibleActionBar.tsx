@@ -49,6 +49,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
   // Forward state
   const [fwdOpen, setFwdOpen] = useState(false)
   const [fwdType, setFwdType] = useState('FREE')
+  const [fwdTitle, setFwdTitle] = useState('')
   const [fwdNote, setFwdNote] = useState('')
   const [fwdPicks, setFwdPicks] = useState<{ role?: string; userId?: string; label: string }[]>([])
   const [fwdQuery, setFwdQuery] = useState('')
@@ -117,6 +118,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
       body: JSON.stringify({
         mode: 'FORWARD',
         forward: {
+          title: fwdTitle.trim() || undefined,
           taskType: fwdType, note: fwdNote.trim() || undefined,
           deadline: fwdDeadline || undefined,
           assignees: fwdPicks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
@@ -194,6 +196,10 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
           <div style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 10, color: '#b45309' }}>↗ Hoàn thành & chuyển tiếp sang bộ phận khác</div>
           <label style={{ fontSize: '0.78rem', fontWeight: 600 }}>Loại việc chuyển tiếp</label>
           <select value={fwdType} onChange={(e) => setFwdType(e.target.value)} style={inp}>{TASK_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</select>
+          <div style={{ marginTop: 8 }}>
+            <label style={{ fontSize: '0.78rem', fontWeight: 600 }}>Tên công việc</label>
+            <input value={fwdTitle} onChange={(e) => setFwdTitle(e.target.value)} placeholder="Nhập tên công việc chuyển tiếp…" style={inp} />
+          </div>
           <div style={{ margin: '8px 0' }}>{fwdPicks.map((p, i) => (
             <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', marginRight: 8, marginBottom: 6, padding: '5px 12px', borderRadius: 20, background: '#eef2ff', color: '#3730a3', border: '1px solid #c7d2fe' }}>
               {p.label} <span style={{ cursor: 'pointer', opacity: 0.6 }} onClick={() => setFwdPicks(fwdPicks.filter((_, idx) => idx !== i))}>✕</span>
