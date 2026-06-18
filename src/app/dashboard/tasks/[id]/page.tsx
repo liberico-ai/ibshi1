@@ -1687,7 +1687,7 @@ export default function TaskDetailPage() {
     </div>
   )
 
-  const isActive = task.status === 'IN_PROGRESS'
+  const isActive = task.status === 'IN_PROGRESS' || task.status === 'RETURNED'
   const isDone = task.status === 'DONE'
 
   let isP45Valid = true
@@ -1870,6 +1870,7 @@ export default function TaskDetailPage() {
                 taskId={taskId}
                 isEditable={isActive}
                 projectCode={task.project?.projectCode}
+                project={task.project}
               />
             </div>
 

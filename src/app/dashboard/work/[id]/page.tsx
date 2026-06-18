@@ -241,9 +241,11 @@ export default function WorkDetailPage() {
         taskId={id}
         isEditable={isAssignee && !myDone && task.status !== 'DONE'}
         projectCode={task.project?.projectCode}
+        project={task.project}
         initialTemplate={
-          task.resultData?.templateType as 'PR' | 'BBH' | 'WELD_PAINT' | undefined ??
-          (/\bpr\b|vật tư|đề xuất/i.test(task.title) || (task.taskType || '').startsWith('P2') ? 'PR' :
+          task.resultData?.templateType as 'ESTIMATE' | 'PR' | 'BBH' | 'WELD_PAINT' | undefined ??
+          (/dự toán|estimate/i.test(task.title) ? 'ESTIMATE' :
+           /\bpr\b|vật tư|đề xuất/i.test(task.title) || (task.taskType || '').startsWith('P2') ? 'PR' :
            /\bhọp\b|bbh|meeting/i.test(task.title) ? 'BBH' : undefined)
         }
       />

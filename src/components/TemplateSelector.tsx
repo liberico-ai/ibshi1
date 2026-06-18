@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import MomSectionsUI from '@/components/MomSectionsUI'
+import EstimateUploadUI from '@/components/EstimateUploadUI'
 import BomPrUploadUI from '@/app/dashboard/tasks/[id]/components/BomPrUploadUI'
 import WeldPaintUploadUI from '@/app/dashboard/tasks/[id]/components/WeldPaintUploadUI'
 
-export type TemplateType = 'PR' | 'BBH' | 'WELD_PAINT' | null
+export type TemplateType = 'ESTIMATE' | 'PR' | 'BBH' | 'WELD_PAINT' | null
 
-const TEMPLATES: { value: TemplateType; label: string; icon: string; desc: string }[] = [
+const TEMPLATES: { value: NonNullable<TemplateType>; label: string; icon: string; desc: string }[] = [
+  { value: 'ESTIMATE', label: 'Dự toán thi công', icon: '📊', desc: 'Upload Excel dự toán (DT01-DT07), parse tổng hợp chi phí' },
   { value: 'PR', label: 'Đề xuất vật tư (PR)', icon: '📦', desc: 'Upload file PR, parse danh sách vật tư, đối chiếu kho' },
   { value: 'BBH', label: 'Biên bản họp (BBH)', icon: '📋', desc: 'Upload BB họp Excel, parse nội dung & phân công' },
   { value: 'WELD_PAINT', label: 'Vật tư hàn / sơn', icon: '🔧', desc: 'Upload danh sách vật tư hàn, sơn' },
@@ -18,14 +20,15 @@ interface Props {
   taskId: string
   isEditable: boolean
   projectCode?: string
+  project?: { projectCode?: string; projectName?: string; clientName?: string; contractValue?: number | string; productType?: string; startDate?: string | Date; endDate?: string | Date } | null
   initialTemplate?: TemplateType
 }
 
-export default function TemplateSelector({ taskId, isEditable, projectCode, initialTemplate }: Props) {
+export default function TemplateSelector({ taskId, isEditable, projectCode, project, initialTemplate }: Props) {
   const [selected, setSelected] = useState<TemplateType>(initialTemplate ?? null)
   const [loaded, setLoaded] = useState(false)
+  const [resultData, setResultData] = useState<Record<string, unknown>>({})
 
-  // resultData from server
   const [prData, setPrData] = useState('')
   const [momAttendants, setMomAttendants] = useState('')
   const [momSections, setMomSections] = useState('')
@@ -36,6 +39,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, init
     apiFetch(`/api/work/tasks/${taskId}/result-data`).then((r) => {
       if (r.ok && r.resultData) {
         const rd = r.resultData as Record<string, unknown>
+        setResultData(rd)
         if (rd.templateType) setSelected(rd.templateType as TemplateType)
         if (rd.bomPr) setPrData(String(rd.bomPr))
         if (rd.momAttendants) setMomAttendants(String(rd.momAttendants))
@@ -50,6 +54,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, init
   useEffect(() => { loadResultData() }, [loadResultData])
 
   const saveField = (key: string, value: unknown) => {
+    setResultData(prev => ({ ...prev, [key]: value }))
     apiFetch(`/api/work/tasks/${taskId}/result-data`, {
       method: 'POST',
       body: JSON.stringify({ key, value }),
@@ -95,11 +100,8 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, init
 
   if (!loaded) return null
 
-  const hasData = prData || momAttendants || momSections || weldData || paintData
-
   return (
     <div>
-      {/* Template selector chips */}
       <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
@@ -145,7 +147,25 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, init
         </div>
       </div>
 
-      {/* Render selected template UI */}
+      {selected === 'ESTIMATE' && (
+        <div style={{ marginTop: 12 }}>
+          <EstimateUploadUI
+            isEditable={isEditable}
+            project={project || (projectCode ? { projectCode } : undefined)}
+            estimateData={{
+              totalMaterial: Number(resultData.totalMaterial) || 0,
+              totalLabor: Number(resultData.totalLabor) || 0,
+              totalService: Number(resultData.totalService) || 0,
+              totalOverhead: Number(resultData.totalOverhead) || 0,
+              totalEstimate: Number(resultData.totalEstimate) || 0,
+              dt02Detail: resultData.dt02Detail ? String(resultData.dt02Detail) : undefined,
+              estimateFileName: resultData.estimateFileName ? String(resultData.estimateFileName) : undefined,
+            }}
+            onFieldChange={saveField}
+          />
+        </div>
+      )}
+
       {selected === 'PR' && (
         <div style={{ marginTop: 12 }}>
           <BomPrUploadUI
