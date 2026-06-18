@@ -33,7 +33,7 @@ interface Task {
   resultData?: Record<string, unknown> | null
 }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
-const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Một người hoàn thành', SUBMITTED_TO_CREATOR: '↩ Đã trả người giao', COMPLETED: '✓ Hoàn thành (tất cả)', CLOSED: '🏁 Người giao kết thúc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại (sai phạm vi)', REASSIGNED: 'Giao lại', SUBTASK_CREATED: 'Tạo việc con', COMMENT: '💬 Trao đổi' }
+const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao việc', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành phần việc', SUBMITTED_TO_CREATOR: '↩ Trả kết quả', COMPLETED: '✓ Hoàn thành tất cả', CLOSED: '🏁 Kết thúc công việc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: '🔄 Giao lại', SUBTASK_CREATED: '+ Tạo việc con', COMMENT: '💬 Trao đổi', EDITED: '✏️ Chỉnh sửa' }
 const STATUS_LABEL: Record<string, string> = { OPEN: 'Mới', IN_PROGRESS: 'Đang xử lý', AWAITING_REVIEW: 'Chờ người giao kết thúc', DONE: 'Hoàn thành', RETURNED: 'Bị trả lại', CANCELLED: 'Đã hủy' }
 const TASK_TYPES = [
   { v: 'FREE', l: 'Việc khác' },
@@ -307,17 +307,42 @@ export default function WorkDetailPage() {
         {/* Trao đổi & lịch sử (cột chính) */}
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="text-sm font-semibold mb-2">💬 Trao đổi & lịch sử</div>
-          <div className="space-y-2 mb-3">
+          <div className="space-y-1 mb-3">
             {task.history.map((h) => {
               const target = h.toName || h.toRoleName
+              const isComment = h.action === 'COMMENT'
+              const actionColor = h.action === 'RETURNED' ? '#dc2626' : h.action === 'COMPLETED' || h.action === 'CLOSED' ? '#059669' : h.action === 'FORWARDED' ? '#7c3aed' : 'var(--navy,#0a2540)'
+
+              let detail = ''
+              if (h.action === 'CREATED') detail = h.byName ? `${h.byName} tạo công việc` : ''
+              else if (h.action === 'ASSIGNED') detail = `${h.byName || '?'} → ${target || '?'}`
+              else if (h.action === 'ASSIGNEE_DONE') detail = `${h.byName || '?'} hoàn thành` + (target ? ` → trả ${target}` : '')
+              else if (h.action === 'SUBMITTED_TO_CREATOR') detail = `${h.byName || '?'} trả kết quả cho ${target || 'người giao'}`
+              else if (h.action === 'FORWARDED') detail = `${h.byName || '?'} chuyển tiếp` + (target ? ` cho ${target}` : '')
+              else if (h.action === 'RETURNED') detail = `${h.byName || '?'} trả lại cho ${h.fromName || 'người giao'}`
+              else if (h.action === 'REASSIGNED') detail = `${h.byName || '?'} giao lại` + (target ? ` cho ${target}` : '')
+              else if (h.action === 'CLOSED') detail = `${h.byName || '?'} kết thúc công việc`
+              else if (h.action === 'COMPLETED') detail = `${h.byName || '?'} — tất cả đã hoàn thành`
+              else if (h.action === 'EDITED') detail = `${h.byName || '?'} chỉnh sửa thông tin`
+              else if (h.action === 'SUBTASK_CREATED') detail = h.byName || ''
+              else detail = h.byName || ''
+
               return (
-                <div key={h.id} className="text-sm">
-                  <span className="font-semibold" style={{ color: 'var(--navy,#0a2540)' }}>{ACT[h.action] || h.action}</span>
-                  {h.byName && <span style={{ color: 'var(--text-secondary)' }}> · {h.byName}</span>}
-                  {(h.action === 'ASSIGNED' || h.action === 'REASSIGNED' || h.action === 'FORWARDED') && target && <span style={{ color: 'var(--text-secondary)' }}> → {target}</span>}
-                  {h.action === 'RETURNED' && h.fromName && <span style={{ color: 'var(--text-secondary)' }}> → {h.fromName}</span>}
-                  {h.reason && <span style={{ color: 'var(--text-secondary)' }}> — {h.reason}</span>}
-                  <span className="text-xs ml-2" style={{ color: 'var(--text-muted)' }}>{new Date(h.createdAt).toLocaleString('vi-VN')}</span>
+                <div key={h.id} style={{ padding: '4px 0', borderBottom: isComment ? 'none' : '1px solid #f1f5f9' }}>
+                  {isComment ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '4px 8px', background: '#f8fafc', borderRadius: 6 }}>
+                      <span className="text-sm font-semibold" style={{ color: '#1d4ed8', flexShrink: 0 }}>{h.byName || '?'}</span>
+                      <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{h.reason}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}>{new Date(h.createdAt).toLocaleString('vi-VN')}</span>
+                    </div>
+                  ) : (
+                    <div className="text-sm" style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                      <span className="font-semibold" style={{ color: actionColor, flexShrink: 0 }}>{ACT[h.action] || h.action}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{detail}</span>
+                      {h.reason && h.action !== 'COMMENT' && <span style={{ color: '#64748b', fontStyle: 'italic' }}>— {h.reason}</span>}
+                      <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}>{new Date(h.createdAt).toLocaleString('vi-VN')}</span>
+                    </div>
+                  )}
                 </div>
               )
             })}

@@ -263,9 +263,8 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
     }
   }
 
-  // Mỗi người tự ghi nhận đã xong (kèm hướng chọn)
   await prisma.taskHistory.create({
-    data: { taskId, action: 'ASSIGNEE_DONE', byUserId: userId, reason: input.note, meta: { mode: input.mode } },
+    data: { taskId, action: 'ASSIGNEE_DONE', byUserId: userId, toUserId: task.createdBy, reason: input.note, meta: { mode: input.mode } },
   })
 
   // Option 2: hoàn thành & CHUYỂN TIẾP sang bộ phận khác → sinh task mới liên kết (truy vết)
@@ -296,8 +295,9 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
     if (srcRd && typeof srcRd === 'object' && Object.keys(srcRd as object).length > 0) {
       await prisma.task.update({ where: { id: fwd.id }, data: { resultData: JSON.parse(JSON.stringify(srcRd)) } }).catch(() => {})
     }
+    const fwdAssigneeNames = input.forward.assignees.map((a: { userId?: string; role?: string }) => a.userId || a.role || '').filter(Boolean)
     await prisma.taskHistory.create({
-      data: { taskId, action: 'FORWARDED', byUserId: userId, reason: input.forward.note, meta: { forwardedTaskId: fwd.id } },
+      data: { taskId, action: 'FORWARDED', byUserId: userId, toUserId: fwdAssigneeNames[0] || null, reason: input.forward.note, meta: { forwardedTaskId: fwd.id } },
     })
   }
 
@@ -328,7 +328,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
       // (1) Hoàn thành & kết thúc  hoặc  (2) Tạo việc tiếp theo.
       await prisma.$transaction([
         prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.AWAITING_REVIEW, resultData: input.resultData ? JSON.parse(JSON.stringify(input.resultData)) : undefined } }),
-        prisma.taskHistory.create({ data: { taskId, action: 'SUBMITTED_TO_CREATOR', byUserId: userId } }),
+        prisma.taskHistory.create({ data: { taskId, action: 'SUBMITTED_TO_CREATOR', byUserId: userId, toUserId: task.createdBy } }),
         prisma.notification.create({ data: { userId: task.createdBy, title: `Cần xem & kết thúc: ${task.title}`, message: 'Người nhận đã hoàn thành và trả lại. Hãy kết thúc hoặc tạo việc tiếp theo.', type: 'task_review', linkUrl: `/dashboard/work/${taskId}` } }),
       ])
     }
@@ -385,7 +385,7 @@ export async function reassignTask(taskId: string, userId: string, input: Reassi
     prisma.taskAssignee.deleteMany({ where: { taskId } }),
     prisma.taskAssignee.createMany({ data: input.assignees.map((a, i) => ({ taskId, role: a.role || null, userId: a.userId || null, isPrimary: a.isPrimary ?? i === 0 })) }),
     prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.OPEN, assignedAt: new Date() } }),
-    prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, reason: input.note } }),
+    prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, toRole: input.assignees[0]?.role || null, toUserId: input.assignees[0]?.userId || null, reason: input.note } }),
   ])
   await notifyAssignees(taskId, task.title, input.assignees)
   return { ok: true }
