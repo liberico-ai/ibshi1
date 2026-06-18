@@ -66,7 +66,34 @@ export async function completeTask(
   const mergedResultData = resultData ? JSON.parse(JSON.stringify(resultData)) : undefined
   if (finalNotes && mergedResultData) mergedResultData._notes = finalNotes
 
-  // Mark as done
+  // Multi-assignee: mark current user's row as done first
+  const myRow =
+    task.assignees.find((a) => a.userId === userId) ||
+    task.assignees.find((a) => !a.done)
+  if (myRow) {
+    await prisma.taskAssignee.update({
+      where: { id: myRow.id },
+      data: { done: true, doneAt: new Date(), doneBy: userId },
+    })
+  }
+
+  // Check if ALL assignees are now done (including the one we just updated)
+  const totalAssignees = task.assignees.length
+  const alreadyDone = task.assignees.filter((a) => a.done && a.id !== myRow?.id).length
+  const allDone = totalAssignees <= 1 || (alreadyDone + 1 >= totalAssignees)
+
+  if (!allDone) {
+    // Not all assignees done yet — save resultData but keep task active
+    if (mergedResultData) {
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { resultData: mergedResultData },
+      })
+    }
+    return { nextSteps: [] }
+  }
+
+  // All assignees done — mark task as DONE
   await prisma.task.update({
     where: { id: taskId },
     data: {
