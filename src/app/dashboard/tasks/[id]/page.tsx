@@ -19,7 +19,7 @@ import P3_6ApprovalUI from './components/P3_6ApprovalUI'
 import FlexibleFeatures from './components/FlexibleFeatures'
 import FlexibleActionBar from './components/FlexibleActionBar'
 import MomSectionsUI from '@/components/MomSectionsUI'
-import InheritedDataUI from '@/components/InheritedDataUI'
+
 import TemplateSelector from '@/components/TemplateSelector'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
@@ -1859,12 +1859,7 @@ export default function TaskDetailPage() {
               </p>
             </div>
 
-            {/* Dữ liệu kế thừa từ bước trước (estimate, MOM, PR...) — hiển thị read-only cho step phê duyệt */}
-            {task.resultData && (
-              <InheritedDataUI resultData={task.resultData as Record<string, unknown>} project={task.project} />
-            )}
-
-            {/* Template selector: chọn biểu mẫu + upload/parse cho mọi step (trừ step đã có UI riêng) */}
+            {/* Template selector: chọn biểu mẫu + upload/parse — single point cho tất cả template data */}
             <div style={{ marginBottom: '1rem' }}>
               <TemplateSelector
                 taskId={taskId}

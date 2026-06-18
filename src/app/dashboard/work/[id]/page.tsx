@@ -7,7 +7,7 @@ import { ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import TemplateSelector from '@/components/TemplateSelector'
-import InheritedDataUI from '@/components/InheritedDataUI'
+
 
 interface DocFile { id: string; fileName: string; fileUrl: string }
 interface DocAck { userId: string; userName: string | null; createdAt: string }
@@ -231,23 +231,11 @@ export default function WorkDetailPage() {
         </div>
       </div>
 
-      {/* Dữ liệu kế thừa từ task trước (estimate, MOM...) — read-only */}
-      {task.resultData && Object.keys(task.resultData).length > 0 && (
-        <InheritedDataUI resultData={task.resultData} project={task.project} />
-      )}
-
-      {/* Template selector: chọn biểu mẫu PR / BBH / Hàn-Sơn */}
       <TemplateSelector
         taskId={id}
         isEditable={isAssignee && !myDone && task.status !== 'DONE'}
         projectCode={task.project?.projectCode}
         project={task.project}
-        initialTemplate={
-          task.resultData?.templateType as 'ESTIMATE' | 'PR' | 'BBH' | 'WELD_PAINT' | undefined ??
-          (/dự toán|estimate/i.test(task.title) ? 'ESTIMATE' :
-           /\bpr\b|vật tư|đề xuất/i.test(task.title) || (task.taskType || '').startsWith('P2') ? 'PR' :
-           /\bhọp\b|bbh|meeting/i.test(task.title) ? 'BBH' : undefined)
-        }
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">

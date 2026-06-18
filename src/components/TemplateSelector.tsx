@@ -47,7 +47,6 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       if (r.ok && r.resultData) {
         const rd = r.resultData as Record<string, unknown>
         setResultData(rd)
-        if (rd.templateType) setSelected(rd.templateType as TemplateType)
         if (rd.bomPr) setPrData(String(rd.bomPr))
         if (rd.momAttendants) setMomAttendants(String(rd.momAttendants))
         if (rd.momSections) setMomSections(String(rd.momSections))
@@ -56,6 +55,19 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
         if (rd.wbsItems) setWbsData(String(rd.wbsItems))
         if (rd.milestones) setMilestonesData(String(rd.milestones))
         if (rd.bomItemsList) setBomItems(String(rd.bomItemsList))
+        // Auto-detect template: explicit > data-based > prop
+        if (rd.templateType) {
+          setSelected(rd.templateType as TemplateType)
+        } else {
+          const detected = rd.totalEstimate ? 'ESTIMATE'
+            : (rd.momSections || rd.momAttendants) ? 'BBH'
+            : rd.bomPr ? 'PR'
+            : (rd.wbsItems || rd.milestones) ? 'WBS'
+            : (rd.weldData || rd.paintData) ? 'WELD_PAINT'
+            : rd.bomItemsList ? 'BOM'
+            : initialTemplate ?? null
+          if (detected) setSelected(detected)
+        }
       }
       setLoaded(true)
     }).catch(() => setLoaded(true))
