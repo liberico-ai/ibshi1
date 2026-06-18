@@ -242,10 +242,18 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <h4 style={{ margin: 0, fontSize: '0.9rem' }}>Thành phần tham dự (Attendants)</h4>
           {isEditable && (
-            <button type="button" onClick={addAttendant}
-              style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
-              + Thêm
-            </button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {attendants.length > 0 && (
+                <button type="button" onClick={() => updateAttendants([])}
+                  style={{ padding: '4px 10px', fontSize: '0.75rem', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
+                  ✕ Xoá tất cả
+                </button>
+              )}
+              <button type="button" onClick={addAttendant}
+                style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
+                + Thêm
+              </button>
+            </div>
           )}
         </div>
         {attendants.length === 0 ? (
@@ -364,10 +372,18 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
       ))}
 
       {isEditable && (
-        <button type="button" onClick={addSection}
-          style={{ padding: '8px 16px', fontSize: '0.85rem', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px dashed var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600, width: '100%' }}>
-          + Thêm mục mới
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={addSection}
+            style={{ flex: 1, padding: '8px 16px', fontSize: '0.85rem', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px dashed var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
+            + Thêm mục mới
+          </button>
+          {(attendants.length > 0 || sections.some(s => s.items.some(it => it.noiDung))) && (
+            <button type="button" onClick={() => { updateAttendants([]); updateSections(DEFAULT_SECTIONS) }}
+              style={{ padding: '8px 16px', fontSize: '0.85rem', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
+              ✕ Xoá toàn bộ
+            </button>
+          )}
+        </div>
       )}
     </div>
   )
