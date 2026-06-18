@@ -6,7 +6,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
-import BomPrUploadUI from '@/app/dashboard/tasks/[id]/components/BomPrUploadUI'
+import TemplateSelector from '@/components/TemplateSelector'
 
 interface DocFile { id: string; fileName: string; fileUrl: string }
 interface DocAck { userId: string; userName: string | null; createdAt: string }
@@ -29,7 +29,7 @@ interface Task {
   progress?: { done: number; total: number }
   parent?: LinkTask | null; forwardedFrom?: LinkTask | null; forwards?: LinkTask[]
   meetings?: LinkMeeting[]
-  resultData?: { bomPr?: string } | null
+  resultData?: Record<string, unknown> | null
 }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
 const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Một người hoàn thành', SUBMITTED_TO_CREATOR: '↩ Đã trả người giao', COMPLETED: '✓ Hoàn thành (tất cả)', CLOSED: '🏁 Người giao kết thúc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại (sai phạm vi)', REASSIGNED: 'Giao lại', SUBTASK_CREATED: 'Tạo việc con', COMMENT: '💬 Trao đổi' }
@@ -72,7 +72,6 @@ export default function WorkDetailPage() {
   const [delOpen, setDelOpen] = useState(false)
   const [delDept, setDelDept] = useState('')
   const [delQuery, setDelQuery] = useState('')
-  const [prBom, setPrBom] = useState('')
   // Toast + trả lại (inline) + sửa việc
   const [toast, setToast] = useState('')
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2600) }
@@ -84,8 +83,6 @@ export default function WorkDetailPage() {
   const load = useCallback(() => { apiFetch(`/api/work/tasks/${id}`).then((r) => { if (r.ok) setTask(r.task); setLoading(false) }) }, [id])
   useEffect(() => { load() }, [load])
   useEffect(() => { apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) }) }, [])
-  // Khởi tạo dữ liệu PR từ task (1 lần)
-  useEffect(() => { if (task?.resultData?.bomPr != null) setPrBom((p) => p || task.resultData!.bomPr || '') }, [task?.resultData?.bomPr])
 
   useEffect(() => {
     if (task?.taskType && /^P\d/.test(task.taskType)) {
@@ -150,11 +147,6 @@ export default function WorkDetailPage() {
     const qd = delQuery.trim().toLowerCase(); if (!qd) return []
     const dept = delDept ? ROLE_TO_DEPT[delDept] : ''
     return users.filter((u) => (u.fullName || u.username || '').toLowerCase().includes(qd)).filter((u) => !dept || ROLE_TO_DEPT[u.roleCode] === dept).slice(0, 8)
-  }
-  // Lưu dữ liệu PR (BomPrUploadUI) vào task
-  const saveBomPr = (data: string) => {
-    setPrBom(data)
-    apiFetch(`/api/work/tasks/${id}/bom-pr`, { method: 'POST', body: JSON.stringify({ data }) }).catch(() => {})
   }
   const doDelegate = async (userId: string, label: string) => {
     setBusy(true)
@@ -238,15 +230,17 @@ export default function WorkDetailPage() {
         </div>
       </div>
 
-      {/* Đề xuất vật tư (PR) — FULL chiều ngang (bảng rộng): module hệ cũ, tìm kho + chống trùng + tồn kho */}
-      {(/\bpr\b|vật tư|đề xuất/i.test(task.title) || (task.taskType || '').startsWith('P2') || prBom) && (
-        <BomPrUploadUI
-          isEditable={isAssignee && !myDone && task.status !== 'DONE'}
-          bomPrData={prBom || undefined}
-          onChange={saveBomPr}
-          projectCode={task.project?.projectCode}
-        />
-      )}
+      {/* Template selector: chọn biểu mẫu PR / BBH / Hàn-Sơn */}
+      <TemplateSelector
+        taskId={id}
+        isEditable={isAssignee && !myDone && task.status !== 'DONE'}
+        projectCode={task.project?.projectCode}
+        initialTemplate={
+          task.resultData?.templateType as 'PR' | 'BBH' | 'WELD_PAINT' | undefined ??
+          (/\bpr\b|vật tư|đề xuất/i.test(task.title) || (task.taskType || '').startsWith('P2') ? 'PR' :
+           /\bhọp\b|bbh|meeting/i.test(task.title) ? 'BBH' : undefined)
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
       {/* ══ CỘT CHÍNH: tài liệu + trao đổi ══ */}
