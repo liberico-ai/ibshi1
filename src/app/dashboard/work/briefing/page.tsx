@@ -106,7 +106,7 @@ export default function BriefingPage() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
       const res = await fetch('/api/work/briefing/export', {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       })
@@ -134,7 +134,7 @@ export default function BriefingPage() {
     setImportResult(null)
     setPreviewing(true)
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
       const form = new FormData()
       form.append('file', file)
       form.append('mode', 'preview')
@@ -162,7 +162,7 @@ export default function BriefingPage() {
     if (!importFile) return
     setApplying(true)
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
       const form = new FormData()
       form.append('file', importFile)
       form.append('mode', 'apply')
