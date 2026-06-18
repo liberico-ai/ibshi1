@@ -15,7 +15,7 @@ export interface BomEntry {
 }
 
 export interface BomEntryWithSource extends BomEntry {
-  source: 'P2.1' | 'P2.2' | 'P2.3'
+  source: 'P2.1' | 'P2.2' | 'P2.3' | 'PR'
 }
 
 // ── WBS (Work Breakdown Structure) ───────────────────────────

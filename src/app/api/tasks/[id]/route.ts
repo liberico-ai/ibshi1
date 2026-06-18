@@ -120,9 +120,51 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
   // For P3.5: aggregate BOM items from P2.1/P2.2/P2.3 + compare with Materials stock
   // (Note: P3.2 — Kho check tồn kho — has been removed from the workflow; logic merged into P3.5.)
+  // Fallback: nếu không có workflow steps, lấy PR data từ parent/forwardedFrom/self resultData
   let previousStepData: Record<string, unknown> | null = null
   if (task.stepCode === 'P3.5') {
-    const allPrItems = await aggregateBomItems(task.projectId)
+    let allPrItems = await aggregateBomItems(task.projectId)
+
+    // Fallback: tìm bomPr từ parent → forwardedFrom → self resultData
+    if (allPrItems.length === 0) {
+      const parseArr = (raw: unknown): unknown[] => {
+        if (!raw) return []
+        if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return [] } }
+        return Array.isArray(raw) ? raw : []
+      }
+      const normItem = (item: Record<string, unknown>) => ({
+        name: String(item.name || item.description || ''),
+        code: String(item.code || item.materialCode || ''),
+        spec: String(item.spec || item.specification || ''),
+        quantity: String(item.quantity || item.qty || '0'),
+        unit: String(item.unit || ''),
+        source: 'PR' as const,
+      })
+
+      const candidateIds = [
+        (task as unknown as { parentId?: string }).parentId,
+        (task as unknown as { forwardedFromId?: string }).forwardedFromId,
+      ].filter((x): x is string => !!x)
+
+      // Check parent/forwarded tasks
+      for (const cid of candidateIds) {
+        if (allPrItems.length > 0) break
+        const src = await prisma.task.findUnique({ where: { id: cid }, select: { resultData: true } })
+        const rd = src?.resultData as Record<string, unknown> | null
+        if (!rd) continue
+        const bomPr = parseArr(rd.bomPr)
+        if (bomPr.length) allPrItems = bomPr.map((it) => normItem(it as Record<string, unknown>))
+      }
+
+      // Check self resultData (user uploaded PR via TemplateSelector)
+      if (allPrItems.length === 0) {
+        const selfRd = (task as unknown as { resultData?: Record<string, unknown> }).resultData
+        if (selfRd) {
+          const bomPr = parseArr(selfRd.bomPr)
+          if (bomPr.length) allPrItems = bomPr.map((it) => normItem(it as Record<string, unknown>))
+        }
+      }
+    }
 
     // Fetch all materials for stock comparison
     const materials = await fetchAllMaterials()
