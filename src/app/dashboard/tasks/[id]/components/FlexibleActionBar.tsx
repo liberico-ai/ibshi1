@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
+import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 
 interface Usr { id: string; fullName?: string; username?: string; roleCode: string }
+interface FwdDoc { kind: string; label: string; fileAttachmentId?: string; fileName?: string; selected?: boolean }
 const TASK_TYPES = [
   { v: 'FREE', l: 'Việc khác' },
   { v: 'P2.1', l: 'Đề xuất / yêu cầu vật tư (Thiết kế)' },
@@ -45,8 +47,32 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
   const [rejOpen, setRejOpen] = useState(false)
   const [rejReason, setRejReason] = useState('')
 
+  // Forward docs state
+  const [fwdDocs, setFwdDocs] = useState<FwdDoc[]>([])
+  const [newDocLabel, setNewDocLabel] = useState('')
+  const [newDocKind, setNewDocKind] = useState<'MUST_READ' | 'MUST_RETURN'>('MUST_READ')
+  const [newDocFileId, setNewDocFileId] = useState('')
+  const [newDocFileName, setNewDocFileName] = useState('')
+
   const [users, setUsers] = useState<Usr[]>([])
   useEffect(() => { apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) }) }, [])
+
+  const loadSourceDocs = () => {
+    apiFetch(`/api/work/tasks/${taskId}`).then((r) => {
+      if (r.ok && r.task?.docs?.length) {
+        setFwdDocs(r.task.docs.map((d: { kind: string; label: string; fileAttachmentId?: string; file?: { fileName: string } }) => ({
+          kind: d.kind, label: d.label, fileAttachmentId: d.fileAttachmentId || undefined,
+          fileName: d.file?.fileName, selected: true,
+        })))
+      }
+    }).catch(() => {})
+  }
+
+  const addNewDoc = () => {
+    if (!newDocLabel.trim()) return
+    setFwdDocs((prev) => [...prev, { kind: newDocKind, label: newDocLabel.trim(), fileAttachmentId: newDocFileId || undefined, fileName: newDocFileName || undefined, selected: true }])
+    setNewDocLabel(''); setNewDocFileId(''); setNewDocFileName('')
+  }
 
   if (!isActive) return null
 
@@ -65,6 +91,9 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
   const doForward = async () => {
     if (fwdPicks.length === 0) { showToast('Chọn nơi nhận để chuyển tiếp'); return }
     setBusy(true)
+    const selectedDocs = fwdDocs.filter((d) => d.selected).map((d) => ({
+      kind: d.kind, label: d.label, fileAttachmentId: d.fileAttachmentId || undefined,
+    }))
     const res = await apiFetch(`/api/work/tasks/${taskId}/complete`, {
       method: 'POST',
       body: JSON.stringify({
@@ -72,6 +101,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
         forward: {
           taskType: fwdType, note: fwdNote.trim() || undefined,
           assignees: fwdPicks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
+          docs: selectedDocs.length ? selectedDocs : undefined,
         },
         acknowledgedDocIds: [], returnedDocs: [],
       }),
@@ -143,6 +173,41 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
             </div>
           </div>
           <textarea value={fwdNote} onChange={(e) => setFwdNote(e.target.value)} placeholder="Ghi chú chuyển tiếp (tùy chọn)…" rows={2} style={{ ...inp, marginTop: 8 }} />
+
+          {/* ── Tài liệu bắt buộc chuyển tiếp ── */}
+          <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 6, color: '#92400e' }}>📖 Tài liệu bắt buộc (chuyển kèm)</div>
+            {fwdDocs.length === 0 && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6 }}>Không có tài liệu từ task gốc.</div>
+            )}
+            {fwdDocs.map((d, i) => (
+              <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', padding: '3px 0', cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!d.selected} onChange={(e) => setFwdDocs((prev) => prev.map((dd, idx) => idx === i ? { ...dd, selected: e.target.checked } : dd))} />
+                <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? '📄 Phải đọc' : '📤 Phải trả lại'}</span>
+                <span style={{ flex: 1 }}>{d.label}</span>
+                {d.fileName && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({d.fileName})</span>}
+              </label>
+            ))}
+            <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 120 }}>
+                <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Thêm tài liệu mới</label>
+                <input value={newDocLabel} onChange={(e) => setNewDocLabel(e.target.value)} placeholder="Tên tài liệu…" style={{ ...inp, fontSize: '0.78rem', padding: '6px 8px' }} />
+              </div>
+              <select value={newDocKind} onChange={(e) => setNewDocKind(e.target.value as 'MUST_READ' | 'MUST_RETURN')} style={{ ...inp, width: 'auto', fontSize: '0.78rem', padding: '6px 8px' }}>
+                <option value="MUST_READ">Phải đọc</option>
+                <option value="MUST_RETURN">Phải trả lại</option>
+              </select>
+              <button onClick={addNewDoc} disabled={!newDocLabel.trim()} style={{ fontSize: '0.78rem', padding: '6px 12px', borderRadius: 6, background: '#d97706', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, opacity: newDocLabel.trim() ? 1 : 0.5 }}>+ Thêm</button>
+            </div>
+            {newDocLabel.trim() && (
+              <div style={{ marginTop: 4 }}>
+                <MultiFileUpload label="" entityType="TaskDoc" entityId={`draft_fwd_${taskId}`} compact
+                  onUploaded={(f: UploadedFile) => { setNewDocFileId(f.id); setNewDocFileName(f.fileName) }} />
+                {newDocFileName && <span style={{ fontSize: '0.72rem', color: '#059669' }}>✓ {newDocFileName}</span>}
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button onClick={doForward} disabled={busy} style={{ flex: 1, padding: '10px', fontSize: '0.88rem', borderRadius: 10, fontWeight: 700, background: fwdPicks.length > 0 ? '#d97706' : '#9ca3af', color: '#fff', border: 'none', cursor: 'pointer' }}>↗ Xác nhận chuyển tiếp</button>
             <button onClick={() => setFwdOpen(false)} style={{ padding: '10px 20px', fontSize: '0.88rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer' }}>Hủy</button>
@@ -196,7 +261,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
             <button onClick={onComplete} disabled={busy} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#059669', color: '#fff', border: 'none', cursor: 'pointer' }}>
               ✓ Hoàn thành & trả người tạo
             </button>
-            <button onClick={() => { setFwdOpen(true); setDelOpen(false); setRejOpen(false) }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#d97706', color: '#fff', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => { setFwdOpen(true); setDelOpen(false); setRejOpen(false); loadSourceDocs() }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#d97706', color: '#fff', border: 'none', cursor: 'pointer' }}>
               ↗ Hoàn thành & chuyển tiếp
             </button>
             <button onClick={() => { setDelOpen(true); setFwdOpen(false); setRejOpen(false) }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--surface, #fff)', color: '#1d4ed8', border: '1px solid #bfdbfe', cursor: 'pointer' }}>

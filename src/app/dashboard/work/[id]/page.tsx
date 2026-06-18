@@ -62,6 +62,11 @@ export default function WorkDetailPage() {
   const [fwdPicks, setFwdPicks] = useState<{ role?: string; userId?: string; label: string }[]>([])
   const [users, setUsers] = useState<Usr[]>([])
   const [fwdQuery, setFwdQuery] = useState('')
+  // Docs chuyển tiếp
+  const [fwdDocSel, setFwdDocSel] = useState<Record<string, boolean>>({})
+  const [newFwdDocLabel, setNewFwdDocLabel] = useState('')
+  const [newFwdDocKind, setNewFwdDocKind] = useState<'MUST_READ' | 'MUST_RETURN'>('MUST_READ')
+  const [extraFwdDocs, setExtraFwdDocs] = useState<{ kind: string; label: string }[]>([])
   // Chuyển giao (giao lại việc này cho người khác trong phòng)
   const [delOpen, setDelOpen] = useState(false)
   const [delDept, setDelDept] = useState('')
@@ -118,9 +123,16 @@ export default function WorkDetailPage() {
   }
   const doForward = async () => {
     if (fwdPicks.length === 0) { showToast('Chọn nơi nhận để chuyển tiếp'); return }
+    const selectedDocs = [
+      ...task.docs.filter((d) => fwdDocSel[d.id] !== false).map((d) => ({
+        kind: d.kind, label: d.label, fileAttachmentId: (d.file as DocFile | null | undefined)?.id || undefined,
+      })),
+      ...extraFwdDocs,
+    ]
     await doComplete('FORWARD', {
       taskType: fwdType, note: fwdNote.trim() || undefined,
       assignees: fwdPicks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
+      docs: selectedDocs.length ? selectedDocs : undefined,
     })
   }
   const doFinalize = async () => {
@@ -405,6 +417,38 @@ export default function WorkDetailPage() {
             </div>
           </div>
           <textarea value={fwdNote} onChange={(e) => setFwdNote(e.target.value)} placeholder="Ghi chú chuyển tiếp (tùy chọn)…" rows={2} style={{ ...inp, marginTop: 8 }} />
+
+          {/* Tài liệu bắt buộc chuyển kèm */}
+          {(task.docs.length > 0 || extraFwdDocs.length > 0) && (
+            <div className="rounded-lg p-3 mt-2" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+              <div className="text-xs font-bold mb-1.5" style={{ color: '#92400e' }}>📖 Tài liệu bắt buộc (chuyển kèm)</div>
+              {task.docs.map((d) => (
+                <label key={d.id} className="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer">
+                  <input type="checkbox" checked={fwdDocSel[d.id] !== false} onChange={(e) => setFwdDocSel((s) => ({ ...s, [d.id]: e.target.checked }))} />
+                  <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? '📄 Phải đọc' : '📤 Phải trả'}</span>
+                  <span className="flex-1">{d.label}</span>
+                  {d.file && <span style={{ color: 'var(--text-muted)' }}>({d.file.fileName})</span>}
+                </label>
+              ))}
+              {extraFwdDocs.map((d, i) => (
+                <div key={`extra-${i}`} className="flex items-center gap-1.5 text-xs py-0.5">
+                  <span>✓</span>
+                  <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? '📄 Phải đọc' : '📤 Phải trả'}</span>
+                  <span className="flex-1">{d.label}</span>
+                  <span className="cursor-pointer opacity-60" onClick={() => setExtraFwdDocs((prev) => prev.filter((_, idx) => idx !== i))}>✕</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-1.5 mt-1.5 items-end">
+            <input value={newFwdDocLabel} onChange={(e) => setNewFwdDocLabel(e.target.value)} placeholder="Thêm tài liệu mới…" style={{ ...inp, flex: 1, fontSize: '0.78rem', padding: '5px 8px' }} />
+            <select value={newFwdDocKind} onChange={(e) => setNewFwdDocKind(e.target.value as 'MUST_READ' | 'MUST_RETURN')} style={{ ...inp, width: 'auto', fontSize: '0.78rem', padding: '5px 8px' }}>
+              <option value="MUST_READ">Phải đọc</option>
+              <option value="MUST_RETURN">Phải trả lại</option>
+            </select>
+            <button onClick={() => { if (newFwdDocLabel.trim()) { setExtraFwdDocs((p) => [...p, { kind: newFwdDocKind, label: newFwdDocLabel.trim() }]); setNewFwdDocLabel('') } }} disabled={!newFwdDocLabel.trim()} className="text-xs px-2.5 py-1.5 rounded font-semibold" style={{ background: '#d97706', color: '#fff', border: 'none', cursor: 'pointer', opacity: newFwdDocLabel.trim() ? 1 : 0.5 }}>+ Thêm</button>
+          </div>
+
           <div className="flex gap-2 mt-2">
             <button onClick={doForward} disabled={busy || !canComplete} className="text-sm px-4 py-2.5 rounded-lg font-semibold flex-1" style={{ background: canComplete ? '#d97706' : '#9ca3af', color: '#fff' }}>↗ Xác nhận chuyển tiếp</button>
             <button onClick={() => setFwdOpen(false)} className="text-sm px-4 py-2.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>

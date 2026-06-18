@@ -4,7 +4,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
+import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 
+interface DocFile { id: string; fileName: string; fileUrl: string }
+interface DocAck { userId: string; userName: string | null; createdAt: string }
+interface Doc { id: string; kind: string; label: string; fulfilled: boolean; note?: string | null; fileAttachmentId?: string | null; file?: DocFile | null; acks?: DocAck[] }
 interface Assignee { id: string; role: string | null; userId: string | null; isPrimary: boolean; done?: boolean; doneAt?: string | null; userName?: string | null; roleName?: string | null }
 interface Hist { id: string; action: string; byUserId: string; reason: string | null; createdAt: string; toRole: string | null; toUserId?: string | null; fromUserId?: string | null; byName?: string | null; fromName?: string | null; toName?: string | null; toRoleName?: string | null }
 interface LinkTask { id: string; title: string; status: string; taskType?: string }
@@ -14,10 +18,12 @@ interface FlexData {
   history: Hist[]
   children: LinkTask[]
   meetings?: LinkMeeting[]
+  docs: Doc[]
   progress?: { done: number; total: number }
   projectId?: string | null
   project?: { projectCode: string; projectName: string } | null
   title: string
+  status: string
 }
 
 const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành', SUBMITTED_TO_CREATOR: '↩ Đã trả', COMPLETED: '✓ Hoàn thành (tất cả)', CLOSED: '🏁 Kết thúc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: 'Giao lại', SUBTASK_CREATED: 'Tạo việc con', COMMENT: '💬 Trao đổi' }
@@ -28,6 +34,9 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
   const { user } = useAuthStore()
   const [data, setData] = useState<FlexData | null>(null)
   const [comment, setComment] = useState('')
+  const [acked, setAcked] = useState<Record<string, boolean>>({})
+  const [returnNotes, setReturnNotes] = useState<Record<string, string>>({})
+  const [returnFiles, setReturnFiles] = useState<Record<string, DocFile>>({})
 
   const load = useCallback(() => {
     apiFetch(`/api/work/tasks/${taskId}`).then((r) => {
@@ -37,10 +46,12 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
           history: r.task.history || [],
           children: r.task.children || [],
           meetings: r.task.meetings || [],
+          docs: r.task.docs || [],
           progress: r.task.progress,
           projectId: r.task.projectId,
           project: r.task.project,
           title: r.task.title,
+          status: r.task.status,
         })
       }
     }).catch(() => {})
@@ -54,6 +65,11 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
     if (res.ok) { setComment(''); load() }
   }
 
+  const ackDoc = async (docId: string) => {
+    setAcked((s) => ({ ...s, [docId]: true }))
+    await apiFetch(`/api/work/tasks/${taskId}/ack-doc`, { method: 'POST', body: JSON.stringify({ docId }) })
+  }
+
   const goCreateMeeting = () => {
     const q = new URLSearchParams({ new: '1', task: taskId })
     if (data?.projectId) q.set('project', data.projectId)
@@ -64,10 +80,94 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
 
   if (!data) return null
 
+  const mustRead = data.docs.filter((d) => d.kind === 'MUST_READ')
+  const mustReturn = data.docs.filter((d) => d.kind === 'MUST_RETURN')
+  const hasDocs = mustRead.length > 0 || mustReturn.length > 0
+  const ackedByMe = (d: Doc) => !!d.acks?.some((a) => a.userId === user?.id) || !!acked[d.id]
+  const isActive = data.status !== 'DONE' && data.status !== 'CANCELLED'
+  const isAssignee = data.assignees.some((a) => a.userId === user?.id || a.role === user?.roleCode)
+  const myDone = data.assignees.find((a) => a.userId === user?.id || a.role === user?.roleCode)?.done
+
   const assigneeLabel = (a: Assignee) => a.userName || a.roleName || roleLabel(a.role) || '—'
 
   return (
     <>
+      {/* ── MUST_READ DOCUMENTS ── */}
+      {mustRead.length > 0 && (
+        <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem', border: '1px solid #fbbf24', background: '#fffbeb' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', marginBottom: 10, color: '#92400e' }}>
+            📖 Tài liệu bắt buộc đọc ({mustRead.length})
+          </h3>
+          {mustRead.map((d) => (
+            <div key={d.id} style={{ padding: '8px 0', borderBottom: '1px solid #fde68a' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                <span>📄</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{d.label}</div>
+                  {d.file ? (
+                    <a href={d.file.fileUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: '0.78rem', color: '#1d4ed8', textDecoration: 'underline', wordBreak: 'break-all' }}>
+                      {d.file.fileName} ↗
+                    </a>
+                  ) : (
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>(không có tệp đính kèm)</span>
+                  )}
+                </div>
+              </div>
+              {isAssignee && isActive && !myDone && (() => {
+                const meAcked = ackedByMe(d)
+                return (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: '0.78rem', cursor: 'pointer', color: meAcked ? '#059669' : '#92400e' }}>
+                    <input type="checkbox" checked={meAcked} disabled={!!d.acks?.some((a) => a.userId === user?.id)} onChange={() => ackDoc(d.id)} />
+                    Tôi đã đọc tài liệu này
+                  </label>
+                )
+              })()}
+              {d.acks && d.acks.length > 0 && (
+                <div style={{ fontSize: '0.72rem', marginTop: 4, color: '#059669' }}>
+                  ✓ Đã đọc: {d.acks.map((a) => `${a.userName || 'Người dùng'} (${new Date(a.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})`).join('; ')}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── MUST_RETURN DOCUMENTS ── */}
+      {mustReturn.length > 0 && (
+        <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem', border: '1px solid #93c5fd', background: '#eff6ff' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', marginBottom: 10, color: '#1e40af' }}>
+            📤 Tài liệu phải trả lại ({mustReturn.length})
+          </h3>
+          {mustReturn.map((d) => (
+            <div key={d.id} style={{ padding: '8px 0', borderBottom: '1px solid #bfdbfe' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
+                📌 {d.label} {d.fulfilled && <span style={{ color: '#059669' }}>✓</span>}
+              </div>
+              {d.fulfilled ? (
+                <div style={{ fontSize: '0.78rem', marginTop: 4, color: 'var(--text-secondary)' }}>
+                  {d.note && <div>📝 {d.note}</div>}
+                  {d.file && <a href={d.file.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>{d.file.fileName} ↗</a>}
+                </div>
+              ) : isAssignee && isActive && !myDone ? (
+                <div style={{ marginTop: 6 }}>
+                  <textarea
+                    value={returnNotes[d.id] || ''}
+                    onChange={(e) => setReturnNotes((s) => ({ ...s, [d.id]: e.target.value }))}
+                    placeholder="Nhập nội dung trả lại…"
+                    rows={2}
+                    style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 9px', fontSize: '0.78rem', background: '#fff' }}
+                  />
+                  <MultiFileUpload label="" entityType="TaskDoc" entityId={`${taskId}_${d.id}`} compact
+                    onUploaded={(f: UploadedFile) => setReturnFiles((s) => ({ ...s, [d.id]: { id: f.id, fileName: f.fileName, fileUrl: f.fileUrl } }))} />
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 4 }}>Cần nhập nội dung <b>hoặc</b> đính kèm tệp.</div>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── SIDEBAR PANELS ── */}
 
       {/* Assignees */}

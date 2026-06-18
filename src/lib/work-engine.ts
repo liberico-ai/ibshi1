@@ -261,6 +261,11 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
   // Option 2: hoàn thành & CHUYỂN TIẾP sang bộ phận khác → sinh task mới liên kết (truy vết)
   let forwardedId: string | null = null
   if (input.mode === 'FORWARD' && input.forward) {
+    const fwdDocs = input.forward.docs?.length
+      ? input.forward.docs
+      : task.docs.filter((d) => d.kind === 'MUST_READ' || d.kind === 'MUST_RETURN').map((d) => ({
+          kind: d.kind as 'MUST_READ' | 'MUST_RETURN', label: d.label, fileAttachmentId: d.fileAttachmentId || undefined,
+        }))
     const fwd = await createTask(
       {
         title: input.forward.title?.trim() || `[Chuyển tiếp] ${task.title}`,
@@ -270,7 +275,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
         priority: 'NORMAL',
         deadline: input.forward.deadline,
         assignees: input.forward.assignees,
-        docs: input.forward.docs,
+        docs: fwdDocs.length ? fwdDocs : undefined,
       },
       userId,
       { forwardedFromId: taskId }

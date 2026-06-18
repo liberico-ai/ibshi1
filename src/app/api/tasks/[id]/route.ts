@@ -559,6 +559,28 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       }
     }
 
+    // Also fetch TaskDoc files (MUST_READ/MUST_RETURN) from other tasks
+    const taskDocReqs = await prisma.taskDocRequirement.findMany({
+      where: { taskId: { in: taskIds }, fileAttachmentId: { not: null } },
+      select: { taskId: true, fileAttachmentId: true, kind: true, label: true },
+    })
+    if (taskDocReqs.length > 0) {
+      const docFileIds = taskDocReqs.map((r) => r.fileAttachmentId!).filter((id) => !allFiles.some((f) => f.id === id))
+      if (docFileIds.length > 0) {
+        const docFiles = await prisma.fileAttachment.findMany({
+          where: { id: { in: docFileIds } },
+          select: { id: true, entityId: true, entityType: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true },
+        })
+        for (const dr of taskDocReqs) {
+          const file = docFiles.find((f) => f.id === dr.fileAttachmentId)
+          if (file) {
+            if (!filesByTaskId.has(dr.taskId)) filesByTaskId.set(dr.taskId, [])
+            filesByTaskId.get(dr.taskId)!.push(file)
+          }
+        }
+      }
+    }
+
     previousStepFiles = otherTasks
       .filter(t => filesByTaskId.has(t.id))
       .map(t => ({
