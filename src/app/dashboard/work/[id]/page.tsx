@@ -403,7 +403,7 @@ export default function WorkDetailPage() {
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="flex justify-between items-center mb-2">
             <div className="text-sm font-semibold">↳ Việc con ({task.children.length})</div>
-            <button onClick={() => router.push(`/dashboard/work/create?parent=${id}`)} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>+ Tạo</button>
+            <button onClick={() => router.push(`/dashboard/work/create?parent=${id}${task.projectId ? `&project=${task.projectId}` : ''}`)} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>+ Tạo</button>
           </div>
           {task.children.map((c) => <div key={c.id} onClick={() => router.push(`/dashboard/work/${c.id}`)} className="text-sm py-1.5 px-2 rounded cursor-pointer hover:bg-blue-50">{c.title} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {c.status}</span></div>)}
           {task.children.length === 0 && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Chưa có việc con.</div>}
@@ -498,7 +498,7 @@ export default function WorkDetailPage() {
             <button onClick={() => doComplete('RETURN_CREATOR')} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold flex-1" style={{ background: canComplete ? '#059669' : '#9ca3af', color: '#fff', minWidth: 150 }}>✓ Hoàn thành & trả người tạo</button>
             <button onClick={() => setFwdOpen(true)} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: canComplete ? '#d97706' : '#9ca3af', color: '#fff' }}>↗ Hoàn thành & chuyển tiếp</button>
             <button onClick={() => setDelOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>↪ Chuyển giao</button>
-            <button onClick={() => router.push(`/dashboard/work/create?parent=${id}`)} className="text-sm px-4 py-3 rounded-xl" style={{ background: 'var(--navy,#0a2540)', color: '#fff' }}>+ Việc con</button>
+            <button onClick={() => router.push(`/dashboard/work/create?parent=${id}${task.projectId ? `&project=${task.projectId}` : ''}`)} className="text-sm px-4 py-3 rounded-xl" style={{ background: 'var(--navy,#0a2540)', color: '#fff' }}>+ Việc con</button>
             <button onClick={() => setRejOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#e63946', border: '1px solid #fecaca' }}>✕ Từ chối / trả lại</button>
           </div>
         </div>

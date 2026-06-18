@@ -3,6 +3,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { createTaskSchema } from '@/lib/schemas'
 import { createTask } from '@/lib/work-engine'
+import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params
     const result = await validateBody(req, createTaskSchema)
     if (!result.success) return result.response
-    const task = await createTask({ ...result.data, parentId: id }, payload.userId)
+    const data = result.data
+    if (!data.projectId) {
+      const parent = await prisma.task.findUnique({ where: { id }, select: { projectId: true } })
+      if (parent?.projectId) data.projectId = parent.projectId
+    }
+    const task = await createTask({ ...data, parentId: id }, payload.userId)
     return successResponse({ task }, 'Đã tạo việc con', 201)
   } catch (err) {
     console.error('POST /api/work/tasks/[id]/subtasks error:', err)

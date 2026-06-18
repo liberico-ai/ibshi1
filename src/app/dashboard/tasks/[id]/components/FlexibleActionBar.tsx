@@ -34,11 +34,13 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
   // AWAITING_REVIEW: creator can finalize or create follow-up
   const [workTaskStatus, setWorkTaskStatus] = useState('')
   const [workTaskCreatedBy, setWorkTaskCreatedBy] = useState('')
+  const [workTaskProjectId, setWorkTaskProjectId] = useState('')
   useEffect(() => {
     apiFetch(`/api/work/tasks/${taskId}`).then((r) => {
       if (r.ok && r.task) {
         setWorkTaskStatus(r.task.status || '')
         setWorkTaskCreatedBy(r.task.createdBy || '')
+        setWorkTaskProjectId(r.task.projectId || '')
       }
     }).catch(() => {})
   }, [taskId])
@@ -173,7 +175,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
   }
 
   const goCreateNext = () => {
-    router.push(`/dashboard/work/create?from=${taskId}`)
+    router.push(`/dashboard/work/create?from=${taskId}${workTaskProjectId ? `&project=${workTaskProjectId}` : ''}`)
   }
 
   const submitReject = async () => {
@@ -357,7 +359,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
             <button onClick={() => { setDelOpen(true); setFwdOpen(false); setRejOpen(false) }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--surface, #fff)', color: '#1d4ed8', border: '1px solid #bfdbfe', cursor: 'pointer' }}>
               ↪ Chuyển giao
             </button>
-            <button onClick={() => router.push(`/dashboard/work/create?parent=${taskId}`)} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--navy, #0a2540)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => router.push(`/dashboard/work/create?parent=${taskId}${workTaskProjectId ? `&project=${workTaskProjectId}` : ''}`)} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--navy, #0a2540)', color: '#fff', border: 'none', cursor: 'pointer' }}>
               + Việc con
             </button>
             <button onClick={() => { setRejOpen(true); setFwdOpen(false); setDelOpen(false) }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--surface, #fff)', color: '#e63946', border: '1px solid #fecaca', cursor: 'pointer' }}>
