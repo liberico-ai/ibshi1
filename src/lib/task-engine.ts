@@ -69,6 +69,7 @@ export async function getTaskInbox(userId: string, roleCode: string) {
       OR: [
         { status: { in: ACTIVE_STATUSES }, assignees: { some: { OR: [{ userId }, { role: roleCode }] } } },
         { status: 'AWAITING_REVIEW', createdBy: userId },
+        { status: 'RETURNED', createdBy: userId },
       ],
     },
     include: {

@@ -191,8 +191,8 @@ function TaskList({ tasks, onComplete, completing }: {
                 {task.deadline && <span className="flex items-center gap-0.5"><Clock size={10} /> {formatDate(task.deadline)}</span>}
               </div>
             </div>
-            <Badge variant={task.status === 'IN_PROGRESS' ? 'info' : task.status === 'AWAITING_REVIEW' ? 'warning' : 'default'}>
-              {task.status === 'IN_PROGRESS' ? 'Đang xử lý' : task.status === 'AWAITING_REVIEW' ? 'Chờ kết thúc' : 'Chờ'}
+            <Badge variant={task.status === 'IN_PROGRESS' ? 'info' : task.status === 'AWAITING_REVIEW' ? 'warning' : task.status === 'RETURNED' ? 'danger' : 'default'}>
+              {task.status === 'IN_PROGRESS' ? 'Đang xử lý' : task.status === 'AWAITING_REVIEW' ? 'Chờ kết thúc' : task.status === 'RETURNED' ? 'Bị trả lại' : 'Chờ'}
             </Badge>
             {task.status === 'IN_PROGRESS' && (
               <Button

@@ -43,6 +43,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
     }).catch(() => {})
   }, [taskId])
   const isAwaitingReview = workTaskStatus === 'AWAITING_REVIEW'
+  const isReturned = workTaskStatus === 'RETURNED'
   const isCreator = !!(user?.id && user.id === workTaskCreatedBy)
 
   // Forward state
@@ -91,7 +92,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
     setNewDocLabel(''); setNewDocFileId(''); setNewDocFileName('')
   }
 
-  if (!isActive && !(isAwaitingReview && isCreator)) return null
+  if (!isActive && !(isAwaitingReview && isCreator) && !(isReturned && isCreator)) return null
 
   const addFwdRole = (r: string) => {
     if (fwdPicks.some((p) => p.role === r)) return
@@ -299,6 +300,23 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button onClick={submitReject} disabled={busy} style={{ padding: '10px 20px', fontSize: '0.88rem', borderRadius: 10, fontWeight: 700, background: '#e63946', color: '#fff', border: 'none', cursor: 'pointer' }}>Gửi trả lại</button>
             <button onClick={() => setRejOpen(false)} style={{ padding: '10px 20px', fontSize: '0.88rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer' }}>Hủy</button>
+          </div>
+        </div>
+      )}
+
+      {/* RETURNED: creator sees re-assign + create-next */}
+      {isReturned && isCreator && !delOpen && (
+        <div style={{ position: 'sticky', bottom: 0, paddingTop: 12, paddingBottom: 12, background: 'var(--bg, #f1f5f9)', zIndex: 10, marginTop: '1rem' }}>
+          <div style={{ fontSize: '0.82rem', padding: '8px 12px', marginBottom: 8, borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}>
+            Người nhận đã trả lại công việc này. Bạn có thể giao lại cho người khác hoặc tạo việc mới.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => { setDelOpen(true); setFwdOpen(false); setRejOpen(false) }} disabled={busy} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}>
+              ↪ Giao lại cho người khác
+            </button>
+            <button onClick={goCreateNext} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: 'var(--navy, #0a2540)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+              + Tạo việc mới
+            </button>
           </div>
         </div>
       )}

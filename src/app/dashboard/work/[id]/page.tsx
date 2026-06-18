@@ -485,8 +485,8 @@ export default function WorkDetailPage() {
         <div className="rounded-xl p-3 text-sm" style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>✓ Bạn đã hoàn thành phần của mình. Đang chờ những người nhận khác.</div>
       )}
 
-      {/* Chuyển giao (inline) */}
-      {delOpen && isAssignee && !myDone && (
+      {/* Chuyển giao (inline) — assignee hoặc creator khi task bị trả lại */}
+      {delOpen && ((isAssignee && !myDone) || (isCreator && task.status === 'RETURNED')) && (
         <div className="rounded-xl p-4 space-y-2" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
           <div className="text-sm font-semibold" style={{ color: '#1d4ed8' }}>↪ Chuyển giao việc cho người khác</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -520,6 +520,17 @@ export default function WorkDetailPage() {
           <div className="flex gap-2">
             <button onClick={submitReject} disabled={busy} className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: '#e63946', color: '#fff' }}>Gửi trả lại</button>
             <button onClick={() => setRejOpen(false)} className="text-sm px-4 py-2.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+          </div>
+        </div>
+      )}
+
+      {/* Người GIAO xử lý task BỊ TRẢ LẠI: giao lại hoặc tạo việc mới */}
+      {isCreator && task.status === 'RETURNED' && !delOpen && (
+        <div className="sticky bottom-0 py-3 space-y-1.5" style={{ background: 'var(--bg,#f1f5f9)' }}>
+          <div className="text-xs px-1" style={{ color: '#e63946' }}>Người nhận đã trả lại công việc này. Bạn có thể giao lại cho người khác hoặc tạo việc mới.</div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setDelOpen(true)} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold flex-1" style={{ background: '#2563eb', color: '#fff', minWidth: 160 }}>↪ Giao lại cho người khác</button>
+            <button onClick={goCreateNext} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--navy,#0a2540)', color: '#fff' }}>+ Tạo việc mới</button>
           </div>
         </div>
       )}

@@ -2142,7 +2142,7 @@ export default function TaskDetailPage() {
         </h1>
         <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary, #475569)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: isDone ? '#059669' : isActive ? '#2563eb' : 'inherit' }}>
-            {isDone ? '✅ Hoàn thành' : isActive ? '🔄 Đang thực hiện' : task.status === 'AWAITING_REVIEW' ? '⏳ Chờ người tạo xác nhận' : `📋 ${task.status}`}
+            {isDone ? '✅ Hoàn thành' : isActive ? '🔄 Đang thực hiện' : task.status === 'AWAITING_REVIEW' ? '⏳ Chờ người tạo xác nhận' : task.status === 'RETURNED' ? '↩ Bị trả lại' : `📋 ${task.status}`}
           </span>
           {task.deadline && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}>
@@ -5546,7 +5546,7 @@ export default function TaskDetailPage() {
       )}
 
       {/* Flexible Action Bar: Hoàn thành, Chuyển tiếp, Chuyển giao, Việc con, Từ chối + AWAITING_REVIEW creator actions */}
-      {(isActive || task.status === 'AWAITING_REVIEW') && (
+      {(isActive || task.status === 'AWAITING_REVIEW' || task.status === 'RETURNED') && (
         <FlexibleActionBar
           taskId={taskId}
           isActive={isActive}

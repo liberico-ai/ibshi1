@@ -418,11 +418,12 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
   if (tab === 'created') where = { createdBy: userId }
   else if (tab === 'dept') where = { status: active, assignees: { some: { role: { in: deptRoles } } } }
   else if (tab === 'overdue') where = { status: active, deadline: { lt: new Date() }, assignees: { some: { OR: [{ userId }, { role: roleCode }] } } }
-  // assigned: việc tôi đang nhận + việc tôi giao đang CHỜ TÔI KẾT THÚC (AWAITING_REVIEW)
+  // assigned: việc tôi đang nhận + việc tôi giao đang CHỜ TÔI KẾT THÚC hoặc BỊ TRẢ LẠI
   else where = {
     OR: [
       { status: active, assignees: { some: { OR: [{ userId }, { role: roleCode }] } } },
       { status: TASK_STATUS.AWAITING_REVIEW, createdBy: userId },
+      { status: TASK_STATUS.RETURNED, createdBy: userId },
     ],
   }
   // Lọc thêm: từ khóa tiêu đề + dự án
