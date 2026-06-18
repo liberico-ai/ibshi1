@@ -56,15 +56,16 @@ export const PRODUCT_TYPES = [
 
 // ── Task Statuses ──
 export const TASK_STATUS = {
-  PENDING: 'PENDING',
+  OPEN: 'OPEN',
+  PENDING: 'OPEN',
   IN_PROGRESS: 'IN_PROGRESS',
   DONE: 'DONE',
-  BLOCKED: 'BLOCKED',
-  SKIPPED: 'SKIPPED',
-  REJECTED: 'REJECTED',
+  RETURNED: 'RETURNED',
+  REJECTED: 'RETURNED',
+  CANCELLED: 'CANCELLED',
 } as const
 
-export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS]
+export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'RETURNED' | 'CANCELLED'
 
 // ── Project Statuses ──
 export const PROJECT_STATUS = {

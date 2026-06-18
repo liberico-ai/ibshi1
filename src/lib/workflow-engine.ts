@@ -45,66 +45,71 @@ export async function completeTask(
   resultData?: Record<string, unknown>,
   notes?: string
 ): Promise<{ nextSteps: string[] }> {
-  const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
   if (!task) throw new Error('Task not found')
+  if (!task.projectId) throw new Error('Task has no projectId')
   if (task.status === TASK_STATUS.DONE) throw new Error('Task already completed')
+  const projectId = task.projectId
 
   // Run TC validation rules before marking as done
-  const validation = await runValidationRules(task.stepCode, resultData, task.projectId)
+  const validation = await runValidationRules(task.taskType, resultData, projectId)
   if (!validation.valid) {
     throw new Error(`Validation failed: ${validation.errors.join('; ')}`)
   }
-  // Append warnings to notes (non-blocking)
+  // Append warnings to resultData (non-blocking)
   let finalNotes = notes || ''
   if (validation.warnings.length > 0) {
     finalNotes = finalNotes + (finalNotes ? '\n' : '') + validation.warnings.map(w => `⚠️ ${w}`).join('\n')
   }
 
+  // Merge notes into resultData since Task model has no notes field
+  const mergedResultData = resultData ? JSON.parse(JSON.stringify(resultData)) : undefined
+  if (finalNotes && mergedResultData) mergedResultData._notes = finalNotes
+
   // Mark as done
-  await prisma.workflowTask.update({
+  await prisma.task.update({
     where: { id: taskId },
     data: {
       status: TASK_STATUS.DONE,
       completedAt: new Date(),
       completedBy: userId,
-      resultData: resultData ? JSON.parse(JSON.stringify(resultData)) : undefined,
-      notes: finalNotes || undefined,
+      resultData: mergedResultData,
     },
   })
 
   // Run module integration hooks
-  await runWorkflowHooks(task.projectId, task.stepCode, userId, resultData)
+  await runWorkflowHooks(projectId, task.taskType, userId, resultData)
 
   // Get workflow rule for this step
-  const rule = WORKFLOW_RULES[task.stepCode]
+  const rule = WORKFLOW_RULES[task.taskType]
 
   // Auto-create P5.1 when a dynamic P4.5 completes
-  if (task.stepCode === 'P4.5') {
+  if (task.taskType === 'P4.5') {
     await checkAndCreateP51(taskId)
   }
 
   // Dynamic P4.4 creation — when a per-PO P4.3 (QC nghiệm thu CL) completes,
   // spawn the matching per-PO P4.4 (Kho nghiệm thu SL + nhập kho) for the same PO.
-  if (task.stepCode === 'P4.3') {
+  if (task.taskType === 'P4.3') {
     const rd = (resultData || task.resultData) as { poId?: string; poCode?: string } | null
     if (rd?.poId && rd?.poCode) {
-      const existingP44 = await prisma.workflowTask.findFirst({
+      const existingP44 = await prisma.task.findFirst({
         where: {
-          projectId: task.projectId,
-          stepCode: 'P4.4',
+          projectId: projectId,
+          taskType: 'P4.4',
           resultData: { path: ['poId'], equals: rd.poId },
         },
         select: { id: true },
       })
       if (!existingP44) {
         const p44Rule = WORKFLOW_RULES['P4.4']
-        await prisma.workflowTask.create({
+        const newP44 = await prisma.task.create({
           data: {
-            projectId: task.projectId,
-            stepCode: 'P4.4',
-            stepName: `Nhập kho theo PO ${rd.poCode}`,
-            stepNameEn: `Stock-in for PO ${rd.poCode}`,
-            assignedRole: p44Rule?.role || 'R05',
+            projectId: projectId,
+            taskType: 'P4.4',
+            title: `Nhập kho theo PO ${rd.poCode}`,
+            description: `Stock-in for PO ${rd.poCode}`,
+            createdBy: userId,
             status: TASK_STATUS.IN_PROGRESS,
             startedAt: new Date(),
             deadline: p44Rule?.deadlineDays
@@ -113,45 +118,46 @@ export async function completeTask(
             resultData: { poId: rd.poId, poCode: rd.poCode },
           },
         })
+        await prisma.taskAssignee.create({ data: { taskId: newP44.id, role: p44Rule?.role || 'R05', isPrimary: true } })
       }
     }
   }
 
   // Auto-create P5.3A when P5.1.1 (Yêu cầu nghiệm thu CL) completes
-  if (task.stepCode === 'P5.1.1') {
+  if (task.taskType === 'P5.1.1') {
     const rd = resultData || (task.resultData as Record<string, any>) || {}
-    await prisma.workflowTask.create({
+    const newP53a = await prisma.task.create({
       data: {
-        projectId: task.projectId,
-        stepCode: 'P5.3A',
-        stepName: `QAQC nghiệm thu CL: ${rd.hangMucName || 'Hạng mục'}`,
-        assignedRole: WORKFLOW_RULES['P5.3A']?.role || 'R09',
+        projectId: projectId,
+        taskType: 'P5.3A',
+        title: `QAQC nghiệm thu CL: ${rd.hangMucName || 'Hạng mục'}`,
+        createdBy: userId,
         status: TASK_STATUS.IN_PROGRESS,
         resultData: rd,
       }
     })
+    const p53aRole = WORKFLOW_RULES['P5.3A']?.role || 'R09'
+    await prisma.taskAssignee.create({ data: { taskId: newP53a.id, role: p53aRole, isPrimary: true } })
 
     // Notify for P5.3A
-    const roleCode = WORKFLOW_RULES['P5.3A']?.role || 'R09'
     try {
-      const users = await prisma.user.findMany({ where: { roleCode, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+      const users = await prisma.user.findMany({ where: { roleCode: p53aRole, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
       if (users.length > 0) {
-        const project = await prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } })
-        const p53aTask = await prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P5.3A' }, orderBy: { createdAt: 'desc' } })
-        if (project && p53aTask) {
+        const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
+        if (project) {
           await prisma.notification.createMany({
             data: users.map(u => ({
               userId: u.id,
               title: `Công việc mới: QAQC nghiệm thu CL`,
               message: `Bước P5.3A của dự án ${project.projectCode} đã sẵn sàng.`,
               type: 'task_assigned',
-              linkUrl: `/dashboard/tasks/${p53aTask.id}`,
+              linkUrl: `/dashboard/tasks/${newP53a.id}`,
             }))
           })
           await notifyTaskActivated({
-            stepCode: 'P5.3A', stepName: p53aTask.stepName,
+            stepCode: 'P5.3A', stepName: newP53a.title,
             projectCode: project.projectCode, projectName: project.projectName,
-            assignedRole: roleCode, deadline: null, taskId: p53aTask.id,
+            assignedRole: p53aRole, deadline: null, taskId: newP53a.id,
             mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
           }).catch(console.error)
         }
@@ -162,11 +168,11 @@ export async function completeTask(
   if (!rule) return { nextSteps: [] }
 
   // Parallel multi-user approval check for P1.3
-  if (task.stepCode === 'P1.3') {
-    const pendingCount = await prisma.workflowTask.count({
+  if (task.taskType === 'P1.3') {
+    const pendingCount = await prisma.task.count({
       where: {
-        projectId: task.projectId,
-        stepCode: task.stepCode,
+        projectId: projectId,
+        taskType: task.taskType,
         status: { not: TASK_STATUS.DONE }
       }
     })
@@ -189,37 +195,35 @@ export async function completeTask(
 
     // Check gate conditions
     if (nextRule.gate && nextRule.gate.length > 0) {
-      const gatePass = await checkGate(task.projectId, nextRule.gate)
+      const gatePass = await checkGate(projectId, nextRule.gate)
       if (!gatePass) continue
     }
 
-    await activateTask(task.projectId, nextCode)
+    await activateTask(projectId, nextCode)
     activatedSteps.push(nextCode)
 
-    // Auto-propagate: if the next step's own next step is REJECTED (was the step that rejected),
-    // auto-complete the intermediate step and re-activate the REJECTED step.
+    // Auto-propagate: if the next step's own next step is RETURNED (was the step that rejected),
+    // auto-complete the intermediate step and re-activate the RETURNED step.
     // This handles: P5.3 reject → P5.1 → P5.2 auto-skip → P5.3 re-activate
     if (nextRule.next && nextRule.next.length > 0) {
       for (const downstreamCode of nextRule.next) {
-        const downstreamTask = await prisma.workflowTask.findFirst({
-          where: { projectId: task.projectId, stepCode: downstreamCode, status: TASK_STATUS.REJECTED },
+        const downstreamTask = await prisma.task.findFirst({
+          where: { projectId: projectId, taskType: downstreamCode, status: TASK_STATUS.RETURNED },
         })
         if (downstreamTask) {
-          // The downstream step was the one that rejected — auto-complete the intermediate step
-          const intermediateTask = await prisma.workflowTask.findFirst({
-            where: { projectId: task.projectId, stepCode: nextCode, status: TASK_STATUS.IN_PROGRESS },
+          const intermediateTask = await prisma.task.findFirst({
+            where: { projectId: projectId, taskType: nextCode, status: TASK_STATUS.IN_PROGRESS },
           })
           if (intermediateTask) {
-            await prisma.workflowTask.update({
+            await prisma.task.update({
               where: { id: intermediateTask.id },
               data: {
                 status: TASK_STATUS.DONE,
                 completedAt: new Date(),
                 completedBy: userId,
-                notes: 'Auto-completed (re-submission after rejection)',
               },
             })
-            await activateTask(task.projectId, downstreamCode)
+            await activateTask(projectId, downstreamCode)
             activatedSteps.push(downstreamCode)
           }
         }
@@ -232,11 +236,11 @@ export async function completeTask(
   if (activatedSteps.length === 0) {
     for (const [code, r] of Object.entries(WORKFLOW_RULES)) {
       if (!r.gate || r.gate.length === 0) continue
-      if (!r.gate.includes(task.stepCode)) continue
+      if (!r.gate.includes(task.taskType)) continue
       // This gated step depends on the step we just completed
-      const gatePass = await checkGate(task.projectId, r.gate)
+      const gatePass = await checkGate(projectId, r.gate)
       if (gatePass) {
-        await activateTask(task.projectId, code)
+        await activateTask(projectId, code)
         activatedSteps.push(code)
       }
     }
@@ -249,80 +253,81 @@ export async function completeTask(
 // Idempotent: safe to call multiple times — only creates each task once.
 // Triggered by: (1) first P4.5 completion (Kho cấp VT xong); (2) PM/QLSX phát hành LSX
 // (api/tasks/ensure-daily-report) — so material-less stages still get a daily report.
-export async function ensureDailyReportTasks(projectId: string): Promise<void> {
+export async function ensureDailyReportTasks(projectId: string, createdByUserId?: string): Promise<void> {
   const rule = WORKFLOW_RULES['P5.1']
   if (!rule) return
+  const systemUser = createdByUserId || 'system'
 
   // P5.1 — single persistent "Daily Report" task
-  const existingDailyTask = await prisma.workflowTask.findFirst({
-    where: { projectId, stepCode: 'P5.1', stepName: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' },
+  const existingDailyTask = await prisma.task.findFirst({
+    where: { projectId, taskType: 'P5.1', title: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' },
   })
   if (!existingDailyTask) {
-    await prisma.workflowTask.create({
+    const newP51 = await prisma.task.create({
       data: {
         projectId,
-        stepCode: 'P5.1',
-        stepName: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)',
-        stepNameEn: 'Daily Production Volume Report',
-        assignedRole: rule.role,
+        taskType: 'P5.1',
+        title: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)',
+        description: 'Daily Production Volume Report',
+        createdBy: systemUser,
         status: TASK_STATUS.IN_PROGRESS,
         startedAt: new Date(),
       },
     })
+    await prisma.taskAssignee.create({ data: { taskId: newP51.id, role: rule.role, isPrimary: true } })
     try {
       const users = await prisma.user.findMany({ where: { roleCode: rule.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
       const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
-      const p51Task = await prisma.workflowTask.findFirst({ where: { projectId, stepCode: 'P5.1' }, orderBy: { createdAt: 'desc' } })
-      if (users.length > 0 && project && p51Task) {
+      if (users.length > 0 && project) {
         await prisma.notification.createMany({
           data: users.map(u => ({
             userId: u.id, title: `Công việc mới: Báo cáo SX Hàng ngày`,
             message: `Bước P5.1 của dự án ${project.projectCode} đã sẵn sàng.`,
-            type: 'task_assigned', linkUrl: `/dashboard/tasks/${p51Task.id}`,
+            type: 'task_assigned', linkUrl: `/dashboard/tasks/${newP51.id}`,
           })),
         })
         await notifyTaskActivated({
-          stepCode: 'P5.1', stepName: p51Task.stepName,
+          stepCode: 'P5.1', stepName: newP51.title,
           projectCode: project.projectCode, projectName: project.projectName,
-          assignedRole: rule.role, deadline: null, taskId: p51Task.id,
+          assignedRole: rule.role, deadline: null, taskId: newP51.id,
           mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
         }).catch(console.error)
       }
     } catch (e) { console.error(e) }
   }
 
-  // P5.1A — subcontractor daily report (PM updates on behalf of external subcontractors)
+  // P5.1A — subcontractor daily report
   const ruleP51A = WORKFLOW_RULES['P5.1A']
   if (ruleP51A) {
-    const existingP51A = await prisma.workflowTask.findFirst({ where: { projectId, stepCode: 'P5.1A' } })
+    const existingP51A = await prisma.task.findFirst({ where: { projectId, taskType: 'P5.1A' } })
     if (!existingP51A) {
-      await prisma.workflowTask.create({
+      const newP51A = await prisma.task.create({
         data: {
           projectId,
-          stepCode: 'P5.1A',
-          stepName: 'BÁO CÁO KHỐI LƯỢNG CỦA THẦU PHỤ (THEO NGÀY)',
-          stepNameEn: 'Daily Subcontractor Production Report',
-          assignedRole: ruleP51A.role,
+          taskType: 'P5.1A',
+          title: 'BÁO CÁO KHỐI LƯỢNG CỦA THẦU PHỤ (THEO NGÀY)',
+          description: 'Daily Subcontractor Production Report',
+          createdBy: systemUser,
           status: TASK_STATUS.IN_PROGRESS,
           startedAt: new Date(),
         },
       })
+      await prisma.taskAssignee.create({ data: { taskId: newP51A.id, role: ruleP51A.role, isPrimary: true } })
       try {
         const users = await prisma.user.findMany({ where: { roleCode: ruleP51A.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
         const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
-        const p51ATask = await prisma.workflowTask.findFirst({ where: { projectId, stepCode: 'P5.1A' }, orderBy: { createdAt: 'desc' } })
-        if (users.length > 0 && project && p51ATask) {
+        if (users.length > 0 && project) {
           await prisma.notification.createMany({
             data: users.map(u => ({
               userId: u.id, title: `Công việc mới: Báo cáo SX Thầu phụ`,
               message: `Bước P5.1A của dự án ${project.projectCode} đã sẵn sàng.`,
-              type: 'task_assigned', linkUrl: `/dashboard/tasks/${p51ATask.id}`,
+              type: 'task_assigned', linkUrl: `/dashboard/tasks/${newP51A.id}`,
             })),
           })
           await notifyTaskActivated({
-            stepCode: 'P5.1A', stepName: p51ATask.stepName,
+            stepCode: 'P5.1A', stepName: newP51A.title,
             projectCode: project.projectCode, projectName: project.projectName,
-            assignedRole: ruleP51A.role, deadline: null, taskId: p51ATask.id,
+            assignedRole: ruleP51A.role, deadline: null, taskId: newP51A.id,
             mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
           }).catch(console.error)
         }
@@ -335,18 +340,18 @@ export async function ensureDailyReportTasks(projectId: string): Promise<void> {
 // P5.1.1 (Yêu cầu nghiệm thu) is NOT handled here anymore.
 // It is triggered by /api/tasks/check-p511 when PM/QLSX Phát hành đủ 100% công đoạn.
 async function checkAndCreateP51(taskId: string) {
-  const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
+  const task = await prisma.task.findUnique({ where: { id: taskId } })
   if (!task) return
-  if (task.stepCode !== 'P4.5') return
+  if (task.taskType !== 'P4.5') return
 
   const data = (task.resultData as Record<string, any>) || {}
   if (data._p51Created || !data.sourceStep) return
   if (task.status !== TASK_STATUS.DONE) return
 
-  await ensureDailyReportTasks(task.projectId)
+  await ensureDailyReportTasks(task.projectId!, task.completedBy || undefined)
 
   // Mark P4.5 as processed
-  await prisma.workflowTask.update({
+  await prisma.task.update({
     where: { id: task.id },
     data: { resultData: JSON.parse(JSON.stringify({ ...data, _p51Created: true })) },
   })
@@ -361,44 +366,45 @@ export async function rejectTask(
   overrideRejectTo?: string,
   failedContext?: Record<string, any>
 ): Promise<{ returnedTo: string }> {
-  const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
   if (!task) throw new Error('Task not found')
+  if (!task.projectId) throw new Error('Task has no projectId')
+  const projectId = task.projectId
 
-  const rule = WORKFLOW_RULES[task.stepCode]
+  const rule = WORKFLOW_RULES[task.taskType]
   if (!rule) throw new Error('No workflow rule for this step')
 
   const rejectTo = overrideRejectTo || rule.rejectTo
-  if (!rejectTo) throw new Error(`Step ${task.stepCode} cannot be rejected (no rejectTo defined)`)
+  if (!rejectTo) throw new Error(`Step ${task.taskType} cannot be rejected (no rejectTo defined)`)
 
-  // 1. Mark current task as REJECTED
-  await prisma.workflowTask.update({
+  // 1. Mark current task as RETURNED
+  await prisma.task.update({
     where: { id: taskId },
     data: {
-      status: TASK_STATUS.REJECTED,
-      notes: `REJECTED: ${reason}`,
+      status: TASK_STATUS.RETURNED,
+      resultData: { ...(task.resultData as Record<string, any> || {}), _rejectReason: reason },
       completedBy: userId,
       completedAt: new Date(),
+      returnCount: { increment: 1 },
     },
   })
 
   // Parallel multi-user rejection logic for P1.3
-  if (task.stepCode === 'P1.3') {
-    await prisma.workflowTask.updateMany({
+  if (task.taskType === 'P1.3') {
+    await prisma.task.updateMany({
       where: {
-        projectId: task.projectId,
-        stepCode: task.stepCode,
+        projectId: projectId,
+        taskType: task.taskType,
         id: { not: taskId },
-        status: { not: TASK_STATUS.REJECTED }
+        status: { not: TASK_STATUS.RETURNED }
       },
       data: {
-        status: TASK_STATUS.REJECTED,
-        notes: `Auto-rejected due to rejection by another user: ${reason}`
+        status: TASK_STATUS.RETURNED,
       }
     })
   }
 
   // 2. Reset intermediate steps between rejectTo and current step
-  //    Skip this when using overrideRejectTo (selective reject — don't reset siblings)
   if (!overrideRejectTo) {
     const allSteps = Object.keys(WORKFLOW_RULES)
     const rejectToPhase = WORKFLOW_RULES[rejectTo]?.phase || 1
@@ -406,39 +412,37 @@ export async function rejectTask(
 
     const stepsToReset = allSteps.filter((code) => {
       const r = WORKFLOW_RULES[code]
-      // DO NOT globally reset parallel production steps, as it destroys independent job cards
       if (['P5.2', 'P5.3', 'P5.4'].includes(code)) return false;
       return r && r.phase >= rejectToPhase && r.phase <= currentPhase
-        && code !== task.stepCode && code !== rejectTo
+        && code !== task.taskType && code !== rejectTo
     })
 
-    // Reset intermediate steps that were DONE back to PENDING
     if (stepsToReset.length > 0) {
-      await prisma.workflowTask.updateMany({
+      await prisma.task.updateMany({
         where: {
-          projectId: task.projectId,
-          stepCode: { in: stepsToReset },
+          projectId: projectId,
+          taskType: { in: stepsToReset },
           status: TASK_STATUS.DONE,
         },
-        data: { status: TASK_STATUS.PENDING, completedAt: null, completedBy: null },
+        data: { status: TASK_STATUS.OPEN, completedAt: null, completedBy: null },
       })
     }
   }
 
   // 3. Reactivate the target step
-  await activateTask(task.projectId, rejectTo)
+  await activateTask(projectId, rejectTo)
 
   // Append failedContext if provided
   if (failedContext) {
-    const targetTask = await prisma.workflowTask.findFirst({
-      where: { projectId: task.projectId, stepCode: rejectTo },
+    const targetTask = await prisma.task.findFirst({
+      where: { projectId: projectId, taskType: rejectTo },
       orderBy: { createdAt: 'desc' }
     });
     if (targetTask) {
       const rd = (targetTask.resultData || {}) as Record<string, any>;
       rd.qcFailedAssignments = rd.qcFailedAssignments || [];
       rd.qcFailedAssignments.push(failedContext);
-      await prisma.workflowTask.update({
+      await prisma.task.update({
         where: { id: targetTask.id },
         data: { resultData: rd }
       });
@@ -446,13 +450,13 @@ export async function rejectTask(
   }
 
   // 4. Run reverse sync hooks
-  await runReverseHooks(task.projectId, task.stepCode, userId, reason)
+  await runReverseHooks(projectId, task.taskType, userId, reason)
 
   // 5. Log ChangeEvent
   await logChangeEvent({
-    projectId: task.projectId, sourceStep: task.stepCode,
-    sourceModel: 'WorkflowTask', sourceId: taskId,
-    eventType: 'REJECT', targetModel: 'WorkflowTask',
+    projectId: projectId, sourceStep: task.taskType,
+    sourceModel: 'Task', sourceId: taskId,
+    eventType: 'REJECT', targetModel: 'Task',
     targetId: rejectTo, reason, triggeredBy: userId,
   })
 
@@ -461,7 +465,7 @@ export async function rejectTask(
     const targetRule = WORKFLOW_RULES[rejectTo]
     if (targetRule) {
       const project = await prisma.project.findUnique({
-        where: { id: task.projectId },
+        where: { id: projectId },
         select: { projectCode: true, projectName: true },
       })
       const users = await prisma.user.findMany({
@@ -473,14 +477,13 @@ export async function rejectTask(
           data: users.map((u) => ({
             userId: u.id,
             title: `⚠️ Từ chối: ${rule.name}`,
-            message: `Bước ${task.stepCode} bị từ chối. Lý do: ${reason}. Quay về ${rejectTo} — ${targetRule.name}.`,
+            message: `Bước ${task.taskType} bị từ chối. Lý do: ${reason}. Quay về ${rejectTo} — ${targetRule.name}.`,
             type: 'REJECTED',
-            linkUrl: `/dashboard/projects/${task.projectId}`,
+            linkUrl: `/dashboard/projects/${projectId}`,
           })),
         })
-        // Push rejection to Telegram group (fire-and-forget)
         notifyTaskRejected({
-          stepCode: task.stepCode, stepName: rule.name,
+          stepCode: task.taskType, stepName: rule.name,
           projectCode: project.projectCode, projectName: project.projectName,
           assignedRole: rule.role, deadline: null, taskId,
           reason, returnedTo: rejectTo, returnedStepName: targetRule.name,
@@ -631,7 +634,7 @@ async function runWorkflowHooks(
       const p36Id = resultData?.sourceP36Id as string
       const groupId = resultData?.sourceGroupId as string
       if (p36Id && groupId) {
-        const p36Task = await prisma.workflowTask.findUnique({ where: { id: p36Id } })
+        const p36Task = await prisma.task.findUnique({ where: { id: p36Id } })
         if (p36Task) {
           const rd = (p36Task.resultData as any) || {}
           if (rd.groups) {
@@ -640,7 +643,7 @@ async function runWorkflowHooks(
                rd.groups[gIndex].paymentStatus = 'PAID'
                rd.groups[gIndex].paymentDate = resultData?.paymentDate ? new Date(resultData.paymentDate as string).toISOString() : new Date().toISOString()
                rd.groups[gIndex].paymentMethod = resultData?.paymentMethod
-               await prisma.workflowTask.update({
+               await prisma.task.update({
                  where: { id: p36Id },
                  data: { resultData: rd }
                })
@@ -768,18 +771,17 @@ async function runWorkflowHooks(
 
     // P5.3: PM Acceptance → forward week data to P5.4 + set deadline
     if (stepCode === 'P5.3' && resultData) {
-      const p54Task = await prisma.workflowTask.findFirst({
-        where: { projectId, stepCode: 'P5.4', status: 'IN_PROGRESS' },
+      const p54Task = await prisma.task.findFirst({
+        where: { projectId, taskType: 'P5.4', status: 'IN_PROGRESS' },
         orderBy: { createdAt: 'desc' },
       })
       if (p54Task) {
-        // Deadline is 23:59:59 of that Saturday (same array of dates from P5.3)
         const weekStartDate = new Date(resultData.weekStartDate as string)
         const deadline = new Date(weekStartDate)
-        deadline.setDate(weekStartDate.getDate() + 5) // Saturday
+        deadline.setDate(weekStartDate.getDate() + 5)
         deadline.setHours(23, 59, 59, 999)
 
-        await prisma.workflowTask.update({
+        await prisma.task.update({
           where: { id: p54Task.id },
           data: {
             deadline,
@@ -814,15 +816,15 @@ async function runWorkflowHooks(
 }
 
 async function checkGate(projectId: string, requiredCodes: string[]): Promise<boolean> {
-  const doneTasks = await prisma.workflowTask.findMany({
+  const doneTasks = await prisma.task.findMany({
     where: {
       projectId,
-      stepCode: { in: requiredCodes },
+      taskType: { in: requiredCodes },
       status: TASK_STATUS.DONE,
     },
-    select: { stepCode: true, status: true },
+    select: { taskType: true, status: true },
   })
-  const doneStepCodes = doneTasks.map(t => t.stepCode)
+  const doneStepCodes = doneTasks.map(t => t.taskType)
   const missing = requiredCodes.filter(c => !doneStepCodes.includes(c))
   console.log(`[GATE CHECK] Required: [${requiredCodes.join(', ')}] | Done: [${doneStepCodes.join(', ')}] | Missing: [${missing.join(', ')}] | Pass: ${missing.length === 0}`)
   return missing.length === 0
@@ -832,12 +834,12 @@ export async function activateTask(projectId: string, stepCode: string): Promise
   const rule = WORKFLOW_RULES[stepCode]
   if (!rule) return
 
-  // For rejection re-activation: also update tasks that are DONE, REJECTED or PENDING
-  await prisma.workflowTask.updateMany({
+  // For rejection re-activation: also update tasks that are OPEN, RETURNED or DONE
+  await prisma.task.updateMany({
     where: {
       projectId,
-      stepCode,
-      status: { in: [TASK_STATUS.PENDING, TASK_STATUS.REJECTED, TASK_STATUS.DONE] },
+      taskType: stepCode,
+      status: { in: [TASK_STATUS.OPEN, TASK_STATUS.RETURNED, TASK_STATUS.DONE] },
     },
     data: {
       status: TASK_STATUS.IN_PROGRESS,
@@ -855,34 +857,38 @@ export async function activateTask(projectId: string, stepCode: string): Promise
     })
 
     if (roleUsers.length > 0) {
-      const existingTasks = await prisma.workflowTask.findMany({
-        where: { projectId, stepCode },
+      const existingTasks = await prisma.task.findMany({
+        where: { projectId, taskType: stepCode },
+        include: { assignees: true },
         orderBy: { createdAt: 'asc' }
       })
 
       if (existingTasks.length > 0) {
-        // Find users that don't have a specific task assigned to them yet
-        const assignedUserIds = existingTasks.map(t => t.assignedTo).filter(Boolean) as string[]
+        const assignedUserIds = existingTasks
+          .flatMap(t => t.assignees?.map(a => a.userId) || [])
+          .filter(Boolean) as string[]
         const unassignedUsers = roleUsers.filter(u => !assignedUserIds.includes(u.id))
-        
-        let firstUnassignedTask = existingTasks.find(t => !t.assignedTo)
+
+        let firstUnassignedTask = existingTasks.find(t => !t.assignees?.some(a => a.userId))
 
         for (const user of unassignedUsers) {
           if (firstUnassignedTask) {
-            await prisma.workflowTask.update({
-              where: { id: firstUnassignedTask.id },
-              data: { assignedTo: user.id }
-            })
-            firstUnassignedTask = undefined // used up
+            const assignee = firstUnassignedTask.assignees?.[0]
+            if (assignee) {
+              await prisma.taskAssignee.update({
+                where: { id: assignee.id },
+                data: { userId: user.id }
+              })
+            }
+            firstUnassignedTask = undefined
           } else {
-            await prisma.workflowTask.create({
+            const newTask = await prisma.task.create({
               data: {
                 projectId,
-                stepCode,
-                stepName: rule.name,
-                stepNameEn: rule.nameEn,
-                assignedRole: rule.role,
-                assignedTo: user.id,
+                taskType: stepCode,
+                title: rule.name,
+                description: rule.nameEn,
+                createdBy: 'system',
                 status: TASK_STATUS.IN_PROGRESS,
                 startedAt: new Date(),
                 deadline: rule.deadlineDays
@@ -890,6 +896,7 @@ export async function activateTask(projectId: string, stepCode: string): Promise
                   : null,
               }
             })
+            await prisma.taskAssignee.create({ data: { taskId: newTask.id, role: rule.role, userId: user.id, isPrimary: true } })
           }
         }
       }
@@ -906,9 +913,8 @@ export async function activateTask(projectId: string, stepCode: string): Promise
       where: { roleCode: rule.role, isActive: true },
       select: { id: true, fullName: true },
     })
-    // Find the task ID for this step+project to link notifications correctly
-    const task = await prisma.workflowTask.findFirst({
-      where: { projectId, stepCode },
+    const task = await prisma.task.findFirst({
+      where: { projectId, taskType: stepCode },
       select: { id: true },
     })
     if (users.length > 0 && project && task) {
@@ -922,7 +928,6 @@ export async function activateTask(projectId: string, stepCode: string): Promise
           linkUrl: `/dashboard/tasks/${task.id}`,
         })),
       })
-      // Push to Telegram group + tag users (fire-and-forget)
       notifyTaskActivated({
         stepCode, stepName: rule.name,
         projectCode: project.projectCode, projectName: project.projectName,
@@ -943,7 +948,7 @@ export async function processP45PartialIssue(
   userId: string,
   resultData: Record<string, unknown>
 ): Promise<{ isPartial: boolean; issuedAccumulated: Record<string, number> }> {
-  const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
+  const task = await prisma.task.findUnique({ where: { id: taskId } })
   if (!task) throw new Error('Task not found')
   if (task.status === TASK_STATUS.DONE) throw new Error('Task already completed')
 
@@ -951,7 +956,7 @@ export async function processP45PartialIssue(
   const issuedAccumulated: Record<string, number> = { ...(existingData.issuedAccumulated || {}) }
   const reqs = (existingData.materialIssueRequests as Record<string, any>[]) || []
 
-  const project = await prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true } })
+  const project = await prisma.project.findUnique({ where: { id: task.projectId! }, select: { projectCode: true } })
   const projCode = project?.projectCode || 'UNKNOWN'
 
   for (let i = 0; i < reqs.length; i++) {
@@ -972,7 +977,7 @@ export async function processP45PartialIssue(
         prisma.stockMovement.create({
           data: {
             materialId: material.id,
-            projectId: task.projectId,
+            projectId: task.projectId!,
             type: 'OUT',
             quantity: actualQty,
             reason: 'production_issue',
@@ -1019,7 +1024,7 @@ export async function processP45PartialIssue(
   for (const key of Object.keys(updatedData)) {
     if (key.startsWith('actualQty_')) delete updatedData[key]
   }
-  await prisma.workflowTask.update({
+  await prisma.task.update({
     where: { id: taskId },
     data: { resultData: JSON.parse(JSON.stringify(updatedData)) },
   })

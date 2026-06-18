@@ -32,13 +32,13 @@ export async function POST(req: NextRequest) {
 
     // 1. Fetch BOTH P3.3 and P3.4 tasks for combined volume checking
     const [p33Task, p34Task] = await Promise.all([
-      prisma.workflowTask.findFirst({
-        where: { projectId, stepCode: 'P3.3' },
+      prisma.task.findFirst({
+        where: { projectId, taskType: 'P3.3' },
         orderBy: { createdAt: 'desc' },
         select: { resultData: true },
       }),
-      prisma.workflowTask.findFirst({
-        where: { projectId, stepCode: 'P3.4' },
+      prisma.task.findFirst({
+        where: { projectId, taskType: 'P3.4' },
         orderBy: { createdAt: 'desc' },
         select: { resultData: true },
       })
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
     try { p34Issued = typeof p34Data.lsxIssuedDetails === 'string' ? JSON.parse(p34Data.lsxIssuedDetails) : (p34Data.lsxIssuedDetails || {}) } catch { /* */ }
 
     // 3. Parse WBS items để lấy thông tin hạng mục
-    const planTask = await prisma.workflowTask.findFirst({
-      where: { projectId, stepCode: 'P1.2A' },
+    const planTask = await prisma.task.findFirst({
+      where: { projectId, taskType: 'P1.2A' },
       select: { resultData: true },
       orderBy: { createdAt: 'desc' },
     })
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
     // 5. ĐỦ MÂM! 100% đã phát hành. Kiểm tra task P5.1.1 đã tồn tại chưa
     const uniqueId = `p511_${projectId}_row${rowIdx}`.replace(/[^a-zA-Z0-9_-]/g, '')
 
-    const existing = await prisma.workflowTask.findUnique({ where: { id: uniqueId } })
+    const existing = await prisma.task.findUnique({ where: { id: uniqueId } })
     if (existing) {
       return successResponse({
         allIssued: true,
@@ -162,14 +162,14 @@ export async function POST(req: NextRequest) {
     const stepName = `P5.1.1: Yêu cầu nghiệm thu — ${hangMucName}`
 
     try {
-      const newTask = await prisma.workflowTask.create({
+      const newTask = await prisma.task.create({
         data: {
           id: uniqueId,
           projectId,
-          stepCode: 'P5.1.1',
-          stepName,
-          stepNameEn: `Quality Acceptance: ${hangMucName}`,
-          assignedRole: rule?.role || 'R06',
+          taskType: 'P5.1.1',
+          title: stepName,
+          description: `Quality Acceptance: ${hangMucName}`,
+          createdBy: payload.userId,
           status: TASK_STATUS.IN_PROGRESS,
           startedAt: new Date(),
           deadline: rule?.deadlineDays
@@ -186,6 +186,7 @@ export async function POST(req: NextRequest) {
           },
         },
       })
+      await prisma.taskAssignee.create({ data: { taskId: newTask.id, role: rule?.role || 'R06', isPrimary: true } })
 
       // Notify users
       const notifyRole = rule?.role || 'R06'
@@ -211,7 +212,7 @@ export async function POST(req: NextRequest) {
           try {
             await notifyTaskActivated({
               stepCode: 'P5.1.1',
-              stepName: newTask.stepName,
+              stepName: newTask.title,
               projectCode: project?.projectCode || '',
               projectName: project?.projectName || '',
               assignedRole: notifyRole,

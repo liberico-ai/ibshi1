@@ -298,10 +298,14 @@ function TaskCard({ task, onCompleteClick, onRejectClick, onAssignClick, current
         </span>
       </div>
 
-      {/* Title */}
-      <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, marginBottom: '8px' }}>
+      {/* Title — clickable to task detail */}
+      <a
+        href={`/dashboard/tasks/${task.id}`}
+        style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, marginBottom: '8px', display: 'block', textDecoration: 'none' }}
+        className="hover:underline"
+      >
         {task.stepName}
-      </p>
+      </a>
 
       {/* Meta row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', fontSize: '11px' }}>

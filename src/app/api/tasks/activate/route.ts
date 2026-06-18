@@ -36,14 +36,14 @@ export async function POST(req: NextRequest) {
     }
 
     // CREATE a brand new task for this request, setting status directly to IN_PROGRESS
-    const newTask = await prisma.workflowTask.create({
+    const newTask = await prisma.task.create({
       data: {
         projectId,
-        stepCode,
-        stepName: dynamicStepName,
-        stepNameEn: dynamicStepNameEn,
+        taskType: stepCode,
+        title: dynamicStepName,
+        description: dynamicStepNameEn,
+        createdBy: payload.userId,
         status: 'IN_PROGRESS',
-        assignedRole: rule.role,
         deadline: rule.deadlineDays
           ? new Date(Date.now() + rule.deadlineDays * 24 * 60 * 60 * 1000)
           : null,
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
         } : undefined
       }
     })
+    await prisma.taskAssignee.create({ data: { taskId: newTask.id, role: rule.role, isPrimary: true } })
 
     return successResponse({
       taskId: newTask.id,

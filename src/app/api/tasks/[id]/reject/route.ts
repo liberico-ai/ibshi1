@@ -26,7 +26,7 @@ export async function POST(
     const { reason, overrideRejectTo, failedContext } = bodyResult.data
 
     // Verify task exists and is in-progress
-    const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
+    const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
     if (!task) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
@@ -39,17 +39,18 @@ export async function POST(
     }
 
     // Role-based authorization: only the assigned role (or admin) can reject
-    if (payload.roleCode !== task.assignedRole && payload.roleCode !== 'R00') {
+    const taskRole = task.assignees?.[0]?.role || ''
+    if (payload.roleCode !== taskRole && payload.roleCode !== 'R00') {
       return NextResponse.json(
-        { error: `Bạn (${payload.roleCode}) không có quyền từ chối bước này. Chỉ ${task.assignedRole} mới được phép.` },
+        { error: `Bạn (${payload.roleCode}) không có quyền từ chối bước này. Chỉ ${taskRole} mới được phép.` },
         { status: 403 }
       )
     }
 
-    const rule = WORKFLOW_RULES[task.stepCode]
+    const rule = WORKFLOW_RULES[task.taskType]
     if (!rule?.rejectTo && !overrideRejectTo) {
       return NextResponse.json(
-        { error: `Step ${task.stepCode} has no reject destination defined` },
+        { error: `Step ${task.taskType} has no reject destination defined` },
         { status: 400 }
       )
     }

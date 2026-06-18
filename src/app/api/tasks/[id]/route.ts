@@ -70,8 +70,8 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
   if (task.stepCode === 'P1.1B' || task.stepCode === 'P2.1A') {
     // For P1.1B and P2.1A: fetch P1.1's attached files (Project Contract)
-    const p1Task = await prisma.workflowTask.findFirst({
-      where: { projectId: task.projectId, stepCode: 'P1.1' },
+    const p1Task = await prisma.task.findFirst({
+      where: { projectId: task.projectId, taskType: 'P1.1' },
       select: { resultData: true },
     })
     siblingFiles = resolveFiles(
@@ -92,13 +92,14 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     .map(([code]) => code)
 
   if (rejectingStepCodes.length > 0) {
-    const rejectedTask = await prisma.workflowTask.findFirst({
-      where: { projectId: task.projectId, stepCode: { in: rejectingStepCodes }, status: 'REJECTED' },
-      select: { stepCode: true, notes: true, completedBy: true, completedAt: true, resultData: true },
+    const rejectedTask = await prisma.task.findFirst({
+      where: { projectId: task.projectId, taskType: { in: rejectingStepCodes }, status: 'RETURNED' },
+      select: { taskType: true, completedBy: true, completedAt: true, resultData: true },
       orderBy: { completedAt: 'desc' },
     })
-    if (rejectedTask?.notes) {
-      const reason = rejectedTask.notes.replace(/^REJECTED:\s*/, '')
+    const rd = rejectedTask?.resultData as Record<string, unknown> | null
+    const rejectReason = rd?._rejectReason as string || ''
+    if (rejectedTask && rejectReason) {
       let rejectedByName = 'BGĐ'
       if (rejectedTask.completedBy) {
         const user = await prisma.user.findUnique({
@@ -107,12 +108,11 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
         })
         if (user) rejectedByName = user.fullName
       }
-      const rd = rejectedTask.resultData as Record<string, unknown> | null
       rejectionInfo = {
-        reason,
+        reason: rejectReason,
         rejectedBy: rejectedByName,
         rejectedAt: rejectedTask.completedAt?.toISOString() || '',
-        fromStep: rejectedTask.stepCode,
+        fromStep: rejectedTask.taskType,
         ...(rd?.qcItems ? { qcItems: rd.qcItems } : {}),
       } as typeof rejectionInfo & { fromStep: string; qcItems?: unknown }
     }
@@ -338,7 +338,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     let p45TeamData: { teamName?: string; volume?: string; startDate?: string; endDate?: string } | null = null
 
     if (sourceP45TaskId) {
-      const p45 = await prisma.workflowTask.findUnique({
+      const p45 = await prisma.task.findUnique({
         where: { id: sourceP45TaskId },
         select: { resultData: true },
       })
@@ -364,8 +364,8 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
     // Try cellAssignments from parent P3.x first
     let found = false
-    const parentTask = await prisma.workflowTask.findFirst({
-      where: { stepCode: sourceStep, projectId: task.projectId },
+    const parentTask = await prisma.task.findFirst({
+      where: { taskType: sourceStep, projectId: task.projectId },
       orderBy: { createdAt: 'desc' },
       select: { resultData: true },
     })
@@ -464,7 +464,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
     let p51Task: any = null;
     if (rd.sourceP51TaskId) {
-      p51Task = await prisma.workflowTask.findUnique({ where: { id: String(rd.sourceP51TaskId) } });
+      p51Task = await prisma.task.findUnique({ where: { id: String(rd.sourceP51TaskId) } });
     } else {
       p51Task = await fetchStepResult(task.projectId, 'P5.1');
     }
@@ -491,10 +491,10 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   // P6.5: Fetch P6.1-P6.4 status for BGĐ review
   if (task.stepCode === 'P6.5') {
     const [p61, p62, p63, p64] = await Promise.all([
-      prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P6.1' }, select: { status: true, resultData: true } }),
-      prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P6.2' }, select: { status: true, resultData: true } }),
-      prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P6.3' }, select: { status: true, resultData: true } }),
-      prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P6.4' }, select: { status: true, resultData: true } }),
+      prisma.task.findFirst({ where: { projectId: task.projectId, taskType: 'P6.1' }, select: { status: true, resultData: true } }),
+      prisma.task.findFirst({ where: { projectId: task.projectId, taskType: 'P6.2' }, select: { status: true, resultData: true } }),
+      prisma.task.findFirst({ where: { projectId: task.projectId, taskType: 'P6.3' }, select: { status: true, resultData: true } }),
+      prisma.task.findFirst({ where: { projectId: task.projectId, taskType: 'P6.4' }, select: { status: true, resultData: true } }),
     ])
     const statusLabel = (s: string | undefined) => s === 'DONE' ? '✅ Hoàn thành' : s === 'IN_PROGRESS' ? '🔄 Đang thực hiện' : '⏳ Chưa bắt đầu'
     const rd62 = p62?.resultData as Record<string, string> | null
@@ -513,14 +513,14 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   }
 
   // Fetch file attachments from all previous steps (completed or in-progress) in the same project
-  const otherTasks = await prisma.workflowTask.findMany({
+  const otherTasks = await prisma.task.findMany({
     where: {
       projectId: task.projectId,
       id: { not: task.id },
       status: { in: ['DONE', 'IN_PROGRESS'] },
     },
-    select: { id: true, stepCode: true, stepName: true },
-    orderBy: { stepCode: 'asc' },
+    select: { id: true, taskType: true, title: true },
+    orderBy: { taskType: 'asc' },
   })
 
   let previousStepFiles: PrevStepFile[] = []
@@ -546,7 +546,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
     // Group files by task ID (entityId format: "{taskId}_{attachmentKey}")
     const filesByTaskId = new Map<string, typeof allFiles>()
-    const p11Task = otherTasks.find(t => ['P1.1', 'P1.1B'].includes(t.stepCode))
+    const p11Task = otherTasks.find(t => ['P1.1', 'P1.1B'].includes(t.taskType))
 
     for (const f of allFiles) {
       if (f.entityType === 'Project' && p11Task) {
@@ -562,8 +562,8 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     previousStepFiles = otherTasks
       .filter(t => filesByTaskId.has(t.id))
       .map(t => ({
-        stepCode: t.stepCode,
-        stepName: t.stepName,
+        stepCode: t.taskType,
+        stepName: t.title,
         files: filesByTaskId.get(t.id)!.map(f => ({
           id: f.id, fileName: f.fileName, fileUrl: f.fileUrl,
           fileSize: f.fileSize, mimeType: f.mimeType, createdAt: f.createdAt,
@@ -587,7 +587,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
 
   if (action === 'save') {
     // Save resultData without completing — used for partial approval state
-    const updatedTask = await prisma.workflowTask.update({
+    const updatedTask = await prisma.task.update({
       where: { id },
       data: { resultData: body.resultData ? JSON.parse(JSON.stringify(body.resultData)) : undefined },
     })
@@ -603,7 +603,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
   }
 
   if (action === 'p35_submit_groups') {
-    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    const task = await prisma.task.findUnique({ where: { id } })
     if (!task) return errorResponse('Task not found', 404)
     
     const { groupsToSubmit, totalItemsCount, submittedItemsCount } = body.resultData
@@ -626,7 +626,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
     let updatedTask;
     if (isComplete) {
       // If 100% submitted, complete the P3.5 task
-      updatedTask = await prisma.workflowTask.update({
+      updatedTask = await prisma.task.update({
         where: { id },
         data: { 
           status: 'DONE', 
@@ -636,7 +636,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
         }
       })
     } else {
-      updatedTask = await prisma.workflowTask.update({
+      updatedTask = await prisma.task.update({
         where: { id },
         data: { resultData: { ...currentRd, submittedGroups: updatedSubmitted } }
       })
@@ -646,11 +646,11 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
     // Strategy: find any P3.6 still open for this project (PENDING/IN_PROGRESS) and merge groups in.
     // Only create a fresh task if none open (e.g. previous round fully approved/closed).
     const newGroups = groupsToSubmit.map((g: any) => ({ ...g, status: 'PENDING' }))
-    const openP36 = await prisma.workflowTask.findFirst({
+    const openP36 = await prisma.task.findFirst({
       where: {
         projectId: task.projectId,
-        stepCode: 'P3.6',
-        status: { in: ['PENDING', 'IN_PROGRESS'] },
+        taskType: 'P3.6',
+        status: { in: ['OPEN', 'IN_PROGRESS'] },
       },
       orderBy: { createdAt: 'asc' }, // prefer the original init-spawned one
     })
@@ -665,26 +665,29 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
         if (idx >= 0) merged[idx] = g
         else merged.push(g)
       }
-      await prisma.workflowTask.update({
+      await prisma.task.update({
         where: { id: openP36.id },
         data: {
-          stepName: `BGĐ phê duyệt báo giá NCC (${merged.length} nhóm)`,
+          title: `BGĐ phê duyệt báo giá NCC (${merged.length} nhóm)`,
           status: 'IN_PROGRESS',
           startedAt: openP36.startedAt || new Date(),
           resultData: { ...rd, groups: merged, sourceP35Id: id },
         },
       })
     } else {
-      await prisma.workflowTask.create({
+      const newP36 = await prisma.task.create({
         data: {
           projectId: task.projectId,
-          stepCode: 'P3.6',
-          stepName: `BGĐ phê duyệt báo giá NCC (${newGroups.length} nhóm)`,
-          assignedRole: 'R01',
+          taskType: 'P3.6',
+          title: `BGĐ phê duyệt báo giá NCC (${newGroups.length} nhóm)`,
+          createdBy: payload.userId,
           status: 'IN_PROGRESS',
           resultData: { groups: newGroups, sourceP35Id: id },
           startedAt: new Date(),
         },
+      })
+      await prisma.taskAssignee.create({
+        data: { taskId: newP36.id, role: 'R01', isPrimary: true },
       })
     }
 
@@ -692,7 +695,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
   }
 
   if (action === 'p36_evaluate_groups') {
-    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    const task = await prisma.task.findUnique({ where: { id } })
     if (!task) return errorResponse('Task not found', 404)
 
     const { evaluations } = body.resultData 
@@ -728,7 +731,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
 
     // Push decisions back to P3.5 source task
     if (currentRd.sourceP35Id) {
-      const p35 = await prisma.workflowTask.findUnique({ where: { id: currentRd.sourceP35Id } })
+      const p35 = await prisma.task.findUnique({ where: { id: currentRd.sourceP35Id } })
       if (p35) {
         const p35rd = (p35.resultData as any) || {}
         let p35submitted = p35rd.submittedGroups || []
@@ -747,7 +750,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
           }
         }
         
-        await prisma.workflowTask.update({
+        await prisma.task.update({
           where: { id: p35.id },
           data: {
             resultData: { ...p35rd, submittedGroups: p35submitted },
@@ -762,14 +765,13 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
 
     let updatedTask;
     if (isAllEvaluated) {
-       updatedTask = await prisma.workflowTask.update({
+       updatedTask = await prisma.task.update({
          where: { id },
          data: {
             status: 'DONE',
             completedAt: new Date(),
             completedBy: payload.userId,
-            resultData: { ...currentRd, groups },
-            notes: hasAnyRejected ? 'Từ chối một số/toàn bộ nhóm báo giá' : 'Đã duyệt báo giá'
+            resultData: { ...currentRd, groups, _notes: hasAnyRejected ? 'Từ chối một số/toàn bộ nhóm báo giá' : 'Đã duyệt báo giá' },
          }
        })
 
@@ -777,7 +779,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
        // Approved groups are now centrally managed in /dashboard/warehouse/procurement Dashboard
     } else {
        // Partial save, do not complete task
-       updatedTask = await prisma.workflowTask.update({
+       updatedTask = await prisma.task.update({
          where: { id },
          data: {
             resultData: { ...currentRd, groups }
@@ -789,14 +791,17 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
   }
 
   if (action === 'complete') {
-    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    const task = await prisma.task.findUnique({ where: { id }, include: { assignees: true } })
     if (!task) return errorResponse('Task không tồn tại', 404)
+    const primary = task.assignees?.find(a => a.isPrimary) || task.assignees?.[0]
+    const taskRole = primary?.role || ''
+    const taskAssignedTo = primary?.userId || null
     const isGlobalAdmin = ['R00', 'R01', 'R02', 'R02a'].includes(payload.roleCode)
-    const baseTaskRole = task.assignedRole.replace(/[a-zA-Z]$/, '')
+    const baseTaskRole = taskRole.replace(/[a-zA-Z]$/, '')
     const baseUserRole = payload.roleCode.replace(/[a-zA-Z]$/, '')
-    const isAssignedToMe = task.assignedTo === payload.userId
+    const isAssignedToMe = taskAssignedTo === payload.userId
 
-    const isAuthorized = isGlobalAdmin || isAssignedToMe || (baseUserRole === baseTaskRole && !task.assignedTo)
+    const isAuthorized = isGlobalAdmin || isAssignedToMe || (baseUserRole === baseTaskRole && !taskAssignedTo)
 
     if (!isAuthorized) {
       return errorResponse(`Bạn (${payload.roleCode}) không có quyền thực hiện bước này. Hãy yêu cầu quản lý phân công task cho bạn.`, 403)
@@ -817,21 +822,24 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
       return errorResponse('Chỉ L1 (trưởng phòng) hoặc Admin mới có quyền phân công', 403)
     }
 
-    const task = await prisma.workflowTask.findUnique({ where: { id } })
+    const task = await prisma.task.findUnique({ where: { id }, include: { assignees: true } })
     if (!task) return errorResponse('Task không tồn tại', 404)
+    const primaryAssignee = task.assignees?.find(a => a.isPrimary) || task.assignees?.[0]
+    const taskAssignedUserId = primaryAssignee?.userId || null
+    const taskRoleCode = primaryAssignee?.role || ''
 
     // Skip if already assigned to this user (prevent double notification)
-    if (task.assignedTo === body.assignToUserId) {
+    if (taskAssignedUserId === body.assignToUserId) {
       return successResponse({ task }, 'Task đã được phân công cho người này')
     }
 
     // Strict role check: PM (R02, R02a) and Admin (R00, R01) can bypass, otherwise assigner must match task role
     const userBaseRole = payload.roleCode.replace(/[a-z]$/i, '')
-    const taskBaseRole = task.assignedRole.replace(/[a-z]$/i, '')
+    const taskBaseRole = taskRoleCode.replace(/[a-z]$/i, '')
     const isGlobalAdmin = ['R00', 'R01', 'R02'].includes(userBaseRole)
 
     if (!isGlobalAdmin && userBaseRole !== taskBaseRole) {
-      return errorResponse(`Bạn không có quyền phân công. Chỉ Quản lý bộ phận ${task.assignedRole} hoặc PM mới được thao tác.`, 403)
+      return errorResponse(`Bạn không có quyền phân công. Chỉ Quản lý bộ phận ${taskRoleCode} hoặc PM mới được thao tác.`, 403)
     }
 
     const updated = await assignTask(id, body.assignToUserId)
@@ -840,10 +848,10 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
     try {
       const { notifyTaskAssigned } = await import('@/lib/telegram-notifications')
       const [fullTask, assigner, assignee] = await Promise.all([
-        prisma.workflowTask.findUnique({
+        prisma.task.findUnique({
           where: { id },
           select: {
-            id: true, stepCode: true, stepName: true, deadline: true,
+            id: true, taskType: true, title: true, deadline: true,
             project: { select: { projectCode: true, projectName: true } },
           },
         }),
@@ -851,12 +859,12 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
         prisma.user.findUnique({ where: { id: body.assignToUserId }, select: { fullName: true } }),
       ])
       if (fullTask?.project && assigner && assignee) {
-        console.log(`📌 Telegram assign: ${assigner.fullName} → ${assignee.fullName} [${fullTask.stepCode}] ${fullTask.project.projectCode}`)
+        console.log(`📌 Telegram assign: ${assigner.fullName} → ${assignee.fullName} [${fullTask.taskType}] ${fullTask.project.projectCode}`)
         await notifyTaskAssigned({
           assignedUser: { fullName: assignee.fullName, telegramChatId: null },
           assignedByName: assigner.fullName,
-          stepCode: fullTask.stepCode,
-          stepName: fullTask.stepName,
+          stepCode: fullTask.taskType,
+          stepName: fullTask.title,
           projectCode: fullTask.project.projectCode,
           projectName: fullTask.project.projectName,
           deadline: fullTask.deadline,
