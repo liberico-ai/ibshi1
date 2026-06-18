@@ -310,7 +310,10 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
       ])
       const hookKeys = (task as { hookKeys?: string[] }).hookKeys
       await runHooks(hookKeys, { projectId: task.projectId, userId, resultData: input.resultData })
-      await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId)
+      // Nếu user chọn FORWARD thì KHÔNG chain next (forward task thay thế luồng tự động)
+      if (!forwardedId) {
+        await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId)
+      }
     } else {
       // Task ad-hoc: trả về NGƯỜI GIAO để xem & kết thúc (chờ duyệt). Người giao sẽ chọn:
       // (1) Hoàn thành & kết thúc  hoặc  (2) Tạo việc tiếp theo.
