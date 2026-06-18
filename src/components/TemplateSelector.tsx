@@ -25,10 +25,12 @@ interface Props {
   isEditable: boolean
   projectCode?: string
   project?: { projectCode?: string; projectName?: string; clientName?: string; contractValue?: number | string; productType?: string; startDate?: string | Date; endDate?: string | Date } | null
+  projectId?: string
+  taskTitle?: string
   initialTemplate?: TemplateType
 }
 
-export default function TemplateSelector({ taskId, isEditable, projectCode, project, initialTemplate }: Props) {
+export default function TemplateSelector({ taskId, isEditable, projectCode, project, projectId, taskTitle, initialTemplate }: Props) {
   const [selected, setSelected] = useState<TemplateType>(initialTemplate ?? null)
   const [loaded, setLoaded] = useState(false)
   const [resultData, setResultData] = useState<Record<string, unknown>>({})
@@ -184,6 +186,8 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
             onAttendantsChange={(val) => { setMomAttendants(val); saveField('momAttendants', val) }}
             onSectionsChange={(val) => { setMomSections(val); saveField('momSections', val) }}
             onHeaderImport={(h) => saveField('momHeader', JSON.stringify(h))}
+            projectId={projectId}
+            taskSourceTitle={taskTitle}
           />
         </div>
       )}

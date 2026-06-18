@@ -1,6 +1,9 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
+import { apiFetch } from '@/hooks/useAuth'
+import { DEPARTMENTS_V2, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import type { MomItem, MomSection, MomAttendant } from '@/lib/types'
 
 export const DEFAULT_SECTIONS: MomSection[] = [
@@ -11,13 +14,17 @@ export const DEFAULT_SECTIONS: MomSection[] = [
   { key: 'V', title: 'Các việc liên quan', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
 ]
 
-export default function MomSectionsUI({ isEditable, attendantsData, sectionsData, onAttendantsChange, onSectionsChange, onHeaderImport }: {
+interface Usr { id: string; fullName?: string; username?: string; roleCode: string }
+
+export default function MomSectionsUI({ isEditable, attendantsData, sectionsData, onAttendantsChange, onSectionsChange, onHeaderImport, projectId, taskSourceTitle }: {
   isEditable: boolean
   attendantsData: unknown
   sectionsData: unknown
   onAttendantsChange: (val: string) => void
   onSectionsChange: (val: string) => void
   onHeaderImport?: (h: Record<string, string>) => void
+  projectId?: string
+  taskSourceTitle?: string
 }) {
   let attendants: MomAttendant[] = []
   try { const p = attendantsData ? JSON.parse(String(attendantsData)) : null; if (Array.isArray(p)) attendants = p } catch { /* */ }
@@ -215,6 +222,63 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
     XLSX.writeFile(wb, 'BB_Hop_Trien_Khai.xlsx')
   }
 
+  // ── Giao việc từ action items ──
+  const [users, setUsers] = useState<Usr[]>([])
+  const [rowDept, setRowDept] = useState<Record<string, string>>({})
+  const [rowPick, setRowPick] = useState<Record<string, { userId: string; label: string }>>({})
+  const [rowQuery, setRowQuery] = useState<Record<string, string>>({})
+  const [rowDone, setRowDone] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (isEditable && projectId) {
+      apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) }).catch(() => {})
+    }
+  }, [isEditable, projectId])
+
+  const rowKey = (secIdx: number, itemIdx: number) => `${secIdx}-${itemIdx}`
+
+  const rowUsersFor = (key: string) => {
+    const q = (rowQuery[key] || '').trim().toLowerCase()
+    if (!q) return []
+    const roleSel = rowDept[key] || ''
+    const dept = roleSel ? ROLE_TO_DEPT[roleSel] : ''
+    return users.filter((u) => (u.fullName || u.username || '').toLowerCase().includes(q))
+      .filter((u) => !dept || ROLE_TO_DEPT[u.roleCode] === dept).slice(0, 6)
+  }
+
+  const createTaskFromItem = async (secIdx: number, itemIdx: number) => {
+    const item = sections[secIdx]?.items[itemIdx]
+    if (!item?.noiDung?.trim()) { alert('Mục chưa có nội dung'); return }
+    const key = rowKey(secIdx, itemIdx)
+    const role = rowDept[key] || undefined
+    const pick = rowPick[key]
+    if (!pick && !role) { alert('Chọn phòng hoặc nhân sự để giao'); return }
+
+    let deadline: string | undefined
+    if (item.dueDate) {
+      const parts = item.dueDate.split('/')
+      if (parts.length === 3) deadline = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toISOString()
+      else deadline = new Date(item.dueDate).toISOString()
+    }
+
+    setBusy(true)
+    const res = await apiFetch('/api/work/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: item.noiDung.trim(),
+        description: taskSourceTitle ? `Từ biên bản họp: ${taskSourceTitle}` : undefined,
+        projectId: projectId || undefined,
+        taskType: 'FREE',
+        deadline: deadline && !isNaN(new Date(deadline).getTime()) ? deadline : undefined,
+        assignees: pick ? [{ userId: pick.userId, isPrimary: true }] : [{ role, isPrimary: true }],
+      }),
+    })
+    setBusy(false)
+    if (res.ok && res.task?.id) setRowDone((s) => ({ ...s, [key]: res.task.id }))
+    else alert(res.error || 'Lỗi tạo task')
+  }
+
   const cellStyle = { padding: '4px 6px', border: '1px solid var(--border)', fontSize: '0.8rem' }
   const inputStyle = { width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, fontSize: '0.8rem', background: 'var(--bg-secondary)' }
 
@@ -336,35 +400,82 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
                 </tr>
               </thead>
               <tbody>
-                {sec.items.map((item, itemIdx) => (
-                  <tr key={itemIdx}>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>
-                      {isEditable ? <input style={{ ...inputStyle, width: 30, textAlign: 'center' }} value={item.stt} onChange={e => editItem(secIdx, itemIdx, 'stt', e.target.value)} />
-                        : item.stt}
-                    </td>
-                    <td style={cellStyle}>
-                      {isEditable ? <input style={inputStyle} value={item.noiDung} onChange={e => editItem(secIdx, itemIdx, 'noiDung', e.target.value)} placeholder="Nội dung công việc" />
-                        : item.noiDung}
-                    </td>
-                    <td style={cellStyle}>
-                      {isEditable ? <input style={inputStyle} value={item.actionBy} onChange={e => editItem(secIdx, itemIdx, 'actionBy', e.target.value)} placeholder="Ai thực hiện" />
-                        : item.actionBy}
-                    </td>
-                    <td style={cellStyle}>
-                      {isEditable ? <input style={inputStyle} value={item.dueDate} onChange={e => editItem(secIdx, itemIdx, 'dueDate', e.target.value)} placeholder="dd/mm/yyyy" />
-                        : item.dueDate}
-                    </td>
-                    <td style={cellStyle}>
-                      {isEditable ? <input style={inputStyle} value={item.remark} onChange={e => editItem(secIdx, itemIdx, 'remark', e.target.value)} placeholder="Ghi chú" />
-                        : item.remark}
-                    </td>
-                    {isEditable && (
-                      <td style={{ ...cellStyle, textAlign: 'center' }}>
-                        <button type="button" onClick={() => removeItem(secIdx, itemIdx)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem' }}>✕</button>
+                {sec.items.map((item, itemIdx) => {
+                  const key = rowKey(secIdx, itemIdx)
+                  const done = rowDone[key]
+                  const sel = rowDept[key] || ''
+                  const us = rowUsersFor(key)
+                  const showAssign = isEditable && projectId && item.noiDung?.trim()
+                  return (
+                    <tr key={itemIdx}>
+                      <td style={{ ...cellStyle, textAlign: 'center', verticalAlign: 'top' }}>
+                        {isEditable ? <input style={{ ...inputStyle, width: 30, textAlign: 'center' }} value={item.stt} onChange={e => editItem(secIdx, itemIdx, 'stt', e.target.value)} />
+                          : item.stt}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td style={{ ...cellStyle, verticalAlign: 'top' }}>
+                        {isEditable ? <input style={inputStyle} value={item.noiDung} onChange={e => editItem(secIdx, itemIdx, 'noiDung', e.target.value)} placeholder="Nội dung công việc" />
+                          : item.noiDung}
+                        {showAssign && (
+                          done ? (
+                            <div style={{ marginTop: 4, padding: '3px 8px', background: '#ecfdf5', color: '#059669', borderRadius: 4, fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              ✓ Đã giao <a href={`/dashboard/work/${done}`} style={{ color: '#059669', fontWeight: 600, textDecoration: 'underline' }}>Mở ↗</a>
+                            </div>
+                          ) : (
+                            <div style={{ marginTop: 6, padding: '6px 8px', background: '#f8fafc', border: '1px dashed var(--border)', borderRadius: 6, display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                              <div style={{ minWidth: 120 }}>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: 2 }}>Phòng</div>
+                                <select value={sel} onChange={(e) => { setRowDept(s => ({ ...s, [key]: e.target.value })); setRowPick(s => { const n = { ...s }; delete n[key]; return n }) }}
+                                  style={{ ...inputStyle, padding: '3px 4px', fontSize: '0.75rem' }}>
+                                  <option value="">— Chọn —</option>
+                                  {DEPARTMENTS_V2.map((d) => DEPT_PRIMARY_ROLE[d.code] && <option key={d.code} value={DEPT_PRIMARY_ROLE[d.code]}>{d.name}</option>)}
+                                </select>
+                              </div>
+                              <div style={{ minWidth: 130, position: 'relative' }}>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: 2 }}>Nhân sự</div>
+                                <input value={rowPick[key]?.label || rowQuery[key] || ''} placeholder="Gõ tên..."
+                                  onChange={(e) => { setRowQuery(s => ({ ...s, [key]: e.target.value })); setRowPick(s => { const n = { ...s }; delete n[key]; return n }) }}
+                                  style={{ ...inputStyle, padding: '3px 4px', fontSize: '0.75rem' }} />
+                                {us.length > 0 && !rowPick[key] && (
+                                  <div style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, right: 0, border: '1px solid var(--border)', background: '#fff', borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,.08)', maxHeight: 160, overflow: 'auto' }}>
+                                    {us.map((u) => (
+                                      <div key={u.id} onClick={() => { setRowPick(s => ({ ...s, [key]: { userId: u.id, label: u.fullName || u.username || '' } })); setRowQuery(s => ({ ...s, [key]: '' })) }}
+                                        style={{ padding: '4px 8px', fontSize: '0.75rem', cursor: 'pointer' }}
+                                        onMouseEnter={e => (e.currentTarget.style.background = '#eff6ff')}
+                                        onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                                        {u.fullName || u.username} <span style={{ color: 'var(--text-muted)' }}>· {DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <button type="button" onClick={() => createTaskFromItem(secIdx, itemIdx)} disabled={busy}
+                                style={{ padding: '4px 10px', fontSize: '0.72rem', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                + Giao việc
+                              </button>
+                            </div>
+                          )
+                        )}
+                      </td>
+                      <td style={{ ...cellStyle, verticalAlign: 'top' }}>
+                        {isEditable ? <input style={inputStyle} value={item.actionBy} onChange={e => editItem(secIdx, itemIdx, 'actionBy', e.target.value)} placeholder="Ai thực hiện" />
+                          : item.actionBy}
+                      </td>
+                      <td style={{ ...cellStyle, verticalAlign: 'top' }}>
+                        {isEditable ? <input style={inputStyle} value={item.dueDate} onChange={e => editItem(secIdx, itemIdx, 'dueDate', e.target.value)} placeholder="dd/mm/yyyy" />
+                          : item.dueDate}
+                      </td>
+                      <td style={{ ...cellStyle, verticalAlign: 'top' }}>
+                        {isEditable ? <input style={inputStyle} value={item.remark} onChange={e => editItem(secIdx, itemIdx, 'remark', e.target.value)} placeholder="Ghi chú" />
+                          : item.remark}
+                      </td>
+                      {isEditable && (
+                        <td style={{ ...cellStyle, textAlign: 'center', verticalAlign: 'top' }}>
+                          <button type="button" onClick={() => removeItem(secIdx, itemIdx)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem' }}>✕</button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

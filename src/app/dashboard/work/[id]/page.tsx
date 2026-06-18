@@ -236,6 +236,8 @@ export default function WorkDetailPage() {
         isEditable={isAssignee && !myDone && task.status !== 'DONE'}
         projectCode={task.project?.projectCode}
         project={task.project}
+        projectId={task.projectId || undefined}
+        taskTitle={task.title}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">

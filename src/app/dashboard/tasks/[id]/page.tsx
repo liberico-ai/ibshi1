@@ -1866,6 +1866,8 @@ export default function TaskDetailPage() {
                 isEditable={isActive}
                 projectCode={task.project?.projectCode}
                 project={task.project}
+                projectId={task.projectId || undefined}
+                taskTitle={task.stepName}
               />
             </div>
 
