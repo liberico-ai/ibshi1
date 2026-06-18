@@ -16,6 +16,7 @@ import WeeklyAcceptanceUI from './components/WeeklyAcceptanceUI'
 import QualityAcceptanceUI from './components/QualityAcceptanceUI'
 import P3_5CommercialGroupUI from './components/P3_5CommercialGroupUI'
 import P3_6ApprovalUI from './components/P3_6ApprovalUI'
+import FlexibleFeatures from './components/FlexibleFeatures'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
@@ -5458,6 +5459,9 @@ export default function TaskDetailPage() {
                 ))}
               </div>
             )}
+
+            {/* Flexible features: assignees, meetings, subtasks, comments */}
+            <FlexibleFeatures taskId={taskId} />
 
             {/* Attachments */}
             {config.attachments.length > 0 && (
