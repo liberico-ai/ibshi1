@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, redirect } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
@@ -986,6 +986,10 @@ export default function TaskDetailPage() {
   const router = useRouter()
   const taskId = params.id as string
   const { user: currentUser } = useAuthStore()
+
+  useEffect(() => {
+    router.replace(`/dashboard/work/${taskId}`)
+  }, [taskId, router])
 
   const [task, setTask] = useState<TaskData | null>(null)
   const [loading, setLoading] = useState(true)

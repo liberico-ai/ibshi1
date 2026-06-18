@@ -60,7 +60,7 @@ export async function notifyTaskActivated(data: TaskNotifyData & {
     `👤 Phụ trách: ${escapeHtml(data.assignedRole)} (${escapeHtml(roleName(data.assignedRole))})`,
     mentionLine,
     `⏰ Deadline: ${formatDeadline(data.deadline)}`,
-    url ? `🔗 <a href="${url}/dashboard/tasks/${data.taskId}">Xem chi tiết</a>` : '',
+    url ? `🔗 <a href="${url}/dashboard/work/${data.taskId}">Xem chi tiết</a>` : '',
   ].filter(Boolean).join('\n')
   await sendGroupMessage(msg)
 }
@@ -90,7 +90,7 @@ export async function notifyTaskAssigned(data: {
     `👤 Giao cho: ${tag}`,
     `📝 Phân công bởi: ${escapeHtml(data.assignedByName)}`,
     `⏰ Deadline: <b>${formatDeadline(data.deadline)}</b>`,
-    url ? `🔗 <a href="${url}/dashboard/tasks/${data.taskId}">Xem chi tiết</a>` : '',
+    url ? `🔗 <a href="${url}/dashboard/work/${data.taskId}">Xem chi tiết</a>` : '',
   ].filter(Boolean).join('\n')
   await sendGroupMessage(msg)
 }

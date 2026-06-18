@@ -178,7 +178,7 @@ export async function completeTask(
               title: `Công việc mới: QAQC nghiệm thu CL`,
               message: `Bước P5.3A của dự án ${project.projectCode} đã sẵn sàng.`,
               type: 'task_assigned',
-              linkUrl: `/dashboard/tasks/${newP53a.id}`,
+              linkUrl: `/dashboard/work/${newP53a.id}`,
             }))
           })
           await notifyTaskActivated({
@@ -310,7 +310,7 @@ export async function ensureDailyReportTasks(projectId: string, createdByUserId?
           data: users.map(u => ({
             userId: u.id, title: `Công việc mới: Báo cáo SX Hàng ngày`,
             message: `Bước P5.1 của dự án ${project.projectCode} đã sẵn sàng.`,
-            type: 'task_assigned', linkUrl: `/dashboard/tasks/${newP51.id}`,
+            type: 'task_assigned', linkUrl: `/dashboard/work/${newP51.id}`,
           })),
         })
         await notifyTaskActivated({
@@ -348,7 +348,7 @@ export async function ensureDailyReportTasks(projectId: string, createdByUserId?
             data: users.map(u => ({
               userId: u.id, title: `Công việc mới: Báo cáo SX Thầu phụ`,
               message: `Bước P5.1A của dự án ${project.projectCode} đã sẵn sàng.`,
-              type: 'task_assigned', linkUrl: `/dashboard/tasks/${newP51A.id}`,
+              type: 'task_assigned', linkUrl: `/dashboard/work/${newP51A.id}`,
             })),
           })
           await notifyTaskActivated({
@@ -952,7 +952,7 @@ export async function activateTask(projectId: string, stepCode: string): Promise
           title: `Công việc mới: ${rule.name}`,
           message: `Bước ${stepCode} của dự án ${project.projectCode} — ${project.projectName} đã sẵn sàng.`,
           type: 'task_assigned',
-          linkUrl: `/dashboard/tasks/${task.id}`,
+          linkUrl: `/dashboard/work/${task.id}`,
         })),
       })
       notifyTaskActivated({

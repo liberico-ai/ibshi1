@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { getStatusBg, getUrgencyLabel, formatDate } from '@/lib/utils'
 import { getStepFormConfig } from '@/lib/step-form-configs'
@@ -24,6 +25,9 @@ const STATUS_TABS = [
 ]
 
 export default function TasksPage() {
+  const router = useRouter()
+  useEffect(() => { router.replace('/dashboard/work') }, [router])
+
   const [allTasks, setAllTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [completing, setCompleting] = useState<string | null>(null)

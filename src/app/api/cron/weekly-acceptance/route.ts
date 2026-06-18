@@ -138,7 +138,7 @@ export async function GET(request: Request) {
                 title: `📋 Nghiệm thu tuần W${weekNumber}: ${project.projectCode}`,
                 message: `Phiếu nghiệm thu khối lượng tuần ${weekNumber} — ${project.projectName} đã sẵn sàng.`,
                 type: 'task_assigned',
-                linkUrl: `/dashboard/tasks/${newTask.id}`,
+                linkUrl: `/dashboard/work/${newTask.id}`,
               })),
             })
             

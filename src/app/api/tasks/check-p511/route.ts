@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
               title: `📋 Yêu cầu nghiệm thu mới: ${project?.projectCode}`,
               message: `Đã tự động tạo Yêu cầu nghiệm thu cho hạng mục: ${hangMucName}.`,
               type: 'task_assigned',
-              linkUrl: `/dashboard/tasks/${newTask.id}`,
+              linkUrl: `/dashboard/work/${newTask.id}`,
             }))
           })
 
