@@ -3055,8 +3055,27 @@ export default function TaskDetailPage() {
                       )}
                     </div>
                     {formData.estimateFileName && (
-                      <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: '0.8rem' }}>
-                        File đã upload: <strong>{String(formData.estimateFileName)}</strong>
+                      <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>File đã upload: <strong>{String(formData.estimateFileName)}</strong></span>
+                        {isActive && (
+                          <button type="button" onClick={() => {
+                            setFormData(prev => {
+                              const next = { ...prev }
+                              delete next.estimateFileName
+                              delete next.totalMaterial
+                              delete next.totalLabor
+                              delete next.totalService
+                              delete next.totalOverhead
+                              delete next.totalEstimate
+                              delete next.dt02Detail
+                              return next
+                            })
+                            setSuccessMsg('Đã xoá dự toán. Bạn có thể upload lại.')
+                            setTimeout(() => setSuccessMsg(''), 3000)
+                          }} style={{ padding: '4px 12px', fontSize: '0.78rem', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                            ✕ Xoá
+                          </button>
+                        )}
                       </div>
                     )}
                     <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '8px 0 0', fontStyle: 'italic' }}>
