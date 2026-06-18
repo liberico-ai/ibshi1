@@ -5,6 +5,7 @@ import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import * as XLSX from 'xlsx'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
