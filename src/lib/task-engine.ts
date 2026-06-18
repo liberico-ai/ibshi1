@@ -38,7 +38,7 @@ function toLegacy(t: {
 }): LegacyTask {
   const rule = WORKFLOW_RULES[t.taskType]
   const primary = t.assignees?.find(a => a.isPrimary) || t.assignees?.[0]
-  const status = t.status === 'OPEN' || t.status === 'RETURNED' ? TASK_STATUS.IN_PROGRESS : t.status
+  const status = t.status === 'OPEN' ? TASK_STATUS.IN_PROGRESS : t.status
   return {
     id: t.id,
     projectId: t.projectId || '',
