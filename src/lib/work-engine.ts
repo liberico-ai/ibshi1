@@ -242,16 +242,25 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
   }
 
   // ── Hoàn thành theo TỪNG người nhận ──
-  // Tìm dòng người nhận của user hiện tại (ưu tiên khớp userId, sau đó khớp role chưa xong).
-  const myRow =
-    task.assignees.find((a) => a.userId === userId) ||
-    task.assignees.find((a) => a.role === roleCode && !a.done) ||
-    task.assignees.find((a) => a.role === roleCode)
-  if (myRow) {
-    await prisma.taskAssignee.update({
-      where: { id: myRow.id },
+  // Khi creator hoàn thành task RETURNED → mark TẤT CẢ assignees done (creator đang finalize toàn bộ task)
+  const isCreatorOnReturned = task.status === 'RETURNED' && task.createdBy === userId
+  if (isCreatorOnReturned) {
+    await prisma.taskAssignee.updateMany({
+      where: { taskId, done: false },
       data: { done: true, doneAt: new Date(), doneBy: userId, outcome: input.mode },
     })
+  } else {
+    // Tìm dòng người nhận của user hiện tại (ưu tiên khớp userId, sau đó khớp role chưa xong).
+    const myRow =
+      task.assignees.find((a) => a.userId === userId) ||
+      task.assignees.find((a) => a.role === roleCode && !a.done) ||
+      task.assignees.find((a) => a.role === roleCode)
+    if (myRow) {
+      await prisma.taskAssignee.update({
+        where: { id: myRow.id },
+        data: { done: true, doneAt: new Date(), doneBy: userId, outcome: input.mode },
+      })
+    }
   }
 
   // Mỗi người tự ghi nhận đã xong (kèm hướng chọn)
