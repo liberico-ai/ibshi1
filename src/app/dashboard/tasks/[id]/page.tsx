@@ -19,6 +19,7 @@ import P3_6ApprovalUI from './components/P3_6ApprovalUI'
 import FlexibleFeatures from './components/FlexibleFeatures'
 import FlexibleActionBar from './components/FlexibleActionBar'
 import MomSectionsUI from '@/components/MomSectionsUI'
+import InheritedDataUI from '@/components/InheritedDataUI'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 
 // ── Number formatting helpers ──
@@ -1858,6 +1859,11 @@ export default function TaskDetailPage() {
                 ℹ️ {config.description}
               </p>
             </div>
+
+            {/* Dữ liệu kế thừa từ bước trước (estimate, MOM, PR...) — hiển thị read-only cho step phê duyệt */}
+            {!['P1.2', 'P1.2A', 'P1.3'].includes(task.stepCode) && task.resultData && (
+              <InheritedDataUI resultData={task.resultData as Record<string, unknown>} project={task.project} />
+            )}
 
             {/* P1.3 Dual Approval UI */}
             {task.stepCode === 'P1.3' && previousStepData ? (

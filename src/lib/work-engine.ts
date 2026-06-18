@@ -281,11 +281,10 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
       { forwardedFromId: taskId }
     )
     forwardedId = fwd.id
-    // Mang dữ liệu PR (BomPr) sang task được chuyển tiếp để người nhận thấy ngay
+    // Mang toàn bộ resultData sang task chuyển tiếp (dự toán, PR, BBH...) để người nhận xem & phê duyệt
     const srcRd = (task as { resultData?: unknown }).resultData
-    const bomPr = srcRd && typeof srcRd === 'object' ? (srcRd as Record<string, unknown>).bomPr : undefined
-    if (bomPr) {
-      await prisma.task.update({ where: { id: fwd.id }, data: { resultData: JSON.parse(JSON.stringify({ bomPr })) } }).catch(() => {})
+    if (srcRd && typeof srcRd === 'object' && Object.keys(srcRd as object).length > 0) {
+      await prisma.task.update({ where: { id: fwd.id }, data: { resultData: JSON.parse(JSON.stringify(srcRd)) } }).catch(() => {})
     }
     await prisma.taskHistory.create({
       data: { taskId, action: 'FORWARDED', byUserId: userId, reason: input.forward.note, meta: { forwardedTaskId: fwd.id } },
