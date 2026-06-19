@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import QuickCreateMaterialDialog from './QuickCreateMaterialDialog'
 import { resolveCodes, type ResolvedLite } from './material-resolve-client'
+import { detectSectionType, normalizeDims, dimsMatch } from '@/lib/section-type'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -54,6 +55,9 @@ interface StockMatch {
   currentStock: number
   matched: boolean
   viaCode?: boolean   // matched by resolving the code (canonical or old alias)
+  viaSectionType?: boolean
+  gradeWarning?: string
+  sectionCandidates?: number
 }
 
 // ── Props ──────────────────────────────────────────────────
@@ -279,6 +283,19 @@ function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[], cod
     currentStock: Number(inv.currentStock), matched: true,
   })
 
+  // Pre-compute section type index for inventory items
+  type SectionEntry = { inv: InventoryItem; dims: string; grade: string }
+  const sectionIndex = new Map<string, SectionEntry[]>()
+  for (const inv of inventory) {
+    const text = `${inv.name} ${inv.specification || ''}`
+    const st = detectSectionType(text)
+    if (!st) continue
+    const dims = normalizeDims(inv.specification || inv.name)
+    if (!dims) continue
+    if (!sectionIndex.has(st)) sectionIndex.set(st, [])
+    sectionIndex.get(st)!.push({ inv, dims, grade: (inv.grade || '').trim().toLowerCase() })
+  }
+
   for (let i = 0; i < items.length; i++) {
     const pr = items[i]
     const noMatch: StockMatch = { inventoryId: null, inventoryCode: null, inventoryName: null, currentStock: 0, matched: false }
@@ -304,6 +321,42 @@ function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[], cod
           normDim(m.specification || '').includes(profileKey) ||
           normDim(m.name).includes(profileKey)
         )
+      }
+    }
+
+    // Strategy 2.5: section type + dims matching (PR notation ↔ inventory naming)
+    if (!inv && pr.profile) {
+      const prText = `${pr.description} ${pr.profile}`.trim()
+      const prSection = detectSectionType(prText)
+      if (prSection) {
+        const prDims = normalizeDims(pr.profile)
+        if (prDims) {
+          const candidates = sectionIndex.get(prSection) || []
+          const dimMatches = candidates.filter(c => dimsMatch(prDims, c.dims))
+          if (dimMatches.length > 0) {
+            const prGrade = (pr.grade || '').trim().toLowerCase()
+            const gradeExact = dimMatches.filter(c => c.grade === prGrade)
+            if (gradeExact.length === 1) {
+              inv = gradeExact[0].inv
+              matches.set(i, { ...toMatch(inv), viaSectionType: true })
+              continue
+            } else if (gradeExact.length > 1) {
+              const best = gradeExact.reduce((a, b) => Number(b.inv.currentStock) > Number(a.inv.currentStock) ? b : a)
+              matches.set(i, { ...toMatch(best.inv), viaSectionType: true, sectionCandidates: gradeExact.length })
+              continue
+            } else if (dimMatches.length === 1) {
+              inv = dimMatches[0].inv
+              const warn = prGrade && dimMatches[0].grade && prGrade !== dimMatches[0].grade
+                ? `PR: ${pr.grade} ≠ Kho: ${dimMatches[0].inv.grade}` : undefined
+              matches.set(i, { ...toMatch(inv), viaSectionType: true, gradeWarning: warn })
+              continue
+            } else {
+              const best = dimMatches.reduce((a, b) => Number(b.inv.currentStock) > Number(a.inv.currentStock) ? b : a)
+              matches.set(i, { ...toMatch(best.inv), viaSectionType: true, gradeWarning: 'cần xác nhận mác', sectionCandidates: dimMatches.length })
+              continue
+            }
+          }
+        }
       }
     }
 
@@ -898,16 +951,27 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <span style={{
                                   fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                                  background: stockSufficient ? '#dcfce7' : '#fef9c3',
-                                  color: stockSufficient ? '#166534' : '#854d0e',
+                                  background: stockSufficient ? '#dcfce7' : (match.gradeWarning ? '#fef3c7' : '#fef9c3'),
+                                  color: stockSufficient ? '#166534' : (match.gradeWarning ? '#92400e' : '#854d0e'),
                                   whiteSpace: 'nowrap',
                                 }}>
                                   {stockSufficient ? 'Đủ kho' : 'Thiếu'}
+                                  {match.viaSectionType && <span style={{ fontSize: '0.58rem', opacity: 0.8 }}> (tiết diện)</span>}
                                 </span>
                                 <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 600, color: '#0a2540', whiteSpace: 'nowrap' }}
                                   title={`${match.inventoryCode} — ${match.inventoryName}`}>
                                   {match.inventoryCode}
                                 </span>
+                                {match.gradeWarning && (
+                                  <span style={{ fontSize: '0.58rem', color: '#b45309', fontStyle: 'italic' }} title={match.gradeWarning}>
+                                    ⚠ {match.gradeWarning}
+                                  </span>
+                                )}
+                                {(match.sectionCandidates ?? 0) > 1 && (
+                                  <span style={{ fontSize: '0.56rem', color: '#6b7280' }}>
+                                    ({match.sectionCandidates} ứng viên)
+                                  </span>
+                                )}
                               </div>
                             ) : (
                               <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#fee2e2', color: '#991b1b', whiteSpace: 'nowrap' }}>
