@@ -41,6 +41,7 @@ export default function WorkInboxPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [q, setQ] = useState('')
   const [qInput, setQInput] = useState('')
   const [projectId, setProjectId] = useState('')
@@ -55,15 +56,19 @@ export default function WorkInboxPage() {
   useEffect(() => { loadCounts() }, [loadCounts])
   const load = useCallback(() => {
     setLoading(true)
+    setError('')
     const params = new URLSearchParams({ tab, page: String(page) })
     if (q.trim()) params.set('q', q.trim())
     if (projectId) params.set('projectId', projectId)
     apiFetch(`/api/work/inbox?${params.toString()}`).then((r) => {
       if (r.ok) { setTasks(r.tasks); setTotal(r.pagination.total); setTotalPages(r.pagination.totalPages) }
+      else { setTasks([]); setTotal(0); setError(r.error || 'Không tải được danh sách việc') }
       setLoading(false)
     })
   }, [tab, page, q, projectId])
   useEffect(() => { load() }, [load])
+  // auto-refresh mỗi 30s
+  useEffect(() => { const iv = setInterval(load, 30000); return () => clearInterval(iv) }, [load])
   // đổi tab/lọc → về trang 1
   useEffect(() => { setPage(1) }, [tab, q, projectId])
 
@@ -109,6 +114,11 @@ export default function WorkInboxPage() {
 
       {loading ? (
         <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
+      ) : error ? (
+        <div className="text-center py-12 space-y-3">
+          <p className="text-sm" style={{ color: '#e63946' }}>{error}</p>
+          <button onClick={load} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Thử lại</button>
+        </div>
       ) : tasks.length === 0 ? (
         <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
           Không có việc nào{q || projectId ? ' khớp bộ lọc' : ''}.

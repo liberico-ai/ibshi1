@@ -2,6 +2,7 @@ import prisma from './db'
 import type { CreateTaskInput, CompleteWorkTaskInput, ReassignTaskInput } from './schemas/work.schema'
 import { ROLE_TO_DEPT, DEPT_KEYWORDS, DEPT_PRIMARY_ROLE, DEPT_NAME } from './org-map'
 import { runHooks } from './work-hooks'
+import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -68,17 +69,23 @@ function rolesInSameDept(roleCode?: string | null): string[] {
   return Object.entries(ROLE_TO_DEPT).filter(([, d]) => d === dept).map(([r]) => r)
 }
 
-async function notifyAssignees(taskId: string, title: string, assignees: { role?: string | null; userId?: string | null }[]) {
-  try {
-    const userIds = new Set<string>()
-    for (const a of assignees) {
-      if (a.userId) userIds.add(a.userId)
-      else if (a.role) {
-        const us = await prisma.user.findMany({ where: { roleCode: a.role, isActive: true }, select: { id: true } })
-        us.forEach((u) => userIds.add(u.id))
-      }
+async function notifyAssignees(
+  taskId: string, title: string,
+  assignees: { role?: string | null; userId?: string | null }[],
+  opts?: { projectCode?: string; projectName?: string; createdByName?: string; deadline?: Date | null },
+) {
+  const userIds = new Set<string>()
+  for (const a of assignees) {
+    if (a.userId) userIds.add(a.userId)
+    else if (a.role) {
+      const us = await prisma.user.findMany({ where: { roleCode: a.role, isActive: true }, select: { id: true } })
+      us.forEach((u) => userIds.add(u.id))
     }
-    if (userIds.size === 0) return
+  }
+  if (userIds.size === 0) return
+
+  // In-app notification
+  try {
     await prisma.notification.createMany({
       data: [...userIds].map((uid) => ({
         userId: uid, title: `Công việc mới: ${title}`,
@@ -86,7 +93,27 @@ async function notifyAssignees(taskId: string, title: string, assignees: { role?
         linkUrl: `/dashboard/work/${taskId}`,
       })),
     })
-  } catch (e) { console.error('notifyAssignees error', e) }
+  } catch (e) { console.error('notifyAssignees DB error:', e, { taskId, userIds: [...userIds] }) }
+
+  // Telegram group notification
+  try {
+    const users = await prisma.user.findMany({ where: { id: { in: [...userIds] } }, select: { fullName: true, telegramChatId: true } })
+    const mentions = users.map((u) =>
+      u.telegramChatId ? `<a href="tg://user?id=${u.telegramChatId}">${escapeHtml(u.fullName)}</a>` : `<b>${escapeHtml(u.fullName)}</b>`
+    )
+    const url = process.env.NEXT_PUBLIC_APP_URL || ''
+    const msg = [
+      `📋 <b>GIAO VIỆC MỚI</b>`,
+      '━━━━━━━━━━━━━━━━',
+      opts?.projectCode ? `📁 Dự án: <b>${escapeHtml(opts.projectCode)}</b>${opts.projectName ? ` — ${escapeHtml(opts.projectName)}` : ''}` : null,
+      `📌 Việc: <b>${escapeHtml(title)}</b>`,
+      `👥 Giao cho: ${mentions.join(', ')}`,
+      opts?.createdByName ? `📝 Người giao: ${escapeHtml(opts.createdByName)}` : null,
+      opts?.deadline ? `⏰ Deadline: <b>${formatDeadline(opts.deadline)}</b>` : null,
+      url ? `🔗 <a href="${url}/dashboard/work/${taskId}">Xem chi tiết</a>` : null,
+    ].filter(Boolean).join('\n')
+    await sendGroupMessage(msg)
+  } catch (e) { console.error('notifyAssignees Telegram error:', e) }
 }
 
 export async function createTask(input: CreateTaskInput, userId: string, opts?: { forwardedFromId?: string }) {
@@ -171,7 +198,15 @@ export async function createTask(input: CreateTaskInput, userId: string, opts?: 
     }
   }
 
-  await notifyAssignees(task.id, task.title, assignees)
+  // Fetch context for Telegram notification (project + creator name)
+  const [project, creator] = await Promise.all([
+    task.projectId ? prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } }) : null,
+    prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }),
+  ])
+  await notifyAssignees(task.id, task.title, assignees, {
+    projectCode: project?.projectCode, projectName: project?.projectName,
+    createdByName: creator?.fullName, deadline: task.deadline,
+  })
   return task
 }
 
@@ -379,7 +414,7 @@ export async function returnTask(taskId: string, userId: string, roleCode: strin
 }
 
 export async function reassignTask(taskId: string, userId: string, input: ReassignTaskInput) {
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true } })
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
   await prisma.$transaction([
     prisma.taskAssignee.deleteMany({ where: { taskId } }),
@@ -387,7 +422,14 @@ export async function reassignTask(taskId: string, userId: string, input: Reassi
     prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.OPEN, assignedAt: new Date() } }),
     prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, toRole: input.assignees[0]?.role || null, toUserId: input.assignees[0]?.userId || null, reason: input.note } }),
   ])
-  await notifyAssignees(taskId, task.title, input.assignees)
+  const [project, creator] = await Promise.all([
+    task.projectId ? prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } }) : null,
+    prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }),
+  ])
+  await notifyAssignees(taskId, task.title, input.assignees, {
+    projectCode: project?.projectCode, projectName: project?.projectName,
+    createdByName: creator?.fullName, deadline: task.deadline,
+  })
   return { ok: true }
 }
 
@@ -606,7 +648,14 @@ async function spawnTemplateStep(step: TStep, projectId: string, byUser: string)
   })
   if (step.roleCode) await prisma.taskAssignee.create({ data: { taskId: t.id, role: step.roleCode, isPrimary: true } })
   await prisma.taskHistory.create({ data: { taskId: t.id, action: 'CREATED', byUserId: byUser, toRole: step.roleCode } })
-  await notifyAssignees(t.id, t.title, step.roleCode ? [{ role: step.roleCode }] : [])
+  const [project, creator] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } }),
+    prisma.user.findUnique({ where: { id: byUser }, select: { fullName: true } }),
+  ])
+  await notifyAssignees(t.id, t.title, step.roleCode ? [{ role: step.roleCode }] : [], {
+    projectCode: project?.projectCode, projectName: project?.projectName,
+    createdByName: creator?.fullName, deadline: t.deadline,
+  })
   return true
 }
 
