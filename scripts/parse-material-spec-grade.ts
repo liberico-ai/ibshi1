@@ -20,34 +20,44 @@ const adapter = new PrismaPg(pool as any)
 const prisma = new PrismaClient({ adapter })
 
 const apply = process.argv.includes('--apply')
+const extendGrades = process.argv.includes('--extend-grades')
 const prodAck = process.argv.includes('--i-understand-production')
 if (apply && isRemote && !prodAck) {
   console.error('DB is remote. Add --i-understand-production to confirm.')
   process.exit(1)
 }
 
-// ── Nhóm cần mác ──
-const NEED_GRADE = new Set([
-  '1.1','1.2','1.3','1.4','1.5',
-  '2.1','2.2','2.3',
-  '3.1','3.2',
-  '4.1','4.2',
-  '5.1',
-  '6.1','6.2','6.3','6.4',
+// ── Nhóm KHÔNG cần mác ──
+const SKIP_GRADE = new Set([
+  '7.1','7.2','7.3','7.4',                         // sơn, dung môi, hạt mài, béc phun
+  '8.1','8.2','8.3','8.4','8.5','8.6','8.7','8.8', // dầu, đá mài, gỗ, bạt, mũi khoan, BHLĐ, tiêu hao
+  '9.1','9.2','9.3','9.4',                         // ròng rọc, đồ đo, cáp, VP
+  'VTT',                                            // vật tư tiêu hao (sơn xịt, thuốc tẩy, giấy ráp)
+  'COC',                                            // công cụ cắt (mũi khoan, mũi cắt)
+  'DG',                                             // dụng cụ (đầu khẩu, cáng)
+  'BAH',                                            // bảo hộ lao động
+  'NLG',                                            // gỗ đóng thùng
+  'OTHER',                                          // chi phí dịch vụ
+  'CCDC',                                           // công cụ dụng cụ
+  'MTB',                                            // máy móc thiết bị
+  'MAY',                                            // máy
+  'TBV','TBVP',                                     // thiết bị văn phòng
 ])
-function needGrade(grp: string): boolean {
-  return NEED_GRADE.has(grp)
+function shouldExtractGrade(groupCode: string | null, category: string): boolean {
+  if (groupCode && SKIP_GRADE.has(groupCode)) return false
+  if (SKIP_GRADE.has(category)) return false
+  return true
 }
 
 // ════════════════════════════════════════════════
 //  GRADE EXTRACTION
 // ════════════════════════════════════════════════
 
-function extractGrade(name: string, grp: string): string {
+function extractGrade(name: string, groupCode: string | null, category: string): string {
   const n = name
 
   // ── A. Hàn (group 6.x hoặc name chứa que/dây/thuốc hàn) ──
-  const isWeld = grp.startsWith('6') || /que hàn|dây hàn|thuốc hàn/i.test(n)
+  const isWeld = (groupCode || '').startsWith('6') || category.startsWith('6') || /que hàn|dây hàn|thuốc hàn/i.test(n)
   if (isWeld) {
     let w = n
     w = w.replace(/\/\s*.*weld.*/i, '')          // cắt "/ ...Welding..."
@@ -60,8 +70,9 @@ function extractGrade(name: string, grp: string): string {
     return ''
   }
 
-  // ── C. Cấp bền bu lông — CHỈ group bắt đầu "4" ──
-  if (grp.startsWith('4')) {
+  // ── C. Cấp bền bu lông — group 4.x hoặc category BL/4.x ──
+  const isBolt = (groupCode || '').startsWith('4') || category.startsWith('4') || category === 'BL'
+  if (isBolt) {
     const bolt = n.match(/(?<![\d.])(?:4\.8|8\.8|10\.9|12\.9)(?![\d])/i)
     if (bolt) return bolt[0].toUpperCase()
   }
@@ -77,8 +88,8 @@ function extractGrade(name: string, grp: string): string {
     /\bS\d{3}(?:J2H|J2W|J2G3|J2|J0|JR|K2|NL|N|ML|M)?\b/i,       // 6
     /\bE\d{3}\b/i,                                                   // 7
     /\bQ\d{3}[A-E]?\b/i,                                            // 8
-    /\bSA-?\d{2,3}(?:\s*GR\.?\s*[0-9A-Z]+)?\b/i,                  // 9
-    /\bASTM\s*[AB]\d+\w*(?:\s*GR\.?\s*\w+)?\b/i,                  // 10a
+    /\bSA[\s-]?\d{2,3}(?:\s*GR\.?\s*[0-9A-Z]+|\s+TP\s?\d{3}[A-Z]*)?\b/i, // 9
+    /\bASTM\s*[AB]\d+\w*(?:\s*GR\.?\s*\w+|\s+TP\s?\d{3}[A-Z]*)?\b/i,   // 10a
     /\bSA479\s*GR\s*\w+\b/i,                                       // 10b
     /\bA(?:36|53|105|106|182|193|194|234|240|283|285|325|350|387|420|490|500|516|515|563|572|573|587|789)\b(?:\s*GR\.?\s*[0-9A-Z]+)?/i, // 11
     /\b1\.4\d{3}\b/,                                                // 12
@@ -96,7 +107,7 @@ function extractGrade(name: string, grp: string): string {
   }
 
   // ── D. Bông bảo ôn (group 5.1) ──
-  if (grp === '5.1') {
+  if ((groupCode || '') === '5.1' || category === '5.1') {
     const density = n.match(/(\d+)\s*kg\/m3/i)
     if (density) return `${density[1]}KG/M3`
   }
@@ -150,25 +161,36 @@ async function main() {
     orderBy: { materialCode: 'asc' },
   })
 
+  const mode = extendGrades ? 'EXTEND-GRADES' : 'FILL-EMPTY'
   console.log(`\nParse spec/grade from Material.name`)
-  console.log(`Mode: ${apply ? 'APPLY' : 'DRY-RUN'}`)
+  console.log(`Mode: ${mode} ${apply ? '(APPLY)' : '(DRY-RUN)'}`)
   console.log(`Total materials: ${materials.length}\n`)
 
+  if (extendGrades) {
+    await runExtendGrades(materials)
+  } else {
+    await runFillEmpty(materials)
+  }
+
+  await prisma.$disconnect()
+}
+
+async function runFillEmpty(materials: { id: string; materialCode: string; name: string; category: string; groupCode: string | null; specification: string | null; grade: string | null }[]) {
   let willGrade = 0, willSpec = 0, updatedGrade = 0, updatedSpec = 0
   const gradeByGroup = new Map<string, number>()
   const specByGroup = new Map<string, number>()
   const samples: string[] = []
 
   for (const m of materials) {
-    const grp = m.groupCode || m.category
+    const displayGrp = m.groupCode || m.category
     const gradeEmpty = !m.grade || m.grade.trim() === ''
     const specEmpty = !m.specification || m.specification.trim() === ''
 
     let newGrade = ''
     let newSpec = ''
 
-    if (gradeEmpty && needGrade(grp)) {
-      newGrade = extractGrade(m.name, grp)
+    if (gradeEmpty && shouldExtractGrade(m.groupCode, m.category)) {
+      newGrade = extractGrade(m.name, m.groupCode, m.category)
     }
     if (specEmpty) {
       newSpec = extractProfile(m.name)
@@ -178,11 +200,11 @@ async function main() {
 
     if (newGrade) {
       willGrade++
-      gradeByGroup.set(grp, (gradeByGroup.get(grp) || 0) + 1)
+      gradeByGroup.set(displayGrp, (gradeByGroup.get(displayGrp) || 0) + 1)
     }
     if (newSpec) {
       willSpec++
-      specByGroup.set(grp, (specByGroup.get(grp) || 0) + 1)
+      specByGroup.set(displayGrp, (specByGroup.get(displayGrp) || 0) + 1)
     }
 
     if (samples.length < 15) {
@@ -204,12 +226,10 @@ async function main() {
   console.log(`Will fill spec:  ${willSpec}`)
 
   console.log(`\nGrade by group:`)
-  const gs = [...gradeByGroup.entries()].sort((a, b) => b[1] - a[1])
-  for (const [g, c] of gs) console.log(`  ${g}: ${c}`)
+  for (const [g, c] of [...gradeByGroup.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${g}: ${c}`)
 
   console.log(`\nSpec by group:`)
-  const ss = [...specByGroup.entries()].sort((a, b) => b[1] - a[1])
-  for (const [g, c] of ss) console.log(`  ${g}: ${c}`)
+  for (const [g, c] of [...specByGroup.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${g}: ${c}`)
 
   console.log(`\nSamples (15):`)
   for (const s of samples) console.log(s)
@@ -219,8 +239,48 @@ async function main() {
   } else {
     console.log(`\nDRY-RUN. Run with --apply to write DB.`)
   }
+}
 
-  await prisma.$disconnect()
+async function runExtendGrades(materials: { id: string; materialCode: string; name: string; category: string; groupCode: string | null; specification: string | null; grade: string | null }[]) {
+  let willExtend = 0, extended = 0
+  const samples: string[] = []
+
+  for (const m of materials) {
+    const oldGrade = (m.grade || '').trim()
+    if (!oldGrade) continue
+    if (!shouldExtractGrade(m.groupCode, m.category)) continue
+
+    const newGrade = extractGrade(m.name, m.groupCode, m.category)
+    if (!newGrade) continue
+    if (newGrade === oldGrade) continue
+
+    const oldUp = oldGrade.toUpperCase()
+    const newUp = newGrade.toUpperCase()
+    if (!newUp.startsWith(oldUp)) continue
+    if (newGrade.length <= oldGrade.length) continue
+
+    willExtend++
+    if (samples.length < 15) {
+      samples.push(`  ${m.materialCode} | ${m.name}\n    grade: "${oldGrade}" -> "${newGrade}"`)
+    }
+
+    if (apply) {
+      await prisma.material.update({ where: { id: m.id }, data: { grade: newGrade } })
+      extended++
+    }
+  }
+
+  console.log(`--- EXTEND-GRADES RESULT ---`)
+  console.log(`Will extend: ${willExtend}`)
+
+  console.log(`\nSamples (15):`)
+  for (const s of samples) console.log(s)
+
+  if (apply) {
+    console.log(`\nAPPLIED: extended=${extended}`)
+  } else {
+    console.log(`\nDRY-RUN. Run with --extend-grades --apply to write DB.`)
+  }
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
