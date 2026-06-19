@@ -4,20 +4,20 @@ import { createHash } from 'crypto'
 export interface BriefingRow {
   rowIndex: number
   stt: string
-  taskType: string
+  systemId: string
   projectCode: string
+  projectNameNew: string
   title: string
+  deptText: string
   assigneeName: string
   openDate: string
   deadline: string
   deadlineISO: string
-  daysOverdue: string
   status: string
   criteria: string
   proposal: string
   decision: string
   notes: string
-  systemId: string
 }
 
 export type BriefingAction =
@@ -40,6 +40,26 @@ export function mapStatusLabel(label: string): { status: string; blocked: boolea
   const m = STATUS_MAP[key]
   if (!m) return null
   return { status: m.status, blocked: !!m.blocked }
+}
+
+const DEPT_MAP: Record<string, string> = {
+  'dự án': 'R02',
+  'pm': 'R02',
+  'thương mại': 'R07',
+  'kinh doanh': 'R07',
+  'sản xuất': 'R06',
+  'kế hoạch': 'R03',
+  'kế toán': 'R08',
+  'qc': 'R09',
+  'thiết kế': 'R04',
+  'hcns': 'R10',
+  'kho': 'R05',
+  'ban gđ': 'R01',
+}
+
+export function mapDept(deptText: string): string | null {
+  const key = deptText.trim().toLowerCase()
+  return DEPT_MAP[key] || null
 }
 
 function serialToDateStr(n: number): string {
@@ -67,8 +87,12 @@ export function parseDateDMY(s: string): string {
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-const EXPECTED_HEADERS = ['STT', 'Mã việc', 'Dự án', 'Nội dung', 'Người thực hiện', 'Ngày mở', 'Hạn',
-  'Số ngày quá hạn', 'Trạng thái', 'Tiêu chí xong', 'Đề xuất', 'Quyết định BGĐ', 'Ghi chú', 'ID hệ thống']
+const EXPECTED_HEADERS = [
+  'STT', 'ID hệ thống', 'Dự án', 'Tên dự án', 'Nội dung công việc',
+  'Phòng xử lý', 'Người thực hiện', 'Ngày mở', 'Hạn',
+  'Số ngày quá hạn', 'Trạng thái', 'Tiêu chí hoàn thành',
+  'Đề xuất/hướng xử lý', 'Quyết định BGĐ', 'Ghi chú',
+]
 
 export function parseBriefingXlsx(buffer: Buffer | ArrayBuffer): BriefingRow[] {
   const wb = XLSX.read(buffer, { type: 'buffer' })
@@ -84,9 +108,9 @@ export function parseBriefingXlsx(buffer: Buffer | ArrayBuffer): BriefingRow[] {
     if (idx >= 0) colIdx[expected] = idx
   }
 
-  if (colIdx['Nội dung'] == null) {
+  if (colIdx['Nội dung công việc'] == null) {
     const fuzzy = hdr.findIndex((h) => /nội dung/i.test(h))
-    if (fuzzy >= 0) colIdx['Nội dung'] = fuzzy
+    if (fuzzy >= 0) colIdx['Nội dung công việc'] = fuzzy
   }
 
   const col = (row: unknown[], name: string): string => {
@@ -97,7 +121,7 @@ export function parseBriefingXlsx(buffer: Buffer | ArrayBuffer): BriefingRow[] {
   const rows: BriefingRow[] = []
   for (let i = 1; i < raw.length; i++) {
     const r = raw[i]
-    const title = col(r, 'Nội dung')
+    const title = col(r, 'Nội dung công việc')
     const systemId = col(r, 'ID hệ thống')
     if (!title && !systemId) continue
 
@@ -107,20 +131,20 @@ export function parseBriefingXlsx(buffer: Buffer | ArrayBuffer): BriefingRow[] {
     rows.push({
       rowIndex: i + 1,
       stt: col(r, 'STT'),
-      taskType: col(r, 'Mã việc'),
+      systemId,
       projectCode: col(r, 'Dự án'),
+      projectNameNew: col(r, 'Tên dự án'),
       title,
+      deptText: col(r, 'Phòng xử lý'),
       assigneeName: col(r, 'Người thực hiện'),
       openDate: col(r, 'Ngày mở'),
       deadline: deadlineRaw,
       deadlineISO,
-      daysOverdue: col(r, 'Số ngày quá hạn'),
       status: col(r, 'Trạng thái'),
-      criteria: col(r, 'Tiêu chí xong'),
-      proposal: col(r, 'Đề xuất'),
+      criteria: col(r, 'Tiêu chí hoàn thành'),
+      proposal: col(r, 'Đề xuất/hướng xử lý'),
       decision: col(r, 'Quyết định BGĐ'),
       notes: col(r, 'Ghi chú'),
-      systemId,
     })
   }
   return rows
@@ -136,14 +160,14 @@ export function classifyRows(rows: BriefingRow[]): BriefingAction[] {
     if (row.systemId.trim()) {
       return { type: 'update' as const, row, taskId: row.systemId.trim() }
     }
-    if (!row.assigneeName.trim()) {
-      return { type: 'error' as const, row, reason: 'Việc mới thiếu "Người thực hiện"' }
+    if (!row.title.trim()) {
+      return { type: 'error' as const, row, reason: 'Việc mới thiếu "Nội dung công việc"' }
     }
     if (!row.deadlineISO) {
       return { type: 'error' as const, row, reason: 'Việc mới thiếu "Hạn" hoặc ngày không hợp lệ' }
     }
-    if (!row.criteria.trim()) {
-      return { type: 'error' as const, row, reason: 'Việc mới thiếu "Tiêu chí xong"' }
+    if (!row.assigneeName.trim() && !row.deptText.trim()) {
+      return { type: 'error' as const, row, reason: 'Việc mới thiếu cả "Người thực hiện" lẫn "Phòng xử lý"' }
     }
     return { type: 'create' as const, row }
   })
