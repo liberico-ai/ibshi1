@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "import:catalog": "tsx scripts/import-material-groups.ts && tsx scripts/import-materials.ts",
-    "import:kho": "tsx scripts/import-kho-ton.ts"
+    "import:kho": "tsx scripts/import-kho-ton.ts",
+    "parse:spec-grade": "tsx scripts/parse-material-spec-grade.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
