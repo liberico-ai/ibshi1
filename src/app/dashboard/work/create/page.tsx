@@ -78,7 +78,7 @@ function CreateInner() {
     if (picks.some((p) => p.role === r)) return
     setPicks((prev) => [...prev, { role: r, label: `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || (ROLES as Record<string, { name: string }>)[r]?.name || r}` }])
   }
-  const addUser = (u: Usr) => { if (!picks.some((p) => p.userId === u.id)) setPicks([...picks, { userId: u.id, label: `👤 ${u.fullName || u.username || u.id} · ${deptNameOfUser(u)}` }]); setUserQuery('') }
+  const addUser = (u: Usr) => { if (!picks.some((p) => p.userId === u.id)) setPicks([...picks, { userId: u.id, label: `👤 ${u.fullName || u.username || u.id} (${u.username}) · ${deptNameOfUser(u)}` }]); setUserQuery('') }
   const addDoc = (kind: DocReq['kind']) => setDocs([...docs, { key: newKey(), kind, label: '' }])
 
   const submit = async () => {
@@ -173,7 +173,7 @@ function CreateInner() {
               <div className="rounded-lg mt-1" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
                 {filteredUsers.map((u) => (
                   <div key={u.id} onClick={() => addUser(u)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">
-                    {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {deptNameOfUser(u)}</span>
+                    {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>({u.username}) · {deptNameOfUser(u)}</span>
                   </div>
                 ))}
               </div>
