@@ -318,6 +318,13 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: UserItem; onClose
 }
 
 /* ── Create User Form ── */
+const ROLE_TO_DEPT: Record<string, string> = {
+  R01: 'BGD', R02: 'QLDA', R02a: 'QLDA', R03: 'KTKH', R03a: 'KTKH',
+  R04: 'TK', R04a: 'TK', R05: 'KHO', R05a: 'KHO',
+  R06: 'SX', R06a: 'SX', R06b: 'SX', R07: 'TM', R07a: 'TM',
+  R08: 'KT', R08a: 'KT', R09: 'QC', R09a: 'QC', R10: 'HCNS',
+}
+
 function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated: (u: unknown) => void }) {
   const [form, setForm] = useState({
     username: '', password: '', fullName: '', roleCode: 'R06b',
@@ -325,6 +332,12 @@ function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  const handleRoleChange = (roleCode: string) => {
+    const dept = ROLE_TO_DEPT[roleCode] || form.departmentCode
+    const level = roleCode.endsWith('a') ? 1 : 2
+    setForm({ ...form, roleCode, departmentCode: dept, userLevel: level })
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -347,7 +360,7 @@ function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Họ tên *</label>
           <input className="input" placeholder="Nguyễn Văn A" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required /></div>
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Role *</label>
-          <select className="input" value={form.roleCode} onChange={(e) => setForm({ ...form, roleCode: e.target.value })}>
+          <select className="input" value={form.roleCode} onChange={(e) => handleRoleChange(e.target.value)}>
             {Object.values(ROLES).map((r) => <option key={r.code} value={r.code}>{r.code} — {r.name}</option>)}
           </select></div>
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Level</label>
