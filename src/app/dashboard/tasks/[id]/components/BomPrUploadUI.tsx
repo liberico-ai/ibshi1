@@ -570,9 +570,19 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
   const needToBuyWeight = items.reduce((s, item, _) => {
     const idx = items.indexOf(item)
     const match = stockMatches.get(idx)
-    if (!match?.matched || match.currentStock === 0) return s + (item.weight || 0)
-    if (match.currentStock < item.quantity) return s + (item.weight || 0)
-    return s
+    if (!match?.matched) return s + (item.weight || 0)
+    const sameU = match.inventoryUnit?.toLowerCase() === item.unit?.toLowerCase()
+    const nKg = (item.weight > 0) ? item.weight : (item.unitWeight > 0 ? item.quantity * item.unitWeight : 0)
+    const canKg = !sameU && match.inventoryUnit?.toLowerCase() === 'kg' && nKg > 0
+    if (sameU) {
+      if (match.currentStock >= item.quantity) return s
+      return s + (item.weight || 0)
+    }
+    if (canKg) {
+      if (match.currentStock >= nKg) return s
+      return s + Math.max(0, nKg - match.currentStock)
+    }
+    return s + (item.weight || 0)
   }, 0)
 
   // ── Filter by search ──────────────────────────────────────
@@ -841,9 +851,13 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                     {catItems.map((item, catIdx) => {
                       const globalIdx = items.indexOf(item)
                       const match = stockMatches.get(globalIdx)
-                      const unitMismatch = !!(match?.matched && match.inventoryUnit && item.unit && match.inventoryUnit.toLowerCase() !== item.unit.toLowerCase())
+                      const sameUnit = !!(match?.matched && match.inventoryUnit && item.unit && match.inventoryUnit.toLowerCase() === item.unit.toLowerCase())
+                      const needKg = (item.weight > 0) ? item.weight : (item.unitWeight > 0 ? item.quantity * item.unitWeight : 0)
+                      const canConvertKg = !!(match?.matched && !sameUnit && match.inventoryUnit?.toLowerCase() === 'kg' && needKg > 0)
+                      const unitMismatch = !!(match?.matched && !sameUnit && !canConvertKg && match.inventoryUnit && item.unit)
                       const hasStock = match?.matched && match.currentStock > 0
-                      const stockSufficient = hasStock && !unitMismatch && match!.currentStock >= item.quantity
+                      const stockSufficient = hasStock && (sameUnit ? match!.currentStock >= item.quantity : canConvertKg ? match!.currentStock >= needKg : false)
+                      const matchedByWeight = canConvertKg
                       const cellPad = '5px 8px'
 
                       return (
@@ -944,8 +958,8 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                             {match?.matched ? (
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                                 <span title={`${match.inventoryCode} — ${match.inventoryName}`}>{match.currentStock === 0 ? '0' : fmtNum(match.currentStock, 0)}</span>
-                                {unitMismatch && (
-                                  <span style={{ fontSize: '0.55rem', color: '#b45309', fontWeight: 600 }}>({match.inventoryUnit})</span>
+                                {(matchedByWeight || unitMismatch) && (
+                                  <span style={{ fontSize: '0.55rem', color: matchedByWeight ? '#6b7280' : '#b45309', fontWeight: 600 }}>({match.inventoryUnit})</span>
                                 )}
                               </div>
                             ) : '—'}
@@ -966,7 +980,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                                   <option value="">— cần mua —</option><option>Chưa mua</option><option>Đang mua</option><option>Đã về</option>
                                 </select>
                               ) : (cmap[stt] ? <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: cmap[stt].b, color: cmap[stt].c }}>{stt}</span> : null)
-                              // Khác đơn vị → không kết luận đủ/thiếu
+                              // Khác đơn vị & không quy đổi được → cảnh báo
                               if (unitMismatch) {
                                 return (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -978,24 +992,32 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                               }
                               // Đủ kho → không cần mua
                               if (match?.matched && stockSufficient) {
-                                return <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>✓ Đủ kho · xuất kho</span>
-                              }
-                              // Đủ mã nhưng hết tồn → cần mua toàn bộ
-                              if (match?.matched && match.currentStock === 0) {
                                 return (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                    <span style={{ fontSize: '0.6rem', color: '#4338ca', fontWeight: 600 }}>Cần mua: {fmtNum(item.quantity, 1)} {item.unit}</span>
+                                    <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>✓ Đủ kho · xuất kho</span>
+                                    {matchedByWeight && <span style={{ fontSize: '0.54rem', color: '#6b7280' }}>(so theo kg)</span>}
+                                  </div>
+                                )
+                              }
+                              // Matched but need to buy
+                              if (match?.matched) {
+                                const useKg = matchedByWeight
+                                const need = useKg ? Math.max(0, needKg - match.currentStock) : Math.max(0, item.quantity - match.currentStock)
+                                const displayUnit = useKg ? 'kg' : item.unit
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    {match.currentStock > 0
+                                      ? <span style={{ fontSize: '0.6rem', color: '#854d0e' }}>Kho {fmtNum(match.currentStock, 0)} kg · thiếu {fmtNum(need, 1)} {displayUnit}</span>
+                                      : <span style={{ fontSize: '0.6rem', color: '#4338ca', fontWeight: 600 }}>Cần mua: {fmtNum(useKg ? needKg : item.quantity, 1)} {displayUnit}</span>}
+                                    {useKg && <span style={{ fontSize: '0.54rem', color: '#6b7280' }}>(so theo kg)</span>}
                                     {statusSelect}
                                   </div>
                                 )
                               }
-                              // Thiếu kho → cần mua phần chênh
-                              const need = match?.matched ? Math.max(0, item.quantity - match.currentStock) : item.quantity
-                              const partial = !!(match?.matched && match.currentStock > 0)
+                              // Unmatched
                               return (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                  {partial && <span style={{ fontSize: '0.6rem', color: '#854d0e' }}>Kho {fmtNum(match!.currentStock, 0)} · thiếu {fmtNum(need, 1)} {item.unit}</span>}
-                                  {!match?.matched && <span style={{ fontSize: '0.6rem', color: '#991b1b', fontWeight: 600 }}>Cần mua: {fmtNum(need, 1)} {item.unit}</span>}
+                                  <span style={{ fontSize: '0.6rem', color: '#991b1b', fontWeight: 600 }}>Cần mua: {fmtNum(item.weight > 0 ? item.weight : item.quantity, 1)} {item.weight > 0 ? 'kg' : item.unit}</span>
                                   {statusSelect}
                                 </div>
                               )
@@ -1023,6 +1045,9 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                                 )}
                                 {!unitMismatch && match.currentStock === 0 && (
                                   <span style={{ fontSize: '0.58rem', color: '#4338ca', fontWeight: 600 }}>cần mua</span>
+                                )}
+                                {matchedByWeight && (
+                                  <span style={{ fontSize: '0.54rem', color: '#6b7280' }}>(so theo kg)</span>
                                 )}
                                 {match.gradeWarning && (
                                   <span style={{ fontSize: '0.58rem', color: '#b45309', fontStyle: 'italic' }} title={match.gradeWarning}>
