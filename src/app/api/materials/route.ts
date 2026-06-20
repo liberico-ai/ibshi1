@@ -81,16 +81,44 @@ export async function GET(req: NextRequest) {
         specification: true,
         grade: true,
         currentStock: true,
+        ...(forMatch ? {
+          stocks: {
+            where: { quantity: { gt: 0 } },
+            select: {
+              quantity: true,
+              warehouse: { select: { code: true, kind: true, projectCode: true } },
+            },
+          },
+        } : {}),
       },
       orderBy: { category: 'asc' },
     })
 
+    const REUSABLE_KINDS = new Set(['COMMON', 'RETURN'])
+
     return NextResponse.json({
       ok: true,
-      materials: materials.map((m) => ({
-        ...m,
-        currentStock: Number(m.currentStock),
-      })),
+      materials: materials.map((m) => {
+        const base = {
+          id: m.id, materialCode: m.materialCode, name: m.name, unit: m.unit,
+          category: m.category, groupCode: m.groupCode, specification: m.specification,
+          grade: m.grade, currentStock: Number(m.currentStock),
+        }
+        if (!forMatch || !('stocks' in m)) return base
+        const stocks = (m as any).stocks as { quantity: any; warehouse: { code: string; kind: string; projectCode: string | null } }[]
+        let reusableStock = 0, projectStock = 0, customerStock = 0
+        const projectWarehouses: { projectCode: string; warehouseCode: string; quantity: number }[] = []
+        for (const s of stocks) {
+          const qty = Number(s.quantity)
+          const kind = s.warehouse.kind
+          if (REUSABLE_KINDS.has(kind)) reusableStock += qty
+          else if (kind === 'PROJECT') {
+            projectStock += qty
+            projectWarehouses.push({ projectCode: s.warehouse.projectCode || s.warehouse.code, warehouseCode: s.warehouse.code, quantity: qty })
+          } else if (kind === 'CUSTOMER') customerStock += qty
+        }
+        return { ...base, reusableStock, projectStock, customerStock, projectWarehouses }
+      }),
     })
   } catch (err) {
     console.error('Materials API error:', err)
