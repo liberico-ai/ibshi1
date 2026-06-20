@@ -309,10 +309,10 @@ function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[], cod
     }
 
     // Strategy 1: exact specification match on profile
-    let inv = inventory.find(m =>
+    let inv = pr.profile ? inventory.find(m =>
       m.specification?.trim().toLowerCase() === pr.profile.toLowerCase() &&
-      m.unit.toLowerCase() === pr.unit.toLowerCase()
-    )
+      (m.unit || '').toLowerCase() === (pr.unit || '').toLowerCase()
+    ) : undefined
 
     // Strategy 2: profile key contained in specification/name
     if (!inv && pr.profile) {
@@ -402,9 +402,10 @@ function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[], cod
     // Strategy 4: name similarity
     if (!inv && pr.description) {
       const descLower = pr.description.toLowerCase()
+      const prUnitLower = (pr.unit || '').toLowerCase()
       inv = inventory.find(m =>
         m.name.toLowerCase() === descLower ||
-        (m.name.toLowerCase().includes(descLower) && m.unit.toLowerCase() === pr.unit.toLowerCase())
+        (m.name.toLowerCase().includes(descLower) && (m.unit || '').toLowerCase() === prUnitLower)
       )
     }
 
@@ -589,10 +590,10 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
   const searchLower = search.toLowerCase().trim()
   const filteredItems = searchLower
     ? items.filter(i =>
-        i.stt.toLowerCase().includes(searchLower) ||
-        i.description.toLowerCase().includes(searchLower) ||
-        i.profile.toLowerCase().includes(searchLower) ||
-        i.grade.toLowerCase().includes(searchLower)
+        (i.stt || '').toLowerCase().includes(searchLower) ||
+        (i.description || '').toLowerCase().includes(searchLower) ||
+        (i.profile || '').toLowerCase().includes(searchLower) ||
+        (i.grade || '').toLowerCase().includes(searchLower)
       )
     : items
 
