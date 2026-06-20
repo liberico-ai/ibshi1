@@ -48,7 +48,8 @@ export async function POST(req: NextRequest) {
 
     const result = await validateBody(req, createUserSchema)
     if (!result.success) return result.response
-    const { username, password, fullName, roleCode, userLevel, email, departmentCode } = result.data
+    const { username, password, fullName, roleCode, userLevel, email: rawEmail, departmentCode } = result.data
+    const email = rawEmail && rawEmail.trim() ? rawEmail.trim() : null
 
     const existing = await prisma.user.findUnique({ where: { username } })
     if (existing) return errorResponse(`Username ${username} đã tồn tại`)
