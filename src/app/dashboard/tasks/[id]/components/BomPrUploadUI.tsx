@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import QuickCreateMaterialDialog from './QuickCreateMaterialDialog'
 import { resolveCodes, type ResolvedLite } from './material-resolve-client'
 import { detectSectionType, normalizeDims, dimsMatch } from '@/lib/section-type'
+import { apiFetch } from '@/hooks/useAuth'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -439,8 +440,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/materials?forMatch=true&t=${Date.now()}`)
-        const json = await res.json()
+        const json = await apiFetch(`/api/materials?forMatch=true&t=${Date.now()}`)
         if (json.ok && json.materials) setInventory(json.materials)
       } catch { /* ignore */ }
     })()
