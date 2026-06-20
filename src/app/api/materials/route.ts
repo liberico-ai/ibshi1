@@ -67,16 +67,19 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // ── Legacy mode (unchanged): flat list of in-stock materials for autocompletes ──
+    // ── Legacy mode: flat list for autocompletes / PR matching ──
+    const forMatch = url.searchParams.get('forMatch') === 'true'
     const materials = await prisma.material.findMany({
-      where: { currentStock: { gt: 0 } },
+      where: forMatch ? { status: 'ACTIVE' } : { currentStock: { gt: 0 } },
       select: {
         id: true,
         materialCode: true,
         name: true,
         unit: true,
         category: true,
+        groupCode: true,
         specification: true,
+        grade: true,
         currentStock: true,
       },
       orderBy: { category: 'asc' },

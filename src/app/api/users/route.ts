@@ -4,13 +4,17 @@ import { authenticateRequest, hashPassword, successResponse, errorResponse, unau
 import { validateBody } from '@/lib/api-helpers'
 import { createUserSchema } from '@/lib/schemas'
 
-// GET /api/users — List all users
+// GET /api/users — List users (default: only active; ?includeInactive=true for admin pages)
 export async function GET(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
+    const includeInactive = req.nextUrl.searchParams.get('includeInactive') === 'true'
+    const where = includeInactive ? {} : { isActive: true }
+
     const users = await prisma.user.findMany({
+      where,
       select: {
         id: true,
         username: true,

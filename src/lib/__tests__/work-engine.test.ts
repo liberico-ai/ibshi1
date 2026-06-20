@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { prismaMock } from '@/lib/__mocks__/db'
-import { createTask, completeTask, returnTask, suggestRoute } from '@/lib/work-engine'
+import { createTask, completeTask, returnTask, reassignTask, suggestRoute } from '@/lib/work-engine'
 
 beforeEach(() => {
   // $transaction: hàm → gọi với prismaMock; mảng → Promise.all
@@ -79,6 +79,46 @@ describe('returnTask', () => {
     expect(r.returnedTo).toBe('creator')
     expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'RETURNED', returnCount: { increment: 1 } }) }))
     expect(prismaMock.taskHistory.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'RETURNED', reason: 'Sai phạm vi - thuộc QA/QC' }) }))
+  })
+})
+
+describe('reject inactive assignee', () => {
+  it('createTask rejects inactive userId', async () => {
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'inactive1', fullName: 'Trịnh Hữu Hưng', username: 'nv190549', roleCode: 'R06b', isActive: false },
+    ] as never)
+
+    await expect(createTask({
+      title: 'Test', taskType: 'FREE', priority: 'NORMAL',
+      assignees: [{ userId: 'inactive1', isPrimary: true }],
+    } as never, 'creator')).rejects.toThrow(/Tài khoản đã vô hiệu/)
+  })
+
+  it('reassignTask rejects inactive userId', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({ id: 't1', title: 'X', projectId: null, deadline: null } as never)
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'inactive1', fullName: 'Trịnh Hữu Hưng', username: 'nv190549', isActive: false },
+    ] as never)
+
+    await expect(reassignTask('t1', 'admin', {
+      assignees: [{ userId: 'inactive1', isPrimary: true }],
+    } as never)).rejects.toThrow(/Tài khoản đã vô hiệu/)
+  })
+
+  it('createTask allows active userId', async () => {
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'active1', fullName: 'Trịnh Hữu Hưng', username: 'hungth', roleCode: 'R07', isActive: true },
+    ] as never)
+    prismaMock.task.create.mockResolvedValue({ id: 't2', title: 'OK' } as never)
+    prismaMock.taskAssignee.createMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.taskHistory.createMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.notification.createMany.mockResolvedValue({ count: 0 } as never)
+
+    const task = await createTask({
+      title: 'OK', taskType: 'FREE', priority: 'NORMAL',
+      assignees: [{ userId: 'active1', isPrimary: true }],
+    } as never, 'creator')
+    expect(task.id).toBe('t2')
   })
 })
 

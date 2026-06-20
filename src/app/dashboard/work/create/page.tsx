@@ -8,7 +8,7 @@ import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 
 interface Proj { id: string; projectCode: string; projectName: string }
-interface Usr { id: string; fullName?: string; username?: string; roleCode: string; department?: { code: string; name: string } | null }
+interface Usr { id: string; fullName?: string; username?: string; roleCode: string; isActive?: boolean; department?: { code: string; name: string } | null }
 interface Pick { role?: string; userId?: string; label: string }
 const deptCodeOfUser = (u: Usr) => ROLE_TO_DEPT[u.roleCode] || u.department?.code || ''
 const deptNameOfUser = (u: Usr) => DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.department?.name || u.roleCode
@@ -110,6 +110,7 @@ function CreateInner() {
   const selectedDeptCodes = picks.filter((p) => p.role).map((p) => ROLE_TO_DEPT[p.role!]).filter(Boolean)
   const filteredUsers = userQuery.trim()
     ? users
+        .filter((u) => u.isActive !== false)
         .filter((u) => (u.fullName || u.username || '').toLowerCase().includes(userQuery.toLowerCase()))
         .filter((u) => selectedDeptCodes.length === 0 || selectedDeptCodes.includes(deptCodeOfUser(u)))
         .filter((u) => !picks.some((p) => p.userId === u.id))

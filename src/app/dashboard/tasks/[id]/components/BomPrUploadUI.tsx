@@ -439,7 +439,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/materials?t=${Date.now()}`)
+        const res = await fetch(`/api/materials?forMatch=true&t=${Date.now()}`)
         const json = await res.json()
         if (json.ok && json.materials) setInventory(json.materials)
       } catch { /* ignore */ }
@@ -561,11 +561,17 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
     const match = stockMatches.get(idx)
     return s + (match?.currentStock || 0)
   }, 0)
+  const zeroStockMatched = matchedItems.filter((item) => {
+    const idx = items.indexOf(item)
+    const match = stockMatches.get(idx)
+    return match?.currentStock === 0
+  }).length
   const unmatchedTypes = totalTypes - matchedTypes
   const needToBuyWeight = items.reduce((s, item, _) => {
     const idx = items.indexOf(item)
     const match = stockMatches.get(idx)
-    if (!match?.matched) return s + (item.weight || 0)
+    if (!match?.matched || match.currentStock === 0) return s + (item.weight || 0)
+    if (match.currentStock < item.quantity) return s + (item.weight || 0)
     return s
   }, 0)
 
@@ -911,9 +917,9 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                           {/* Total Qty + Weight */}
                           <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', borderLeft: '1px solid var(--border)' }}>{item.totalQty > 0 ? fmtNum(item.totalQty, 2) : fmtNum(item.quantity, 2)}</td>
                           <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{item.totalWeight > 0 ? fmtNum(item.totalWeight, 1) : (item.weight > 0 ? fmtNum(item.weight, 1) : '—')}</td>
-                          <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 600, color: hasStock ? '#16a34a' : '#9ca3af' }}>
+                          <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 600, color: hasStock ? '#16a34a' : (match?.matched ? '#6366f1' : '#9ca3af') }}>
                             {match?.matched ? (
-                              <span title={`${match.inventoryCode} — ${match.inventoryName}`}>{fmtNum(match.currentStock, 0)}</span>
+                              <span title={`${match.inventoryCode} — ${match.inventoryName}`}>{match.currentStock === 0 ? '0' : fmtNum(match.currentStock, 0)}</span>
                             ) : '—'}
                           </td>
                           {/* Ngày cần hàng về (PM điền để theo dõi tiến độ mua) */}
@@ -928,6 +934,21 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                               // Đủ kho → không cần mua
                               if (match?.matched && stockSufficient) {
                                 return <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>✓ Đủ kho · xuất kho</span>
+                              }
+                              // Đủ mã nhưng hết tồn → cần mua toàn bộ
+                              if (match?.matched && match.currentStock === 0) {
+                                const stt = item.procureStatus || ''
+                                const cmap: Record<string, { c: string; b: string }> = { 'Đã về': { c: '#166534', b: '#dcfce7' }, 'Đang mua': { c: '#854d0e', b: '#fef9c3' }, 'Chưa mua': { c: '#991b1b', b: '#fee2e2' } }
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    <span style={{ fontSize: '0.6rem', color: '#4338ca', fontWeight: 600 }}>Đủ mã · mua {fmtNum(item.quantity, 1)}</span>
+                                    {isEditable ? (
+                                      <select value={stt} onChange={(e) => patchItem(globalIdx, { procureStatus: e.target.value })} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }}>
+                                        <option value="">— cần mua —</option><option>Chưa mua</option><option>Đang mua</option><option>Đã về</option>
+                                      </select>
+                                    ) : (cmap[stt] ? <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: cmap[stt].b, color: cmap[stt].c }}>{stt}</span> : <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#e0e7ff', color: '#3730a3' }}>Cần mua</span>)}
+                                  </div>
+                                )
                               }
                               const need = match?.matched ? Math.max(0, item.quantity - match.currentStock) : item.quantity
                               const partial = !!(match?.matched && match.currentStock > 0)
@@ -951,17 +972,20 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <span style={{
                                   fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                                  background: stockSufficient ? '#dcfce7' : (match.gradeWarning ? '#fef3c7' : '#fef9c3'),
-                                  color: stockSufficient ? '#166534' : (match.gradeWarning ? '#92400e' : '#854d0e'),
+                                  background: stockSufficient ? '#dcfce7' : match.currentStock === 0 ? '#e0e7ff' : (match.gradeWarning ? '#fef3c7' : '#fef9c3'),
+                                  color: stockSufficient ? '#166534' : match.currentStock === 0 ? '#3730a3' : (match.gradeWarning ? '#92400e' : '#854d0e'),
                                   whiteSpace: 'nowrap',
                                 }}>
-                                  {stockSufficient ? 'Đủ kho' : 'Thiếu'}
+                                  {stockSufficient ? 'Đủ kho' : match.currentStock === 0 ? 'Đủ mã · Hết tồn' : 'Thiếu'}
                                   {match.viaSectionType && <span style={{ fontSize: '0.58rem', opacity: 0.8 }}> (tiết diện)</span>}
                                 </span>
                                 <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 600, color: '#0a2540', whiteSpace: 'nowrap' }}
                                   title={`${match.inventoryCode} — ${match.inventoryName}`}>
                                   {match.inventoryCode}
                                 </span>
+                                {match.currentStock === 0 && (
+                                  <span style={{ fontSize: '0.58rem', color: '#4338ca', fontWeight: 600 }}>cần mua</span>
+                                )}
                                 {match.gradeWarning && (
                                   <span style={{ fontSize: '0.58rem', color: '#b45309', fontStyle: 'italic' }} title={match.gradeWarning}>
                                     ⚠ {match.gradeWarning}

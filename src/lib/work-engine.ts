@@ -32,8 +32,15 @@ async function resolveAssignees(assignees: { role?: string; userId?: string; isP
   // Phòng nào đã được chọn nhân sự cụ thể (suy từ roleCode của user)
   const explicitUserIds = assignees.map((a) => a.userId).filter((x): x is string => !!x)
   const users = explicitUserIds.length
-    ? await prisma.user.findMany({ where: { id: { in: explicitUserIds } }, select: { id: true, roleCode: true } })
+    ? await prisma.user.findMany({ where: { id: { in: explicitUserIds } }, select: { id: true, fullName: true, username: true, roleCode: true, isActive: true } })
     : []
+
+  const inactive = users.filter((u) => !u.isActive)
+  if (inactive.length > 0) {
+    const names = inactive.map((u) => `${u.fullName} (${u.username})`).join(', ')
+    throw new Error(`Tài khoản đã vô hiệu, chọn tài khoản đang hoạt động: ${names}`)
+  }
+
   const coveredDepts = new Set(users.map((u) => ROLE_TO_DEPT[u.roleCode]).filter(Boolean))
 
   const out: { role: string | null; userId: string | null; isPrimary: boolean }[] = []
@@ -416,6 +423,17 @@ export async function returnTask(taskId: string, userId: string, roleCode: strin
 export async function reassignTask(taskId: string, userId: string, input: ReassignTaskInput) {
   const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
+
+  const reassignUserIds = (input.assignees || []).map((a) => a.userId).filter((x): x is string => !!x)
+  if (reassignUserIds.length > 0) {
+    const reassignUsers = await prisma.user.findMany({ where: { id: { in: reassignUserIds } }, select: { id: true, fullName: true, username: true, isActive: true } })
+    const inactive = reassignUsers.filter((u) => !u.isActive)
+    if (inactive.length > 0) {
+      const names = inactive.map((u) => `${u.fullName} (${u.username})`).join(', ')
+      throw new Error(`Tài khoản đã vô hiệu, chọn tài khoản đang hoạt động: ${names}`)
+    }
+  }
+
   await prisma.$transaction([
     prisma.taskAssignee.deleteMany({ where: { taskId } }),
     prisma.taskAssignee.createMany({ data: input.assignees.map((a, i) => ({ taskId, role: a.role || null, userId: a.userId || null, isPrimary: a.isPrimary ?? i === 0 })) }),

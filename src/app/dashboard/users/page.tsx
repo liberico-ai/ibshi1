@@ -39,7 +39,7 @@ export default function UsersPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
   const reload = () => {
-    apiFetch('/api/users').then((res) => {
+    apiFetch('/api/users?includeInactive=true').then((res) => {
       if (res.ok) setAllUsers(res.users)
     })
   }
