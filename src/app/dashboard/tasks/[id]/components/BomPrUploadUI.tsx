@@ -53,9 +53,10 @@ interface StockMatch {
   inventoryId: string | null
   inventoryCode: string | null
   inventoryName: string | null
+  inventoryUnit?: string
   currentStock: number
   matched: boolean
-  viaCode?: boolean   // matched by resolving the code (canonical or old alias)
+  viaCode?: boolean
   viaSectionType?: boolean
   gradeWarning?: string
   sectionCandidates?: number
@@ -108,8 +109,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function fmtNum(n: number, decimals = 1): string {
   if (n === 0) return '0'
-  if (n >= 1000) return n.toLocaleString('vi-VN', { maximumFractionDigits: decimals })
-  return n.toFixed(decimals)
+  return n.toLocaleString('vi-VN', { maximumFractionDigits: decimals, minimumFractionDigits: 0 })
 }
 
 // ── Parse PR Excel ─────────────────────────────────────────
@@ -281,7 +281,7 @@ function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[], cod
   const matches = new Map<number, StockMatch>()
   const toMatch = (inv: InventoryItem): StockMatch => ({
     inventoryId: inv.id, inventoryCode: inv.materialCode, inventoryName: inv.name,
-    currentStock: Number(inv.currentStock), matched: true,
+    inventoryUnit: inv.unit, currentStock: Number(inv.currentStock), matched: true,
   })
 
   // Pre-compute section type index for inventory items
@@ -841,8 +841,9 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                     {catItems.map((item, catIdx) => {
                       const globalIdx = items.indexOf(item)
                       const match = stockMatches.get(globalIdx)
+                      const unitMismatch = !!(match?.matched && match.inventoryUnit && item.unit && match.inventoryUnit.toLowerCase() !== item.unit.toLowerCase())
                       const hasStock = match?.matched && match.currentStock > 0
-                      const stockSufficient = hasStock && match!.currentStock >= item.quantity
+                      const stockSufficient = hasStock && !unitMismatch && match!.currentStock >= item.quantity
                       const cellPad = '5px 8px'
 
                       return (
@@ -871,6 +872,28 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                                 <span style={{ fontSize: '0.6rem', color: item.provisionalCode ? '#6366f1' : '#166534' }}>
                                   {item.provisionalCode ? 'Mã tạm — chờ chuẩn hóa' : 'Mã kho'}
                                 </span>
+                              </div>
+                            ) : match?.matched ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
+                                <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', whiteSpace: 'nowrap',
+                                  background: '#dcfce7', color: '#166534' }}>
+                                  {match.inventoryCode}
+                                </span>
+                                <span style={{ fontSize: '0.58rem', color: '#6b7280' }}>
+                                  {match.viaSectionType ? 'khớp tiết diện' : 'khớp spec'}
+                                </span>
+                                {match.gradeWarning && (
+                                  <span style={{ fontSize: '0.56rem', color: '#b45309' }}>⚠ {match.gradeWarning}</span>
+                                )}
+                                {(match.sectionCandidates ?? 0) > 1 && (
+                                  <span style={{ fontSize: '0.56rem', color: '#6b7280' }}>({match.sectionCandidates} ứng viên)</span>
+                                )}
+                                {isEditable && (
+                                  <button type="button" onClick={() => patchItem(globalIdx, { canonicalCode: match.inventoryCode!, materialId: match.inventoryId! })}
+                                    style={{ padding: '2px 8px', fontSize: '0.62rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                    Dùng mã này
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
@@ -919,7 +942,12 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                           <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{item.totalWeight > 0 ? fmtNum(item.totalWeight, 1) : (item.weight > 0 ? fmtNum(item.weight, 1) : '—')}</td>
                           <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 600, color: hasStock ? '#16a34a' : (match?.matched ? '#6366f1' : '#9ca3af') }}>
                             {match?.matched ? (
-                              <span title={`${match.inventoryCode} — ${match.inventoryName}`}>{match.currentStock === 0 ? '0' : fmtNum(match.currentStock, 0)}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                                <span title={`${match.inventoryCode} — ${match.inventoryName}`}>{match.currentStock === 0 ? '0' : fmtNum(match.currentStock, 0)}</span>
+                                {unitMismatch && (
+                                  <span style={{ fontSize: '0.55rem', color: '#b45309', fontWeight: 600 }}>({match.inventoryUnit})</span>
+                                )}
+                              </div>
                             ) : '—'}
                           </td>
                           {/* Ngày cần hàng về (PM điền để theo dõi tiến độ mua) */}
@@ -931,37 +959,44 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                           {/* Tiến độ mua — tự xử lý theo tồn kho */}
                           <td style={{ padding: cellPad, whiteSpace: 'nowrap' }}>
                             {(() => {
+                              const stt = item.procureStatus || ''
+                              const cmap: Record<string, { c: string; b: string }> = { 'Đã về': { c: '#166534', b: '#dcfce7' }, 'Đang mua': { c: '#854d0e', b: '#fef9c3' }, 'Chưa mua': { c: '#991b1b', b: '#fee2e2' } }
+                              const statusSelect = isEditable ? (
+                                <select value={stt} onChange={(e) => patchItem(globalIdx, { procureStatus: e.target.value })} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }}>
+                                  <option value="">— cần mua —</option><option>Chưa mua</option><option>Đang mua</option><option>Đã về</option>
+                                </select>
+                              ) : (cmap[stt] ? <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: cmap[stt].b, color: cmap[stt].c }}>{stt}</span> : null)
+                              // Khác đơn vị → không kết luận đủ/thiếu
+                              if (unitMismatch) {
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    <span style={{ fontSize: '0.58rem', color: '#b45309', fontWeight: 600 }}>⚠ khác ĐVT ({item.unit}↔{match?.inventoryUnit})</span>
+                                    <span style={{ fontSize: '0.56rem', color: '#92400e' }}>cần quy đổi</span>
+                                    {statusSelect}
+                                  </div>
+                                )
+                              }
                               // Đủ kho → không cần mua
                               if (match?.matched && stockSufficient) {
                                 return <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>✓ Đủ kho · xuất kho</span>
                               }
                               // Đủ mã nhưng hết tồn → cần mua toàn bộ
                               if (match?.matched && match.currentStock === 0) {
-                                const stt = item.procureStatus || ''
-                                const cmap: Record<string, { c: string; b: string }> = { 'Đã về': { c: '#166534', b: '#dcfce7' }, 'Đang mua': { c: '#854d0e', b: '#fef9c3' }, 'Chưa mua': { c: '#991b1b', b: '#fee2e2' } }
                                 return (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                    <span style={{ fontSize: '0.6rem', color: '#4338ca', fontWeight: 600 }}>Đủ mã · mua {fmtNum(item.quantity, 1)}</span>
-                                    {isEditable ? (
-                                      <select value={stt} onChange={(e) => patchItem(globalIdx, { procureStatus: e.target.value })} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }}>
-                                        <option value="">— cần mua —</option><option>Chưa mua</option><option>Đang mua</option><option>Đã về</option>
-                                      </select>
-                                    ) : (cmap[stt] ? <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: cmap[stt].b, color: cmap[stt].c }}>{stt}</span> : <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#e0e7ff', color: '#3730a3' }}>Cần mua</span>)}
+                                    <span style={{ fontSize: '0.6rem', color: '#4338ca', fontWeight: 600 }}>Cần mua: {fmtNum(item.quantity, 1)} {item.unit}</span>
+                                    {statusSelect}
                                   </div>
                                 )
                               }
+                              // Thiếu kho → cần mua phần chênh
                               const need = match?.matched ? Math.max(0, item.quantity - match.currentStock) : item.quantity
                               const partial = !!(match?.matched && match.currentStock > 0)
-                              const stt = item.procureStatus || ''
-                              const cmap: Record<string, { c: string; b: string }> = { 'Đã về': { c: '#166534', b: '#dcfce7' }, 'Đang mua': { c: '#854d0e', b: '#fef9c3' }, 'Chưa mua': { c: '#991b1b', b: '#fee2e2' } }
                               return (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                  {partial && <span style={{ fontSize: '0.6rem', color: '#854d0e' }}>Kho {fmtNum(match!.currentStock, 0)} · mua {fmtNum(need, 1)}</span>}
-                                  {isEditable ? (
-                                    <select value={stt} onChange={(e) => patchItem(globalIdx, { procureStatus: e.target.value })} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }}>
-                                      <option value="">{partial ? '— mua phần thiếu —' : '— cần mua —'}</option><option>Chưa mua</option><option>Đang mua</option><option>Đã về</option>
-                                    </select>
-                                  ) : (cmap[stt] ? <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: cmap[stt].b, color: cmap[stt].c }}>{stt}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>)}
+                                  {partial && <span style={{ fontSize: '0.6rem', color: '#854d0e' }}>Kho {fmtNum(match!.currentStock, 0)} · thiếu {fmtNum(need, 1)} {item.unit}</span>}
+                                  {!match?.matched && <span style={{ fontSize: '0.6rem', color: '#991b1b', fontWeight: 600 }}>Cần mua: {fmtNum(need, 1)} {item.unit}</span>}
+                                  {statusSelect}
                                 </div>
                               )
                             })()}
@@ -972,18 +1007,21 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <span style={{
                                   fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                                  background: stockSufficient ? '#dcfce7' : match.currentStock === 0 ? '#e0e7ff' : (match.gradeWarning ? '#fef3c7' : '#fef9c3'),
-                                  color: stockSufficient ? '#166534' : match.currentStock === 0 ? '#3730a3' : (match.gradeWarning ? '#92400e' : '#854d0e'),
+                                  background: unitMismatch ? '#fef3c7' : stockSufficient ? '#dcfce7' : match.currentStock === 0 ? '#e0e7ff' : (match.gradeWarning ? '#fef3c7' : '#fef9c3'),
+                                  color: unitMismatch ? '#92400e' : stockSufficient ? '#166534' : match.currentStock === 0 ? '#3730a3' : (match.gradeWarning ? '#92400e' : '#854d0e'),
                                   whiteSpace: 'nowrap',
                                 }}>
-                                  {stockSufficient ? 'Đủ kho' : match.currentStock === 0 ? 'Đủ mã · Hết tồn' : 'Thiếu'}
+                                  {unitMismatch ? 'Khác ĐVT' : stockSufficient ? 'Đủ kho' : match.currentStock === 0 ? 'Đủ mã · Hết tồn' : 'Thiếu'}
                                   {match.viaSectionType && <span style={{ fontSize: '0.58rem', opacity: 0.8 }}> (tiết diện)</span>}
                                 </span>
                                 <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 600, color: '#0a2540', whiteSpace: 'nowrap' }}
                                   title={`${match.inventoryCode} — ${match.inventoryName}`}>
                                   {match.inventoryCode}
                                 </span>
-                                {match.currentStock === 0 && (
+                                {unitMismatch && (
+                                  <span style={{ fontSize: '0.56rem', color: '#b45309', fontWeight: 600 }}>⚠ {item.unit}↔{match.inventoryUnit}</span>
+                                )}
+                                {!unitMismatch && match.currentStock === 0 && (
                                   <span style={{ fontSize: '0.58rem', color: '#4338ca', fontWeight: 600 }}>cần mua</span>
                                 )}
                                 {match.gradeWarning && (

@@ -339,9 +339,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="sticky top-0 z-20 flex items-center justify-between" style={{
           height: '64px',
           padding: '0 32px',
-          background: 'rgba(240, 244, 248, 0.9)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
+          background: '#f0f4f8',
           borderBottom: '1px solid var(--border)',
         }}>
           <div>
