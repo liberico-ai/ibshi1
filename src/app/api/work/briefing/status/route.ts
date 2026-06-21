@@ -15,10 +15,10 @@ export async function PATCH(req: NextRequest) {
     if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được cập nhật trạng thái')
 
     const body = await req.json()
-    const { taskId, status, blocked, escalated, reason, briefingPatch, deadline } = body as { taskId?: string; status?: string; escalated?: boolean } & Partial<SetStatusAdminInput>
+    const { taskId, status, blocked, escalated, execReviewed, reason, briefingPatch, deadline } = body as { taskId?: string; status?: string; escalated?: boolean; execReviewed?: boolean } & Partial<SetStatusAdminInput>
 
     if (!taskId) return errorResponse('Cần taskId', 400)
-    if (!status && !briefingPatch && escalated === undefined) return errorResponse('Cần status, briefingPatch, hoặc escalated', 400)
+    if (!status && !briefingPatch && escalated === undefined && execReviewed === undefined) return errorResponse('Cần status, briefingPatch, escalated, hoặc execReviewed', 400)
 
     let effectiveStatus = status
     if (!effectiveStatus) {
@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest) {
       effectiveStatus = task.status
     }
 
-    const result = await setTaskStatusAdmin(taskId, payload.userId, { status: effectiveStatus, blocked, escalated, reason, briefingPatch, deadline })
+    const result = await setTaskStatusAdmin(taskId, payload.userId, { status: effectiveStatus, blocked, escalated, execReviewed, reason, briefingPatch, deadline })
 
     if (result.wasEscalated) {
       const task = await prisma.task.findUnique({

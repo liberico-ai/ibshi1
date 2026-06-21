@@ -27,6 +27,9 @@ interface BriefingTask {
   criteria: string
   proposal: string
   decision: string
+  decisionByName: string
+  decisionAt: string
+  execReviewedAt: string
   notes: string
 }
 interface ProjectGroup {
@@ -493,6 +496,12 @@ export default function BriefingPage() {
 
   const execTasks = useMemo(() => {
     return groups.flatMap((g) => g.tasks.filter((t) => t.needsExecDecision))
+      .sort((a, b) => {
+        const aOverdue = a.isOverdue ? 1 : 0
+        const bOverdue = b.isOverdue ? 1 : 0
+        if (aOverdue !== bOverdue) return bOverdue - aOverdue
+        return b.daysOverdue - a.daysOverdue
+      })
   }, [groups])
 
   if (loading) {
@@ -544,6 +553,16 @@ export default function BriefingPage() {
     else alert(r.error || 'Lỗi cập nhật')
   }
 
+  const handleExecReview = async (taskId: string, reviewed: boolean) => {
+    const r = await apiFetch('/api/work/briefing/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, execReviewed: reviewed }),
+    })
+    if (r.ok) load()
+    else alert(r.error || 'Lỗi cập nhật')
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
@@ -585,29 +604,45 @@ export default function BriefingPage() {
       {/* ════ Dashboard Tab ════ */}
       {activeTab === 'dashboard' && (
         <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          {/* KPI Row 1: Action (large) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Cần BGĐ quyết', value: kpi.execDecision, color: '#b91c1c', bg: '#fef2f2', filter: 'exec' },
-              { label: 'Tổng task', value: kpi.total, color: '#475569', bg: '#f1f5f9', filter: '' },
-              { label: 'Đang xử lý', value: kpi.active, color: '#1d4ed8', bg: '#eff6ff', filter: '' },
               { label: 'Quá hạn', value: kpi.overdue, color: '#dc2626', bg: '#fef2f2', filter: 'yes' },
               { label: 'Đến hạn tuần này', value: kpi.dueSoon, color: '#d97706', bg: '#fffbeb', filter: 'due_soon' },
-              { label: 'Tắc', value: kpi.blocked, color: '#c2410c', bg: '#fff7ed', filter: '' },
-              { label: 'Xong tuần này', value: kpi.doneThisWeek, color: '#059669', bg: '#ecfdf5', filter: 'done_week' },
+              { label: 'Tắc', value: kpi.blocked, color: '#c2410c', bg: '#fff7ed', filter: 'blocked' },
+            ].map((card) => (
+              <div
+                key={card.label}
+                className={`rounded-xl p-4 text-center cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all ${(card.filter === 'exec' && filterExecOnly) || (card.filter === 'yes' && filterOverdue === 'yes') || (card.filter === 'due_soon' && filterOverdue === 'due_soon') || (card.filter === 'blocked' && filterBlocked === 'yes') ? 'ring-2 ring-offset-1' : ''}`}
+                style={{ background: card.bg, border: `1px solid ${card.color}33`, '--tw-ring-color': card.color } as React.CSSProperties}
+                onClick={() => {
+                  if (card.filter === 'exec') setFilterExecOnly(!filterExecOnly)
+                  else if (card.filter === 'blocked') setFilterBlocked(filterBlocked === 'yes' ? '' : 'yes')
+                  else if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter)
+                }}
+              >
+                <div className="text-3xl font-extrabold" style={{ color: card.color }}>{card.value}</div>
+                <div className="text-xs font-bold mt-1 uppercase tracking-wide" style={{ color: card.color }}>{card.label}</div>
+              </div>
+            ))}
+          </div>
+          {/* KPI Row 2: Context (small) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { label: 'Tổng task', value: kpi.total, color: '#475569', bg: '#f8fafc', filter: '' },
+              { label: 'Đang xử lý', value: kpi.active, color: '#1d4ed8', bg: '#f0f4ff', filter: '' },
+              { label: 'Xong tuần này', value: kpi.doneThisWeek, color: '#059669', bg: '#f0fdf4', filter: 'done_week' },
               { label: 'Mới tuần này', value: kpi.newThisWeek, color: '#7c3aed', bg: '#faf5ff', filter: 'new_week' },
             ].map((card) => (
               <div
                 key={card.label}
-                className={`rounded-xl p-4 text-center cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all ${card.filter === 'exec' && filterExecOnly ? 'ring-2 ring-offset-1' : ''}`}
-                style={{ background: card.bg, border: `1px solid ${card.color}22`, '--tw-ring-color': card.color } as React.CSSProperties}
-                onClick={() => {
-                  if (card.filter === 'exec') setFilterExecOnly(!filterExecOnly)
-                  else if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter)
-                }}
+                className={`rounded-lg px-3 py-2 flex items-center justify-between cursor-pointer hover:ring-1 hover:ring-offset-1 transition-all ${card.filter && card.filter === filterOverdue ? 'ring-1 ring-offset-1' : ''}`}
+                style={{ background: card.bg, border: `1px solid ${card.color}15`, '--tw-ring-color': card.color } as React.CSSProperties}
+                onClick={() => { if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter) }}
               >
-                <div className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</div>
-                <div className="text-xs font-medium mt-1" style={{ color: card.color }}>{card.label}</div>
+                <span className="text-[11px] font-medium" style={{ color: card.color }}>{card.label}</span>
+                <span className="text-base font-bold" style={{ color: card.color }}>{card.value}</span>
               </div>
             ))}
           </div>
@@ -669,12 +704,17 @@ export default function BriefingPage() {
                       <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 130 }}>Lý do</th>
                       <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 180 }}>Đề xuất</th>
                       <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 180 }}>Quyết định BGĐ</th>
-                      <th className="text-center px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 80 }}>Đẩy</th>
+                      <th className="text-center px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 70 }}>Đẩy</th>
+                      <th className="text-center px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 80 }}>Đã bàn</th>
                     </tr>
                   </thead>
                   <tbody>
                     {execTasks.map((t) => {
-                      const reason = t.escalated ? 'PM đẩy' : t.blocked ? 'Tắc' : `Quá hạn ${t.daysOverdue}d`
+                      const isAuto = t.blocked || (t.isOverdue && t.daysOverdue >= 14)
+                      const isManual = t.escalated && !isAuto
+                      const reason = isAuto
+                        ? (t.blocked ? 'Tự: tắc' : `Tự: quá hạn ${t.daysOverdue}d`)
+                        : (t.escalated ? 'PM đẩy' : `Quá hạn ${t.daysOverdue}d`)
                       return (
                         <tr key={t.id} className="border-t" style={{ borderColor: '#b91c1c22', background: 'white' }}>
                           <td className="px-4 py-2.5 text-xs font-mono font-semibold" style={{ color: '#475569' }}>{t.projectCode || '—'}</td>
@@ -683,7 +723,7 @@ export default function BriefingPage() {
                           </td>
                           <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
                           <td className="px-4 py-2.5">
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: t.escalated ? '#faf5ff' : t.blocked ? '#fff7ed' : '#fef2f2', color: t.escalated ? '#7c3aed' : t.blocked ? '#c2410c' : '#dc2626' }}>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: isAuto ? '#f1f5f9' : t.escalated ? '#faf5ff' : '#fef2f2', color: isAuto ? '#64748b' : t.escalated ? '#7c3aed' : '#dc2626' }}>
                               {reason}
                             </span>
                           </td>
@@ -716,15 +756,34 @@ export default function BriefingPage() {
                                 {t.decision || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
                               </span>
                             )}
+                            {t.decision && t.decisionByName && (
+                              <span className="block text-[10px] mt-0.5" style={{ color: '#94a3b8' }}>
+                                — {t.decisionByName}, {t.decisionAt ? new Date(t.decisionAt).toLocaleDateString('vi-VN') : ''}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            {isAuto ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#f1f5f9', color: '#94a3b8' }}>tự động</span>
+                            ) : isManual ? (
+                              <button
+                                onClick={() => handleEscalate(t.id, false)}
+                                className="text-[10px] font-semibold px-2 py-1 rounded-full transition-all"
+                                style={{ background: '#faf5ff', color: '#7c3aed', border: '1px solid #7c3aed33' }}
+                                title="Gỡ khỏi BGĐ"
+                              >
+                                Gỡ
+                              </button>
+                            ) : null}
                           </td>
                           <td className="px-4 py-2.5 text-center">
                             <button
-                              onClick={() => handleEscalate(t.id, !t.escalated)}
+                              onClick={() => handleExecReview(t.id, true)}
                               className="text-[10px] font-semibold px-2 py-1 rounded-full transition-all"
-                              style={{ background: t.escalated ? '#faf5ff' : '#f1f5f9', color: t.escalated ? '#7c3aed' : '#475569', border: `1px solid ${t.escalated ? '#7c3aed33' : '#47556922'}` }}
-                              title={t.escalated ? 'Gỡ khỏi BGĐ' : 'Đẩy lên BGĐ'}
+                              style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #05966922' }}
+                              title="Đánh dấu đã bàn trong tuần"
                             >
-                              {t.escalated ? 'Gỡ' : '▲ Đẩy'}
+                              ✓ Đã bàn
                             </button>
                           </td>
                         </tr>
@@ -762,6 +821,16 @@ export default function BriefingPage() {
                       <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
                       {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
                       {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}
+                      {!t.needsExecDecision && !t.escalated && t.status !== 'DONE' && t.status !== 'CANCELLED' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEscalate(t.id, true) }}
+                          className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded transition-all opacity-40 hover:opacity-100"
+                          style={{ color: '#7c3aed', border: '1px solid #7c3aed33' }}
+                          title="Đẩy lên BGĐ"
+                        >
+                          ▲ Đẩy
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
                     <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.deadline)}</td>
@@ -846,6 +915,17 @@ export default function BriefingPage() {
                           title="Nhấn để sửa"
                         >
                           {t.decision || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                        </span>
+                      )}
+                      {t.decision && t.decisionByName && (
+                        <span className="block text-[10px] mt-0.5" style={{ color: '#94a3b8' }}>
+                          — {t.decisionByName}, {t.decisionAt ? new Date(t.decisionAt).toLocaleDateString('vi-VN') : ''}
+                        </span>
+                      )}
+                      {t.execReviewedAt && (
+                        <span className="inline-flex items-center gap-1 text-[10px] mt-0.5" style={{ color: '#059669' }}>
+                          ✓ đã bàn
+                          <button onClick={(e) => { e.stopPropagation(); handleExecReview(t.id, false) }} className="underline" style={{ color: '#94a3b8' }}>bỏ</button>
                         </span>
                       )}
                     </td>

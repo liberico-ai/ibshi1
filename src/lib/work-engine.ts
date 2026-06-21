@@ -411,6 +411,7 @@ export interface SetStatusAdminInput {
   status: string
   blocked?: boolean
   escalated?: boolean
+  execReviewed?: boolean
   reason?: string
   briefingPatch?: Partial<{ criteria: string; proposal: string; decision: string; notes: string }>
   deadline?: string | null
@@ -431,6 +432,17 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
     for (const [k, v] of Object.entries(input.briefingPatch)) {
       if (v && v.trim()) newBriefing[k] = v.trim()
     }
+    if (input.briefingPatch.decision && input.briefingPatch.decision.trim()) {
+      const decider = await prisma.user.findUnique({ where: { id: byUserId }, select: { fullName: true } })
+      newBriefing.decisionBy = byUserId
+      newBriefing.decisionByName = decider?.fullName || ''
+      newBriefing.decisionAt = new Date().toISOString()
+    }
+  }
+  if (input.execReviewed === true) {
+    newBriefing.execReviewedAt = new Date().toISOString()
+  } else if (input.execReviewed === false) {
+    delete newBriefing.execReviewedAt
   }
   newBriefing.blocked = input.blocked ? 'true' : ''
 

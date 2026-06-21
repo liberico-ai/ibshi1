@@ -56,11 +56,17 @@ export async function GET(req: NextRequest) {
       const dl = t.deadline ? new Date(t.deadline) : null
       const isDueSoon = !!(dl && !isOverdue && t.status !== 'DONE' && t.status !== 'CANCELLED' && dl >= now && dl <= weekFromNow)
 
+      const rd = (t.resultData && typeof t.resultData === 'object') ? t.resultData as Record<string, unknown> : {}
+      const briefing = (rd.briefing && typeof rd.briefing === 'object') ? rd.briefing as Record<string, string> : {}
+
+      const execReviewedAt = briefing.execReviewedAt ? new Date(briefing.execReviewedAt as string) : null
+      const reviewedRecently = !!(execReviewedAt && (now.getTime() - execReviewedAt.getTime()) < 7 * 86400000)
+
       const needsExecDecision = t.status !== 'DONE' && t.status !== 'CANCELLED' && (
         t.escalated === true ||
         t.blocked === true ||
         (isOverdue && daysOverdue >= 14)
-      )
+      ) && !reviewedRecently
 
       if (isOverdue) kpiOverdue++
       if (isDueSoon) kpiDueSoon++
@@ -73,8 +79,6 @@ export async function GET(req: NextRequest) {
       const assigneeNames = t.assignees.map((a) =>
         a.userId ? (nameById.get(a.userId) || 'NV') : (DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—')
       )
-      const rd = (t.resultData && typeof t.resultData === 'object') ? t.resultData as Record<string, unknown> : {}
-      const briefing = (rd.briefing && typeof rd.briefing === 'object') ? rd.briefing as Record<string, string> : {}
       return {
         id: t.id,
         taskType: t.taskType,
@@ -97,6 +101,9 @@ export async function GET(req: NextRequest) {
         criteria: briefing.criteria || '',
         proposal: briefing.proposal || '',
         decision: briefing.decision || '',
+        decisionByName: briefing.decisionByName || '',
+        decisionAt: briefing.decisionAt || '',
+        execReviewedAt: briefing.execReviewedAt || '',
         notes: briefing.notes || '',
       }
     }
