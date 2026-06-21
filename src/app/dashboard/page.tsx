@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
-import { getProgressColor } from '@/lib/utils'
 import { StatCard, Card } from '@/components/ui'
 import {
   BarChart, Zap, CheckCircle, AlertCircle,
   Package, Factory, ShieldCheck,
+  PieChart, FileBarChart, BarChart3,
 } from 'lucide-react'
 
 interface DashboardData {
@@ -61,8 +61,9 @@ export default function DashboardPage() {
 
   if (!data) return <p className="text-center py-10" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-md)' }}>Không thể tải dữ liệu dashboard</p>
 
-  const { stats, projects, bottleneck, modules } = data
-  const maxBottleneck = Math.max(...bottleneck.map(b => b.pendingCount), 1)
+  const { stats, modules } = data
+  const MGMT_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10']
+  const showManagement = user?.roleCode && MGMT_ROLES.includes(user.roleCode)
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
@@ -124,69 +125,26 @@ export default function DashboardPage() {
       {/* ═══ Role-Specific Insights ═══ */}
       {roleData && <RoleInsights data={roleData} role={user?.roleCode || ''} />}
 
-      {/* ═══ Main Content Grid ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-5">
-        {/* Projects */}
-        <Card padding="spacious">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-lg)' }}>
-            <div>
-              <h3 className="section-title">Dự án đang triển khai</h3>
-              <p className="section-subtitle">{projects.length} dự án hoạt động</p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-            {projects.length === 0 && (
-              <div className="empty-state">
-                <p className="empty-state-icon">📋</p>
-                <p className="empty-state-text">Chưa có dự án nào</p>
-              </div>
-            )}
-            {projects.map((p) => <ProjectRow key={p.id} project={p} />)}
-          </div>
-        </Card>
-
-        {/* Bottleneck Map */}
-        <Card padding="spacious">
-          <div style={{ marginBottom: 'var(--space-lg)' }}>
-            <h3 className="section-title">Bottleneck Map</h3>
-            <p className="section-subtitle">Task chờ xử lý theo phòng ban</p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-            {bottleneck.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 'var(--space-2xl) var(--space-lg)' }}>
-                <div style={{ width: 48, height: 48, borderRadius: '50%', margin: '0 auto var(--space-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--success-bg)' }}>
-                  <CheckCircle size={22} stroke="var(--success)" />
-                </div>
-                <p style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--success)' }}>Không có bottleneck</p>
-              </div>
-            )}
-            {bottleneck.map((b) => (
-              <div key={b.role} className="bottleneck-item">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-xs)' }}>
-                  <div>
-                    <span className="mono-label">{b.role}</span>
-                    <p className="bottleneck-name">
-                      {ROLES[b.role as keyof typeof ROLES]?.name || b.role}
-                    </p>
-                  </div>
-                  <span className="bottleneck-count" style={{
-                    background: b.pendingCount > 3 ? 'var(--danger-bg)' : b.pendingCount > 1 ? 'var(--warning-bg)' : 'var(--success-bg)',
-                    color: b.pendingCount > 3 ? 'var(--danger)' : b.pendingCount > 1 ? 'var(--warning)' : 'var(--success)',
-                  }}>
-                    {b.pendingCount}
-                  </span>
-                </div>
-                <div className="progress-bar" style={{ height: 6 }}>
-                  <div className="progress-bar-fill" style={{
-                    width: `${(b.pendingCount / maxBottleneck) * 100}%`,
-                    background: b.pendingCount > 3 ? 'var(--danger)' : b.pendingCount > 1 ? 'var(--warning)' : 'var(--success)',
-                  }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+      {/* ═══ Management Quick Links ═══ */}
+      {showManagement && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
+          <ModuleCard
+            title="Tổng quan dự án" subtitle="Tiến độ & giá trị các dự án" href="/dashboard/work/overview"
+            icon={<PieChart size={22} stroke="#2563eb" />} iconBg="#eff6ff"
+            metrics={[]}
+          />
+          <ModuleCard
+            title="Giao ban tuần" subtitle="Việc quá hạn/tắc, họp tuần" href="/dashboard/work/briefing"
+            icon={<FileBarChart size={22} stroke="#c2410c" />} iconBg="#fff7ed"
+            metrics={[]}
+          />
+          <ModuleCard
+            title="Hiệu suất & KPI" subtitle="Hiệu quả theo phòng ban" href="/dashboard/work/performance"
+            icon={<BarChart3 size={22} stroke="#059669" />} iconBg="#f0fdf4"
+            metrics={[]}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -217,99 +175,6 @@ function ModuleCard({ title, subtitle, href, icon, iconBg, metrics }: {
         ))}
       </div>
     </Card>
-  )
-}
-
-/* ═══ Project Row ═══ */
-function ProjectRow({ project: p }: { project: DashboardData['projects'][0] }) {
-  const vol = p.volumeProgress
-  const depts = Object.entries(p.deptBreakdown || {}).sort((a, b) => b[1].total - a[1].total)
-  const DEPT_COLORS: Record<string, string> = { SX: '#e74c3c', QC: '#2ecc71', KHO: '#f39c12', TK: '#3498db', PM: '#9b59b6', KTKH: '#1abc9c', TM: '#e67e22', KT: '#34495e', 'BGĐ': '#8e44ad', HT: '#95a5a6' }
-
-  return (
-    <a href={`/dashboard/projects/${p.id}`} className="project-row bg-ibs-navy hover:bg-ibs-navy-light text-ibs-navy-100 no-underline block">
-      {/* Header */}
-      <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-sm)' }}>
-        <div>
-          <span className="text-xs font-mono font-bold text-ibs-red-light">{p.projectCode}</span>
-          <div className="project-name text-base font-semibold" style={{ marginTop: 4 }}>{p.projectName}</div>
-          <p className="text-sm text-ibs-navy-100" style={{ marginTop: 2 }}>{p.clientName}</p>
-        </div>
-        {/* Removed large percentage from here as requested */}
-      </div>
-
-      <div className="space-y-4 mb-4 pr-2">
-        {/* Task progress bar */}
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-ibs-navy-100" style={{ width: 100 }}>Tiến độ C.Việc</span>
-            <div className="progress-bar flex-1" style={{ background: 'rgba(255,255,255,0.1)' }}>
-              <div className={`progress-bar-fill ${getProgressColor(p.progress)}`} style={{ width: `${p.progress}%` }} />
-            </div>
-            <span className={`text-[11px] font-bold w-9 text-right ${getProgressColor(p.progress).replace('bg-', 'text-')}`}>
-              {p.progress}%
-            </span>
-          </div>
-          <div className="flex items-center gap-2 mt-1.5">
-            <div style={{ width: 100 }} className="flex-shrink-0"></div>
-            <div className="flex-1 flex gap-1.5 text-[10px] text-ibs-navy-100 items-center font-mono">
-              <span className={`font-bold ${getProgressColor(p.progress).replace('bg-', 'text-')}`}>{p.completedTasks}</span>
-              <span className="opacity-50 text-[9px]">/</span>
-              <span>{p.totalTasks} <span className="font-sans opacity-70">tasks</span></span>
-            </div>
-          </div>
-        </div>
-
-        {/* Volume display */}
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-ibs-navy-100" style={{ width: 100 }}>Khối lượng T.Tế</span>
-            {vol.estimatedKg > 0 ? (
-              <>
-                <div className="progress-bar flex-1" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                  <div className="progress-bar-fill bg-blue-500" style={{ width: `${Math.round((vol.acceptedKg / vol.estimatedKg) * 100)}%` }} />
-                </div>
-                <span className="text-[11px] font-bold text-blue-400 w-9 text-right">
-                  {Math.round((vol.acceptedKg / vol.estimatedKg) * 100)}%
-                </span>
-              </>
-            ) : (
-              <span className="text-xs italic text-ibs-navy-100 flex-1">Chưa có dữ liệu KL</span>
-            )}
-          </div>
-          {vol.estimatedKg > 0 && (
-            <div className="flex items-center gap-2 mt-1.5">
-              <div style={{ width: 100 }} className="flex-shrink-0"></div>
-              <div className="flex-1 flex gap-1.5 text-[10px] text-ibs-navy-100 items-center font-mono">
-                {/* Removed completedKg (Báo cáo) from here */}
-                <span className="text-blue-400 font-bold">{vol.acceptedKg.toLocaleString()}</span>
-                <span className="opacity-50 text-[9px]">/</span>
-                <span>{vol.estimatedKg.toLocaleString()} <span className="font-sans opacity-70">kg</span></span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Summary row */}
-      <div className="flex items-center justify-between flex-wrap" style={{ gap: '4px var(--space-sm)' }}>
-        <div className="flex gap-1 flex-wrap">
-          {depts.slice(0, 6).map(([dept, v]) => (
-            <span key={dept} className="dept-tag" style={{
-              background: `${DEPT_COLORS[dept] || '#64748b'}30`,
-              color: DEPT_COLORS[dept] || '#94a3b8',
-            }}>
-              {dept}:{v.done}/{v.total}
-            </span>
-          ))}
-        </div>
-        {vol.estimatedKg > 0 && (
-          <span className="text-xs font-semibold text-info whitespace-nowrap">
-            ⚖️ {(vol.acceptedKg / 1000).toFixed(1)}/{(vol.estimatedKg / 1000).toFixed(1)}T
-          </span>
-        )}
-      </div>
-    </a>
   )
 }
 
