@@ -491,6 +491,10 @@ export default function BriefingPage() {
     }).filter((g) => g.tasks.length > 0)
   }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch, filterExecOnly])
 
+  const execTasks = useMemo(() => {
+    return groups.flatMap((g) => g.tasks.filter((t) => t.needsExecDecision))
+  }, [groups])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -539,10 +543,6 @@ export default function BriefingPage() {
     if (r.ok) load()
     else alert(r.error || 'Lỗi cập nhật')
   }
-
-  const execTasks = useMemo(() => {
-    return groups.flatMap((g) => g.tasks.filter((t) => t.needsExecDecision))
-  }, [groups])
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -973,7 +973,7 @@ export default function BriefingPage() {
               </thead>
               <tbody>
                 {groupRowsByProject(editRows).map((grp) => (
-                  <GroupSection key={grp.key} grp={grp} dbProjects={dbProjects} dbUsers={dbUsers} updateRow={updateRow} />
+                  <GroupSection key={grp.key} grp={grp} dbUsers={dbUsers} updateRow={updateRow} />
                 ))}
               </tbody>
             </table>
@@ -1091,9 +1091,8 @@ export default function BriefingPage() {
 //  GroupSection — project group in import preview
 // ════════════════════════════════════════
 
-function GroupSection({ grp, dbProjects, dbUsers, updateRow }: {
+function GroupSection({ grp, dbUsers, updateRow }: {
   grp: RowGroup
-  dbProjects: DBProject[]
   dbUsers: DBUser[]
   updateRow: (idx: number, patch: Partial<EditableRow>) => void
 }) {

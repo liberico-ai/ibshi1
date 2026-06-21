@@ -29,9 +29,10 @@ Before modifying any file, check what depends on it:
 ### 3. Post-change Verification
 After every change, run in order:
 ```bash
-npx tsc --noEmit 2>&1 | grep -v "__tests__" | grep "error TS"  # Must be empty
-npm run build                                                      # Must succeed
-npx vitest run --reporter=verbose 2>&1 | tail -20                  # Check pass/fail
+npx eslint src 2>&1 | grep "rules-of-hooks" && echo "FAIL" || echo "OK"  # Must print OK (no hook violations)
+npx tsc --noEmit 2>&1 | grep -v "__tests__" | grep "error TS"            # Must be empty
+npm run build                                                              # Must succeed
+npx vitest run --reporter=verbose 2>&1 | tail -20                          # Check pass/fail
 ```
 
 ## Architecture Quick Reference
