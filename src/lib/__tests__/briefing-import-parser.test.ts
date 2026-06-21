@@ -360,4 +360,59 @@ describe('matchUserName', () => {
     expect(results[1].match).toBe('ok')
     expect(results[1].userId).toBe('u2')
   })
+
+  // dept narrowing
+  it('(c) ambiguous narrowed by dept to single → auto match', () => {
+    const r = matchUserName('Hưng', users, 'R02')
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u1')
+    expect(r.matchMethod).toBe('givenName+dept')
+  })
+
+  it('(c) ambiguous narrowed by dept variant (R06) → auto match', () => {
+    const r = matchUserName('Hưng', users, 'R06')
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u3')
+    expect(r.matchMethod).toBe('givenName+dept')
+  })
+
+  it('(c) role group treats R02a same as R02', () => {
+    const r = matchUserName('Hưng', users, 'R02a')
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u1')
+    expect(r.matchMethod).toBe('givenName+dept')
+  })
+
+  it('(c) dept narrows but still multiple in same group', () => {
+    const usersExpanded = [
+      ...users,
+      { id: 'u5', fullName: 'Trần Thanh Hưng', username: 'hungtt', roleCode: 'R06a' },
+    ]
+    const r = matchUserName('Hưng', usersExpanded, 'R06')
+    expect(r.match).toBe('ambiguous')
+    expect(r.candidates).toHaveLength(2)
+    expect(r.candidates.map(c => c.id).sort()).toEqual(['u3', 'u5'])
+  })
+
+  it('(c) no dept → keeps all candidates', () => {
+    const r = matchUserName('Hưng', users)
+    expect(r.match).toBe('ambiguous')
+    expect(r.candidates).toHaveLength(2)
+  })
+
+  it('(c) dept has no match in group → keeps all candidates', () => {
+    const r = matchUserName('Hưng', users, 'R09')
+    expect(r.match).toBe('ambiguous')
+    expect(r.candidates).toHaveLength(2)
+  })
+
+  it('multi-person with dept resolves ambiguous', () => {
+    const names = splitAssigneeNames('Hưng + Toàn')
+    const results = names.map(n => matchUserName(n, users, 'R02'))
+    expect(results[0].match).toBe('ok')
+    expect(results[0].userId).toBe('u1')
+    expect(results[0].matchMethod).toBe('givenName+dept')
+    expect(results[1].match).toBe('ok')
+    expect(results[1].userId).toBe('u2')
+  })
 })

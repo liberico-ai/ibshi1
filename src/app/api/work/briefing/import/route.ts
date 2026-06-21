@@ -171,7 +171,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
     if (nameRaw) {
       const names = splitAssigneeNames(nameRaw)
       for (const name of names) {
-        assignees.push(matchUserName(name, allUsers))
+        assignees.push(matchUserName(name, allUsers, roleCode))
       }
       const unmatched = assignees.filter(am => am.match === 'none')
       const ambiguous = assignees.filter(am => am.match === 'ambiguous')
@@ -180,11 +180,13 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
       if (ambiguous.length > 0) details.push(ambiguous.map(am => `"${am.inputName}" trùng ${am.candidates.length} người — chọn`).join('; '))
       if (unmatched.length > 0) details.push(unmatched.map(am => `"${am.inputName}" không tìm thấy`).join('; '))
       if (details.length === 0 && matched.length > 0) {
-        const methods = matched.filter(m => m.matchMethod !== 'fullName').map(m =>
-          m.matchMethod === 'givenName' ? `"${m.inputName}": khớp tên gọi`
-          : m.matchMethod === 'username' ? `"${m.inputName}": khớp username`
-          : m.matchMethod === 'contains' ? `"${m.inputName}": khớp tên chứa` : ''
-        ).filter(Boolean)
+        const methods = matched.filter(m => m.matchMethod !== 'fullName').map(m => {
+          if (m.matchMethod.endsWith('+dept')) return `"${m.inputName}": khớp tên + phòng`
+          if (m.matchMethod === 'givenName') return `"${m.inputName}": khớp tên gọi`
+          if (m.matchMethod === 'username') return `"${m.inputName}": khớp username`
+          if (m.matchMethod === 'contains') return `"${m.inputName}": khớp tên chứa`
+          return ''
+        }).filter(Boolean)
         if (methods.length > 0) details.push(methods.join('; '))
       }
       detail = details.join('; ')

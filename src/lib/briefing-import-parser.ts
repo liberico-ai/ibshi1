@@ -175,16 +175,30 @@ export interface UserMatchResult {
   candidates: { id: string; fullName: string; roleCode: string }[]
 }
 
-export function matchUserName(inputName: string, users: MatchableUser[]): UserMatchResult {
+function roleGroup(rc: string): string {
+  return rc.replace(/[a-z]+$/, '')
+}
+
+export function matchUserName(inputName: string, users: MatchableUser[], deptRoleCode?: string | null): UserMatchResult {
   const norm = removeDiacritics(inputName.trim().toLowerCase())
   if (!norm) return { inputName, userId: null, match: 'none', matchMethod: '', candidates: [] }
 
   const toCand = (u: MatchableUser) => ({ id: u.id, fullName: u.fullName, roleCode: u.roleCode })
 
+  function resolve(matches: MatchableUser[], method: string): UserMatchResult {
+    if (matches.length === 1) return { inputName, userId: matches[0].id, match: 'ok', matchMethod: method, candidates: [] }
+    if (deptRoleCode) {
+      const grp = roleGroup(deptRoleCode)
+      const narrowed = matches.filter(u => roleGroup(u.roleCode) === grp)
+      if (narrowed.length === 1) return { inputName, userId: narrowed[0].id, match: 'ok', matchMethod: method + '+dept', candidates: [] }
+      if (narrowed.length > 1) return { inputName, userId: null, match: 'ambiguous', matchMethod: method, candidates: narrowed.map(toCand) }
+    }
+    return { inputName, userId: null, match: 'ambiguous', matchMethod: method, candidates: matches.map(toCand) }
+  }
+
   // (a) exact fullName
   const byFull = users.filter(u => removeDiacritics(u.fullName.toLowerCase()) === norm)
-  if (byFull.length === 1) return { inputName, userId: byFull[0].id, match: 'ok', matchMethod: 'fullName', candidates: [] }
-  if (byFull.length > 1) return { inputName, userId: null, match: 'ambiguous', matchMethod: 'fullName', candidates: byFull.map(toCand) }
+  if (byFull.length >= 1) return resolve(byFull, 'fullName')
 
   // (b) username
   const byUser = users.filter(u => u.username && removeDiacritics(u.username.toLowerCase()) === norm)
@@ -195,13 +209,11 @@ export function matchUserName(inputName: string, users: MatchableUser[]): UserMa
     const parts = removeDiacritics(u.fullName.toLowerCase()).split(/\s+/)
     return parts.length > 0 && parts[parts.length - 1] === norm
   })
-  if (byGiven.length === 1) return { inputName, userId: byGiven[0].id, match: 'ok', matchMethod: 'givenName', candidates: [] }
-  if (byGiven.length > 1) return { inputName, userId: null, match: 'ambiguous', matchMethod: 'givenName', candidates: byGiven.map(toCand) }
+  if (byGiven.length >= 1) return resolve(byGiven, 'givenName')
 
   // (d) fullName contains token
   const byContains = users.filter(u => removeDiacritics(u.fullName.toLowerCase()).includes(norm))
-  if (byContains.length === 1) return { inputName, userId: byContains[0].id, match: 'ok', matchMethod: 'contains', candidates: [] }
-  if (byContains.length > 1) return { inputName, userId: null, match: 'ambiguous', matchMethod: 'contains', candidates: byContains.map(toCand) }
+  if (byContains.length >= 1) return resolve(byContains, 'contains')
 
   return { inputName, userId: null, match: 'none', matchMethod: '', candidates: [] }
 }
