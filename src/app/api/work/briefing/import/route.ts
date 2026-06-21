@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
-import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, computeImportKey } from '@/lib/briefing-import-parser'
+import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, computeImportKey, splitAssigneeNames, matchUserName, type UserMatchResult } from '@/lib/briefing-import-parser'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -31,6 +31,7 @@ interface PreviewRow {
   assigneeUserId: string | null
   assignBy: 'user' | 'role' | null
   userMatch: 'ok' | 'ambiguous' | 'none' | null
+  assignees: UserMatchResult[]
   deadlineISO: string
   deadline: string
   hasNoDeadline: boolean
@@ -52,7 +53,7 @@ interface FinalRow {
   projectNameNew?: string
   title: string
   roleCode?: string
-  assigneeUserId?: string
+  assigneeUserIds?: string[]
   deadlineISO: string
   status: string
   criteria: string
@@ -109,17 +110,6 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
 
   // Resolve users
   const allUsers = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, fullName: true, username: true, roleCode: true } })
-  const userByNameLower = new Map<string, { id: string; count: number }>()
-  for (const u of allUsers) {
-    const fn = u.fullName.toLowerCase()
-    const existing = userByNameLower.get(fn)
-    if (existing) { existing.count++; continue }
-    userByNameLower.set(fn, { id: u.id, count: 1 })
-    if (u.username) {
-      const un = u.username.toLowerCase()
-      if (!userByNameLower.has(un)) userByNameLower.set(un, { id: u.id, count: 1 })
-    }
-  }
 
   // Validate update targets exist
   const updateIds = actions.filter((a) => a.type === 'update').map((a) => (a as { taskId: string }).taskId)
@@ -139,6 +129,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
         projectExists: false, willCreateProject: false,
         title: a.row.title || '', deptText: a.row.deptText, roleCode: mapDept(a.row.deptText),
         assigneeName: a.row.assigneeName, assigneeUserId: null, assignBy: null, userMatch: null,
+        assignees: [],
         deadlineISO: a.row.deadlineISO, deadline: a.row.deadline, hasNoDeadline: false,
         status: a.row.status, criteria: a.row.criteria, proposal: a.row.proposal,
         decision: a.row.decision, notes: a.row.notes, detail: a.reason,
@@ -154,6 +145,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
         projectExists: true, willCreateProject: false,
         title: a.row.title, deptText: a.row.deptText, roleCode: mapDept(a.row.deptText),
         assigneeName: a.row.assigneeName, assigneeUserId: null, assignBy: null, userMatch: null,
+        assignees: [],
         deadlineISO: a.row.deadlineISO, deadline: a.row.deadline, hasNoDeadline: false,
         status: a.row.status, criteria: a.row.criteria, proposal: a.row.proposal,
         decision: a.row.decision, notes: a.row.notes,
@@ -171,20 +163,39 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
       if (match) { projectExists = true } else { willCreateProject = true; newProjectCodes.add(pc) }
     }
 
-    let assignBy: 'user' | 'role' | null = null
-    let assigneeUserId: string | null = null
-    let roleCode = mapDept(a.row.deptText)
-    let userMatch: 'ok' | 'ambiguous' | 'none' | null = null
+    const roleCode = mapDept(a.row.deptText)
+    const nameRaw = a.row.assigneeName.trim()
+    const assignees: UserMatchResult[] = []
     let detail = ''
 
-    const nameRaw = a.row.assigneeName.trim()
     if (nameRaw) {
-      const matched = userByNameLower.get(nameRaw.toLowerCase())
-      if (!matched) { userMatch = 'none'; detail = `Người "${nameRaw}" không tìm thấy` }
-      else if (matched.count > 1) { userMatch = 'ambiguous'; detail = `Tên "${nameRaw}" khớp ${matched.count} người` }
-      else { userMatch = 'ok'; assignBy = 'user'; assigneeUserId = matched.id }
+      const names = splitAssigneeNames(nameRaw)
+      for (const name of names) {
+        assignees.push(matchUserName(name, allUsers))
+      }
+      const unmatched = assignees.filter(am => am.match === 'none')
+      const ambiguous = assignees.filter(am => am.match === 'ambiguous')
+      const matched = assignees.filter(am => am.match === 'ok')
+      const details: string[] = []
+      if (ambiguous.length > 0) details.push(ambiguous.map(am => `"${am.inputName}" trùng ${am.candidates.length} người — chọn`).join('; '))
+      if (unmatched.length > 0) details.push(unmatched.map(am => `"${am.inputName}" không tìm thấy`).join('; '))
+      if (details.length === 0 && matched.length > 0) {
+        const methods = matched.filter(m => m.matchMethod !== 'fullName').map(m =>
+          m.matchMethod === 'givenName' ? `"${m.inputName}": khớp tên gọi`
+          : m.matchMethod === 'username' ? `"${m.inputName}": khớp username`
+          : m.matchMethod === 'contains' ? `"${m.inputName}": khớp tên chứa` : ''
+        ).filter(Boolean)
+        if (methods.length > 0) details.push(methods.join('; '))
+      }
+      detail = details.join('; ')
     }
-    if (!assigneeUserId && roleCode) { assignBy = 'role' }
+
+    const okAssignees = assignees.filter(am => am.match === 'ok')
+    const assigneeUserId = okAssignees[0]?.userId || null
+    const assignBy: 'user' | 'role' | null = okAssignees.length > 0 ? 'user' : (roleCode ? 'role' : null)
+    const userMatch: 'ok' | 'ambiguous' | 'none' | null = assignees.length === 0 ? null
+      : assignees.every(am => am.match === 'ok') ? 'ok'
+      : assignees.some(am => am.match === 'ambiguous') ? 'ambiguous' : 'none'
 
     rows.push({
       rowIndex: a.row.rowIndex, action: 'create', taskId: null,
@@ -192,6 +203,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
       projectExists, willCreateProject,
       title: a.row.title, deptText: a.row.deptText, roleCode,
       assigneeName: a.row.assigneeName, assigneeUserId, assignBy, userMatch,
+      assignees,
       deadlineISO: a.row.deadlineISO, deadline: a.row.deadline, hasNoDeadline: !a.row.deadlineISO,
       status: a.row.status, criteria: a.row.criteria, proposal: a.row.proposal,
       decision: a.row.decision, notes: a.row.notes, detail,
@@ -226,9 +238,9 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
   const projectByNorm = new Map(dbProjects.map((p) => [normalizeCode(p.projectCode), p.id]))
   const projectById = new Set(dbProjects.map((p) => p.id))
 
-  const userIds = included.filter((r) => r.assigneeUserId).map((r) => r.assigneeUserId!)
-  const validUsers = userIds.length > 0
-    ? new Set((await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true } })).map((u) => u.id))
+  const allUserIds = [...new Set(included.flatMap((r) => r.assigneeUserIds || []).filter(Boolean))]
+  const validUsers = allUserIds.length > 0
+    ? new Set((await prisma.user.findMany({ where: { id: { in: allUserIds } }, select: { id: true } })).map((u) => u.id))
     : new Set<string>()
 
   let created = 0, updated = 0, projectsCreated = 0, skipped = 0
@@ -289,14 +301,16 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
         }
       }
 
-      // Validate assignee
-      if (r.assigneeUserId && !validUsers.has(r.assigneeUserId)) {
-        errors.push({ row: rowNum, reason: `User ID "${r.assigneeUserId}" không tồn tại` })
+      // Validate assignees
+      const assigneeIds = (r.assigneeUserIds || []).filter(Boolean)
+      const invalidIds = assigneeIds.filter(id => !validUsers.has(id))
+      if (invalidIds.length > 0) {
+        errors.push({ row: rowNum, reason: `User ID không tồn tại: ${invalidIds.join(', ')}` })
         continue
       }
 
       // Idempotent importKey
-      const keyUser = r.assigneeUserId || r.roleCode || ''
+      const keyUser = assigneeIds[0] || r.roleCode || ''
       const importKey = computeImportKey(r.title, r.projectCode || null, r.deadlineISO, keyUser)
 
       const existingDup = await prisma.task.findMany({
@@ -336,10 +350,13 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
             resultData: JSON.parse(JSON.stringify({ briefing: briefingData })),
           },
         })
-        const assigneeData: { taskId: string; isPrimary: boolean; userId?: string; role?: string } = { taskId: t.id, isPrimary: true }
-        if (r.assigneeUserId) { assigneeData.userId = r.assigneeUserId }
-        else if (r.roleCode) { assigneeData.role = r.roleCode }
-        await tx.taskAssignee.create({ data: assigneeData })
+        if (assigneeIds.length > 0) {
+          for (let j = 0; j < assigneeIds.length; j++) {
+            await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: j === 0, userId: assigneeIds[j] } })
+          }
+        } else if (r.roleCode) {
+          await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: true, role: r.roleCode } })
+        }
         await tx.taskHistory.create({
           data: { taskId: t.id, action: 'CREATED', byUserId: payload.userId, meta: JSON.parse(JSON.stringify({ source: 'briefing-import' })) },
         })

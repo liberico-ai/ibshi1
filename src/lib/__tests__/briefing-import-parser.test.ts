@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as XLSX from 'xlsx'
-import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, parseDateDMY, computeImportKey } from '../briefing-import-parser'
+import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, parseDateDMY, computeImportKey, removeDiacritics, splitAssigneeNames, matchUserName } from '../briefing-import-parser'
 
 function makeSheet(rows: unknown[][]) {
   const ws = XLSX.utils.aoa_to_sheet(rows)
@@ -236,5 +236,128 @@ describe('computeImportKey', () => {
       const k2 = computeImportKey(rows2[i].title, projId, rows2[i].deadlineISO, userId)
       expect(k1).toBe(k2)
     }
+  })
+})
+
+describe('removeDiacritics', () => {
+  it('removes Vietnamese tone marks', () => {
+    expect(removeDiacritics('Đặng Quang Hưng')).toBe('Dang Quang Hung')
+  })
+  it('converts đ/Đ to d/D', () => {
+    expect(removeDiacritics('đ')).toBe('d')
+    expect(removeDiacritics('Đ')).toBe('D')
+  })
+  it('handles all Vietnamese vowels', () => {
+    expect(removeDiacritics('Nguyễn Đức Toàn')).toBe('Nguyen Duc Toan')
+    expect(removeDiacritics('ơ')).toBe('o')
+    expect(removeDiacritics('ư')).toBe('u')
+    expect(removeDiacritics('ă')).toBe('a')
+  })
+  it('passes through plain ASCII', () => {
+    expect(removeDiacritics('abc')).toBe('abc')
+  })
+})
+
+describe('splitAssigneeNames', () => {
+  it('splits by comma', () => {
+    expect(splitAssigneeNames('Hưng, Toàn')).toEqual(['Hưng', 'Toàn'])
+  })
+  it('splits by + & /', () => {
+    expect(splitAssigneeNames('A + B & C / D')).toEqual(['A', 'B', 'C', 'D'])
+  })
+  it('returns single name', () => {
+    expect(splitAssigneeNames('Hưng')).toEqual(['Hưng'])
+  })
+  it('filters empty parts', () => {
+    expect(splitAssigneeNames(', Hưng,')).toEqual(['Hưng'])
+  })
+})
+
+describe('matchUserName', () => {
+  const users = [
+    { id: 'u1', fullName: 'Đặng Quang Hưng', username: 'hungdq', roleCode: 'R02' },
+    { id: 'u2', fullName: 'Nguyễn Đức Toàn', username: 'toannguyen', roleCode: 'R02' },
+    { id: 'u3', fullName: 'Lê Văn Hưng', username: 'hunglv', roleCode: 'R06' },
+    { id: 'u4', fullName: 'Trần Thị Lan', username: 'lantran', roleCode: 'R08' },
+  ]
+
+  it('(a) matches exact fullName', () => {
+    const r = matchUserName('Đặng Quang Hưng', users)
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u1')
+    expect(r.matchMethod).toBe('fullName')
+  })
+
+  it('(a) matches fullName without diacritics', () => {
+    const r = matchUserName('Dang Quang Hung', users)
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u1')
+    expect(r.matchMethod).toBe('fullName')
+  })
+
+  it('(b) matches username', () => {
+    const r = matchUserName('hungdq', users)
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u1')
+    expect(r.matchMethod).toBe('username')
+  })
+
+  it('(c) matches unique given name', () => {
+    const r = matchUserName('Toàn', users)
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u2')
+    expect(r.matchMethod).toBe('givenName')
+  })
+
+  it('(c) given name without diacritics', () => {
+    const r = matchUserName('Toan', users)
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u2')
+    expect(r.matchMethod).toBe('givenName')
+  })
+
+  it('(c) ambiguous when given name matches multiple', () => {
+    const r = matchUserName('Hưng', users)
+    expect(r.match).toBe('ambiguous')
+    expect(r.userId).toBeNull()
+    expect(r.candidates).toHaveLength(2)
+    expect(r.candidates.map(c => c.id).sort()).toEqual(['u1', 'u3'])
+  })
+
+  it('(c) ambiguous without diacritics too', () => {
+    const r = matchUserName('Hung', users)
+    expect(r.match).toBe('ambiguous')
+    expect(r.candidates).toHaveLength(2)
+  })
+
+  it('(d) matches by contains', () => {
+    const r = matchUserName('Lan', users)
+    expect(r.match).toBe('ok')
+    expect(r.userId).toBe('u4')
+    expect(r.matchMethod).toBe('givenName')
+  })
+
+  it('returns none for unknown name', () => {
+    const r = matchUserName('Không Ai', users)
+    expect(r.match).toBe('none')
+    expect(r.userId).toBeNull()
+  })
+
+  it('multi-person cell: split and match each', () => {
+    const names = splitAssigneeNames('Toàn, Lan')
+    const results = names.map(n => matchUserName(n, users))
+    expect(results).toHaveLength(2)
+    expect(results[0].match).toBe('ok')
+    expect(results[0].userId).toBe('u2')
+    expect(results[1].match).toBe('ok')
+    expect(results[1].userId).toBe('u4')
+  })
+
+  it('multi-person cell with ambiguous', () => {
+    const names = splitAssigneeNames('Hưng + Toàn')
+    const results = names.map(n => matchUserName(n, users))
+    expect(results[0].match).toBe('ambiguous')
+    expect(results[1].match).toBe('ok')
+    expect(results[1].userId).toBe('u2')
   })
 })

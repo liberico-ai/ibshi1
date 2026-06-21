@@ -27,6 +27,14 @@ interface ProjectGroup {
   maxDaysOverdue: number
 }
 
+interface AssigneeMatch {
+  inputName: string
+  userId: string | null
+  match: 'ok' | 'ambiguous' | 'none'
+  matchMethod: string
+  candidates: { id: string; fullName: string; roleCode: string }[]
+}
+
 interface PreviewRow {
   rowIndex: number
   action: 'update' | 'create' | 'error'
@@ -42,6 +50,7 @@ interface PreviewRow {
   assigneeUserId: string | null
   assignBy: 'user' | 'role' | null
   userMatch: 'ok' | 'ambiguous' | 'none' | null
+  assignees: AssigneeMatch[]
   deadlineISO: string
   deadline: string
   hasNoDeadline: boolean
@@ -120,6 +129,8 @@ function fmtDate(d: string | null): string {
   return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`
 }
 
+const rmDiacritics = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, c => c === 'đ' ? 'd' : 'D')
+
 // ── UserAutocomplete ──
 
 function UserAutocomplete({ value, users, warning, onChange }: {
@@ -144,8 +155,8 @@ function UserAutocomplete({ value, users, warning, onChange }: {
 
   const filtered = useMemo(() => {
     if (!query.trim()) return users.slice(0, 15)
-    const q = query.toLowerCase()
-    return users.filter((u) => u.fullName.toLowerCase().includes(q)).slice(0, 15)
+    const q = rmDiacritics(query.toLowerCase())
+    return users.filter((u) => rmDiacritics(u.fullName.toLowerCase()).includes(q)).slice(0, 15)
   }, [query, users])
 
   return (
@@ -357,7 +368,7 @@ export default function BriefingPage() {
           projectNameNew: r.projectNameNew || undefined,
           title: r.title,
           roleCode: r.roleCode || undefined,
-          assigneeUserId: r.assigneeUserId || undefined,
+          assigneeUserIds: (r.assignees || []).filter(a => a.userId).map(a => a.userId!),
           deadlineISO: r.deadlineISO,
           status: r.status,
           criteria: r.criteria,
@@ -618,7 +629,8 @@ function GroupSection({ grp, dbProjects, dbUsers, updateRow }: {
       </tr>
       {grp.rows.map(({ row: r, idx }) => {
         const isError = r.action === 'error' && !r.include
-        const hasWarning = r.action === 'create' && r.include && (!r.assigneeUserId && !r.roleCode)
+        const noOkAssignee = !(r.assignees || []).some(a => a.match === 'ok' && a.userId)
+        const hasWarning = r.action === 'create' && r.include && noOkAssignee && !r.roleCode
         const rowBg = isError ? '#fef2f2' : hasWarning ? '#fffbeb' : undefined
         const st = ACTION_STYLE[r.action] || ACTION_STYLE.error
 
@@ -660,21 +672,34 @@ function GroupSection({ grp, dbProjects, dbUsers, updateRow }: {
               </select>
             </td>
 
-            {/* Assignee — searchable autocomplete */}
+            {/* Assignee — multi-person autocomplete */}
             <td className="px-2 py-1.5">
-              <UserAutocomplete
-                value={r.assigneeName || ''}
-                users={dbUsers}
-                warning={r.userMatch === 'none' || r.userMatch === 'ambiguous'}
-                onChange={(name, userId) => {
-                  updateRow(idx, {
-                    assigneeName: name,
-                    assigneeUserId: userId,
-                    assignBy: userId ? 'user' : (r.roleCode ? 'role' : null),
-                    userMatch: userId ? 'ok' : (name ? 'none' : null),
-                  })
-                }}
-              />
+              {(r.assignees && r.assignees.length > 0) ? r.assignees.map((a, ai) => (
+                <div key={ai} className="flex items-center gap-1 mb-0.5">
+                  <div className="flex-1">
+                    <UserAutocomplete
+                      value={a.match === 'ok' && a.userId ? (dbUsers.find(u => u.id === a.userId)?.fullName || a.inputName) : a.inputName}
+                      users={a.match === 'ambiguous' ? a.candidates.map(c => ({ ...c, isActive: true })) : dbUsers}
+                      warning={a.match !== 'ok'}
+                      onChange={(name, userId) => {
+                        const next = [...(r.assignees || [])]
+                        next[ai] = { ...next[ai], userId, match: userId ? 'ok' : 'none', inputName: name, candidates: userId ? [] : next[ai].candidates }
+                        updateRow(idx, { assignees: next })
+                      }}
+                    />
+                  </div>
+                  {a.match === 'ok' && <span style={{ color: '#059669', fontSize: '0.6rem', flexShrink: 0 }}>✓</span>}
+                </div>
+              )) : (
+                <UserAutocomplete
+                  value=""
+                  users={dbUsers}
+                  warning={false}
+                  onChange={(name, userId) => {
+                    updateRow(idx, { assignees: [{ inputName: name, userId, match: userId ? 'ok' : 'none', matchMethod: '', candidates: [] }] })
+                  }}
+                />
+              )}
             </td>
 
             {/* Deadline */}

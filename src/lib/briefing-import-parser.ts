@@ -150,6 +150,62 @@ export function parseBriefingXlsx(buffer: Buffer | ArrayBuffer): BriefingRow[] {
   return rows
 }
 
+// ── Vietnamese name matching ──────────────────────────────
+
+export function removeDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, c => c === 'đ' ? 'd' : 'D')
+}
+
+export function splitAssigneeNames(raw: string): string[] {
+  return raw.split(/[,+&/]/).map(s => s.trim()).filter(Boolean)
+}
+
+export interface MatchableUser {
+  id: string
+  fullName: string
+  username: string
+  roleCode: string
+}
+
+export interface UserMatchResult {
+  inputName: string
+  userId: string | null
+  match: 'ok' | 'ambiguous' | 'none'
+  matchMethod: string
+  candidates: { id: string; fullName: string; roleCode: string }[]
+}
+
+export function matchUserName(inputName: string, users: MatchableUser[]): UserMatchResult {
+  const norm = removeDiacritics(inputName.trim().toLowerCase())
+  if (!norm) return { inputName, userId: null, match: 'none', matchMethod: '', candidates: [] }
+
+  const toCand = (u: MatchableUser) => ({ id: u.id, fullName: u.fullName, roleCode: u.roleCode })
+
+  // (a) exact fullName
+  const byFull = users.filter(u => removeDiacritics(u.fullName.toLowerCase()) === norm)
+  if (byFull.length === 1) return { inputName, userId: byFull[0].id, match: 'ok', matchMethod: 'fullName', candidates: [] }
+  if (byFull.length > 1) return { inputName, userId: null, match: 'ambiguous', matchMethod: 'fullName', candidates: byFull.map(toCand) }
+
+  // (b) username
+  const byUser = users.filter(u => u.username && removeDiacritics(u.username.toLowerCase()) === norm)
+  if (byUser.length === 1) return { inputName, userId: byUser[0].id, match: 'ok', matchMethod: 'username', candidates: [] }
+
+  // (c) given name = last token of fullName
+  const byGiven = users.filter(u => {
+    const parts = removeDiacritics(u.fullName.toLowerCase()).split(/\s+/)
+    return parts.length > 0 && parts[parts.length - 1] === norm
+  })
+  if (byGiven.length === 1) return { inputName, userId: byGiven[0].id, match: 'ok', matchMethod: 'givenName', candidates: [] }
+  if (byGiven.length > 1) return { inputName, userId: null, match: 'ambiguous', matchMethod: 'givenName', candidates: byGiven.map(toCand) }
+
+  // (d) fullName contains token
+  const byContains = users.filter(u => removeDiacritics(u.fullName.toLowerCase()).includes(norm))
+  if (byContains.length === 1) return { inputName, userId: byContains[0].id, match: 'ok', matchMethod: 'contains', candidates: [] }
+  if (byContains.length > 1) return { inputName, userId: null, match: 'ambiguous', matchMethod: 'contains', candidates: byContains.map(toCand) }
+
+  return { inputName, userId: null, match: 'none', matchMethod: '', candidates: [] }
+}
+
 export function computeImportKey(title: string, projectId: string | null, deadlineISO: string, userId: string): string {
   const raw = [title, projectId || '', deadlineISO, userId].join('|')
   return createHash('sha1').update(raw).digest('hex')
