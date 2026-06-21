@@ -136,6 +136,32 @@ export async function notifyTaskOverdue(data: {
   await sendGroupMessage(msg)
 }
 
+// ── Executive Escalation → Group notification ──────────────
+
+export async function notifyExecEscalation(data: {
+  projectCode: string
+  projectName: string
+  title: string
+  assigneeName: string
+  reason: string
+  byName: string
+  taskId: string
+  daysOverdue?: number
+}): Promise<void> {
+  const url = appUrl()
+  const msg = [
+    '🔺 <b>CẦN BGĐ QUYẾT</b>',
+    '━━━━━━━━━━━━━━━━━━━',
+    `📁 Dự án: <b>${escapeHtml(data.projectCode)}</b> — ${escapeHtml(data.projectName)}`,
+    `📌 Việc: <b>${escapeHtml(data.title)}</b>`,
+    `👤 Phụ trách: ${escapeHtml(data.assigneeName)}`,
+    `⚠️ Lý do: <b>${escapeHtml(data.reason)}</b>`,
+    `📝 Đẩy bởi: ${escapeHtml(data.byName)}`,
+    url ? `🔗 <a href="${url}/dashboard/work/${data.taskId}">Xem chi tiết</a>` : '',
+  ].filter(Boolean).join('\n')
+  await sendGroupMessage(msg)
+}
+
 // ── Task Completed → Group notification (optional) ──────────
 
 export async function notifyTaskCompleted(data: {

@@ -137,7 +137,7 @@ describe('setTaskStatusAdmin', () => {
     prismaMock.notification.create.mockResolvedValue({} as never)
 
     const r = await setTaskStatusAdmin('t1', 'admin', { status: 'DONE', blocked: true, reason: 'Giao ban: Xong' })
-    expect(r).toEqual({ ok: true, status: 'DONE' })
+    expect(r).toEqual({ ok: true, status: 'DONE', wasEscalated: false })
     expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: 'DONE', blocked: false, completedAt: expect.any(Date), completedBy: 'admin' }),
     }))
@@ -155,7 +155,7 @@ describe('setTaskStatusAdmin', () => {
     prismaMock.taskHistory.create.mockResolvedValue({} as never)
 
     const r = await setTaskStatusAdmin('t1', 'admin', { status: 'IN_PROGRESS', blocked: true })
-    expect(r).toEqual({ ok: true, status: 'IN_PROGRESS' })
+    expect(r).toEqual({ ok: true, status: 'IN_PROGRESS', wasEscalated: false })
     expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: 'IN_PROGRESS',
@@ -172,7 +172,7 @@ describe('setTaskStatusAdmin', () => {
     prismaMock.notification.create.mockResolvedValue({} as never)
 
     const r = await setTaskStatusAdmin('t1', 'admin', { status: 'RETURNED', reason: 'Giao ban: Bị trả lại' })
-    expect(r).toEqual({ ok: true, status: 'RETURNED' })
+    expect(r).toEqual({ ok: true, status: 'RETURNED', wasEscalated: false })
     expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: 'RETURNED', returnCount: { increment: 1 } }),
     }))

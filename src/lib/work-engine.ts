@@ -416,7 +416,7 @@ export interface SetStatusAdminInput {
   deadline?: string | null
 }
 
-export async function setTaskStatusAdmin(taskId: string, byUserId: string, input: SetStatusAdminInput): Promise<{ ok: true; status: string }> {
+export async function setTaskStatusAdmin(taskId: string, byUserId: string, input: SetStatusAdminInput): Promise<{ ok: true; status: string; wasEscalated?: boolean }> {
   const validStatuses = Object.values(TASK_STATUS) as string[]
   if (!validStatuses.includes(input.status)) throw new Error('Trạng thái không hợp lệ')
 
@@ -500,7 +500,8 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
     ])
   }
 
-  return { ok: true, status: input.status }
+  const wasEscalated = !task.escalated && input.escalated === true
+  return { ok: true, status: input.status, wasEscalated }
 }
 
 export async function returnTask(taskId: string, userId: string, roleCode: string, reason: string) {

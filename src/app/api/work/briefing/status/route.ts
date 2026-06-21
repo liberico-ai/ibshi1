@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { setTaskStatusAdmin, type SetStatusAdminInput } from '@/lib/work-engine'
+import { notifyExecEscalation } from '@/lib/telegram-notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +28,31 @@ export async function PATCH(req: NextRequest) {
     }
 
     const result = await setTaskStatusAdmin(taskId, payload.userId, { status: effectiveStatus, blocked, escalated, reason, briefingPatch, deadline })
+
+    if (result.wasEscalated) {
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        select: { title: true, blocked: true, deadline: true, project: { select: { projectCode: true, projectName: true } }, assignees: true },
+      })
+      if (task) {
+        const uids = task.assignees.map(a => a.userId).filter(Boolean) as string[]
+        const users = uids.length ? await prisma.user.findMany({ where: { id: { in: uids } }, select: { fullName: true } }) : []
+        const assigneeName = users.map(u => u.fullName).join(', ') || '—'
+        const daysOverdue = task.deadline ? Math.ceil((Date.now() - new Date(task.deadline).getTime()) / 86400000) : 0
+        const reasonText = task.blocked ? 'Tắc' : daysOverdue > 0 ? `Quá hạn ${daysOverdue}d` : 'PM đẩy'
+        notifyExecEscalation({
+          projectCode: task.project?.projectCode || '—',
+          projectName: task.project?.projectName || '',
+          title: task.title,
+          assigneeName,
+          reason: reasonText,
+          byName: payload.fullName || payload.username || 'PM',
+          taskId,
+          daysOverdue: daysOverdue > 0 ? daysOverdue : undefined,
+        }).catch(() => {})
+      }
+    }
+
     return successResponse(result)
   } catch (err) {
     const msg = (err as Error).message

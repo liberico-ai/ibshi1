@@ -1,5 +1,5 @@
 import prisma from '@/lib/db'
-import { sendGroupMessage, escapeHtml } from '@/lib/telegram'
+import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { ROLES } from '@/lib/constants'
 
@@ -129,4 +129,96 @@ export async function runProjectStatusReport() {
     stuckCount,
     sentAt: now.toISOString(),
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Weekly Briefing Digest — sent Monday 8AM
+// ══════════════════════════════════════════════════════════════
+
+export async function runWeeklyBriefingDigest() {
+  const now = new Date()
+  const weekFromNow = new Date(now.getTime() + 7 * 86400000)
+
+  const tasks = await prisma.task.findMany({
+    where: { status: { notIn: ['DONE', 'CANCELLED'] }, deadline: { not: null } },
+    include: {
+      project: { select: { id: true, projectCode: true, projectName: true } },
+      assignees: true,
+    },
+    orderBy: { deadline: 'asc' },
+  })
+
+  const uids = new Set<string>()
+  for (const t of tasks) for (const a of t.assignees) if (a.userId) uids.add(a.userId)
+  const users = uids.size ? await prisma.user.findMany({ where: { id: { in: [...uids] } }, select: { id: true, fullName: true } }) : []
+  const nameById = new Map(users.map(u => [u.id, u.fullName]))
+
+  interface DigestTask { title: string; assignee: string; deadline: Date | null; daysOverdue: number; isOverdue: boolean; isDueSoon: boolean; needsExec: boolean }
+  interface ProjectDigest { code: string; name: string; overdue: DigestTask[]; dueSoon: DigestTask[]; exec: DigestTask[] }
+
+  const byProject = new Map<string, ProjectDigest>()
+  let totalOverdue = 0, totalDueSoon = 0, totalExec = 0
+
+  for (const t of tasks) {
+    const dl = t.deadline ? new Date(t.deadline) : null
+    const daysOverdue = dl ? Math.ceil((now.getTime() - dl.getTime()) / 86400000) : 0
+    const isOverdue = daysOverdue > 0
+    const isDueSoon = !!(dl && !isOverdue && dl >= now && dl <= weekFromNow)
+    const needsExec = t.escalated || t.blocked || (isOverdue && daysOverdue >= 14)
+
+    const assignee = t.assignees.map(a => a.userId ? (nameById.get(a.userId) || 'NV') : (a.role || '—')).join(', ')
+    const dt: DigestTask = { title: t.title, assignee, deadline: t.deadline, daysOverdue, isOverdue, isDueSoon, needsExec }
+
+    const pid = t.project?.id || '__general__'
+    if (!byProject.has(pid)) {
+      byProject.set(pid, { code: t.project?.projectCode || 'Chung', name: t.project?.projectName || '', overdue: [], dueSoon: [], exec: [] })
+    }
+    const pg = byProject.get(pid)!
+    if (isOverdue) { pg.overdue.push(dt); totalOverdue++ }
+    if (isDueSoon) { pg.dueSoon.push(dt); totalDueSoon++ }
+    if (needsExec) { pg.exec.push(dt); totalExec++ }
+  }
+
+  const lines: string[] = []
+  lines.push('📋 <b>GIAO BAN TUẦN — TỔNG HỢP</b>')
+  lines.push(`🕐 ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`)
+  lines.push('━━━━━━━━━━━━━━━━━━━━')
+
+  for (const [, pg] of byProject) {
+    if (pg.overdue.length === 0 && pg.dueSoon.length === 0 && pg.exec.length === 0) continue
+    lines.push('')
+    lines.push(`📁 <b>${escapeHtml(pg.code)}</b> — ${escapeHtml(pg.name)}`)
+    if (pg.overdue.length) lines.push(`   🔴 Quá hạn: <b>${pg.overdue.length}</b>`)
+    if (pg.dueSoon.length) lines.push(`   🟡 Sắp hạn (≤7d): <b>${pg.dueSoon.length}</b>`)
+    if (pg.exec.length) lines.push(`   🔺 Cần BGĐ quyết: <b>${pg.exec.length}</b>`)
+
+    const urgent = [...pg.exec, ...pg.overdue.filter(t => !t.needsExec), ...pg.dueSoon.filter(t => !t.needsExec && !t.isOverdue)]
+    for (const t of urgent.slice(0, 5)) {
+      const icon = t.needsExec ? '🔺' : t.isOverdue ? '🔴' : '🟡'
+      const dlStr = t.deadline ? formatDeadline(t.deadline) : '—'
+      const overStr = t.isOverdue ? ` (+${t.daysOverdue}d)` : t.isDueSoon ? ` (còn ${-t.daysOverdue}d)` : ''
+      lines.push(`   ${icon} ${escapeHtml(t.title.slice(0, 40))} · ${escapeHtml(t.assignee)} · DL ${dlStr}${overStr}`)
+    }
+    if (urgent.length > 5) lines.push(`   ... và ${urgent.length - 5} việc khác`)
+  }
+
+  lines.push('')
+  lines.push('━━━━━━━━━━━━━━━━━━━━')
+  lines.push(`📊 <b>Tổng:</b> 🔴 ${totalOverdue} quá hạn · 🟡 ${totalDueSoon} sắp hạn · 🔺 ${totalExec} cần quyết`)
+
+  const message = lines.join('\n')
+  if (message.length > 4096) {
+    const chunks: string[] = []
+    let current = ''
+    for (const line of lines) {
+      if ((current + '\n' + line).length > 4000) { chunks.push(current); current = line }
+      else current += (current ? '\n' : '') + line
+    }
+    if (current) chunks.push(current)
+    for (const chunk of chunks) await sendGroupMessage(chunk)
+  } else {
+    await sendGroupMessage(message)
+  }
+
+  return { projects: byProject.size, overdue: totalOverdue, dueSoon: totalDueSoon, exec: totalExec, sentAt: now.toISOString() }
 }
