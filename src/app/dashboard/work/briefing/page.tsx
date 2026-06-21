@@ -254,6 +254,8 @@ export default function BriefingPage() {
   const [filterSearch, setFilterSearch] = useState('')
   const [statusEditing, setStatusEditing] = useState<string | null>(null)
   const [statusSaving, setStatusSaving] = useState(false)
+  const [doneExpanded, setDoneExpanded] = useState<Set<string>>(new Set())
+  const [cellEditing, setCellEditing] = useState<string | null>(null)
 
   // Import state
   const fileRef = useRef<HTMLInputElement>(null)
@@ -442,8 +444,14 @@ export default function BriefingPage() {
     errors: editRows.filter((r) => r.action === 'error' && !r.include).length,
   } : null
 
-  // Filtered tasks for dashboard
+  // Filtered tasks for dashboard — sorted by urgency, split active/done
   const filteredGroups = useMemo(() => {
+    function urgencyRank(t: BriefingTask): number {
+      if (t.isOverdue) return 1
+      if (t.blocked) return 2
+      if (['RETURNED', 'IN_PROGRESS', 'OPEN', 'AWAITING_REVIEW'].includes(t.status)) return 3
+      return 4 // DONE
+    }
     return groups.map((g) => {
       let tasks = g.tasks
       if (filterStatus) tasks = tasks.filter((t) => t.status === filterStatus)
@@ -459,7 +467,17 @@ export default function BriefingPage() {
           t.assigneeNames.some((n) => rmDiacritics(n.toLowerCase()).includes(q))
         )
       }
-      return { ...g, tasks, totalTasks: tasks.length }
+      const sorted = [...tasks].sort((a, b) => {
+        const ra = urgencyRank(a), rb = urgencyRank(b)
+        if (ra !== rb) return ra - rb
+        if (ra === 1) return b.daysOverdue - a.daysOverdue
+        const da = a.deadline ? new Date(a.deadline).getTime() : Infinity
+        const db = b.deadline ? new Date(b.deadline).getTime() : Infinity
+        return da - db
+      })
+      const activeTasks = sorted.filter((t) => urgencyRank(t) <= 3)
+      const doneTasks = sorted.filter((t) => urgencyRank(t) === 4)
+      return { ...g, tasks: sorted, activeTasks, doneTasks, totalTasks: tasks.length }
     }).filter((g) => g.tasks.length > 0)
   }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch])
 
@@ -489,6 +507,17 @@ export default function BriefingPage() {
     }
     setStatusSaving(false)
     setStatusEditing(null)
+  }
+
+  const handleBriefingPatch = async (taskId: string, field: 'proposal' | 'decision', value: string) => {
+    setCellEditing(null)
+    const r = await apiFetch('/api/work/briefing/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, briefingPatch: { [field]: value } }),
+    })
+    if (r.ok) load()
+    else alert(r.error || 'Lỗi cập nhật')
   }
 
   return (
@@ -598,6 +627,111 @@ export default function BriefingPage() {
               const groupKey = g.project?.id || '__general__'
               const isOpen = expanded.has(groupKey)
               const sev = g.totalOverdue > 0 ? overdueSeverity(g.maxDaysOverdue) : { color: '#059669', bg: '#ecfdf5' }
+              const isDoneOpen = doneExpanded.has(groupKey)
+
+              const renderRow = (t: BriefingTask, dimmed?: boolean) => {
+                const tsev = t.isOverdue ? overdueSeverity(t.daysOverdue) : { color: '#475569', bg: '#f1f5f9' }
+                const statusDisplay = t.blocked
+                  ? { label: 'Tắc', color: '#c2410c', bg: '#fff7ed' }
+                  : (STATUS_LABELS[t.status] || { label: t.status, color: '#475569', bg: '#f1f5f9' })
+                const isEditingThis = statusEditing === t.id
+                return (
+                  <tr key={t.id} className="border-t hover:bg-opacity-50" style={{ borderColor: 'var(--border)', opacity: dimmed ? 0.55 : 1 }}>
+                    <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{t.taskType !== 'FREE' ? t.taskType : '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
+                      {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
+                      {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
+                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.deadline)}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      {t.isOverdue ? (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: tsev.bg, color: tsev.color }}>{t.daysOverdue}d</span>
+                      ) : t.daysOverdue < 0 ? (
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{-t.daysOverdue}d</span>
+                      ) : (
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-center">
+                      {isEditingThis ? (
+                        <select
+                          autoFocus
+                          disabled={statusSaving}
+                          className="text-xs px-1 py-1 rounded border"
+                          style={{ borderColor: '#3b82f6', background: '#eff6ff' }}
+                          defaultValue={t.blocked ? 'BLOCKED' : t.status}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            if (v === 'BLOCKED') handleStatusChange(t.id, 'IN_PROGRESS', true)
+                            else handleStatusChange(t.id, v, false)
+                          }}
+                          onBlur={() => setStatusEditing(null)}
+                        >
+                          <option value="OPEN">Mới</option>
+                          <option value="IN_PROGRESS">Đang xử lý</option>
+                          <option value="BLOCKED">Tắc</option>
+                          <option value="AWAITING_REVIEW">Chờ kết thúc</option>
+                          <option value="RETURNED">Bị trả lại</option>
+                          <option value="DONE">Hoàn thành</option>
+                        </select>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setStatusEditing(t.id) }}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all"
+                          style={{ background: statusDisplay.bg, color: statusDisplay.color }}
+                          title="Nhấn để đổi trạng thái"
+                        >
+                          {statusDisplay.label}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {cellEditing === `${t.id}:proposal` ? (
+                        <textarea
+                          autoFocus
+                          defaultValue={t.proposal}
+                          className="w-full text-xs px-2 py-1 rounded border resize-none"
+                          style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 48 }}
+                          onBlur={(e) => handleBriefingPatch(t.id, 'proposal', e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
+                        />
+                      ) : (
+                        <span
+                          className="cursor-pointer block min-h-[20px]"
+                          onClick={() => setCellEditing(`${t.id}:proposal`)}
+                          title="Nhấn để sửa"
+                        >
+                          {t.proposal || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {cellEditing === `${t.id}:decision` ? (
+                        <textarea
+                          autoFocus
+                          defaultValue={t.decision}
+                          className="w-full text-xs px-2 py-1 rounded border resize-none"
+                          style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 48 }}
+                          onBlur={(e) => handleBriefingPatch(t.id, 'decision', e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
+                        />
+                      ) : (
+                        <span
+                          className="cursor-pointer block min-h-[20px]"
+                          onClick={() => setCellEditing(`${t.id}:decision`)}
+                          title="Nhấn để sửa"
+                        >
+                          {t.decision || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.notes || '—'}</td>
+                  </tr>
+                )
+              }
+
               return (
                 <div key={groupKey} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                   <button onClick={() => toggleProject(groupKey)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-opacity-80 transition-colors" style={{ background: 'var(--surface)' }}>
@@ -610,6 +744,9 @@ export default function BriefingPage() {
                     </div>
                     <div className="flex gap-2 items-center">
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#f1f5f9', color: '#475569' }}>{g.totalTasks} việc</span>
+                      {g.activeTasks.length > 0 && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{g.activeTasks.length} cần xem</span>
+                      )}
                       {g.totalOverdue > 0 && (
                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: sev.bg, color: sev.color }}>
                           {g.totalOverdue} quá hạn
@@ -621,81 +758,38 @@ export default function BriefingPage() {
                   {isOpen && (
                     <div className="border-t" style={{ borderColor: 'var(--border)' }}>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm" style={{ minWidth: 900 }}>
+                        <table className="w-full text-sm" style={{ minWidth: 1200 }}>
                           <thead>
                             <tr style={{ background: 'var(--surface-alt, #f8fafc)' }}>
                               <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 70 }}>Mã</th>
                               <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)' }}>Nội dung</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 140 }}>Người thực hiện</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 90 }}>Hạn</th>
-                              <th className="text-center px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 80 }}>Quá hạn</th>
-                              <th className="text-center px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Trạng thái</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 150 }}>Ghi chú</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Người thực hiện</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 85 }}>Hạn</th>
+                              <th className="text-center px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 70 }}>Quá hạn</th>
+                              <th className="text-center px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 120 }}>Trạng thái</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 180 }}>Đề xuất/hướng xử lý</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 180 }}>Quyết định BGĐ</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Ghi chú</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {g.tasks.map((t) => {
-                              const tsev = t.isOverdue ? overdueSeverity(t.daysOverdue) : { color: '#475569', bg: '#f1f5f9' }
-                              const statusDisplay = t.blocked
-                                ? { label: 'Tắc', color: '#c2410c', bg: '#fff7ed' }
-                                : (STATUS_LABELS[t.status] || { label: t.status, color: '#475569', bg: '#f1f5f9' })
-                              const isEditingThis = statusEditing === t.id
-                              return (
-                                <tr key={t.id} className="border-t hover:bg-opacity-50" style={{ borderColor: 'var(--border)' }}>
-                                  <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{t.taskType !== 'FREE' ? t.taskType : '—'}</td>
-                                  <td className="px-4 py-2.5">
-                                    <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
-                                    {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
-                                    {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}
+                            {g.activeTasks.map((t) => renderRow(t))}
+                            {g.doneTasks.length > 0 && (
+                              <>
+                                <tr>
+                                  <td colSpan={9} className="px-4 py-2">
+                                    <button
+                                      onClick={() => setDoneExpanded((prev) => { const s = new Set(prev); if (s.has(groupKey)) s.delete(groupKey); else s.add(groupKey); return s })}
+                                      className="text-xs font-medium"
+                                      style={{ color: 'var(--text-muted)' }}
+                                    >
+                                      {isDoneOpen ? '▾' : '▸'} ✓ {g.doneTasks.length} việc đã xong — {isDoneOpen ? 'ẩn' : 'bấm để xem'}
+                                    </button>
                                   </td>
-                                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
-                                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.deadline)}</td>
-                                  <td className="px-4 py-2.5 text-center">
-                                    {t.isOverdue ? (
-                                      <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: tsev.bg, color: tsev.color }}>{t.daysOverdue}d</span>
-                                    ) : t.daysOverdue < 0 ? (
-                                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{-t.daysOverdue}d</span>
-                                    ) : (
-                                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-center">
-                                    {isEditingThis ? (
-                                      <select
-                                        autoFocus
-                                        disabled={statusSaving}
-                                        className="text-xs px-1 py-1 rounded border"
-                                        style={{ borderColor: '#3b82f6', background: '#eff6ff' }}
-                                        defaultValue={t.blocked ? 'BLOCKED' : t.status}
-                                        onChange={(e) => {
-                                          const v = e.target.value
-                                          if (v === 'BLOCKED') handleStatusChange(t.id, 'IN_PROGRESS', true)
-                                          else handleStatusChange(t.id, v, false)
-                                        }}
-                                        onBlur={() => setStatusEditing(null)}
-                                      >
-                                        <option value="OPEN">Mới</option>
-                                        <option value="IN_PROGRESS">Đang xử lý</option>
-                                        <option value="BLOCKED">Tắc</option>
-                                        <option value="AWAITING_REVIEW">Chờ kết thúc</option>
-                                        <option value="RETURNED">Bị trả lại</option>
-                                        <option value="DONE">Hoàn thành</option>
-                                      </select>
-                                    ) : (
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); setStatusEditing(t.id) }}
-                                        className="text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all"
-                                        style={{ background: statusDisplay.bg, color: statusDisplay.color }}
-                                        title="Nhấn để đổi trạng thái"
-                                      >
-                                        {statusDisplay.label}
-                                      </button>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.notes || t.decision || '—'}</td>
                                 </tr>
-                              )
-                            })}
+                                {isDoneOpen && g.doneTasks.map((t) => renderRow(t, true))}
+                              </>
+                            )}
                           </tbody>
                         </table>
                       </div>

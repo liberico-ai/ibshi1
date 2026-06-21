@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { setTaskStatusAdmin, type SetStatusAdminInput } from '@/lib/work-engine'
 
@@ -13,11 +14,19 @@ export async function PATCH(req: NextRequest) {
     if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được cập nhật trạng thái')
 
     const body = await req.json()
-    const { taskId, status, blocked, reason, briefingPatch, deadline } = body as { taskId?: string } & SetStatusAdminInput
+    const { taskId, status, blocked, reason, briefingPatch, deadline } = body as { taskId?: string; status?: string } & Partial<SetStatusAdminInput>
 
-    if (!taskId || !status) return errorResponse('Cần taskId và status', 400)
+    if (!taskId) return errorResponse('Cần taskId', 400)
+    if (!status && !briefingPatch) return errorResponse('Cần status hoặc briefingPatch', 400)
 
-    const result = await setTaskStatusAdmin(taskId, payload.userId, { status, blocked, reason, briefingPatch, deadline })
+    let effectiveStatus = status
+    if (!effectiveStatus) {
+      const task = await prisma.task.findUnique({ where: { id: taskId }, select: { status: true } })
+      if (!task) return errorResponse('Task không tìm thấy', 404)
+      effectiveStatus = task.status
+    }
+
+    const result = await setTaskStatusAdmin(taskId, payload.userId, { status: effectiveStatus, blocked, reason, briefingPatch, deadline })
     return successResponse(result)
   } catch (err) {
     const msg = (err as Error).message
