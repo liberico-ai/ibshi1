@@ -442,14 +442,6 @@ export default function BriefingPage() {
     errors: editRows.filter((r) => r.action === 'error' && !r.include).length,
   } : null
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
-      </div>
-    )
-  }
-
   // Filtered tasks for dashboard
   const filteredGroups = useMemo(() => {
     return groups.map((g) => {
@@ -470,6 +462,14 @@ export default function BriefingPage() {
       return { ...g, tasks, totalTasks: tasks.length }
     }).filter((g) => g.tasks.length > 0)
   }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+      </div>
+    )
+  }
 
   const handleStatusChange = async (taskId: string, newStatus: string, blocked: boolean) => {
     setStatusSaving(true)
