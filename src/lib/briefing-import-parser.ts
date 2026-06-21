@@ -163,9 +163,6 @@ export function classifyRows(rows: BriefingRow[]): BriefingAction[] {
     if (!row.title.trim()) {
       return { type: 'error' as const, row, reason: 'Việc mới thiếu "Nội dung công việc"' }
     }
-    if (!row.deadlineISO) {
-      return { type: 'error' as const, row, reason: 'Việc mới thiếu "Hạn" hoặc ngày không hợp lệ' }
-    }
     if (!row.assigneeName.trim() && !row.deptText.trim()) {
       return { type: 'error' as const, row, reason: 'Việc mới thiếu cả "Người thực hiện" lẫn "Phòng xử lý"' }
     }

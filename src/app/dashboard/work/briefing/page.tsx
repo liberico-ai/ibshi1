@@ -44,6 +44,7 @@ interface PreviewRow {
   userMatch: 'ok' | 'ambiguous' | 'none' | null
   deadlineISO: string
   deadline: string
+  hasNoDeadline: boolean
   status: string
   criteria: string
   proposal: string
@@ -617,7 +618,7 @@ function GroupSection({ grp, dbProjects, dbUsers, updateRow }: {
       </tr>
       {grp.rows.map(({ row: r, idx }) => {
         const isError = r.action === 'error' && !r.include
-        const hasWarning = r.action === 'create' && r.include && (!r.deadlineISO || (!r.assigneeUserId && !r.roleCode))
+        const hasWarning = r.action === 'create' && r.include && (!r.assigneeUserId && !r.roleCode)
         const rowBg = isError ? '#fef2f2' : hasWarning ? '#fffbeb' : undefined
         const st = ACTION_STYLE[r.action] || ACTION_STYLE.error
 
@@ -681,13 +682,13 @@ function GroupSection({ grp, dbProjects, dbUsers, updateRow }: {
               <input
                 type="date"
                 className="w-full text-xs px-1 py-1 rounded border"
-                style={{
-                  borderColor: !r.deadlineISO && r.action === 'create' ? '#ef4444' : 'var(--border)',
-                  background: !r.deadlineISO && r.action === 'create' ? '#fef2f2' : 'var(--surface)',
-                }}
+                style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
                 value={r.deadlineISO}
-                onChange={(e) => updateRow(idx, { deadlineISO: e.target.value, deadline: e.target.value })}
+                onChange={(e) => updateRow(idx, { deadlineISO: e.target.value, deadline: e.target.value, hasNoDeadline: !e.target.value })}
               />
+              {!r.deadlineISO && r.action === 'create' && r.include && (
+                <span className="text-[10px] mt-0.5 inline-block" style={{ color: '#b45309' }}>chưa có hạn</span>
+              )}
             </td>
 
             {/* Status */}
@@ -715,7 +716,7 @@ function GroupSection({ grp, dbProjects, dbUsers, updateRow }: {
 
             {/* Detail */}
             <td className="px-2 py-1.5 text-xs" style={{ color: r.detail ? '#dc2626' : 'var(--text-muted)' }}>
-              {r.detail || (r.action === 'create' && r.include && !r.deadlineISO ? 'Thiếu hạn' : '')}
+              {r.detail || ''}
             </td>
           </tr>
         )

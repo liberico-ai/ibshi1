@@ -33,6 +33,7 @@ interface PreviewRow {
   userMatch: 'ok' | 'ambiguous' | 'none' | null
   deadlineISO: string
   deadline: string
+  hasNoDeadline: boolean
   status: string
   criteria: string
   proposal: string
@@ -138,7 +139,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
         projectExists: false, willCreateProject: false,
         title: a.row.title || '', deptText: a.row.deptText, roleCode: mapDept(a.row.deptText),
         assigneeName: a.row.assigneeName, assigneeUserId: null, assignBy: null, userMatch: null,
-        deadlineISO: a.row.deadlineISO, deadline: a.row.deadline,
+        deadlineISO: a.row.deadlineISO, deadline: a.row.deadline, hasNoDeadline: false,
         status: a.row.status, criteria: a.row.criteria, proposal: a.row.proposal,
         decision: a.row.decision, notes: a.row.notes, detail: a.reason,
       })
@@ -153,7 +154,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
         projectExists: true, willCreateProject: false,
         title: a.row.title, deptText: a.row.deptText, roleCode: mapDept(a.row.deptText),
         assigneeName: a.row.assigneeName, assigneeUserId: null, assignBy: null, userMatch: null,
-        deadlineISO: a.row.deadlineISO, deadline: a.row.deadline,
+        deadlineISO: a.row.deadlineISO, deadline: a.row.deadline, hasNoDeadline: false,
         status: a.row.status, criteria: a.row.criteria, proposal: a.row.proposal,
         decision: a.row.decision, notes: a.row.notes,
         detail: found ? '' : `Task ID không tồn tại: ${a.taskId}`,
@@ -191,7 +192,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
       projectExists, willCreateProject,
       title: a.row.title, deptText: a.row.deptText, roleCode,
       assigneeName: a.row.assigneeName, assigneeUserId, assignBy, userMatch,
-      deadlineISO: a.row.deadlineISO, deadline: a.row.deadline,
+      deadlineISO: a.row.deadlineISO, deadline: a.row.deadline, hasNoDeadline: !a.row.deadlineISO,
       status: a.row.status, criteria: a.row.criteria, proposal: a.row.proposal,
       decision: a.row.decision, notes: a.row.notes, detail,
     })
@@ -310,7 +311,18 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
       if (alreadyExists) { skipped++; continue }
 
       // Create task
+      const hasDeadline = !!(r.deadlineISO && r.deadlineISO.trim())
       await prisma.$transaction(async (tx) => {
+        const briefingData: Record<string, unknown> = {
+          criteria: (r.criteria || '').trim(),
+          proposal: (r.proposal || '').trim(),
+          decision: (r.decision || '').trim(),
+          notes: (r.notes || '').trim(),
+          deptRole: r.roleCode || '',
+          importKey,
+        }
+        if (!hasDeadline) briefingData.noDeadline = true
+
         const t = await tx.task.create({
           data: {
             projectId,
@@ -318,19 +330,10 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
             taskType: 'FREE',
             status: 'OPEN',
             priority: 'NORMAL',
-            deadline: new Date(r.deadlineISO),
+            deadline: hasDeadline ? new Date(r.deadlineISO) : null,
             createdBy: payload.userId,
             startedAt: new Date(),
-            resultData: JSON.parse(JSON.stringify({
-              briefing: {
-                criteria: (r.criteria || '').trim(),
-                proposal: (r.proposal || '').trim(),
-                decision: (r.decision || '').trim(),
-                notes: (r.notes || '').trim(),
-                deptRole: r.roleCode || '',
-                importKey,
-              },
-            })),
+            resultData: JSON.parse(JSON.stringify({ briefing: briefingData })),
           },
         })
         const assigneeData: { taskId: string; isPrimary: boolean; userId?: string; role?: string } = { taskId: t.id, isPrimary: true }
