@@ -94,24 +94,25 @@ export const NOTIFICATION_TYPES = {
 
 export const MENU_GROUPS = [
   { key: 'overview', label: 'Tổng quan', labelEn: 'Overview', icon: '📊', priority: 0 },
-  { key: 'project', label: 'Dự án', labelEn: 'Projects', icon: '📁', priority: 1 },
-  { key: 'design', label: 'Thiết kế', labelEn: 'Design', icon: '✏️', priority: 2 },
-  { key: 'warehouse', label: 'Kho & Mua hàng', labelEn: 'Warehouse', icon: '📦', priority: 3 },
-  { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: '🏭', priority: 4 },
-  { key: 'qc', label: 'Chất lượng', labelEn: 'Quality', icon: '✅', priority: 5 },
-  { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: '👤', priority: 6 },
-  { key: 'finance', label: 'Tài chính', labelEn: 'Finance', icon: '💰', priority: 7 },
-  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: '📊', priority: 8 },
-  { key: 'system', label: 'Hệ thống', labelEn: 'System', icon: '⚙️', priority: 9 },
+  { key: 'management', label: 'Điều hành', labelEn: 'Management', icon: '📈', priority: 1 },
+  { key: 'project', label: 'Dự án', labelEn: 'Projects', icon: '📁', priority: 2 },
+  { key: 'design', label: 'Thiết kế', labelEn: 'Design', icon: '✏️', priority: 3 },
+  { key: 'warehouse', label: 'Kho & Mua hàng', labelEn: 'Warehouse', icon: '📦', priority: 4 },
+  { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: '🏭', priority: 5 },
+  { key: 'qc', label: 'Chất lượng', labelEn: 'Quality', icon: '✅', priority: 6 },
+  { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: '👤', priority: 7 },
+  { key: 'finance', label: 'Tài chính', labelEn: 'Finance', icon: '💰', priority: 8 },
+  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: '📊', priority: 9 },
+  { key: 'system', label: 'Hệ thống', labelEn: 'System', icon: '⚙️', priority: 10 },
 ] as const
 
 // Role-specific group priority: first group = expanded by default
 export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
-  R01:  ['overview', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
-  R02:  ['overview', 'project', 'design', 'warehouse', 'hr', 'finance', 'reports'],
-  R02a: ['overview', 'project', 'design', 'warehouse', 'hr', 'finance', 'reports'],
-  R03:  ['overview', 'project', 'finance', 'warehouse', 'production', 'qc', 'reports'],
-  R03a: ['overview', 'project', 'finance', 'warehouse', 'production', 'qc', 'reports'],
+  R01:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
+  R02:  ['overview', 'management', 'project', 'design', 'warehouse', 'hr', 'finance', 'reports'],
+  R02a: ['overview', 'management', 'project', 'design', 'warehouse', 'hr', 'finance', 'reports'],
+  R03:  ['overview', 'management', 'project', 'finance', 'warehouse', 'production', 'qc', 'reports'],
+  R03a: ['overview', 'management', 'project', 'finance', 'warehouse', 'production', 'qc', 'reports'],
   R04:  ['overview', 'design', 'project'],
   R04a: ['overview', 'design', 'project'],
   R05:  ['overview', 'warehouse'],
@@ -125,24 +126,25 @@ export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R08a: ['overview', 'finance', 'reports'],
   R09:  ['overview', 'qc', 'reports'],
   R09a: ['overview', 'qc', 'reports'],
-  R10:  ['overview', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
+  R10:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
 }
 
 // ── Menu Items with Group ──
 
 export const MENU_ITEMS = [
-  // ── Overview ──
+  // ── Overview (việc cá nhân / thao tác hàng ngày) ──
   { key: 'dashboard', label: 'Bảng điều khiển', labelEn: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard', roles: 'all', group: 'overview' },
   // [ẨN: luồng 36 bước cũ — đang test hệ động. Bật lại bằng cách bỏ comment dòng dưới]
   // { key: 'tasks', label: 'Công việc (cũ)', labelEn: 'Tasks (legacy)', icon: 'ClipboardList', href: '/dashboard/tasks', roles: 'all', group: 'overview' },
   { key: 'work', label: 'Công việc', labelEn: 'Work Inbox', icon: 'Inbox', href: '/dashboard/work', roles: 'all', group: 'overview' },
   { key: 'work-team', label: 'Phòng của tôi', labelEn: 'My Department', icon: 'Users', href: '/dashboard/work/team', roles: ['R01', 'R02', 'R03', 'R04', 'R06', 'R08', 'R09', 'R10'], group: 'overview' },
   { key: 'work-meetings', label: 'Lịch họp', labelEn: 'Meetings', icon: 'CalendarCheck', href: '/dashboard/work/meetings', roles: 'all', group: 'overview' },
-  { key: 'work-overview', label: 'Tổng quan dự án', labelEn: 'Project Overview', icon: 'PieChart', href: '/dashboard/work/overview', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'overview' },
-  { key: 'work-perf', label: 'Hiệu suất & KPI', labelEn: 'Performance', icon: 'BarChart3', href: '/dashboard/work/performance', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'], group: 'overview' },
-  { key: 'work-briefing', label: 'Giao ban tuần', labelEn: 'Weekly Briefing', icon: 'FileBarChart', href: '/dashboard/work/briefing', roles: ['R01', 'R02', 'R02a', 'R10'], group: 'overview' },
-  { key: 'work-templates', label: 'Quy trình & Template', labelEn: 'Templates', icon: 'Settings', href: '/dashboard/work/templates', roles: ['R01', 'R02', 'R10'], group: 'overview' },
   { key: 'notifications', label: 'Thông báo', labelEn: 'Notifications', icon: 'Bell', href: '/dashboard/notifications', roles: 'all', group: 'overview' },
+
+  // ── Management (điều hành / dashboard cấp quản lý) ──
+  { key: 'work-overview', label: 'Tổng quan dự án', labelEn: 'Project Overview', icon: 'PieChart', href: '/dashboard/work/overview', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'management' },
+  { key: 'work-briefing', label: 'Giao ban tuần', labelEn: 'Weekly Briefing', icon: 'FileBarChart', href: '/dashboard/work/briefing', roles: ['R01', 'R02', 'R02a', 'R10'], group: 'management' },
+  { key: 'work-perf', label: 'Hiệu suất & KPI', labelEn: 'Performance', icon: 'BarChart3', href: '/dashboard/work/performance', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'], group: 'management' },
 
   // ── Project ──
   { key: 'projects', label: 'Dự án', labelEn: 'Projects', icon: 'FolderKanban', href: '/dashboard/projects', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a', 'R06', 'R06a'], group: 'project' },
@@ -212,5 +214,6 @@ export const MENU_ITEMS = [
   // ── System ──
   { key: 'users', label: 'Người dùng', labelEn: 'Users', icon: 'Users', href: '/dashboard/users', roles: ['R01', 'R10'], group: 'system' },
   { key: 'admin', label: 'Quản trị hệ thống', labelEn: 'Admin Dashboard', icon: 'Shield', href: '/dashboard/admin', roles: ['R01', 'R10'], group: 'system' },
+  { key: 'work-templates', label: 'Quy trình & Template', labelEn: 'Templates', icon: 'Settings', href: '/dashboard/work/templates', roles: ['R01', 'R02', 'R10'], group: 'system' },
   { key: 'settings', label: 'Cài đặt', labelEn: 'Settings', icon: 'Settings', href: '/dashboard/settings', roles: 'all', group: 'system' },
 ] as const
