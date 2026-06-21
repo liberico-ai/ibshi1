@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { prismaMock } from '@/lib/__mocks__/db'
-import { createTask, completeTask, returnTask, reassignTask, suggestRoute } from '@/lib/work-engine'
+import { createTask, completeTask, returnTask, reassignTask, suggestRoute, setTaskStatusAdmin } from '@/lib/work-engine'
 
 beforeEach(() => {
   // $transaction: hàm → gọi với prismaMock; mảng → Promise.all
@@ -119,6 +119,71 @@ describe('reject inactive assignee', () => {
       assignees: [{ userId: 'active1', isPrimary: true }],
     } as never, 'creator')
     expect(task.id).toBe('t2')
+  })
+})
+
+describe('setTaskStatusAdmin', () => {
+  const baseTask = {
+    id: 't1', title: 'Việc test', status: 'IN_PROGRESS', createdBy: 'creator',
+    projectId: null, resultData: { briefing: { criteria: 'cũ' } },
+    assignees: [{ id: 'a1', userId: 'u1', role: 'R02' }, { id: 'a2', userId: 'u2', role: 'R06' }],
+  }
+
+  it('DONE → completedAt + mọi assignee done + blocked=false + History STATUS_DONE', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({ ...baseTask } as never)
+    prismaMock.task.update.mockResolvedValue({} as never)
+    prismaMock.taskAssignee.updateMany.mockResolvedValue({ count: 2 } as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+    prismaMock.notification.create.mockResolvedValue({} as never)
+
+    const r = await setTaskStatusAdmin('t1', 'admin', { status: 'DONE', blocked: true, reason: 'Giao ban: Xong' })
+    expect(r).toEqual({ ok: true, status: 'DONE' })
+    expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'DONE', blocked: false, completedAt: expect.any(Date), completedBy: 'admin' }),
+    }))
+    expect(prismaMock.taskAssignee.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { taskId: 't1' }, data: expect.objectContaining({ done: true, doneAt: expect.any(Date) }),
+    }))
+    expect(prismaMock.taskHistory.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'STATUS_DONE', meta: expect.objectContaining({ source: 'briefing' }) }),
+    }))
+  })
+
+  it('"Tắc" → cột blocked=true + resultData.briefing.blocked==="true"', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({ ...baseTask } as never)
+    prismaMock.task.update.mockResolvedValue({} as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+
+    const r = await setTaskStatusAdmin('t1', 'admin', { status: 'IN_PROGRESS', blocked: true })
+    expect(r).toEqual({ ok: true, status: 'IN_PROGRESS' })
+    expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'IN_PROGRESS',
+        blocked: true,
+        resultData: expect.objectContaining({ briefing: expect.objectContaining({ blocked: 'true' }) }),
+      }),
+    }))
+  })
+
+  it('RETURNED → returnCount increment + History STATUS_RETURNED', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({ ...baseTask } as never)
+    prismaMock.task.update.mockResolvedValue({} as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+    prismaMock.notification.create.mockResolvedValue({} as never)
+
+    const r = await setTaskStatusAdmin('t1', 'admin', { status: 'RETURNED', reason: 'Giao ban: Bị trả lại' })
+    expect(r).toEqual({ ok: true, status: 'RETURNED' })
+    expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'RETURNED', returnCount: { increment: 1 } }),
+    }))
+    expect(prismaMock.taskHistory.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'STATUS_RETURNED' }),
+    }))
+  })
+
+  it('status sai → throw', async () => {
+    await expect(setTaskStatusAdmin('t1', 'admin', { status: 'INVALID' }))
+      .rejects.toThrow('Trạng thái không hợp lệ')
   })
 })
 

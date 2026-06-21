@@ -11,9 +11,14 @@ interface BriefingTask {
   title: string
   status: string
   priority: string
+  blocked: boolean
   startedAt: string | null
   deadline: string | null
+  completedAt: string | null
   daysOverdue: number
+  isOverdue: boolean
+  isDoneThisWeek: boolean
+  isNewThisWeek: boolean
   assigneeNames: string[]
   criteria: string
   proposal: string
@@ -23,8 +28,17 @@ interface BriefingTask {
 interface ProjectGroup {
   project: { id: string; projectCode: string; projectName: string } | null
   tasks: BriefingTask[]
+  totalTasks: number
   totalOverdue: number
   maxDaysOverdue: number
+}
+interface KPI {
+  total: number
+  active: number
+  overdue: number
+  blocked: number
+  doneThisWeek: number
+  newThisWeek: number
 }
 
 interface AssigneeMatch {
@@ -86,6 +100,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   IN_PROGRESS: { label: 'Đang xử lý', color: '#1d4ed8', bg: '#eff6ff' },
   AWAITING_REVIEW: { label: 'Chờ kết thúc', color: '#b45309', bg: '#fffbeb' },
   RETURNED: { label: 'Bị trả lại', color: '#e63946', bg: '#fef2f2' },
+  DONE: { label: 'Hoàn thành', color: '#059669', bg: '#ecfdf5' },
 }
 
 const ACTION_STYLE: Record<string, { label: string; color: string; bg: string }> = {
@@ -225,11 +240,20 @@ function groupRowsByProject(rows: EditableRow[]): RowGroup[] {
 // ════════════════════════════════════════
 
 export default function BriefingPage() {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'import'>('dashboard')
   const [groups, setGroups] = useState<ProjectGroup[]>([])
-  const [totalTasks, setTotalTasks] = useState(0)
+  const [kpi, setKpi] = useState<KPI>({ total: 0, active: 0, overdue: 0, blocked: 0, doneThisWeek: 0, newThisWeek: 0 })
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [exporting, setExporting] = useState(false)
+
+  // Dashboard filters
+  const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterBlocked, setFilterBlocked] = useState<string>('')
+  const [filterOverdue, setFilterOverdue] = useState<string>('')
+  const [filterSearch, setFilterSearch] = useState('')
+  const [statusEditing, setStatusEditing] = useState<string | null>(null)
+  const [statusSaving, setStatusSaving] = useState(false)
 
   // Import state
   const fileRef = useRef<HTMLInputElement>(null)
@@ -245,7 +269,7 @@ export default function BriefingPage() {
     apiFetch('/api/work/briefing/agenda').then((r) => {
       if (r.ok) {
         setGroups(r.groups || [])
-        setTotalTasks(r.totalTasks || 0)
+        setKpi(r.kpi || { total: 0, active: 0, overdue: 0, blocked: 0, doneThisWeek: 0, newThisWeek: 0 })
         const allIds = new Set<string>((r.groups || []).map((g: ProjectGroup) => g.project?.id || '__general__'))
         setExpanded(allIds)
       }
@@ -426,13 +450,54 @@ export default function BriefingPage() {
     )
   }
 
+  // Filtered tasks for dashboard
+  const filteredGroups = useMemo(() => {
+    return groups.map((g) => {
+      let tasks = g.tasks
+      if (filterStatus) tasks = tasks.filter((t) => t.status === filterStatus)
+      if (filterBlocked === 'yes') tasks = tasks.filter((t) => t.blocked)
+      if (filterBlocked === 'no') tasks = tasks.filter((t) => !t.blocked)
+      if (filterOverdue === 'yes') tasks = tasks.filter((t) => t.isOverdue)
+      if (filterOverdue === 'done_week') tasks = tasks.filter((t) => t.isDoneThisWeek)
+      if (filterOverdue === 'new_week') tasks = tasks.filter((t) => t.isNewThisWeek)
+      if (filterSearch.trim()) {
+        const q = rmDiacritics(filterSearch.toLowerCase())
+        tasks = tasks.filter((t) =>
+          rmDiacritics(t.title.toLowerCase()).includes(q) ||
+          t.assigneeNames.some((n) => rmDiacritics(n.toLowerCase()).includes(q))
+        )
+      }
+      return { ...g, tasks, totalTasks: tasks.length }
+    }).filter((g) => g.tasks.length > 0)
+  }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch])
+
+  const handleStatusChange = async (taskId: string, newStatus: string, blocked: boolean) => {
+    setStatusSaving(true)
+    try {
+      const r = await apiFetch('/api/work/briefing/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, status: newStatus, blocked }),
+      })
+      if (r.ok) {
+        load()
+      } else {
+        alert(r.error || 'Lỗi cập nhật trạng thái')
+      }
+    } catch {
+      alert('Lỗi kết nối')
+    }
+    setStatusSaving(false)
+    setStatusEditing(null)
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Giao ban tuần</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{totalTasks} việc quá hạn · {groups.length} dự án</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{kpi.active} việc đang mở · {kpi.overdue} quá hạn · {groups.length} dự án</p>
         </div>
         <div className="flex gap-2">
           <button onClick={load} className="text-sm px-4 py-2 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>Tải lại</button>
@@ -440,11 +505,211 @@ export default function BriefingPage() {
             Import biên bản
             <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={handleFileSelect} />
           </label>
-          <button onClick={handleExport} disabled={exporting || totalTasks === 0} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
+          <button onClick={handleExport} disabled={exporting || kpi.total === 0} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
             {exporting ? 'Đang xuất...' : 'Xuất biên bản'}
           </button>
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b" style={{ borderColor: 'var(--border)' }}>
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className="text-sm px-4 py-2 font-semibold border-b-2 -mb-px transition-colors"
+          style={{ borderColor: activeTab === 'dashboard' ? '#1d4ed8' : 'transparent', color: activeTab === 'dashboard' ? '#1d4ed8' : 'var(--text-muted)' }}
+        >
+          Dashboard giao ban
+        </button>
+        <button
+          onClick={() => setActiveTab('import')}
+          className="text-sm px-4 py-2 font-semibold border-b-2 -mb-px transition-colors"
+          style={{ borderColor: activeTab === 'import' ? '#1d4ed8' : 'transparent', color: activeTab === 'import' ? '#1d4ed8' : 'var(--text-muted)' }}
+        >
+          Import & Quá hạn
+        </button>
+      </div>
+
+      {/* ════ Dashboard Tab ════ */}
+      {activeTab === 'dashboard' && (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'Tổng task', value: kpi.total, color: '#475569', bg: '#f1f5f9' },
+              { label: 'Đang xử lý', value: kpi.active, color: '#1d4ed8', bg: '#eff6ff' },
+              { label: 'Quá hạn', value: kpi.overdue, color: '#dc2626', bg: '#fef2f2' },
+              { label: 'Tắc', value: kpi.blocked, color: '#c2410c', bg: '#fff7ed' },
+              { label: 'Xong tuần này', value: kpi.doneThisWeek, color: '#059669', bg: '#ecfdf5' },
+              { label: 'Mới tuần này', value: kpi.newThisWeek, color: '#7c3aed', bg: '#faf5ff' },
+            ].map((card) => (
+              <div key={card.label} className="rounded-xl p-4 text-center" style={{ background: card.bg, border: `1px solid ${card.color}22` }}>
+                <div className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</div>
+                <div className="text-xs font-medium mt-1" style={{ color: card.color }}>{card.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-2 flex-wrap items-center">
+            <input
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              placeholder="Tìm theo tiêu đề / người..."
+              className="text-sm px-3 py-2 rounded-lg flex-1"
+              style={{ border: '1px solid var(--border)', background: '#f8fafc', minWidth: 200 }}
+            />
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="text-sm px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
+              <option value="">Tất cả trạng thái</option>
+              <option value="OPEN">Mới</option>
+              <option value="IN_PROGRESS">Đang xử lý</option>
+              <option value="AWAITING_REVIEW">Chờ kết thúc</option>
+              <option value="RETURNED">Bị trả lại</option>
+              <option value="DONE">Hoàn thành</option>
+            </select>
+            <select value={filterBlocked} onChange={(e) => setFilterBlocked(e.target.value)} className="text-sm px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
+              <option value="">Tắc: tất cả</option>
+              <option value="yes">Chỉ Tắc</option>
+              <option value="no">Không tắc</option>
+            </select>
+            <select value={filterOverdue} onChange={(e) => setFilterOverdue(e.target.value)} className="text-sm px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
+              <option value="">Thời gian: tất cả</option>
+              <option value="yes">Quá hạn</option>
+              <option value="done_week">Xong tuần này</option>
+              <option value="new_week">Mới tuần này</option>
+            </select>
+            {(filterStatus || filterBlocked || filterOverdue || filterSearch) && (
+              <button
+                onClick={() => { setFilterStatus(''); setFilterBlocked(''); setFilterOverdue(''); setFilterSearch('') }}
+                className="text-xs px-3 py-2 rounded-lg"
+                style={{ color: '#dc2626', border: '1px solid #fecaca', background: '#fef2f2' }}
+              >
+                Xoá bộ lọc
+              </button>
+            )}
+          </div>
+
+          {/* Grouped table */}
+          {filteredGroups.length === 0 ? (
+            <div className="rounded-xl p-8 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <p className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>Không có việc nào khớp bộ lọc</p>
+            </div>
+          ) : (
+            filteredGroups.map((g) => {
+              const groupKey = g.project?.id || '__general__'
+              const isOpen = expanded.has(groupKey)
+              const sev = g.totalOverdue > 0 ? overdueSeverity(g.maxDaysOverdue) : { color: '#059669', bg: '#ecfdf5' }
+              return (
+                <div key={groupKey} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <button onClick={() => toggleProject(groupKey)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-opacity-80 transition-colors" style={{ background: 'var(--surface)' }}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-mono" style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>
+                      <div>
+                        <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{g.project?.projectCode || 'Công việc chung'}</span>
+                        {g.project && <span className="text-sm ml-2" style={{ color: 'var(--text-secondary)' }}>{g.project.projectName}</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#f1f5f9', color: '#475569' }}>{g.totalTasks} việc</span>
+                      {g.totalOverdue > 0 && (
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: sev.bg, color: sev.color }}>
+                          {g.totalOverdue} quá hạn
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="border-t" style={{ borderColor: 'var(--border)' }}>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm" style={{ minWidth: 900 }}>
+                          <thead>
+                            <tr style={{ background: 'var(--surface-alt, #f8fafc)' }}>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 70 }}>Mã</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)' }}>Nội dung</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 140 }}>Người thực hiện</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 90 }}>Hạn</th>
+                              <th className="text-center px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 80 }}>Quá hạn</th>
+                              <th className="text-center px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Trạng thái</th>
+                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 150 }}>Ghi chú</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {g.tasks.map((t) => {
+                              const tsev = t.isOverdue ? overdueSeverity(t.daysOverdue) : { color: '#475569', bg: '#f1f5f9' }
+                              const statusDisplay = t.blocked
+                                ? { label: 'Tắc', color: '#c2410c', bg: '#fff7ed' }
+                                : (STATUS_LABELS[t.status] || { label: t.status, color: '#475569', bg: '#f1f5f9' })
+                              const isEditingThis = statusEditing === t.id
+                              return (
+                                <tr key={t.id} className="border-t hover:bg-opacity-50" style={{ borderColor: 'var(--border)' }}>
+                                  <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{t.taskType !== 'FREE' ? t.taskType : '—'}</td>
+                                  <td className="px-4 py-2.5">
+                                    <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
+                                    {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
+                                    {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
+                                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.deadline)}</td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    {t.isOverdue ? (
+                                      <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: tsev.bg, color: tsev.color }}>{t.daysOverdue}d</span>
+                                    ) : t.daysOverdue < 0 ? (
+                                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{-t.daysOverdue}d</span>
+                                    ) : (
+                                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    {isEditingThis ? (
+                                      <select
+                                        autoFocus
+                                        disabled={statusSaving}
+                                        className="text-xs px-1 py-1 rounded border"
+                                        style={{ borderColor: '#3b82f6', background: '#eff6ff' }}
+                                        defaultValue={t.blocked ? 'BLOCKED' : t.status}
+                                        onChange={(e) => {
+                                          const v = e.target.value
+                                          if (v === 'BLOCKED') handleStatusChange(t.id, 'IN_PROGRESS', true)
+                                          else handleStatusChange(t.id, v, false)
+                                        }}
+                                        onBlur={() => setStatusEditing(null)}
+                                      >
+                                        <option value="OPEN">Mới</option>
+                                        <option value="IN_PROGRESS">Đang xử lý</option>
+                                        <option value="BLOCKED">Tắc</option>
+                                        <option value="AWAITING_REVIEW">Chờ kết thúc</option>
+                                        <option value="RETURNED">Bị trả lại</option>
+                                        <option value="DONE">Hoàn thành</option>
+                                      </select>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setStatusEditing(t.id) }}
+                                        className="text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all"
+                                        style={{ background: statusDisplay.bg, color: statusDisplay.color }}
+                                        title="Nhấn để đổi trạng thái"
+                                      >
+                                        {statusDisplay.label}
+                                      </button>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.notes || t.decision || '—'}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </>
+      )}
+
+      {/* ════ Import Tab ════ */}
+      {activeTab === 'import' && (<>
 
       {/* ════ Import: Editable Preview ════ */}
       {previewing && (
@@ -528,15 +793,15 @@ export default function BriefingPage() {
       )}
 
       {/* Empty state */}
-      {totalTasks === 0 && !editRows && !importResult && (
+      {kpi.overdue === 0 && !editRows && !importResult && (
         <div className="rounded-xl p-8 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <p className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>Không có việc quá hạn</p>
           <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Tất cả công việc đều đang đúng tiến độ.</p>
         </div>
       )}
 
-      {/* ════ Project Accordions (agenda) ════ */}
-      {groups.map((g) => {
+      {/* ════ Overdue Project Accordions ════ */}
+      {groups.filter((g) => g.totalOverdue > 0).map((g) => {
         const groupKey = g.project?.id || '__general__'
         const isOpen = expanded.has(groupKey)
         const sev = overdueSeverity(g.maxDaysOverdue)
@@ -544,7 +809,7 @@ export default function BriefingPage() {
           <div key={groupKey} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <button onClick={() => toggleProject(groupKey)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-opacity-80 transition-colors" style={{ background: 'var(--surface)' }}>
               <div className="flex items-center gap-3">
-                <span className="text-lg font-mono" style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                <span className="text-lg font-mono" style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>
                 <div>
                   <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{g.project?.projectCode || 'Công việc chung'}</span>
                   {g.project && <span className="text-sm ml-2" style={{ color: 'var(--text-secondary)' }}>{g.project.projectName}</span>}
@@ -570,9 +835,11 @@ export default function BriefingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {g.tasks.map((t) => {
+                      {g.tasks.filter((t) => t.isOverdue).map((t) => {
                         const tsev = overdueSeverity(t.daysOverdue)
-                        const tst = STATUS_LABELS[t.status] || { label: t.status, color: '#475569', bg: '#f1f5f9' }
+                        const tst = t.blocked
+                          ? { label: 'Tắc', color: '#c2410c', bg: '#fff7ed' }
+                          : (STATUS_LABELS[t.status] || { label: t.status, color: '#475569', bg: '#f1f5f9' })
                         return (
                           <tr key={t.id} className="border-t hover:bg-opacity-50" style={{ borderColor: 'var(--border)' }}>
                             <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{t.taskType !== 'FREE' ? t.taskType : '—'}</td>
@@ -598,6 +865,8 @@ export default function BriefingPage() {
           </div>
         )
       })}
+
+      </>)}
     </div>
   )
 }

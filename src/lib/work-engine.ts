@@ -405,6 +405,93 @@ export async function finalizeTask(taskId: string, userId: string) {
   return { ok: true }
 }
 
+// ── Admin status setter (briefing import / manual override) ──
+
+export interface SetStatusAdminInput {
+  status: string
+  blocked?: boolean
+  reason?: string
+  briefingPatch?: Partial<{ criteria: string; proposal: string; decision: string; notes: string }>
+  deadline?: string | null
+}
+
+export async function setTaskStatusAdmin(taskId: string, byUserId: string, input: SetStatusAdminInput): Promise<{ ok: true; status: string }> {
+  const validStatuses = Object.values(TASK_STATUS) as string[]
+  if (!validStatuses.includes(input.status)) throw new Error('Trạng thái không hợp lệ')
+
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
+  if (!task) throw new Error('Không tìm thấy công việc')
+
+  // Merge resultData.briefing
+  const rd = (task.resultData && typeof task.resultData === 'object') ? task.resultData as Record<string, unknown> : {}
+  const oldBriefing = (rd.briefing && typeof rd.briefing === 'object') ? rd.briefing as Record<string, unknown> : {}
+  const newBriefing: Record<string, unknown> = { ...oldBriefing }
+  if (input.briefingPatch) {
+    for (const [k, v] of Object.entries(input.briefingPatch)) {
+      if (v && v.trim()) newBriefing[k] = v.trim()
+    }
+  }
+  newBriefing.blocked = input.blocked ? 'true' : ''
+
+  const newResultData = JSON.parse(JSON.stringify({ ...rd, briefing: newBriefing }))
+
+  const blockedCol = (input.status === TASK_STATUS.DONE || input.status === TASK_STATUS.CANCELLED)
+    ? false
+    : !!input.blocked
+
+  const updateData: Record<string, unknown> = {
+    status: input.status,
+    blocked: blockedCol,
+    resultData: newResultData,
+  }
+  if (input.deadline !== undefined) {
+    updateData.deadline = input.deadline ? new Date(input.deadline) : null
+  }
+
+  const historyMeta = JSON.parse(JSON.stringify({ source: 'briefing', blocked: !!input.blocked }))
+  const now = new Date()
+
+  if (input.status === TASK_STATUS.DONE) {
+    updateData.completedAt = now
+    updateData.completedBy = byUserId
+    await prisma.$transaction([
+      prisma.task.update({ where: { id: taskId }, data: updateData }),
+      prisma.taskAssignee.updateMany({ where: { taskId }, data: { done: true, doneAt: now } }),
+      prisma.taskHistory.create({ data: { taskId, action: 'STATUS_DONE', byUserId, reason: input.reason, meta: historyMeta } }),
+      prisma.notification.create({ data: { userId: task.createdBy, title: `Hoàn thành: ${task.title}`, message: 'Công việc đã được đánh dấu hoàn thành.', type: 'task_completed', linkUrl: `/dashboard/work/${taskId}` } }),
+    ])
+    const templateStepId = (task as { templateStepId?: string | null }).templateStepId
+    if (templateStepId && task.projectId) {
+      const hookKeys = (task as { hookKeys?: string[] }).hookKeys
+      await runHooks(hookKeys, { projectId: task.projectId, userId: byUserId })
+      await chainNextTemplateTasks(taskId, task.projectId, templateStepId, byUserId)
+    }
+  } else if (input.status === TASK_STATUS.RETURNED) {
+    updateData.returnCount = { increment: 1 }
+    const assigneeUserIds = task.assignees.map(a => a.userId).filter((uid): uid is string => !!uid)
+    await prisma.$transaction([
+      prisma.task.update({ where: { id: taskId }, data: updateData }),
+      prisma.taskHistory.create({ data: { taskId, action: 'STATUS_RETURNED', byUserId, reason: input.reason, meta: historyMeta } }),
+      ...assigneeUserIds.map(uid =>
+        prisma.notification.create({ data: { userId: uid, title: `⚠️ Trả lại: ${task.title}`, message: input.reason || 'Công việc bị trả lại.', type: 'task_returned', linkUrl: `/dashboard/work/${taskId}` } })
+      ),
+    ])
+  } else if (input.status === TASK_STATUS.CANCELLED) {
+    await prisma.$transaction([
+      prisma.task.update({ where: { id: taskId }, data: updateData }),
+      prisma.taskHistory.create({ data: { taskId, action: 'STATUS_CANCELLED', byUserId, reason: input.reason, meta: historyMeta } }),
+    ])
+  } else {
+    const label = input.blocked ? `${input.status} (Tắc)` : input.status
+    await prisma.$transaction([
+      prisma.task.update({ where: { id: taskId }, data: updateData }),
+      prisma.taskHistory.create({ data: { taskId, action: 'STATUS_SET', byUserId, reason: input.reason || `Chuyển: ${label}`, meta: historyMeta } }),
+    ])
+  }
+
+  return { ok: true, status: input.status }
+}
+
 export async function returnTask(taskId: string, userId: string, roleCode: string, reason: string) {
   const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
   if (!task) throw new Error('Không tìm thấy công việc')

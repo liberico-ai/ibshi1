@@ -104,3 +104,32 @@ ibs-erp-20260322
 # Scratch seeds
 tmp_seed.ts
 tmp_seed.js
+
+# Database dumps
+*.dump
+
+# Scratch prefix scripts
+__*.js
+_*.js
+_*.ts
+_*.cjs
+
+# Claude Code local state
+/.claude/
+
+# LibreOffice lock files
+.~lock.*
+
+# Sync reports
+material-sync-report-*.csv
+
+# Prisma local DB
+prisma/dev.db
+
+# Root-level scratch markdown docs
+/AI_CODING_RULES_GENERAL.md
+/HUONG_DAN_NHAP_PR_THIET_KE.md
+/IBS_DESIGN_SYSTEM.md
+/RUNBOOK_import_kho.md
+/Prompt_*.md
+/plans/

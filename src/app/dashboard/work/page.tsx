@@ -6,6 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 
 interface Task {
   id: string; title: string; status: string; priority: string; deadline: string | null; taskType: string
+  blocked: boolean
   project: { projectCode: string; projectName: string } | null
   assigneeNames: string[]; needsMyReview: boolean; _count: { children: number; docs: number }
 }
@@ -126,7 +127,7 @@ export default function WorkInboxPage() {
       ) : (
         <>
           {tasks.map((t, idx) => {
-            const st = ST[t.status] || ST.OPEN
+            const st = t.blocked ? { l: 'Tắc', c: '#c2410c', b: '#fff7ed' } : (ST[t.status] || ST.OPEN)
             const due = dueInfo(t.deadline)
             const pc = t.priority === 'URGENT' ? '#e63946' : t.priority === 'HIGH' ? '#d97706' : 'var(--border)'
             const rowNum = (page - 1) * 20 + idx + 1

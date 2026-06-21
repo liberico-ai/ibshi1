@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, computeImportKey, splitAssigneeNames, matchUserName, type UserMatchResult } from '@/lib/briefing-import-parser'
+import { setTaskStatusAdmin } from '@/lib/work-engine'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -378,37 +379,16 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
 async function applyUpdate(r: FinalRow, byUserId: string, rowNum: number, errors: { row: number; reason: string }[]) {
   if (!r.taskId) { errors.push({ row: rowNum, reason: 'update thiếu taskId' }); return }
 
-  const task = await prisma.task.findUnique({ where: { id: r.taskId }, select: { resultData: true, status: true } })
+  const task = await prisma.task.findUnique({ where: { id: r.taskId }, select: { status: true } })
   if (!task) { errors.push({ row: rowNum, reason: `Task "${r.taskId}" không tồn tại` }); return }
 
-  const rd = (task.resultData && typeof task.resultData === 'object') ? task.resultData as Record<string, unknown> : {}
-  const oldBriefing = (rd.briefing && typeof rd.briefing === 'object') ? rd.briefing as Record<string, unknown> : {}
-  const newBriefing: Record<string, unknown> = { ...oldBriefing }
-  if (r.criteria?.trim()) newBriefing.criteria = r.criteria.trim()
-  if (r.proposal?.trim()) newBriefing.proposal = r.proposal.trim()
-  if (r.decision?.trim()) newBriefing.decision = r.decision.trim()
-  if (r.notes?.trim()) newBriefing.notes = r.notes.trim()
-
   const statusParsed = r.status?.trim() ? mapStatusLabel(r.status) : null
-  if (statusParsed) {
-    newBriefing.blocked = statusParsed.blocked ? 'true' : (oldBriefing.blocked || '')
-  }
 
-  const updateData: Record<string, unknown> = {
-    resultData: JSON.parse(JSON.stringify({ ...rd, briefing: newBriefing })),
-  }
-  if (statusParsed) updateData.status = statusParsed.status
-  if (r.deadlineISO) updateData.deadline = new Date(r.deadlineISO)
-
-  await prisma.$transaction([
-    prisma.task.update({ where: { id: r.taskId }, data: updateData }),
-    prisma.taskHistory.create({
-      data: {
-        taskId: r.taskId,
-        action: 'BRIEFING_UPDATE',
-        byUserId,
-        meta: JSON.parse(JSON.stringify({ source: 'briefing-import', statusChange: statusParsed ? r.status : null, deadlineChange: r.deadlineISO || null })),
-      },
-    }),
-  ])
+  await setTaskStatusAdmin(r.taskId, byUserId, {
+    status: statusParsed ? statusParsed.status : task.status,
+    blocked: statusParsed ? statusParsed.blocked : undefined,
+    reason: statusParsed ? `Giao ban: ${r.status}` : undefined,
+    briefingPatch: { criteria: r.criteria, proposal: r.proposal, decision: r.decision, notes: r.notes },
+    deadline: r.deadlineISO ? r.deadlineISO : undefined,
+  })
 }

@@ -9,11 +9,28 @@ export const runtime = 'nodejs'
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
-const STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Mới',
-  IN_PROGRESS: 'Đang xử lý',
-  AWAITING_REVIEW: 'Chờ kết thúc',
-  RETURNED: 'Bị trả lại',
+const DEPT_ROLE_LABEL: Record<string, string> = {
+  R01: 'Ban GĐ',
+  R02: 'Dự án',
+  R02a: 'Dự án',
+  R03: 'Kế hoạch',
+  R04: 'Thiết kế',
+  R05: 'Kho',
+  R06: 'Sản xuất',
+  R07: 'Thương mại',
+  R08: 'Kế toán',
+  R09: 'QC',
+  R10: 'HCNS',
+}
+
+function statusLabel(status: string, blocked: boolean): string {
+  if (status === 'IN_PROGRESS' && blocked) return 'Tắc'
+  if (status === 'OPEN') return 'Mới'
+  if (status === 'IN_PROGRESS') return 'Đang xử lý'
+  if (status === 'AWAITING_REVIEW') return 'Chờ kết thúc'
+  if (status === 'RETURNED') return 'Bị trả lại'
+  if (status === 'DONE') return 'Xong'
+  return status
 }
 
 export async function GET(req: NextRequest) {
@@ -26,8 +43,7 @@ export async function GET(req: NextRequest) {
 
     const overdueTasks = await prisma.task.findMany({
       where: {
-        deadline: { lt: now },
-        status: { notIn: ['DONE', 'CANCELLED'] },
+        status: { notIn: ['CANCELLED'] },
       },
       include: {
         project: { select: { projectCode: true, projectName: true } },
@@ -44,28 +60,32 @@ export async function GET(req: NextRequest) {
     const nameById = new Map(users.map((u) => [u.id, u.fullName]))
 
     const rows = overdueTasks.map((t, idx) => {
-      const daysOverdue = Math.ceil((now.getTime() - new Date(t.deadline!).getTime()) / 86400000)
+      const daysOverdue = t.deadline && t.status !== 'DONE'
+        ? Math.ceil((now.getTime() - new Date(t.deadline).getTime()) / 86400000)
+        : 0
       const assigneeNames = t.assignees.map((a) =>
         a.userId ? (nameById.get(a.userId) || 'NV') : (DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—')
       ).join(', ')
       const rd = (t.resultData && typeof t.resultData === 'object') ? t.resultData as Record<string, unknown> : {}
       const briefing = (rd.briefing && typeof rd.briefing === 'object') ? rd.briefing as Record<string, string> : {}
+      const deptRole = briefing.deptRole || ''
 
       return {
         'STT': idx + 1,
-        'Mã việc': t.taskType !== 'FREE' ? t.taskType : '',
+        'ID hệ thống': t.id,
         'Dự án': t.project?.projectCode || 'Công việc chung',
-        'Nội dung': t.title,
+        'Tên dự án': t.project?.projectName || '',
+        'Nội dung công việc': t.title,
+        'Phòng xử lý': DEPT_ROLE_LABEL[deptRole] || '',
         'Người thực hiện': assigneeNames,
         'Ngày mở': t.startedAt ? formatDate(t.startedAt) : formatDate(t.createdAt),
         'Hạn': t.deadline ? formatDate(t.deadline) : '',
-        'Số ngày quá hạn': daysOverdue,
-        'Trạng thái': STATUS_LABELS[t.status] || t.status,
-        'Tiêu chí xong': briefing.criteria || '',
-        'Đề xuất': briefing.proposal || '',
+        'Số ngày quá hạn': daysOverdue > 0 ? daysOverdue : '',
+        'Trạng thái': statusLabel(t.status, t.blocked),
+        'Tiêu chí hoàn thành': briefing.criteria || '',
+        'Đề xuất/hướng xử lý': briefing.proposal || '',
         'Quyết định BGĐ': briefing.decision || '',
         'Ghi chú': briefing.notes || '',
-        'ID hệ thống': t.id,
       }
     })
 
@@ -74,19 +94,20 @@ export async function GET(req: NextRequest) {
 
     ws['!cols'] = [
       { wch: 5 },   // STT
-      { wch: 10 },  // Mã việc
+      { wch: 28 },  // ID hệ thống
       { wch: 18 },  // Dự án
-      { wch: 40 },  // Nội dung
+      { wch: 24 },  // Tên dự án
+      { wch: 40 },  // Nội dung công việc
+      { wch: 14 },  // Phòng xử lý
       { wch: 20 },  // Người thực hiện
       { wch: 12 },  // Ngày mở
       { wch: 12 },  // Hạn
       { wch: 8 },   // Số ngày quá hạn
       { wch: 14 },  // Trạng thái
-      { wch: 25 },  // Tiêu chí xong
-      { wch: 25 },  // Đề xuất
+      { wch: 25 },  // Tiêu chí hoàn thành
+      { wch: 25 },  // Đề xuất/hướng xử lý
       { wch: 25 },  // Quyết định BGĐ
       { wch: 25 },  // Ghi chú
-      { wch: 28 },  // ID hệ thống
     ]
 
     XLSX.utils.book_append_sheet(wb, ws, 'Giao ban tuần')

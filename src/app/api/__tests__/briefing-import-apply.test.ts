@@ -71,7 +71,9 @@ function setupMocks() {
   })
   prismaMock.task.create.mockResolvedValue({ id: 'new-task-1' } as never)
   prismaMock.taskAssignee.create.mockResolvedValue({} as never)
+  prismaMock.taskAssignee.updateMany.mockResolvedValue({ count: 0 } as never)
   prismaMock.taskHistory.create.mockResolvedValue({} as never)
+  prismaMock.notification.create.mockResolvedValue({} as never)
 }
 
 describe('POST /api/work/briefing/import (apply via JSON)', () => {
@@ -80,12 +82,13 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     setupMocks()
   })
 
-  // ── Case 1: update taskId → status/deadline/briefing + TaskHistory ──
-  it('(1) update by taskId → changes status, deadline, briefing fields + creates BRIEFING_UPDATE history', async () => {
+  // ── Case 1: update taskId → status/deadline/briefing via setTaskStatusAdmin ──
+  it('(1) update by taskId → changes status, deadline, briefing fields + creates STATUS_SET history', async () => {
     prismaMock.task.findUnique.mockResolvedValue({
       id: 'task-exist-1',
       status: 'OPEN',
       resultData: { briefing: { criteria: 'cũ', importKey: 'abc' } },
+      assignees: [{ id: 'a1', userId: 'u1', role: 'R07' }],
     } as never)
 
     const req = buildApplyRequest([{
@@ -127,13 +130,13 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
       }),
     })
 
-    // TaskHistory created with BRIEFING_UPDATE action
+    // TaskHistory created via setTaskStatusAdmin with STATUS_SET action
     expect(prismaMock.taskHistory.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         taskId: 'task-exist-1',
-        action: 'BRIEFING_UPDATE',
+        action: 'STATUS_SET',
         byUserId: 'user-pm',
-        meta: expect.objectContaining({ source: 'briefing-import' }),
+        meta: expect.objectContaining({ source: 'briefing' }),
       }),
     })
   })
@@ -151,7 +154,7 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
       projectId: 'proj-abc',
       projectCode: '25-ABC',
       title: 'Lắp đặt kết cấu',
-      assigneeUserId: 'u1',
+      assigneeUserIds: ['u1'],
       roleCode: 'R07',
       deadlineISO: '2026-07-10',
       status: 'Mới',
@@ -196,7 +199,7 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
       projectCode: '27-NEW',
       projectNameNew: 'Dự án Mới XYZ',
       title: 'Thiết kế bản vẽ',
-      assigneeUserId: 'u1',
+      assigneeUserIds: ['u1'],
       roleCode: 'R07',
       deadlineISO: '2026-06-25',
       status: 'Mới',
@@ -277,7 +280,7 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
       projectCode: '27-DUP',
       projectNameNew: 'Dự án dup',
       title: 'Task trùng',
-      assigneeUserId: 'u1',
+      assigneeUserIds: ['u1'],
       deadlineISO: '2026-06-25',
       status: 'Mới',
       criteria: 'TC',
@@ -313,7 +316,7 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
       projectId: 'existing-proj',
       projectCode: '27-DUP',
       title: 'Task trùng',
-      assigneeUserId: 'u1',
+      assigneeUserIds: ['u1'],
       deadlineISO: '2026-06-25',
       status: 'Mới',
       criteria: 'TC',

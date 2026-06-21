@@ -14,11 +14,11 @@ export async function GET(req: NextRequest) {
     if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được truy cập giao ban tuần')
 
     const now = new Date()
+    const weekAgo = new Date(now.getTime() - 7 * 86400000)
 
-    const overdueTasks = await prisma.task.findMany({
+    const tasks = await prisma.task.findMany({
       where: {
-        deadline: { lt: now },
-        status: { notIn: ['DONE', 'CANCELLED'] },
+        status: { notIn: ['CANCELLED'] },
       },
       include: {
         project: { select: { id: true, projectCode: true, projectName: true } },
@@ -28,25 +28,35 @@ export async function GET(req: NextRequest) {
     })
 
     const uids = new Set<string>()
-    for (const t of overdueTasks) {
+    for (const t of tasks) {
       for (const a of t.assignees) if (a.userId) uids.add(a.userId)
     }
     const users = uids.size ? await prisma.user.findMany({ where: { id: { in: [...uids] } }, select: { id: true, fullName: true } }) : []
     const nameById = new Map(users.map((u) => [u.id, u.fullName]))
 
+    let kpiOverdue = 0
+    let kpiBlocked = 0
+    let kpiDoneThisWeek = 0
+    let kpiNewThisWeek = 0
+    let kpiActive = 0
+
     const GENERAL_KEY = '__general__'
-    const grouped = new Map<string, { project: { id: string; projectCode: string; projectName: string } | null; tasks: typeof overdueTasks }>()
+    const grouped = new Map<string, { project: { id: string; projectCode: string; projectName: string } | null; tasks: ReturnType<typeof mapTask>[] }>()
 
-    for (const t of overdueTasks) {
-      const pid = t.project ? t.project.id : GENERAL_KEY
-      if (!grouped.has(pid)) {
-        grouped.set(pid, { project: t.project || null, tasks: [] })
-      }
-      grouped.get(pid)!.tasks.push(t)
-    }
+    function mapTask(t: typeof tasks[number]) {
+      const isOverdue = !!(t.deadline && new Date(t.deadline) < now && t.status !== 'DONE')
+      const isDoneThisWeek = !!(t.status === 'DONE' && t.completedAt && new Date(t.completedAt) >= weekAgo)
+      const isNewThisWeek = new Date(t.createdAt) >= weekAgo && t.status !== 'DONE'
+      const daysOverdue = t.deadline && t.status !== 'DONE'
+        ? Math.ceil((now.getTime() - new Date(t.deadline).getTime()) / 86400000)
+        : 0
 
-    function mapTask(t: typeof overdueTasks[number]) {
-      const daysOverdue = Math.ceil((now.getTime() - new Date(t.deadline!).getTime()) / 86400000)
+      if (isOverdue) kpiOverdue++
+      if (t.blocked && t.status !== 'DONE') kpiBlocked++
+      if (isDoneThisWeek) kpiDoneThisWeek++
+      if (isNewThisWeek) kpiNewThisWeek++
+      if (t.status !== 'DONE') kpiActive++
+
       const assigneeNames = t.assignees.map((a) =>
         a.userId ? (nameById.get(a.userId) || 'NV') : (DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—')
       )
@@ -58,21 +68,36 @@ export async function GET(req: NextRequest) {
         title: t.title,
         status: t.status,
         priority: t.priority,
+        blocked: t.blocked,
         startedAt: t.startedAt,
         deadline: t.deadline,
+        completedAt: t.completedAt,
         daysOverdue,
+        isOverdue,
+        isDoneThisWeek,
+        isNewThisWeek,
         assigneeNames,
         criteria: briefing.criteria || '',
         proposal: briefing.proposal || '',
         decision: briefing.decision || '',
         notes: briefing.notes || '',
-        blocked: briefing.blocked || '',
       }
     }
 
+    for (const t of tasks) {
+      const mapped = mapTask(t)
+      const pid = t.project ? t.project.id : GENERAL_KEY
+      if (!grouped.has(pid)) {
+        grouped.set(pid, { project: t.project || null, tasks: [] })
+      }
+      grouped.get(pid)!.tasks.push(mapped)
+    }
+
+    type MappedTask = ReturnType<typeof mapTask>
     type GroupEntry = {
       project: { id: string; projectCode: string; projectName: string } | null
-      tasks: ReturnType<typeof mapTask>[]
+      tasks: MappedTask[]
+      totalTasks: number
       totalOverdue: number
       maxDaysOverdue: number
     }
@@ -81,9 +106,19 @@ export async function GET(req: NextRequest) {
     let generalGroup: GroupEntry | null = null
 
     for (const [key, g] of grouped) {
-      const tasks = g.tasks.map(mapTask).sort((a, b) => b.daysOverdue - a.daysOverdue)
-      const maxDays = Math.max(...tasks.map((t) => t.daysOverdue))
-      const entry: GroupEntry = { project: g.project, tasks, totalOverdue: g.tasks.length, maxDaysOverdue: maxDays }
+      const overdueTasks = g.tasks.filter((t) => t.isOverdue)
+      const maxDays = overdueTasks.length > 0 ? Math.max(...overdueTasks.map((t) => t.daysOverdue)) : 0
+      const entry: GroupEntry = {
+        project: g.project,
+        tasks: g.tasks.sort((a, b) => {
+          if (a.isOverdue && !b.isOverdue) return -1
+          if (!a.isOverdue && b.isOverdue) return 1
+          return b.daysOverdue - a.daysOverdue
+        }),
+        totalTasks: g.tasks.length,
+        totalOverdue: overdueTasks.length,
+        maxDaysOverdue: maxDays,
+      }
       if (key === GENERAL_KEY) generalGroup = entry
       else projectGroups.push(entry)
     }
@@ -91,7 +126,16 @@ export async function GET(req: NextRequest) {
     projectGroups.sort((a, b) => b.maxDaysOverdue - a.maxDaysOverdue)
     const groups = generalGroup ? [...projectGroups, generalGroup] : projectGroups
 
-    return successResponse({ groups, totalTasks: overdueTasks.length, asOf: now.toISOString() })
+    const kpi = {
+      total: tasks.length,
+      active: kpiActive,
+      overdue: kpiOverdue,
+      blocked: kpiBlocked,
+      doneThisWeek: kpiDoneThisWeek,
+      newThisWeek: kpiNewThisWeek,
+    }
+
+    return successResponse({ groups, kpi, asOf: now.toISOString() })
   } catch (err) {
     console.error('GET /api/work/briefing/agenda error:', err)
     return errorResponse('Lỗi hệ thống', 500)
