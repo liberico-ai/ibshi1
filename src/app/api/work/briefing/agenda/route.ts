@@ -39,6 +39,8 @@ export async function GET(req: NextRequest) {
     let kpiDoneThisWeek = 0
     let kpiNewThisWeek = 0
     let kpiActive = 0
+    let kpiDueSoon = 0
+    const weekFromNow = new Date(now.getTime() + 7 * 86400000)
 
     const GENERAL_KEY = '__general__'
     const grouped = new Map<string, { project: { id: string; projectCode: string; projectName: string } | null; tasks: ReturnType<typeof mapTask>[] }>()
@@ -50,8 +52,11 @@ export async function GET(req: NextRequest) {
       const daysOverdue = t.deadline && t.status !== 'DONE'
         ? Math.ceil((now.getTime() - new Date(t.deadline).getTime()) / 86400000)
         : 0
+      const dl = t.deadline ? new Date(t.deadline) : null
+      const isDueSoon = !!(dl && !isOverdue && t.status !== 'DONE' && t.status !== 'CANCELLED' && dl >= now && dl <= weekFromNow)
 
       if (isOverdue) kpiOverdue++
+      if (isDueSoon) kpiDueSoon++
       if (t.blocked && t.status !== 'DONE') kpiBlocked++
       if (isDoneThisWeek) kpiDoneThisWeek++
       if (isNewThisWeek) kpiNewThisWeek++
@@ -74,6 +79,7 @@ export async function GET(req: NextRequest) {
         completedAt: t.completedAt,
         daysOverdue,
         isOverdue,
+        isDueSoon,
         isDoneThisWeek,
         isNewThisWeek,
         assigneeNames,
@@ -130,6 +136,7 @@ export async function GET(req: NextRequest) {
       total: tasks.length,
       active: kpiActive,
       overdue: kpiOverdue,
+      dueSoon: kpiDueSoon,
       blocked: kpiBlocked,
       doneThisWeek: kpiDoneThisWeek,
       newThisWeek: kpiNewThisWeek,

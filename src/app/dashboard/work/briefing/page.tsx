@@ -17,6 +17,7 @@ interface BriefingTask {
   completedAt: string | null
   daysOverdue: number
   isOverdue: boolean
+  isDueSoon: boolean
   isDoneThisWeek: boolean
   isNewThisWeek: boolean
   assigneeNames: string[]
@@ -36,6 +37,7 @@ interface KPI {
   total: number
   active: number
   overdue: number
+  dueSoon: number
   blocked: number
   doneThisWeek: number
   newThisWeek: number
@@ -242,7 +244,7 @@ function groupRowsByProject(rows: EditableRow[]): RowGroup[] {
 export default function BriefingPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'import'>('dashboard')
   const [groups, setGroups] = useState<ProjectGroup[]>([])
-  const [kpi, setKpi] = useState<KPI>({ total: 0, active: 0, overdue: 0, blocked: 0, doneThisWeek: 0, newThisWeek: 0 })
+  const [kpi, setKpi] = useState<KPI>({ total: 0, active: 0, overdue: 0, dueSoon: 0, blocked: 0, doneThisWeek: 0, newThisWeek: 0 })
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [exporting, setExporting] = useState(false)
@@ -271,7 +273,7 @@ export default function BriefingPage() {
     apiFetch('/api/work/briefing/agenda').then((r) => {
       if (r.ok) {
         setGroups(r.groups || [])
-        setKpi(r.kpi || { total: 0, active: 0, overdue: 0, blocked: 0, doneThisWeek: 0, newThisWeek: 0 })
+        setKpi(r.kpi || { total: 0, active: 0, overdue: 0, dueSoon: 0, blocked: 0, doneThisWeek: 0, newThisWeek: 0 })
         const allIds = new Set<string>((r.groups || []).map((g: ProjectGroup) => g.project?.id || '__general__'))
         setExpanded(allIds)
       }
@@ -449,8 +451,9 @@ export default function BriefingPage() {
     function urgencyRank(t: BriefingTask): number {
       if (t.isOverdue) return 1
       if (t.blocked) return 2
-      if (['RETURNED', 'IN_PROGRESS', 'OPEN', 'AWAITING_REVIEW'].includes(t.status)) return 3
-      return 4 // DONE
+      if (t.isDueSoon) return 3
+      if (['RETURNED', 'IN_PROGRESS', 'OPEN', 'AWAITING_REVIEW'].includes(t.status)) return 4
+      return 5 // DONE
     }
     return groups.map((g) => {
       let tasks = g.tasks
@@ -458,6 +461,7 @@ export default function BriefingPage() {
       if (filterBlocked === 'yes') tasks = tasks.filter((t) => t.blocked)
       if (filterBlocked === 'no') tasks = tasks.filter((t) => !t.blocked)
       if (filterOverdue === 'yes') tasks = tasks.filter((t) => t.isOverdue)
+      if (filterOverdue === 'due_soon') tasks = tasks.filter((t) => t.isDueSoon)
       if (filterOverdue === 'done_week') tasks = tasks.filter((t) => t.isDoneThisWeek)
       if (filterOverdue === 'new_week') tasks = tasks.filter((t) => t.isNewThisWeek)
       if (filterSearch.trim()) {
@@ -475,8 +479,8 @@ export default function BriefingPage() {
         const db = b.deadline ? new Date(b.deadline).getTime() : Infinity
         return da - db
       })
-      const activeTasks = sorted.filter((t) => urgencyRank(t) <= 3)
-      const doneTasks = sorted.filter((t) => urgencyRank(t) === 4)
+      const activeTasks = sorted.filter((t) => urgencyRank(t) <= 4)
+      const doneTasks = sorted.filter((t) => urgencyRank(t) === 5)
       return { ...g, tasks: sorted, activeTasks, doneTasks, totalTasks: tasks.length }
     }).filter((g) => g.tasks.length > 0)
   }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch])
@@ -562,16 +566,22 @@ export default function BriefingPage() {
       {activeTab === 'dashboard' && (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             {[
-              { label: 'Tổng task', value: kpi.total, color: '#475569', bg: '#f1f5f9' },
-              { label: 'Đang xử lý', value: kpi.active, color: '#1d4ed8', bg: '#eff6ff' },
-              { label: 'Quá hạn', value: kpi.overdue, color: '#dc2626', bg: '#fef2f2' },
-              { label: 'Tắc', value: kpi.blocked, color: '#c2410c', bg: '#fff7ed' },
-              { label: 'Xong tuần này', value: kpi.doneThisWeek, color: '#059669', bg: '#ecfdf5' },
-              { label: 'Mới tuần này', value: kpi.newThisWeek, color: '#7c3aed', bg: '#faf5ff' },
+              { label: 'Tổng task', value: kpi.total, color: '#475569', bg: '#f1f5f9', filter: '' },
+              { label: 'Đang xử lý', value: kpi.active, color: '#1d4ed8', bg: '#eff6ff', filter: '' },
+              { label: 'Quá hạn', value: kpi.overdue, color: '#dc2626', bg: '#fef2f2', filter: 'yes' },
+              { label: 'Đến hạn tuần này', value: kpi.dueSoon, color: '#d97706', bg: '#fffbeb', filter: 'due_soon' },
+              { label: 'Tắc', value: kpi.blocked, color: '#c2410c', bg: '#fff7ed', filter: '' },
+              { label: 'Xong tuần này', value: kpi.doneThisWeek, color: '#059669', bg: '#ecfdf5', filter: 'done_week' },
+              { label: 'Mới tuần này', value: kpi.newThisWeek, color: '#7c3aed', bg: '#faf5ff', filter: 'new_week' },
             ].map((card) => (
-              <div key={card.label} className="rounded-xl p-4 text-center" style={{ background: card.bg, border: `1px solid ${card.color}22` }}>
+              <div
+                key={card.label}
+                className="rounded-xl p-4 text-center cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all"
+                style={{ background: card.bg, border: `1px solid ${card.color}22`, '--tw-ring-color': card.color } as React.CSSProperties}
+                onClick={() => { if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter) }}
+              >
                 <div className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</div>
                 <div className="text-xs font-medium mt-1" style={{ color: card.color }}>{card.label}</div>
               </div>
@@ -603,6 +613,7 @@ export default function BriefingPage() {
             <select value={filterOverdue} onChange={(e) => setFilterOverdue(e.target.value)} className="text-sm px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
               <option value="">Thời gian: tất cả</option>
               <option value="yes">Quá hạn</option>
+              <option value="due_soon">Đến hạn tuần này</option>
               <option value="done_week">Xong tuần này</option>
               <option value="new_week">Mới tuần này</option>
             </select>
@@ -648,6 +659,8 @@ export default function BriefingPage() {
                     <td className="px-4 py-2.5 text-center">
                       {t.isOverdue ? (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: tsev.bg, color: tsev.color }}>{t.daysOverdue}d</span>
+                      ) : t.isDueSoon ? (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>còn {-t.daysOverdue}d</span>
                       ) : t.daysOverdue < 0 ? (
                         <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{-t.daysOverdue}d</span>
                       ) : (
