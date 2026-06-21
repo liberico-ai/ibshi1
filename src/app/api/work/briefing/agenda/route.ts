@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
     let kpiNewThisWeek = 0
     let kpiActive = 0
     let kpiDueSoon = 0
+    let kpiExecDecision = 0
     const weekFromNow = new Date(now.getTime() + 7 * 86400000)
 
     const GENERAL_KEY = '__general__'
@@ -55,12 +56,19 @@ export async function GET(req: NextRequest) {
       const dl = t.deadline ? new Date(t.deadline) : null
       const isDueSoon = !!(dl && !isOverdue && t.status !== 'DONE' && t.status !== 'CANCELLED' && dl >= now && dl <= weekFromNow)
 
+      const needsExecDecision = t.status !== 'DONE' && t.status !== 'CANCELLED' && (
+        t.escalated === true ||
+        t.blocked === true ||
+        (isOverdue && daysOverdue >= 14)
+      )
+
       if (isOverdue) kpiOverdue++
       if (isDueSoon) kpiDueSoon++
       if (t.blocked && t.status !== 'DONE') kpiBlocked++
       if (isDoneThisWeek) kpiDoneThisWeek++
       if (isNewThisWeek) kpiNewThisWeek++
       if (t.status !== 'DONE') kpiActive++
+      if (needsExecDecision) kpiExecDecision++
 
       const assigneeNames = t.assignees.map((a) =>
         a.userId ? (nameById.get(a.userId) || 'NV') : (DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—')
@@ -74,6 +82,8 @@ export async function GET(req: NextRequest) {
         status: t.status,
         priority: t.priority,
         blocked: t.blocked,
+        escalated: t.escalated,
+        needsExecDecision,
         startedAt: t.startedAt,
         deadline: t.deadline,
         completedAt: t.completedAt,
@@ -83,6 +93,7 @@ export async function GET(req: NextRequest) {
         isDoneThisWeek,
         isNewThisWeek,
         assigneeNames,
+        projectCode: t.project?.projectCode || '',
         criteria: briefing.criteria || '',
         proposal: briefing.proposal || '',
         decision: briefing.decision || '',
@@ -138,6 +149,7 @@ export async function GET(req: NextRequest) {
       overdue: kpiOverdue,
       dueSoon: kpiDueSoon,
       blocked: kpiBlocked,
+      execDecision: kpiExecDecision,
       doneThisWeek: kpiDoneThisWeek,
       newThisWeek: kpiNewThisWeek,
     }

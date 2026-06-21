@@ -12,6 +12,8 @@ interface BriefingTask {
   status: string
   priority: string
   blocked: boolean
+  escalated: boolean
+  needsExecDecision: boolean
   startedAt: string | null
   deadline: string | null
   completedAt: string | null
@@ -21,6 +23,7 @@ interface BriefingTask {
   isDoneThisWeek: boolean
   isNewThisWeek: boolean
   assigneeNames: string[]
+  projectCode: string
   criteria: string
   proposal: string
   decision: string
@@ -39,6 +42,7 @@ interface KPI {
   overdue: number
   dueSoon: number
   blocked: number
+  execDecision: number
   doneThisWeek: number
   newThisWeek: number
 }
@@ -244,7 +248,7 @@ function groupRowsByProject(rows: EditableRow[]): RowGroup[] {
 export default function BriefingPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'import'>('dashboard')
   const [groups, setGroups] = useState<ProjectGroup[]>([])
-  const [kpi, setKpi] = useState<KPI>({ total: 0, active: 0, overdue: 0, dueSoon: 0, blocked: 0, doneThisWeek: 0, newThisWeek: 0 })
+  const [kpi, setKpi] = useState<KPI>({ total: 0, active: 0, overdue: 0, dueSoon: 0, blocked: 0, execDecision: 0, doneThisWeek: 0, newThisWeek: 0 })
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [exporting, setExporting] = useState(false)
@@ -258,6 +262,7 @@ export default function BriefingPage() {
   const [statusSaving, setStatusSaving] = useState(false)
   const [doneExpanded, setDoneExpanded] = useState<Set<string>>(new Set())
   const [cellEditing, setCellEditing] = useState<string | null>(null)
+  const [filterExecOnly, setFilterExecOnly] = useState(false)
 
   // Import state
   const fileRef = useRef<HTMLInputElement>(null)
@@ -273,7 +278,7 @@ export default function BriefingPage() {
     apiFetch('/api/work/briefing/agenda').then((r) => {
       if (r.ok) {
         setGroups(r.groups || [])
-        setKpi(r.kpi || { total: 0, active: 0, overdue: 0, dueSoon: 0, blocked: 0, doneThisWeek: 0, newThisWeek: 0 })
+        setKpi(r.kpi || { total: 0, active: 0, overdue: 0, dueSoon: 0, blocked: 0, execDecision: 0, doneThisWeek: 0, newThisWeek: 0 })
         const allIds = new Set<string>((r.groups || []).map((g: ProjectGroup) => g.project?.id || '__general__'))
         setExpanded(allIds)
       }
@@ -457,6 +462,7 @@ export default function BriefingPage() {
     }
     return groups.map((g) => {
       let tasks = g.tasks
+      if (filterExecOnly) tasks = tasks.filter((t) => t.needsExecDecision)
       if (filterStatus) tasks = tasks.filter((t) => t.status === filterStatus)
       if (filterBlocked === 'yes') tasks = tasks.filter((t) => t.blocked)
       if (filterBlocked === 'no') tasks = tasks.filter((t) => !t.blocked)
@@ -483,7 +489,7 @@ export default function BriefingPage() {
       const doneTasks = sorted.filter((t) => urgencyRank(t) === 5)
       return { ...g, tasks: sorted, activeTasks, doneTasks, totalTasks: tasks.length }
     }).filter((g) => g.tasks.length > 0)
-  }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch])
+  }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch, filterExecOnly])
 
   if (loading) {
     return (
@@ -523,6 +529,20 @@ export default function BriefingPage() {
     if (r.ok) load()
     else alert(r.error || 'Lỗi cập nhật')
   }
+
+  const handleEscalate = async (taskId: string, escalated: boolean) => {
+    const r = await apiFetch('/api/work/briefing/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, escalated }),
+    })
+    if (r.ok) load()
+    else alert(r.error || 'Lỗi cập nhật')
+  }
+
+  const execTasks = useMemo(() => {
+    return groups.flatMap((g) => g.tasks.filter((t) => t.needsExecDecision))
+  }, [groups])
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -566,8 +586,9 @@ export default function BriefingPage() {
       {activeTab === 'dashboard' && (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
             {[
+              { label: 'Cần BGĐ quyết', value: kpi.execDecision, color: '#b91c1c', bg: '#fef2f2', filter: 'exec' },
               { label: 'Tổng task', value: kpi.total, color: '#475569', bg: '#f1f5f9', filter: '' },
               { label: 'Đang xử lý', value: kpi.active, color: '#1d4ed8', bg: '#eff6ff', filter: '' },
               { label: 'Quá hạn', value: kpi.overdue, color: '#dc2626', bg: '#fef2f2', filter: 'yes' },
@@ -578,9 +599,12 @@ export default function BriefingPage() {
             ].map((card) => (
               <div
                 key={card.label}
-                className="rounded-xl p-4 text-center cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all"
+                className={`rounded-xl p-4 text-center cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all ${card.filter === 'exec' && filterExecOnly ? 'ring-2 ring-offset-1' : ''}`}
                 style={{ background: card.bg, border: `1px solid ${card.color}22`, '--tw-ring-color': card.color } as React.CSSProperties}
-                onClick={() => { if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter) }}
+                onClick={() => {
+                  if (card.filter === 'exec') setFilterExecOnly(!filterExecOnly)
+                  else if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter)
+                }}
               >
                 <div className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</div>
                 <div className="text-xs font-medium mt-1" style={{ color: card.color }}>{card.label}</div>
@@ -617,9 +641,9 @@ export default function BriefingPage() {
               <option value="done_week">Xong tuần này</option>
               <option value="new_week">Mới tuần này</option>
             </select>
-            {(filterStatus || filterBlocked || filterOverdue || filterSearch) && (
+            {(filterStatus || filterBlocked || filterOverdue || filterSearch || filterExecOnly) && (
               <button
-                onClick={() => { setFilterStatus(''); setFilterBlocked(''); setFilterOverdue(''); setFilterSearch('') }}
+                onClick={() => { setFilterStatus(''); setFilterBlocked(''); setFilterOverdue(''); setFilterSearch(''); setFilterExecOnly(false) }}
                 className="text-xs px-3 py-2 rounded-lg"
                 style={{ color: '#dc2626', border: '1px solid #fecaca', background: '#fef2f2' }}
               >
@@ -627,6 +651,90 @@ export default function BriefingPage() {
               </button>
             )}
           </div>
+
+          {/* ═══ Executive Decision Section ═══ */}
+          {execTasks.length > 0 && (
+            <div className="rounded-xl overflow-hidden" style={{ background: '#fef2f2', border: '2px solid #b91c1c33' }}>
+              <div className="px-5 py-3 flex items-center gap-2" style={{ background: '#b91c1c11', borderBottom: '1px solid #b91c1c22' }}>
+                <span className="text-base">🔺</span>
+                <span className="font-bold text-sm" style={{ color: '#b91c1c' }}>Cần BGĐ quyết ({execTasks.length})</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ minWidth: 1100 }}>
+                  <thead>
+                    <tr style={{ background: '#fef2f2' }}>
+                      <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 90 }}>Dự án</th>
+                      <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c' }}>Nội dung</th>
+                      <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 120 }}>Người</th>
+                      <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 130 }}>Lý do</th>
+                      <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 180 }}>Đề xuất</th>
+                      <th className="text-left px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 180 }}>Quyết định BGĐ</th>
+                      <th className="text-center px-4 py-2.5 font-semibold" style={{ color: '#b91c1c', width: 80 }}>Đẩy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {execTasks.map((t) => {
+                      const reason = t.escalated ? 'PM đẩy' : t.blocked ? 'Tắc' : `Quá hạn ${t.daysOverdue}d`
+                      return (
+                        <tr key={t.id} className="border-t" style={{ borderColor: '#b91c1c22', background: 'white' }}>
+                          <td className="px-4 py-2.5 text-xs font-mono font-semibold" style={{ color: '#475569' }}>{t.projectCode || '—'}</td>
+                          <td className="px-4 py-2.5">
+                            <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: t.escalated ? '#faf5ff' : t.blocked ? '#fff7ed' : '#fef2f2', color: t.escalated ? '#7c3aed' : t.blocked ? '#c2410c' : '#dc2626' }}>
+                              {reason}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                            {cellEditing === `${t.id}:proposal` ? (
+                              <textarea
+                                autoFocus defaultValue={t.proposal}
+                                className="w-full text-xs px-2 py-1 rounded border resize-none"
+                                style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 40 }}
+                                onBlur={(e) => handleBriefingPatch(t.id, 'proposal', e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
+                              />
+                            ) : (
+                              <span className="cursor-pointer block min-h-[20px]" onClick={() => setCellEditing(`${t.id}:proposal`)}>
+                                {t.proposal || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                            {cellEditing === `${t.id}:decision` ? (
+                              <textarea
+                                autoFocus defaultValue={t.decision}
+                                className="w-full text-xs px-2 py-1 rounded border resize-none"
+                                style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 40 }}
+                                onBlur={(e) => handleBriefingPatch(t.id, 'decision', e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
+                              />
+                            ) : (
+                              <span className="cursor-pointer block min-h-[20px]" onClick={() => setCellEditing(`${t.id}:decision`)}>
+                                {t.decision || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <button
+                              onClick={() => handleEscalate(t.id, !t.escalated)}
+                              className="text-[10px] font-semibold px-2 py-1 rounded-full transition-all"
+                              style={{ background: t.escalated ? '#faf5ff' : '#f1f5f9', color: t.escalated ? '#7c3aed' : '#475569', border: `1px solid ${t.escalated ? '#7c3aed33' : '#47556922'}` }}
+                              title={t.escalated ? 'Gỡ khỏi BGĐ' : 'Đẩy lên BGĐ'}
+                            >
+                              {t.escalated ? 'Gỡ' : '▲ Đẩy'}
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Grouped table */}
           {filteredGroups.length === 0 ? (
@@ -650,6 +758,7 @@ export default function BriefingPage() {
                   <tr key={t.id} className="border-t hover:bg-opacity-50" style={{ borderColor: 'var(--border)', opacity: dimmed ? 0.55 : 1 }}>
                     <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{t.taskType !== 'FREE' ? t.taskType : '—'}</td>
                     <td className="px-4 py-2.5">
+                      {t.needsExecDecision && <span className="mr-1" title="Cần BGĐ quyết">🔺</span>}
                       <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
                       {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
                       {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}

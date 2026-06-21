@@ -410,6 +410,7 @@ export async function finalizeTask(taskId: string, userId: string) {
 export interface SetStatusAdminInput {
   status: string
   blocked?: boolean
+  escalated?: boolean
   reason?: string
   briefingPatch?: Partial<{ criteria: string; proposal: string; decision: string; notes: string }>
   deadline?: string | null
@@ -435,10 +436,10 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
 
   const newResultData = JSON.parse(JSON.stringify({ ...rd, briefing: newBriefing }))
 
-  const blockedCol = (input.status === TASK_STATUS.DONE || input.status === TASK_STATUS.CANCELLED)
-    ? false
-    : !!input.blocked
+  const isDoneOrCancelled = input.status === TASK_STATUS.DONE || input.status === TASK_STATUS.CANCELLED
+  const blockedCol = isDoneOrCancelled ? false : !!input.blocked
 
+  const now = new Date()
   const updateData: Record<string, unknown> = {
     status: input.status,
     blocked: blockedCol,
@@ -448,8 +449,18 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
     updateData.deadline = input.deadline ? new Date(input.deadline) : null
   }
 
-  const historyMeta = JSON.parse(JSON.stringify({ source: 'briefing', blocked: !!input.blocked }))
-  const now = new Date()
+  // Escalation handling
+  if (isDoneOrCancelled) {
+    updateData.escalated = false
+    updateData.escalatedAt = null
+    updateData.escalatedBy = null
+  } else if (input.escalated !== undefined) {
+    updateData.escalated = input.escalated
+    updateData.escalatedAt = input.escalated ? now : null
+    updateData.escalatedBy = input.escalated ? byUserId : null
+  }
+
+  const historyMeta = JSON.parse(JSON.stringify({ source: 'briefing', blocked: !!input.blocked, escalated: !!input.escalated }))
 
   if (input.status === TASK_STATUS.DONE) {
     updateData.completedAt = now

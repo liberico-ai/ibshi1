@@ -1402,6 +1402,9 @@ model Task {
   templateStepId       String?             @map("template_step_id")
   returnCount          Int                 @default(0) @map("return_count")
   blocked              Boolean             @default(false)
+  escalated            Boolean             @default(false)
+  escalatedAt          DateTime?           @map("escalated_at")
+  escalatedBy          String?             @map("escalated_by")
   forwardedFromId      String?             @map("forwarded_from_id") // việc này được "chuyển tiếp" từ task nào (truy vết)
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
@@ -1419,6 +1422,7 @@ model Task {
   @@index([forwardedFromId])
   @@index([status, deadline])
   @@index([status, blocked])
+  @@index([escalated])
   @@map("tasks")
 }
 
