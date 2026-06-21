@@ -6,8 +6,12 @@
  */
 import pg from 'pg'
 
-const connStr = process.env.DATABASE_URL
-if (!connStr) { console.error('DATABASE_URL is required'); process.exit(1) }
+function requireEnv(key: string): string {
+  const v = process.env[key]
+  if (!v) { console.error(`${key} is required`); process.exit(1) }
+  return v
+}
+const connStr = requireEnv('DATABASE_URL')
 const isApply = process.argv.includes('--apply') && process.argv.includes('--i-understand-production')
 
 async function main() {
