@@ -332,15 +332,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ═══ Main ═══ */}
       <div className="flex-1 flex flex-col transition-all" style={{
         marginLeft: sidebarWidth,
+        scrollPaddingTop: '72px',
         transitionDuration: 'var(--duration-normal)',
         transitionTimingFunction: 'var(--ease-out)',
       }}>
         {/* Topbar */}
-        <header className="sticky top-0 z-20 flex items-center justify-between" style={{
+        <header className="sticky top-0 z-40 flex items-center justify-between" style={{
           height: '64px',
           padding: '0 32px',
-          background: '#f0f4f8',
+          background: 'var(--bg-primary)',
           borderBottom: '1px solid var(--border)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
         }}>
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-heading)' }}>
