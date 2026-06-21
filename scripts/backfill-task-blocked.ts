@@ -6,7 +6,8 @@
  */
 import pg from 'pg'
 
-const connStr = process.env.DATABASE_URL || 'postgresql://ibshi:l6871F0PyOVU@103.141.177.194:15432/ibshi'
+const connStr = process.env.DATABASE_URL
+if (!connStr) { console.error('DATABASE_URL is required'); process.exit(1) }
 const isApply = process.argv.includes('--apply') && process.argv.includes('--i-understand-production')
 
 async function main() {
