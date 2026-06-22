@@ -2,6 +2,7 @@ import prisma from '@/lib/db'
 import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { ROLES } from '@/lib/constants'
+import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 
 const DYNAMIC_STEPS = new Set(['P5.1', 'P5.1A', 'P5.1.1', 'P5.2', 'P5.3', 'P5.3A', 'P5.4'])
 
@@ -221,4 +222,128 @@ export async function runWeeklyBriefingDigest() {
   }
 
   return { projects: byProject.size, overdue: totalOverdue, dueSoon: totalDueSoon, exec: totalExec, sentAt: now.toISOString() }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Daily Deadline Digest — sent weekdays 8AM VN
+// ══════════════════════════════════════════════════════════════
+
+export async function runDailyDeadlineDigest() {
+  const now = new Date()
+
+  const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' })
+  const todayVN = dayFmt.format(now)
+  const todayStart = new Date(`${todayVN}T00:00:00+07:00`)
+  const todayEnd = new Date(`${todayVN}T23:59:59.999+07:00`)
+
+  const wdFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', weekday: 'short' })
+  const wdMap: Record<string, number> = { Sun: 0, Mon: 6, Tue: 5, Wed: 4, Thu: 3, Fri: 2, Sat: 1 }
+  const daysToSunday = wdMap[wdFmt.format(now)] ?? 0
+  const sundayMs = todayStart.getTime() + daysToSunday * 86400000
+  const sundayVN = dayFmt.format(new Date(sundayMs))
+  const weekEnd = new Date(`${sundayVN}T23:59:59.999+07:00`)
+
+  const tasks = await prisma.task.findMany({
+    where: {
+      status: { notIn: ['DONE', 'CANCELLED'] },
+      deadline: { not: null, gte: todayStart, lte: weekEnd },
+    },
+    include: {
+      project: { select: { projectCode: true, projectName: true } },
+      assignees: true,
+    },
+    orderBy: { deadline: 'asc' },
+  })
+
+  const uids = new Set<string>()
+  for (const t of tasks) for (const a of t.assignees) if (a.userId) uids.add(a.userId)
+  const users = uids.size ? await prisma.user.findMany({ where: { id: { in: [...uids] } }, select: { id: true, fullName: true } }) : []
+  const nameById = new Map(users.map(u => [u.id, u.fullName]))
+
+  function resolveAssignee(assignees: { userId: string | null; role: string | null }[]) {
+    return assignees.map(a => {
+      if (a.userId) return nameById.get(a.userId) || 'NV'
+      return DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—'
+    }).join(', ') || '—'
+  }
+
+  const STATUS_LABEL: Record<string, string> = { OPEN: 'Mới', IN_PROGRESS: 'Đang xử lý', AWAITING_REVIEW: 'Chờ duyệt', RETURNED: 'Bị trả lại' }
+
+  interface DeadlineTask { title: string; assignee: string; status: string; deadline: Date; projectKey: string; projectLabel: string }
+
+  const dueToday: DeadlineTask[] = []
+  const dueThisWeek: DeadlineTask[] = []
+
+  for (const t of tasks) {
+    const dl = new Date(t.deadline!)
+    const pKey = t.project?.projectCode || '__general__'
+    const pLabel = t.project ? `${t.project.projectCode} — ${t.project.projectName}` : 'Công việc chung'
+    const statusText = t.blocked ? 'Tắc' : (STATUS_LABEL[t.status] || t.status)
+    const entry: DeadlineTask = { title: t.title, assignee: resolveAssignee(t.assignees), status: statusText, deadline: dl, projectKey: pKey, projectLabel: pLabel }
+
+    if (dl >= todayStart && dl <= todayEnd) dueToday.push(entry)
+    else dueThisWeek.push(entry)
+  }
+
+  function groupByProject(items: DeadlineTask[]) {
+    const map = new Map<string, { label: string; tasks: DeadlineTask[] }>()
+    for (const item of items) {
+      if (!map.has(item.projectKey)) map.set(item.projectKey, { label: item.projectLabel, tasks: [] })
+      map.get(item.projectKey)!.tasks.push(item)
+    }
+    return [...map.values()]
+  }
+
+  const lines: string[] = []
+  lines.push('📅 <b>VIỆC ĐẾN HẠN — NHẮC HÀNG NGÀY</b>')
+  lines.push(`🕐 ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`)
+  lines.push('━━━━━━━━━━━━━━━━━━━━')
+
+  lines.push('')
+  lines.push(`📅 <b>HÔM NAY ĐẾN HẠN (${dueToday.length})</b>`)
+  if (dueToday.length === 0) {
+    lines.push('   — Không có —')
+  } else {
+    for (const pg of groupByProject(dueToday)) {
+      lines.push(`   📁 <b>${escapeHtml(pg.label)}</b>`)
+      for (const t of pg.tasks) {
+        lines.push(`      • ${escapeHtml(t.title.slice(0, 50))} · 👤 ${escapeHtml(t.assignee)} · [${escapeHtml(t.status)}] · DL ${formatDeadline(t.deadline)}`)
+      }
+    }
+  }
+
+  lines.push('')
+  lines.push(`🗓 <b>TRONG TUẦN ĐẾN HẠN (đến CN, ${dueThisWeek.length})</b>`)
+  if (dueThisWeek.length === 0) {
+    lines.push('   — Không có —')
+  } else {
+    for (const pg of groupByProject(dueThisWeek)) {
+      lines.push(`   📁 <b>${escapeHtml(pg.label)}</b>`)
+      for (const t of pg.tasks) {
+        const daysLeft = Math.ceil((t.deadline.getTime() - todayEnd.getTime()) / 86400000)
+        lines.push(`      • ${escapeHtml(t.title.slice(0, 50))} · 👤 ${escapeHtml(t.assignee)} · [${escapeHtml(t.status)}] · DL ${formatDeadline(t.deadline)} (còn ${daysLeft}d)`)
+      }
+    }
+  }
+
+  lines.push('')
+  lines.push('━━━━━━━━━━━━━━━━━━━━')
+  const projectCount = new Set([...dueToday, ...dueThisWeek].map(t => t.projectKey)).size
+  lines.push(`📊 <b>Tổng:</b> ${dueToday.length} hôm nay · ${dueThisWeek.length} trong tuần · ${projectCount} dự án`)
+
+  const message = lines.join('\n')
+  if (message.length > 4096) {
+    const chunks: string[] = []
+    let current = ''
+    for (const line of lines) {
+      if ((current + '\n' + line).length > 4000) { chunks.push(current); current = line }
+      else current += (current ? '\n' : '') + line
+    }
+    if (current) chunks.push(current)
+    for (const chunk of chunks) await sendGroupMessage(chunk)
+  } else {
+    await sendGroupMessage(message)
+  }
+
+  return { dueToday: dueToday.length, dueThisWeek: dueThisWeek.length, projects: projectCount, sentAt: now.toISOString() }
 }

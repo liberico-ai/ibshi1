@@ -1,5 +1,5 @@
 import cron from 'node-cron'
-import { runProjectStatusReport, runWeeklyBriefingDigest } from '@/lib/cron-jobs'
+import { runProjectStatusReport, runWeeklyBriefingDigest, runDailyDeadlineDigest } from '@/lib/cron-jobs'
 
 let initialized = false
 
@@ -30,17 +30,24 @@ export function startScheduler() {
         .catch(err => console.error('[CronScheduler] 5PM report failed:', err))
     }, { timezone: 'Asia/Ho_Chi_Minh' })
 
-    const jobMonday = cron.schedule('0 8 * * 1', () => {
-      console.log('[CronScheduler] Monday 8:00 AM VN — triggering weekly briefing digest')
+    const jobMonday = cron.schedule('5 8 * * 1', () => {
+      console.log('[CronScheduler] Monday 8:05 AM VN — triggering weekly briefing digest')
       runWeeklyBriefingDigest()
         .then(result => console.log('[CronScheduler] Weekly digest sent:', JSON.stringify(result)))
         .catch(err => console.error('[CronScheduler] Weekly digest failed:', err))
     }, { timezone: 'Asia/Ho_Chi_Minh' })
 
+    const jobDaily = cron.schedule('0 8 * * 1-5', () => {
+      console.log('[CronScheduler] Weekday 8:00 AM VN — triggering daily deadline digest')
+      runDailyDeadlineDigest()
+        .then(result => console.log('[CronScheduler] Daily deadline digest:', JSON.stringify(result)))
+        .catch(err => console.error('[CronScheduler] Daily deadline digest failed:', err))
+    }, { timezone: 'Asia/Ho_Chi_Minh' })
+
     initialized = true
     console.log('[CronScheduler] ✅ Started successfully')
-    console.log('[CronScheduler] Schedule: 9:00 & 17:00 daily, 8:00 Monday (briefing digest) Asia/Ho_Chi_Minh')
-    console.log('[CronScheduler] Jobs registered:', { '9am': !!job9am, '5pm': !!job5pm, 'monday8am': !!jobMonday })
+    console.log('[CronScheduler] Schedule: 9:00 & 17:00 daily, 8:00 Mon-Fri (deadline), 8:05 Monday (weekly) Asia/Ho_Chi_Minh')
+    console.log('[CronScheduler] Jobs registered:', { '9am': !!job9am, '5pm': !!job5pm, 'daily8am': !!jobDaily, 'monday805am': !!jobMonday })
   } catch (err) {
     console.error('[CronScheduler] ❌ Failed to initialize:', err)
   }
