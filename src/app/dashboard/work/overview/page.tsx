@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 
@@ -206,8 +206,12 @@ function KpiCard({ label, value, sub, color, bar, alert }: {
   )
 }
 
-// ── Project Detail (tầng 2, giữ nguyên logic cũ) ──
+// ── Project Detail (tầng 2) ──
+type TaskFilter = { label: string; fn: (t: ActiveTask) => boolean } | null
+
 function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnType<typeof useRouter> }) {
+  const [filter, setFilter] = useState<TaskFilter>(null)
+  const tableRef = useRef<HTMLDivElement>(null)
   const m = ov.material
   const max = Math.max(m.demand, 1)
   const fbar = (label: string, val: number, color: string, hl = false) => (
@@ -218,6 +222,15 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
     </div>
   )
 
+  const applyFilter = (f: TaskFilter) => {
+    setFilter((prev) => prev?.label === f?.label ? null : f)
+    setTimeout(() => tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+
+  const allTasks = ov.allTasks || []
+  const shown = filter ? allTasks.filter(filter.fn) : allTasks
+  const clickNum = 'cursor-pointer hover:underline'
+
   return (
     <>
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))' }}>
@@ -226,9 +239,12 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
           <div className="text-2xl font-extrabold mt-1" style={{ color: '#1d4ed8' }}>{ov.progress}%</div>
           <div style={{ height: 8, background: '#e2e8f0', borderRadius: 6, overflow: 'hidden', marginTop: 6 }}><div style={{ width: `${ov.progress}%`, height: '100%', background: '#1d4ed8' }} /></div>
         </div>
-        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid #0a2540' }}>
+        <div className="rounded-xl p-4 cursor-pointer" onClick={() => applyFilter({ label: 'all', fn: () => true })} style={{ background: 'var(--surface)', border: filter?.label === 'all' ? '2px solid #0a2540' : '1px solid var(--border)', borderTop: '3px solid #0a2540' }}>
           <div className="text-xs uppercase" style={{ color: 'var(--text-muted)' }}>Công việc</div>
-          <div className="text-2xl font-extrabold mt-1" style={{ color: '#0a2540' }}>{ov.completedTasks}/{ov.totalTasks}</div>
+          <div className="text-2xl font-extrabold mt-1" style={{ color: '#0a2540' }}>
+            <span className={clickNum} onClick={(e) => { e.stopPropagation(); applyFilter({ label: 'done', fn: (t) => t.status === 'DONE' }) }} style={{ color: '#059669' }}>{ov.completedTasks}</span>
+            /{ov.totalTasks}
+          </div>
           <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Hoàn thành / tổng</div>
         </div>
         {(ov.project.contractValue || ov.project.id !== '__general__') && (
@@ -281,11 +297,11 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
             <tbody>
               {ov.byDept.map((d) => (
                 <tr key={d.deptCode} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td className="px-3 py-2 font-semibold" style={{ color: 'var(--text-primary)' }}>{d.deptName}</td>
-                  <td className="px-3 py-2">{d.total}</td>
-                  <td className="px-3 py-2" style={{ color: '#1d4ed8', fontWeight: 600 }}>{d.active}</td>
-                  <td className="px-3 py-2" style={{ color: '#059669' }}>{d.done}</td>
-                  <td className="px-3 py-2" style={{ color: d.overdue > 0 ? '#e63946' : 'var(--text-muted)', fontWeight: d.overdue > 0 ? 700 : 400 }}>{d.overdue}</td>
+                  <td className="px-3 py-2 font-semibold cursor-pointer hover:underline" style={{ color: 'var(--text-primary)' }} onClick={() => applyFilter({ label: `dept-${d.deptCode}`, fn: (t) => t.deptName === d.deptName })}>{d.deptName}</td>
+                  <td className="px-3 py-2 cursor-pointer hover:underline" onClick={() => applyFilter({ label: `dept-${d.deptCode}`, fn: (t) => t.deptName === d.deptName })}>{d.total}</td>
+                  <td className="px-3 py-2 cursor-pointer hover:underline" style={{ color: '#1d4ed8', fontWeight: 600 }} onClick={() => applyFilter({ label: `dept-active-${d.deptCode}`, fn: (t) => t.deptName === d.deptName && t.status !== 'DONE' })}>{d.active}</td>
+                  <td className="px-3 py-2 cursor-pointer hover:underline" style={{ color: '#059669' }} onClick={() => applyFilter({ label: `dept-done-${d.deptCode}`, fn: (t) => t.deptName === d.deptName && t.status === 'DONE' })}>{d.done}</td>
+                  <td className="px-3 py-2 cursor-pointer hover:underline" style={{ color: d.overdue > 0 ? '#e63946' : 'var(--text-muted)', fontWeight: d.overdue > 0 ? 700 : 400 }} onClick={() => applyFilter({ label: `dept-overdue-${d.deptCode}`, fn: (t) => t.deptName === d.deptName && t.overdue })}>{d.overdue}</td>
                 </tr>
               ))}
               {ov.byDept.length === 0 && <tr><td colSpan={5} className="text-center py-4" style={{ color: 'var(--text-muted)' }}>Chưa có công việc</td></tr>}
@@ -294,59 +310,40 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
         </div>
       </div>
 
-      {ov.activeTasks.length > 0 && (
-        <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>Việc đang chạy ({ov.activeTasks.length})</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr style={{ background: 'var(--surface-hover,#f1f5f9)' }}>
-                {['Công việc', 'Phòng ban', 'Người làm', 'Trạng thái', 'Hạn'].map((h) => <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>)}
-              </tr></thead>
-              <tbody>
-                {ov.activeTasks.map((t) => {
-                  const st = ST_LABEL[t.status] || ST_LABEL.OPEN
-                  return (
-                    <tr key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)} className="cursor-pointer hover:bg-blue-50" style={{ borderTop: '1px solid var(--border)' }}>
-                      <td className="px-3 py-2" style={{ color: '#1d4ed8', fontWeight: 500 }}>{t.title} ↗</td>
-                      <td className="px-3 py-2 text-xs">{t.deptName}</td>
-                      <td className="px-3 py-2 text-xs">{t.assignee}</td>
-                      <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span></td>
-                      <td className="px-3 py-2 text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+      <div ref={tableRef} className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold" style={{ color: 'var(--navy,#0a2540)' }}>
+            {filter ? `Công việc lọc (${shown.length})` : `Tất cả công việc (${allTasks.length})`}
+          </h3>
+          {filter && (
+            <button onClick={() => setFilter(null)} className="text-xs px-2 py-1 rounded-lg" style={{ background: '#f1f5f9', color: '#1d4ed8', border: '1px solid #e2e8f0' }}>
+              Bỏ lọc ✕
+            </button>
+          )}
         </div>
-      )}
-
-      {ov.allTasks && ov.allTasks.length > 0 && (
-        <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>Tất cả công việc ({ov.allTasks.length})</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr style={{ background: 'var(--surface-hover,#f1f5f9)' }}>
-                {['Công việc', 'Phòng ban', 'Người làm', 'Trạng thái', 'Hạn'].map((h) => <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>)}
-              </tr></thead>
-              <tbody>
-                {ov.allTasks.map((t) => {
-                  const st = ST_LABEL[t.status] || ST_LABEL.OPEN
-                  return (
-                    <tr key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)} className="cursor-pointer hover:bg-blue-50" style={{ borderTop: '1px solid var(--border)' }}>
-                      <td className="px-3 py-2" style={{ color: '#1d4ed8', fontWeight: 500 }}>{t.title} ↗</td>
-                      <td className="px-3 py-2 text-xs">{t.deptName}</td>
-                      <td className="px-3 py-2 text-xs">{t.assignee}</td>
-                      <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span></td>
-                      <td className="px-3 py-2 text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr style={{ background: 'var(--surface-hover,#f1f5f9)' }}>
+              {['Công việc', 'Phòng ban', 'Người làm', 'Trạng thái', 'Hạn'].map((h) => <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {shown.map((t) => {
+                const st = ST_LABEL[t.status] || ST_LABEL.OPEN
+                return (
+                  <tr key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)} className="cursor-pointer hover:bg-blue-50" style={{ borderTop: '1px solid var(--border)' }}>
+                    <td className="px-3 py-2" style={{ color: '#1d4ed8', fontWeight: 500 }}>{t.title} ↗</td>
+                    <td className="px-3 py-2 text-xs">{t.deptName}</td>
+                    <td className="px-3 py-2 text-xs">{t.assignee}</td>
+                    <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span></td>
+                    <td className="px-3 py-2 text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
+                  </tr>
+                )
+              })}
+              {shown.length === 0 && <tr><td colSpan={5} className="text-center py-4" style={{ color: 'var(--text-muted)' }}>Không có công việc</td></tr>}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </>
   )
 }
