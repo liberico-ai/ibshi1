@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
         prisma.project.count({ where: { status: 'CLOSED' } }),
         prisma.workflowTask.count(),
         prisma.workflowTask.count({ where: { status: 'DONE' } }),
-        prisma.workflowTask.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] }, deadline: { lt: new Date() } } }),
+        prisma.workflowTask.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] }, deadline: { lt: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
         prisma.workOrder.count({ where: { status: 'IN_PROGRESS' } }),
         prisma.nonConformanceReport.count({ where: { status: { not: 'CLOSED' } } }),
       ])
@@ -262,7 +262,7 @@ export async function GET(req: NextRequest) {
       const [totalTasks, doneTasks, overdueTasks, totalInsp, passedInsp, totalWO, completedWO] = await Promise.all([
         prisma.workflowTask.count(),
         prisma.workflowTask.count({ where: { status: 'DONE' } }),
-        prisma.workflowTask.count({ where: { status: { not: 'DONE' }, deadline: { lt: new Date() } } }),
+        prisma.workflowTask.count({ where: { status: { not: 'DONE' }, deadline: { lt: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
         prisma.inspection.count(),
         prisma.inspection.count({ where: { status: 'PASSED' } }),
         prisma.workOrder.count(),

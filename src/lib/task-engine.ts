@@ -1,6 +1,7 @@
 import prisma from './db'
 import { TASK_STATUS } from './constants'
 import { WORKFLOW_RULES } from './workflow-constants'
+import { todayStart } from './utils'
 
 // ── Compatibility adapter: reads from Task (dynamic) table,
 // returns WorkflowTask-shaped objects so downstream routes work unchanged. ──
@@ -166,7 +167,7 @@ export async function getDashboardStats(roleCode?: string) {
     prisma.task.count({ where: { ...base, status: 'OPEN' } }),
     prisma.task.count({ where: { ...base, status: { in: ACTIVE_STATUSES } } }),
     prisma.task.count({ where: { ...base, status: TASK_STATUS.DONE } }),
-    prisma.task.count({ where: { ...base, status: { in: ACTIVE_STATUSES }, deadline: { lt: new Date() } } }),
+    prisma.task.count({ where: { ...base, status: { in: ACTIVE_STATUSES }, deadline: { lt: todayStart() } } }),
   ])
   return { totalTasks, pendingTasks, inProgressTasks, completedTasks, overdueTasks }
 }
@@ -280,7 +281,7 @@ export async function checkDeadlines() {
   const overdueTasks = await prisma.task.findMany({
     where: {
       status: { in: ACTIVE_STATUSES },
-      deadline: { lt: new Date() },
+      deadline: { lt: todayStart() },
     },
     include: {
       project: { select: { projectCode: true, projectName: true } },

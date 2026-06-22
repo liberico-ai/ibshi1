@@ -8,6 +8,7 @@ import prisma from '@/lib/db'
 import { ROLES } from '@/lib/constants'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { escapeHtml, formatDeadline } from '@/lib/telegram'
+import { todayStart } from '@/lib/utils'
 import { runWeeklyBriefingDigest } from '@/lib/cron-jobs'
 
 // ── Command menu (registered with Telegram) ─────────────────
@@ -490,7 +491,7 @@ export function registerCommands(bot: Bot): void {
         take: 30,
       }),
       prisma.workflowTask.count({
-        where: { status: 'IN_PROGRESS', deadline: { lt: new Date() } },
+        where: { status: 'IN_PROGRESS', deadline: { lt: todayStart() } },
       }),
     ])
 

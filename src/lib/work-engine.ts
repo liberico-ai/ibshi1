@@ -3,6 +3,7 @@ import type { CreateTaskInput, CompleteWorkTaskInput, ReassignTaskInput } from '
 import { ROLE_TO_DEPT, DEPT_KEYWORDS, DEPT_PRIMARY_ROLE, DEPT_NAME } from './org-map'
 import { runHooks } from './work-hooks'
 import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
+import { todayStart } from './utils'
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -600,7 +601,7 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
   let where: Record<string, unknown>
   if (tab === 'created') where = { createdBy: userId }
   else if (tab === 'dept') where = { status: active, assignees: { some: { role: { in: deptRoles } } } }
-  else if (tab === 'overdue') where = { status: active, deadline: { lt: new Date() }, assignees: { some: { OR: [{ userId }, { role: roleCode }] } } }
+  else if (tab === 'overdue') where = { status: active, deadline: { lt: todayStart() }, assignees: { some: { OR: [{ userId }, { role: roleCode }] } } }
   // assigned: việc tôi đang nhận + việc tôi giao đang CHỜ TÔI KẾT THÚC hoặc BỊ TRẢ LẠI
   else where = {
     OR: [

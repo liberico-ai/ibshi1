@@ -74,6 +74,10 @@ function startOfDay(d: Date | string | number): number {
   const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime()
 }
 
+export function todayStart(): Date {
+  const d = new Date(); d.setHours(0, 0, 0, 0); return d
+}
+
 export function isTaskOverdue(t: { status: string; deadline: Date | string | null; completedAt?: Date | string | null }): boolean {
   if (!t.deadline) return false
   const dl = startOfDay(t.deadline)

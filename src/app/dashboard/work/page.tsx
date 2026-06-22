@@ -26,9 +26,17 @@ const ST: Record<string, { l: string; c: string; b: string }> = {
   DONE: { l: 'Hoàn thành', c: '#059669', b: '#ecfdf5' },
 }
 
-function dueInfo(d: string | null) {
+function startOfDay(d: Date | string | number): number {
+  const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime()
+}
+
+function dueInfo(d: string | null, status: string) {
   if (!d) return null
-  const days = Math.ceil((new Date(d).getTime() - Date.now()) / 86400000)
+  if (status === 'DONE' || status === 'CANCELLED') return null
+  const dlDay = startOfDay(d)
+  const todayDay = startOfDay(Date.now())
+  const diffMs = dlDay - todayDay
+  const days = Math.round(diffMs / 86400000)
   if (days < 0) return { txt: `Quá hạn ${-days} ngày`, over: true }
   if (days === 0) return { txt: 'Hết hạn hôm nay', over: true }
   return { txt: `Còn ${days} ngày`, over: false }
@@ -128,7 +136,7 @@ export default function WorkInboxPage() {
         <>
           {tasks.map((t, idx) => {
             const st = t.blocked ? { l: 'Tắc', c: '#c2410c', b: '#fff7ed' } : (ST[t.status] || ST.OPEN)
-            const due = dueInfo(t.deadline)
+            const due = dueInfo(t.deadline, t.status)
             const pc = t.priority === 'URGENT' ? '#e63946' : t.priority === 'HIGH' ? '#d97706' : 'var(--border)'
             const rowNum = (page - 1) * 20 + idx + 1
             return (
