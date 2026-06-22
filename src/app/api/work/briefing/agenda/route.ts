@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
+import { isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,12 +48,10 @@ export async function GET(req: NextRequest) {
     const grouped = new Map<string, { project: { id: string; projectCode: string; projectName: string } | null; tasks: ReturnType<typeof mapTask>[] }>()
 
     function mapTask(t: typeof tasks[number]) {
-      const isOverdue = !!(t.deadline && new Date(t.deadline) < now && t.status !== 'DONE')
+      const isOverdue = isTaskOverdue(t)
+      const daysOverdue = taskDaysOverdue(t)
       const isDoneThisWeek = !!(t.status === 'DONE' && t.completedAt && new Date(t.completedAt) >= weekAgo)
       const isNewThisWeek = new Date(t.createdAt) >= weekAgo && t.status !== 'DONE'
-      const daysOverdue = t.deadline && t.status !== 'DONE'
-        ? Math.ceil((now.getTime() - new Date(t.deadline).getTime()) / 86400000)
-        : 0
       const dl = t.deadline ? new Date(t.deadline) : null
       const isDueSoon = !!(dl && !isOverdue && t.status !== 'DONE' && t.status !== 'CANCELLED' && dl >= now && dl <= weekFromNow)
 

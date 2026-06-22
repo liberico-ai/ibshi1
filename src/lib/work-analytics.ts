@@ -1,5 +1,6 @@
 import prisma from './db'
 import { ROLE_TO_DEPT, DEPT_NAME } from './org-map'
+import { isTaskOverdue } from './utils'
 
 // ── Phase 4: KPI hiệu suất + tổng quan dự án (đọc dữ liệu thật) ──
 
@@ -157,7 +158,7 @@ export async function getMyDynamicTasks(userId: string, roleCode: string) {
   return { total: inProgress + done, byStatus: { IN_PROGRESS: inProgress, COMPLETED: done } }
 }
 
-type TaskRow = { id: string; title: string; status: string; taskType: string; deadline: Date | null; assignees: { role: string | null; userId: string | null; isPrimary: boolean }[] }
+type TaskRow = { id: string; title: string; status: string; taskType: string; deadline: Date | null; completedAt: Date | null; assignees: { role: string | null; userId: string | null; isPrimary: boolean }[] }
 
 function buildTaskAnalytics(tasks: TaskRow[]) {
   const total = tasks.length
@@ -182,7 +183,6 @@ function buildDeptAndActiveTasks(
   userName: Map<string, string>,
   userRole: Map<string, string>,
 ) {
-  const now = Date.now()
   const taskDept = (t: TaskRow) => {
     const a = t.assignees.find((x) => x.isPrimary) || t.assignees[0]
     if (!a) return 'KHAC'
@@ -198,7 +198,7 @@ function buildDeptAndActiveTasks(
     const row = deptMap.get(d) || { total: 0, active: 0, done: 0, overdue: 0 }
     row.total++
     if (t.status === 'DONE') row.done++
-    else { row.active++; if (t.deadline && t.deadline.getTime() < now) row.overdue++ }
+    else { row.active++; if (isTaskOverdue(t)) row.overdue++ }
     deptMap.set(d, row)
   }
   const byDept = [...deptMap.entries()].map(([d, v]) => ({ deptCode: d, deptName: DEPT_NAME[d] || d, ...v })).sort((a, b) => b.active - a.active)
@@ -210,7 +210,7 @@ function buildDeptAndActiveTasks(
       id: t.id, title: t.title, status: t.status,
       deptName: DEPT_NAME[d] || d,
       assignee: people.length ? people.join(', ') : 'Cả phòng',
-      deadline: t.deadline, overdue: !!(t.deadline && t.deadline.getTime() < now),
+      deadline: t.deadline, overdue: isTaskOverdue(t),
     }
   }
   const activeTasks = tasks.filter((t) => t.status !== 'DONE').map(mapTask)
@@ -228,7 +228,7 @@ export async function getProjectOverview(projectId: string) {
 
   const tasks = await prisma.task.findMany({
     where: { projectId },
-    select: { id: true, title: true, status: true, taskType: true, deadline: true, assignees: { select: { role: true, userId: true, isPrimary: true } } },
+    select: { id: true, title: true, status: true, taskType: true, deadline: true, completedAt: true, assignees: { select: { role: true, userId: true, isPrimary: true } } },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -265,7 +265,7 @@ export async function getProjectOverview(projectId: string) {
 export async function getGeneralTasksOverview() {
   const tasks = await prisma.task.findMany({
     where: { projectId: null, status: { not: 'CANCELLED' } },
-    select: { id: true, title: true, status: true, taskType: true, deadline: true, assignees: { select: { role: true, userId: true, isPrimary: true } } },
+    select: { id: true, title: true, status: true, taskType: true, deadline: true, completedAt: true, assignees: { select: { role: true, userId: true, isPrimary: true } } },
     orderBy: { createdAt: 'asc' },
   })
   if (tasks.length === 0) return null

@@ -3,6 +3,7 @@ import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
+import { isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
 
 const DYNAMIC_STEPS = new Set(['P5.1', 'P5.1A', 'P5.1.1', 'P5.2', 'P5.3', 'P5.3A', 'P5.4'])
 
@@ -162,20 +163,20 @@ export async function runWeeklyBriefingDigest() {
 
   for (const t of tasks) {
     const dl = t.deadline ? new Date(t.deadline) : null
-    const daysOverdue = dl ? Math.ceil((now.getTime() - dl.getTime()) / 86400000) : 0
-    const isOverdue = daysOverdue > 0
-    const isDueSoon = !!(dl && !isOverdue && dl >= now && dl <= weekFromNow)
-    const needsExec = t.escalated || t.blocked || (isOverdue && daysOverdue >= 14)
+    const overdue = isTaskOverdue(t)
+    const daysOver = taskDaysOverdue(t)
+    const isDueSoon = !!(dl && !overdue && dl >= now && dl <= weekFromNow)
+    const needsExec = t.escalated || t.blocked || (overdue && daysOver >= 14)
 
     const assignee = t.assignees.map(a => a.userId ? (nameById.get(a.userId) || 'NV') : (a.role || '—')).join(', ')
-    const dt: DigestTask = { title: t.title, assignee, deadline: t.deadline, daysOverdue, isOverdue, isDueSoon, needsExec }
+    const dt: DigestTask = { title: t.title, assignee, deadline: t.deadline, daysOverdue: daysOver, isOverdue: overdue, isDueSoon, needsExec }
 
     const pid = t.project?.id || '__general__'
     if (!byProject.has(pid)) {
       byProject.set(pid, { code: t.project?.projectCode || 'Chung', name: t.project?.projectName || '', overdue: [], dueSoon: [], exec: [] })
     }
     const pg = byProject.get(pid)!
-    if (isOverdue) { pg.overdue.push(dt); totalOverdue++ }
+    if (overdue) { pg.overdue.push(dt); totalOverdue++ }
     if (isDueSoon) { pg.dueSoon.push(dt); totalDueSoon++ }
     if (needsExec) { pg.exec.push(dt); totalExec++ }
   }

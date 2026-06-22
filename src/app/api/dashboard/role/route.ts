@@ -34,9 +34,10 @@ async function fetchRoleWidgets(user: { userId: string; roleCode: string }) {
     // Role-specific widgets
     if (['R01', 'R02'].includes(role)) {
       // BGĐ / PM — project overview
+      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
       const [projects, overdueCount] = await Promise.all([
         prisma.project.count({ where: { status: { not: 'CLOSED' } } }),
-        prisma.task.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED'] }, deadline: { lt: new Date() } } }),
+        prisma.task.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: startOfToday } } }),
       ])
       widgets.activeProjects = projects
       widgets.overdueTasks = overdueCount

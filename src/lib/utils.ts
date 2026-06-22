@@ -69,3 +69,22 @@ export function getProgressColor(progress: number): string {
   if (progress >= 25) return 'bg-sky-500'
   return 'bg-slate-300'
 }
+
+function startOfDay(d: Date | string | number): number {
+  const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime()
+}
+
+export function isTaskOverdue(t: { status: string; deadline: Date | string | null; completedAt?: Date | string | null }): boolean {
+  if (!t.deadline) return false
+  const dl = startOfDay(t.deadline)
+  if (t.status === 'DONE') return !!(t.completedAt && startOfDay(t.completedAt) > dl)
+  if (t.status === 'CANCELLED') return false
+  return startOfDay(Date.now()) > dl
+}
+
+export function taskDaysOverdue(t: { status: string; deadline: Date | string | null; completedAt?: Date | string | null }): number {
+  if (!isTaskOverdue(t)) return 0
+  const dl = startOfDay(t.deadline!)
+  const ref = t.status === 'DONE' && t.completedAt ? startOfDay(t.completedAt) : startOfDay(Date.now())
+  return Math.ceil((ref - dl) / 86400000)
+}
