@@ -203,7 +203,7 @@ function buildDeptAndActiveTasks(
   }
   const byDept = [...deptMap.entries()].map(([d, v]) => ({ deptCode: d, deptName: DEPT_NAME[d] || d, ...v })).sort((a, b) => b.active - a.active)
 
-  const activeTasks = tasks.filter((t) => t.status !== 'DONE').map((t) => {
+  const mapTask = (t: TaskRow) => {
     const d = taskDept(t)
     const people = t.assignees.map((a) => a.userId ? (userName.get(a.userId) || 'NV') : null).filter(Boolean) as string[]
     return {
@@ -212,9 +212,11 @@ function buildDeptAndActiveTasks(
       assignee: people.length ? people.join(', ') : 'Cả phòng',
       deadline: t.deadline, overdue: !!(t.deadline && t.deadline.getTime() < now),
     }
-  })
+  }
+  const activeTasks = tasks.filter((t) => t.status !== 'DONE').map(mapTask)
+  const allTasks = tasks.map(mapTask)
 
-  return { statusSummary, byDept, activeTasks }
+  return { statusSummary, byDept, activeTasks, allTasks }
 }
 
 export async function getProjectOverview(projectId: string) {

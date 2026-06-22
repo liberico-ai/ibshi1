@@ -25,6 +25,7 @@ interface DetailData {
   statusSummary: Record<string, number>
   byDept: DeptRow[]
   activeTasks: ActiveTask[]
+  allTasks?: ActiveTask[]
 }
 
 const ST_LABEL: Record<string, { l: string; c: string; b: string }> = {
@@ -293,31 +294,59 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
         </div>
       </div>
 
-      <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>Việc đang chạy ({ov.activeTasks.length})</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr style={{ background: 'var(--surface-hover,#f1f5f9)' }}>
-              {['Công việc', 'Phòng ban', 'Người làm', 'Trạng thái', 'Hạn'].map((h) => <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {ov.activeTasks.map((t) => {
-                const st = ST_LABEL[t.status] || ST_LABEL.OPEN
-                return (
-                  <tr key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)} className="cursor-pointer hover:bg-blue-50" style={{ borderTop: '1px solid var(--border)' }}>
-                    <td className="px-3 py-2" style={{ color: '#1d4ed8', fontWeight: 500 }}>{t.title} ↗</td>
-                    <td className="px-3 py-2 text-xs">{t.deptName}</td>
-                    <td className="px-3 py-2 text-xs">{t.assignee}</td>
-                    <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span></td>
-                    <td className="px-3 py-2 text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
-                  </tr>
-                )
-              })}
-              {ov.activeTasks.length === 0 && <tr><td colSpan={5} className="text-center py-4" style={{ color: 'var(--text-muted)' }}>Không có việc đang chạy</td></tr>}
-            </tbody>
-          </table>
+      {ov.activeTasks.length > 0 && (
+        <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>Việc đang chạy ({ov.activeTasks.length})</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr style={{ background: 'var(--surface-hover,#f1f5f9)' }}>
+                {['Công việc', 'Phòng ban', 'Người làm', 'Trạng thái', 'Hạn'].map((h) => <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {ov.activeTasks.map((t) => {
+                  const st = ST_LABEL[t.status] || ST_LABEL.OPEN
+                  return (
+                    <tr key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)} className="cursor-pointer hover:bg-blue-50" style={{ borderTop: '1px solid var(--border)' }}>
+                      <td className="px-3 py-2" style={{ color: '#1d4ed8', fontWeight: 500 }}>{t.title} ↗</td>
+                      <td className="px-3 py-2 text-xs">{t.deptName}</td>
+                      <td className="px-3 py-2 text-xs">{t.assignee}</td>
+                      <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span></td>
+                      <td className="px-3 py-2 text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
+
+      {ov.allTasks && ov.allTasks.length > 0 && (
+        <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>Tất cả công việc ({ov.allTasks.length})</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr style={{ background: 'var(--surface-hover,#f1f5f9)' }}>
+                {['Công việc', 'Phòng ban', 'Người làm', 'Trạng thái', 'Hạn'].map((h) => <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {ov.allTasks.map((t) => {
+                  const st = ST_LABEL[t.status] || ST_LABEL.OPEN
+                  return (
+                    <tr key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)} className="cursor-pointer hover:bg-blue-50" style={{ borderTop: '1px solid var(--border)' }}>
+                      <td className="px-3 py-2" style={{ color: '#1d4ed8', fontWeight: 500 }}>{t.title} ↗</td>
+                      <td className="px-3 py-2 text-xs">{t.deptName}</td>
+                      <td className="px-3 py-2 text-xs">{t.assignee}</td>
+                      <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span></td>
+                      <td className="px-3 py-2 text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </>
   )
 }
