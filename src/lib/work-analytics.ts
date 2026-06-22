@@ -236,7 +236,7 @@ export async function getProjectOverview(projectId: string) {
   const users = userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, roleCode: true } }) : []
   const userName = new Map(users.map((u) => [u.id, u.fullName]))
   const userRole = new Map(users.map((u) => [u.id, u.roleCode]))
-  const { statusSummary, byDept, activeTasks } = buildDeptAndActiveTasks(tasks, userName, userRole)
+  const { statusSummary, byDept, activeTasks, allTasks } = buildDeptAndActiveTasks(tasks, userName, userRole)
 
   const budget = await prisma.budget.findFirst({ where: { projectId, category: 'MATERIAL', month: null, year: null } })
   const planned = budget ? Number(budget.planned) : 0
@@ -258,7 +258,7 @@ export async function getProjectOverview(projectId: string) {
       remaining: Math.max(0, planned - committed),
       inProjectStock,
     },
-    statusSummary, byDept, activeTasks,
+    statusSummary, byDept, activeTasks, allTasks,
   }
 }
 
@@ -274,13 +274,13 @@ export async function getGeneralTasksOverview() {
   const users = userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, roleCode: true } }) : []
   const userName = new Map(users.map((u) => [u.id, u.fullName]))
   const userRole = new Map(users.map((u) => [u.id, u.roleCode]))
-  const { statusSummary, byDept, activeTasks } = buildDeptAndActiveTasks(tasks, userName, userRole)
+  const { statusSummary, byDept, activeTasks, allTasks } = buildDeptAndActiveTasks(tasks, userName, userRole)
 
   return {
     project: { id: '__general__', projectCode: 'CÔNG VIỆC CHUNG', projectName: 'Việc không thuộc dự án', clientName: '—', status: 'ACTIVE', contractValue: null, currency: 'VND' },
     progress, totalTasks: total, completedTasks: completed,
     phases: Object.entries(phaseAgg).map(([ph, v]) => ({ phase: ph, pct: v.total ? Math.round((v.done / v.total) * 100) : 0 })).sort((a, b) => a.phase.localeCompare(b.phase)),
     material: { demand: 0, ordered: 0, received: 0, remaining: 0, inProjectStock: 0 },
-    statusSummary, byDept, activeTasks,
+    statusSummary, byDept, activeTasks, allTasks,
   }
 }
