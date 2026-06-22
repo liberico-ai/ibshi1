@@ -157,23 +157,13 @@ export async function getMyDynamicTasks(userId: string, roleCode: string) {
   return { total: inProgress + done, byStatus: { IN_PROGRESS: inProgress, COMPLETED: done } }
 }
 
-export async function getProjectOverview(projectId: string) {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { id: true, projectCode: true, projectName: true, clientName: true, status: true, contractValue: true, currency: true },
-  })
-  if (!project) return null
+type TaskRow = { id: string; title: string; status: string; taskType: string; deadline: Date | null; assignees: { role: string | null; userId: string | null; isPrimary: boolean }[] }
 
-  // Tiến độ + chi tiết task động (phòng/trạng thái/người)
-  const tasks = await prisma.task.findMany({
-    where: { projectId },
-    select: { id: true, title: true, status: true, taskType: true, deadline: true, assignees: { select: { role: true, userId: true, isPrimary: true } } },
-    orderBy: { createdAt: 'asc' },
-  })
+function buildTaskAnalytics(tasks: TaskRow[]) {
   const total = tasks.length
   const completed = tasks.filter((t) => t.status === 'DONE').length
   const progress = total ? Math.round((completed / total) * 100) : 0
-  // theo phase (suy từ taskType P<phase>.x)
+
   const phaseAgg: Record<string, { total: number; done: number }> = {}
   for (const t of tasks) {
     const m = /^P(\d)/.exec(t.taskType || '')
@@ -183,21 +173,23 @@ export async function getProjectOverview(projectId: string) {
     if (t.status === 'DONE') phaseAgg[ph].done++
   }
 
-  // Tên + role người nhận (cho cột "ai làm" và để suy phòng ban khi giao theo người)
   const userIds = [...new Set(tasks.flatMap((t) => t.assignees.map((a) => a.userId).filter(Boolean) as string[]))]
-  const users = userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, roleCode: true } }) : []
-  const userName = new Map(users.map((u) => [u.id, u.fullName]))
-  const userRole = new Map(users.map((u) => [u.id, u.roleCode]))
+  return { total, completed, progress, phaseAgg, userIds }
+}
+
+function buildDeptAndActiveTasks(
+  tasks: TaskRow[],
+  userName: Map<string, string>,
+  userRole: Map<string, string>,
+) {
   const now = Date.now()
-  // Phòng của task: ưu tiên role của người nhận chính; nếu giao theo userId thì suy từ roleCode của người đó.
-  const taskDept = (t: typeof tasks[number]) => {
+  const taskDept = (t: TaskRow) => {
     const a = t.assignees.find((x) => x.isPrimary) || t.assignees[0]
     if (!a) return 'KHAC'
     const role = a.role || (a.userId ? userRole.get(a.userId) : null)
     return deptOf(role)
   }
 
-  // Tổng hợp theo phòng ban
   const deptMap = new Map<string, { total: number; active: number; done: number; overdue: number }>()
   const statusSummary = { OPEN: 0, IN_PROGRESS: 0, AWAITING_REVIEW: 0, RETURNED: 0, DONE: 0 } as Record<string, number>
   for (const t of tasks) {
@@ -211,7 +203,6 @@ export async function getProjectOverview(projectId: string) {
   }
   const byDept = [...deptMap.entries()].map(([d, v]) => ({ deptCode: d, deptName: DEPT_NAME[d] || d, ...v })).sort((a, b) => b.active - a.active)
 
-  // Danh sách việc đang chạy (cho CEO nhìn ai/phòng/trạng thái/deadline)
   const activeTasks = tasks.filter((t) => t.status !== 'DONE').map((t) => {
     const d = taskDept(t)
     const people = t.assignees.map((a) => a.userId ? (userName.get(a.userId) || 'NV') : null).filter(Boolean) as string[]
@@ -223,13 +214,33 @@ export async function getProjectOverview(projectId: string) {
     }
   })
 
-  // Phễu vật tư: Budget MATERIAL (planned=nhu cầu, committed=đã đặt, actual=đã nhận)
+  return { statusSummary, byDept, activeTasks }
+}
+
+export async function getProjectOverview(projectId: string) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, projectCode: true, projectName: true, clientName: true, status: true, contractValue: true, currency: true },
+  })
+  if (!project) return null
+
+  const tasks = await prisma.task.findMany({
+    where: { projectId },
+    select: { id: true, title: true, status: true, taskType: true, deadline: true, assignees: { select: { role: true, userId: true, isPrimary: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const { total, completed, progress, phaseAgg, userIds } = buildTaskAnalytics(tasks)
+  const users = userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, roleCode: true } }) : []
+  const userName = new Map(users.map((u) => [u.id, u.fullName]))
+  const userRole = new Map(users.map((u) => [u.id, u.roleCode]))
+  const { statusSummary, byDept, activeTasks } = buildDeptAndActiveTasks(tasks, userName, userRole)
+
   const budget = await prisma.budget.findFirst({ where: { projectId, category: 'MATERIAL', month: null, year: null } })
   const planned = budget ? Number(budget.planned) : 0
   const committed = budget ? Number(budget.committed) : 0
   const actual = budget ? Number(budget.actual) : 0
 
-  // Tồn gắn dự án (MaterialStock ở kho có projectCode = mã dự án)
   const projStock = await prisma.materialStock.aggregate({
     _sum: { value: true },
     where: { warehouse: { projectCode: project.projectCode }, quantity: { gt: 0 } },
@@ -241,14 +252,33 @@ export async function getProjectOverview(projectId: string) {
     progress, totalTasks: total, completedTasks: completed,
     phases: Object.entries(phaseAgg).map(([ph, v]) => ({ phase: ph, pct: v.total ? Math.round((v.done / v.total) * 100) : 0 })).sort((a, b) => a.phase.localeCompare(b.phase)),
     material: {
-      demand: planned,            // nhu cầu (BOM)
-      ordered: committed,         // đã đặt mua (PO)
-      received: actual,           // đã nhận (GRN)
+      demand: planned, ordered: committed, received: actual,
       remaining: Math.max(0, planned - committed),
       inProjectStock,
     },
-    statusSummary,
-    byDept,
-    activeTasks,
+    statusSummary, byDept, activeTasks,
+  }
+}
+
+export async function getGeneralTasksOverview() {
+  const tasks = await prisma.task.findMany({
+    where: { projectId: null, status: { not: 'CANCELLED' } },
+    select: { id: true, title: true, status: true, taskType: true, deadline: true, assignees: { select: { role: true, userId: true, isPrimary: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (tasks.length === 0) return null
+
+  const { total, completed, progress, phaseAgg, userIds } = buildTaskAnalytics(tasks)
+  const users = userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, roleCode: true } }) : []
+  const userName = new Map(users.map((u) => [u.id, u.fullName]))
+  const userRole = new Map(users.map((u) => [u.id, u.roleCode]))
+  const { statusSummary, byDept, activeTasks } = buildDeptAndActiveTasks(tasks, userName, userRole)
+
+  return {
+    project: { id: '__general__', projectCode: 'CÔNG VIỆC CHUNG', projectName: 'Việc không thuộc dự án', clientName: '—', status: 'ACTIVE', contractValue: null, currency: 'VND' },
+    progress, totalTasks: total, completedTasks: completed,
+    phases: Object.entries(phaseAgg).map(([ph, v]) => ({ phase: ph, pct: v.total ? Math.round((v.done / v.total) * 100) : 0 })).sort((a, b) => a.phase.localeCompare(b.phase)),
+    material: { demand: 0, ordered: 0, received: 0, remaining: 0, inProjectStock: 0 },
+    statusSummary, byDept, activeTasks,
   }
 }

@@ -18,7 +18,7 @@ interface Aggregate {
 interface DeptRow { deptCode: string; deptName: string; total: number; active: number; done: number; overdue: number }
 interface ActiveTask { id: string; title: string; status: string; deptName: string; assignee: string; deadline: string | null; overdue: boolean }
 interface DetailData {
-  project: { projectCode: string; projectName: string; clientName: string; status: string; contractValue: number | null }
+  project: { id: string; projectCode: string; projectName: string; clientName: string; status: string; contractValue: number | null }
   progress: number; totalTasks: number; completedTasks: number
   phases: { phase: string; pct: number }[]
   material: { demand: number; ordered: number; received: number; remaining: number; inProjectStock: number }
@@ -82,7 +82,7 @@ export default function WorkOverviewPage() {
           </button>
           <div>
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{proj?.projectCode} — {proj?.projectName}</h1>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>KH: {proj?.clientName}</p>
+            {proj?.id !== '__general__' && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>KH: {proj?.clientName}</p>}
           </div>
         </div>
         {detailLoading || !detail ? <div className="h-48 skeleton rounded-xl" /> : <ProjectDetail data={detail} router={router} />}
@@ -111,66 +111,72 @@ export default function WorkOverviewPage() {
 
       {/* Project cards */}
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))' }}>
-        {projects.map((p) => (
-          <div
-            key={p.id}
-            onClick={() => openDetail(p.id)}
-            className="rounded-xl p-5 cursor-pointer transition-all"
-            style={{
-              background: 'var(--surface)',
-              border: p.overdueTasks > 0 ? '2px solid #fca5a5' : '1px solid var(--border)',
-              boxShadow: p.overdueTasks > 0 ? '0 0 0 1px #fca5a5' : 'none',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = p.overdueTasks > 0 ? '0 0 0 1px #fca5a5' : 'none'; e.currentTarget.style.transform = 'none' }}
-          >
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <div className="font-bold text-sm" style={{ color: '#1d4ed8' }}>{p.projectCode}</div>
-                <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{p.projectName}</div>
-                <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>KH: {p.clientName}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-extrabold" style={{ color: '#1d4ed8' }}>{p.progress}%</div>
-              </div>
-            </div>
-
-            {/* Progress bar */}
-            <div style={{ height: 6, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
-              <div style={{ width: `${p.progress}%`, height: '100%', background: p.progress === 100 ? '#059669' : '#1d4ed8', transition: 'width 0.3s' }} />
-            </div>
-
-            {/* Stats row */}
-            <div className="flex gap-4 text-xs">
-              <div>
-                <span style={{ color: 'var(--text-muted)' }}>Tổng: </span>
-                <span className="font-semibold">{p.totalTasks}</span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)' }}>Xong: </span>
-                <span className="font-semibold" style={{ color: '#059669' }}>{p.completedTasks}</span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)' }}>Active: </span>
-                <span className="font-semibold" style={{ color: '#1d4ed8' }}>{p.activeTasks}</span>
-              </div>
-              {p.overdueTasks > 0 && (
+        {projects.map((p) => {
+          const isGeneral = p.id === '__general__'
+          const accentColor = isGeneral ? '#6d28d9' : '#1d4ed8'
+          return (
+            <div
+              key={p.id}
+              onClick={() => openDetail(p.id)}
+              className="rounded-xl p-5 cursor-pointer transition-all"
+              style={{
+                background: 'var(--surface)',
+                border: p.overdueTasks > 0 ? '2px solid #fca5a5' : isGeneral ? '2px dashed #c4b5fd' : '1px solid var(--border)',
+                boxShadow: p.overdueTasks > 0 ? '0 0 0 1px #fca5a5' : 'none',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = p.overdueTasks > 0 ? '0 0 0 1px #fca5a5' : 'none'; e.currentTarget.style.transform = 'none' }}
+            >
+              <div className="flex justify-between items-start mb-3">
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Quá hạn: </span>
-                  <span className="font-bold" style={{ color: '#e63946' }}>{p.overdueTasks}</span>
+                  <div className="font-bold text-sm" style={{ color: accentColor }}>{p.projectCode}</div>
+                  <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{p.projectName}</div>
+                  {!isGeneral && <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>KH: {p.clientName}</div>}
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-extrabold" style={{ color: accentColor }}>{p.progress}%</div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ height: 6, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
+                <div style={{ width: `${p.progress}%`, height: '100%', background: p.progress === 100 ? '#059669' : accentColor, transition: 'width 0.3s' }} />
+              </div>
+
+              {/* Stats row */}
+              <div className="flex gap-4 text-xs">
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Tổng: </span>
+                  <span className="font-semibold">{p.totalTasks}</span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Xong: </span>
+                  <span className="font-semibold" style={{ color: '#059669' }}>{p.completedTasks}</span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Active: </span>
+                  <span className="font-semibold" style={{ color: accentColor }}>{p.activeTasks}</span>
+                </div>
+                {p.overdueTasks > 0 && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Quá hạn: </span>
+                    <span className="font-bold" style={{ color: '#e63946' }}>{p.overdueTasks}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Contract + material — hide for general */}
+              {!isGeneral && (p.contractValue || p.materialRemaining > 0) && (
+                <div className="flex gap-4 text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                  {p.contractValue ? <div>HĐ: <b style={{ color: 'var(--text-primary)' }}>{billion(p.contractValue)} tỷ</b></div> : null}
+                  {p.materialRemaining > 0 && <div>Còn mua: <b style={{ color: '#b45309' }}>{billion(p.materialRemaining)} tỷ</b></div>}
                 </div>
               )}
-            </div>
 
-            {/* Contract + material */}
-            <div className="flex gap-4 text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-              {p.contractValue ? <div>HĐ: <b style={{ color: 'var(--text-primary)' }}>{billion(p.contractValue)} tỷ</b></div> : null}
-              {p.materialRemaining > 0 && <div>Còn mua: <b style={{ color: '#b45309' }}>{billion(p.materialRemaining)} tỷ</b></div>}
+              <div className="text-xs mt-3 text-right" style={{ color: accentColor }}>Xem chi tiết →</div>
             </div>
-
-            <div className="text-xs mt-3 text-right" style={{ color: '#1d4ed8' }}>Xem chi tiết →</div>
-          </div>
-        ))}
+          )
+        })}
         {projects.length === 0 && (
           <div className="col-span-full text-center py-12 rounded-xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
             Chưa có dự án nào
@@ -224,15 +230,19 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
           <div className="text-2xl font-extrabold mt-1" style={{ color: '#0a2540' }}>{ov.completedTasks}/{ov.totalTasks}</div>
           <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Hoàn thành / tổng</div>
         </div>
-        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid #059669' }}>
-          <div className="text-xs uppercase" style={{ color: 'var(--text-muted)' }}>Giá trị hợp đồng</div>
-          <div className="text-2xl font-extrabold mt-1" style={{ color: '#059669' }}>{ov.project.contractValue ? billion(ov.project.contractValue) : '—'} <span className="text-sm" style={{ color: 'var(--text-muted)' }}>tỷ</span></div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>KH: {ov.project.clientName}</div>
-        </div>
-        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid #d97706' }}>
-          <div className="text-xs uppercase" style={{ color: 'var(--text-muted)' }}>Tồn gắn dự án</div>
-          <div className="text-2xl font-extrabold mt-1" style={{ color: '#d97706' }}>{billion(m.inProjectStock)} <span className="text-sm" style={{ color: 'var(--text-muted)' }}>tỷ</span></div>
-        </div>
+        {(ov.project.contractValue || ov.project.id !== '__general__') && (
+          <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid #059669' }}>
+            <div className="text-xs uppercase" style={{ color: 'var(--text-muted)' }}>Giá trị hợp đồng</div>
+            <div className="text-2xl font-extrabold mt-1" style={{ color: '#059669' }}>{ov.project.contractValue ? billion(ov.project.contractValue) : '—'} <span className="text-sm" style={{ color: 'var(--text-muted)' }}>tỷ</span></div>
+            {ov.project.id !== '__general__' && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>KH: {ov.project.clientName}</div>}
+          </div>
+        )}
+        {(m.inProjectStock > 0 || ov.project.id !== '__general__') && (
+          <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid #d97706' }}>
+            <div className="text-xs uppercase" style={{ color: 'var(--text-muted)' }}>Tồn gắn dự án</div>
+            <div className="text-2xl font-extrabold mt-1" style={{ color: '#d97706' }}>{billion(m.inProjectStock)} <span className="text-sm" style={{ color: 'var(--text-muted)' }}>tỷ</span></div>
+          </div>
+        )}
       </div>
 
       {m.demand > 0 && (

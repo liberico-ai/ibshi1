@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { getProjectOverview } from '@/lib/work-analytics'
+import { getProjectOverview, getGeneralTasksOverview } from '@/lib/work-analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
     const { id } = await params
-    const data = await getProjectOverview(id)
+    const data = id === '__general__' ? await getGeneralTasksOverview() : await getProjectOverview(id)
     if (!data) return errorResponse('Không tìm thấy dự án', 404)
     return successResponse(data)
   } catch (err) {
