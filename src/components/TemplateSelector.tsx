@@ -8,8 +8,10 @@ import WbsMilestonesUploadUI from '@/components/WbsMilestonesUploadUI'
 import BomItemsUploadUI from '@/components/BomItemsUploadUI'
 import BomPrUploadUI from '@/app/dashboard/tasks/[id]/components/BomPrUploadUI'
 import WeldPaintUploadUI from '@/app/dashboard/tasks/[id]/components/WeldPaintUploadUI'
+import SupplierQuoteUI from '@/components/SupplierQuoteUI'
+import { useAuthStore } from '@/hooks/useAuth'
 
-export type TemplateType = 'ESTIMATE' | 'PR' | 'BBH' | 'WBS' | 'WELD_PAINT' | 'BOM' | null
+export type TemplateType = 'ESTIMATE' | 'PR' | 'BBH' | 'WBS' | 'WELD_PAINT' | 'BOM' | 'SUPPLIER_QUOTE' | null
 
 const TEMPLATES: { value: NonNullable<TemplateType>; label: string; icon: string; desc: string }[] = [
   { value: 'ESTIMATE', label: 'Dự toán thi công', icon: '📊', desc: 'Upload Excel dự toán (DT01-DT07), parse tổng hợp chi phí' },
@@ -18,6 +20,7 @@ const TEMPLATES: { value: NonNullable<TemplateType>; label: string; icon: string
   { value: 'WBS', label: 'WBS + Milestones', icon: '📐', desc: 'Upload WBS cơ cấu phân chia công việc + cột mốc dự án' },
   { value: 'WELD_PAINT', label: 'Vật tư hàn / sơn', icon: '🔧', desc: 'Upload danh sách vật tư hàn, sơn' },
   { value: 'BOM', label: 'BOM vật tư phụ', icon: '🧱', desc: 'Upload danh mục vật tư phụ (BOM)' },
+  { value: 'SUPPLIER_QUOTE', label: 'Báo giá nhà cung cấp', icon: '💰', desc: 'Tìm NCC, đính kèm báo giá/hợp đồng, so sánh & chọn' },
 ]
 
 interface Props {
@@ -34,6 +37,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
   const [selected, setSelected] = useState<TemplateType>(initialTemplate ?? null)
   const [loaded, setLoaded] = useState(false)
   const [resultData, setResultData] = useState<Record<string, unknown>>({})
+  const roleCode = useAuthStore(s => s.user?.roleCode || '')
 
   const [prData, setPrData] = useState('')
   const [momAttendants, setMomAttendants] = useState('')
@@ -63,6 +67,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
         } else {
           const detected = rd.totalEstimate ? 'ESTIMATE'
             : (rd.momSections || rd.momAttendants) ? 'BBH'
+            : rd.supplierQuotes ? 'SUPPLIER_QUOTE'
             : rd.bomPr ? 'PR'
             : (rd.wbsItems || rd.milestones) ? 'WBS'
             : (rd.weldData || rd.paintData) ? 'WELD_PAINT'
@@ -174,6 +179,14 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
             onChange={handlePrChange}
             projectCode={projectCode}
           />
+          {['R07', 'R07a', 'R01', 'R02'].includes(roleCode) && !resultData.supplierQuotes && (
+            <button
+              onClick={() => handleSelectTemplate('SUPPLIER_QUOTE')}
+              style={{ marginTop: 10, padding: '8px 16px', borderRadius: 10, border: '2px dashed #93c5fd', background: '#f0f9ff', color: '#1d4ed8', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', width: '100%' }}
+            >
+              ➕ Bắt đầu báo giá NCC
+            </button>
+          )}
         </div>
       )}
 
@@ -225,6 +238,22 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
             bomData={bomItems || undefined}
             onChange={(val) => { setBomItems(val); saveField('bomItemsList', val) }}
             projectCode={projectCode}
+          />
+        </div>
+      )}
+
+      {selected === 'SUPPLIER_QUOTE' && (
+        <div style={{ marginTop: 12 }}>
+          <SupplierQuoteUI
+            taskId={taskId}
+            isEditable={isEditable}
+            bomPrData={prData || (resultData.bomPr ? String(resultData.bomPr) : undefined)}
+            value={resultData.supplierQuotes ? (Array.isArray(resultData.supplierQuotes) ? resultData.supplierQuotes : (() => { try { return JSON.parse(String(resultData.supplierQuotes)) } catch { return [] } })()) : undefined}
+            onChange={(quotes) => {
+              const chosen = quotes.find(q => q.selected)
+              saveField('supplierQuotes', quotes)
+              saveField('chosenVendorId', chosen?.vendorId || '')
+            }}
           />
         </div>
       )}
