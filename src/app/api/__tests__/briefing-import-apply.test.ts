@@ -63,6 +63,7 @@ function setupMocks() {
   prismaMock.task.findUnique.mockResolvedValue(null)
   prismaMock.task.update.mockResolvedValue({} as never)
 
+  prismaMock.$executeRaw.mockResolvedValue(1 as never)
   prismaMock.$transaction.mockImplementation(async (fn) => {
     if (typeof fn === 'function') {
       return fn(prismaMock as never)
@@ -112,21 +113,14 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     expect(json.summary.updated).toBe(1)
     expect(json.summary.created).toBe(0)
 
-    // task.update called with merged briefing and new status/deadline
+    // Briefing merged atomically via $executeRaw (not in task.update payload)
+    expect(prismaMock.$executeRaw).toHaveBeenCalled()
+    // task.update carries status/deadline/blocked but NOT resultData
     expect(prismaMock.task.update).toHaveBeenCalledWith({
       where: { id: 'task-exist-1' },
       data: expect.objectContaining({
         status: 'IN_PROGRESS',
         deadline: new Date('2026-07-15'),
-        resultData: expect.objectContaining({
-          briefing: expect.objectContaining({
-            criteria: 'Tiêu chí mới',
-            proposal: 'Đề xuất mới',
-            decision: 'Quyết định BGĐ',
-            notes: 'Ghi chú cập nhật',
-            importKey: 'abc',
-          }),
-        }),
       }),
     })
 
@@ -271,8 +265,8 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     expect(assigneeCall.data.userId).toBeUndefined()
   })
 
-  // ── Case 5: idempotent → apply same rows twice, second time created=0, skipped>0 ──
-  it('(5) idempotent: second apply of same rows → created=0, skipped increases', async () => {
+  // ── Case 5: idempotent → apply same rows twice, second time updates existing instead of creating ──
+  it('(5) idempotent: second apply of same rows → created=0, updated=1 (upsert)', async () => {
     const req1 = buildApplyRequest([{
       include: true,
       action: 'create',
@@ -293,10 +287,6 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     expect(json1.ok).toBe(true)
     expect(json1.summary.created).toBe(1)
 
-    // Capture resultData from first create (contains importKey)
-    const createCall = prismaMock.task.create.mock.calls[0]?.[0] as { data: { resultData: unknown } } | undefined
-    const rd = createCall?.data.resultData || { briefing: { importKey: 'dummy' } }
-
     vi.clearAllMocks()
     setupMocks()
 
@@ -304,10 +294,11 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     prismaMock.project.findMany.mockResolvedValue([
       { id: 'existing-proj', projectCode: '27-DUP', projectName: 'Dự án dup' } as never,
     ])
-    // Task with matching importKey already exists (dedup)
+    // Existing task with matching title + briefing data (found by upsert query)
     prismaMock.task.findMany.mockResolvedValue([
-      { resultData: rd } as never,
+      { id: 'existing-task-1', title: 'Task trùng', resultData: { briefing: { importKey: 'abc', criteria: 'TC' } } } as never,
     ])
+    prismaMock.taskAssignee.deleteMany.mockResolvedValue({ count: 1 } as never)
 
     const req2 = buildApplyRequest([{
       include: true,
@@ -319,7 +310,7 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
       assigneeUserIds: ['u1'],
       deadlineISO: '2026-06-25',
       status: 'Mới',
-      criteria: 'TC',
+      criteria: 'TC mới',
       proposal: '',
       decision: '',
       notes: '',
@@ -329,8 +320,8 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
 
     expect(json2.ok).toBe(true)
     expect(json2.summary.created).toBe(0)
+    expect(json2.summary.updated).toBe(1)
     expect(json2.summary.projectsCreated).toBe(0)
-    expect(json2.summary.skipped).toBeGreaterThan(0)
   })
 
   // ── Case 6: include=false → row is skipped entirely ──

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Certificate {
   id: string; certType: string; certNumber: string; holderName: string;
@@ -118,9 +119,9 @@ export default function CertificatePage() {
                   </div>
                 </div>
                 <div className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>
-                  <p>Cấp: {new Date(cert.issueDate).toLocaleDateString('vi-VN')}</p>
+                  <p>Cấp: {formatDate(cert.issueDate)}</p>
                   <p className="font-semibold" style={{ color: borderColor }}>
-                    HH: {new Date(cert.expiryDate).toLocaleDateString('vi-VN')}
+                    HH: {formatDate(cert.expiryDate)}
                   </p>
                 </div>
               </div>

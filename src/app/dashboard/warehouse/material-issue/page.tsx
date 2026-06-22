@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { Badge, Button, Card } from '@/components/ui'
-import { formatDate, getUrgencyLabel } from '@/lib/utils'
+import { formatDate, formatNumber, getUrgencyLabel } from '@/lib/utils'
 import { Clock, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface MaterialIssueRecord {
@@ -117,7 +117,7 @@ function ExpandedDncRow({ taskId, onComplete }: { taskId: string, onComplete: ()
                     <td className="p-2 font-mono font-bold text-sky-600 dark:text-sky-400">{m.code}</td>
                     <td className="p-2 font-medium">{m.name}</td>
                     <td className="p-2 text-slate-500">{m.spec || '—'}</td>
-                    <td className={`p-2 text-right font-bold ${m.stock > 0 ? 'text-green-600' : 'text-red-500'}`}>{m.stock.toLocaleString('vi-VN')}</td>
+                    <td className={`p-2 text-right font-bold ${m.stock > 0 ? 'text-green-600' : 'text-red-500'}`}>{formatNumber(m.stock)}</td>
                     <td className="p-2 text-center text-slate-500">{m.unit}</td>
                   </tr>
                 ))}
@@ -173,14 +173,14 @@ function ExpandedDncRow({ taskId, onComplete }: { taskId: string, onComplete: ()
                     <div className="text-xs text-slate-500">{req.name}</div>
                   </td>
                   <td className="p-3 text-center font-bold">
-                    {reqQty.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-500">{req.unit}</span>
+                    {formatNumber(reqQty)} <span className="text-xs font-normal text-slate-500">{req.unit}</span>
                   </td>
                   <td className="p-3 text-center font-bold text-sky-600 dark:text-sky-400">
-                    {alreadyIssued > 0 ? alreadyIssued.toLocaleString('vi-VN') : '0'}
+                    {alreadyIssued > 0 ? formatNumber(alreadyIssued) : '0'}
                   </td>
                   <td className="p-3 text-center">
                     {stockItem ? (
-                      <span className={`font-bold ${currentStock > 0 ? 'text-green-600' : 'text-red-500'}`}>{currentStock.toLocaleString('vi-VN')}</span>
+                      <span className={`font-bold ${currentStock > 0 ? 'text-green-600' : 'text-red-500'}`}>{formatNumber(currentStock)}</span>
                     ) : (
                       <span className="text-xs font-bold text-red-500">Chưa có</span>
                     )}
@@ -343,7 +343,7 @@ export default function MaterialIssuePage() {
       <section className="space-y-4">
         <div>
           <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Lịch sử phiếu cấp vật tư</h2>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{issues.length} phiếu đã cấp • Tổng SL: {totalQty.toLocaleString('vi-VN')}</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{issues.length} phiếu đã cấp • Tổng SL: {formatNumber(totalQty)}</p>
         </div>
 
         <div className="card overflow-hidden">
@@ -356,12 +356,12 @@ export default function MaterialIssuePage() {
                 <tr key={r.id}>
                   <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{r.referenceNo || '—'}</span></td>
                   <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{r.material.materialCode} — {r.material.name}</td>
-                  <td className="text-xs font-bold" style={{ color: '#dc2626' }}>{Number(r.quantity).toLocaleString('vi-VN')}</td>
+                  <td className="text-xs font-bold" style={{ color: '#dc2626' }}>{formatNumber(r.quantity)}</td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.material.unit}</td>
                   <td className="text-xs font-mono" style={{ color: '#0ea5e9' }}>{r.heatNumber || '—'}</td>
                   <td className="text-xs font-mono" style={{ color: '#f59e0b' }}>{r.lotNumber || '—'}</td>
                   <td className="text-xs max-w-32 truncate" style={{ color: 'var(--text-muted)' }}>{r.notes || '—'}</td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(r.createdAt).toLocaleDateString('vi-VN')}</td>
+                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(r.createdAt)}</td>
                 </tr>
               ))}
             </tbody>

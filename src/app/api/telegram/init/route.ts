@@ -2,8 +2,26 @@ import { NextRequest } from 'next/server'
 import { startPolling, isPolling } from '@/lib/telegram'
 import { startScheduler, isSchedulerRunning } from '@/lib/cron-scheduler'
 import { runProjectStatusReport } from '@/lib/cron-jobs'
+import { authenticateRequest } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
+  const cronSecret = req.headers.get('x-cron-secret')
+  const expectedSecret = process.env.CRON_SECRET
+  let authorized = false
+
+  if (expectedSecret && cronSecret === expectedSecret) {
+    authorized = true
+  } else {
+    const user = await authenticateRequest(req)
+    if (user && ['R01', 'R10'].includes(user.roleCode)) {
+      authorized = true
+    }
+  }
+
+  if (!authorized) {
+    return Response.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+  }
+
   console.log('[TelegramInit] GET called — bot:', isPolling(), 'cron:', isSchedulerRunning())
 
   let botStatus = 'already_running'
@@ -29,7 +47,7 @@ export async function GET(req: NextRequest) {
       return Response.json({ ok: true, bot: botStatus, cron: 'running', triggered: result })
     } catch (err) {
       console.error('[TelegramInit] Manual trigger failed:', err)
-      return Response.json({ ok: false, error: 'Report failed', detail: String(err) }, { status: 500 })
+      return Response.json({ ok: false, error: 'Report failed' }, { status: 500 })
     }
   }
 

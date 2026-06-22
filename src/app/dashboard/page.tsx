@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { ROLES } from '@/lib/constants'
+import { ROLES, HIDDEN_MENU_KEYS } from '@/lib/constants'
 import { StatCard, Card } from '@/components/ui'
 import {
   BarChart, Zap, CheckCircle, AlertCircle,
@@ -79,7 +79,7 @@ export default function DashboardPage() {
         </div>
         <div className="hidden md:block" style={{ textAlign: 'right' }}>
           <p className="welcome-date">
-            {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
       </div>
@@ -94,6 +94,7 @@ export default function DashboardPage() {
 
       {/* ═══ Module Overview ═══ */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
+        {!HIDDEN_MENU_KEYS.has('warehouse') && (
         <ModuleCard
           title="Kho vật tư" subtitle="Warehouse" href="/dashboard/warehouse"
           icon={<Package size={22} stroke="#0ea5e9" />} iconBg="#eff6ff"
@@ -102,6 +103,8 @@ export default function DashboardPage() {
             { value: modules.warehouse.lowStockCount, label: 'Thiếu hàng', color: modules.warehouse.lowStockCount > 0 ? '#dc2626' : '#059669', alertBg: modules.warehouse.lowStockCount > 0 },
           ]}
         />
+        )}
+        {!HIDDEN_MENU_KEYS.has('production') && (
         <ModuleCard
           title="Sản xuất" subtitle="Production" href="/dashboard/production"
           icon={<Factory size={22} stroke="#f59e0b" />} iconBg="#fffbeb"
@@ -111,6 +114,8 @@ export default function DashboardPage() {
             { value: modules.production.woPendingMaterial, label: 'Chờ VT', color: modules.production.woPendingMaterial > 0 ? '#dc2626' : 'var(--text-muted)', alertBg: modules.production.woPendingMaterial > 0 },
           ]}
         />
+        )}
+        {!HIDDEN_MENU_KEYS.has('qc') && (
         <ModuleCard
           title="Chất lượng" subtitle="Quality Control" href="/dashboard/qc"
           icon={<ShieldCheck size={22} stroke="#059669" />} iconBg="#f0fdf4"
@@ -120,6 +125,7 @@ export default function DashboardPage() {
             { value: modules.qc.inspectionsPending, label: 'Chờ kiểm', color: modules.qc.inspectionsPending > 0 ? '#d97706' : 'var(--text-muted)', alertBg: modules.qc.inspectionsPending > 0 },
           ]}
         />
+        )}
       </div>
 
       {/* ═══ Role-Specific Insights ═══ */}

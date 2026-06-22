@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import CreateDrawdownForm from './components/CreateDrawdownForm'
 import * as XLSX from 'xlsx'
+import { formatDate, formatDateTime, formatNumber } from '@/lib/utils'
 
 interface Payment {
   id: string; amount: string; paymentDate: string; method: string; reference: string | null; notes: string | null;
@@ -124,7 +125,7 @@ export default function PaymentsPage() {
     setShowForm(true)
   }
 
-  const fmt = (v: number | string) => Number(v).toLocaleString('vi-VN')
+  const fmt = (v: number | string) => formatNumber(v)
   const methodLabel: Record<string, string> = { BANK_TRANSFER: 'Chuyển khoản', CASH: 'Tiền mặt', CHECK: 'Séc' }
 
   return (
@@ -211,7 +212,7 @@ export default function PaymentsPage() {
                     <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{p.invoice.invoiceCode}</span></td>
                     <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{p.invoice.clientName}</td>
                     <td className="text-right font-mono text-xs font-bold" style={{ color: '#16a34a' }}>+{fmt(p.amount)}</td>
-                    <td className="text-xs">{new Date(p.paymentDate).toLocaleDateString('vi-VN')}</td>
+                    <td className="text-xs">{formatDate(p.paymentDate)}</td>
                     <td><span className="badge">{methodLabel[p.method] || p.method}</span></td>
                     <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{p.reference || '—'}</td>
                     <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{p.notes || '—'}</td>
@@ -254,7 +255,7 @@ export default function PaymentsPage() {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-lg font-mono text-gray-800">{dd.drawdownNo}</h3>
-                    <p className="text-xs text-gray-500 mt-1">Lập ngày: {new Date(dd.requestDate).toLocaleString('vi-VN')} | Người lập: {dd.createdBy}</p>
+                    <p className="text-xs text-gray-500 mt-1">Lập ngày: {formatDateTime(dd.requestDate)} | Người lập: {dd.createdBy}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold font-mono text-[#8b5cf6]">{fmt(Number(dd.amountFundedVnd))} {dd.currency || 'VND'}</p>

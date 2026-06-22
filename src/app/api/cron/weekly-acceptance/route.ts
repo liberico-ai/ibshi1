@@ -1,26 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
-import { TASK_STATUS } from '@/lib/constants'
 import { notifyTaskActivated } from '@/lib/telegram-notifications'
-
-/**
- * WEEKLY ACCEPTANCE CRON JOB
- * Runs every Saturday morning (configured in vercel.json or called manually).
- *
- * Logic:
- * 1. Find all ACTIVE projects that have DailyProductionLog entries this week (Mon→Fri).
- * 2. For each project, create 2 identical tasks:
- *    - P5.3: "NGHIỆM THU KHỐI LƯỢNG TUẦN" assigned to QC (R09)
- *    - P5.4: "NGHIỆM THU KHỐI LƯỢNG TUẦN" assigned to PM (R02)
- * 3. Both tasks carry the same `resultData` with weekStartDate/weekEndDate
- *    so the UI can query the correct DailyProductionLog range.
- *
- * When PM/QC Submit (in the task API):
- * - Their "Khối lượng thực nghiệm" values are saved as immutable
- *   WeeklyAcceptanceLog records (Bảo vệ Dữ liệu Bất khả xâm phạm).
- * - If cumulative accepted volume >= total LSX volume → close that LSX line.
- */
 
 function getISOWeekNumber(date: Date): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
@@ -30,17 +11,14 @@ function getISOWeekNumber(date: Date): number {
 }
 
 export async function GET(request: Request) {
-  // Optional auth check for Vercel Cron
   const authHeader = request.headers.get('authorization')
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
-    // Calculate this week's Monday → Friday
     const now = new Date()
-    const dayOfWeek = now.getDay() // 0=Sun, 6=Sat
-    // thisMonday = current date minus (dayOfWeek - 1), or if Sunday (0), minus 6
+    const dayOfWeek = now.getDay()
     const mondayOffset = dayOfWeek === 0 ? -6 : -(dayOfWeek - 1)
     const thisMonday = new Date(now)
     thisMonday.setDate(now.getDate() + mondayOffset)
@@ -53,7 +31,6 @@ export async function GET(request: Request) {
     const weekNumber = getISOWeekNumber(now)
     const year = now.getFullYear()
 
-    // 1. Find all active projects
     const activeProjects = await prisma.project.findMany({
       where: { status: 'ACTIVE' },
       select: { id: true, projectCode: true, projectName: true },
@@ -62,7 +39,6 @@ export async function GET(request: Request) {
     let createdCount = 0
 
     for (const project of activeProjects) {
-      // 2. Check if there are any DailyProductionLog entries this week for this project
       const weekLogs = await (prisma as any).dailyProductionLog.findMany({
         where: {
           projectId: project.id,
@@ -70,26 +46,24 @@ export async function GET(request: Request) {
         },
       })
 
-      if (weekLogs.length === 0) continue // No production data this week → skip
+      if (weekLogs.length === 0) continue
 
-      // 3. Check if we already created P5.3/P5.4 for this week+project (idempotent)
-      const existingTask = await prisma.workflowTask.findFirst({
+      // Check if we already created P5.3 for this week+project (idempotent)
+      const existingTask = await prisma.task.findFirst({
         where: {
           projectId: project.id,
-          stepCode: { in: ['P5.3', 'P5.4'] },
+          taskType: { in: ['P5.3', 'P5.4'] },
           resultData: {
             path: ['weekNumber'],
             equals: weekNumber,
           },
         },
       })
-      // Prisma JSON filter may not work for all cases; double-check via resultData
       if (existingTask) {
-        const rd = existingTask.resultData as Record<string, unknown>
-        if (rd?.year === year) continue // Already created for this week
+        const rdCheck = existingTask.resultData as Record<string, unknown>
+        if (rdCheck?.year === year) continue
       }
 
-      // 4. Create identical P5.3 (QC) and P5.4 (PM) tasks
       const taskPayload = {
         weekNumber,
         year,
@@ -111,21 +85,29 @@ export async function GET(request: Request) {
         const rule = WORKFLOW_RULES[step.code]
         if (!rule) continue
 
-        const newTask = await prisma.workflowTask.create({
+        const newTask = await prisma.task.create({
           data: {
             projectId: project.id,
-            stepCode: step.code,
-            stepName: `NGHIỆM THU KHỐI LƯỢNG TUẦN — W${weekNumber}`,
-            stepNameEn: `Weekly Volume Acceptance — W${weekNumber}`,
-            assignedRole: rule.role,
-            status: TASK_STATUS.IN_PROGRESS,
+            level: 2,
+            taskType: step.code,
+            title: `NGHIỆM THU KHỐI LƯỢNG TUẦN — W${weekNumber}`,
+            priority: 'NORMAL',
+            createdBy: 'SYSTEM',
+            assignedAt: new Date(),
+            status: 'IN_PROGRESS',
             startedAt: new Date(),
             deadline: thisSaturday,
             resultData: JSON.parse(JSON.stringify(taskPayload)),
           },
         })
+        // Assign to the correct role
+        await prisma.taskAssignee.create({
+          data: { taskId: newTask.id, role: rule.role, isPrimary: true },
+        })
+        await prisma.taskHistory.create({
+          data: { taskId: newTask.id, action: 'CREATED', byUserId: 'SYSTEM', toRole: rule.role },
+        })
 
-        // Notify users with matching role
         try {
           const users = await prisma.user.findMany({
             where: { roleCode: rule.role, isActive: true },
@@ -141,12 +123,11 @@ export async function GET(request: Request) {
                 linkUrl: `/dashboard/work/${newTask.id}`,
               })),
             })
-            
-            // Telegram notification
+
             try {
               await notifyTaskActivated({
                 stepCode: step.code,
-                stepName: newTask.stepName,
+                stepName: newTask.title,
                 projectCode: project.projectCode,
                 projectName: project.projectName,
                 assignedRole: rule.role,

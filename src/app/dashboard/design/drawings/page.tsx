@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Drawing {
   id: string; drawingCode: string; title: string; discipline: string; currentRev: string;
@@ -137,7 +138,7 @@ export default function DrawingRegisterPage() {
                 <td className="text-xs font-mono font-bold" style={{ color: '#0ea5e9' }}>{d.currentRev}</td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[d.status]}20`, color: statusColor[d.status] }}>{statusLabel[d.status]}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {d.revisions[0] ? `${d.revisions[0].revision} — ${new Date(d.revisions[0].issuedDate).toLocaleDateString('vi-VN')}` : '—'}
+                  {d.revisions[0] ? `${d.revisions[0].revision} — ${formatDate(d.revisions[0].issuedDate)}` : '—'}
                 </td>
                 <td>
                   <div className="flex gap-1">

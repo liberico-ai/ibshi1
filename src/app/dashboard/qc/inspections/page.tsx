@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface InspectionRecord {
   id: string; inspectionCode: string; type: string; status: string; result: string | null;
@@ -52,7 +53,7 @@ export default function InspectionsPage() {
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[i.status] || '#888'}20`, color: statusColor[i.status] || '#888' }}>{statusLabel[i.status] || i.status}</span></td>
                 <td>{i.result ? <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${resultColor[i.result] || '#888'}20`, color: resultColor[i.result] || '#888' }}>{i.result}</span> : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                 <td className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{i.items?.length || 0}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{i.inspectionDate ? new Date(i.inspectionDate).toLocaleDateString('vi-VN') : '—'}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{i.inspectionDate ? formatDate(i.inspectionDate) : '—'}</td>
               </tr>
             ))}
           </tbody>

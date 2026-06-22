@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { RBAC } from '@/lib/rbac-rules'
 
 interface WorkOrderDetail {
@@ -139,7 +139,7 @@ export default function ProductionDetailPage() {
                 <td className="text-right font-semibold" style={{ color: 'var(--text-primary)' }}>{mi.quantity}</td>
                 <td className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{mi.issuedBy.slice(0, 8)}...</td>
                 <td style={{ color: 'var(--text-muted)' }}>{mi.notes || '—'}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(mi.issuedAt).toLocaleString('vi-VN')}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDateTime(mi.issuedAt)}</td>
               </tr>
             ))}
             {wo.materialIssues.length === 0 && <tr><td colSpan={5} className="text-center py-6" style={{ color: 'var(--text-muted)' }}>Chưa có vật tư được cấp</td></tr>}

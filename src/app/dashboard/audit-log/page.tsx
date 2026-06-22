@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { SearchBar } from '@/components/SearchPagination'
+import { formatDateTime } from '@/lib/utils'
 
 interface AuditEntry {
   id: string; action: string; entity: string; entityId: string | null
@@ -102,7 +103,7 @@ export default function AuditLogPage() {
                       <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>({l.fullName})</span>
                     </td>
                     <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{l.ipAddress || '—'}</td>
-                    <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleString('vi-VN')}</td>
+                    <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDateTime(l.createdAt)}</td>
                     <td className="text-center text-xs">{l.changes ? (expandedId === l.id ? '▲' : '▼') : ''}</td>
                   </tr>
                   {expandedId === l.id && l.changes && (

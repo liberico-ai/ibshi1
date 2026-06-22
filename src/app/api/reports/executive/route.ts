@@ -24,16 +24,16 @@ export async function GET(req: NextRequest) {
     }
 
     // Tasks
-    const tasks = await prisma.workflowTask.findMany({
+    const tasks = await prisma.task.findMany({
       select: { status: true },
     })
     const taskStats = {
       total: tasks.length,
-      completed: tasks.filter(t => t.status === 'COMPLETED').length,
+      completed: tasks.filter(t => t.status === 'DONE').length,
       inProgress: tasks.filter(t => t.status === 'IN_PROGRESS').length,
-      pending: tasks.filter(t => t.status === 'PENDING').length,
+      pending: tasks.filter(t => t.status === 'OPEN').length,
       completionRate: tasks.length > 0
-        ? Math.round(tasks.filter(t => t.status === 'COMPLETED').length / tasks.length * 100)
+        ? Math.round(tasks.filter(t => t.status === 'DONE').length / tasks.length * 100)
         : 0,
     }
 

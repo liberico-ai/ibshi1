@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 interface PO {
   id: string; poCode: string; status: string; totalAmount: number | null; orderDate: string | null; deliveryDate: string | null;
@@ -46,7 +47,7 @@ export default function PurchaseOrdersPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🛒 Đơn đặt hàng (PO)</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{pos.length} đơn • Tổng {totalValue.toLocaleString('vi-VN')} ₫ • {pos.filter(p => p.status === 'DRAFT' || p.status === 'PENDING').length} chờ duyệt</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{pos.length} đơn • Tổng {formatCurrency(totalValue)} • {pos.filter(p => p.status === 'DRAFT' || p.status === 'PENDING').length} chờ duyệt</p>
         </div>
       </div>
 
@@ -61,8 +62,8 @@ export default function PurchaseOrdersPage() {
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{po.poCode}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.vendor?.name || '—'}</td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[po.status] || '#888'}20`, color: statusColor[po.status] || '#888' }}>{statusLabel[po.status] || po.status}</span></td>
-                <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{(po.totalAmount || 0).toLocaleString('vi-VN')} ₫</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString('vi-VN') : '—'}</td>
+                <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{formatCurrency((po.totalAmount || 0))}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.deliveryDate ? formatDate(po.deliveryDate) : '—'}</td>
                 <td className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{po.items?.length || 0}</td>
                 <td>
                   <div className="flex gap-1">

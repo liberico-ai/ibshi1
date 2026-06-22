@@ -22,6 +22,7 @@ import MomSectionsUI from '@/components/MomSectionsUI'
 
 import TemplateSelector from '@/components/TemplateSelector'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
+import { formatCurrency, formatDate, formatDateTime, formatNumber } from '@/lib/utils'
 
 // ── Number formatting helpers ──
 const formatNumberWithCommas = (val: string | number): string => {
@@ -424,7 +425,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hạng mục</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>{totalKL > 1000 ? `${(totalKL / 1000).toFixed(1)}t` : `${totalKL.toLocaleString('vi-VN')}`}</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>{totalKL > 1000 ? `${(totalKL / 1000).toFixed(1)}t` : `${formatNumber(totalKL)}`}</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Tổng KL (kg)</div>
           </div>
           <div style={{ textAlign: 'center' }}>
@@ -534,9 +535,9 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           const badgeColor = isFailed ? '#dc2626' : isFull ? '#16a34a' : '#2563eb';
                           const tooltipText = isFailed ? '❌ Bị QC TỪ CHỐI — Click để Xử lý' :
                             isFull
-                            ? `✅ Đã phân giao đủ (${assignedKL.toLocaleString('vi-VN')}/${totalKL.toLocaleString('vi-VN')} ${row.dvt || 'kg'} • ${assignCount} tổ)`
+                            ? `✅ Đã phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • ${assignCount} tổ)`
                             : isPartial
-                            ? `⏳ Chưa phân giao đủ (${assignedKL.toLocaleString('vi-VN')}/${totalKL.toLocaleString('vi-VN')} ${row.dvt || 'kg'} • còn ${(totalKL - assignedKL).toLocaleString('vi-VN')})`
+                            ? `⏳ Chưa phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • còn ${formatNumber(totalKL - assignedKL)})`
                             : '📋 Chưa phân giao — Click để phân giao tổ';
                           return (
                             <td key={c.key} style={tdS}>
@@ -604,7 +605,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>📋 LỆNH SẢN XUẤT</div>
                     <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem' }}>{row.stt}. {row.hangMuc || 'Hạng mục'}</h3>
                     <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.9 }}>
-                      KL: <strong>{totalKL.toLocaleString('vi-VN')} {row.dvt || 'kg'}</strong>
+                      KL: <strong>{formatNumber(totalKL)} {row.dvt || 'kg'}</strong>
                       {' • '}{fmtDate(row.batDau)} — {fmtDate(row.ketThuc)}
                       {' • '}{row.phamVi}{row.thauPhu ? ` • ${row.thauPhu}` : ''}
                     </div>
@@ -658,7 +659,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           return (
                             <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.5fr 0.5fr 140px 100px', gap: 8, padding: '8px 12px', alignItems: 'center', background: qcFailed ? '#fef2f2' : isCloned ? '#f1f5f9' : ti % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', opacity: isCloned ? 0.6 : 1 }}>
                               <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{team.teamName || `Tổ ${ti + 1}`} {isCloned ? '(Đã Rework)' : ''}</span>
-                              <span style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.88rem' }}>{teamVol.toLocaleString('vi-VN')} {row.dvt || 'kg'}</span>
+                              <span style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.88rem' }}>{formatNumber(teamVol)} {row.dvt || 'kg'}</span>
                               <span style={{ fontSize: '0.82rem' }}>{fmtDate(team.startDate) || '—'}</span>
                               <span style={{ fontSize: '0.82rem' }}>{fmtDate(team.endDate) || '—'}</span>
                               <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -685,7 +686,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                               </div>
                               <div style={{ textAlign: 'center' }}>
                                 <button type="button" disabled={atLimit}
-                                  title={atLimit ? `Đã đạt ${limitPct}% KL (${teamMatTotal.toLocaleString('vi-VN')}/${maxAllowed.toLocaleString('vi-VN')})` : `DNC: ${teamMatTotal.toLocaleString('vi-VN')}/${maxAllowed.toLocaleString('vi-VN')} (${teamVol > 0 ? Math.round(teamMatTotal / teamVol * 100) : 0}%)`}
+                                  title={atLimit ? `Đã đạt ${limitPct}% KL (${formatNumber(teamMatTotal)}/${formatNumber(maxAllowed)})` : `DNC: ${formatNumber(teamMatTotal)}/${formatNumber(maxAllowed)} (${teamVol > 0 ? Math.round(teamMatTotal / teamVol * 100) : 0}%)`}
                                   onClick={() => {
                                     const existing = materialRequests?.[idx]?.[stage.key]?.[ti] || [];
                                     setTempMaterials(existing.length > 0 ? JSON.parse(JSON.stringify(existing)) : [{ name: '', code: '', spec: '', quantity: '', unit: 'kg' }]);
@@ -722,7 +723,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>📦 VẬT TƯ HẠNG MỤC</div>
                 <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem' }}>{row.stt}. {row.hangMuc || 'Hạng mục'}</h3>
                 <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.9 }}>
-                  KL: <strong>{totalKL.toLocaleString('vi-VN')} {row.dvt || 'kg'}</strong>
+                  KL: <strong>{formatNumber(totalKL)} {row.dvt || 'kg'}</strong>
                   {' \u2022 '}{row.phamVi}{row.thauPhu ? ` \u2022 ${row.thauPhu}` : ''}
                 </div>
               </div>
@@ -756,7 +757,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                             <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{m.name || '—'}</span>
                             <span style={{ fontSize: '0.82rem', color: '#6d28d9', fontWeight: 600 }}>{m.code || '—'}</span>
                             <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{m.spec || '—'}</span>
-                            <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0ea5e9', textAlign: 'right' }}>{Number(m.quantity || 0).toLocaleString('vi-VN')}</span>
+                            <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0ea5e9', textAlign: 'right' }}>{formatNumber(m.quantity || 0)}</span>
                             <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{m.unit}</span>
                           </div>
                         ))}
@@ -791,12 +792,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.1rem' }}>📝 DNC Vật tư — {stageLabel}</h3>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    {row.hangMuc || `Hạng mục #${idx + 1}`} • KL tổ: {teamVolume.toLocaleString('vi-VN')} {row.dvt || 'kg'} • Giới hạn: {maxAllowed.toLocaleString('vi-VN')} (110%)
+                    {row.hangMuc || `Hạng mục #${idx + 1}`} • KL tổ: {formatNumber(teamVolume)} {row.dvt || 'kg'} • Giới hạn: {formatNumber(maxAllowed)} (110%)
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <span style={{ fontSize: '0.82rem', fontWeight: 700, color: overLimit ? '#dc2626' : pctUsed > 100 ? '#f59e0b' : '#16a34a', background: overLimit ? '#fef2f2' : pctUsed > 100 ? '#fef3c7' : '#f0fdf4', padding: '4px 10px', borderRadius: 20 }}>
-                    {tempTotal.toLocaleString('vi-VN')} / {maxAllowed.toLocaleString('vi-VN')} ({pctUsed}%)
+                    {formatNumber(tempTotal)} / {formatNumber(maxAllowed)} ({pctUsed}%)
                   </span>
                   <button type="button" onClick={() => setTempMaterials(prev => [...prev, { name: '', code: '', spec: '', quantity: '', unit: 'kg' }])}
                     style={{ padding: '7px 14px', fontSize: '0.85rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>
@@ -904,7 +905,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div style={{ display: 'grid', gridTemplateColumns: '0.3fr 2fr 0.5fr 0.5fr 0.5fr', gap: 12, fontSize: '0.85rem' }}>
                   <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>STT</div><div style={{ fontWeight: 700 }}>{row.stt}</div></div>
                   <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>HẠNG MỤC</div><div style={{ fontWeight: 700 }}>{row.hangMuc || '—'}</div></div>
-                  <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>KHỐI LƯỢNG</div><div style={{ fontWeight: 700, color: '#0ea5e9' }}>{totalKL.toLocaleString('vi-VN')} {row.dvt || 'kg'}</div></div>
+                  <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>KHỐI LƯỢNG</div><div style={{ fontWeight: 700, color: '#0ea5e9' }}>{formatNumber(totalKL)} {row.dvt || 'kg'}</div></div>
                   <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>BẮT ĐẦU</div><div style={{ fontWeight: 600 }}>{fmtDate(row.batDau) || '—'}</div></div>
                   <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>KẾT THÚC</div><div style={{ fontWeight: 600 }}>{fmtDate(row.ketThuc) || '—'}</div></div>
                 </div>
@@ -914,9 +915,9 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h4 style={{ margin: 0, fontSize: '1rem', color: '#0c4a6e' }}>📋 Thực hiện phân giao</h4>
                   <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                    Đã giao: <span style={{ color: assignedKL >= totalKL ? '#16a34a' : '#f59e0b', fontWeight: 800 }}>{assignedKL.toLocaleString('vi-VN')}</span> / {totalKL.toLocaleString('vi-VN')} {row.dvt || 'kg'}
-                    {remaining > 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>Còn lại: {remaining.toLocaleString('vi-VN')}</span>}
-                    {remaining < 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>⚠️ Vượt {Math.abs(remaining).toLocaleString('vi-VN')}</span>}
+                    Đã giao: <span style={{ color: assignedKL >= totalKL ? '#16a34a' : '#f59e0b', fontWeight: 800 }}>{formatNumber(assignedKL)}</span> / {formatNumber(totalKL)} {row.dvt || 'kg'}
+                    {remaining > 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>Còn lại: {formatNumber(remaining)}</span>}
+                    {remaining < 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>⚠️ Vượt {formatNumber(Math.abs(remaining))}</span>}
                   </div>
                 </div>
                 {/* Header */}
@@ -952,7 +953,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 {remaining > 0 && (
                   <button type="button" onClick={() => setTempAssigns(prev => [...prev, { teamName: '', volume: String(remaining), startDate: '', endDate: '' }])}
                     style={{ marginTop: 4, padding: '8px 16px', fontSize: '0.85rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                    ➕ Thêm tổ ({remaining.toLocaleString('vi-VN')} {row.dvt || 'kg'} chưa giao)
+                    ➕ Thêm tổ ({formatNumber(remaining)} {row.dvt || 'kg'} chưa giao)
                   </button>
                 )}
                 {remaining <= 0 && tempAssigns.length > 0 && (
@@ -1185,8 +1186,8 @@ export default function TaskDetailPage() {
           productType: p.productType || '',
           contractValue: p.contractValue ? String(p.contractValue) : '',
           currency: p.currency || '',
-          startDate: p.startDate ? new Date(p.startDate).toLocaleDateString('vi-VN') : '',
-          endDate: p.endDate ? new Date(p.endDate).toLocaleDateString('vi-VN') : '',
+          startDate: p.startDate ? formatDate(p.startDate) : '',
+          endDate: p.endDate ? formatDate(p.endDate) : '',
           description: (p.description || '').replace(/\n?<!--FILES:.*?-->/g, '').trim(),
         }))
       }
@@ -1223,20 +1224,20 @@ export default function TaskDetailPage() {
         if (bomData?.bomItems) {
           const items = bomData.bomItems as Array<{ quantity: string }>
           const totalQty = items.reduce((sum: number, item: { quantity: string }) => sum + (Number(item.quantity) || 0), 0)
-          bomSummary = `${items.length} mục VT — Tổng SL: ${totalQty.toLocaleString('vi-VN')}`
+          bomSummary = `${items.length} mục VT — Tổng SL: ${formatNumber(totalQty)}`
         }
         if (estimateData?.totalEstimate) {
           const totalEstimate = Number(estimateData.totalEstimate) || 0
-          budgetComparison = `Dự toán: ${totalEstimate.toLocaleString('vi-VN')} VNĐ`
+          budgetComparison = `Dự toán: ${formatCurrency(totalEstimate)}`
         }
         setFormData(prev => ({ ...prev, bomSummary, budgetComparison }))
       }
       // For P6.5: auto-fill readonly fields from P6.1-P6.4 status
       if (res.task.stepCode === 'P6.5' && res.previousStepData) {
         const pd = res.previousStepData as Record<string, unknown>
-        const totalCost = pd.p62Total ? `${Number(pd.p62Total).toLocaleString('vi-VN')} đ` : ''
+        const totalCost = pd.p62Total ? `${formatCurrency(Number(pd.p62Total))}` : ''
         const variance = pd.p62Variance ? ` (chênh lệch: ${Number(pd.p62Variance) > 0 ? '+' : ''}${pd.p62Variance}%)` : ''
-        const profit = pd.p63Profit ? `LN: ${Number(pd.p63Profit).toLocaleString('vi-VN')} đ` : ''
+        const profit = pd.p63Profit ? `LN: ${formatCurrency(Number(pd.p63Profit))}` : ''
         const margin = pd.p63Margin ? ` — Biên LN: ${pd.p63Margin}%` : ''
         setFormData(prev => ({
           ...prev,
@@ -1757,7 +1758,7 @@ export default function TaskDetailPage() {
           </span>
           {task.deadline && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}>
-              ⏰ Deadline: {new Date(task.deadline).toLocaleDateString('vi-VN')}
+              ⏰ Deadline: {formatDate(task.deadline)}
             </span>
           )}
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1808,7 +1809,7 @@ export default function TaskDetailPage() {
           </div>
           <div style={{ fontSize: '0.8rem', color: '#b91c1c' }}>
             Người từ chối: {rejectionInfo.rejectedBy}
-            {rejectionInfo.rejectedAt && ` — ${new Date(rejectionInfo.rejectedAt).toLocaleString('vi-VN')}`}
+            {rejectionInfo.rejectedAt && ` — ${formatDateTime(rejectionInfo.rejectedAt)}`}
           </div>
           {/* QC items from P5.3 rejection */}
           {fromStep === 'P5.3' && (() => {
@@ -2014,7 +2015,7 @@ export default function TaskDetailPage() {
                     const totalEst = Number(est.totalEstimate) || 0
                     const contractVal = Number(task.project?.contractValue) || 0
                     const profit = contractVal - totalEst
-                    const fmtVND = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+                    const fmtVND = (v: number) => v > 0 ? formatCurrency(v) : '—'
                     const pctEst = (v: number) => totalEst > 0 ? ((v / totalEst) * 100).toFixed(1) + '%' : '—'
 
                     // Parse DT02 detail rows
@@ -2033,7 +2034,7 @@ export default function TaskDetailPage() {
                             <div><span style={{ color: 'var(--text-muted)' }}>Mã dự án:</span> <strong>{task.project.projectCode}</strong></div>
                             <div><span style={{ color: 'var(--text-muted)' }}>Khách hàng:</span> <strong>{task.project.clientName}</strong></div>
                             <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-muted)' }}>Tên dự án:</span> <strong>{task.project.projectName}</strong></div>
-                            {task.project.contractValue && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{Number(task.project.contractValue).toLocaleString('vi-VN')} đ</strong></div>}
+                            {task.project.contractValue && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{formatCurrency(Number(task.project.contractValue))}</strong></div>}
                             {task.project.productType && <div><span style={{ color: 'var(--text-muted)' }}>Sản phẩm:</span> {task.project.productType}</div>}
                           </div>
                         </div>
@@ -2090,7 +2091,7 @@ export default function TaskDetailPage() {
                                   }}>
                                     <span style={{ color: 'var(--text-muted)' }}>{row.maCP}</span>
                                     <span>{row.noiDung}</span>
-                                    <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? Number(row.giaTri).toLocaleString('vi-VN') : ''}</span>
+                                    <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? formatNumber(row.giaTri) : ''}</span>
                                   </div>
                                 )
                               })}
@@ -2209,7 +2210,7 @@ export default function TaskDetailPage() {
                       </tr>
                       <tr>
                         <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600 }}>Tổng KL thiết kế</td>
-                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{Number(rd.totalKL || 0).toLocaleString('vi-VN')} kg</td>
+                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{formatNumber(rd.totalKL || 0)} kg</td>
                       </tr>
                     </tbody>
                   </table>
@@ -2329,7 +2330,7 @@ export default function TaskDetailPage() {
                 <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #3b82f6', display: 'flex', alignItems: 'center', gap: 16 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Tổng dự toán từ P1.2 (DT03-DT07)</div>
-                    <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#3b82f6', marginTop: 4 }}>{budget > 0 ? `${budget.toLocaleString('vi-VN')} đ` : 'Chưa có dữ liệu dự toán'}</div>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#3b82f6', marginTop: 4 }}>{budget > 0 ? formatCurrency(budget) : 'Chưa có dữ liệu dự toán'}</div>
                   </div>
                   <div style={{ fontSize: '2rem' }}>💰</div>
                 </div>
@@ -2381,7 +2382,7 @@ export default function TaskDetailPage() {
                   const getCalcDisplay = () => {
                     if (isP62Total) {
                       const v = Number(formData.totalActualCost || 0)
-                      return v ? `${v.toLocaleString('vi-VN')} đ` : '—'
+                      return v ? formatCurrency(v) : '—'
                     }
                     if (isP62Variance) {
                       const v = Number(formData.costVariance || 0)
@@ -2389,7 +2390,7 @@ export default function TaskDetailPage() {
                     }
                     if (isP63Profit) {
                       const v = Number(formData.grossProfit || 0)
-                      return v ? `${v.toLocaleString('vi-VN')} đ` : '—'
+                      return v ? formatCurrency(v) : '—'
                     }
                     if (isP63Margin) {
                       const v = Number(formData.profitMargin || 0)
@@ -2483,7 +2484,7 @@ export default function TaskDetailPage() {
 
             {/* P1.2: Estimate Summary (upload Excel → show DT02 summary) */}
             {task.stepCode === 'P1.2' && (() => {
-              const fmt = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+              const fmt = (v: number) => v > 0 ? formatCurrency(v) : '—'
               const contractVal = Number(task.project?.contractValue) || 0
               const totalMat = Number(formData.totalMaterial) || 0
               const totalLab = Number(formData.totalLabor) || 0
@@ -2652,10 +2653,10 @@ export default function TaskDetailPage() {
                       <div><span style={{ color: 'var(--text-muted)' }}>Mã dự án:</span> <strong>{task.project.projectCode}</strong></div>
                       <div><span style={{ color: 'var(--text-muted)' }}>Khách hàng:</span> <strong>{task.project.clientName}</strong></div>
                       <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-muted)' }}>Tên dự án:</span> <strong>{task.project.projectName}</strong></div>
-                      {task.project.contractValue && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{Number(task.project.contractValue).toLocaleString('vi-VN')} đ</strong></div>}
+                      {task.project.contractValue && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{formatCurrency(Number(task.project.contractValue))}</strong></div>}
                       {task.project.productType && <div><span style={{ color: 'var(--text-muted)' }}>Sản phẩm:</span> {task.project.productType}</div>}
-                      {task.project.startDate && <div><span style={{ color: 'var(--text-muted)' }}>Bắt đầu:</span> {new Date(task.project.startDate).toLocaleDateString('vi-VN')}</div>}
-                      {task.project.endDate && <div><span style={{ color: 'var(--text-muted)' }}>Giao hàng:</span> {new Date(task.project.endDate).toLocaleDateString('vi-VN')}</div>}
+                      {task.project.startDate && <div><span style={{ color: 'var(--text-muted)' }}>Bắt đầu:</span> {formatDate(task.project.startDate)}</div>}
+                      {task.project.endDate && <div><span style={{ color: 'var(--text-muted)' }}>Giao hàng:</span> {formatDate(task.project.endDate)}</div>}
                     </div>
                   </div>
 
@@ -2760,7 +2761,7 @@ export default function TaskDetailPage() {
                               }}>
                                 <span style={{ color: 'var(--text-muted)' }}>{row.maCP}</span>
                                 <span>{row.noiDung}</span>
-                                <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? Number(row.giaTri).toLocaleString('vi-VN') : ''}</span>
+                                <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? formatNumber(row.giaTri) : ''}</span>
                               </div>
                             )
                           })}
@@ -3865,7 +3866,7 @@ export default function TaskDetailPage() {
                                 <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{idx + 1}</td>
                                 <td style={{ padding: '6px 8px', fontWeight: 500 }}>{item.material}</td>
                                 <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: '#16a34a', fontSize: '0.85rem' }}>
-                                  {item.bestPrice > 0 ? `${item.bestPrice.toLocaleString('vi-VN')} ₫` : '—'}
+                                  {item.bestPrice > 0 ? formatCurrency(item.bestPrice) : '—'}
                                 </td>
                                 <td style={{ padding: '6px 8px' }}>
                                   <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: '#dcfce7', color: '#16a34a' }}>
@@ -3881,7 +3882,7 @@ export default function TaskDetailPage() {
                             <tr style={{ borderTop: '2px solid var(--border)', background: '#f0fdf4' }}>
                               <td colSpan={2} style={{ padding: '8px', fontWeight: 700, fontSize: '0.9rem', color: '#15803d' }}>TỔNG HÓA ĐƠN (giá tốt nhất)</td>
                               <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, fontSize: '1rem', color: '#15803d' }}>
-                                {grandTotal.toLocaleString('vi-VN')} ₫
+                                {formatCurrency(grandTotal)}
                               </td>
                               <td colSpan={2} style={{ padding: '8px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                 Tổng hợp giá tốt nhất từ tất cả NCC
@@ -4017,7 +4018,7 @@ export default function TaskDetailPage() {
                     <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 8 }}>
                       <p style={{ margin: '0 0 6px 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Tổng Giá Trị</p>
                       <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#16a34a' }}>
-                        {totalVal > 0 ? Number(totalVal).toLocaleString('vi-VN') + ' ₫' : '—'}
+                        {totalVal > 0 ? formatCurrency(Number(totalVal)) : '—'}
                       </p>
                     </div>
                   </div>
@@ -4036,7 +4037,7 @@ export default function TaskDetailPage() {
                           <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{item.name} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({item.materialCode})</span></span>
                           <span style={{ fontSize: '0.85rem', textAlign: 'right' }}>{item.shortfall || item.quantity} {item.unit}</span>
                           <span style={{ fontSize: '0.85rem', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                            {quote?.price ? Number(quote.price).toLocaleString('vi-VN') + ' ₫' : '—'}
+                            {quote?.price ? formatCurrency(Number(quote.price)) : '—'}
                           </span>
                         </div>
                       )
@@ -4095,7 +4096,7 @@ export default function TaskDetailPage() {
                   <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#0ea5e9' }}>📦 Nghiệm thu chất lượng hàng về — PO {po.poCode}</h3>
                   <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div>🏢 NCC: <strong>{po.vendor?.name || '—'}</strong></div>
-                    <div>💰 Tổng PO: <strong>{po.totalValue ? Number(po.totalValue).toLocaleString('vi-VN') : '—'} ₫</strong></div>
+                    <div>💰 Tổng PO: <strong>{po.totalValue ? formatCurrency(Number(po.totalValue)) : '—'}</strong></div>
                     <div>📌 Trạng thái: <strong>{po.status}</strong></div>
                     <div>📦 Số lần nhận hàng: <strong>{grns.length}</strong></div>
                   </div>
@@ -4121,8 +4122,8 @@ export default function TaskDetailPage() {
                               <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{idx + 1}</td>
                               <td style={{ padding: '6px 8px', fontWeight: 500 }}>{it.material?.name || '—'}</td>
                               <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{it.material?.specification || '—'}</td>
-                              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{qty.toLocaleString('vi-VN')}</td>
-                              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: full ? '#16a34a' : '#f59e0b' }}>{recv.toLocaleString('vi-VN')}</td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{formatNumber(qty)}</td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: full ? '#16a34a' : '#f59e0b' }}>{formatNumber(recv)}</td>
                               <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{it.material?.unit || '—'}</td>
                             </tr>
                           )
@@ -4150,9 +4151,9 @@ export default function TaskDetailPage() {
                           <tbody>
                             {grns.map(g => (
                               <tr key={g.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{new Date(g.createdAt).toLocaleDateString('vi-VN')}</td>
+                                <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{formatDate(g.createdAt)}</td>
                                 <td style={{ padding: '4px 8px' }}>{g.material?.name || '—'}</td>
-                                <td style={{ padding: '4px 8px', textAlign: 'right' }}>{Number(g.quantity).toLocaleString('vi-VN')}</td>
+                                <td style={{ padding: '4px 8px', textAlign: 'right' }}>{formatNumber(Number(g.quantity))}</td>
                                 <td style={{ padding: '4px 8px', color: 'var(--text-secondary)' }}>{g.heatNumber || '—'}</td>
                                 <td style={{ padding: '4px 8px', color: 'var(--text-secondary)' }}>{g.lotNumber || '—'}</td>
                               </tr>
@@ -4212,8 +4213,8 @@ export default function TaskDetailPage() {
                           <span style={{ color: 'var(--text-muted)' }}>{idx + 1}</span>
                           <span style={{ fontWeight: 500 }}>{it.material?.name || '—'}</span>
                           <span style={{ color: 'var(--text-secondary)' }}>{it.material?.specification || '—'}</span>
-                          <span style={{ textAlign: 'right' }}>{qty.toLocaleString('vi-VN')}</span>
-                          <span style={{ textAlign: 'right', fontWeight: 600, color: recv >= qty ? '#16a34a' : '#f59e0b' }}>{recv.toLocaleString('vi-VN')}</span>
+                          <span style={{ textAlign: 'right' }}>{formatNumber(qty)}</span>
+                          <span style={{ textAlign: 'right', fontWeight: 600, color: recv >= qty ? '#16a34a' : '#f59e0b' }}>{formatNumber(recv)}</span>
                           <span style={{ color: 'var(--text-secondary)' }}>{it.material?.unit || '—'}</span>
                           <input className="input" type="text" placeholder="Vị trí..." disabled={!isActive}
                             value={storageMap[it.id] || ''}
@@ -4242,9 +4243,9 @@ export default function TaskDetailPage() {
                           <tbody>
                             {grns.map(g => (
                               <tr key={g.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{new Date(g.createdAt).toLocaleDateString('vi-VN')}</td>
+                                <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{formatDate(g.createdAt)}</td>
                                 <td style={{ padding: '4px 8px' }}>{g.material?.name || '—'}</td>
-                                <td style={{ padding: '4px 8px', textAlign: 'right' }}>{Number(g.quantity).toLocaleString('vi-VN')}</td>
+                                <td style={{ padding: '4px 8px', textAlign: 'right' }}>{formatNumber(Number(g.quantity))}</td>
                                 <td style={{ padding: '4px 8px', color: 'var(--text-secondary)' }}>{g.heatNumber || '—'}</td>
                                 <td style={{ padding: '4px 8px', color: 'var(--text-secondary)' }}>{g.lotNumber || '—'}</td>
                               </tr>
@@ -4292,7 +4293,7 @@ export default function TaskDetailPage() {
                           <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{m.code}</span>
                           <span style={{ fontWeight: 600 }}>{m.name}</span>
                           <span style={{ color: 'var(--text-secondary)' }}>{m.spec || '—'}</span>
-                          <span style={{ fontWeight: 700, color: m.stock > 0 ? '#16a34a' : '#dc2626' }}>{m.stock.toLocaleString('vi-VN')}</span>
+                          <span style={{ fontWeight: 700, color: m.stock > 0 ? '#16a34a' : '#dc2626' }}>{formatNumber(m.stock)}</span>
                           <span style={{ color: 'var(--text-secondary)' }}>{m.unit}</span>
                         </div>
                       ))}
@@ -4378,12 +4379,12 @@ export default function TaskDetailPage() {
                                 <div style={{ fontWeight: 600, color: 'var(--accent)' }}>{req.code}</div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{req.name}</div>
                               </div>
-                              <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.9rem' }}>{reqQty.toLocaleString('vi-VN')} <span style={{fontSize:'0.7rem', color: 'var(--text-muted)'}}>{req.unit}</span></div>
-                              <div style={{ textAlign: 'center', fontWeight: 700, color: alreadyIssued > 0 ? '#0ea5e9' : 'var(--text-muted)' }}>{alreadyIssued > 0 ? alreadyIssued.toLocaleString('vi-VN') : '0'}</div>
+                              <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.9rem' }}>{formatNumber(reqQty)} <span style={{fontSize:'0.7rem', color: 'var(--text-muted)'}}>{req.unit}</span></div>
+                              <div style={{ textAlign: 'center', fontWeight: 700, color: alreadyIssued > 0 ? '#0ea5e9' : 'var(--text-muted)' }}>{alreadyIssued > 0 ? formatNumber(alreadyIssued) : '0'}</div>
                               {/* Tồn kho */}
                               <div style={{ textAlign: 'center' }}>
                                 {stockItem ? (
-                                  <span style={{ fontWeight: 700, color: currentStock > 0 ? '#16a34a' : '#dc2626' }}>{currentStock.toLocaleString('vi-VN')}</span>
+                                  <span style={{ fontWeight: 700, color: currentStock > 0 ? '#16a34a' : '#dc2626' }}>{formatNumber(currentStock)}</span>
                                 ) : (
                                   <span style={{ color: '#dc2626', fontWeight: 600, fontSize: '0.8rem' }}>Chưa có</span>
                                 )}
@@ -5280,9 +5281,9 @@ function FormattedNumericInput({
     if (internal === '' || internal == null) return ''
     const num = parseFloat(internal.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'))
     if (isNaN(num)) return internal
-    if (kind === 'currency') return Math.round(num).toLocaleString('vi-VN')
-    if (kind === 'percent') return num.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
-    return num.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
+    if (kind === 'currency') return formatNumber(Math.round(num))
+    if (kind === 'percent') return formatNumber(num)
+    return formatNumber(num)
   }, [internal, kind])
 
   return (
@@ -5329,7 +5330,7 @@ function renderField(
   switch (field.type) {
     case 'readonly': {
       const display = typeof value === 'number' && value > 0
-        ? value.toLocaleString('vi-VN') + (field.unit ? ` ${field.unit}` : '')
+        ? formatNumber(value) + (field.unit ? ` ${field.unit}` : '')
         : value || '—'
       const isTotalRow = field.key === 'totalEstimate'
       return <div style={{

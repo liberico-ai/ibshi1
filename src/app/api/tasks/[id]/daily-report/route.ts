@@ -11,26 +11,26 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   try {
     const payload = await authenticateRequest(request as any)
     if (!payload) return unauthorizedResponse()
-    const task = await prisma.workflowTask.findUnique({
+    const task = await prisma.task.findUnique({
       where: { id: params.id },
-      select: { projectId: true, stepCode: true }
+      select: { projectId: true, taskType: true }
     })
 
     if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
-    if (task.stepCode !== 'P5.1' && task.stepCode !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
+    if (task.taskType !== 'P5.1' && task.taskType !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
 
     // 1. Tìm TẤT CẢ các task P3.3/P3.4 của dự án (bất kể status)
-    const p3Tasks = await prisma.workflowTask.findMany({
+    const p3Tasks = await prisma.task.findMany({
       where: {
         projectId: task.projectId,
-        stepCode: { in: ['P3.3', 'P3.4'] },
+        taskType: { in: ['P3.3', 'P3.4'] },
       },
-      select: { resultData: true, stepCode: true }
+      select: { resultData: true, taskType: true }
     })
 
     // 2. Lấy wbsItems từ P1.2A
-    const p12Task = await prisma.workflowTask.findFirst({
-      where: { projectId: task.projectId, stepCode: 'P1.2A' },
+    const p12Task = await prisma.task.findFirst({
+      where: { projectId: task.projectId, taskType: 'P1.2A' },
       select: { resultData: true },
       orderBy: { createdAt: 'desc' }
     })
@@ -43,7 +43,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     // 3. Lấy project info
     const project = await prisma.project.findUnique({
-      where: { id: task.projectId },
+      where: { id: task.projectId! },
       select: { projectCode: true, projectName: true }
     })
 
@@ -56,10 +56,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     }
 
     // Kiểm tra xem Kho đã xuất vật tư (P4.5 DONE) cho dự án này chưa
-    const p45DoneCount = await prisma.workflowTask.count({
+    const p45DoneCount = await prisma.task.count({
       where: {
         projectId: task.projectId,
-        stepCode: 'P4.5',
+        taskType: 'P4.5',
         status: 'DONE'
       }
     })
@@ -100,8 +100,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           // Filter theo giá trị ô WBS của từng công đoạn: IBS → P5.1, TP/khác → P5.1A
           const cellValue = (wbsList[rowIdx]?.[stageKey] || '').toString().toUpperCase().trim()
           const stageIsIBS = cellValue === 'IBS' || cellValue.includes('IBS')
-          if (task.stepCode === 'P5.1' && !stageIsIBS) continue
-          if ((task.stepCode as string) === 'P5.1A' && stageIsIBS) continue
+          if (task.taskType === 'P5.1' && !stageIsIBS) continue
+          if (task.taskType === 'P5.1A' && stageIsIBS) continue
 
           // Chỉ hiển thị LSX khi Kho đã hoàn thành xuất vật tư (P4.5 DONE)
           if (!warehouseHasIssued) continue
@@ -123,14 +123,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
                   wbsItem: wbsName,
                   stageKey,
                   stageLabel: STAGE_LABELS[stageKey] || stageKey,
-                  teamName, // Add teamName
-                  phamVi,   // Add phamVi explicitly
+                  teamName,
+                  phamVi,
                   totalLsx: totalVol,
                   unit: wbsList[rowIdx]?.dvt || 'kg',
                 })
               } else {
                 const existing = uniqueLsxItemsMap.get(lsxCode)
-                existing.totalLsx += totalVol // Should not happen with _ti suffix, but safe to keep
+                existing.totalLsx += totalVol
               }
             }
           }
@@ -194,8 +194,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         return sum + Math.max(0, reported - accepted)
       }, 0)
 
-      // The true accumulated volume is the sum of all reported volumes (before today)
-      // MINUS any volume that was explicitly rejected by PM in the past weeks.
       const trueAccumulated = Math.max(0, previousTotal - totalRejected)
 
       return {
@@ -221,13 +219,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const payload = await authenticateRequest(request as any)
     if (!payload) return unauthorizedResponse()
 
-    const task = await prisma.workflowTask.findUnique({
+    const task = await prisma.task.findUnique({
       where: { id: params.id },
-      select: { projectId: true, stepCode: true }
+      select: { projectId: true, taskType: true }
     })
 
     if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
-    if (task.stepCode !== 'P5.1' && task.stepCode !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
+    if (task.taskType !== 'P5.1' && task.taskType !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
 
     const body = await request.json()
     const { items, date } = body as {
@@ -251,17 +249,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     const reportDate = new Date(date)
-    // Make sure reportDate matches the date in local timezone (strip time components to strictly 00:00 UTC)
     reportDate.setUTCHours(0, 0, 0, 0)
 
     let savedCount = 0
 
-    // Begin database transaction to ensure atomicity
     await prisma.$transaction(async (tx) => {
       for (const item of items) {
         if (item.reportedVolume <= 0) continue
 
-        // Check if log already exists for this exact date and lsxCode
         const existingLog = await (tx as any).dailyProductionLog.findFirst({
           where: {
             projectId: task.projectId,
@@ -271,7 +266,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         })
 
         if (existingLog) {
-          // Update
           await (tx as any).dailyProductionLog.update({
             where: { id: existingLog.id },
             data: {
@@ -280,7 +274,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             }
           })
         } else {
-          // Create
           await (tx as any).dailyProductionLog.create({
             data: {
               projectId: task.projectId,
@@ -302,4 +295,3 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ success: false, error: 'Lỗi máy chủ khi lưu báo cáo' }, { status: 500 })
   }
 }
-

@@ -13,7 +13,7 @@ const mockSendGroupMessage = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/lib/telegram', () => ({
   sendGroupMessage: (...args: unknown[]) => mockSendGroupMessage(...args),
   escapeHtml: (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
-  formatDeadline: (d: Date | null) => d ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(d)) : 'Không có',
+  formatDeadline: (d: Date | null) => d ? new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(d)) : 'Không có',
 }))
 
 import { notifyTaskActivated, notifyTaskRejected, notifyTaskOverdue, notifyTaskCompleted } from '@/lib/telegram-notifications'

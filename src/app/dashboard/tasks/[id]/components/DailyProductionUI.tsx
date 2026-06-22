@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatNumber } from '@/lib/utils'
 
 interface DailyReportRow {
   lsxCode: string
@@ -199,17 +200,17 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
                     <tr key={row.lsxCode} style={{ background: '#ffffff' }}>
                       <td style={{ padding: 12, border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 500, color: '#475569' }}>{row.stageLabel}</td>
                       <td style={{ padding: 12, border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 600, color: '#f59e0b' }}>{row.teamName}</td>
-                      <td style={{ padding: 12, border: '1px solid #e2e8f0', textAlign: 'center' }}>{Number(row.totalLsx).toLocaleString('vi-VN')}</td>
+                      <td style={{ padding: 12, border: '1px solid #e2e8f0', textAlign: 'center' }}>{formatNumber(row.totalLsx)}</td>
                       <td style={{ padding: 12, border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: isLocked ? 600 : 400, color: isLocked ? '#0369a1' : 'inherit' }}>
                         {isLocked
-                          ? effectiveAccumulated.toLocaleString('vi-VN')
-                          : Number(row.previousAccumulated || 0).toLocaleString('vi-VN')
+                          ? formatNumber(effectiveAccumulated)
+                          : formatNumber(row.previousAccumulated || 0)
                         }
                       </td>
                       <td style={{ padding: 12, border: '1px solid #e2e8f0', textAlign: 'center', background: isLocked ? '#f8fafc' : '#f0fdf4' }}>
                         {isLocked ? (
                           <span style={{ fontWeight: 600, color: '#059669' }}>
-                            {(row.todayVolume || 0).toLocaleString('vi-VN')} {row.unit}
+                            {formatNumber(row.todayVolume || 0)} {row.unit}
                           </span>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -218,7 +219,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
                               onChange={e => setTodayInputs(prev => ({ ...prev, [row.lsxCode]: e.target.value }))}
                               max={maxInput}
                               min={0}
-                              placeholder={`Tối đa ${maxInput.toLocaleString('vi-VN')}`}
+                              placeholder={`Tối đa ${formatNumber(maxInput)}`}
                               style={{ 
                                 width: 120, 
                                 textAlign: 'center',
@@ -228,7 +229,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
                                 fontWeight: isOverReport ? 'bold' : 'normal'
                               }}
                             />
-                            {isOverReport && <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600 }}>Cần nhập ≤ {maxInput.toLocaleString('vi-VN')}</span>}
+                            {isOverReport && <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600 }}>Cần nhập ≤ {formatNumber(maxInput)}</span>}
                           </div>
                         )}
                       </td>
@@ -239,10 +240,10 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
                         {isOverReport ? (
                           <div style={{ color: '#dc2626', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span>⚠️ Vượt quá</span>
-                            <span>{Math.abs(rawRemaining).toLocaleString('vi-VN')}</span>
+                            <span>{formatNumber(Math.abs(rawRemaining))}</span>
                           </div>
                         ) : (
-                           remaining.toLocaleString('vi-VN')
+                           formatNumber(remaining)
                         )}
                       </td>
                     </tr>

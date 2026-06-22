@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatNumber } from '@/lib/utils'
 
 interface SalaryRecord {
   id: string; month: number; year: number; baseSalary: string;
@@ -43,7 +44,7 @@ export default function SalaryPage() {
     if (res.ok) loadData()
   }
 
-  const fmt = (v: string | number) => Number(v).toLocaleString('vi-VN')
+  const fmt = (v: string | number) => formatNumber(v)
 
   return (
     <div className="space-y-6 animate-fade-in">

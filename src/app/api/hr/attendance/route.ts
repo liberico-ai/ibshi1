@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { recordAttendanceSchema } from '@/lib/schemas'
 
@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!['R01', 'R02', 'R08'].includes(user.roleCode)) return forbiddenResponse()
 
     const { searchParams } = new URL(req.url)
     const employeeId = searchParams.get('employeeId') || ''

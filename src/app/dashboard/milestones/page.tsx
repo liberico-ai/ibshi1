@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 interface Milestone {
   id: string; name: string; nameEn: string; description: string | null; billingPercent: string;
@@ -64,7 +65,7 @@ export default function MilestonePage() {
     if (res.ok) load()
   }
 
-  const fmt = (v: number | string) => Number(v).toLocaleString('vi-VN')
+  const fmt = (v: number | string) => formatNumber(v)
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-20 skeleton rounded-xl" />)}</div>
 
@@ -136,8 +137,8 @@ export default function MilestonePage() {
                     {m.description && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.description}</div>}
                   </td>
                   <td className="text-right font-mono text-xs font-bold" style={{ color: '#0ea5e9' }}>{Number(m.billingPercent)}%</td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.plannedDate ? new Date(m.plannedDate).toLocaleDateString('vi-VN') : '—'}</td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.actualDate ? new Date(m.actualDate).toLocaleDateString('vi-VN') : '—'}</td>
+                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.plannedDate ? formatDate(m.plannedDate) : '—'}</td>
+                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{m.actualDate ? formatDate(m.actualDate) : '—'}</td>
                   <td>
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[m.status]}20`, color: statusColor[m.status] }}>
                       {statusLabel[m.status]}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface AttendanceRecord {
   id: string; date: string; checkIn: string | null; checkOut: string | null; status: string;
@@ -58,7 +59,7 @@ export default function AttendancePage() {
             ) : records.map(r => (
               <tr key={r.id}>
                 <td><div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{r.employee?.fullName || '—'}</div><div className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{r.employee?.employeeCode || '—'}</div></td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(r.date).toLocaleDateString('vi-VN')}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(r.date)}</td>
                 <td className="text-xs font-mono" style={{ color: '#16a34a' }}>{r.checkIn || '—'}</td>
                 <td className="text-xs font-mono" style={{ color: '#dc2626' }}>{r.checkOut || '—'}</td>
                 <td className="text-xs font-mono" style={{ color: '#f59e0b' }}>{Number(r.overtime) > 0 ? `${r.overtime}h` : '—'}</td>

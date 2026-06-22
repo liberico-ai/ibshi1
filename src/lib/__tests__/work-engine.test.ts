@@ -135,6 +135,7 @@ describe('setTaskStatusAdmin', () => {
     prismaMock.taskAssignee.updateMany.mockResolvedValue({ count: 2 } as never)
     prismaMock.taskHistory.create.mockResolvedValue({} as never)
     prismaMock.notification.create.mockResolvedValue({} as never)
+    prismaMock.$executeRaw.mockResolvedValue(1 as never)
 
     const r = await setTaskStatusAdmin('t1', 'admin', { status: 'DONE', blocked: true, reason: 'Giao ban: Xong' })
     expect(r).toEqual({ ok: true, status: 'DONE', wasEscalated: false })
@@ -149,18 +150,19 @@ describe('setTaskStatusAdmin', () => {
     }))
   })
 
-  it('"Tắc" → cột blocked=true + resultData.briefing.blocked==="true"', async () => {
+  it('"Tắc" → cột blocked=true + atomic briefing merge via $executeRaw', async () => {
     prismaMock.task.findUnique.mockResolvedValue({ ...baseTask } as never)
     prismaMock.task.update.mockResolvedValue({} as never)
     prismaMock.taskHistory.create.mockResolvedValue({} as never)
+    prismaMock.$executeRaw.mockResolvedValue(1 as never)
 
     const r = await setTaskStatusAdmin('t1', 'admin', { status: 'IN_PROGRESS', blocked: true })
     expect(r).toEqual({ ok: true, status: 'IN_PROGRESS', wasEscalated: false })
+    expect(prismaMock.$executeRaw).toHaveBeenCalled()
     expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: 'IN_PROGRESS',
         blocked: true,
-        resultData: expect.objectContaining({ briefing: expect.objectContaining({ blocked: 'true' }) }),
       }),
     }))
   })
@@ -170,6 +172,7 @@ describe('setTaskStatusAdmin', () => {
     prismaMock.task.update.mockResolvedValue({} as never)
     prismaMock.taskHistory.create.mockResolvedValue({} as never)
     prismaMock.notification.create.mockResolvedValue({} as never)
+    prismaMock.$executeRaw.mockResolvedValue(1 as never)
 
     const r = await setTaskStatusAdmin('t1', 'admin', { status: 'RETURNED', reason: 'Giao ban: Bị trả lại' })
     expect(r).toEqual({ ok: true, status: 'RETURNED', wasEscalated: false })

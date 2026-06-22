@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Notification {
   id: string; title: string; message: string; type: string; isRead: boolean; createdAt: string;
@@ -13,15 +14,28 @@ const typeColor: Record<string, string> = { INFO: '#0ea5e9', WARNING: '#f59e0b',
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
+  function loadNotifications() {
+    setLoading(true)
+    setError('')
     apiFetch('/api/notifications').then(res => {
       if (res.ok) setNotifications(res.notifications || [])
+      else { setNotifications([]); setError(res.error || 'Không tải được thông báo') }
       setLoading(false)
     })
-  }, [])
+  }
+
+  useEffect(() => { loadNotifications() }, [])
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
+
+  if (error) return (
+    <div className="text-center py-12">
+      <p className="text-red-600 mb-4">{error}</p>
+      <button onClick={loadNotifications} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Thử lại</button>
+    </div>
+  )
 
   const unreadCount = notifications.filter(n => !n.isRead).length
 
@@ -47,7 +61,7 @@ export default function NotificationsPage() {
               <h3 className="text-sm font-bold mt-1" style={{ color: 'var(--text-primary)' }}>{n.title}</h3>
               <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{n.message}</p>
             </div>
-            <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{new Date(n.createdAt).toLocaleDateString('vi-VN')}</span>
+            <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{formatDate(n.createdAt)}</span>
           </div>
         ))}
       </div>

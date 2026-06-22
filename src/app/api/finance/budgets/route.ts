@@ -62,44 +62,10 @@ export async function GET(req: NextRequest) {
       where: { projectId: { in: dbProjects.map(p => p.id) } }
     })
 
-    // Fetch APPROVED budgets from P1.2 WorkflowTask (Dự toán được duyệt)
-    const p12Tasks = await prisma.workflowTask.findMany({
-      where: {
-        projectId: { in: dbProjects.map(p => p.id) },
-        stepCode: 'P1.2',
-        status: { in: ['DONE', 'COMPLETED', 'APPROVED'] }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
+    // DEPRECATED: legacy WorkflowTask, đã ngừng dùng
+    // P1.2 approved-budget fetch was here but workflowTask table is dead.
+    // Budget planned values now come from the Budget table only.
     const p12BudgetsMap: Record<string, Record<string, number>> = {};
-    const maCpToCat: Record<string, string> = {
-      'I': 'MATERIAL',
-      'II': 'LABOR',
-      'III': 'EQUIPMENT',
-      'IV': 'SUBCONTRACT',
-      'V': 'OVERHEAD'
-    };
-
-    for (const p12 of p12Tasks) {
-      if (!p12BudgetsMap[p12.projectId]) { // Only take the latest one (because of orderBy desc)
-        p12BudgetsMap[p12.projectId] = {};
-        try {
-           const rd = p12.resultData as any;
-           if (rd && rd.dt02Detail) {
-              const dt02 = typeof rd.dt02Detail === 'string' ? JSON.parse(rd.dt02Detail) : rd.dt02Detail;
-              for (const row of dt02) {
-                 const mappedCat = maCpToCat[row.maCP];
-                 if (mappedCat) {
-                    p12BudgetsMap[p12.projectId][mappedCat] = Number(row.giaTri || 0);
-                 }
-              }
-           }
-        } catch (e) {
-           console.error('Error parsing P1.2 dt02Detail', e);
-        }
-      }
-    }
 
     const projectsRes = dbProjects.map(p => {
       const pid = p.id

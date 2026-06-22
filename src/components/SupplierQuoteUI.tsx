@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import MultiFileUpload, { UploadedFile } from '@/components/MultiFileUpload'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 
 export interface QuoteFile { id: string; fileName: string; fileUrl: string; kind: 'Báo giá' | 'Hợp đồng' | 'Khác' }
 
@@ -43,7 +44,7 @@ function emptyQuote(): SupplierQuote {
 }
 
 function fmt(n: number, cur = 'VND') {
-  return new Intl.NumberFormat('vi-VN').format(n) + (cur === 'VND' ? ' ₫' : ` ${cur}`)
+  return cur === 'VND' ? formatCurrency(n) : formatNumber(n) + ` ${cur}`
 }
 
 export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, onChange }: Props) {
@@ -53,6 +54,7 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
   const [showNewVendor, setShowNewVendor] = useState<string | null>(null)
   const [newVendor, setNewVendor] = useState({ name: '', vendorCode: '', category: 'NCC', contact: '', phone: '' })
   const [creatingVendor, setCreatingVendor] = useState(false)
+  const [reasonError, setReasonError] = useState<string | null>(null)
 
   const roleCode = useAuthStore(s => s.user?.roleCode || '')
 
@@ -76,6 +78,14 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
   const removeRow = (id: string) => fire(quotes.filter(q => q.id !== id))
 
   const selectRow = (id: string) => {
+    const target = quotes.find(q => q.id === id)
+    const priced = quotes.filter(q => q.totalAmount > 0)
+    const min = priced.length > 0 ? Math.min(...priced.map(q => q.totalAmount)) : 0
+    if (target && min > 0 && target.totalAmount > min && !target.selectReason?.trim()) {
+      setReasonError(id)
+      return
+    }
+    setReasonError(null)
     fire(quotes.map(q => ({ ...q, selected: q.id === id })))
   }
 
@@ -378,13 +388,16 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
           </div>
 
           {/* Select reason */}
-          {q.selected && (
+          {(q.selected || reasonError === q.id) && (
             <div className="mt-3">
-              <label className="text-xs font-semibold" style={{ color: '#15803d' }}>Lý do chọn NCC này</label>
+              <label className="text-xs font-semibold" style={{ color: reasonError === q.id ? '#dc2626' : '#15803d' }}>
+                {reasonError === q.id ? 'Phải nhập lý do khi chọn NCC không phải giá thấp nhất' : 'Lý do chọn NCC này'}
+              </label>
               <input type="text" value={q.selectReason}
-                onChange={e => updateRow(q.id, { selectReason: e.target.value })}
-                placeholder="VD: Giá tốt nhất, giao nhanh, uy tín..."
-                className="w-full text-sm px-2 py-1.5 rounded-lg mt-1" style={{ border: '1px solid #86efac', background: '#f0fdf4' }} />
+                onChange={e => { updateRow(q.id, { selectReason: e.target.value }); if (reasonError === q.id) setReasonError(null) }}
+                placeholder="VD: Giao nhanh, uy tín, chất lượng tốt hơn..."
+                className="w-full text-sm px-2 py-1.5 rounded-lg mt-1"
+                style={{ border: `1px solid ${reasonError === q.id ? '#fca5a5' : '#86efac'}`, background: reasonError === q.id ? '#fef2f2' : '#f0fdf4' }} />
             </div>
           )}
 

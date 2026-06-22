@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
+import { formatDate } from '@/lib/utils'
 
 interface MTask { id: string; title: string; status: string; projectCode: string | null; deadline: string | null; overdue: boolean }
 interface Member { userId: string; fullName: string; roleCode: string; counts: { active: number; done: number; overdue: number }; tasks: MTask[] }
@@ -76,7 +77,7 @@ export default function TeamPage() {
                       {t.projectCode && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{t.projectCode}</span>}
                       <span className="flex-1" style={{ color: 'var(--text-primary)' }}>{t.title}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span>
-                      <span className="text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : '—'}{t.overdue ? ' ⚠' : ''}</span>
+                      <span className="text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? formatDate(t.deadline) : '—'}{t.overdue ? ' ⚠' : ''}</span>
                     </div>
                   )
                 })}

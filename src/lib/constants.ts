@@ -217,3 +217,11 @@ export const MENU_ITEMS = [
   { key: 'work-templates', label: 'Quy trình & Template', labelEn: 'Templates', icon: 'Settings', href: '/dashboard/work/templates', roles: ['R01', 'R02', 'R10'], group: 'system' },
   { key: 'settings', label: 'Cài đặt', labelEn: 'Settings', icon: 'Settings', href: '/dashboard/settings', roles: 'all', group: 'system' },
 ] as const
+
+// [ẨN tạm các menu gắn luồng 36 bước cũ để test hệ động — xóa Set này để bật lại]
+export const HIDDEN_MENU_KEYS = new Set<string>([
+  'design', 'bom', 'drawings', 'eco',
+  'procurement', 'purchase-requests', 'purchase-orders', 'grn', 'material-issue', 'movements',
+  'production', 'jobcards', 'workshops', 'delivery',
+  'qc', 'inspections', 'itp', 'ncr', 'certificates', 'mill-certs', 'fat-sat', 'mrb',
+])

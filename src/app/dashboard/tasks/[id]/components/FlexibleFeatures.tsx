@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
+import { formatDateTime, formatShortDateTime } from '@/lib/utils'
 
 interface DocFile { id: string; fileName: string; fileUrl: string }
 interface DocAck { userId: string; userName: string | null; createdAt: string }
@@ -125,7 +126,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
               })()}
               {d.acks && d.acks.length > 0 && (
                 <div style={{ fontSize: '0.72rem', marginTop: 4, color: '#059669' }}>
-                  ✓ Đã đọc: {d.acks.map((a) => `${a.userName || 'Người dùng'} (${new Date(a.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})`).join('; ')}
+                  ✓ Đã đọc: {d.acks.map((a) => `${a.userName || 'Người dùng'} (${formatShortDateTime(a.createdAt)})`).join('; ')}
                 </div>
               )}
             </div>
@@ -211,7 +212,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
           <div key={mt.id} onClick={() => router.push(`/dashboard/work/meetings/${mt.id}`)} style={{ fontSize: '0.85rem', padding: '6px 8px', borderRadius: 8, cursor: 'pointer' }} className="hover:bg-blue-50">
             <div>{mt.title}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {new Date(mt.startsAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              {formatShortDateTime(mt.startsAt)}
               {' · '}{mt.status === 'DONE' ? 'đã kết thúc' : 'đã lên lịch'}
             </div>
           </div>
@@ -253,7 +254,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
                 {(h.action === 'ASSIGNED' || h.action === 'REASSIGNED' || h.action === 'FORWARDED') && target && <span style={{ color: 'var(--text-secondary)' }}> → {target}</span>}
                 {h.action === 'RETURNED' && h.fromName && <span style={{ color: 'var(--text-secondary)' }}> → {h.fromName}</span>}
                 {h.reason && <span style={{ color: 'var(--text-secondary)' }}> — {h.reason}</span>}
-                <span style={{ fontSize: '0.7rem', marginLeft: 6, color: 'var(--text-muted)' }}>{new Date(h.createdAt).toLocaleString('vi-VN')}</span>
+                <span style={{ fontSize: '0.7rem', marginLeft: 6, color: 'var(--text-muted)' }}>{formatDateTime(h.createdAt)}</span>
               </div>
             )
           })}

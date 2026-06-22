@@ -38,7 +38,7 @@ export async function logChangeEvent(params: ChangeEventParams): Promise<void> {
 //  FORWARD SYNC HOOKS (Phase 2)
 // ══════════════════════════════════════════════════════
 
-/** P2.2/P2.3 complete → recalc Budget.MATERIAL.planned from BOM items */
+/** P2.2/P2.3 complete → recalc Budget.MATERIAL.planned from BOM items (idempotent recompute) */
 export async function syncBOMtoBudget(projectId: string, triggeredBy: string): Promise<void> {
   const boms = await prisma.billOfMaterial.findMany({
     where: { projectId, status: { in: ['APPROVED', 'RELEASED'] } },
@@ -53,209 +53,70 @@ export async function syncBOMtoBudget(projectId: string, triggeredBy: string): P
     }
   }
 
-  const existing = await prisma.budget.findFirst({
-    where: { projectId, category: 'MATERIAL', month: null, year: null },
+  const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.budget.findFirst({
+      where: { projectId, category: 'MATERIAL', month: null, year: null },
+    })
+    const oldPlanned = existing ? Number(existing.planned) : 0
+
+    if (existing) {
+      await tx.budget.update({ where: { id: existing.id }, data: { planned: totalPlanned } })
+    } else {
+      await tx.budget.create({ data: { projectId, category: 'MATERIAL', planned: totalPlanned } })
+    }
+    return { oldPlanned, budgetId: existing?.id || 'new' }
   })
-
-  const oldPlanned = existing ? Number(existing.planned) : 0
-
-  if (existing) {
-    await prisma.budget.update({
-      where: { id: existing.id },
-      data: { planned: totalPlanned },
-    })
-  } else {
-    await prisma.budget.create({
-      data: { projectId, category: 'MATERIAL', planned: totalPlanned },
-    })
-  }
 
   await logChangeEvent({
     projectId, sourceStep: 'P2.2', sourceModel: 'BillOfMaterial',
     sourceId: boms[0]?.id || 'N/A', eventType: 'SYNC',
-    targetModel: 'Budget', targetId: existing?.id || 'new',
-    dataBefore: { planned: oldPlanned },
+    targetModel: 'Budget', targetId: result.budgetId,
+    dataBefore: { planned: result.oldPlanned },
     dataAfter: { planned: totalPlanned },
     triggeredBy,
   })
 }
 
-/** P3.3 PO approved → Budget.MATERIAL.committed += PO total */
-export async function syncPOtoBudget(projectId: string, poId: string, triggeredBy: string): Promise<void> {
-  const po = await prisma.purchaseOrder.findUnique({ where: { id: poId } })
-  if (!po || !po.totalValue) return
-
-  const amount = Number(po.totalValue)
-  const budget = await prisma.budget.findFirst({
-    where: { projectId, category: 'MATERIAL', month: null, year: null },
+/** PO approved → recompute Budget.MATERIAL.committed = SUM(approved PO totalValue) (idempotent) */
+export async function syncPOtoBudget(projectId: string, _poId: string, triggeredBy: string): Promise<void> {
+  const COMMITTED_STATUSES = ['APPROVED', 'SENT', 'CONFIRMED', 'RECEIVED']
+  const pos = await prisma.purchaseOrder.findMany({
+    where: { projectId, status: { in: COMMITTED_STATUSES } },
+    select: { totalValue: true },
   })
 
-  if (budget) {
-    const oldCommitted = Number(budget.committed)
-    await prisma.budget.update({
-      where: { id: budget.id },
-      data: { committed: { increment: amount } },
+  const totalCommitted = pos.reduce((sum, po) => sum + (po.totalValue ? Number(po.totalValue) : 0), 0)
+
+  const result = await prisma.$transaction(async (tx) => {
+    const budget = await tx.budget.findFirst({
+      where: { projectId, category: 'MATERIAL', month: null, year: null },
     })
+    if (!budget) return null
+    const oldCommitted = Number(budget.committed)
+    await tx.budget.update({ where: { id: budget.id }, data: { committed: totalCommitted } })
+    return { oldCommitted, budgetId: budget.id }
+  })
+
+  if (result) {
     await logChangeEvent({
       projectId, sourceStep: 'P3.3', sourceModel: 'PurchaseOrder',
-      sourceId: poId, eventType: 'SYNC',
-      targetModel: 'Budget', targetId: budget.id,
-      dataBefore: { committed: oldCommitted },
-      dataAfter: { committed: oldCommitted + amount },
+      sourceId: _poId, eventType: 'SYNC',
+      targetModel: 'Budget', targetId: result.budgetId,
+      dataBefore: { committed: result.oldCommitted },
+      dataAfter: { committed: totalCommitted },
       triggeredBy,
     })
   }
 }
 
-/** P3.4A/B GRN → Budget.MATERIAL.actual += GRN amount */
-export async function syncGRNtoBudget(projectId: string, grnAmount: number, triggeredBy: string): Promise<void> {
-  const budget = await prisma.budget.findFirst({
-    where: { projectId, category: 'MATERIAL', month: null, year: null },
-  })
 
-  if (budget) {
-    const oldActual = Number(budget.actual)
-    await prisma.budget.update({
-      where: { id: budget.id },
-      data: { actual: { increment: grnAmount } },
-    })
-    await logChangeEvent({
-      projectId, sourceStep: 'P3.4A', sourceModel: 'StockMovement',
-      sourceId: 'grn', eventType: 'SYNC',
-      targetModel: 'Budget', targetId: budget.id,
-      dataBefore: { actual: oldActual },
-      dataAfter: { actual: oldActual + grnAmount },
-      triggeredBy,
-    })
-  }
-}
-
-/** ECO approved → update BOM items → recalc Budget → flag affected POs */
-export async function syncECOcascade(ecoId: string, triggeredBy: string): Promise<void> {
-  const eco = await prisma.engineeringChangeOrder.findUnique({ where: { id: ecoId } })
-  if (!eco || eco.status !== 'APPROVED') return
-
-  // Recalculate budget from BOM after ECO changes
-  await syncBOMtoBudget(eco.projectId, triggeredBy)
-
-  await logChangeEvent({
-    projectId: eco.projectId, sourceStep: 'P2.3', sourceModel: 'EngineeringChangeOrder',
-    sourceId: ecoId, eventType: 'SYNC',
-    targetModel: 'Budget', targetId: 'cascade',
-    dataBefore: { ecoStatus: 'SUBMITTED' },
-    dataAfter: { ecoStatus: 'APPROVED', budgetRecalculated: true },
-    triggeredBy,
-  })
-}
-
-// ══════════════════════════════════════════════════════
-//  REVERSE HOOKS (Phase 3)
-// ══════════════════════════════════════════════════════
-
-/** Reverse stock movement — undo IN or OUT */
-export async function reverseStockMovement(projectId: string, stepCode: string, triggeredBy: string): Promise<void> {
-  // Find the last stock movement created by this step
-  const lastMovement = await prisma.stockMovement.findFirst({
-    where: { projectId, referenceNo: { contains: stepCode } },
-    orderBy: { createdAt: 'desc' },
-  })
-  if (!lastMovement) return
-
-  const reverseType = lastMovement.type === 'IN' ? 'OUT' : 'IN'
-  const reverseQty = Number(lastMovement.quantity)
-
-  await prisma.$transaction([
-    prisma.stockMovement.create({
-      data: {
-        materialId: lastMovement.materialId,
-        projectId,
-        type: reverseType,
-        quantity: reverseQty,
-        reason: 'qc_reject',
-        referenceNo: `REV-${lastMovement.referenceNo}`,
-        performedBy: triggeredBy,
-        notes: `Reverse: reject ${stepCode}`,
-      },
-    }),
-    prisma.material.update({
-      where: { id: lastMovement.materialId },
-      data: {
-        currentStock: reverseType === 'IN'
-          ? { increment: reverseQty }
-          : { decrement: reverseQty },
-      },
-    }),
-  ])
-
-  await logChangeEvent({
-    projectId, sourceStep: stepCode, sourceModel: 'StockMovement',
-    sourceId: lastMovement.id, eventType: 'REJECT',
-    targetModel: 'StockMovement', targetId: 'reversed',
-    dataBefore: { type: lastMovement.type, quantity: reverseQty },
-    dataAfter: { type: reverseType, quantity: reverseQty },
-    reason: `Reversed due to reject at ${stepCode}`,
-    triggeredBy,
-  })
-}
-
-/** Reverse delivery — mark as RETURNED */
-export async function reverseDelivery(projectId: string, triggeredBy: string): Promise<void> {
-  const delivery = await prisma.deliveryRecord.findFirst({
-    where: { projectId, status: { in: ['SHIPPED', 'DELIVERED'] } },
-    orderBy: { createdAt: 'desc' },
-  })
-  if (!delivery) return
-
-  const oldStatus = delivery.status
-  await prisma.deliveryRecord.update({
-    where: { id: delivery.id },
-    data: { status: 'RETURNED', notes: `RETURNED: SAT rejected` },
-  })
-
-  await logChangeEvent({
-    projectId, sourceStep: 'P5.3', sourceModel: 'DeliveryRecord',
-    sourceId: delivery.id, eventType: 'REJECT',
-    targetModel: 'DeliveryRecord', targetId: delivery.id,
-    dataBefore: { status: oldStatus },
-    dataAfter: { status: 'RETURNED' },
-    reason: 'SAT rejected — delivery returned',
-    triggeredBy,
-  })
-}
-
-/** Reverse WO status → REWORK */
-export async function reverseWOstatus(projectId: string, triggeredBy: string): Promise<void> {
-  const wo = await prisma.workOrder.findFirst({
-    where: { projectId, status: { in: ['IN_PROGRESS', 'COMPLETED', 'QC_HOLD'] } },
-    orderBy: { createdAt: 'desc' },
-  })
-  if (!wo) return
-
-  const oldStatus = wo.status
-  await prisma.workOrder.update({
-    where: { id: wo.id },
-    data: { status: 'REWORK' },
-  })
-
-  await logChangeEvent({
-    projectId, sourceStep: 'P4.6', sourceModel: 'WorkOrder',
-    sourceId: wo.id, eventType: 'REWORK',
-    targetModel: 'WorkOrder', targetId: wo.id,
-    dataBefore: { status: oldStatus },
-    dataAfter: { status: 'REWORK' },
-    reason: 'QC/Test reject → rework required',
-    triggeredBy,
-  })
-}
-
-/** Recalculate budget actual from all non-reversed transactions */
-export async function recalcBudgetActual(projectId: string, triggeredBy: string): Promise<void> {
-  // Sum all stock movements with type IN that are po_receipt (not reversed)
+/** Recalculate budget actual from all non-reversed IN movements (po_receipt + warehouse_receipt) */
+export async function recalcBudgetActual(projectId: string, _triggeredBy: string): Promise<void> {
   const movements = await prisma.stockMovement.findMany({
     where: {
       projectId,
       type: 'IN',
-      reason: 'po_receipt',
+      reason: { in: ['po_receipt', 'warehouse_receipt'] },
       referenceNo: { not: { startsWith: 'REV-' } },
     },
     include: { material: true },
@@ -279,7 +140,9 @@ export async function recalcBudgetActual(projectId: string, triggeredBy: string)
   }
 }
 
-/** Dispatch reverse hooks based on step code */
+const BUDGET_RELEVANT_STEPS = new Set(['P3.1', 'P3.3', 'P3.4', 'P3.5', 'P3.6', 'P4.3', 'P4.4', 'P4.5'])
+
+/** Dispatch reverse hooks — only recalc budget for Phase 3-4 rejections */
 export async function runReverseHooks(
   projectId: string,
   stepCode: string,
@@ -287,20 +150,9 @@ export async function runReverseHooks(
   _reason: string,
 ): Promise<void> {
   try {
-    // Material receipt rejected → undo stock IN
-    if (['P3.4A', 'P3.4B'].includes(stepCode)) {
-      await reverseStockMovement(projectId, stepCode, triggeredBy)
+    if (BUDGET_RELEVANT_STEPS.has(stepCode)) {
+      await recalcBudgetActual(projectId, triggeredBy)
     }
-    // QC/Test reject → WO → REWORK
-    if (['P4.6', 'P4.7', 'P4.8'].includes(stepCode)) {
-      await reverseWOstatus(projectId, triggeredBy)
-    }
-    // SAT rejected → delivery RETURNED
-    if (stepCode === 'P5.3') {
-      await reverseDelivery(projectId, triggeredBy)
-    }
-    // Always recalculate budget after any reject
-    await recalcBudgetActual(projectId, triggeredBy)
   } catch (err) {
     console.error(`Reverse hook error for ${stepCode}:`, err)
   }

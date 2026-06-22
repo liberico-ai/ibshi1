@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { SearchBar } from '@/components/SearchPagination'
+import { formatDateTime } from '@/lib/utils'
 
 interface ErrorEntry {
   id: string; level: string; message: string; stack: string | null; code: string | null
@@ -157,7 +158,7 @@ export default function ErrorLogPage() {
                       }}>{l.level}</span>
                     </td>
                     <td className="text-xs" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {new Date(l.createdAt).toLocaleString('vi-VN')}
+                      {formatDateTime(l.createdAt)}
                     </td>
                     <td className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>
                       {l.method && <span className="font-bold mr-1" style={{ color: '#0ea5e9' }}>{l.method}</span>}

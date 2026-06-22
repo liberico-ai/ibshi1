@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from 'xlsx';
 import {  } from "lucide-react";
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow } from '@/lib/types'
+import { formatNumber } from '@/lib/utils'
 export type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow }
 
 
@@ -273,7 +274,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hạng mục</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>{totalKL > 1000 ? `${(totalKL / 1000).toFixed(1)}t` : `${totalKL.toLocaleString('vi-VN')}`}</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>{totalKL > 1000 ? `${(totalKL / 1000).toFixed(1)}t` : `${formatNumber(totalKL)}`}</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Tổng KL (kg)</div>
           </div>
           <div style={{ textAlign: 'center' }}>
@@ -373,9 +374,9 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           const badgeColor = isFailed ? '#dc2626' : isFull ? '#16a34a' : '#2563eb';
                           const tooltipText = isFailed ? '❌ Bị QC TỪ CHỐI — Click để Xử lý' :
                             isFull
-                            ? `✅ Đã phân giao đủ (${assignedKL.toLocaleString('vi-VN')}/${totalKL.toLocaleString('vi-VN')} ${row.dvt || 'kg'} • ${assignCount} tổ)`
+                            ? `✅ Đã phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • ${assignCount} tổ)`
                             : isPartial
-                            ? `⏳ Chưa phân giao đủ (${assignedKL.toLocaleString('vi-VN')}/${totalKL.toLocaleString('vi-VN')} ${row.dvt || 'kg'} • còn ${(totalKL - assignedKL).toLocaleString('vi-VN')})`
+                            ? `⏳ Chưa phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • còn ${formatNumber(totalKL - assignedKL)})`
                             : '📋 Chưa phân giao — Click để phân giao tổ';
                           return (
                             <td key={c.key} style={tdS}>
@@ -443,7 +444,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>📋 LỆNH SẢN XUẤT</div>
                     <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem' }}>{row.stt}. {row.hangMuc || 'Hạng mục'}</h3>
                     <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.9 }}>
-                      KL: <strong>{totalKL.toLocaleString('vi-VN')} {row.dvt || 'kg'}</strong>
+                      KL: <strong>{formatNumber(totalKL)} {row.dvt || 'kg'}</strong>
                       {' • '}{fmtDate(row.batDau)} — {fmtDate(row.ketThuc)}
                       {' • '}{row.phamVi}{row.thauPhu ? ` • ${row.thauPhu}` : ''}
                     </div>
@@ -494,7 +495,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           return (
                             <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.5fr 0.5fr 140px 100px', gap: 8, padding: '8px 12px', alignItems: 'center', background: qcFailed ? '#fef2f2' : isCloned ? '#f1f5f9' : ti % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', opacity: isCloned ? 0.6 : 1 }}>
                               <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{team.teamName || `Tổ ${ti + 1}`} {isCloned ? '(Đã Rework)' : ''}</span>
-                              <span style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.88rem' }}>{teamVol.toLocaleString('vi-VN')} {row.dvt || 'kg'}</span>
+                              <span style={{ fontWeight: 700, color: '#0ea5e9', fontSize: '0.88rem' }}>{formatNumber(teamVol)} {row.dvt || 'kg'}</span>
                               <span style={{ fontSize: '0.82rem' }}>{fmtDate(team.startDate) || '—'}</span>
                               <span style={{ fontSize: '0.82rem' }}>{fmtDate(team.endDate) || '—'}</span>
                               <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -517,7 +518,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                               </div>
                               <div style={{ textAlign: 'center' }}>
                                 <button type="button" disabled={atLimit}
-                                  title={atLimit ? `Đã đạt ${limitPct}% KL (${teamMatTotal.toLocaleString('vi-VN')}/${maxAllowed.toLocaleString('vi-VN')})` : `DNC: ${teamMatTotal.toLocaleString('vi-VN')}/${maxAllowed.toLocaleString('vi-VN')} (${teamVol > 0 ? Math.round(teamMatTotal / teamVol * 100) : 0}%)`}
+                                  title={atLimit ? `Đã đạt ${limitPct}% KL (${formatNumber(teamMatTotal)}/${formatNumber(maxAllowed)})` : `DNC: ${formatNumber(teamMatTotal)}/${formatNumber(maxAllowed)} (${teamVol > 0 ? Math.round(teamMatTotal / teamVol * 100) : 0}%)`}
                                   onClick={() => {
                                     const existing = materialRequests?.[idx]?.[stage.key]?.[ti] || [];
                                     setTempMaterials(existing.length > 0 ? JSON.parse(JSON.stringify(existing)) : [{ name: '', code: '', spec: '', quantity: '', unit: 'kg' }]);
@@ -554,7 +555,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>📦 VẬT TƯ HẠNG MỤC</div>
                 <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem' }}>{row.stt}. {row.hangMuc || 'Hạng mục'}</h3>
                 <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.9 }}>
-                  KL: <strong>{totalKL.toLocaleString('vi-VN')} {row.dvt || 'kg'}</strong>
+                  KL: <strong>{formatNumber(totalKL)} {row.dvt || 'kg'}</strong>
                   {' \u2022 '}{row.phamVi}{row.thauPhu ? ` \u2022 ${row.thauPhu}` : ''}
                 </div>
               </div>
@@ -588,7 +589,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                             <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{m.name || '—'}</span>
                             <span style={{ fontSize: '0.82rem', color: '#6d28d9', fontWeight: 600 }}>{m.code || '—'}</span>
                             <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{m.spec || '—'}</span>
-                            <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0ea5e9', textAlign: 'right' }}>{Number(m.quantity || 0).toLocaleString('vi-VN')}</span>
+                            <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0ea5e9', textAlign: 'right' }}>{formatNumber(m.quantity || 0)}</span>
                             <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{m.unit}</span>
                           </div>
                         ))}
@@ -623,12 +624,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.1rem' }}>📝 DNC Vật tư — {stageLabel}</h3>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    {row.hangMuc || `Hạng mục #${idx + 1}`} • KL tổ: {teamVolume.toLocaleString('vi-VN')} {row.dvt || 'kg'} • Giới hạn: {maxAllowed.toLocaleString('vi-VN')} (110%)
+                    {row.hangMuc || `Hạng mục #${idx + 1}`} • KL tổ: {formatNumber(teamVolume)} {row.dvt || 'kg'} • Giới hạn: {formatNumber(maxAllowed)} (110%)
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <span style={{ fontSize: '0.82rem', fontWeight: 700, color: overLimit ? '#dc2626' : pctUsed > 100 ? '#f59e0b' : '#16a34a', background: overLimit ? '#fef2f2' : pctUsed > 100 ? '#fef3c7' : '#f0fdf4', padding: '4px 10px', borderRadius: 20 }}>
-                    {tempTotal.toLocaleString('vi-VN')} / {maxAllowed.toLocaleString('vi-VN')} ({pctUsed}%)
+                    {formatNumber(tempTotal)} / {formatNumber(maxAllowed)} ({pctUsed}%)
                   </span>
                   <button type="button" onClick={() => setTempMaterials(prev => [...prev, { name: '', code: '', spec: '', quantity: '', unit: 'kg' }])}
                     style={{ padding: '7px 14px', fontSize: '0.85rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>
@@ -735,7 +736,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div style={{ display: 'grid', gridTemplateColumns: '0.3fr 2fr 0.5fr 0.5fr 0.5fr', gap: 12, fontSize: '0.85rem' }}>
                   <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>STT</div><div style={{ fontWeight: 700 }}>{row.stt}</div></div>
                   <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>HẠNG MỤC</div><div style={{ fontWeight: 700 }}>{row.hangMuc || '—'}</div></div>
-                  <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>KHỐI LƯỢNG</div><div style={{ fontWeight: 700, color: '#0ea5e9' }}>{totalKL.toLocaleString('vi-VN')} {row.dvt || 'kg'}</div></div>
+                  <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>KHỐI LƯỢNG</div><div style={{ fontWeight: 700, color: '#0ea5e9' }}>{formatNumber(totalKL)} {row.dvt || 'kg'}</div></div>
                   <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>BẮT ĐẦU</div><div style={{ fontWeight: 600 }}>{fmtDate(row.batDau) || '—'}</div></div>
                   <div><div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>KẾT THÚC</div><div style={{ fontWeight: 600 }}>{fmtDate(row.ketThuc) || '—'}</div></div>
                 </div>
@@ -745,9 +746,9 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h4 style={{ margin: 0, fontSize: '1rem', color: '#0c4a6e' }}>📋 Thực hiện phân giao</h4>
                   <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                    Đã giao: <span style={{ color: assignedKL >= totalKL ? '#16a34a' : '#f59e0b', fontWeight: 800 }}>{assignedKL.toLocaleString('vi-VN')}</span> / {totalKL.toLocaleString('vi-VN')} {row.dvt || 'kg'}
-                    {remaining > 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>Còn lại: {remaining.toLocaleString('vi-VN')}</span>}
-                    {remaining < 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>⚠️ Vượt {Math.abs(remaining).toLocaleString('vi-VN')}</span>}
+                    Đã giao: <span style={{ color: assignedKL >= totalKL ? '#16a34a' : '#f59e0b', fontWeight: 800 }}>{formatNumber(assignedKL)}</span> / {formatNumber(totalKL)} {row.dvt || 'kg'}
+                    {remaining > 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>Còn lại: {formatNumber(remaining)}</span>}
+                    {remaining < 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>⚠️ Vượt {formatNumber(Math.abs(remaining))}</span>}
                   </div>
                 </div>
                 {/* Header */}
@@ -783,7 +784,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 {remaining > 0 && (
                   <button type="button" onClick={() => setTempAssigns(prev => [...prev, { teamName: '', volume: String(remaining), startDate: '', endDate: '' }])}
                     style={{ marginTop: 4, padding: '8px 16px', fontSize: '0.85rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                    ➕ Thêm tổ ({remaining.toLocaleString('vi-VN')} {row.dvt || 'kg'} chưa giao)
+                    ➕ Thêm tổ ({formatNumber(remaining)} {row.dvt || 'kg'} chưa giao)
                   </button>
                 )}
                 {remaining <= 0 && tempAssigns.length > 0 && (

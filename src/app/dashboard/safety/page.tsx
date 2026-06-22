@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Incident {
   id: string; incidentCode: string; severity: string; category: string; location: string | null;
@@ -155,7 +156,7 @@ export default function SafetyPage() {
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${sevColor[i.severity]}20`, color: sevColor[i.severity] }}>{sevLabel[i.severity]}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{catLabel[i.category] || i.category}</td>
                 <td className="text-xs max-w-40 truncate" style={{ color: 'var(--text-primary)' }}>{i.description}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(i.incidentDate).toLocaleDateString('vi-VN')}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(i.incidentDate)}</td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: i.status === 'OPEN' ? '#f59e0b20' : i.status === 'CLOSED' ? '#16a34a20' : '#0ea5e920', color: i.status === 'OPEN' ? '#f59e0b' : i.status === 'CLOSED' ? '#16a34a' : '#0ea5e9' }}>{i.status}</span></td>
                 <td>
                   <div className="flex gap-1">

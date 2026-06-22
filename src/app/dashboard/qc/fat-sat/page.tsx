@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Inspection {
   id: string; inspectionCode: string; type: string; status: string;
@@ -62,7 +63,7 @@ export default function FATSATPage() {
                   background: i.status === 'PASSED' ? '#16a34a20' : i.status === 'FAILED' ? '#dc262620' : '#f59e0b20',
                   color: i.status === 'PASSED' ? '#16a34a' : i.status === 'FAILED' ? '#dc2626' : '#f59e0b',
                 }}>{i.status}</span></td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(i.createdAt).toLocaleDateString('vi-VN')}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(i.createdAt)}</td>
               </tr>
             ))}
           </tbody>

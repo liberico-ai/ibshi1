@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import * as XLSX from 'xlsx'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 
 interface ProjectInfo {
   projectCode?: string
@@ -41,7 +42,7 @@ export default function EstimateUploadUI({ isEditable, project, estimateData, on
   const profit = contractVal - totalEst
   const hasData = totalEst > 0
 
-  const fmt = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+  const fmt = (v: number) => v > 0 ? formatCurrency(v) : '—'
   const pct = (v: number) => totalEst > 0 ? ((v / totalEst) * 100).toFixed(1) + '%' : '—'
 
   let dt02Rows: { maCP: string; noiDung: string; giaTri: number }[] = []
@@ -187,7 +188,7 @@ export default function EstimateUploadUI({ isEditable, project, estimateData, on
             {project.projectCode && <div><span style={{ color: 'var(--text-muted)' }}>Mã dự án:</span> <strong>{project.projectCode}</strong></div>}
             {project.clientName && <div><span style={{ color: 'var(--text-muted)' }}>Khách hàng:</span> <strong>{project.clientName}</strong></div>}
             {project.projectName && <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-muted)' }}>Tên dự án:</span> <strong>{project.projectName}</strong></div>}
-            {contractVal > 0 && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{contractVal.toLocaleString('vi-VN')} đ</strong></div>}
+            {contractVal > 0 && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{formatCurrency(contractVal)}</strong></div>}
           </div>
         </div>
       )}
@@ -283,7 +284,7 @@ export default function EstimateUploadUI({ isEditable, project, estimateData, on
                   }}>
                     <span style={{ color: 'var(--text-muted)' }}>{row.maCP}</span>
                     <span>{row.noiDung}</span>
-                    <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? Number(row.giaTri).toLocaleString('vi-VN') : ''}</span>
+                    <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? formatNumber(row.giaTri) : ''}</span>
                   </div>
                 )
               })}

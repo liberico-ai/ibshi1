@@ -5,9 +5,6 @@ import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 
 // Mock sync-engine
 vi.mock('@/lib/sync-engine', () => ({
-  syncBOMtoBudget: vi.fn().mockResolvedValue(undefined),
-  syncPOtoBudget: vi.fn().mockResolvedValue(undefined),
-  syncGRNtoBudget: vi.fn().mockResolvedValue(undefined),
   logChangeEvent: vi.fn().mockResolvedValue(undefined),
   runReverseHooks: vi.fn().mockResolvedValue(undefined),
 }))
@@ -24,7 +21,7 @@ import {
   activateTask,
 } from '@/lib/workflow-engine'
 
-import { syncBOMtoBudget, syncPOtoBudget, syncGRNtoBudget, runReverseHooks, logChangeEvent } from '@/lib/sync-engine'
+import { runReverseHooks, logChangeEvent } from '@/lib/sync-engine'
 import { runValidationRules } from '@/lib/validation-rules'
 
 const PROJECT_ID = 'proj-001'
@@ -248,37 +245,6 @@ describe('completeTask', () => {
         where: expect.objectContaining({ taskType: 'P1.1B' }),
       })
     )
-  })
-
-  it('runs BOM sync hook when completing P2.2', async () => {
-    prismaMock.task.findUnique.mockResolvedValue(
-      makeTask({ taskType: 'P2.2' }) as never
-    )
-    prismaMock.task.findMany.mockResolvedValue([])
-
-    await completeTask(TASK_ID, USER_ID)
-
-    expect(syncBOMtoBudget).toHaveBeenCalledWith(PROJECT_ID, USER_ID)
-  })
-
-  it('runs PO sync hook when completing P3.3 with poId', async () => {
-    prismaMock.task.findUnique.mockResolvedValue(
-      makeTask({ taskType: 'P3.3' }) as never
-    )
-
-    await completeTask(TASK_ID, USER_ID, { poId: 'po-123' })
-
-    expect(syncPOtoBudget).toHaveBeenCalledWith(PROJECT_ID, 'po-123', USER_ID)
-  })
-
-  it('runs GRN sync hook when completing P3.4A with grnAmount', async () => {
-    prismaMock.task.findUnique.mockResolvedValue(
-      makeTask({ taskType: 'P3.4A' }) as never
-    )
-
-    await completeTask(TASK_ID, USER_ID, { grnAmount: 50000 })
-
-    expect(syncGRNtoBudget).toHaveBeenCalledWith(PROJECT_ID, 50000, USER_ID)
   })
 
   it('checks gate before activating gated step', async () => {

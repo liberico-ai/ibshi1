@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { validateBody, validateParams } from '@/lib/api-helpers'
 import { taskCommentSchema, idParamSchema } from '@/lib/schemas'
+import { addComment } from '@/lib/work-engine'
 
 // GET /api/tasks/[id]/comments — List comments for a task
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -13,10 +14,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!pResult.success) return pResult.response
   const { id } = pResult.data
 
-  const comments = await prisma.auditLog.findMany({
-    where: { entityId: id, entity: 'TASK_COMMENT' },
+  const entries = await prisma.taskHistory.findMany({
+    where: { taskId: id, action: 'COMMENT' },
     orderBy: { createdAt: 'desc' },
   })
+
+  const userIds = [...new Set(entries.map(e => e.byUserId))]
+  const users = userIds.length
+    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true } })
+    : []
+  const nameById = new Map(users.map(u => [u.id, u.fullName]))
+
+  const comments = entries.map(e => ({
+    id: e.id,
+    createdAt: e.createdAt,
+    userId: e.byUserId,
+    changes: { content: e.reason || '', userName: nameById.get(e.byUserId) || 'Người dùng' },
+  }))
 
   return successResponse({ comments })
 }
@@ -33,18 +47,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!result.success) return result.response
   const { content } = result.data
 
-  const task = await prisma.workflowTask.findUnique({ where: { id } })
+  const task = await prisma.task.findUnique({ where: { id }, select: { id: true } })
   if (!task) return errorResponse('Không tìm thấy task', 404)
 
-  const comment = await prisma.auditLog.create({
-    data: {
-      entityId: id,
-      entity: 'TASK_COMMENT',
-      action: 'COMMENT',
-      userId: user.userId,
-      changes: { content: content.trim(), userName: user.fullName },
-    },
-  })
+  const entry = await addComment(id, user.userId, content.trim())
+
+  const comment = {
+    id: entry.id,
+    createdAt: entry.createdAt,
+    userId: entry.byUserId,
+    changes: { content: entry.reason || '', userName: user.fullName },
+  }
 
   return successResponse({ comment, message: 'Đã thêm bình luận' })
 }

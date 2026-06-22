@@ -36,29 +36,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const firstInvoice = await prisma.invoice.findFirst({ where: { id: invoiceIds[0] } });
         projectId = firstInvoice?.projectId || null;
 
-        // Fallback: If Invoice doesn't have projectId natively, extract poCode from description and find the project via WorkflowTask P3.6
-        if (!projectId && firstInvoice && firstInvoice.description?.includes('Đơn đặt hàng:')) {
-            const poCodeMatch = firstInvoice.description.match(/Đơn đặt hàng:\s*([^\s]+)/);
-            if (poCodeMatch && poCodeMatch[1]) {
-               const prCode = poCodeMatch[1];
-               const prTask = await prisma.workflowTask.findFirst({
-                   where: { 
-                       stepCode: 'P3.6' 
-                   }
-               });
-               // Iterate to find the correct task safely if there are multiple P3.6
-               if (prTask) {
-                   const prTasks = await prisma.workflowTask.findMany({ where: { stepCode: 'P3.6' } });
-                   for (const t of prTasks) {
-                       const rd = t.resultData as any;
-                       if (rd?.groups?.some((g: any) => g.prCode === prCode)) {
-                           projectId = t.projectId;
-                           break;
-                       }
-                   }
-               }
-            }
-        }
+        // DEPRECATED: legacy WorkflowTask, đã ngừng dùng
+        // P3.6 projectId fallback was here but workflowTask table is dead — projectId stays null if invoice lacks it.
       }
     }
 

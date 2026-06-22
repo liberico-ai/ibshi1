@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { DEPT_NAME, ROLE_TO_DEPT, DEPT_PRIMARY_ROLE, DEPARTMENTS_V2 } from '@/lib/org-map'
 import MultiFileUpload from '@/components/MultiFileUpload'
+import { formatShortDateTime } from '@/lib/utils'
 
 interface Proj { id: string; projectCode: string; projectName: string }
 interface Usr { id: string; fullName?: string; username?: string; roleCode: string }
@@ -164,7 +165,7 @@ function MeetingsInner() {
                   <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{m.title}{tag && <span className="text-xs ml-2" style={{ color: m.status === 'CANCELLED' ? '#e63946' : '#059669' }}>{tag}</span>}</div>
                   <div className="flex flex-wrap gap-2 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                     {m.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {m.project.projectCode}</span>}
-                    <span>🕒 {new Date(m.startsAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>🕒 {formatShortDateTime(m.startsAt)}</span>
                     {m.location && <span>📍 {m.location}</span>}
                     <span>✓ {m.counts.accepted}/{m.counts.total} nhận</span>
                   </div>

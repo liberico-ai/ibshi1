@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatCurrency } from '@/lib/utils'
 
 interface VarianceData {
   projectId: string; totalBudget: number; totalActualPO: number; totalPaid: number;
@@ -63,7 +64,7 @@ export default function SettlementPage() {
               <div key={i} className="card p-4 text-center">
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.label}</p>
                 <p className="text-xl font-bold" style={{ color: c.color }}>
-                  {c.value.toLocaleString('vi-VN')} ₫
+                  {formatCurrency(c.value)}
                 </p>
                 {c.suffix && <p className="text-xs font-bold" style={{ color: c.color }}>{c.suffix}</p>}
               </div>
@@ -95,9 +96,9 @@ export default function SettlementPage() {
                   {data.budgetLines.map((b, i) => (
                     <tr key={i}>
                       <td className="text-xs font-bold" style={{ color: 'var(--primary)' }}>{b.category}</td>
-                      <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{(b.planned || 0).toLocaleString('vi-VN')} ₫</td>
-                      <td className="text-right text-xs font-bold" style={{ color: '#f59e0b' }}>{(b.actual || 0).toLocaleString('vi-VN')} ₫</td>
-                      <td className="text-right text-xs font-bold" style={{ color: (b.variance >= 0) ? '#16a34a' : '#dc2626' }}>{(b.variance || 0).toLocaleString('vi-VN')} ₫</td>
+                      <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{formatCurrency((b.planned || 0))}</td>
+                      <td className="text-right text-xs font-bold" style={{ color: '#f59e0b' }}>{formatCurrency((b.actual || 0))}</td>
+                      <td className="text-right text-xs font-bold" style={{ color: (b.variance >= 0) ? '#16a34a' : '#dc2626' }}>{formatCurrency((b.variance || 0))}</td>
                     </tr>
                   ))}
                 </tbody>

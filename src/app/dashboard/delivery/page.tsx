@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Delivery {
   id: string; deliveryCode: string; status: string; shippingMethod: string | null;
@@ -102,7 +103,7 @@ export default function DeliveryPage() {
                   <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${cfg.color}20`, color: cfg.color }}>{cfg.label}</span></td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.shippingMethod || '—'}</td>
                   <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{d.trackingNo || '—'}</td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.shippedAt ? new Date(d.shippedAt).toLocaleDateString('vi-VN') : '—'}</td>
+                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.shippedAt ? formatDate(d.shippedAt) : '—'}</td>
                   <td>
                     {action && (
                       <button

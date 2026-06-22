@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface MillCert {
   id: string; certNumber: string; heatNumber: string; grade: string | null; thickness: string | null;
@@ -105,7 +106,7 @@ export default function MillCertificatesPage() {
                 <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{c.grade || '—'}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.thickness || '—'}</td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: c.isVerified ? '#16a34a20' : '#f59e0b20', color: c.isVerified ? '#16a34a' : '#f59e0b' }}>{c.isVerified ? '✓ Đã XM' : '⏳ Chờ'}</span></td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString('vi-VN')}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(c.createdAt)}</td>
               </tr>
             ))}
           </tbody>

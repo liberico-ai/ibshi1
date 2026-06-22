@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
-import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, computeImportKey, splitAssigneeNames, matchUserName, type UserMatchResult } from '@/lib/briefing-import-parser'
+import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, computeImportKey, normalizeTitle, splitAssigneeNames, matchUserName, type UserMatchResult } from '@/lib/briefing-import-parser'
 import { setTaskStatusAdmin } from '@/lib/work-engine'
 
 export const dynamic = 'force-dynamic'
@@ -304,67 +304,103 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
         }
       }
 
-      // Validate assignees
-      const assigneeIds = (r.assigneeUserIds || []).filter(Boolean)
+      // Validate assignees — default to creator (PM) when row has no assignee/dept
+      let assigneeIds = (r.assigneeUserIds || []).filter(Boolean)
       const invalidIds = assigneeIds.filter(id => !validUsers.has(id))
       if (invalidIds.length > 0) {
         errors.push({ row: rowNum, reason: `User ID không tồn tại: ${invalidIds.join(', ')}` })
         continue
       }
+      let effectiveRoleCode = r.roleCode || null
+      if (assigneeIds.length === 0 && !effectiveRoleCode) {
+        assigneeIds = [payload.userId]
+      }
 
-      // Idempotent importKey
-      const keyUser = assigneeIds[0] || r.roleCode || ''
-      const importKey = computeImportKey(r.title, r.projectCode || null, r.deadlineISO, keyUser)
+      // Dedup key: normalized title + projectCode only
+      const importKey = computeImportKey(r.title, r.projectCode || null)
+      const normTitle = normalizeTitle(r.title)
 
-      const existingDup = await prisma.task.findMany({
-        where: { title: r.title, projectId },
-        select: { resultData: true },
+      // Find existing briefing-import task with same (projectId + normalized title)
+      const existingTasks = await prisma.task.findMany({
+        where: { projectId },
+        select: { id: true, title: true, resultData: true },
       })
-      const alreadyExists = existingDup.some((t) => {
+      const existingTask = existingTasks.find((t) => {
+        if (normalizeTitle(t.title).toLowerCase() !== normTitle.toLowerCase()) return false
         const rd = (t.resultData && typeof t.resultData === 'object') ? t.resultData as Record<string, unknown> : {}
-        const b = (rd.briefing && typeof rd.briefing === 'object') ? rd.briefing as Record<string, unknown> : {}
-        return typeof b.importKey === 'string' && b.importKey === importKey
+        return rd.briefing && typeof rd.briefing === 'object'
       })
-      if (alreadyExists) { skipped++; continue }
 
-      // Create task
       const hasDeadline = !!(r.deadlineISO && r.deadlineISO.trim())
-      await prisma.$transaction(async (tx) => {
-        const briefingData: Record<string, unknown> = {
-          criteria: (r.criteria || '').trim(),
-          proposal: (r.proposal || '').trim(),
-          decision: (r.decision || '').trim(),
-          notes: (r.notes || '').trim(),
-          deptRole: r.roleCode || '',
-          importKey,
-        }
-        if (!hasDeadline) briefingData.noDeadline = true
+      const briefingData: Record<string, unknown> = {
+        criteria: (r.criteria || '').trim(),
+        proposal: (r.proposal || '').trim(),
+        decision: (r.decision || '').trim(),
+        notes: (r.notes || '').trim(),
+        deptRole: effectiveRoleCode || '',
+        importKey,
+        source: 'briefing-import',
+      }
+      if (!hasDeadline) briefingData.noDeadline = true
 
-        const t = await tx.task.create({
-          data: {
-            projectId,
-            title: r.title,
-            taskType: 'FREE',
-            status: 'OPEN',
-            priority: 'NORMAL',
-            deadline: hasDeadline ? new Date(r.deadlineISO) : null,
-            createdBy: payload.userId,
-            startedAt: new Date(),
-            resultData: JSON.parse(JSON.stringify({ briefing: briefingData })),
-          },
-        })
-        if (assigneeIds.length > 0) {
-          for (let j = 0; j < assigneeIds.length; j++) {
-            await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: j === 0, userId: assigneeIds[j] } })
+      if (existingTask) {
+        // UPDATE existing task (deadline, assignees, briefing fields)
+        const oldRd = (existingTask.resultData && typeof existingTask.resultData === 'object') ? existingTask.resultData as Record<string, unknown> : {}
+        const oldBriefing = (oldRd.briefing && typeof oldRd.briefing === 'object') ? oldRd.briefing as Record<string, unknown> : {}
+        const mergedRd = { ...oldRd, briefing: { ...oldBriefing, ...briefingData } }
+
+        await prisma.$transaction(async (tx) => {
+          await tx.task.update({
+            where: { id: existingTask.id },
+            data: {
+              title: r.title,
+              deadline: hasDeadline ? new Date(r.deadlineISO) : undefined,
+              resultData: JSON.parse(JSON.stringify(mergedRd)),
+            },
+          })
+          // Replace assignees
+          await tx.taskAssignee.deleteMany({ where: { taskId: existingTask.id } })
+          if (assigneeIds.length > 0) {
+            for (let j = 0; j < assigneeIds.length; j++) {
+              await tx.taskAssignee.create({ data: { taskId: existingTask.id, isPrimary: j === 0, userId: assigneeIds[j] } })
+            }
+          } else if (effectiveRoleCode) {
+            await tx.taskAssignee.create({ data: { taskId: existingTask.id, isPrimary: true, role: effectiveRoleCode } })
           }
-        } else if (r.roleCode) {
-          await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: true, role: r.roleCode } })
-        }
-        await tx.taskHistory.create({
-          data: { taskId: t.id, action: 'CREATED', byUserId: payload.userId, meta: JSON.parse(JSON.stringify({ source: 'briefing-import' })) },
+          await tx.taskHistory.create({
+            data: { taskId: existingTask.id, action: 'UPDATED', byUserId: payload.userId, meta: JSON.parse(JSON.stringify({ source: 'briefing-import', reimport: true })) },
+          })
         })
-      })
-      created++
+        updated++
+      } else {
+        // CREATE new task
+        await prisma.$transaction(async (tx) => {
+          const t = await tx.task.create({
+            data: {
+              projectId,
+              title: r.title,
+              taskType: 'FREE',
+              status: 'OPEN',
+              priority: 'NORMAL',
+              deadline: hasDeadline ? new Date(r.deadlineISO) : null,
+              createdBy: payload.userId,
+              startedAt: new Date(),
+              resultData: JSON.parse(JSON.stringify({ briefing: briefingData })),
+            },
+          })
+          if (assigneeIds.length > 0) {
+            for (let j = 0; j < assigneeIds.length; j++) {
+              await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: j === 0, userId: assigneeIds[j] } })
+            }
+          } else if (effectiveRoleCode) {
+            await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: true, role: effectiveRoleCode } })
+          }
+          await tx.taskHistory.create({
+            data: { taskId: t.id, action: 'CREATED', byUserId: payload.userId, meta: JSON.parse(JSON.stringify({ source: 'briefing-import' })) },
+          })
+        })
+        created++
+      }
     } catch (err) {
       errors.push({ row: rowNum, reason: `Lỗi: ${(err as Error).message}` })
     }

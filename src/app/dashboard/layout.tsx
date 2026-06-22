@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAuthStore, apiFetch } from '@/hooks/useAuth'
-import { ROLES, MENU_ITEMS, MENU_GROUPS, ROLE_GROUP_PRIORITY } from '@/lib/constants'
+import { ROLES, MENU_ITEMS, MENU_GROUPS, ROLE_GROUP_PRIORITY, HIDDEN_MENU_KEYS } from '@/lib/constants'
 import NotificationBell from '@/components/NotificationBell'
 import {
   LayoutDashboard, FolderKanban, ClipboardList, Users, Package, Factory, ShieldCheck,
@@ -75,13 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const roleCode = user?.roleCode || 'R01'
   const roleName = ROLES[roleCode as keyof typeof ROLES]?.name || roleCode
 
-  // [ẨN tạm các menu gắn luồng 36 bước cũ để test hệ động — xóa Set này để bật lại]
-  const HIDDEN_MENU_KEYS = new Set<string>([
-    'design', 'bom', 'drawings', 'eco',                                   // Thiết kế (bước cũ)
-    'procurement', 'purchase-requests', 'purchase-orders', 'grn', 'material-issue', 'movements', // Mua hàng/PR/PO/GRN
-    'production', 'jobcards', 'workshops', 'delivery',                    // Sản xuất
-    'qc', 'inspections', 'itp', 'ncr', 'certificates', 'mill-certs', 'fat-sat', 'mrb', // QC
-  ])
+  // HIDDEN_MENU_KEYS imported from @/lib/constants
   const filteredMenu = MENU_ITEMS.filter((item) => {
     if (HIDDEN_MENU_KEYS.has(item.key)) return false
     if (item.roles === 'all') return true

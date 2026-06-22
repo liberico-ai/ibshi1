@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // Telegram Notification Formatters — Push to company group
-// Called by workflow-engine.ts and deadline-check cron
+// Called by workflow-engine.ts and cron-jobs
 // ALL calls are fire-and-forget — errors never block workflow
 // ══════════════════════════════════════════════════════════════
 

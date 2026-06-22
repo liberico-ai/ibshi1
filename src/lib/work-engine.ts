@@ -133,6 +133,10 @@ export async function createTask(input: CreateTaskInput, userId: string, opts?: 
   // Giao cấp phòng (role-only) → tự gắn trưởng phòng; phòng không có trưởng phòng → buộc chọn người cụ thể.
   const assignees = await resolveAssignees(input.assignees || [])
 
+  if (assignees.length === 0) {
+    throw new Error('Phải có ít nhất 1 người/phòng nhận việc')
+  }
+
   const task = await prisma.$transaction(async (tx) => {
     const t = await tx.task.create({
       data: {
@@ -346,7 +350,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
 
   // Task chỉ "xong phần thực thi" khi TẤT CẢ người nhận đã hoàn thành
   const rows = await prisma.taskAssignee.findMany({ where: { taskId }, select: { done: true } })
-  const allDone = rows.length > 0 && rows.every((r) => r.done)
+  const allDone = rows.length === 0 || rows.every((r) => r.done)
   const templateStepId = (task as { templateStepId?: string | null }).templateStepId
 
   if (allDone) {
@@ -425,29 +429,47 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
   const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
 
-  // Merge resultData.briefing
-  const rd = (task.resultData && typeof task.resultData === 'object') ? task.resultData as Record<string, unknown> : {}
-  const oldBriefing = (rd.briefing && typeof rd.briefing === 'object') ? rd.briefing as Record<string, unknown> : {}
-  const newBriefing: Record<string, unknown> = { ...oldBriefing }
+  // Build briefing patch (merged atomically via jsonb || later)
+  const briefingPatch: Record<string, unknown> = {}
   if (input.briefingPatch) {
     for (const [k, v] of Object.entries(input.briefingPatch)) {
-      if (v && v.trim()) newBriefing[k] = v.trim()
+      if (v && v.trim()) briefingPatch[k] = v.trim()
     }
     if (input.briefingPatch.decision && input.briefingPatch.decision.trim()) {
       const decider = await prisma.user.findUnique({ where: { id: byUserId }, select: { fullName: true } })
-      newBriefing.decisionBy = byUserId
-      newBriefing.decisionByName = decider?.fullName || ''
-      newBriefing.decisionAt = new Date().toISOString()
+      briefingPatch.decisionBy = byUserId
+      briefingPatch.decisionByName = decider?.fullName || ''
+      briefingPatch.decisionAt = new Date().toISOString()
     }
   }
   if (input.execReviewed === true) {
-    newBriefing.execReviewedAt = new Date().toISOString()
-  } else if (input.execReviewed === false) {
-    delete newBriefing.execReviewedAt
+    briefingPatch.execReviewedAt = new Date().toISOString()
   }
-  newBriefing.blocked = input.blocked ? 'true' : ''
+  briefingPatch.blocked = input.blocked ? 'true' : ''
 
-  const newResultData = JSON.parse(JSON.stringify({ ...rd, briefing: newBriefing }))
+  // Atomic nested merge: resultData.briefing gets patched without losing sibling keys
+  const briefingPatchStr = JSON.stringify(briefingPatch)
+  if (input.execReviewed === false) {
+    await prisma.$executeRaw`
+      UPDATE "tasks"
+      SET "result_data" = jsonb_set(
+            COALESCE("result_data", '{}'::jsonb),
+            '{briefing}',
+            (COALESCE("result_data"->'briefing', '{}'::jsonb) || ${briefingPatchStr}::jsonb) - 'execReviewedAt'
+          ),
+          "updated_at" = now()
+      WHERE "id" = ${taskId}`
+  } else {
+    await prisma.$executeRaw`
+      UPDATE "tasks"
+      SET "result_data" = jsonb_set(
+            COALESCE("result_data", '{}'::jsonb),
+            '{briefing}',
+            COALESCE("result_data"->'briefing', '{}'::jsonb) || ${briefingPatchStr}::jsonb
+          ),
+          "updated_at" = now()
+      WHERE "id" = ${taskId}`
+  }
 
   const isDoneOrCancelled = input.status === TASK_STATUS.DONE || input.status === TASK_STATUS.CANCELLED
   const blockedCol = isDoneOrCancelled ? false : !!input.blocked
@@ -456,7 +478,6 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
   const updateData: Record<string, unknown> = {
     status: input.status,
     blocked: blockedCol,
-    resultData: newResultData,
   }
   if (input.deadline !== undefined) {
     updateData.deadline = input.deadline ? new Date(input.deadline) : null
@@ -790,11 +811,19 @@ async function spawnTemplateStep(step: TStep, projectId: string, byUser: string)
 }
 
 // Tập "code đã xong" = BƯỚC ĐẦU (orderIndex nhỏ nhất, coi như xong khi tạo dự án) + task template đã DONE.
+// Resolve qua templateStepId → step.code (KHÔNG dùng taskType — có thể khác code khi step.taskType được set).
 async function doneCodesForProject(steps: TStep[], projectId: string): Promise<Set<string>> {
   const first = steps.slice().sort((a, b) => a.orderIndex - b.orderIndex)[0]
   const roots = first ? [first.code] : []
-  const doneTasks = await prisma.task.findMany({ where: { projectId, status: 'DONE', NOT: { templateStepId: null } }, select: { taskType: true } })
-  return new Set([...roots, ...doneTasks.map((t) => t.taskType)])
+  const doneTasks = await prisma.task.findMany({
+    where: { projectId, status: 'DONE', NOT: { templateStepId: null } },
+    select: { templateStepId: true },
+  })
+  const stepById = new Map(steps.map((s) => [s.id, s]))
+  const doneCodes = doneTasks
+    .map((t) => stepById.get(t.templateStepId!)?.code)
+    .filter((c): c is string => !!c)
+  return new Set([...roots, ...doneCodes])
 }
 
 export async function applyTemplate(projectId: string, templateCode: string, byUser: string) {

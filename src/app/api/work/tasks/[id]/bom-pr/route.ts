@@ -11,10 +11,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!payload) return unauthorizedResponse()
     const { id } = await params
     const body = await req.json().catch(() => ({})) as { data?: string }
-    const task = await prisma.task.findUnique({ where: { id }, select: { resultData: true } })
-    if (!task) return errorResponse('Không tìm thấy công việc', 404)
-    const prev = (task.resultData && typeof task.resultData === 'object') ? (task.resultData as Record<string, unknown>) : {}
-    await prisma.task.update({ where: { id }, data: { resultData: JSON.parse(JSON.stringify({ ...prev, bomPr: body.data || '' })) } })
+    const exists = await prisma.task.findUnique({ where: { id }, select: { id: true } })
+    if (!exists) return errorResponse('Không tìm thấy công việc', 404)
+
+    const patch = JSON.stringify({ bomPr: body.data || '' })
+    await prisma.$executeRaw`
+      UPDATE "tasks"
+      SET "result_data" = COALESCE("result_data", '{}'::jsonb) || ${patch}::jsonb,
+          "updated_at" = now()
+      WHERE "id" = ${id}`
     return successResponse({})
   } catch (err) {
     console.error('POST /api/work/tasks/[id]/bom-pr error:', err)

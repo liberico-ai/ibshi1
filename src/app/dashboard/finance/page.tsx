@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatCurrency, formatDate, formatNumber } from '@/lib/utils'
 
 interface Invoice {
   id: string; invoiceCode: string; type: string; clientName: string | null;
@@ -44,7 +45,7 @@ export default function FinancePage() {
     setLoading(false)
   }
 
-  const fmt = (v: number) => v.toLocaleString('vi-VN')
+  const fmt = (v: number) => formatNumber(v)
 
   if (loading) return (
     <div className="space-y-4 animate-fade-in">
@@ -123,7 +124,7 @@ export default function FinancePage() {
                   <td className="text-xs" style={{ color: 'var(--accent)' }}>{inv.project?.projectCode || '-'}</td>
                   <td className="text-right font-mono text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(Number(inv.totalAmount))}</td>
                   <td className="text-right font-mono text-sm" style={{ color: '#16a34a' }}>{Number(inv.paidAmount) > 0 ? fmt(Number(inv.paidAmount)) : '-'}</td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(inv.issueDate).toLocaleDateString('vi-VN')}</td>
+                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(inv.issueDate)}</td>
                   <td><span className="badge" style={{ background: st.bg, color: st.color }}>{st.label}</span></td>
                 </tr>
               )
@@ -175,7 +176,7 @@ function CreateInvoiceForm({ onClose, onCreated }: { onClose: () => void; onCrea
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>VAT %</label>
           <input className="input" type="number" value={form.taxRate} onChange={e => setForm({ ...form, taxRate: e.target.value })} /></div>
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Tổng (auto)</label>
-          <div className="input font-semibold" style={{ color: '#16a34a', background: 'var(--bg-primary)' }}>{total.toLocaleString('vi-VN')} VNĐ</div></div>
+          <div className="input font-semibold" style={{ color: '#16a34a', background: 'var(--bg-primary)' }}>{formatCurrency(total)}</div></div>
         <div className="col-span-3 flex gap-3 justify-end">
           <button type="button" onClick={onClose} className="btn-primary" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Hủy</button>
           <button type="submit" disabled={submitting} className="btn-accent disabled:opacity-50">{submitting ? 'Đang tạo...' : 'Tạo HĐ'}</button>

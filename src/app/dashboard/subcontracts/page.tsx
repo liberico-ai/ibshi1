@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 interface Contract {
   id: string; contractCode: string; description: string; contractValue: string; currency: string;
@@ -55,7 +56,7 @@ export default function SubcontractsPage() {
     else alert(res.error || 'Lỗi')
   }
 
-  const fmt = (v: number | string) => Number(v).toLocaleString('vi-VN')
+  const fmt = (v: number | string) => formatNumber(v)
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
 
@@ -119,8 +120,8 @@ export default function SubcontractsPage() {
                 <td className="text-xs max-w-48 truncate" style={{ color: 'var(--text-muted)' }}>{c.description}</td>
                 <td className="text-right font-mono text-xs font-bold" style={{ color: '#0ea5e9' }}>{fmt(c.contractValue)}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {c.startDate ? new Date(c.startDate).toLocaleDateString('vi-VN') : '—'} →
-                  {c.endDate ? new Date(c.endDate).toLocaleDateString('vi-VN') : '—'}
+                  {c.startDate ? formatDate(c.startDate) : '—'} →
+                  {c.endDate ? formatDate(c.endDate) : '—'}
                 </td>
                 <td>
                   <span className="text-xs px-2 py-0.5 rounded-full font-medium"

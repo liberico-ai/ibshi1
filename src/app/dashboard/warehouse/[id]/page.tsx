@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDateTime, formatNumber } from '@/lib/utils'
 
 interface Material {
   id: string; materialCode: string; name: string; unit: string;
@@ -119,7 +119,7 @@ export default function WarehouseDetailPage() {
                         ? <span className="badge" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe', borderWidth: '1px' }}>{s.projectCode}</span>
                         : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.kind === 'CONSIGNED' ? 'KH cấp' : 'Kho chung (chưa gắn DA)'}</span>}
                     </td>
-                    <td className="px-3 py-2 font-semibold" style={{ color: 'var(--text-primary)' }}>{s.quantity.toLocaleString('vi-VN')}</td>
+                    <td className="px-3 py-2 font-semibold" style={{ color: 'var(--text-primary)' }}>{formatNumber(s.quantity)}</td>
                     <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{s.value ? formatCurrency(s.value, material.currency) : '—'}</td>
                   </tr>
                 ))}
@@ -167,7 +167,7 @@ export default function WarehouseDetailPage() {
                   <td style={{ color: 'var(--text-secondary)' }}>{mv.reason}</td>
                   <td className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{mv.referenceNo || '—'}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{mv.notes || '—'}</td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(mv.createdAt).toLocaleString('vi-VN')}</td>
+                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDateTime(mv.createdAt)}</td>
                 </tr>
               ))}
               {material.stockMovements.length === 0 && <tr><td colSpan={6} className="text-center py-6" style={{ color: 'var(--text-muted)' }}>Chưa có giao dịch</td></tr>}

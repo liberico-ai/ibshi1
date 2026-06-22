@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 interface GRN {
   id: string; type: string; reason: string; quantity: number; referenceNo: string | null;
@@ -113,7 +114,7 @@ export default function GRNPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📦 Nhận hàng (GRN)</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{receipts.length} phiếu nhận • Tổng SL: {totalQty.toLocaleString('vi-VN')}</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{receipts.length} phiếu nhận • Tổng SL: {formatNumber(totalQty)}</p>
         </div>
         <button onClick={openReceiveForm} className="btn-primary">+ Nhận hàng từ PO</button>
       </div>
@@ -197,12 +198,12 @@ export default function GRNPage() {
               <tr key={r.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{r.referenceNo || '—'}</span></td>
                 <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{r.material.materialCode} — {r.material.name}</td>
-                <td className="text-xs font-bold" style={{ color: '#16a34a' }}>{Number(r.quantity).toLocaleString('vi-VN')}</td>
+                <td className="text-xs font-bold" style={{ color: '#16a34a' }}>{formatNumber(r.quantity)}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.material.unit}</td>
                 <td className="text-xs font-mono" style={{ color: '#0ea5e9' }}>{r.heatNumber || '—'}</td>
                 <td className="text-xs font-mono" style={{ color: '#f59e0b' }}>{r.lotNumber || '—'}</td>
                 <td className="text-xs max-w-32 truncate" style={{ color: 'var(--text-muted)' }}>{r.notes || '—'}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(r.createdAt).toLocaleDateString('vi-VN')}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(r.createdAt)}</td>
               </tr>
             ))}
           </tbody>

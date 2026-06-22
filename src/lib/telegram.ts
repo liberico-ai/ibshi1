@@ -185,7 +185,7 @@ export function escapeHtml(text: string): string {
 
 export function formatDeadline(deadline: Date | null): string {
   if (!deadline) return 'Không có'
-  return new Intl.DateTimeFormat('vi-VN', {
+  return new Intl.DateTimeFormat('en-GB', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   }).format(new Date(deadline))
 }

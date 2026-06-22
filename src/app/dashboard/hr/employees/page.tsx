@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Employee {
   id: string; employeeCode: string; fullName: string; position: string; phone: string | null; email: string | null;
@@ -56,7 +57,7 @@ export default function EmployeesPage() {
                 <td className="text-xs" style={{ color: '#0ea5e9' }}>{e.department?.name || '—'}</td>
                 <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{e.phone || '—'}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{e.email || '—'}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{e.joinDate ? new Date(e.joinDate).toLocaleDateString('vi-VN') : '—'}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{e.joinDate ? formatDate(e.joinDate) : '—'}</td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[e.status] || '#888'}20`, color: statusColor[e.status] || '#888' }}>{statusLabel[e.status] || e.status}</span></td>
               </tr>
             ))}

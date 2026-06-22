@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface JobCard {
   id: string; jobCode: string; workOrderId: string; teamCode: string; workType: string;
@@ -165,7 +166,7 @@ export default function JobCardsPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {new Date(jc.workDate).toLocaleDateString('vi-VN')}
+                    {formatDate(jc.workDate)}
                   </p>
                 </div>
               </div>

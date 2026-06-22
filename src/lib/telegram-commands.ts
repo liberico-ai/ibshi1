@@ -8,7 +8,7 @@ import prisma from '@/lib/db'
 import { ROLES } from '@/lib/constants'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { escapeHtml, formatDeadline } from '@/lib/telegram'
-import { todayStart } from '@/lib/utils'
+import { formatNumber, todayStart } from '@/lib/utils'
 import { runWeeklyBriefingDigest } from '@/lib/cron-jobs'
 
 // ── Command menu (registered with Telegram) ─────────────────
@@ -143,12 +143,9 @@ export function registerCommands(bot: Bot): void {
       return
     }
 
-    const tasks = await prisma.workflowTask.findMany({
+    const tasks = await prisma.task.findMany({
       where: {
-        OR: [
-          { assignedTo: user.id },
-          { assignedRole: user.roleCode, assignedTo: null },
-        ],
+        assignees: { some: { OR: [{ userId: user.id }, { role: user.roleCode }] } },
         status: 'IN_PROGRESS',
       },
       include: {
@@ -165,16 +162,13 @@ export function registerCommands(bot: Bot): void {
 
     const lines = tasks.map((t, i) => {
       const dl = t.deadline ? formatDeadline(t.deadline) : '—'
-      return `${i + 1}. <b>${escapeHtml(t.stepCode)}</b> ${escapeHtml(t.stepName)}\n   📁 ${escapeHtml(t.project.projectCode)} ⏰ ${dl}`
+      return `${i + 1}. <b>${escapeHtml(t.taskType)}</b> ${escapeHtml(t.title)}\n   📁 ${escapeHtml(t.project?.projectCode || '—')} ⏰ ${dl}`
     })
 
     // Count total if more than 15
-    const total = await prisma.workflowTask.count({
+    const total = await prisma.task.count({
       where: {
-        OR: [
-          { assignedTo: user.id },
-          { assignedRole: user.roleCode, assignedTo: null },
-        ],
+        assignees: { some: { OR: [{ userId: user.id }, { role: user.roleCode }] } },
         status: 'IN_PROGRESS',
       },
     })
@@ -195,7 +189,7 @@ export function registerCommands(bot: Bot): void {
     const project = await prisma.project.findFirst({
       where: { projectCode: { equals: code, mode: 'insensitive' } },
       include: {
-        tasks: { select: { stepCode: true, status: true, stepName: true } },
+        dynamicTasks: { select: { taskType: true, status: true, title: true } },
       },
     })
     if (!project) {
@@ -205,19 +199,19 @@ export function registerCommands(bot: Bot): void {
 
     // Group by phase
     const phaseStats: Record<number, { total: number; done: number; inProgress: string[] }> = {}
-    for (const t of project.tasks) {
-      const r = WORKFLOW_RULES[t.stepCode]
+    for (const t of project.dynamicTasks) {
+      const r = WORKFLOW_RULES[t.taskType]
       const p = r?.phase || 0
       if (!phaseStats[p]) phaseStats[p] = { total: 0, done: 0, inProgress: [] }
       phaseStats[p].total++
       if (t.status === 'DONE') phaseStats[p].done++
-      if (t.status === 'IN_PROGRESS') phaseStats[p].inProgress.push(t.stepCode)
+      if (t.status === 'IN_PROGRESS') phaseStats[p].inProgress.push(t.taskType)
     }
 
-    const totalDone = project.tasks.filter(t => t.status === 'DONE').length
-    const totalTasks = project.tasks.length
+    const totalDone = project.dynamicTasks.filter(t => t.status === 'DONE').length
+    const totalTasks = project.dynamicTasks.length
     const overallPct = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0
-    const activeSteps = project.tasks.filter(t => t.status === 'IN_PROGRESS').map(t => t.stepCode)
+    const activeSteps = project.dynamicTasks.filter(t => t.status === 'IN_PROGRESS').map(t => t.taskType)
 
     const phaseLines = Object.entries(phaseStats)
       .sort(([a], [b]) => Number(a) - Number(b))
@@ -242,10 +236,11 @@ export function registerCommands(bot: Bot): void {
   // ── /overdue ────────────────────────────────────────────
   bot.command('overdue', async (ctx: Context) => {
     const now = new Date()
-    const tasks = await prisma.workflowTask.findMany({
-      where: { status: 'IN_PROGRESS', deadline: { lt: now } },
+    const tasks = await prisma.task.findMany({
+      where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } },
       include: {
         project: { select: { projectCode: true, projectName: true } },
+        assignees: { select: { role: true } },
       },
       orderBy: { deadline: 'asc' },
       take: 20,
@@ -256,14 +251,15 @@ export function registerCommands(bot: Bot): void {
       return
     }
 
-    const total = await prisma.workflowTask.count({
-      where: { status: 'IN_PROGRESS', deadline: { lt: now } },
+    const total = await prisma.task.count({
+      where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } },
     })
 
     const lines = tasks.map((t) => {
       const hours = Math.round((now.getTime() - new Date(t.deadline!).getTime()) / 3600000)
       const emoji = hours > 48 ? '🚨' : '⏰'
-      return `${emoji} <b>${escapeHtml(t.stepCode)}</b> — ${escapeHtml(t.stepName)}\n   📁 ${escapeHtml(t.project.projectCode)} | ${escapeHtml(t.assignedRole)} | Quá hạn: ${hours}h`
+      const role = t.assignees[0]?.role || '—'
+      return `${emoji} <b>${escapeHtml(t.taskType)}</b> — ${escapeHtml(t.title)}\n   📁 ${escapeHtml(t.project?.projectCode || '—')} | ${escapeHtml(role)} | Quá hạn: ${hours}h`
     })
 
     let msg = `⏰ <b>TASK QUÁ HẠN (${total})</b>\n━━━━━━━━━━━━━━━━\n` + lines.join('\n')
@@ -282,7 +278,7 @@ export function registerCommands(bot: Bot): void {
     const project = await prisma.project.findFirst({
       where: { projectCode: { equals: code, mode: 'insensitive' } },
       include: {
-        tasks: { select: { status: true } },
+        dynamicTasks: { select: { status: true } },
       },
     })
     if (!project) {
@@ -290,9 +286,9 @@ export function registerCommands(bot: Bot): void {
       return
     }
 
-    const done = project.tasks.filter(t => t.status === 'DONE').length
-    const inProgress = project.tasks.filter(t => t.status === 'IN_PROGRESS').length
-    const total = project.tasks.length
+    const done = project.dynamicTasks.filter(t => t.status === 'DONE').length
+    const inProgress = project.dynamicTasks.filter(t => t.status === 'IN_PROGRESS').length
+    const total = project.dynamicTasks.length
     const pct = total > 0 ? Math.round((done / total) * 100) : 0
 
     const msg = [
@@ -301,7 +297,7 @@ export function registerCommands(bot: Bot): void {
       `📌 Tên: ${escapeHtml(project.projectName)}`,
       `🏢 Khách hàng: ${escapeHtml(project.clientName)}`,
       `📦 Loại SP: ${escapeHtml(project.productType)}`,
-      `💰 Giá trị HĐ: ${project.contractValue ? Number(project.contractValue).toLocaleString('vi-VN') + ' ' + project.currency : '—'}`,
+      `💰 Giá trị HĐ: ${project.contractValue ? formatNumber(Number(project.contractValue)) + ' ' + project.currency : '—'}`,
       `📅 Bắt đầu: ${project.startDate ? formatDeadline(project.startDate) : '—'}`,
       `📅 Kết thúc: ${project.endDate ? formatDeadline(project.endDate) : '—'}`,
       `📊 Trạng thái: ${escapeHtml(project.status)}`,
@@ -328,8 +324,8 @@ export function registerCommands(bot: Bot): void {
     const project = await prisma.project.findFirst({
       where: { projectCode: { equals: code, mode: 'insensitive' } },
       include: {
-        tasks: {
-          select: { stepCode: true, stepName: true, status: true, assignedRole: true, deadline: true },
+        dynamicTasks: {
+          select: { taskType: true, title: true, status: true, deadline: true, assignees: { select: { role: true } } },
         },
       },
     })
@@ -338,7 +334,7 @@ export function registerCommands(bot: Bot): void {
       return
     }
 
-    const phaseTasks = project.tasks.filter(t => WORKFLOW_RULES[t.stepCode]?.phase === phaseNum)
+    const phaseTasks = project.dynamicTasks.filter(t => WORKFLOW_RULES[t.taskType]?.phase === phaseNum)
     if (phaseTasks.length === 0) {
       await ctx.reply(`Phase ${phaseNum} không có task nào.`)
       return
@@ -349,7 +345,8 @@ export function registerCommands(bot: Bot): void {
 
     const lines = phaseTasks.map(t => {
       const dl = t.deadline ? formatDeadline(t.deadline) : '—'
-      return `${statusEmoji(t.status)} <b>${escapeHtml(t.stepCode)}</b> ${escapeHtml(t.stepName)}\n   👤 ${escapeHtml(t.assignedRole)} ⏰ ${dl}`
+      const role = t.assignees[0]?.role || '—'
+      return `${statusEmoji(t.status)} <b>${escapeHtml(t.taskType)}</b> ${escapeHtml(t.title)}\n   👤 ${escapeHtml(role)} ⏰ ${dl}`
     })
 
     const msg = [
@@ -378,7 +375,7 @@ export function registerCommands(bot: Bot): void {
           { clientName: { contains: keyword, mode: 'insensitive' } },
         ],
       },
-      include: { tasks: { select: { status: true } } },
+      include: { dynamicTasks: { select: { status: true } } },
       take: 5,
       orderBy: { updatedAt: 'desc' },
     })
@@ -389,8 +386,8 @@ export function registerCommands(bot: Bot): void {
     }
 
     const lines = projects.map(p => {
-      const done = p.tasks.filter(t => t.status === 'DONE').length
-      const pct = p.tasks.length > 0 ? Math.round((done / p.tasks.length) * 100) : 0
+      const done = p.dynamicTasks.filter(t => t.status === 'DONE').length
+      const pct = p.dynamicTasks.length > 0 ? Math.round((done / p.dynamicTasks.length) * 100) : 0
       return `📁 <b>${escapeHtml(p.projectCode)}</b> — ${escapeHtml(p.projectName)}\n   🏢 ${escapeHtml(p.clientName)} | ${p.status} | ${pct}%`
     })
 
@@ -441,9 +438,9 @@ export function registerCommands(bot: Bot): void {
       return
     }
 
-    const tasks = await prisma.workflowTask.findMany({
+    const tasks = await prisma.task.findMany({
       where: { projectId: project.id, status: 'IN_PROGRESS', deadline: { not: null } },
-      select: { stepCode: true, stepName: true, deadline: true, assignedRole: true },
+      select: { taskType: true, title: true, deadline: true, assignees: { select: { role: true } } },
       orderBy: { deadline: 'asc' },
     })
 
@@ -469,7 +466,8 @@ export function registerCommands(bot: Bot): void {
         countdown = `Còn ${days} ngày`
         emoji = '🟢'
       }
-      return `${emoji} <b>${escapeHtml(t.stepCode)}</b> ${escapeHtml(t.stepName)}\n   👤 ${escapeHtml(t.assignedRole)} | ${formatDeadline(t.deadline)} (${countdown})`
+      const role = t.assignees[0]?.role || '—'
+      return `${emoji} <b>${escapeHtml(t.taskType)}</b> ${escapeHtml(t.title)}\n   👤 ${escapeHtml(role)} | ${formatDeadline(t.deadline)} (${countdown})`
     })
 
     const msg = [
@@ -486,12 +484,12 @@ export function registerCommands(bot: Bot): void {
     const [projects, overdueTasks] = await Promise.all([
       prisma.project.findMany({
         where: { status: 'ACTIVE' },
-        include: { tasks: { select: { status: true, deadline: true } } },
+        include: { dynamicTasks: { select: { status: true, deadline: true } } },
         orderBy: { updatedAt: 'desc' },
         take: 30,
       }),
-      prisma.workflowTask.count({
-        where: { status: 'IN_PROGRESS', deadline: { lt: todayStart() } },
+      prisma.task.count({
+        where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } },
       }),
     ])
 
@@ -499,9 +497,9 @@ export function registerCommands(bot: Bot): void {
     const totalOverdue = overdueTasks
 
     const projectLines = projects.map(p => {
-      const done = p.tasks.filter(t => t.status === 'DONE').length
-      const pct = p.tasks.length > 0 ? Math.round((done / p.tasks.length) * 100) : 0
-      const od = p.tasks.filter(t => t.status === 'IN_PROGRESS' && t.deadline && new Date(t.deadline) < new Date()).length
+      const done = p.dynamicTasks.filter(t => t.status === 'DONE').length
+      const pct = p.dynamicTasks.length > 0 ? Math.round((done / p.dynamicTasks.length) * 100) : 0
+      const od = p.dynamicTasks.filter(t => t.status === 'IN_PROGRESS' && t.deadline && new Date(t.deadline) < new Date()).length
       const odTag = od > 0 ? ` ⚠️${od}` : ''
       return `  ${progressBar(pct, 8)} ${String(pct).padStart(3)}% <b>${escapeHtml(p.projectCode)}</b>${odTag}`
     })

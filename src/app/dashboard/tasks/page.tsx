@@ -33,12 +33,16 @@ export default function TasksPage() {
   const [completing, setCompleting] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [urgencyFilter, setUrgencyFilter] = useState('')
+  const [error, setError] = useState('')
 
   useEffect(() => { loadTasks() }, [])
 
   async function loadTasks() {
+    setLoading(true)
+    setError('')
     const res = await apiFetch('/api/tasks?excludeStep=P4.5')
     if (res.ok) setAllTasks(res.tasks)
+    else { setAllTasks([]); setError(res.error || 'Không tải được danh sách task') }
     setLoading(false)
   }
 
@@ -84,6 +88,15 @@ export default function TasksPage() {
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="h-20 skeleton rounded-2xl" />
         ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-red-600 mb-4">{error}</p>
+        <button onClick={loadTasks} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Thử lại</button>
       </div>
     )
   }

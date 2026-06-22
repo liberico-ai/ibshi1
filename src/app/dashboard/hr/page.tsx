@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Button } from '@/components/ui'
+import { formatDate } from '@/lib/utils'
 
 interface Employee {
   id: string; employeeCode: string; fullName: string; phone: string | null;
@@ -104,7 +105,7 @@ export default function HRPage() {
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{e.departmentName || '-'}</td>
                   <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{e.position || '-'}</td>
                   <td><span className="badge" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>{TYPE_MAP[e.employmentType] || e.employmentType}</span></td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(e.joinDate).toLocaleDateString('vi-VN')}</td>
+                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(e.joinDate)}</td>
                   <td><span className="badge" style={{ background: st.bg, color: st.color }}>{st.label}</span></td>
                 </tr>
               )

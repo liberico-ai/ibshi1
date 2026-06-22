@@ -12,11 +12,6 @@ import {
   logChangeEvent,
   syncBOMtoBudget,
   syncPOtoBudget,
-  syncGRNtoBudget,
-  syncECOcascade,
-  reverseStockMovement,
-  reverseDelivery,
-  reverseWOstatus,
   recalcBudgetActual,
   runReverseHooks,
 } from '@/lib/sync-engine'
@@ -84,6 +79,10 @@ describe('logChangeEvent', () => {
 // ── syncBOMtoBudget ──
 
 describe('syncBOMtoBudget', () => {
+  beforeEach(() => {
+    prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
+  })
+
   it('calculates totalPlanned from BOM items and updates existing budget', async () => {
     const budget = { id: 'budget-1', planned: 500 }
     prismaMock.billOfMaterial.findMany.mockResolvedValue([
@@ -146,18 +145,16 @@ describe('syncBOMtoBudget', () => {
   })
 })
 
-// ── syncPOtoBudget ──
+// ── syncPOtoBudget (recompute) ──
 
 describe('syncPOtoBudget', () => {
-  it('increments budget.committed by PO totalValue', async () => {
-    prismaMock.purchaseOrder.findUnique.mockResolvedValue({
-      id: 'po-1',
-      totalValue: 5000,
-    } as any)
-    prismaMock.budget.findFirst.mockResolvedValue({
-      id: 'budget-1',
-      committed: 1000,
-    } as any)
+  it('recomputes committed from all approved POs', async () => {
+    prismaMock.purchaseOrder.findMany.mockResolvedValue([
+      { totalValue: 3000 },
+      { totalValue: 2000 },
+    ] as any)
+    prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
+    prismaMock.budget.findFirst.mockResolvedValue({ id: 'budget-1', committed: 999 } as any)
     prismaMock.budget.update.mockResolvedValue({} as any)
     prismaMock.changeEvent.create.mockResolvedValue({} as any)
 
@@ -165,193 +162,42 @@ describe('syncPOtoBudget', () => {
 
     expect(prismaMock.budget.update).toHaveBeenCalledWith({
       where: { id: 'budget-1' },
-      data: { committed: { increment: 5000 } },
+      data: { committed: 5000 },
     })
   })
 
-  it('returns early when PO not found', async () => {
-    prismaMock.purchaseOrder.findUnique.mockResolvedValue(null)
-
-    await syncPOtoBudget(PROJECT_ID, 'po-missing', USER)
-
-    expect(prismaMock.budget.findFirst).not.toHaveBeenCalled()
-  })
-
-  it('returns early when PO has no totalValue', async () => {
-    prismaMock.purchaseOrder.findUnique.mockResolvedValue({
-      id: 'po-1',
-      totalValue: null,
-    } as any)
-
-    await syncPOtoBudget(PROJECT_ID, 'po-1', USER)
-
-    expect(prismaMock.budget.findFirst).not.toHaveBeenCalled()
-  })
-})
-
-// ── syncGRNtoBudget ──
-
-describe('syncGRNtoBudget', () => {
-  it('increments budget.actual by GRN amount', async () => {
-    prismaMock.budget.findFirst.mockResolvedValue({
-      id: 'budget-1',
-      actual: 200,
-    } as any)
+  it('is idempotent — calling twice yields same committed', async () => {
+    prismaMock.purchaseOrder.findMany.mockResolvedValue([
+      { totalValue: 5000 },
+    ] as any)
+    prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
+    prismaMock.budget.findFirst.mockResolvedValue({ id: 'budget-1', committed: 5000 } as any)
     prismaMock.budget.update.mockResolvedValue({} as any)
     prismaMock.changeEvent.create.mockResolvedValue({} as any)
 
-    await syncGRNtoBudget(PROJECT_ID, 800, USER)
+    await syncPOtoBudget(PROJECT_ID, 'po-1', USER)
+    await syncPOtoBudget(PROJECT_ID, 'po-1', USER)
 
-    expect(prismaMock.budget.update).toHaveBeenCalledWith({
-      where: { id: 'budget-1' },
-      data: { actual: { increment: 800 } },
-    })
+    const calls = prismaMock.budget.update.mock.calls
+    expect(calls.every((c: any) => c[0].data.committed === 5000)).toBe(true)
   })
 
-  it('does nothing when no budget record exists', async () => {
+  it('does nothing when no budget exists', async () => {
+    prismaMock.purchaseOrder.findMany.mockResolvedValue([{ totalValue: 1000 }] as any)
+    prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
     prismaMock.budget.findFirst.mockResolvedValue(null)
 
-    await syncGRNtoBudget(PROJECT_ID, 500, USER)
+    await syncPOtoBudget(PROJECT_ID, 'po-1', USER)
 
     expect(prismaMock.budget.update).not.toHaveBeenCalled()
   })
 })
 
-// ── syncECOcascade ──
-
-describe('syncECOcascade', () => {
-  it('recalculates budget when ECO is APPROVED', async () => {
-    prismaMock.engineeringChangeOrder.findUnique.mockResolvedValue({
-      id: 'eco-1',
-      projectId: PROJECT_ID,
-      status: 'APPROVED',
-    } as any)
-    // syncBOMtoBudget internals
-    prismaMock.billOfMaterial.findMany.mockResolvedValue([
-      { id: 'bom-1', items: [{ quantity: 1, material: { unitPrice: 50 } }] },
-    ] as any)
-    prismaMock.budget.findFirst.mockResolvedValue(null)
-    prismaMock.budget.create.mockResolvedValue({} as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
-
-    await syncECOcascade('eco-1', USER)
-
-    expect(prismaMock.budget.create).toHaveBeenCalled()
-    // Two change events: one from syncBOMtoBudget, one from syncECOcascade
-    expect(prismaMock.changeEvent.create).toHaveBeenCalledTimes(2)
-  })
-
-  it('does nothing when ECO status is not APPROVED', async () => {
-    prismaMock.engineeringChangeOrder.findUnique.mockResolvedValue({
-      id: 'eco-1',
-      projectId: PROJECT_ID,
-      status: 'SUBMITTED',
-    } as any)
-
-    await syncECOcascade('eco-1', USER)
-
-    expect(prismaMock.billOfMaterial.findMany).not.toHaveBeenCalled()
-  })
-
-  it('does nothing when ECO not found', async () => {
-    prismaMock.engineeringChangeOrder.findUnique.mockResolvedValue(null)
-
-    await syncECOcascade('eco-missing', USER)
-
-    expect(prismaMock.billOfMaterial.findMany).not.toHaveBeenCalled()
-  })
-})
-
-// ── reverseStockMovement ──
-
-describe('reverseStockMovement', () => {
-  it('creates a reverse OUT movement when original was IN', async () => {
-    prismaMock.stockMovement.findFirst.mockResolvedValue({
-      id: 'sm-1',
-      materialId: 'mat-1',
-      type: 'IN',
-      quantity: 100,
-      referenceNo: 'P3.4A-001',
-    } as any)
-    prismaMock.$transaction.mockResolvedValue([{}, {}] as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
-
-    await reverseStockMovement(PROJECT_ID, 'P3.4A', USER)
-
-    expect(prismaMock.$transaction).toHaveBeenCalledOnce()
-    const txArgs = prismaMock.$transaction.mock.calls[0][0]
-    expect(txArgs).toHaveLength(2)
-  })
-
-  it('does nothing when no matching movement found', async () => {
-    prismaMock.stockMovement.findFirst.mockResolvedValue(null)
-
-    await reverseStockMovement(PROJECT_ID, 'P3.4A', USER)
-
-    expect(prismaMock.$transaction).not.toHaveBeenCalled()
-  })
-})
-
-// ── reverseDelivery ──
-
-describe('reverseDelivery', () => {
-  it('marks delivery as RETURNED', async () => {
-    prismaMock.deliveryRecord.findFirst.mockResolvedValue({
-      id: 'del-1',
-      status: 'SHIPPED',
-    } as any)
-    prismaMock.deliveryRecord.update.mockResolvedValue({} as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
-
-    await reverseDelivery(PROJECT_ID, USER)
-
-    expect(prismaMock.deliveryRecord.update).toHaveBeenCalledWith({
-      where: { id: 'del-1' },
-      data: { status: 'RETURNED', notes: 'RETURNED: SAT rejected' },
-    })
-  })
-
-  it('does nothing when no delivery found', async () => {
-    prismaMock.deliveryRecord.findFirst.mockResolvedValue(null)
-
-    await reverseDelivery(PROJECT_ID, USER)
-
-    expect(prismaMock.deliveryRecord.update).not.toHaveBeenCalled()
-  })
-})
-
-// ── reverseWOstatus ──
-
-describe('reverseWOstatus', () => {
-  it('sets work order status to REWORK', async () => {
-    prismaMock.workOrder.findFirst.mockResolvedValue({
-      id: 'wo-1',
-      status: 'IN_PROGRESS',
-    } as any)
-    prismaMock.workOrder.update.mockResolvedValue({} as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
-
-    await reverseWOstatus(PROJECT_ID, USER)
-
-    expect(prismaMock.workOrder.update).toHaveBeenCalledWith({
-      where: { id: 'wo-1' },
-      data: { status: 'REWORK' },
-    })
-  })
-
-  it('does nothing when no matching work order found', async () => {
-    prismaMock.workOrder.findFirst.mockResolvedValue(null)
-
-    await reverseWOstatus(PROJECT_ID, USER)
-
-    expect(prismaMock.workOrder.update).not.toHaveBeenCalled()
-  })
-})
 
 // ── recalcBudgetActual ──
 
 describe('recalcBudgetActual', () => {
-  it('sums non-reversed IN movements and updates budget.actual', async () => {
+  it('sums non-reversed IN movements (po_receipt + warehouse_receipt)', async () => {
     prismaMock.stockMovement.findMany.mockResolvedValue([
       { quantity: 10, material: { unitPrice: 100 } },
       { quantity: 5, material: { unitPrice: 200 } },
@@ -361,7 +207,13 @@ describe('recalcBudgetActual', () => {
 
     await recalcBudgetActual(PROJECT_ID, USER)
 
-    // 10*100 + 5*200 = 2000
+    expect(prismaMock.stockMovement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          reason: { in: ['po_receipt', 'warehouse_receipt'] },
+        }),
+      }),
+    )
     expect(prismaMock.budget.update).toHaveBeenCalledWith({
       where: { id: 'budget-1' },
       data: { actual: 2000 },
@@ -381,64 +233,45 @@ describe('recalcBudgetActual', () => {
 // ── runReverseHooks dispatcher ──
 
 describe('runReverseHooks', () => {
-  // Provide minimal stubs so recalcBudgetActual (always called) succeeds
   beforeEach(() => {
     prismaMock.stockMovement.findMany.mockResolvedValue([] as any)
     prismaMock.budget.findFirst.mockResolvedValue(null)
   })
 
-  it('calls reverseStockMovement for P3.4A', async () => {
-    prismaMock.stockMovement.findFirst.mockResolvedValue({
-      id: 'sm-1',
-      materialId: 'mat-1',
-      type: 'IN',
-      quantity: 10,
-      referenceNo: 'P3.4A-001',
-    } as any)
-    prismaMock.$transaction.mockResolvedValue([{}, {}] as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
+  it('recalcs budget for Phase 3-4 rejection (P4.3)', async () => {
+    prismaMock.stockMovement.findMany.mockResolvedValue([
+      { quantity: 10, material: { unitPrice: 100 } },
+    ] as any)
+    prismaMock.budget.findFirst.mockResolvedValue({ id: 'budget-1' } as any)
+    prismaMock.budget.update.mockResolvedValue({} as any)
 
-    await runReverseHooks(PROJECT_ID, 'P3.4A', USER, 'QC reject')
+    await runReverseHooks(PROJECT_ID, 'P4.3', USER, 'QC reject')
 
-    expect(prismaMock.$transaction).toHaveBeenCalled()
+    expect(prismaMock.budget.update).toHaveBeenCalledWith({
+      where: { id: 'budget-1' },
+      data: { actual: 1000 },
+    })
   })
 
-  it('calls reverseWOstatus for P4.6', async () => {
-    prismaMock.workOrder.findFirst.mockResolvedValue({
-      id: 'wo-1',
-      status: 'IN_PROGRESS',
-    } as any)
-    prismaMock.workOrder.update.mockResolvedValue({} as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
+  it('skips recalc for Phase 1 rejection (P1.1B)', async () => {
+    await runReverseHooks(PROJECT_ID, 'P1.1B', USER, 'reject reason')
 
-    await runReverseHooks(PROJECT_ID, 'P4.6', USER, 'QC reject')
-
-    expect(prismaMock.workOrder.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: 'REWORK' } }),
-    )
+    expect(prismaMock.stockMovement.findMany).not.toHaveBeenCalled()
+    expect(prismaMock.budget.update).not.toHaveBeenCalled()
   })
 
-  it('calls reverseDelivery for P5.3', async () => {
-    prismaMock.deliveryRecord.findFirst.mockResolvedValue({
-      id: 'del-1',
-      status: 'SHIPPED',
-    } as any)
-    prismaMock.deliveryRecord.update.mockResolvedValue({} as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
+  it('skips recalc for Phase 2 rejection (P2.5)', async () => {
+    await runReverseHooks(PROJECT_ID, 'P2.5', USER, 'reject reason')
 
-    await runReverseHooks(PROJECT_ID, 'P5.3', USER, 'SAT reject')
-
-    expect(prismaMock.deliveryRecord.update).toHaveBeenCalled()
+    expect(prismaMock.stockMovement.findMany).not.toHaveBeenCalled()
   })
 
   it('catches errors and does not throw', async () => {
-    prismaMock.stockMovement.findFirst.mockRejectedValue(new Error('DB down'))
     prismaMock.stockMovement.findMany.mockRejectedValue(new Error('DB down'))
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await expect(runReverseHooks(PROJECT_ID, 'P3.4A', USER, 'fail')).resolves.toBeUndefined()
+    await expect(runReverseHooks(PROJECT_ID, 'P3.6', USER, 'fail')).resolves.toBeUndefined()
 
     consoleSpy.mockRestore()
   })
-
 })

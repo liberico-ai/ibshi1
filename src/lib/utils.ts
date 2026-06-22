@@ -25,10 +25,35 @@ export function formatCompactVND(value: number | null | undefined): string {
   return num.toString()
 }
 
+export function formatNumber(value: number | string | null | undefined): string {
+  if (value == null) return '0'
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(num)) return '0'
+  return new Intl.NumberFormat('en-US').format(num)
+}
+
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '-'
   // Use 'en-GB' (DD/MM/YYYY) — safe in Alpine minimal ICU unlike 'vi-VN'
   return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(date))
+}
+
+/** Full datetime: "dd/mm/yyyy, HH:mm:ss" — replaces toLocaleString('vi-VN') on Date objects */
+export function formatDateTime(date: string | Date | null | undefined): string {
+  if (!date) return '-'
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date(date))
+}
+
+/** Short datetime: "dd/mm HH:mm" — replaces toLocaleString('vi-VN', {day,month,hour,minute}) */
+export function formatShortDateTime(date: string | Date | null | undefined): string {
+  if (!date) return '-'
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(date))
 }
 
 export function getStatusColor(status: string): string {

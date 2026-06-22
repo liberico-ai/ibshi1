@@ -5,6 +5,7 @@ import QuickCreateMaterialDialog from './QuickCreateMaterialDialog'
 import { resolveCodes, type ResolvedLite } from './material-resolve-client'
 import { detectSectionType, normalizeDims, dimsMatch } from '@/lib/section-type'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -122,7 +123,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function fmtNum(n: number, decimals = 1): string {
   if (n === 0) return '0'
-  return n.toLocaleString('vi-VN', { maximumFractionDigits: decimals, minimumFractionDigits: 0 })
+  return formatNumber(n)
 }
 
 // ── Parse PR Excel ─────────────────────────────────────────
@@ -1008,7 +1009,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                           <td style={{ padding: cellPad, borderLeft: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
                             {isEditable
                               ? <input type="date" value={item.requiredDate || ''} onChange={(e) => patchItem(globalIdx, { requiredDate: e.target.value })} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }} />
-                              : <span style={{ fontSize: '0.7rem', color: item.requiredDate ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{item.requiredDate ? new Date(item.requiredDate).toLocaleDateString('vi-VN') : '—'}</span>}
+                              : <span style={{ fontSize: '0.7rem', color: item.requiredDate ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{item.requiredDate ? formatDate(item.requiredDate) : '—'}</span>}
                           </td>
                           {/* Tiến độ mua — tính theo khả dụng (chung + DA này) */}
                           <td style={{ padding: cellPad, whiteSpace: 'nowrap' }}>

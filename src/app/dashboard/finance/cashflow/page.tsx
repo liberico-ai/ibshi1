@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import FinancePlanUploader from './components/FinancePlanUploader'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 interface CashflowEntry {
   id: string; entryCode: string; type: string; category: string;
@@ -65,7 +66,7 @@ export default function CashflowPage() {
     if (res.ok) setPlanDetails(res.plan)
   }
 
-  const fmt = (v: number) => v.toLocaleString('vi-VN')
+  const fmt = (v: number) => formatNumber(v)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -175,7 +176,7 @@ export default function CashflowPage() {
                       {e.type === 'INFLOW' ? '+' : '-'}{fmt(Number(e.amount))}
                     </td>
                     <td className="text-xs truncate max-w-48" style={{ color: 'var(--text-muted)' }}>{e.description || '-'}</td>
-                    <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(e.entryDate).toLocaleDateString('vi-VN')}</td>
+                    <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(e.entryDate)}</td>
                   </tr>
                 ))}
               </tbody>

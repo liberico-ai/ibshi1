@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Drawing {
   id: string; drawingCode: string; title: string; discipline: string;
@@ -131,7 +132,7 @@ export default function DrawingPage() {
                   <div className="flex items-center gap-3 text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                     <span>DA: {dwg.project.projectCode}</span>
                     <span>{disc.label}</span>
-                    <span>{new Date(dwg.createdAt).toLocaleDateString('vi-VN')}</span>
+                    <span>{formatDate(dwg.createdAt)}</span>
                   </div>
                 </div>
               </div>

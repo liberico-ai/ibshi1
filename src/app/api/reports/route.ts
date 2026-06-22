@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { todayStart } from '@/lib/utils'
 
 // GET /api/reports — Aggregated reports data — supports 13+ report types
 export async function GET(req: NextRequest) {
@@ -17,9 +18,9 @@ export async function GET(req: NextRequest) {
         prisma.project.count(),
         prisma.project.count({ where: { status: { not: 'CLOSED' } } }),
         prisma.project.count({ where: { status: 'CLOSED' } }),
-        prisma.workflowTask.count(),
-        prisma.workflowTask.count({ where: { status: 'DONE' } }),
-        prisma.workflowTask.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] }, deadline: { lt: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
+        prisma.task.count(),
+        prisma.task.count({ where: { status: 'DONE' } }),
+        prisma.task.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } } }),
         prisma.workOrder.count({ where: { status: 'IN_PROGRESS' } }),
         prisma.nonConformanceReport.count({ where: { status: { not: 'CLOSED' } } }),
       ])
@@ -40,14 +41,14 @@ export async function GET(req: NextRequest) {
       const projectIds = projects.map(p => p.id)
 
       // 2. Lấy dữ liệu WBS từ P1.2A (plan step) — đây là nơi lưu wbsItems
-      const p12aTasks = await prisma.workflowTask.findMany({
-        where: { projectId: { in: projectIds }, stepCode: 'P1.2A' },
+      const p12aTasks = await prisma.task.findMany({
+        where: { projectId: { in: projectIds }, taskType: 'P1.2A' },
         select: { projectId: true, resultData: true },
         orderBy: { createdAt: 'desc' },
       })
       const p3Map = new Map<string, any>()
       for (const pt of p12aTasks) {
-        if (!p3Map.has(pt.projectId)) p3Map.set(pt.projectId, pt.resultData) // Keep most recent
+        if (pt.projectId && !p3Map.has(pt.projectId)) p3Map.set(pt.projectId, pt.resultData)
       }
 
 
@@ -260,9 +261,9 @@ export async function GET(req: NextRequest) {
     // ──── EX-02: KPI Dashboard ────
     if (type === 'kpi') {
       const [totalTasks, doneTasks, overdueTasks, totalInsp, passedInsp, totalWO, completedWO] = await Promise.all([
-        prisma.workflowTask.count(),
-        prisma.workflowTask.count({ where: { status: 'DONE' } }),
-        prisma.workflowTask.count({ where: { status: { not: 'DONE' }, deadline: { lt: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
+        prisma.task.count(),
+        prisma.task.count({ where: { status: 'DONE' } }),
+        prisma.task.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } } }),
         prisma.inspection.count(),
         prisma.inspection.count({ where: { status: 'PASSED' } }),
         prisma.workOrder.count(),

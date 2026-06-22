@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 interface Invoice {
   id: string; invoiceCode: string; type: string; status: string; clientName: string | null;
@@ -30,7 +31,7 @@ export default function InvoicesPage() {
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
 
-  const fmt = (n: number) => n.toLocaleString('vi-VN')
+  const fmt = (n: number) => formatNumber(n)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -69,7 +70,7 @@ export default function InvoicesPage() {
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{inv.project?.projectName || inv.project?.projectCode || '—'}</td>
                 <td className="text-right text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(inv.totalAmount)} ₫</td>
                 <td className="text-right text-xs" style={{ color: '#16a34a' }}>{fmt(inv.paidAmount)} ₫</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('vi-VN') : '—'}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{inv.dueDate ? formatDate(inv.dueDate) : '—'}</td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[inv.status] || '#888'}20`, color: statusColor[inv.status] || '#888' }}>{statusLabel[inv.status] || inv.status}</span></td>
               </tr>
             ))}

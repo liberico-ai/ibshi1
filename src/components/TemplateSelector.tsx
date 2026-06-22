@@ -82,12 +82,12 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
 
   useEffect(() => { loadResultData() }, [loadResultData])
 
-  const saveField = (key: string, value: unknown) => {
+  const saveField = (key: string, value: unknown): Promise<void> => {
     setResultData(prev => ({ ...prev, [key]: value }))
-    apiFetch(`/api/work/tasks/${taskId}/result-data`, {
+    return apiFetch(`/api/work/tasks/${taskId}/result-data`, {
       method: 'POST',
       body: JSON.stringify({ key, value }),
-    }).catch(() => {})
+    }).then(() => {}).catch(() => {})
   }
 
   const handleSelectTemplate = (t: TemplateType) => {
@@ -249,9 +249,9 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
             isEditable={isEditable}
             bomPrData={prData || (resultData.bomPr ? String(resultData.bomPr) : undefined)}
             value={resultData.supplierQuotes ? (Array.isArray(resultData.supplierQuotes) ? resultData.supplierQuotes : (() => { try { return JSON.parse(String(resultData.supplierQuotes)) } catch { return [] } })()) : undefined}
-            onChange={(quotes) => {
+            onChange={async (quotes) => {
               const chosen = quotes.find(q => q.selected)
-              saveField('supplierQuotes', quotes)
+              await saveField('supplierQuotes', quotes)
               saveField('chosenVendorId', chosen?.vendorId || '')
             }}
           />

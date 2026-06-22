@@ -218,8 +218,12 @@ export function matchUserName(inputName: string, users: MatchableUser[], deptRol
   return { inputName, userId: null, match: 'none', matchMethod: '', candidates: [] }
 }
 
-export function computeImportKey(title: string, projectId: string | null, deadlineISO: string, userId: string): string {
-  const raw = [title, projectId || '', deadlineISO, userId].join('|')
+export function normalizeTitle(s: string): string {
+  return s.trim().replace(/\s+/g, ' ')
+}
+
+export function computeImportKey(title: string, projectCode: string | null): string {
+  const raw = [normalizeTitle(title).toLowerCase(), (projectCode || '').trim().toLowerCase()].join('|')
   return createHash('sha1').update(raw).digest('hex')
 }
 
@@ -231,9 +235,7 @@ export function classifyRows(rows: BriefingRow[]): BriefingAction[] {
     if (!row.title.trim()) {
       return { type: 'error' as const, row, reason: 'Việc mới thiếu "Nội dung công việc"' }
     }
-    if (!row.assigneeName.trim() && !row.deptText.trim()) {
-      return { type: 'error' as const, row, reason: 'Việc mới thiếu cả "Người thực hiện" lẫn "Phòng xử lý"' }
-    }
+    // Rows without assignee/dept are allowed — import route defaults to creator
     return { type: 'create' as const, row }
   })
 }

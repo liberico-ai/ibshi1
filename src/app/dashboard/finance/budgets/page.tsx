@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatNumber } from '@/lib/utils'
 
 interface BudgetCat {
   id: string; category: string; planned: string; actual: string; committed: string; forecast: string; notes: string | null
@@ -57,7 +58,7 @@ export default function BudgetsPage() {
     else alert(res.error || 'Lỗi')
   }
 
-  const fmt = (v: number | string) => Number(v).toLocaleString('vi-VN')
+  const fmt = (v: number | string) => formatNumber(v)
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-20 skeleton rounded-xl" />)}</div>
 

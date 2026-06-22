@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { formatCurrency, formatCompactVND } from '@/lib/utils'
+import { formatCompactVND, formatCurrency, formatNumber } from '@/lib/utils'
 import { RBAC } from '@/lib/rbac-rules'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Button } from '@/components/ui'
@@ -185,9 +185,9 @@ export default function WarehousePage() {
                   ) : <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Chung</span>}
                 </td>
                 <td style={{ padding: '8px 4px', textAlign: 'center', color: '#94a3b8', fontSize: '0.75rem' }}>{m.unit}</td>
-                <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, fontSize: '0.85rem', fontVariantNumeric: 'tabular-nums', color: m.lowStock ? '#dc2626' : '#0f172a' }}>{m.currentStock.toLocaleString('vi-VN')}</td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, fontSize: '0.85rem', fontVariantNumeric: 'tabular-nums', color: m.lowStock ? '#dc2626' : '#0f172a' }}>{formatNumber(m.currentStock)}</td>
                 <td style={{ padding: '8px 8px', textAlign: 'right', color: '#64748b', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
-                  {m.unitPrice ? `${Math.round(Number(m.unitPrice)).toLocaleString('vi-VN')} đ` : ''}
+                  {m.unitPrice ? formatCurrency(Math.round(Number(m.unitPrice))) : ''}
                 </td>
                 <td style={{ padding: '8px 4px', textAlign: 'center' }}>
                   {m.minStock >= 0 ? (

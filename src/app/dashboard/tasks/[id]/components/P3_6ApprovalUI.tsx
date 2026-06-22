@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatCurrency } from '@/lib/utils'
 
 interface P3_6Props {
   task: any
@@ -79,7 +80,7 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
                              }`}>
                                  <div>
                                      <h3 className="font-bold text-lg text-gray-800">#{idx + 1}. {group.name}</h3>
-                                     <p className="text-sm text-gray-500">{group.items.length} vật tư — Tổng tiền dự kiến: <strong className="text-red-600">{group.totalValue.toLocaleString('vi-VN')} đ</strong></p>
+                                     <p className="text-sm text-gray-500">{group.items.length} vật tư — Tổng tiền dự kiến: <strong className="text-red-600">{formatCurrency(group.totalValue)}</strong></p>
                                  </div>
                                  <div className="flex gap-2 items-center">
                                      {!isPending ? (
@@ -152,10 +153,10 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
                                                                             {isCheapest && <span className="ml-2 text-[10px] bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded border border-green-200 shadow-sm">RẺ NHẤT</span>}
                                                                          </td>
                                                                          <td className="p-2 border-b text-right font-mono">
-                                                                            {(q.price || 0).toLocaleString('vi-VN')} đ
+                                                                            {formatCurrency((q.price || 0))}
                                                                          </td>
                                                                          <td className="p-2 border-b text-right font-semibold font-mono">
-                                                                             {isSelected ? <span className="text-red-600">{((q.price || 0) * it.shortfall).toLocaleString('vi-VN')} đ</span> : ''}
+                                                                             {isSelected ? <span className="text-red-600">{formatCurrency((q.price || 0) * it.shortfall)}</span> : ''}
                                                                          </td>
                                                                      </tr>
                                                                  )
@@ -171,8 +172,8 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
                                                          </td>
                                                          <td className="p-2 border text-right font-medium text-blue-700">{it.shortfall} {it.unit}</td>
                                                          <td className="p-2 border font-semibold text-gray-800">{it.ncc}</td>
-                                                         <td className="p-2 border text-right text-gray-700">{(it.price || 0).toLocaleString('vi-VN')} đ</td>
-                                                         <td className="p-2 border text-right font-semibold text-red-600">{((it.price || 0) * it.shortfall).toLocaleString('vi-VN')} đ</td>
+                                                         <td className="p-2 border text-right text-gray-700">{formatCurrency((it.price || 0))}</td>
+                                                         <td className="p-2 border text-right font-semibold text-red-600">{formatCurrency(((it.price || 0) * it.shortfall))}</td>
                                                      </tr>
                                                  )
                                              })}

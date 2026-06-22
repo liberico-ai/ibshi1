@@ -6,7 +6,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import { ROLES } from '@/lib/constants'
 import { getStepFormConfig } from '@/lib/step-form-configs'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, isTaskOverdue } from '@/lib/utils'
 
 interface Task {
   id: string; stepCode: string; stepName: string; stepNameEn: string;
@@ -89,10 +89,9 @@ export default function ProjectDetailPage() {
   }
 
   async function handleReject(taskId: string, reason: string) {
-    const userId = localStorage.getItem('userId') || 'system'
     const res = await apiFetch(`/api/tasks/${taskId}/reject`, {
       method: 'POST',
-      body: JSON.stringify({ reason, userId }),
+      body: JSON.stringify({ reason }),
     })
     if (res.ok || res.success) {
       setRejectingTask(null)
@@ -277,7 +276,7 @@ function TaskCard({ task, onCompleteClick, onRejectClick, onAssignClick, current
   const rule = WORKFLOW_RULES[task.stepCode]
   const isActive = task.status === 'IN_PROGRESS'
   const canAct = isActive && (currentUserRole === task.assignedRole || currentUserRole === 'R00')
-  const isOverdue = isActive && task.deadline && new Date(task.deadline) < new Date()
+  const isOverdue = isTaskOverdue(task)
 
   return (
     <div

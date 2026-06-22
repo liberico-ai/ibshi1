@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
+import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,8 +11,8 @@ export async function GET(request: NextRequest) {
     if (!payload?.userId) return unauthorizedResponse()
 
     // Find all P3.6 Tasks
-    const tasks = await prisma.workflowTask.findMany({
-      where: { stepCode: 'P3.6' },
+    const tasks = await prisma.task.findMany({
+      where: { taskType: 'P3.6' },
       include: { project: true },
       orderBy: { createdAt: 'desc' }
     })
@@ -62,7 +63,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { taskId, groupId, action, deliveryDate } = body
 
-    const task = await prisma.workflowTask.findUnique({ where: { id: taskId } })
+    const task = await prisma.task.findUnique({ where: { id: taskId } })
     if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
     const rd = (task.resultData as any) || {}
@@ -178,7 +179,7 @@ export async function PUT(request: NextRequest) {
           data: accountants.map(u => ({
             userId: u.id,
             title: `💰 Yêu cầu thanh toán: ${g.prCode}`,
-            message: `Thương mại vừa gửi yêu cầu thanh toán PO ${g.prCode} (${actualSupplier}) — ${Number(actualTotalValue).toLocaleString('vi-VN')}đ. Vào tab Thanh toán để xử lý.`,
+            message: `Thương mại vừa gửi yêu cầu thanh toán PO ${g.prCode} (${actualSupplier}) — ${formatCurrency(Number(actualTotalValue))}. Vào tab Thanh toán để xử lý.`,
             type: 'payment_request',
             linkUrl: '/dashboard/finance/payments',
           })),
@@ -188,7 +189,7 @@ export async function PUT(request: NextRequest) {
 
     // Save back to P3.6 task
     groups[blockIndex] = g
-    await prisma.workflowTask.update({
+    await prisma.task.update({
       where: { id: taskId },
       data: { resultData: { ...rd, groups } }
     })

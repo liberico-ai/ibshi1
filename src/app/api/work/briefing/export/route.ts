@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import * as XLSX from 'xlsx'
+import { taskDaysOverdue } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -60,9 +61,7 @@ export async function GET(req: NextRequest) {
     const nameById = new Map(users.map((u) => [u.id, u.fullName]))
 
     const rows = overdueTasks.map((t, idx) => {
-      const daysOverdue = t.deadline && t.status !== 'DONE'
-        ? Math.ceil((now.getTime() - new Date(t.deadline).getTime()) / 86400000)
-        : 0
+      const daysOverdue = taskDaysOverdue(t)
       const assigneeNames = t.assignees.map((a) =>
         a.userId ? (nameById.get(a.userId) || 'NV') : (DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—')
       ).join(', ')

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface NCR {
   id: string; ncrCode: string; projectId: string; category: string; severity: string;
@@ -145,7 +146,7 @@ export default function NCRPage() {
                     <span>DA: {ncr.project.projectCode}</span>
                     {ncr.disposition && <span>Xử lý: {ncr.disposition}</span>}
                     {ncr.reworkCount > 0 && <span className="font-semibold" style={{ color: '#f59e0b' }}>Sửa lại: {ncr.reworkCount}x</span>}
-                    <span>{new Date(ncr.createdAt).toLocaleDateString('vi-VN')}</span>
+                    <span>{formatDate(ncr.createdAt)}</span>
                   </div>
                 </div>
                 <div className="text-right">

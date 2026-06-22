@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 interface CashflowEntry {
   id: string; entryCode: string; type: string; category: string; amount: string;
@@ -54,7 +55,7 @@ export default function CashflowEntriesPage() {
     else alert(res.error || 'Lỗi')
   }
 
-  const fmt = (v: number | string) => Number(v).toLocaleString('vi-VN')
+  const fmt = (v: number | string) => formatNumber(v)
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
 
@@ -127,7 +128,7 @@ export default function CashflowEntriesPage() {
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{catLabel[e.category] || e.category}</td>
                 <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{e.project?.projectCode || '—'}</td>
                 <td className="text-right font-mono text-xs font-bold" style={{ color: e.type === 'INFLOW' ? '#16a34a' : '#dc2626' }}>{e.type === 'INFLOW' ? '+' : '-'}{fmt(e.amount)}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(e.entryDate).toLocaleDateString('vi-VN')}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(e.entryDate)}</td>
                 <td className="text-xs max-w-32 truncate" style={{ color: 'var(--text-muted)' }}>{e.description || '—'}</td>
               </tr>
             ))}

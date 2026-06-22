@@ -6,21 +6,6 @@ import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 
 const MAX_VOLUME = 1_000_000
 
-/**
- * GET /api/tasks/[id]/weekly-acceptance
- *
- * Loads the "Siêu Bảng" matrix for P5.3 / P5.4 weekly acceptance tasks.
- * Queries DailyProductionLog within the week range stored in task.resultData,
- * grouped by LSX code → showing daily columns (T2→T6) + weekly total.
- *
- * POST /api/tasks/[id]/weekly-acceptance
- *
- * "BẢO VỆ DỮ LIỆU BẤT KHẢ XÂM PHẠM"
- * Saves the PM/QC acceptance values as immutable WeeklyAcceptanceLog records.
- * These records CANNOT be modified or deleted — they serve as the official
- * financial audit trail for piece-rate salary and project cost reconciliation.
- */
-
 const STAGE_LABELS: Record<string, string> = {
   cutting: 'Cắt', fitup: 'Gá lắp', welding: 'Hàn',
   machining: 'GCCK', tryAssembly: 'Thử lắp ráp',
@@ -35,12 +20,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   try {
     const payload = await authenticateRequest(request as any)
     if (!payload) return unauthorizedResponse()
-    const task = await prisma.workflowTask.findUnique({
+    const task = await prisma.task.findUnique({
       where: { id: params.id },
-      select: { projectId: true, stepCode: true, resultData: true },
+      select: { projectId: true, taskType: true, resultData: true },
     })
     if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
-    if (!['P5.3', 'P5.4'].includes(task.stepCode)) {
+    if (!['P5.3', 'P5.4'].includes(task.taskType)) {
       return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
     }
 
@@ -62,8 +47,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     })
 
     // 2. Get WBS items from P1.2A for label mapping
-    const p12Task = await prisma.workflowTask.findFirst({
-      where: { projectId: task.projectId, stepCode: 'P1.2A' },
+    const p12Task = await prisma.task.findFirst({
+      where: { projectId: task.projectId, taskType: 'P1.2A' },
       select: { resultData: true },
       orderBy: { createdAt: 'desc' },
     })
@@ -74,12 +59,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     }
 
     // 3. Get P3.3/P3.4 cellAssignments for total volume reference
-    const p3Tasks = await prisma.workflowTask.findMany({
+    const p3Tasks = await prisma.task.findMany({
       where: {
         projectId: task.projectId,
-        stepCode: { in: ['P3.3', 'P3.4'] },
+        taskType: { in: ['P3.3', 'P3.4'] },
       },
-      select: { resultData: true, stepCode: true },
+      select: { resultData: true, taskType: true },
     })
 
     // 3. Aggregate Total LSX from P3 tasks, and maintain teamName map
@@ -110,7 +95,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         for (const stageKey of Object.keys(cells[rowKey])) {
           const assignments = cells[rowKey][stageKey]
           if (!Array.isArray(assignments)) continue
-          
+
           for (let ti = 0; ti < assignments.length; ti++) {
             if (issued[rowKey]?.[stageKey]?.[String(ti)]) {
               const totalVol = parseFloat(assignments[ti].volume) || 0
@@ -144,8 +129,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       totalLsx: number
       dailyVolumes: Record<string, number>
       weekTotal: number
-      cumulativeAccepted: number // sum of previous weeks
-      qcAcceptedVolume?: number // QC's value for THIS week (if P5.4)
+      cumulativeAccepted: number
+      qcAcceptedVolume?: number
       qcNotes?: string
     }>()
 
@@ -154,37 +139,32 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     for (const log of dailyLogs) {
       const lsxCode = log.lsxCode
       const reportDate = log.reportDate instanceof Date ? log.reportDate : new Date(log.reportDate)
-      const dayOfWeek = reportDate.getDay() // 0=Sun, 1=Mon ... 6=Sat
+      const dayOfWeek = reportDate.getDay()
       if (dayOfWeek === 0 || dayOfWeek === 6) continue
       const dayKey = dayKeys[dayOfWeek - 1]
 
       if (!matrixMap.has(lsxCode)) {
-        // Parse lsxCode: "rowIdx_stageKey_teamIdx"
         const parts = lsxCode.split('_')
         const rowIdx = Number(parts[0]) || 0
-        const stageKey = parts.slice(1, -1).join('_') || parts[1] // Works for both new (has ti) and old format
+        const stageKey = parts.slice(1, -1).join('_') || parts[1]
         const wbsName = wbsList[rowIdx]?.hangMuc || `Hạng mục #${rowIdx + 1}`
         const phamVi = phamViMap.get(lsxCode) || wbsList[rowIdx]?.phamVi || ''
         const unit = wbsList[rowIdx]?.dvt || 'kg'
         const teamName = teamNameMap.get(lsxCode) || `Tổ (Chưa rõ)`
 
-        // Cumulative accepted from previous weeks (before this week)
         const prevLogs = allAcceptanceLogs.filter((a: any) => a.lsxCode === lsxCode && (a.year < rd.year || (a.year === rd.year && a.weekNumber < rd.weekNumber)))
-        // For P5.4, PM's cumulative from previous weeks. But since PM and QC have records, be careful not to double count!
-        // We should just sum where role = 'PM' for previous weeks.
         const prevPMLogs = prevLogs.filter((a: any) => a.role === 'PM')
         const cumulativeAccepted = prevPMLogs.reduce((sum: number, a: any) => sum + Number(a.acceptedVolume || 0), 0)
 
-        // For P5.4, find QC's acceptance for THIS week
         let qcAcceptedVolume: number | undefined
         let qcNotes: string | undefined
-        if (task.stepCode === 'P5.4') {
+        if (task.taskType === 'P5.4') {
           const qcLog = allAcceptanceLogs.find((a: any) => a.lsxCode === lsxCode && a.year === (rd.year || new Date().getFullYear()) && a.weekNumber === rd.weekNumber && a.role === 'QC')
           if (qcLog) {
             qcAcceptedVolume = Number(qcLog.acceptedVolume || 0)
             qcNotes = qcLog.notes || undefined
           } else {
-            qcAcceptedVolume = 0 // If QC didn't accept anything, fallback to 0
+            qcAcceptedVolume = 0
           }
         }
 
@@ -234,12 +214,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const payload = await authenticateRequest(request as any)
     if (!payload) return unauthorizedResponse()
 
-    const task = await prisma.workflowTask.findUnique({
+    const task = await prisma.task.findUnique({
       where: { id: params.id },
-      include: { project: { select: { projectCode: true, projectName: true } } },
+      select: {
+        id: true, projectId: true, taskType: true, status: true, resultData: true,
+        project: { select: { projectCode: true, projectName: true } },
+      },
     })
     if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
-    if (!['P5.3', 'P5.4'].includes(task.stepCode)) {
+    if (!['P5.3', 'P5.4'].includes(task.taskType)) {
       return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
     }
     if (task.status === 'DONE') {
@@ -263,17 +246,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
     }
 
-    // ══════════════════════════════════════════════════════════════
-    //  BẢO VỆ DỮ LIỆU BẤT KHẢ XÂM PHẠM — atomic $transaction
-    //  Each row is saved as an immutable WeeklyAcceptanceLog record.
-    //  These records serve as the official financial audit trail.
-    // ══════════════════════════════════════════════════════════════
     const rd = (task.resultData as Record<string, any>) || {}
     const weekNumber = rd.weekNumber || 0
     const year = rd.year || new Date().getFullYear()
     const weekStartDate = rd.weekStartDate ? new Date(rd.weekStartDate) : new Date()
     const weekEndDate = rd.weekEndDate ? new Date(rd.weekEndDate) : new Date()
-    const role = task.stepCode === 'P5.3' ? 'QC' : 'PM'
+    const role = task.taskType === 'P5.3' ? 'QC' : 'PM'
 
     const savedLogs = await (prisma as any).$transaction(
       acceptanceData
@@ -300,22 +278,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     // ══════════════════════════════════════════════════════════════
     //  AUTO-TRIGGER P5.1.1: Check if any WBS item reached 100%
-    //  after saving these acceptance records
     // ══════════════════════════════════════════════════════════════
     try {
-      // Fetch ALL acceptance logs (including ones we just saved) grouped by lsxCode
       const allLogs = await (prisma as any).weeklyAcceptanceLog.findMany({
         where: { projectId: task.projectId, role },
       })
 
-      // Get total volume map from P3.3/P3.4 for comparison
-      const p3Tasks = await prisma.workflowTask.findMany({
-        where: { projectId: task.projectId, stepCode: { in: ['P3.3', 'P3.4'] } },
+      const p3Tasks = await prisma.task.findMany({
+        where: { projectId: task.projectId, taskType: { in: ['P3.3', 'P3.4'] } },
         select: { resultData: true },
       })
 
       const totalVolumeMap = new Map<string, number>()
-      const lsxToWbsRow = new Map<string, number>()  // lsxCode → WBS row index
+      const lsxToWbsRow = new Map<string, number>()
 
       for (const t of p3Tasks) {
         const pData = (t.resultData as Record<string, any>) || {}
@@ -342,7 +317,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         }
       }
 
-      // Group by WBS row index to check if ALL stages within a WBS item are 100%
       const wbsRows = new Map<number, { stages: string[]; allComplete: boolean }>()
       for (const [lsxCode, totalVol] of totalVolumeMap) {
         const rowIdx = lsxToWbsRow.get(lsxCode)!
@@ -350,7 +324,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         const entry = wbsRows.get(rowIdx)!
         entry.stages.push(lsxCode)
 
-        // Calculate cumulative accepted volume for this lsxCode
         const cumAccepted = allLogs
           .filter((a: any) => a.lsxCode === lsxCode)
           .reduce((sum: number, a: any) => sum + Number(a.acceptedVolume || 0), 0)
@@ -361,8 +334,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
 
       // Check existing P5.1.1 tasks to avoid duplicates
-      const existingP511 = await prisma.workflowTask.findMany({
-        where: { projectId: task.projectId, stepCode: 'P5.1.1' },
+      const existingP511 = await prisma.task.findMany({
+        where: { projectId: task.projectId, taskType: 'P5.1.1' },
         select: { resultData: true },
       })
       const existingWbsRows = new Set<number>()
@@ -371,9 +344,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         if (rd511?.wbsRowIndex != null) existingWbsRows.add(Number(rd511.wbsRowIndex))
       }
 
-      // Get WBS names for the task description
-      const p12aTask = await prisma.workflowTask.findFirst({
-        where: { projectId: task.projectId, stepCode: 'P1.2A' },
+      const p12aTask = await prisma.task.findFirst({
+        where: { projectId: task.projectId, taskType: 'P1.2A' },
         select: { resultData: true },
       })
       let wbsList: any[] = []
@@ -382,39 +354,48 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         try { wbsList = typeof planData.wbsItems === 'string' ? JSON.parse(planData.wbsItems) : (planData.wbsItems || []) } catch { wbsList = [] }
       }
 
-      // Create P5.1.1 for newly completed WBS items
       for (const [rowIdx, wbsInfo] of wbsRows) {
         if (!wbsInfo.allComplete) continue
-        if (existingWbsRows.has(rowIdx)) continue // Already created
+        if (existingWbsRows.has(rowIdx)) continue
 
         const wbsName = wbsList[rowIdx]?.hangMuc || `Hạng mục #${rowIdx + 1}`
         const totalKL = wbsInfo.stages.reduce((sum, lsx) => sum + (totalVolumeMap.get(lsx) || 0), 0)
 
-        const newP511 = await prisma.workflowTask.create({
+        const newP511 = await prisma.task.create({
           data: {
             projectId: task.projectId,
-            stepCode: 'P5.1.1',
-            stepName: `Yêu cầu nghiệm thu CL: ${wbsName}`,
-            assignedRole: 'R06b',
+            level: 2,
+            taskType: 'P5.1.1',
+            title: `Yêu cầu nghiệm thu CL: ${wbsName}`,
+            priority: 'NORMAL',
+            createdBy: userId,
+            assignedAt: new Date(),
             status: 'IN_PROGRESS',
+            startedAt: new Date(),
             resultData: {
               wbsRowIndex: rowIdx,
               hangMucName: wbsName,
               totalKL,
-              projectName: (task as any).project?.projectName || '',
-              projectCode: (task as any).project?.projectCode || '',
+              projectName: task.project?.projectName || '',
+              projectCode: task.project?.projectCode || '',
               stages: wbsInfo.stages,
             },
           },
         })
+        // Assign to R06b
+        await prisma.taskAssignee.create({
+          data: { taskId: newP511.id, role: 'R06b', isPrimary: true },
+        })
+        await prisma.taskHistory.create({
+          data: { taskId: newP511.id, action: 'CREATED', byUserId: userId, toRole: 'R06b' },
+        })
         console.log(`[AUTO] Created P5.1.1 for WBS "${wbsName}" (row ${rowIdx}) — 100% accepted`)
 
-        // Notify users
         try {
           const users = await prisma.user.findMany({ where: { roleCode: 'R06b', isActive: true }, select: { id: true, username: true, telegramChatId: true } })
-          const projCode = (task as any).project?.projectCode || ''
-          const projName = (task as any).project?.projectName || ''
-          
+          const projCode = task.project?.projectCode || ''
+          const projName = task.project?.projectName || ''
+
           if (users.length > 0) {
             await prisma.notification.createMany({
               data: users.map(u => ({
@@ -424,7 +405,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
               }))
             })
             await notifyTaskActivated({
-              stepCode: 'P5.1.1', stepName: newP511.stepName,
+              stepCode: 'P5.1.1', stepName: newP511.title,
               projectCode: projCode, projectName: projName,
               assignedRole: 'R06b', deadline: null, taskId: newP511.id,
               mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
@@ -434,17 +415,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
     } catch (err) {
       console.error('[AUTO] P5.1.1 check error:', err)
-      // Don't fail the main request for this
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  AUTO-OPEN P5.5: when both QC (P5.3) and PM (P5.4) cumulative
-    //  acceptance reach the planned total. QC and PM are tracked
-    //  INDEPENDENTLY — we must NOT sum them.
+    //  AUTO-OPEN P5.5: when both QC and PM cumulative acceptance
+    //  reach the planned total
     // ══════════════════════════════════════════════════════════════
     try {
-      // Re-fetch QC + PM logs separately for the whole project so we don't
-      // depend on which role just submitted.
       const [qcLogs, pmLogs] = await Promise.all([
         (prisma as any).weeklyAcceptanceLog.findMany({
           where: { projectId: task.projectId, role: 'QC' },
@@ -456,11 +433,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         }),
       ])
 
-      // Planned total = sum of all volumes from P3.3/P3.4 cellAssignments where LSX issued.
-      // Recompute here (small + self-contained) instead of relying on totalVolumeMap above,
-      // which lives inside the P5.1.1 try-block scope.
-      const p3TasksForP55 = await prisma.workflowTask.findMany({
-        where: { projectId: task.projectId, stepCode: { in: ['P3.3', 'P3.4'] } },
+      const p3TasksForP55 = await prisma.task.findMany({
+        where: { projectId: task.projectId, taskType: { in: ['P3.3', 'P3.4'] } },
         select: { resultData: true },
       })
       let plannedTotal = 0
@@ -485,12 +459,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
       const qcTotal = qcLogs.reduce((s: number, l: any) => s + Number(l.acceptedVolume || 0), 0)
       const pmTotal = pmLogs.reduce((s: number, l: any) => s + Number(l.acceptedVolume || 0), 0)
-      const threshold = plannedTotal * 0.995  // 0.5% tolerance for rounding
+      const threshold = plannedTotal * 0.995
       const reached = plannedTotal > 0 && qcTotal >= threshold && pmTotal >= threshold
 
       if (reached) {
-        const activated = await prisma.workflowTask.updateMany({
-          where: { projectId: task.projectId, stepCode: 'P5.5', status: 'PENDING' },
+        const activated = await prisma.task.updateMany({
+          where: { projectId: task.projectId, taskType: 'P5.5', status: 'PENDING' },
           data: {
             status: 'IN_PROGRESS',
             startedAt: new Date(),
@@ -503,9 +477,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           console.log(`[AUTO] P5.5 activated — QC ${qcTotal.toFixed(2)} & PM ${pmTotal.toFixed(2)} ≥ planned ${plannedTotal.toFixed(2)}`)
           try {
             const users = await prisma.user.findMany({ where: { roleCode: 'R03', isActive: true }, select: { id: true, username: true, telegramChatId: true } })
-            const projCode = (task as any).project?.projectCode || ''
-            const projName = (task as any).project?.projectName || ''
-            const p55 = await prisma.workflowTask.findFirst({ where: { projectId: task.projectId, stepCode: 'P5.5' }, select: { id: true, stepName: true } })
+            const projCode = task.project?.projectCode || ''
+            const projName = task.project?.projectName || ''
+            const p55 = await prisma.task.findFirst({ where: { projectId: task.projectId, taskType: 'P5.5' }, select: { id: true, title: true } })
             if (users.length > 0 && p55) {
               await prisma.notification.createMany({
                 data: users.map(u => ({
@@ -517,7 +491,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
                 })),
               })
               await notifyTaskActivated({
-                stepCode: 'P5.5', stepName: p55.stepName,
+                stepCode: 'P5.5', stepName: p55.title,
                 projectCode: projCode, projectName: projName,
                 assignedRole: 'R03', deadline: null, taskId: p55.id,
                 mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
@@ -528,12 +502,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
     } catch (err) {
       console.error('[AUTO] P5.5 check error:', err)
-      // Don't fail the main request for this
     }
 
-    // Mark task as DONE and trigger workflow engine hooks (like generating P5.4)
+    // Mark task as DONE and trigger workflow engine hooks
     const { completeTask } = await import('@/lib/workflow-engine')
-    
+
     const finalResultData = {
       ...rd,
       _acceptanceSubmitted: true,
@@ -542,7 +515,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       submittedAt: new Date().toISOString(),
     }
     const finalNotes = notes || `${role} nghiệm thu tuần W${weekNumber} — ${savedLogs.length} hạng mục`
-    
+
     await completeTask(task.id, userId, finalResultData, finalNotes)
 
     return NextResponse.json({

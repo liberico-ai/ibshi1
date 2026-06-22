@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 
 interface Output {
   id: string; month: number; year: number; quantity: string; unitPrice: string; totalAmount: string; status: string; notes: string | null;
@@ -49,11 +50,11 @@ export default function PieceRateOutputPage() {
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Hợp đồng có KL</p>
         </div>
         <div className="card p-4 text-center">
-          <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>{totals.totalQuantity.toLocaleString('vi-VN')}</p>
+          <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>{formatNumber(totals.totalQuantity)}</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Tổng KL</p>
         </div>
         <div className="card p-4 text-center">
-          <p className="text-2xl font-bold" style={{ color: '#16a34a' }}>{totals.totalAmount.toLocaleString('vi-VN')}₫</p>
+          <p className="text-2xl font-bold" style={{ color: '#16a34a' }}>{formatCurrency(totals.totalAmount)}</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Tổng thành tiền</p>
         </div>
       </div>
@@ -71,10 +72,10 @@ export default function PieceRateOutputPage() {
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{o.contract.project?.projectCode || '—'}</td>
                   <td className="text-xs font-bold" style={{ color: 'var(--primary)' }}>{o.contract.teamCode}</td>
                   <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{o.contract.workType}</td>
-                  <td className="text-right text-xs font-bold" style={{ color: '#f59e0b' }}>{Number(o.quantity).toLocaleString('vi-VN')}</td>
+                  <td className="text-right text-xs font-bold" style={{ color: '#f59e0b' }}>{formatNumber(o.quantity)}</td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{o.contract.unit}</td>
-                  <td className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>{Number(o.unitPrice).toLocaleString('vi-VN')}₫</td>
-                  <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{Number(o.totalAmount).toLocaleString('vi-VN')}₫</td>
+                  <td className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>{formatCurrency(Number(o.unitPrice))}</td>
+                  <td className="text-right text-xs font-bold" style={{ color: '#16a34a' }}>{formatCurrency(Number(o.totalAmount))}</td>
                   <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                     background: o.status === 'VERIFIED' ? '#16a34a20' : '#f59e0b20',
                     color: o.status === 'VERIFIED' ? '#16a34a' : '#f59e0b',

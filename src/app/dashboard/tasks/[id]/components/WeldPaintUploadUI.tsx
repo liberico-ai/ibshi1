@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import * as XLSX from 'xlsx'
 import QuickCreateMaterialDialog from './QuickCreateMaterialDialog'
 import { resolveCodes, type ResolvedLite } from './material-resolve-client'
+import { formatNumber } from '@/lib/utils'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ interface WeldPaintUploadUIProps {
 
 function fmtNum(n: number, d = 1): string {
   if (n === 0) return '0'
-  return n >= 1000 ? n.toLocaleString('vi-VN', { maximumFractionDigits: d }) : n.toFixed(d)
+  return n >= 1000 ? formatNumber(n) : n.toFixed(d)
 }
 
 function isFooterRow(val: string): boolean {

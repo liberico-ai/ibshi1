@@ -123,14 +123,7 @@ export async function getUserProjectIds(user: TokenPayload): Promise<string[] | 
     select: { id: true },
   })
 
-  // Also include projects from WO assignments, task assignments etc (hệ cũ)
-  const taskProjects = await prisma.workflowTask.findMany({
-    where: { OR: [{ assignedTo: user.userId }, { assignedRole: user.roleCode }] },
-    select: { projectId: true },
-    distinct: ['projectId'],
-  })
-
-  // Dự án từ hệ CÔNG VIỆC ĐỘNG — việc tôi nhận (theo userId/role) hoặc tôi tạo
+  // Dự án từ hệ CÔNG VIỆC — việc tôi nhận (theo userId/role) hoặc tôi tạo
   const dynTaskProjects = await prisma.task.findMany({
     where: {
       projectId: { not: null },
@@ -145,7 +138,6 @@ export async function getUserProjectIds(user: TokenPayload): Promise<string[] | 
 
   const ids = new Set<string>()
   pmProjects.forEach(p => ids.add(p.id))
-  taskProjects.forEach(t => ids.add(t.projectId))
   dynTaskProjects.forEach(t => { if (t.projectId) ids.add(t.projectId) })
 
   return Array.from(ids)

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import * as XLSX from 'xlsx'
+import { formatNumber } from '@/lib/utils'
 
 interface Milestone {
   name: string
@@ -232,7 +233,7 @@ export default function WbsMilestonesUploadUI({ isEditable, wbsData, milestonesD
                     <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{r.stt || i + 1}</td>
                     <td style={{ padding: '4px 8px', fontWeight: 500 }}>{r.hangMuc}</td>
                     <td style={{ padding: '4px 8px' }}>{r.dvt}</td>
-                    <td style={{ padding: '4px 8px', textAlign: 'right' }}>{r.khoiLuong ? Number(r.khoiLuong).toLocaleString('vi-VN') : ''}</td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right' }}>{r.khoiLuong ? formatNumber(r.khoiLuong) : ''}</td>
                     <td style={{ padding: '4px 8px' }}>{r.phamVi}</td>
                     <td style={{ padding: '4px 8px' }}>{r.batDau}</td>
                     <td style={{ padding: '4px 8px' }}>{r.ketThuc}</td>

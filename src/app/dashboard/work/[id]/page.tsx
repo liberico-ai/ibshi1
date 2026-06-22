@@ -7,6 +7,7 @@ import { ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import TemplateSelector from '@/components/TemplateSelector'
+import { formatDate, formatDateTime, formatShortDateTime } from '@/lib/utils'
 
 
 interface DocFile { id: string; fileName: string; fileUrl: string }
@@ -228,7 +229,7 @@ export default function WorkDetailPage() {
         <div className="flex flex-wrap gap-3 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
           {task.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {task.project.projectCode}</span>}
           <span>Người tạo: <b>{task.createdByName || '—'}</b></span>
-          {task.deadline && <span>⏰ {new Date(task.deadline).toLocaleDateString('vi-VN')}</span>}
+          {task.deadline && <span>⏰ {formatDate(task.deadline)}</span>}
           {task.returnCount > 0 && <span style={{ color: '#e63946' }}>↩ đã bị trả {task.returnCount} lần</span>}
         </div>
       </div>
@@ -274,7 +275,7 @@ export default function WorkDetailPage() {
                 {/* Lưu vết: ai đã đọc */}
                 {d.acks && d.acks.length > 0 && (
                   <div className="text-xs mt-1" style={{ color: '#059669' }}>
-                    ✓ Đã đọc: {d.acks.map((a) => `${a.userName || 'Người dùng'} (${new Date(a.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})`).join('; ')}
+                    ✓ Đã đọc: {d.acks.map((a) => `${a.userName || 'Người dùng'} (${formatShortDateTime(a.createdAt)})`).join('; ')}
                   </div>
                 )}
               </div>
@@ -335,14 +336,14 @@ export default function WorkDetailPage() {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '4px 8px', background: '#f8fafc', borderRadius: 6 }}>
                       <span className="text-sm font-semibold" style={{ color: '#1d4ed8', flexShrink: 0 }}>{h.byName || '?'}</span>
                       <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{h.reason}</span>
-                      <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}>{new Date(h.createdAt).toLocaleString('vi-VN')}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}>{formatDateTime(h.createdAt)}</span>
                     </div>
                   ) : (
                     <div className="text-sm" style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
                       <span className="font-semibold" style={{ color: actionColor, flexShrink: 0 }}>{ACT[h.action] || h.action}</span>
                       <span style={{ color: 'var(--text-secondary)' }}>{detail}</span>
                       {h.reason && h.action !== 'COMMENT' && <span style={{ color: '#64748b', fontStyle: 'italic' }}>— {h.reason}</span>}
-                      <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}>{new Date(h.createdAt).toLocaleString('vi-VN')}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}>{formatDateTime(h.createdAt)}</span>
                     </div>
                   )}
                 </div>
@@ -393,7 +394,7 @@ export default function WorkDetailPage() {
           {task.meetings?.map((mt) => (
             <div key={mt.id} onClick={() => router.push(`/dashboard/work/meetings/${mt.id}`)} className="text-sm py-1.5 px-2 rounded cursor-pointer hover:bg-blue-50">
               <div>{mt.title}</div>
-              <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(mt.startsAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {mt.status === 'DONE' ? 'đã kết thúc' : 'đã lên lịch'}</div>
+              <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatShortDateTime(mt.startsAt)} · {mt.status === 'DONE' ? 'đã kết thúc' : 'đã lên lịch'}</div>
             </div>
           ))}
           {(!task.meetings || task.meetings.length === 0) && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Chưa có lịch họp.</div>}

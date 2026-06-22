@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import * as XLSX from 'xlsx'
+import { formatNumber } from '@/lib/utils'
 
 interface BomItem {
   code: string
@@ -148,7 +149,7 @@ export default function BomItemsUploadUI({ isEditable, bomData, onChange, projec
                       <td style={{ padding: '4px 8px', fontFamily: 'monospace', fontSize: '0.8rem' }}>{r.code}</td>
                       <td style={{ padding: '4px 8px', fontWeight: 500 }}>{r.name}</td>
                       <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{r.spec}</td>
-                      <td style={{ padding: '4px 8px', textAlign: 'right' }}>{r.quantity ? Number(r.quantity).toLocaleString('vi-VN') : ''}</td>
+                      <td style={{ padding: '4px 8px', textAlign: 'right' }}>{r.quantity ? formatNumber(r.quantity) : ''}</td>
                       <td style={{ padding: '4px 8px' }}>{r.unit}</td>
                     </tr>
                   ))}
@@ -157,7 +158,7 @@ export default function BomItemsUploadUI({ isEditable, bomData, onChange, projec
             </div>
             <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
               <span>{items.length} vật tư</span>
-              {totalQty > 0 && <span>Tổng SL: <strong>{totalQty.toLocaleString('vi-VN')}</strong></span>}
+              {totalQty > 0 && <span>Tổng SL: <strong>{formatNumber(totalQty)}</strong></span>}
             </div>
             {isEditable && (
               <button type="button" onClick={() => { onChange('[]'); setSuccessMsg('Đã xoá danh sách BOM.'); setTimeout(() => setSuccessMsg(''), 2000) }}

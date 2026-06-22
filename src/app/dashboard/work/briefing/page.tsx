@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 // ── Types ──
 
@@ -758,7 +759,7 @@ export default function BriefingPage() {
                             )}
                             {t.decision && t.decisionByName && (
                               <span className="block text-[10px] mt-0.5" style={{ color: '#94a3b8' }}>
-                                — {t.decisionByName}, {t.decisionAt ? new Date(t.decisionAt).toLocaleDateString('vi-VN') : ''}
+                                — {t.decisionByName}, {t.decisionAt ? formatDate(t.decisionAt) : ''}
                               </span>
                             )}
                           </td>
@@ -919,7 +920,7 @@ export default function BriefingPage() {
                       )}
                       {t.decision && t.decisionByName && (
                         <span className="block text-[10px] mt-0.5" style={{ color: '#94a3b8' }}>
-                          — {t.decisionByName}, {t.decisionAt ? new Date(t.decisionAt).toLocaleDateString('vi-VN') : ''}
+                          — {t.decisionByName}, {t.decisionAt ? formatDate(t.decisionAt) : ''}
                         </span>
                       )}
                       {t.execReviewedAt && (

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatNumber } from '@/lib/utils'
 
 interface ProjectPL {
   id: string; projectCode: string; projectName: string; clientName: string;
@@ -23,7 +24,7 @@ export default function ProfitabilityPage() {
     })
   }, [])
 
-  const fmt = (v: number) => v.toLocaleString('vi-VN')
+  const fmt = (v: number) => formatNumber(v)
 
   if (loading) return (
     <div className="space-y-4 animate-fade-in">

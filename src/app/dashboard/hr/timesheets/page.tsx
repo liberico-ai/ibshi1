@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface TimesheetEntry {
   id: string; workDate: string; hoursRegular: string; hoursOT: string; taskDescription: string | null; status: string;
@@ -92,7 +93,7 @@ export default function TimesheetPage() {
               <tr key={t.id}>
                 <td><div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{t.employee.fullName}</div><div className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{t.employee.employeeCode}</div></td>
                 <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{t.project.projectCode}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(t.workDate).toLocaleDateString('vi-VN')}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(t.workDate)}</td>
                 <td className="text-right text-xs font-bold" style={{ color: '#0ea5e9' }}>{Number(t.hoursRegular)}h</td>
                 <td className="text-right text-xs font-bold" style={{ color: Number(t.hoursOT) > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{Number(t.hoursOT)}h</td>
                 <td className="text-xs max-w-32 truncate" style={{ color: 'var(--text-muted)' }}>{t.taskDescription || '—'}</td>

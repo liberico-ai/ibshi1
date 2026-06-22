@@ -157,17 +157,13 @@ describe('classifyRows', () => {
     expect(actions[0].type).toBe('create')
   })
 
-  it('errors when create row missing both assignee and dept', () => {
+  it('allows create row missing both assignee and dept (defaults to creator at import time)', () => {
     const rows = parseBriefingXlsx(makeSheet([
       HEADER,
       [1, '', '', '', 'Việc mới', '', '', '', '25/06/2026', '', '', 'Phải xong', '', '', ''],
     ]))
     const actions = classifyRows(rows)
-    expect(actions[0].type).toBe('error')
-    if (actions[0].type === 'error') {
-      expect(actions[0].reason).toContain('Người thực hiện')
-      expect(actions[0].reason).toContain('Phòng xử lý')
-    }
+    expect(actions[0].type).toBe('create')
   })
 
   it('allows create row without deadline (no error)', () => {
@@ -190,33 +186,37 @@ describe('classifyRows', () => {
     expect(rows[0].deadlineISO).toBe('2026-06-30')
   })
 
-  it('computeImportKey handles empty deadline stably', () => {
-    const k1 = computeImportKey('Task', 'proj-1', '', 'user-1')
-    const k2 = computeImportKey('Task', 'proj-1', '', 'user-1')
+  it('computeImportKey is stable for same inputs', () => {
+    const k1 = computeImportKey('Task', 'proj-1')
+    const k2 = computeImportKey('Task', 'proj-1')
     expect(k1).toBe(k2)
     expect(k1).toMatch(/^[0-9a-f]{40}$/)
   })
 })
 
 describe('computeImportKey', () => {
-  it('produces stable sha1 hex from inputs', () => {
-    const k1 = computeImportKey('Gửi báo giá', 'proj-123', '2026-06-20', 'user-abc')
-    const k2 = computeImportKey('Gửi báo giá', 'proj-123', '2026-06-20', 'user-abc')
+  it('produces stable sha1 hex from (title, projectCode)', () => {
+    const k1 = computeImportKey('Gửi báo giá', '25-WNC')
+    const k2 = computeImportKey('Gửi báo giá', '25-WNC')
     expect(k1).toBe(k2)
     expect(k1).toMatch(/^[0-9a-f]{40}$/)
   })
 
-  it('differs when any input changes', () => {
-    const base = computeImportKey('Task A', 'proj-1', '2026-06-20', 'user-1')
-    expect(computeImportKey('Task B', 'proj-1', '2026-06-20', 'user-1')).not.toBe(base)
-    expect(computeImportKey('Task A', 'proj-2', '2026-06-20', 'user-1')).not.toBe(base)
-    expect(computeImportKey('Task A', 'proj-1', '2026-06-21', 'user-1')).not.toBe(base)
-    expect(computeImportKey('Task A', 'proj-1', '2026-06-20', 'user-2')).not.toBe(base)
+  it('differs when title or projectCode changes', () => {
+    const base = computeImportKey('Task A', 'proj-1')
+    expect(computeImportKey('Task B', 'proj-1')).not.toBe(base)
+    expect(computeImportKey('Task A', 'proj-2')).not.toBe(base)
   })
 
-  it('handles null projectId as empty string', () => {
-    const k1 = computeImportKey('Task', null, '2026-06-20', 'user-1')
-    const k2 = computeImportKey('Task', null, '2026-06-20', 'user-1')
+  it('ignores assignee and deadline (same key regardless)', () => {
+    const k1 = computeImportKey('Task A', 'proj-1')
+    const k2 = computeImportKey('Task A', 'proj-1')
+    expect(k1).toBe(k2)
+  })
+
+  it('handles null projectCode as empty string', () => {
+    const k1 = computeImportKey('Task', null)
+    const k2 = computeImportKey('Task', null)
     expect(k1).toBe(k2)
     expect(k1).toMatch(/^[0-9a-f]{40}$/)
   })
@@ -229,11 +229,9 @@ describe('computeImportKey', () => {
     ])
     const rows1 = parseBriefingXlsx(buf)
     const rows2 = parseBriefingXlsx(buf)
-    const userId = 'fixed-user-id'
-    const projId = 'fixed-proj-id'
     for (let i = 0; i < rows1.length; i++) {
-      const k1 = computeImportKey(rows1[i].title, projId, rows1[i].deadlineISO, userId)
-      const k2 = computeImportKey(rows2[i].title, projId, rows2[i].deadlineISO, userId)
+      const k1 = computeImportKey(rows1[i].title, rows1[i].projectCode)
+      const k2 = computeImportKey(rows2[i].title, rows2[i].projectCode)
       expect(k1).toBe(k2)
     }
   })

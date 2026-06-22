@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Lesson {
   id: string; category: string; description: string; rootCause: string | null; actionTaken: string | null;
@@ -117,7 +118,7 @@ export default function LessonsPage() {
                 {catLabel[l.category]}
               </span>
             </div>
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleDateString('vi-VN')}</span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(l.createdAt)}</span>
           </div>
           <p className="text-xs" style={{ color: 'var(--text-primary)' }}>{l.description}</p>
           <div className="grid grid-cols-3 gap-2">

@@ -1,12 +1,17 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 
 // POST /api/materials/seed — seed sample materials into the DB
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
+    const user = await authenticateRequest(req)
+    if (!user) return unauthorizedResponse()
+    if (!['R01', 'R03', 'R05', 'R10'].includes(user.roleCode)) return forbiddenResponse()
+
     const existing = await prisma.material.count()
     if (existing > 0) {
-      return NextResponse.json({ ok: true, message: `Đã có ${existing} vật tư trong DB, không cần seed thêm.` })
+      return successResponse({ message: `Đã có ${existing} vật tư trong DB, không cần seed thêm.` })
     }
 
     const materials = [
@@ -29,9 +34,9 @@ export async function POST() {
 
     await prisma.material.createMany({ data: materials })
 
-    return NextResponse.json({ ok: true, message: `Đã thêm ${materials.length} vật tư mẫu vào DB.`, count: materials.length })
+    return successResponse({ message: `Đã thêm ${materials.length} vật tư mẫu vào DB.`, count: materials.length })
   } catch (err) {
     console.error('Seed materials error:', err)
-    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 })
+    return errorResponse('Lỗi hệ thống', 500)
   }
 }

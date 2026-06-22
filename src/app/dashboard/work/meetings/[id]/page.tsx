@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import MultiFileUpload from '@/components/MultiFileUpload'
 import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
+import { formatShortDateTime } from '@/lib/utils'
 
 interface Invite { id: string; userId: string; status: string; userName: string | null; deptName: string | null; note: string | null }
 interface MFile { id: string; fileName: string; fileUrl: string }
@@ -158,10 +159,10 @@ export default function MeetingDetailPage() {
           <h1 className="text-xl font-bold flex-1" style={{ color: 'var(--text-primary)' }}>{m.title}</h1>
           <span className="text-xs px-2.5 py-1 rounded-full font-bold" style={{ background: stColor, color: '#fff' }}>{isCancelled ? 'Đã hủy' : isDone ? 'Đã kết thúc' : 'Đã lên lịch'}</span>
         </div>
-        {m.endsAt && <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Kết thúc dự kiến: {new Date(m.endsAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>}
+        {m.endsAt && <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Kết thúc dự kiến: {formatShortDateTime(m.endsAt)}</div>}
         <div className="flex flex-wrap gap-3 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
           {m.project && <span className="px-2 py-0.5 rounded font-semibold" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {m.project.projectCode} — {m.project.projectName}</span>}
-          <span>🕒 {new Date(m.startsAt).toLocaleString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+          <span>🕒 {formatShortDateTime(m.startsAt)}</span>
           {m.location && <span>📍 {m.location}</span>}
           <span>Người tổ chức: <b>{m.createdByName}</b></span>
         </div>

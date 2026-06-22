@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatCurrency } from '@/lib/utils'
 
 interface PieceContract {
   id: string; contractCode: string; teamCode: string; workType: string;
@@ -98,7 +99,7 @@ export default function PieceRatePage() {
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.project?.projectCode || '—'}</td>
                 <td className="text-xs font-bold" style={{ color: 'var(--primary)' }}>{c.teamCode}</td>
                 <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{c.workType}</td>
-                <td className="text-xs font-bold text-right" style={{ color: '#16a34a' }}>{Number(c.unitPrice).toLocaleString('vi-VN')}₫</td>
+                <td className="text-xs font-bold text-right" style={{ color: '#16a34a' }}>{formatCurrency(Number(c.unitPrice))}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.unit}</td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                   background: c.status === 'ACTIVE' ? '#16a34a20' : '#f59e0b20',

@@ -1,6 +1,7 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatNumber } from '@/lib/utils'
 
 export interface PickedMaterial {
   id: string
@@ -159,7 +160,7 @@ export default function QuickCreateMaterialDialog({ open, initialName = '', init
                             )}
                             {c.currentStock > 0 ? (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Tồn: {c.currentStock.toLocaleString('vi-VN')}
+                                Tồn: {formatNumber(c.currentStock)}
                               </span>
                             ) : (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">

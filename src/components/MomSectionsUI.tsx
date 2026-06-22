@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { apiFetch } from '@/hooks/useAuth'
 import { DEPARTMENTS_V2, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import type { MomItem, MomSection, MomAttendant } from '@/lib/types'
+import { formatDate } from '@/lib/utils'
 
 export const DEFAULT_SECTIONS: MomSection[] = [
   { key: 'I', title: 'Hợp đồng', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
@@ -110,7 +111,7 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
             const rawNum = row[row.length - 1]
             if (typeof rawNum === 'number') {
               const d = new Date((rawNum - 25569) * 86400000)
-              header.momNumber = d.toLocaleDateString('vi-VN')
+              header.momNumber = formatDate(d)
             } else {
               header.momNumber = String(rawNum || '')
             }
@@ -166,7 +167,7 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
             let dueDate = ''
             if (typeof dueDateRaw === 'number') {
               const d = new Date((dueDateRaw - 25569) * 86400000)
-              dueDate = d.toLocaleDateString('vi-VN')
+              dueDate = formatDate(d)
             } else if (dueDateRaw) {
               dueDate = String(dueDateRaw)
             }

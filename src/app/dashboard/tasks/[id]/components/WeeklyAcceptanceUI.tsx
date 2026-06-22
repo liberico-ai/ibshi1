@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 interface WeeklyItem {
   lsxCode: string
@@ -136,9 +137,9 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
   }
 
   const fmtDate = (iso: string) => {
-    try { return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) } catch { return '—' }
+    try { return formatDate(iso) } catch { return '—' }
   }
-  const fmtNum = (n: number) => n > 0 ? n.toLocaleString('vi-VN') : '—'
+  const fmtNum = (n: number) => n > 0 ? formatNumber(n) : '—'
   const DAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6']
   const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri']
 

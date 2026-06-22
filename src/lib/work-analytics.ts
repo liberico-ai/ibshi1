@@ -31,20 +31,19 @@ export async function getDeptWorkload(roleCode: string) {
     },
     orderBy: [{ deadline: 'asc' }, { createdAt: 'desc' }],
   })
-  const now = Date.now()
   const out = members.map((m) => {
     const mine = tasks.filter((t) => t.assignees.some((a) => a.userId === m.id))
     const myDone = (t: typeof tasks[number]) => t.status === 'DONE' || !!t.assignees.find((a) => a.userId === m.id)?.done
     const active = mine.filter((t) => !myDone(t))
     const done = mine.filter((t) => myDone(t))
-    const overdue = active.filter((t) => t.deadline && t.deadline.getTime() < now)
+    const overdue = active.filter((t) => isTaskOverdue(t))
     return {
       userId: m.id, fullName: m.fullName, roleCode: m.roleCode,
       counts: { active: active.length, done: done.length, overdue: overdue.length },
       tasks: active.map((t) => ({
         id: t.id, title: t.title, status: t.status,
         projectCode: t.project?.projectCode || null,
-        deadline: t.deadline, overdue: !!(t.deadline && t.deadline.getTime() < now),
+        deadline: t.deadline, overdue: isTaskOverdue(t),
       })),
     }
   })

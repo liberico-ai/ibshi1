@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 interface ProjectSummary {
   id: string; projectCode: string; projectName: string; clientName: string
@@ -35,7 +36,7 @@ const ST_LABEL: Record<string, { l: string; c: string; b: string }> = {
   RETURNED: { l: 'Bị trả lại', c: '#e63946', b: '#fef2f2' },
   DONE: { l: 'Hoàn thành', c: '#059669', b: '#ecfdf5' },
 }
-const billion = (n: number) => (n / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 })
+const billion = (n: number) => formatNumber(n / 1e9)
 const PHASE_NAME: Record<string, string> = { P1: 'Khởi tạo', P2: 'Thiết kế & dự toán', P3: 'Cung ứng', P4: 'Mua & nhập kho', P5: 'Sản xuất', P6: 'Đóng dự án', Khác: 'Khác' }
 
 export default function WorkOverviewPage() {
@@ -46,17 +47,26 @@ export default function WorkOverviewPage() {
   const [detail, setDetail] = useState<DetailData | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
+  function loadOverview() {
+    setLoading(true)
+    setError('')
     apiFetch('/api/work/project-overview').then((r) => {
       if (r.ok) {
         setAgg(r.aggregate)
         const sorted = (r.projects as ProjectSummary[]).sort((a, b) => b.overdueTasks - a.overdueTasks || b.activeTasks - a.activeTasks)
         setProjects(sorted)
+      } else {
+        setAgg(null)
+        setProjects([])
+        setError(r.error || 'Không tải được tổng quan dự án')
       }
       setLoading(false)
     })
-  }, [])
+  }
+
+  useEffect(() => { loadOverview() }, [])
 
   const openDetail = (id: string) => {
     setSelectedId(id)
@@ -71,6 +81,13 @@ export default function WorkOverviewPage() {
   const backToAll = () => { setSelectedId(null); setDetail(null) }
 
   if (loading) return <div className="space-y-4 animate-fade-in"><div className="h-24 skeleton rounded-xl" /><div className="h-48 skeleton rounded-xl" /></div>
+
+  if (error) return (
+    <div className="text-center py-12">
+      <p className="text-red-600 mb-4">{error}</p>
+      <button onClick={loadOverview} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Thử lại</button>
+    </div>
+  )
 
   // ── Tầng 2: Chi tiết 1 dự án ──
   if (selectedId) {
@@ -335,7 +352,7 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
                     <td className="px-3 py-2 text-xs">{t.deptName}</td>
                     <td className="px-3 py-2 text-xs">{t.assignee}</td>
                     <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span></td>
-                    <td className="px-3 py-2 text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? new Date(t.deadline).toLocaleDateString('vi-VN') : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
+                    <td className="px-3 py-2 text-xs" style={{ color: t.overdue ? '#e63946' : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? formatDate(t.deadline) : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
                   </tr>
                 )
               })}

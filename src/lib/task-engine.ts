@@ -1,7 +1,7 @@
 import prisma from './db'
 import { TASK_STATUS } from './constants'
 import { WORKFLOW_RULES } from './workflow-constants'
-import { todayStart } from './utils'
+import { todayStart, isTaskOverdue } from './utils'
 
 // ── Compatibility adapter: reads from Task (dynamic) table,
 // returns WorkflowTask-shaped objects so downstream routes work unchanged. ──
@@ -211,9 +211,8 @@ export async function getProjectsOverview() {
     const total = Math.max(tasks.length, templateStepCount)
     const completed = tasks.filter((t) => t.status === TASK_STATUS.DONE).length
     const inProgress = tasks.filter((t) => ACTIVE_STATUSES.includes(t.status)).length
-    const now = new Date()
     const overdue = tasks.filter(
-      (t) => ACTIVE_STATUSES.includes(t.status) && t.deadline && new Date(t.deadline) < now
+      (t) => isTaskOverdue(t)
     ).length
 
     // Department breakdown (from assignees role)

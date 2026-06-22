@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 interface TrackingGroup {
   taskId: string
@@ -210,7 +210,7 @@ function ExpandableRow({ group, onReload, userRole }: { group: TrackingGroup, on
           {totalVal > 0 ? formatCurrency(totalVal) : '—'}
         </td>
         <td className="px-4 py-3 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-          {group.paymentDate ? new Date(group.paymentDate).toLocaleDateString('vi-VN') : 'N/A'}
+          {group.paymentDate ? formatDate(group.paymentDate) : 'N/A'}
         </td>
         <td className="px-4 py-3 text-right">
           <button 

@@ -89,8 +89,8 @@ export async function middleware(req: NextRequest) {
     return addCorsHeaders(response, req)
   }
 
-  // Telegram routes — webhook verified by its own secret; init is internal-only
-  if (pathname.startsWith('/api/telegram/webhook') || pathname.startsWith('/api/telegram/init')) {
+  // Telegram webhook — verified by its own secret in the handler
+  if (pathname.startsWith('/api/telegram/webhook')) {
     return NextResponse.next()
   }
 

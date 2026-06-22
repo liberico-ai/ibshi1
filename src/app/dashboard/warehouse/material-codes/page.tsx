@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { RBAC } from '@/lib/rbac-rules'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 
 interface Alias { id: string; aliasCode: string; source: string; note: string | null }
 interface StockLoc { warehouseCode: string; warehouseName: string; projectCode: string | null; kind: string; quantity: number; value: number }
@@ -16,7 +17,7 @@ interface Pagination { page: number; limit: number; total: number; totalPages: n
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: 'Đang dùng', PENDING: 'Chờ duyệt', ARCHIVE: 'Lưu trữ', OBSOLETE: 'Ngừng dùng' }
 const STATUS_COLOR: Record<string, string> = { ACTIVE: '#10b981', PENDING: '#f59e0b', ARCHIVE: '#6b7280', OBSOLETE: '#ef4444' }
-const fmt = (n: number | null) => (n == null ? '—' : n.toLocaleString('vi-VN'))
+const fmt = (n: number | null) => (n == null ? '—' : formatNumber(n))
 
 export default function MaterialCodesPage() {
   const { user } = useAuthStore()
@@ -241,7 +242,7 @@ export default function MaterialCodesPage() {
                             {isAnomaly && <span className="block text-[9px] font-normal" style={{ color: '#d97706' }}>Hết SL, còn GT kế toán</span>}
                           </td>
                           <td className="px-2 py-1.5 text-right" style={{ color: val > 0 ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
-                            {val > 0 ? `${Math.round(val).toLocaleString('vi-VN')} đ` : '—'}
+                            {val > 0 ? formatCurrency(Math.round(val)) : '—'}
                           </td>
                         </tr>
                       )

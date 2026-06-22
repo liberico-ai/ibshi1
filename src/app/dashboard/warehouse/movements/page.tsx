@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Movement {
   id: string; materialId: string; type: string; quantity: number | string;
@@ -134,10 +135,10 @@ export default function StockMovementsPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {new Date(m.createdAt).toLocaleDateString('vi-VN')}
+                    {formatDate(m.createdAt)}
                   </p>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(m.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import prisma from './db'
 import { TASK_STATUS } from './constants'
 import { WORKFLOW_RULES } from './workflow-constants'
-import { syncBOMtoBudget, syncPOtoBudget, syncGRNtoBudget, logChangeEvent, runReverseHooks } from './sync-engine'
+import { logChangeEvent, runReverseHooks } from './sync-engine'
 import { runValidationRules } from './validation-rules'
 import { notifyTaskActivated, notifyTaskRejected } from './telegram-notifications'
 
@@ -547,26 +547,8 @@ async function runWorkflowHooks(
     })
     const projCode = project?.projectCode || 'UNKNOWN'
 
-    // ── Forward Sync Hooks ──
-
-
-
-    // P2.2/P2.3: BOM complete → sync budget.planned
-    if (['P2.2', 'P2.3'].includes(stepCode)) {
-      await syncBOMtoBudget(projectId, userId)
-    }
-
-    // P3.3: PO approved → sync budget.committed
-    if (stepCode === 'P3.3' && resultData?.poId) {
-      await syncPOtoBudget(projectId, resultData.poId as string, userId)
-    }
-
-    // P3.4A: GRN → sync budget.actual
-    if (stepCode === 'P3.4A' && resultData?.grnAmount) {
-      await syncGRNtoBudget(projectId, resultData.grnAmount as number, userId)
-    }
-
     // ── Existing Module Hooks ──
+    // Budget sync (syncBOMtoBudget, syncPOtoBudget) handled via work-hooks hookKeys — single path.
     
     // P1.1: Lập KHDA → update Master Project record if edited
     if (stepCode === 'P1.1' && resultData) {

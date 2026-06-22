@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatNumber } from '@/lib/utils'
 
 interface CreateDrawdownFormProps {
   onSuccess: () => void
@@ -33,7 +34,7 @@ export default function CreateDrawdownForm({ onSuccess, onCancel }: CreateDrawdo
     setSelectedContract('mock-contract-1')
   }, [])
 
-  const fmt = (v: number) => v.toLocaleString('vi-VN')
+  const fmt = (v: number) => formatNumber(v)
 
   const toggleInvoice = (id: string) => {
     const newSelected = new Set(selectedInvoices)

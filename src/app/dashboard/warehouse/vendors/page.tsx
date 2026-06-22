@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { formatDate } from '@/lib/utils'
 
 interface Vendor {
   id: string; vendorCode: string; name: string; contactName: string | null;
@@ -134,7 +135,7 @@ export default function VendorsPage() {
                     ))}
                   </div>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {new Date(v.createdAt).toLocaleDateString('vi-VN')}
+                    {formatDate(v.createdAt)}
                   </p>
                 </div>
               </div>

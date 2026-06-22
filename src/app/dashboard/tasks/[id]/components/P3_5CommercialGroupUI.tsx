@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 
 interface P3_5Props {
   task: any
@@ -339,7 +340,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                   <p className="text-[13px] text-slate-500 mb-3 flex items-center gap-2">
                     <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">{group.items.length} vật tư</span>
                     <span className="text-slate-300">•</span>
-                    Tổng trị giá: <strong className="text-slate-800">{group.totalValue.toLocaleString('vi-VN')} <span className="text-xs font-normal">đ</span></strong>
+                    Tổng trị giá: <strong className="text-slate-800">{formatNumber(group.totalValue)} <span className="text-xs font-normal">đ</span></strong>
                   </p>
                   
                   {group.status === 'REJECTED' && group.rejectedReason && (
@@ -585,7 +586,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
             <div className="p-5 border-t border-slate-200 flex justify-between items-center bg-slate-50 mt-auto shrink-0 z-10">
               <div className="text-xl font-bold font-mono text-slate-800 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-3">
                  <span className="text-sm font-medium text-slate-500 uppercase font-sans tracking-wide">Tổng dự toán giỏ:</span> 
-                 <span className="text-blue-700">{selectedItems.reduce((sum, item) => sum + ((item.quotes?.[item.selectedQuoteIndex || 0]?.price || 0) * (item.shortfall || 0)), 0).toLocaleString('vi-VN')} <span className="text-base text-blue-500/70 relative -top-0.5">₫</span></span>
+                 <span className="text-blue-700">{formatCurrency(selectedItems.reduce((sum, item) => sum + ((item.quotes?.[item.selectedQuoteIndex || 0]?.price || 0) * (item.shortfall || 0)), 0))}</span>
               </div>
               <div className="flex gap-3">
                 <button onClick={handleCloseModal} className="px-6 py-2.5 font-bold bg-white text-slate-600 rounded-lg hover:bg-slate-100 border border-slate-300 transition-colors">

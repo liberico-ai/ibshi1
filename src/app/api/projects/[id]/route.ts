@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, getUserProjectIds } from '@/lib/auth'
 import { WORKFLOW_RULES, getWorkflowProgress } from '@/lib/workflow-engine'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { validateBody, validateParams } from '@/lib/api-helpers'
@@ -28,6 +28,13 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   })
 
   if (!project) return errorResponse('Dự án không tồn tại', 404)
+
+  if (!['R01', 'R10'].includes(payload.roleCode)) {
+    const allowedIds = await getUserProjectIds(payload)
+    if (allowedIds !== null && !allowedIds.includes(id)) {
+      return errorResponse('Dự án không tồn tại', 404)
+    }
+  }
 
   const ACTIVE = ['OPEN', 'IN_PROGRESS', 'RETURNED']
 

@@ -1,4 +1,4 @@
-import { syncBOMtoBudget, syncPOtoBudget, syncGRNtoBudget } from './sync-engine'
+import { syncBOMtoBudget, syncPOtoBudget } from './sync-engine'
 
 // HookRegistry (Phase 3): logic tự động hóa nghiệp vụ giữ ở code, template/task chỉ gọi theo TÊN.
 // Task động có `hookKeys[]`; khi hoàn thành, work-engine chạy lần lượt các hook tương ứng.
@@ -20,11 +20,6 @@ export const HOOK_REGISTRY: Record<string, HookFn> = {
   syncPOtoBudget: async ({ projectId, userId, resultData }) => {
     const poId = resultData?.poId as string | undefined
     if (projectId && poId) await syncPOtoBudget(projectId, poId, userId)
-  },
-  // GRN → cộng actual
-  syncGRNtoBudget: async ({ projectId, userId, resultData }) => {
-    const amount = Number(resultData?.grnAmount || 0)
-    if (projectId && amount > 0) await syncGRNtoBudget(projectId, amount, userId)
   },
 }
 

@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createPaymentSchema } from '@/lib/schemas'
+import { formatNumber } from '@/lib/utils'
 
 // GET /api/finance/payments — list payments with invoice info
 export async function GET(req: NextRequest) {
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     const remaining = Number(invoice.totalAmount) - Number(invoice.paidAmount)
     if (Number(amount) > remaining) {
-      return errorResponse(`Số tiền thanh toán vượt quá số còn lại (${remaining.toLocaleString('vi-VN')} VNĐ)`)
+      return errorResponse(`Số tiền thanh toán vượt quá số còn lại (${formatNumber(remaining)} VNĐ)`)
     }
 
     const payment = await prisma.payment.create({

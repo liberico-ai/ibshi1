@@ -3,7 +3,7 @@ import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
-import { isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
+import { formatDate, formatDateTime, isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
 
 const DYNAMIC_STEPS = new Set(['P5.1', 'P5.1A', 'P5.1.1', 'P5.2', 'P5.3', 'P5.3A', 'P5.4'])
 
@@ -21,17 +21,18 @@ export async function runProjectStatusReport() {
     return { projects: 0, activeTasks: 0, stuckCount: 0, sentAt: now.toISOString() }
   }
 
-  const tasks = await prisma.workflowTask.findMany({
+  const tasks = await prisma.task.findMany({
     where: {
       projectId: { in: projects.map(p => p.id) },
       status: 'IN_PROGRESS',
-      stepCode: { notIn: [...DYNAMIC_STEPS] },
+      taskType: { notIn: [...DYNAMIC_STEPS] },
     },
     select: {
       projectId: true,
-      stepCode: true,
-      stepName: true,
-      assignedRole: true,
+      taskType: true,
+      title: true,
+      status: true,
+      assignees: { select: { role: true } },
       startedAt: true,
       updatedAt: true,
       deadline: true,
@@ -41,8 +42,9 @@ export async function runProjectStatusReport() {
 
   const tasksByProject = new Map<string, typeof tasks>()
   for (const t of tasks) {
+    if (!t.projectId) continue
     const list = tasksByProject.get(t.projectId) || []
-    if (!list.some(existing => existing.stepCode === t.stepCode)) {
+    if (!list.some(existing => existing.taskType === t.taskType)) {
       list.push(t)
     }
     tasksByProject.set(t.projectId, list)
@@ -50,7 +52,7 @@ export async function runProjectStatusReport() {
 
   const lines: string[] = []
   lines.push('📊 <b>BÁO CÁO TRẠNG THÁI DỰ ÁN</b>')
-  lines.push(`🕐 ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`)
+  lines.push(`🕐 ${formatDateTime(now)}`)
   lines.push(`━━━━━━━━━━━━━━━━━━━━`)
 
   let stuckCount = 0
@@ -70,10 +72,11 @@ export async function runProjectStatusReport() {
     lines.push(`🟢 <b>${escapeHtml(project.projectCode)}</b> — ${escapeHtml(project.projectName)}`)
 
     for (const task of projectTasks) {
-      const rule = WORKFLOW_RULES[task.stepCode]
+      const rule = WORKFLOW_RULES[task.taskType]
       const phase = rule ? PHASE_LABELS[rule.phase]?.name || `Phase ${rule.phase}` : '—'
-      const roleInfo = (ROLES as Record<string, { name: string }>)[task.assignedRole]
-      const roleName = roleInfo?.name || task.assignedRole
+      const taskRole = task.assignees[0]?.role || '—'
+      const roleInfo = (ROLES as Record<string, { name: string }>)[taskRole]
+      const roleName = roleInfo?.name || taskRole
 
       const refDate = task.startedAt || task.updatedAt
       const staleDays = refDate
@@ -85,11 +88,11 @@ export async function runProjectStatusReport() {
       else if (staleDays >= 3) { staleIcon = '🟡' }
 
       const deadlineStr = task.deadline
-        ? new Date(task.deadline).toLocaleDateString('vi-VN')
+        ? formatDate(task.deadline)
         : '—'
-      const isOverdue = task.deadline && new Date(task.deadline) < now
+      const isOverdue = isTaskOverdue(task)
 
-      let line = `   ${staleIcon} <b>${task.stepCode}</b> ${escapeHtml(task.stepName)}`
+      let line = `   ${staleIcon} <b>${task.taskType}</b> ${escapeHtml(task.title)}`
       line += `\n      📌 ${escapeHtml(phase)} · 👤 ${escapeHtml(roleName)}`
       line += ` · ⏱ ${staleDays} ngày`
       if (isOverdue) line += ` · ⏰ <b>QUÁ HẠN</b> (DL: ${deadlineStr})`
@@ -183,7 +186,7 @@ export async function runWeeklyBriefingDigest() {
 
   const lines: string[] = []
   lines.push('📋 <b>GIAO BAN TUẦN — TỔNG HỢP</b>')
-  lines.push(`🕐 ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`)
+  lines.push(`🕐 ${formatDateTime(now)}`)
   lines.push('━━━━━━━━━━━━━━━━━━━━')
 
   for (const [, pg] of byProject) {
@@ -297,7 +300,7 @@ export async function runDailyDeadlineDigest() {
 
   const lines: string[] = []
   lines.push('📅 <b>VIỆC ĐẾN HẠN — NHẮC HÀNG NGÀY</b>')
-  lines.push(`🕐 ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`)
+  lines.push(`🕐 ${formatDateTime(now)}`)
   lines.push('━━━━━━━━━━━━━━━━━━━━')
 
   lines.push('')

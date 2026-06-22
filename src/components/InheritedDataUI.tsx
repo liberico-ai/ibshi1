@@ -1,6 +1,7 @@
 'use client'
 
 import MomSectionsUI from '@/components/MomSectionsUI'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 
 interface Props {
   resultData: Record<string, unknown>
@@ -54,7 +55,7 @@ function EstimateReadonly({ data, project }: { data: Record<string, unknown>; pr
   const totalEst = Number(data.totalEstimate) || 0
   const contractVal = Number(project?.contractValue) || 0
   const profit = contractVal - totalEst
-  const fmtVND = (v: number) => v > 0 ? v.toLocaleString('vi-VN') + ' đ' : '—'
+  const fmtVND = (v: number) => v > 0 ? formatCurrency(v) : '—'
   const pctEst = (v: number) => totalEst > 0 ? ((v / totalEst) * 100).toFixed(1) + '%' : '—'
 
   let dt02Rows: { maCP: string; noiDung: string; giaTri: number }[] = []
@@ -73,7 +74,7 @@ function EstimateReadonly({ data, project }: { data: Record<string, unknown>; pr
             {project.projectCode && <div><span style={{ color: 'var(--text-muted)' }}>Mã DA:</span> <strong>{project.projectCode}</strong></div>}
             {project.clientName && <div><span style={{ color: 'var(--text-muted)' }}>Khách hàng:</span> <strong>{project.clientName}</strong></div>}
             {project.projectName && <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-muted)' }}>Tên DA:</span> <strong>{project.projectName}</strong></div>}
-            {contractVal > 0 && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{contractVal.toLocaleString('vi-VN')} đ</strong></div>}
+            {contractVal > 0 && <div><span style={{ color: 'var(--text-muted)' }}>Giá trị HĐ:</span> <strong style={{ color: '#059669' }}>{formatCurrency(contractVal)}</strong></div>}
           </div>
         </div>
       )}
@@ -126,7 +127,7 @@ function EstimateReadonly({ data, project }: { data: Record<string, unknown>; pr
                 }}>
                   <span style={{ color: 'var(--text-muted)' }}>{row.maCP}</span>
                   <span>{row.noiDung}</span>
-                  <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? Number(row.giaTri).toLocaleString('vi-VN') : ''}</span>
+                  <span style={{ textAlign: 'right' }}>{row.giaTri > 0 ? formatNumber(row.giaTri) : ''}</span>
                 </div>
               )
             })}

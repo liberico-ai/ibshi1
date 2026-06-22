@@ -97,17 +97,9 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < invoices.length; i++) {
         const invPayload = invoices[i]
         
-        let foundProjectId = invPayload.projectId || null;
-        if (!foundProjectId && invPayload.poCode) {
-           const prTasks = await tx.workflowTask.findMany({ where: { stepCode: 'P3.6' } });
-           for (const t of prTasks) {
-               const rd = t.resultData as any;
-               if (rd?.groups?.some((g: any) => g.prCode === invPayload.poCode)) {
-                   foundProjectId = t.projectId;
-                   break;
-               }
-           }
-        }
+        // DEPRECATED: legacy WorkflowTask, đã ngừng dùng
+        // P3.6 projectId lookup was here but workflowTask table is dead — use invoice projectId only.
+        const foundProjectId = invPayload.projectId || null;
 
         // Auto-spawn Advance Invoice
         const newInvoice = await tx.invoice.create({

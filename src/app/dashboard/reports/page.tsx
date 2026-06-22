@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatCompactVND, formatCurrency, formatNumber } from '@/lib/utils'
 
 type Tab = 'overview' | 'projects' | 'financial' | 'production' | 'qc' | 'warehouse' | 'hr' | 'safety' | 'procurement'
 
@@ -378,10 +379,10 @@ function FinancialReport({ data }: { data: Record<string, unknown> }) {
           : items.map(f => (
             <tr key={f.projectCode}>
               <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{f.projectCode}</span> <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{f.projectName}</span></td>
-              <td className="text-right text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{f.contractValue.toLocaleString('vi-VN')} ₫</td>
-              <td className="text-right text-xs" style={{ color: '#0ea5e9' }}>{f.budgetPlanned.toLocaleString('vi-VN')} ₫</td>
-              <td className="text-right text-xs" style={{ color: '#f59e0b' }}>{f.budgetActual.toLocaleString('vi-VN')} ₫</td>
-              <td className="text-right text-xs font-bold" style={{ color: f.variance >= 0 ? '#16a34a' : '#dc2626' }}>{f.variance.toLocaleString('vi-VN')} ₫</td>
+              <td className="text-right text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{formatCurrency(f.contractValue)}</td>
+              <td className="text-right text-xs" style={{ color: '#0ea5e9' }}>{formatCurrency(f.budgetPlanned)}</td>
+              <td className="text-right text-xs" style={{ color: '#f59e0b' }}>{formatCurrency(f.budgetActual)}</td>
+              <td className="text-right text-xs font-bold" style={{ color: f.variance >= 0 ? '#16a34a' : '#dc2626' }}>{formatCurrency(f.variance)}</td>
               <td className="text-right"><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: f.variancePct >= 0 ? '#16a34a20' : '#dc262620', color: f.variancePct >= 0 ? '#16a34a' : '#dc2626' }}>{f.variancePct}%</span></td>
             </tr>
           ))}
@@ -585,7 +586,7 @@ function ProcurementReport({ data }: { data: Record<string, unknown> }) {
         <KPI emoji="📝" label="Tổng PR" value={p.totalPR} sub={`${p.approvedPR} approved`} color="var(--primary)" />
         <KPI emoji="⏳" label="PR chờ duyệt" value={p.pendingPR} sub="pending approval" color="#f59e0b" />
         <KPI emoji="📦" label="Tổng PO" value={p.totalPO} sub={`${p.approvedPO} approved`} color="#16a34a" />
-        <KPI emoji="💰" label="Tổng giá trị PO" value={new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(p.totalPOValue)} sub="VND" color="#dc2626" />
+        <KPI emoji="💰" label="Tổng giá trị PO" value={formatCompactVND(p.totalPOValue)} sub="VND" color="#dc2626" />
       </div>
       {p.recentPOs?.length > 0 && (
         <div className="card overflow-hidden">
@@ -599,7 +600,7 @@ function ProcurementReport({ data }: { data: Record<string, unknown> }) {
                 <tr key={po.poNumber}>
                   <td className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{po.poNumber}</td>
                   <td className="text-xs">{po.vendorName}</td>
-                  <td className="text-right text-xs font-bold">{new Intl.NumberFormat('vi-VN').format(po.totalAmount)}</td>
+                  <td className="text-right text-xs font-bold">{formatNumber(po.totalAmount)}</td>
                   <td><span className={`badge badge-${po.status === 'APPROVED' ? 'success' : po.status === 'PENDING' ? 'warning' : 'default'}`}>{po.status}</span></td>
                 </tr>
               ))}

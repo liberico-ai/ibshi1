@@ -21,14 +21,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const body = await req.json().catch(() => ({})) as { key?: string; value?: unknown }
     if (!body.key || !ALLOWED_KEYS.includes(body.key)) return errorResponse('Key không hợp lệ', 400)
 
-    const task = await prisma.task.findUnique({ where: { id }, select: { resultData: true } })
+    const task = await prisma.task.findUnique({ where: { id }, select: { id: true, resultData: true } })
     if (!task) return errorResponse('Không tìm thấy công việc', 404)
 
-    const prev = (task.resultData && typeof task.resultData === 'object') ? (task.resultData as Record<string, unknown>) : {}
-    await prisma.task.update({
-      where: { id },
-      data: { resultData: JSON.parse(JSON.stringify({ ...prev, [body.key]: body.value ?? '' })) },
-    })
+    if (body.key === 'chosenVendorId' && body.value) {
+      const rd = (task.resultData && typeof task.resultData === 'object') ? (task.resultData as Record<string, unknown>) : {}
+      const quotes = Array.isArray(rd.supplierQuotes) ? rd.supplierQuotes as { vendorId?: string; totalAmount?: number; selectReason?: string }[] : []
+      const vendorId = String(body.value)
+      const chosen = quotes.find(q => q.vendorId === vendorId)
+      if (!chosen) return errorResponse('NCC không nằm trong danh sách báo giá', 400)
+      const priced = quotes.filter(q => (q.totalAmount ?? 0) > 0)
+      const minAmount = priced.length > 0 ? Math.min(...priced.map(q => q.totalAmount!)) : 0
+      if (minAmount > 0 && (chosen.totalAmount ?? 0) > minAmount && !chosen.selectReason?.trim()) {
+        return errorResponse('Phải nhập lý do khi chọn NCC không phải giá thấp nhất', 400)
+      }
+    }
+
+    const patch = JSON.stringify({ [body.key]: body.value ?? '' })
+    await prisma.$executeRaw`
+      UPDATE "tasks"
+      SET "result_data" = COALESCE("result_data", '{}'::jsonb) || ${patch}::jsonb,
+          "updated_at" = now()
+      WHERE "id" = ${id}`
     return successResponse({})
   } catch (err) {
     console.error('POST /api/work/tasks/[id]/result-data error:', err)

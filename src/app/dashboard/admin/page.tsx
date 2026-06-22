@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
+import { formatDateTime } from '@/lib/utils'
 
 interface Stats {
   totalUsers: number; activeUsers: number; inactiveUsers: number
@@ -112,7 +113,7 @@ export default function AdminDashboardPage() {
                 }}>{l.action}</span>
                 <span className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{l.entity}</span>
                 <span className="text-xs flex-1 truncate" style={{ color: 'var(--text-muted)' }}>bởi <strong>{l.fullName}</strong> ({l.username})</span>
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(l.createdAt).toLocaleString('vi-VN')}</span>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDateTime(l.createdAt)}</span>
               </div>
             ))}
           </div>

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { formatNumber } from '@/lib/utils'
 
 interface QualityAcceptanceUIProps {
   task: any
@@ -62,7 +63,7 @@ export default function QualityAcceptanceUI({ task, isActive, project, currentUs
           </tr>
           <tr>
             <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600 }}>Tổng KL thiết kế</td>
-            <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{Number(rd.totalKL || 0).toLocaleString('vi-VN')} kg</td>
+            <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{formatNumber(rd.totalKL || 0)} kg</td>
           </tr>
         </tbody>
       </table>

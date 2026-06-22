@@ -12,13 +12,19 @@ export default function PerformancePage() {
   const [kpi, setKpi] = useState<Kpi | null>(null)
   const [depts, setDepts] = useState<Dept[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
+  function loadPerformance() {
+    setLoading(true)
+    setError('')
     apiFetch('/api/work/performance').then((r) => {
       if (r.ok) { setKpi(r.kpi); setDepts(r.departments) }
+      else { setKpi(null); setDepts([]); setError(r.error || 'Không tải được dữ liệu hiệu suất') }
       setLoading(false)
     })
-  }, [])
+  }
+
+  useEffect(() => { loadPerformance() }, [])
 
   const cards = kpi ? [
     { l: 'Tỷ lệ đúng hạn', v: `${kpi.onTimePct}%`, c: '#059669' },
@@ -34,7 +40,12 @@ export default function PerformancePage() {
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Đánh giá theo phòng ban — kỳ hiện tại · nguồn: vòng đời task</p>
       </div>
 
-      {loading ? <div className="h-24 skeleton rounded-xl" /> : (
+      {loading ? <div className="h-24 skeleton rounded-xl" /> : error ? (
+        <div className="text-center py-12">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button onClick={loadPerformance} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Thử lại</button>
+        </div>
+      ) : (
         <>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))' }}>
             {cards.map((c) => (

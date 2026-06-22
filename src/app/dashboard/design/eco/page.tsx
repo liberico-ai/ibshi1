@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 interface ECO {
   id: string; ecoCode: string; title: string; description: string;
@@ -100,9 +101,9 @@ export default function ECOPage() {
                   <p className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{eco.description}</p>
                   <div className="flex items-center gap-3 mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                     <span>DA: {eco.project.projectCode}</span>
-                    {eco.impactCost && <span className="font-semibold" style={{ color: '#f59e0b' }}>💰 {Number(eco.impactCost).toLocaleString('vi-VN')} đ</span>}
+                    {eco.impactCost && <span className="font-semibold" style={{ color: '#f59e0b' }}>💰 {formatCurrency(Number(eco.impactCost))}</span>}
                     {eco.impactSchedule && <span className="font-semibold" style={{ color: '#dc2626' }}>📅 +{eco.impactSchedule} ngày</span>}
-                    <span>{new Date(eco.createdAt).toLocaleDateString('vi-VN')}</span>
+                    <span>{formatDate(eco.createdAt)}</span>
                   </div>
                 </div>
               </div>
