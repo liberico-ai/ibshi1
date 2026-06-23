@@ -8,8 +8,19 @@
 
 import { createHash, randomBytes } from 'crypto'
 import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import pg from 'pg'
 
-const prisma = new PrismaClient()
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) { console.error('DATABASE_URL required'); process.exit(1) }
+const isRemote = !connectionString.includes('@localhost') && !connectionString.includes('@127.0.0.1')
+const pool = new pg.Pool({
+  connectionString,
+  max: 5,
+  ...(isRemote && { ssl: { rejectUnauthorized: false } }),
+})
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool as any) })
 
 async function main() {
   const [, , name, ...scopes] = process.argv
