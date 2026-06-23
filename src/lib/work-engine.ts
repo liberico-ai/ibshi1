@@ -2,6 +2,7 @@ import prisma from './db'
 import type { CreateTaskInput, CompleteWorkTaskInput, ReassignTaskInput } from './schemas/work.schema'
 import { ROLE_TO_DEPT, DEPT_KEYWORDS, DEPT_PRIMARY_ROLE, DEPT_NAME } from './org-map'
 import { runHooks } from './work-hooks'
+import { emitTaskUpdated } from './webhook'
 import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
 import { todayStart } from './utils'
 
@@ -232,6 +233,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
   if (!task) throw new Error('Không tìm thấy công việc')
   if (task.status === TASK_STATUS.DONE) throw new Error('Công việc đã hoàn thành')
   if (!isAssignee(task, userId, roleCode)) throw new Error('Bạn không phải người nhận công việc này')
+  const prevStatus = task.status
 
   // ── Điều kiện hoàn thành (áp dụng cho MỌI task) ──
   // (a) MUST_READ: phải tick "đã đọc" từng tài liệu mới được hoàn thành.
@@ -364,6 +366,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
         prisma.taskHistory.create({ data: { taskId, action: 'COMPLETED', byUserId: userId } }),
         prisma.notification.create({ data: { userId: task.createdBy, title: `Hoàn thành: ${task.title}`, message: 'Công việc bạn giao đã hoàn thành.', type: 'task_completed', linkUrl: `/dashboard/work/${taskId}` } }),
       ])
+      emitTaskUpdated(taskId, prevStatus).catch(() => {})
       const hookKeys = (task as { hookKeys?: string[] }).hookKeys
       await runHooks(hookKeys, { projectId: task.projectId, userId, resultData: input.resultData })
       // Nếu user chọn FORWARD thì KHÔNG chain next (forward task thay thế luồng tự động)
@@ -378,6 +381,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
         prisma.taskHistory.create({ data: { taskId, action: 'SUBMITTED_TO_CREATOR', byUserId: userId, toUserId: task.createdBy } }),
         prisma.notification.create({ data: { userId: task.createdBy, title: `Cần xem & kết thúc: ${task.title}`, message: 'Người nhận đã hoàn thành và trả lại. Hãy kết thúc hoặc tạo việc tiếp theo.', type: 'task_review', linkUrl: `/dashboard/work/${taskId}` } }),
       ])
+      emitTaskUpdated(taskId, prevStatus).catch(() => {})
     }
   } else {
     // Còn người chưa xong → chuyển sang đang xử lý, báo người tạo tiến độ
@@ -388,6 +392,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
         data: { userId: task.createdBy, title: `Tiến độ: ${task.title}`, message: `Đã hoàn thành ${doneCount}/${rows.length} người nhận.`, type: 'task_progress', linkUrl: `/dashboard/work/${taskId}` },
       }),
     ])
+    emitTaskUpdated(taskId, prevStatus).catch(() => {})
   }
 
   return { ok: true, allDone, forwardedId }
@@ -400,10 +405,12 @@ export async function finalizeTask(taskId: string, userId: string) {
   if (!task) throw new Error('Không tìm thấy công việc')
   if (task.createdBy !== userId) throw new Error('Chỉ người giao việc mới được kết thúc')
   if (task.status === TASK_STATUS.DONE) throw new Error('Công việc đã kết thúc')
+  const prevStatus = task.status
   await prisma.$transaction([
     prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.DONE, completedAt: new Date(), completedBy: userId } }),
     prisma.taskHistory.create({ data: { taskId, action: 'CLOSED', byUserId: userId } }),
   ])
+  emitTaskUpdated(taskId, prevStatus).catch(() => {})
   // Chạy hook nghiệp vụ khi người giao chốt kết thúc
   const hookKeys = (task as { hookKeys?: string[] }).hookKeys
   await runHooks(hookKeys, { projectId: task.projectId, userId })
@@ -534,6 +541,7 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
     ])
   }
 
+  emitTaskUpdated(taskId, task.status).catch(() => {})
   const wasEscalated = !task.escalated && input.escalated === true
   return { ok: true, status: input.status, wasEscalated }
 }
@@ -542,6 +550,7 @@ export async function returnTask(taskId: string, userId: string, roleCode: strin
   const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
   if (!isAssignee(task, userId, roleCode)) throw new Error('Bạn không phải người nhận công việc này')
+  const prevStatus = task.status
 
   await prisma.$transaction([
     prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.RETURNED, returnCount: { increment: 1 } } }),
@@ -550,11 +559,12 @@ export async function returnTask(taskId: string, userId: string, roleCode: strin
       data: { userId: task.createdBy, title: `⚠️ Trả lại (sai phạm vi): ${task.title}`, message: `Lý do: ${reason}`, type: 'task_returned', linkUrl: `/dashboard/work/${taskId}` },
     }),
   ])
+  emitTaskUpdated(taskId, prevStatus).catch(() => {})
   return { ok: true, returnedTo: task.createdBy }
 }
 
 export async function reassignTask(taskId: string, userId: string, input: ReassignTaskInput) {
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true } })
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true, status: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
 
   const reassignUserIds = (input.assignees || []).map((a) => a.userId).filter((x): x is string => !!x)
@@ -573,6 +583,7 @@ export async function reassignTask(taskId: string, userId: string, input: Reassi
     prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.OPEN, assignedAt: new Date() } }),
     prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, toRole: input.assignees[0]?.role || null, toUserId: input.assignees[0]?.userId || null, reason: input.note } }),
   ])
+  emitTaskUpdated(taskId, task.status).catch(() => {})
   const [project, creator] = await Promise.all([
     task.projectId ? prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } }) : null,
     prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }),

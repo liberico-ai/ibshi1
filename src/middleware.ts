@@ -94,6 +94,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // External API — authenticated by api-auth in route handlers
+  if (pathname.startsWith('/api/external')) {
+    const ip = getClientIP(req)
+    const apiKey = req.headers.get('authorization')?.substring(7) || ''
+    const rateLimitKey = apiKey ? `ext:${apiKey.substring(0, 22)}` : `ext:${ip}`
+    if (!checkRateLimit(rateLimitKey, 120, 60_000)) {
+      return NextResponse.json({ ok: false, error: 'Too many requests' }, { status: 429 })
+    }
+    const response = NextResponse.next()
+    return addCorsHeaders(response, req)
+  }
+
   // Validate CRON routes with secret
   if (pathname.startsWith('/api/cron')) {
     const cronSecret = req.headers.get('x-cron-secret')

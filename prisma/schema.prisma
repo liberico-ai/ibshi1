@@ -1405,6 +1405,8 @@ model Task {
   escalated            Boolean             @default(false)
   escalatedAt          DateTime?           @map("escalated_at")
   escalatedBy          String?             @map("escalated_by")
+  externalRef          String?             @unique @map("external_ref")
+  externalSource       String?             @map("external_source")
   forwardedFromId      String?             @map("forwarded_from_id") // việc này được "chuyển tiếp" từ task nào (truy vết)
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
@@ -1583,4 +1585,19 @@ model TemplateStep {
 
   @@index([templateId])
   @@map("template_steps")
+}
+
+model ApiClient {
+  id            String    @id @default(cuid())
+  name          String
+  keyPrefix     String    @unique @map("key_prefix")
+  keyHash       String    @map("key_hash")
+  webhookSecret String    @map("webhook_secret")
+  callbackUrl   String?   @map("callback_url")
+  scopes        String[]  @default([])
+  active        Boolean   @default(true)
+  lastUsedAt    DateTime? @map("last_used_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("api_clients")
 }
