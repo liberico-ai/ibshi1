@@ -1,12 +1,12 @@
 import { successResponse, errorResponse } from '@/lib/auth'
-import { runProjectStatusReport } from '@/lib/cron-jobs'
+import { runDailyDigest } from '@/lib/cron-jobs'
 
 export async function GET() {
   try {
-    const result = await runProjectStatusReport()
+    const result = await runDailyDigest()
     return successResponse(result)
   } catch (err) {
-    console.error('GET /api/cron/project-status-report error:', err)
+    console.error('GET /api/cron/daily-digest error:', err)
     return errorResponse('Lỗi hệ thống', 500)
   }
 }

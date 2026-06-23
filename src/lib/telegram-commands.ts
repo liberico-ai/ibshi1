@@ -9,7 +9,7 @@ import { ROLES } from '@/lib/constants'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { escapeHtml, formatDeadline } from '@/lib/telegram'
 import { formatNumber, todayStart } from '@/lib/utils'
-import { runWeeklyBriefingDigest } from '@/lib/cron-jobs'
+import { runDailyDigest } from '@/lib/cron-jobs'
 
 // ── Command menu (registered with Telegram) ─────────────────
 
@@ -516,12 +516,12 @@ export function registerCommands(bot: Bot): void {
     await ctx.reply(msg, { parse_mode: 'HTML' })
   })
 
-  // ── /giaoban — Weekly briefing digest ──────────────────────
+  // ── /giaoban — Daily digest on demand ──────────────────────
   bot.command('giaoban', async (ctx: Context) => {
-    await ctx.reply('⏳ Đang tổng hợp giao ban tuần...')
+    await ctx.reply('⏳ Đang tổng hợp...')
     try {
-      const result = await runWeeklyBriefingDigest()
-      await ctx.reply(`✅ Đã gửi digest: ${result.overdue} quá hạn · ${result.dueSoon} sắp hạn · ${result.exec} cần quyết`, { parse_mode: 'HTML' })
+      const result = await runDailyDigest()
+      await ctx.reply(`✅ Đã gửi: 🔴 ${result.overdue} quá hạn · 🟡 ${result.dueSoon} sắp hạn · 🔺 ${result.exec} cần quyết`, { parse_mode: 'HTML' })
     } catch (err) {
       await ctx.reply('❌ Lỗi: ' + (err as Error).message)
     }

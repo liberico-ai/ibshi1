@@ -19,6 +19,12 @@ export async function register() {
       } catch (err) {
         console.error('🤖 Telegram instrumentation error:', err)
       }
+      try {
+        const { startScheduler } = await import('@/lib/cron-scheduler')
+        startScheduler()
+      } catch (err) {
+        console.error('📅 Cron scheduler instrumentation error:', err)
+      }
     }, 3_000)
   }
 }

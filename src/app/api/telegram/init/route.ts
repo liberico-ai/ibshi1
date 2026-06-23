@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { startPolling, isPolling } from '@/lib/telegram'
 import { startScheduler, isSchedulerRunning } from '@/lib/cron-scheduler'
-import { runProjectStatusReport } from '@/lib/cron-jobs'
+import { runDailyDigest } from '@/lib/cron-jobs'
 import { authenticateRequest } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
@@ -39,15 +39,15 @@ export async function GET(req: NextRequest) {
   }
 
   const trigger = req.nextUrl.searchParams.get('trigger')
-  if (trigger === 'status-report') {
-    console.log('[TelegramInit] Manual trigger: status-report')
+  if (trigger === 'digest') {
+    console.log('[TelegramInit] Manual trigger: daily digest')
     try {
-      const result = await runProjectStatusReport()
+      const result = await runDailyDigest()
       console.log('[TelegramInit] Manual trigger result:', JSON.stringify(result))
       return Response.json({ ok: true, bot: botStatus, cron: 'running', triggered: result })
     } catch (err) {
       console.error('[TelegramInit] Manual trigger failed:', err)
-      return Response.json({ ok: false, error: 'Report failed' }, { status: 500 })
+      return Response.json({ ok: false, error: 'Digest failed' }, { status: 500 })
     }
   }
 
