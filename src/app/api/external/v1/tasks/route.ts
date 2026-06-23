@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '@/lib/auth'
 import { authenticateApiClient, requireScope } from '@/lib/api-auth'
 import { createTask } from '@/lib/work-engine'
 import { ROLES } from '@/lib/constants'
+import { saveAttachmentFromBuffer, validateFileName } from '@/lib/save-attachment'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,6 +88,16 @@ export async function GET(req: NextRequest) {
 
 // ── POST: Create task from external system ──
 
+const attachmentSchema = z.object({
+  fileName: z.string().min(1, 'fileName là bắt buộc'),
+  mimeType: z.string().optional(),
+  contentBase64: z.string().min(1, 'contentBase64 là bắt buộc'),
+})
+
+const MAX_ATTACHMENTS = 10
+const MAX_SINGLE_FILE_BYTES = 20 * 1024 * 1024 // 20 MB decoded
+const MAX_TOTAL_FILE_BYTES = 50 * 1024 * 1024   // 50 MB total
+
 const assigneeSchema = z.object({
   userId: z.string().optional(),
   role: z.string().optional(),
@@ -101,6 +112,7 @@ const bodySchema = z.object({
   assignee: assigneeSchema,
   deadline: z.string().optional(),
   priority: z.enum(['NORMAL', 'HIGH', 'URGENT']).default('NORMAL'),
+  attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS, `Tối đa ${MAX_ATTACHMENTS} file đính kèm`).optional(),
 })
 
 async function getApiSystemUserId(): Promise<string> {
@@ -120,6 +132,41 @@ async function getApiSystemUserId(): Promise<string> {
   return user.id
 }
 
+function validateAttachments(attachments: z.infer<typeof attachmentSchema>[]): { error?: string; buffers?: Buffer[] } {
+  const buffers: Buffer[] = []
+  let totalSize = 0
+
+  for (let i = 0; i < attachments.length; i++) {
+    const att = attachments[i]
+
+    const extErr = validateFileName(att.fileName)
+    if (extErr) return { error: `File ${i + 1} ("${att.fileName}"): ${extErr}` }
+
+    let buf: Buffer
+    try {
+      buf = Buffer.from(att.contentBase64, 'base64')
+    } catch {
+      return { error: `File ${i + 1} ("${att.fileName}"): contentBase64 không hợp lệ` }
+    }
+
+    if (buf.length === 0) {
+      return { error: `File ${i + 1} ("${att.fileName}"): file rỗng` }
+    }
+    if (buf.length > MAX_SINGLE_FILE_BYTES) {
+      return { error: `File ${i + 1} ("${att.fileName}"): vượt quá ${MAX_SINGLE_FILE_BYTES / 1024 / 1024}MB` }
+    }
+
+    totalSize += buf.length
+    if (totalSize > MAX_TOTAL_FILE_BYTES) {
+      return { error: `Tổng dung lượng file vượt quá ${MAX_TOTAL_FILE_BYTES / 1024 / 1024}MB` }
+    }
+
+    buffers.push(buf)
+  }
+
+  return { buffers }
+}
+
 export async function POST(req: NextRequest) {
   const client = await authenticateApiClient(req)
   if (!client) return errorResponse('Unauthorized', 401)
@@ -134,9 +181,17 @@ export async function POST(req: NextRequest) {
     return errorResponse(msg, 400)
   }
 
-  const { externalRef, projectCode, title, description, assignee, deadline, priority } = parsed.data
+  const { externalRef, projectCode, title, description, assignee, deadline, priority, attachments } = parsed.data
 
-  // Idempotency: if externalRef already exists, return existing task
+  // Validate attachments BEFORE creating task
+  let attBuffers: Buffer[] | undefined
+  if (attachments && attachments.length > 0) {
+    const validation = validateAttachments(attachments)
+    if (validation.error) return errorResponse(validation.error, 400)
+    attBuffers = validation.buffers
+  }
+
+  // Idempotency: if externalRef already exists, return existing task (do NOT re-create attachments)
   const existing = await prisma.task.findUnique({
     where: { externalRef },
     select: { id: true, externalRef: true, status: true, createdAt: true },
@@ -186,7 +241,29 @@ export async function POST(req: NextRequest) {
       assignees: taskAssignees.map((a, i) => ({ ...a, isPrimary: i === 0 })),
     }, systemUserId, { externalRef, externalSource: 'sale', externalClientId: client.id })
 
-    console.log(`[ExternalAPI] Task created: ${task.id} externalRef=${externalRef} by client=${client.name}`)
+    // Save attachments as MUST_READ docs (only for newly created tasks)
+    if (attachments && attBuffers && attBuffers.length > 0) {
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i]
+        const saved = await saveAttachmentFromBuffer({
+          buffer: attBuffers[i],
+          fileName: att.fileName,
+          entityType: 'TaskDoc',
+          entityId: `${task.id}_doc${i}`,
+          uploadedBy: systemUserId,
+        })
+        await prisma.taskDocRequirement.create({
+          data: {
+            taskId: task.id,
+            kind: 'MUST_READ',
+            label: att.fileName,
+            fileAttachmentId: saved.id,
+          },
+        })
+      }
+    }
+
+    console.log(`[ExternalAPI] Task created: ${task.id} externalRef=${externalRef} attachments=${attachments?.length || 0} by client=${client.name}`)
 
     return successResponse({
       data: { taskId: task.id, externalRef, status: task.status, createdAt: task.createdAt },

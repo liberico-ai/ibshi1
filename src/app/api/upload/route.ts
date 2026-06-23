@@ -2,46 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, unauthorizedResponse, errorResponse } from '@/lib/auth'
 import { canEditForm } from '@/lib/constants'
-import { writeFile, mkdir } from 'fs/promises'
-import path from 'path'
-
-
-// ── Upload Security ──────────────────────────────────────────────────
-const ALLOWED_EXTENSIONS = new Set([
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.csv', '.txt',
-  '.png', '.jpg', '.jpeg', '.webp', '.gif',
-  '.dwg', '.dxf',
-  '.zip', '.rar', '.7z',
-])
-
-const EXT_TO_MIME: Record<string, string> = {
-  '.pdf': 'application/pdf',
-  '.doc': 'application/msword',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.xls': 'application/vnd.ms-excel',
-  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  '.ppt': 'application/vnd.ms-powerpoint',
-  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  '.csv': 'text/csv',
-  '.txt': 'text/plain',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.dwg': 'application/acad',
-  '.dxf': 'application/dxf',
-  '.zip': 'application/zip',
-  '.rar': 'application/vnd.rar',
-  '.7z': 'application/x-7z-compressed',
-}
+import { saveAttachmentFromBuffer, validateFileName, ENTITY_ID_REGEX } from '@/lib/save-attachment'
 
 const ALLOWED_ENTITY_TYPES = new Set([
   'TaskDoc', 'TaskQuote', 'Project', 'ProjectDoc', 'ProjectDraft',
   'PO', 'PR', 'GRN', 'Meeting', 'General', 'Task',
 ])
-
-const ENTITY_ID_REGEX = /^[A-Za-z0-9._-]+$/
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 
@@ -73,37 +39,22 @@ export async function POST(req: NextRequest) {
       return errorResponse('Chưa chọn file', 400)
     }
 
-    const ext = path.extname(file.name).toLowerCase()
-    if (!ALLOWED_EXTENSIONS.has(ext)) {
-      return errorResponse(`Định dạng file "${ext}" không được hỗ trợ.`, 400)
-    }
+    const extErr = validateFileName(file.name)
+    if (extErr) return errorResponse(extErr, 400)
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       return errorResponse('File quá lớn. Kích thước tối đa là 50 MB.', 400)
     }
 
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', entityType.toLowerCase(), entityId)
-    await mkdir(uploadDir, { recursive: true })
-
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const filePath = path.join(uploadDir, safeName)
-    await writeFile(filePath, buffer)
 
-    const fileUrl = `/uploads/${entityType.toLowerCase()}/${entityId}/${safeName}`
-    const mimeType = EXT_TO_MIME[ext] || 'application/octet-stream'
-
-    const attachment = await prisma.fileAttachment.create({
-      data: {
-        entityType,
-        entityId,
-        fileName: file.name,
-        fileUrl,
-        fileSize: buffer.length,
-        mimeType,
-        uploadedBy: user.userId,
-      },
+    const attachment = await saveAttachmentFromBuffer({
+      buffer,
+      fileName: file.name,
+      entityType,
+      entityId,
+      uploadedBy: user.userId,
     })
 
     return NextResponse.json({ ok: true, attachment }, {
