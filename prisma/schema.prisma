@@ -430,6 +430,7 @@ model PurchaseOrder {
   orderDate    DateTime?           @map("order_date")
   deliveryDate DateTime?           @map("delivery_date")
   paymentTerms String?             @map("payment_terms")
+  sourceTaskId String?             @map("source_task_id")
   createdBy    String              @map("created_by")
   notes        String?
   createdAt    DateTime            @default(now()) @map("created_at")
@@ -447,12 +448,17 @@ model PurchaseOrder {
 model PurchaseOrderItem {
   id            String        @id @default(cuid())
   poId          String        @map("po_id")
-  materialId    String        @map("material_id")
+  materialId    String?       @map("material_id")
+  itemCode      String?       @map("item_code")
+  description   String?       @map("item_description")
+  profile       String?       @map("item_profile")
+  grade         String?       @map("item_grade")
+  unit          String?       @map("item_unit")
   quantity      Decimal
   unitPrice     Decimal       @map("unit_price")
   receivedQty   Decimal       @default(0) @map("received_qty")
   notes         String?
-  material      Material      @relation(fields: [materialId], references: [id])
+  material      Material?     @relation(fields: [materialId], references: [id])
   purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
 
   @@index([poId])

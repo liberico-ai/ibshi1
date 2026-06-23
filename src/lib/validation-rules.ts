@@ -34,6 +34,7 @@ async function validateBOMConsistency(
   const contractBOM = resultData?.contractBOM as Record<string, number> | undefined
   if (contractBOM && bomItems.length > 0) {
     for (const item of bomItems) {
+      if (!item.material) continue
       const contractQty = contractBOM[item.material.materialCode]
       if (contractQty && Math.abs(Number(item.quantity) - contractQty) > 0.01) {
         warnings.push(

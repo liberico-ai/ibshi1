@@ -7,13 +7,17 @@ import { formatDate, formatNumber } from '@/lib/utils'
 interface GRN {
   id: string; type: string; reason: string; quantity: number; referenceNo: string | null;
   heatNumber: string | null; lotNumber: string | null; notes: string | null; createdAt: string;
-  material: { materialCode: string; name: string; unit: string }
+  material: { materialCode: string; name: string; unit: string } | null
 }
 
 interface PO {
   id: string; poCode: string; status: string;
   vendor: { name: string } | null;
-  items: Array<{ id: string; materialId: string; quantity: number; receivedQty: number; material: { materialCode: string; name: string; unit: string } }>
+  items: Array<{
+    id: string; materialId: string | null; quantity: number; receivedQty: number;
+    material: { materialCode: string; name: string; unit: string } | null;
+    itemCode?: string; description?: string; unit?: string;
+  }>
 }
 
 interface ReceiveItem {
@@ -65,8 +69,8 @@ export default function GRNPage() {
         lotNumber: '',
         notes: '',
         maxQty: Number(item.quantity) - Number(item.receivedQty),
-        materialName: `${item.material.materialCode} — ${item.material.name}`,
-        unit: item.material.unit,
+        materialName: item.material ? `${item.material.materialCode} — ${item.material.name}` : (item.itemCode ? `${item.itemCode} — ${item.description || ''}` : item.description || '—'),
+        unit: item.material?.unit || item.unit || '',
       })).filter((i: ReceiveItem) => i.maxQty > 0)
     )
   }
@@ -197,9 +201,9 @@ export default function GRNPage() {
             ) : receipts.map(r => (
               <tr key={r.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{r.referenceNo || '—'}</span></td>
-                <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{r.material.materialCode} — {r.material.name}</td>
+                <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{r.material ? `${r.material.materialCode} — ${r.material.name}` : '—'}</td>
                 <td className="text-xs font-bold" style={{ color: '#16a34a' }}>{formatNumber(r.quantity)}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.material.unit}</td>
+                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.material?.unit || '—'}</td>
                 <td className="text-xs font-mono" style={{ color: '#0ea5e9' }}>{r.heatNumber || '—'}</td>
                 <td className="text-xs font-mono" style={{ color: '#f59e0b' }}>{r.lotNumber || '—'}</td>
                 <td className="text-xs max-w-32 truncate" style={{ color: 'var(--text-muted)' }}>{r.notes || '—'}</td>

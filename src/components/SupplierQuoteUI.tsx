@@ -63,6 +63,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   const [newVendor, setNewVendor] = useState({ name: '', vendorCode: '', category: 'NCC', contact: '', phone: '' })
   const [creatingVendor, setCreatingVendor] = useState(false)
   const [reasonError, setReasonError] = useState<string | null>(null)
+  const [poState, setPoState] = useState<{ loading: boolean; poId?: string; poCode?: string; error?: string }>({ loading: false })
 
   useEffect(() => {
     apiFetch('/api/vendors').then(r => {
@@ -169,6 +170,20 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     ).slice(0, 20)
   }
 
+  const handleCreatePO = async () => {
+    setPoState({ loading: true })
+    try {
+      const res = await apiFetch(`/api/work/tasks/${taskId}/create-po`, { method: 'POST' })
+      if (res.ok) {
+        setPoState({ loading: false, poId: res.poId, poCode: res.poCode })
+      } else {
+        setPoState({ loading: false, error: res.error || 'Lỗi tạo PO' })
+      }
+    } catch {
+      setPoState({ loading: false, error: 'Lỗi kết nối' })
+    }
+  }
+
   // PR reference table
   const prItems = bomPrData ? (() => { try { return JSON.parse(bomPrData) } catch { return null } })() : null
   const parsedPrItems: PrItem[] = useMemo(() => {
@@ -180,45 +195,131 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       grade: String(it.grade || ''),
       unit: String(it.unit || it.uom || ''),
       quantity: Number(it.quantity || it.qty || 0),
+      neededQty: typeof it.neededQty === 'number' ? it.neededQty : undefined,
+      needToBuyQty: typeof it.needToBuyQty === 'number' ? it.needToBuyQty : undefined,
     }))
   }, [bomPrData]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Comparison
-  const sorted = [...quotes].filter(q => q.totalAmount > 0).sort((a, b) => a.totalAmount - b.totalAmount)
-  const minAmount = sorted.length > 0 ? sorted[0].totalAmount : 0
+  const hasNeedToBuy = parsedPrItems.some(p => typeof p.needToBuyQty === 'number')
+  const hasItemsToBuy = parsedPrItems.some(p => typeof p.needToBuyQty === 'number' && p.needToBuyQty > 0)
+  const needToBuyTotals: Record<string, number> = useMemo(() => {
+    if (!hasNeedToBuy) return {}
+    const totals: Record<string, number> = {}
+    for (const q of quotes) {
+      if (!q.lines || q.lines.length === 0) continue
+      let total = 0
+      for (const p of parsedPrItems) {
+        const buyQty = p.needToBuyQty ?? (p.quantity || p.qty || 0)
+        if (buyQty <= 0) continue
+        const pi = parsedPrItems.indexOf(p)
+        const match = q.lines.find(l => l.matchedPrIndex === pi)
+        if (match && match.unitPrice > 0) total += buyQty * match.unitPrice
+      }
+      if (total > 0) totals[q.id] = Math.round(total)
+    }
+    return totals
+  }, [quotes, parsedPrItems, hasNeedToBuy])
+
+  const sortKey = (q: SupplierQuote) => hasNeedToBuy && needToBuyTotals[q.id] ? needToBuyTotals[q.id] : q.totalAmount
+  const sorted = [...quotes].filter(q => sortKey(q) > 0).sort((a, b) => sortKey(a) - sortKey(b))
+  const minAmount = sorted.length > 0 ? sortKey(sorted[0]) : 0
   const chosen = quotes.find(q => q.selected)
 
-  const prRef = Array.isArray(prItems) && prItems.length > 0 ? (
-    <div className="rounded-xl p-4" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-      <div className="text-sm font-semibold mb-2" style={{ color: '#0369a1' }}>📦 Vật tư cần mua (từ PR)</div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead><tr style={{ background: '#e0f2fe' }}>
-            {['#', 'Mã VT', 'Tên vật tư', 'ĐVT', 'SL', 'Ghi chú'].map(h => (
-              <th key={h} className="text-left px-2 py-1.5 font-semibold" style={{ color: '#0c4a6e' }}>{h}</th>
-            ))}
-          </tr></thead>
-          <tbody>
-            {(prItems as Record<string, unknown>[]).slice(0, 50).map((item, i) => (
-              <tr key={i} style={{ borderTop: '1px solid #bae6fd' }}>
-                <td className="px-2 py-1" style={{ color: '#64748b' }}>{i + 1}</td>
-                <td className="px-2 py-1 font-mono">{String(item.materialCode || item.code || '—')}</td>
-                <td className="px-2 py-1">{String(item.materialName || item.name || item.description || '—')}</td>
-                <td className="px-2 py-1">{String(item.unit || item.uom || '—')}</td>
-                <td className="px-2 py-1 font-semibold">{String(item.quantity || item.qty || '—')}</td>
-                <td className="px-2 py-1" style={{ color: '#64748b' }}>{String(item.note || item.remark || '')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  const poButton = (() => {
+    if (!canEditQuote || !chosen?.vendorId || !hasItemsToBuy) return null
+    if (poState.poId) {
+      return (
+        <div className="rounded-xl p-4" style={{ background: '#f0fdf4', border: '2px solid #22c55e' }}>
+          <div className="text-sm font-bold" style={{ color: '#15803d' }}>
+            🛒 Đã tạo PO: <span className="font-mono">{poState.poCode}</span>
+          </div>
+          <a href={`/dashboard/warehouse/purchase-orders`} className="text-xs underline" style={{ color: '#0369a1' }}>Xem đơn đặt hàng →</a>
+        </div>
+      )
+    }
+    return (
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleCreatePO}
+          disabled={poState.loading}
+          className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+          style={{ background: poState.loading ? '#94a3b8' : '#0284c7' }}
+        >
+          {poState.loading ? 'Đang tạo PO...' : '🛒 Tạo đơn đặt hàng (PO)'}
+        </button>
+        {poState.error && <span className="text-xs" style={{ color: '#dc2626' }}>{poState.error}</span>}
       </div>
-      {(prItems as unknown[]).length > 50 && <div className="text-xs mt-1" style={{ color: '#64748b' }}>... và {(prItems as unknown[]).length - 50} dòng nữa</div>}
-    </div>
-  ) : null
+    )
+  })()
+
+  const prRef = (() => {
+    if (!Array.isArray(prItems) || prItems.length === 0) return null
+    const arr = prItems as Record<string, unknown>[]
+    const shown = arr.slice(0, 50)
+    const totalNeeded = arr.reduce((s, it) => s + (typeof it.neededQty === 'number' ? (it.neededQty as number) : 0), 0)
+    const totalToBuy = arr.reduce((s, it) => s + (typeof it.needToBuyQty === 'number' ? (it.needToBuyQty as number) : 0), 0)
+    return (
+      <div className="rounded-xl p-4" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
+        <div className="text-sm font-semibold mb-2" style={{ color: '#0369a1' }}>📦 Vật tư cần mua (từ PR)</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead><tr style={{ background: '#e0f2fe' }}>
+              {['#', 'Mã', 'Tên vật tư', 'ĐVT', 'SL cần', 'Tồn khả dụng', 'Còn phải mua'].map(h => (
+                <th key={h} className="text-left px-2 py-1.5 font-semibold" style={{ color: '#0c4a6e' }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {shown.map((item, i) => {
+                const needed = typeof item.neededQty === 'number' ? (item.neededQty as number) : null
+                const avail = typeof item.availableQty === 'number' ? (item.availableQty as number) : null
+                const toBuy = typeof item.needToBuyQty === 'number' ? (item.needToBuyQty as number) : null
+                const sufficient = toBuy !== null && toBuy === 0
+                const unit = String(item.stockUnit || item.unit || item.uom || '')
+                return (
+                  <tr key={i} style={{ borderTop: '1px solid #bae6fd', ...(sufficient ? { background: '#f1f5f9', opacity: 0.7 } : {}) }}>
+                    <td className="px-2 py-1" style={{ color: '#64748b' }}>{i + 1}</td>
+                    <td className="px-2 py-1 font-mono text-xs">{String(item.canonicalCode || item.stt || '—')}</td>
+                    <td className="px-2 py-1">{String(item.description || item.materialName || item.name || '—')}</td>
+                    <td className="px-2 py-1">{unit || '—'}</td>
+                    <td className="px-2 py-1 font-semibold">{needed !== null ? formatNumber(needed) : '—'}</td>
+                    <td className="px-2 py-1" style={{ color: avail !== null && avail > 0 ? '#16a34a' : '#9ca3af' }}>
+                      {avail !== null ? formatNumber(avail) : '—'}
+                      {item.stockConvertedFromKg === true && <span style={{ fontSize: '0.6rem', color: '#6b7280' }}> (kg)</span>}
+                      {item.stockUnitMismatch === true && <span style={{ fontSize: '0.6rem', color: '#b45309' }}> ⚠ khác ĐVT</span>}
+                    </td>
+                    <td className="px-2 py-1 font-semibold" style={{ color: sufficient ? '#16a34a' : toBuy !== null ? '#dc2626' : '#9ca3af' }}>
+                      {sufficient
+                        ? <span style={{ background: '#dcfce7', padding: '1px 6px', borderRadius: 4, color: '#166534', fontWeight: 700, fontSize: '0.65rem' }}>đủ kho</span>
+                        : toBuy !== null ? formatNumber(toBuy) : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            {totalNeeded > 0 && (
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #0284c7', background: '#e0f2fe', fontWeight: 700 }}>
+                  <td colSpan={4} className="px-2 py-1.5 text-right" style={{ color: '#0c4a6e' }}>Tổng</td>
+                  <td className="px-2 py-1.5" style={{ color: '#0c4a6e' }}>{formatNumber(totalNeeded)}</td>
+                  <td className="px-2 py-1.5" />
+                  <td className="px-2 py-1.5" style={{ color: totalToBuy > 0 ? '#dc2626' : '#16a34a' }}>
+                    {totalToBuy > 0 ? formatNumber(totalToBuy) : 'Đủ kho'}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        {arr.length > 50 && <div className="text-xs mt-1" style={{ color: '#64748b' }}>... và {arr.length - 50} dòng nữa</div>}
+      </div>
+    )
+  })()
 
   // ── READ-ONLY REVIEW MODE ──
   if (!isEditable) {
-    const chosenNotMin = chosen && minAmount > 0 && chosen.totalAmount > minAmount
+    const chosenAmount = chosen ? sortKey(chosen) : 0
+    const chosenNotMin = chosen && minAmount > 0 && chosenAmount > minAmount
     return (
       <div className="space-y-4">
         {prRef}
@@ -233,7 +334,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             {chosen ? (
               <div className="rounded-xl p-4" style={{ background: '#f0fdf4', border: '2px solid #22c55e' }}>
                 <div className="text-sm font-bold" style={{ color: '#15803d' }}>
-                  ✅ NCC được chọn: {chosen.vendorName}{chosen.vendorCode ? ` (${chosen.vendorCode})` : ''} — {fmt(chosen.totalAmount, chosen.currency)}
+                  ✅ NCC được chọn: {chosen.vendorName}{chosen.vendorCode ? ` (${chosen.vendorCode})` : ''} — {fmt(chosenAmount, chosen.currency)}
+                  {hasNeedToBuy && needToBuyTotals[chosen.id] && <span className="ml-1 font-normal text-xs" style={{ color: '#166534' }}>(phần cần mua)</span>}
                 </div>
                 {chosen.selectReason && <div className="text-xs mt-1" style={{ color: '#166534' }}>Lý do: {chosen.selectReason}</div>}
                 {chosenNotMin && (
@@ -264,13 +366,14 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead><tr style={{ background: 'var(--surface-hover, #f1f5f9)' }}>
-                    {['NCC', 'Ngày BG', 'Tổng tiền', 'Giao (ngày)', 'Điều kiện TT', 'File', 'Ghi chú'].map(h => (
+                    {['NCC', 'Ngày BG', hasNeedToBuy ? 'Tổng cần mua' : 'Tổng tiền', 'Giao (ngày)', 'Điều kiện TT', 'File', 'Ghi chú'].map(h => (
                       <th key={h} className="text-left px-3 py-2 font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
                     ))}
                   </tr></thead>
                   <tbody>
                     {sorted.map(q => {
-                      const isMin = q.totalAmount === minAmount
+                      const qAmt = sortKey(q)
+                      const isMin = qAmt === minAmount
                       const isSel = q.selected
                       return (
                         <tr key={q.id} style={{ borderTop: '1px solid var(--border)', background: isSel ? '#f0fdf4' : isMin ? '#eff6ff' : undefined }}>
@@ -281,9 +384,12 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                           </td>
                           <td className="px-3 py-2">{q.quoteDate || '—'}</td>
                           <td className="px-3 py-2 font-bold" style={{ color: isMin ? '#1d4ed8' : 'var(--text-primary)' }}>
-                            {fmt(q.totalAmount, q.currency)}
+                            {fmt(qAmt, q.currency)}
                             {isMin && <span className="ml-1" style={{ color: '#1d4ed8' }}>(thấp nhất)</span>}
                             {isSel && !isMin && <span className="ml-1" style={{ color: '#dc2626' }}>(⚠ không phải giá thấp nhất)</span>}
+                            {hasNeedToBuy && needToBuyTotals[q.id] && q.totalAmount > 0 && q.totalAmount !== needToBuyTotals[q.id] && (
+                              <div style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 400 }}>BG gốc: {fmt(q.totalAmount, q.currency)}</div>
+                            )}
                           </td>
                           <td className="px-3 py-2">{q.leadTimeDays || '—'}</td>
                           <td className="px-3 py-2">{q.paymentTerms || '—'}</td>
@@ -300,7 +406,9 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             </div>
 
             {/* Material matrix (review mode) */}
-            <MaterialMatrix quotes={quotes} prItems={parsedPrItems} chosen={chosen} />
+            <MaterialMatrix quotes={quotes} prItems={parsedPrItems} />
+
+            {poButton}
           </>
         )}
       </div>
@@ -525,13 +633,14 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead><tr style={{ background: 'var(--surface-hover, #f1f5f9)' }}>
-                {['NCC', 'Tổng tiền', 'Giao (ngày)', 'Thanh toán', ''].map(h => (
+                {['NCC', hasNeedToBuy ? 'Tổng cần mua' : 'Tổng tiền', 'Giao (ngày)', 'Thanh toán', ''].map(h => (
                   <th key={h} className="text-left px-3 py-2 font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {sorted.map(q => {
-                  const isMin = q.totalAmount === minAmount
+                  const qAmt = sortKey(q)
+                  const isMin = qAmt === minAmount
                   const isSel = q.selected
                   return (
                     <tr key={q.id} style={{ borderTop: '1px solid var(--border)', background: isSel ? '#f0fdf4' : isMin ? '#eff6ff' : undefined }}>
@@ -541,8 +650,11 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                         {q.vendorCode && <span className="ml-1" style={{ color: '#64748b' }}>({q.vendorCode})</span>}
                       </td>
                       <td className="px-3 py-2 font-bold" style={{ color: isMin ? '#1d4ed8' : 'var(--text-primary)' }}>
-                        {fmt(q.totalAmount, q.currency)}
+                        {fmt(qAmt, q.currency)}
                         {isMin && <span className="ml-1 text-xs" style={{ color: '#1d4ed8' }}>(thấp nhất)</span>}
+                        {hasNeedToBuy && needToBuyTotals[q.id] && q.totalAmount > 0 && q.totalAmount !== needToBuyTotals[q.id] && (
+                          <div style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 400 }}>BG gốc: {fmt(q.totalAmount, q.currency)}</div>
+                        )}
                       </td>
                       <td className="px-3 py-2">{q.leadTimeDays || '—'}</td>
                       <td className="px-3 py-2">{q.paymentTerms || '—'}</td>
@@ -564,7 +676,9 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       )}
 
       {/* D: Material comparison matrix */}
-      <MaterialMatrix quotes={quotes} prItems={parsedPrItems} chosen={chosen} />
+      <MaterialMatrix quotes={quotes} prItems={parsedPrItems} />
+
+      {poButton}
 
       {canEditQuote && quotes.length === 0 && (
         <div className="text-center py-6 rounded-xl" style={{ background: '#f0f9ff', border: '2px dashed #93c5fd' }}>
@@ -578,13 +692,15 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
 }
 
 // ── Sub-component: Material comparison matrix ──
-function MaterialMatrix({ quotes, prItems, chosen }: { quotes: SupplierQuote[]; prItems: PrItem[]; chosen?: SupplierQuote }) {
+function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems: PrItem[] }) {
   const quotesWithLines = quotes.filter(q => q.lines && q.lines.length > 0)
   if (quotesWithLines.length === 0 || prItems.length === 0) return null
 
-  type Row = { prIdx: number; code: string; desc: string; profile: string; unit: string; qty: number; prices: Record<string, number> }
+  const hasBreakdown = prItems.some(p => typeof p.needToBuyQty === 'number')
 
-  const rows: Row[] = []
+  type Row = { prIdx: number; code: string; desc: string; profile: string; unit: string; qty: number; needToBuy: number; prices: Record<string, number> }
+
+  const allRows: Row[] = []
   const extraRows: { quoteId: string; vendorName: string; line: QuoteLine }[] = []
 
   for (let pi = 0; pi < prItems.length; pi++) {
@@ -594,16 +710,20 @@ function MaterialMatrix({ quotes, prItems, chosen }: { quotes: SupplierQuote[]; 
       const match = q.lines!.find(l => l.matchedPrIndex === pi)
       if (match) prices[q.id] = match.unitPrice
     }
-    rows.push({
+    allRows.push({
       prIdx: pi,
       code: p.stt || p.code || p.materialCode || '',
       desc: p.description || p.materialName || p.name || '',
       profile: p.profile || '',
       unit: p.unit || p.uom || '',
       qty: p.quantity || p.qty || 0,
+      needToBuy: typeof p.needToBuyQty === 'number' ? p.needToBuyQty : (p.quantity || p.qty || 0),
       prices,
     })
   }
+
+  const rows = hasBreakdown ? allRows.filter(r => r.needToBuy > 0) : allRows
+  const skippedCount = allRows.length - rows.length
 
   for (const q of quotesWithLines) {
     for (const l of q.lines!) {
@@ -613,9 +733,22 @@ function MaterialMatrix({ quotes, prItems, chosen }: { quotes: SupplierQuote[]; 
     }
   }
 
+  // Totals per NCC: Σ(needToBuyQty × unitPrice) for rows that need buying
   const nccTotals: Record<string, number> = {}
+  const nccMissing: Record<string, number> = {}
   for (const q of quotesWithLines) {
-    nccTotals[q.id] = q.lines!.reduce((s, l) => s + l.amount, 0)
+    let total = 0
+    let missing = 0
+    for (const r of rows) {
+      const price = r.prices[q.id]
+      if (price !== undefined && price > 0) {
+        total += r.needToBuy * price
+      } else {
+        missing++
+      }
+    }
+    nccTotals[q.id] = Math.round(total)
+    nccMissing[q.id] = missing
   }
 
   let cheapestId = ''
@@ -627,11 +760,18 @@ function MaterialMatrix({ quotes, prItems, chosen }: { quotes: SupplierQuote[]; 
   return (
     <div className="rounded-xl p-4 mt-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
       <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-        📋 So sánh theo vật tư ({rows.length} dòng PR × {quotesWithLines.length} NCC)
+        📋 So sánh theo vật tư ({rows.length} dòng cần mua × {quotesWithLines.length} NCC)
+        {hasBreakdown && <span className="ml-1 font-normal" style={{ color: '#64748b' }}>(tính theo còn phải mua)</span>}
       </div>
       {cheapestId && (
         <div className="text-xs mb-2 px-2 py-1.5 rounded-lg inline-block" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd' }}>
           NCC rẻ nhất toàn gói: <strong>{quotesWithLines.find(q => q.id === cheapestId)?.vendorName}</strong> — {formatCurrency(cheapestTotal)}
+          {hasBreakdown && <span className="ml-1" style={{ color: '#64748b' }}>(phần còn phải mua)</span>}
+        </div>
+      )}
+      {skippedCount > 0 && (
+        <div className="text-xs mb-2 px-2 py-1.5 rounded-lg inline-block" style={{ background: '#dcfce7', color: '#166534', border: '1px solid #86efac' }}>
+          ✓ {skippedCount} vật tư đủ kho (không cần mua)
         </div>
       )}
       <div className="overflow-x-auto">
@@ -641,9 +781,9 @@ function MaterialMatrix({ quotes, prItems, chosen }: { quotes: SupplierQuote[]; 
               <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 60 }}>#</th>
               <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 120 }}>Vật tư</th>
               <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 60 }}>ĐVT</th>
-              <th className="text-right px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 50 }}>SL</th>
+              <th className="text-right px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 50 }}>{hasBreakdown ? 'Cần mua' : 'SL'}</th>
               {quotesWithLines.map(q => (
-                <th key={q.id} className="text-right px-2 py-1.5 font-semibold" style={{ color: q.selected ? '#15803d' : 'var(--text-muted)', minWidth: 100 }}>
+                <th key={q.id} className="text-right px-2 py-1.5 font-semibold" style={{ color: q.selected ? '#15803d' : 'var(--text-muted)', minWidth: 120 }}>
                   {q.selected && '★ '}{q.vendorName || '—'}
                 </th>
               ))}
@@ -662,14 +802,20 @@ function MaterialMatrix({ quotes, prItems, chosen }: { quotes: SupplierQuote[]; 
                     {missingCount > 0 && <span className="ml-1" style={{ color: '#f59e0b' }} title={`${missingCount} NCC thiếu báo giá`}>⚠</span>}
                   </td>
                   <td className="px-2 py-1">{r.unit || '—'}</td>
-                  <td className="px-2 py-1 text-right font-semibold">{r.qty || '—'}</td>
+                  <td className="px-2 py-1 text-right font-semibold">{r.needToBuy || '—'}</td>
                   {quotesWithLines.map(q => {
                     const price = r.prices[q.id]
                     const isMin = price !== undefined && price > 0 && price === minPrice
+                    const lineTotal = price !== undefined ? r.needToBuy * price : 0
                     return (
-                      <td key={q.id} className="px-2 py-1 text-right font-mono"
-                        style={{ color: price === undefined ? '#94a3b8' : isMin ? '#1d4ed8' : 'var(--text-primary)', fontWeight: isMin ? 700 : 400, background: isMin ? '#eff6ff' : undefined }}>
-                        {price !== undefined ? formatNumber(price) : '—'}
+                      <td key={q.id} className="px-2 py-1 text-right"
+                        style={{ color: price === undefined ? '#94a3b8' : isMin ? '#1d4ed8' : 'var(--text-primary)', background: isMin ? '#eff6ff' : undefined }}>
+                        {price !== undefined ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: isMin ? 700 : 400 }}>{formatNumber(price)}</span>
+                            <span style={{ fontSize: '0.6rem', color: '#64748b' }}>{formatCurrency(Math.round(lineTotal))}</span>
+                          </div>
+                        ) : '—'}
                       </td>
                     )
                   })}
@@ -678,15 +824,19 @@ function MaterialMatrix({ quotes, prItems, chosen }: { quotes: SupplierQuote[]; 
             })}
             {/* Totals row */}
             <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
-              <td className="px-2 py-1.5" colSpan={4} style={{ color: 'var(--text-primary)' }}>Tổng</td>
+              <td className="px-2 py-1.5" colSpan={4} style={{ color: 'var(--text-primary)' }}>
+                Tổng {hasBreakdown ? '(còn phải mua)' : ''}
+              </td>
               {quotesWithLines.map(q => {
                 const total = nccTotals[q.id] || 0
+                const miss = nccMissing[q.id] || 0
                 const isCheapest = q.id === cheapestId
                 return (
                   <td key={q.id} className="px-2 py-1.5 text-right font-mono"
                     style={{ color: isCheapest ? '#1d4ed8' : 'var(--text-primary)', background: isCheapest ? '#eff6ff' : undefined }}>
                     {formatCurrency(total)}
                     {isCheapest && <span className="ml-1" style={{ fontSize: '0.65rem' }}>(thấp nhất)</span>}
+                    {miss > 0 && <div style={{ fontSize: '0.6rem', color: '#f59e0b', fontWeight: 400 }}>⚠ thiếu {miss} dòng</div>}
                   </td>
                 )
               })}

@@ -48,7 +48,7 @@ export async function syncBOMtoBudget(projectId: string, triggeredBy: string): P
   let totalPlanned = 0
   for (const bom of boms) {
     for (const item of bom.items) {
-      const unitPrice = item.material.unitPrice ? Number(item.material.unitPrice) : 0
+      const unitPrice = item.material?.unitPrice ? Number(item.material.unitPrice) : 0
       totalPlanned += Number(item.quantity) * unitPrice
     }
   }

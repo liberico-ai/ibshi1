@@ -74,7 +74,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       // Create PO with items from PR
       const totalValue = pr.items.reduce((sum, item) => {
-        const price = Number(item.material.unitPrice || 0)
+        const price = Number(item.material?.unitPrice || 0)
         return sum + price * Number(item.quantity)
       }, 0)
 
@@ -93,7 +93,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             create: pr.items.map((item) => ({
               materialId: item.materialId,
               quantity: item.quantity,
-              unitPrice: item.material.unitPrice || 0,
+              unitPrice: item.material?.unitPrice || 0,
             })),
           },
         },

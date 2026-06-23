@@ -82,28 +82,28 @@ export async function POST(req: NextRequest) {
         data: { receivedQty: newReceivedQty },
       })
 
-      // Update material stock
-      await tx.material.update({
-        where: { id: poItem.materialId },
-        data: { currentStock: { increment: item.receivedQty } },
-      })
+      if (poItem.materialId) {
+        await tx.material.update({
+          where: { id: poItem.materialId },
+          data: { currentStock: { increment: item.receivedQty } },
+        })
 
-      // Create stock movement record
-      const movement = await tx.stockMovement.create({
-        data: {
-          materialId: poItem.materialId,
-          type: 'IN',
-          reason: 'po_receipt',
-          quantity: item.receivedQty,
-          referenceNo: po.poCode,
-          poItemId: item.poItemId,
-          heatNumber: item.heatNumber || null,
-          lotNumber: item.lotNumber || null,
-          performedBy: user.userId,
-          notes: item.notes || `Nhận hàng từ ${po.poCode}`,
-        },
-      })
-      movements.push(movement)
+        const movement = await tx.stockMovement.create({
+          data: {
+            materialId: poItem.materialId,
+            type: 'IN',
+            reason: 'po_receipt',
+            quantity: item.receivedQty,
+            referenceNo: po.poCode,
+            poItemId: item.poItemId,
+            heatNumber: item.heatNumber || null,
+            lotNumber: item.lotNumber || null,
+            performedBy: user.userId,
+            notes: item.notes || `Nhận hàng từ ${po.poCode}`,
+          },
+        })
+        movements.push(movement)
+      }
     }
 
     // Check if all PO items are fully received

@@ -28,6 +28,8 @@ export interface PrItem {
   uom?: string
   quantity?: number
   qty?: number
+  neededQty?: number
+  needToBuyQty?: number
 }
 
 // ── Helpers ──

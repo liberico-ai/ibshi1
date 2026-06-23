@@ -36,6 +36,12 @@ export interface PrMaterialItem {
   provisionalCode?: boolean // true = mã tạm (tạo mới), false/undefined = mã kho (chọn từ kho)
   requiredDate?: string  // Ngày cần hàng về (YYYY-MM-DD) — PM điền để theo dõi tiến độ mua
   procureStatus?: string // Tiến độ mua: '' | 'Chưa mua' | 'Đang mua' | 'Đã về'
+  neededQty?: number
+  availableQty?: number
+  needToBuyQty?: number
+  stockUnit?: string
+  stockConvertedFromKg?: boolean
+  stockUnitMismatch?: boolean
 }
 
 interface ProjectWarehouse {
@@ -441,6 +447,56 @@ function matchInventory(items: PrMaterialItem[], inventory: InventoryItem[], cod
   return matches
 }
 
+// ── Freeze stock breakdown into items ─────────────────────────
+
+function enrichItems(
+  items: PrMaterialItem[],
+  matches: Map<number, StockMatch>,
+  projectCode?: string,
+): PrMaterialItem[] {
+  const r3 = (n: number) => Math.round(n * 1000) / 1000
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  return items.map((item, idx) => {
+    const m = matches.get(idx)
+    const needed = item.quantity
+
+    if (!m?.matched) {
+      return { ...item, neededQty: needed, availableQty: 0, needToBuyQty: needed, stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: false }
+    }
+
+    const sameUnit = !!(m.inventoryUnit && item.unit &&
+      m.inventoryUnit.toLowerCase() === item.unit.toLowerCase())
+    const needKg = item.weight > 0 ? item.weight :
+      item.unitWeight > 0 ? item.quantity * item.unitWeight : 0
+    const canKg = !sameUnit && m.inventoryUnit?.toLowerCase() === 'kg' && needKg > 0
+
+    const reusable = m.reusableStock ?? 0
+    const whs = m.projectWarehouses ?? []
+    const thisProj = whs
+      .filter(p => projectCode && p.projectCode === projectCode)
+      .reduce((s, p) => s + p.quantity, 0)
+    const avail = reusable + thisProj
+
+    if (sameUnit) {
+      const a = r3(avail)
+      return { ...item, neededQty: needed, availableQty: a, needToBuyQty: r3(Math.max(0, needed - a)), stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: false }
+    }
+
+    if (canKg && item.unitWeight > 0) {
+      const a = r3(avail / item.unitWeight)
+      return { ...item, neededQty: needed, availableQty: a, needToBuyQty: r3(Math.max(0, needed - a)), stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: false }
+    }
+
+    if (canKg) {
+      const nk = r2(needKg)
+      const ak = r2(avail)
+      return { ...item, neededQty: nk, availableQty: ak, needToBuyQty: r2(Math.max(0, nk - ak)), stockUnit: 'kg', stockConvertedFromKg: true, stockUnitMismatch: false }
+    }
+
+    return { ...item, neededQty: needed, availableQty: 0, needToBuyQty: needed, stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: true }
+  })
+}
+
 // ══════════════════════════════════════════════════════════════
 // Component
 // ══════════════════════════════════════════════════════════════
@@ -489,6 +545,16 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
       setStockMatches(matchInventory(items, inventory, codeResolved))
     }
   }, [items.length, inventory.length, codeResolved]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Freeze stock breakdown into bomPr items (only when Thiết kế is editing)
+  useEffect(() => {
+    if (!isEditable || items.length === 0 || stockMatches.size === 0) return
+    const enriched = enrichItems(items, stockMatches, projectCode)
+    const enrichedJson = JSON.stringify(enriched)
+    if (enrichedJson !== JSON.stringify(items)) {
+      onChange(enrichedJson)
+    }
+  }, [stockMatches, projectCode, isEditable]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-expand all categories on first load
   useEffect(() => {
