@@ -106,6 +106,9 @@ export const MENU_GROUPS = [
   { key: 'system', label: 'Hệ thống', labelEn: 'System', icon: '⚙️', priority: 10 },
 ] as const
 
+// Roles allowed to create/edit PR (đề xuất vật tư)
+export const PR_EDIT_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a'] as const
+
 // Roles allowed to create/edit supplier quotes
 export const QUOTE_EDIT_ROLES = ['R07', 'R07a', 'R01'] as const
 

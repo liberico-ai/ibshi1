@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
-import { QUOTE_EDIT_ROLES } from '@/lib/constants'
+import { QUOTE_EDIT_ROLES, PR_EDIT_ROLES } from '@/lib/constants'
 import MomSectionsUI from '@/components/MomSectionsUI'
 import EstimateUploadUI from '@/components/EstimateUploadUI'
 import WbsMilestonesUploadUI from '@/components/WbsMilestonesUploadUI'
@@ -66,9 +66,12 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
         if (rd.templateType) {
           setSelected(rd.templateType as TemplateType)
         } else {
+          const rc = useAuthStore.getState().user?.roleCode || ''
+          const isQuoteRole = (QUOTE_EDIT_ROLES as readonly string[]).includes(rc)
           const detected = rd.totalEstimate ? 'ESTIMATE'
             : (rd.momSections || rd.momAttendants) ? 'BBH'
             : rd.supplierQuotes ? 'SUPPLIER_QUOTE'
+            : (isQuoteRole && rd.bomPr) ? 'SUPPLIER_QUOTE'
             : rd.bomPr ? 'PR'
             : (rd.wbsItems || rd.milestones) ? 'WBS'
             : (rd.weldData || rd.paintData) ? 'WELD_PAINT'
@@ -175,7 +178,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       {selected === 'PR' && (
         <div style={{ marginTop: 12 }}>
           <BomPrUploadUI
-            isEditable={isEditable}
+            isEditable={isEditable && (PR_EDIT_ROLES as readonly string[]).includes(roleCode)}
             bomPrData={prData || undefined}
             onChange={handlePrChange}
             projectCode={projectCode}
