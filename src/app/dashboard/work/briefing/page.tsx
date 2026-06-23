@@ -84,12 +84,16 @@ interface PreviewRow {
   decision: string
   notes: string
   detail: string
+  titleCollision?: boolean
+  collisionTaskId?: string
+  collisionInfo?: { assignee: string; deadline: string | null; status: string }
 }
 
 interface EditableRow extends PreviewRow {
   include: boolean
   projectMode: 'existing' | 'create' | 'none'
   projectId: string | null
+  resolveTo?: 'create' | 'update'
 }
 
 interface DBProject { id: string; projectCode: string; projectName: string }
@@ -399,6 +403,8 @@ export default function BriefingPage() {
           include: true,
           action: r.action === 'error' ? 'create' as const : r.action,
           taskId: r.taskId || undefined,
+          resolveTo: r.resolveTo || undefined,
+          collisionTaskId: r.resolveTo === 'update' ? r.collisionTaskId : undefined,
           projectMode: r.projectMode,
           projectId: r.projectId || undefined,
           projectCode: r.projectCode || undefined,
@@ -453,6 +459,7 @@ export default function BriefingPage() {
     toUpdate: editRows.filter((r) => r.include && r.action === 'update').length,
     projectsNew: new Set(editRows.filter((r) => r.include && r.projectMode === 'create').map((r) => r.projectCode)).size,
     errors: editRows.filter((r) => r.action === 'error' && !r.include).length,
+    titleCollisions: editRows.filter((r) => r.include && r.titleCollision).length,
   } : null
 
   // Filtered tasks for dashboard — sorted by urgency, split active/done
@@ -1031,6 +1038,7 @@ export default function BriefingPage() {
             <span style={{ color: '#059669' }}>Tạo mới: {summary.toCreate}</span>
             <span style={{ color: '#1d4ed8' }}>Cập nhật: {summary.toUpdate}</span>
             {summary.projectsNew > 0 && <span style={{ color: '#7c3aed' }}>DA mới: {summary.projectsNew}</span>}
+            {summary.titleCollisions > 0 && <span style={{ color: '#b45309' }}>Trùng tiêu đề: {summary.titleCollisions}</span>}
             {summary.errors > 0 && <span style={{ color: '#dc2626' }}>Lỗi: {summary.errors}</span>}
           </div>
 
@@ -1215,10 +1223,30 @@ function GroupSection({ grp, dbUsers, updateRow }: {
             <td className="px-2 py-1.5">
               <input
                 className="w-full text-xs px-1 py-1 rounded border"
-                style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+                style={{ borderColor: r.titleCollision ? '#f59e0b' : 'var(--border)', background: r.titleCollision ? '#fffbeb' : 'var(--surface)' }}
                 value={r.title}
                 onChange={(e) => updateRow(idx, { title: e.target.value })}
               />
+              {r.titleCollision && r.collisionInfo && (
+                <div className="mt-1">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                      Trùng tiêu đề
+                    </span>
+                  </div>
+                  <select
+                    className="w-full text-[10px] px-1 py-0.5 rounded border mt-0.5"
+                    style={{ borderColor: '#f59e0b', background: '#fffbeb' }}
+                    value={r.resolveTo || 'create'}
+                    onChange={(e) => updateRow(idx, { resolveTo: e.target.value as 'create' | 'update' })}
+                  >
+                    <option value="create">Tạo việc mới</option>
+                    <option value="update">
+                      {`Cập nhật: ${r.collisionInfo.assignee} · hạn ${r.collisionInfo.deadline || 'chưa có'}`}
+                    </option>
+                  </select>
+                </div>
+              )}
             </td>
 
             {/* Dept */}

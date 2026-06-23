@@ -110,7 +110,6 @@ describe('webhook', () => {
       await emitTaskUpdated('task-1', 'OPEN')
 
       expect(fetch).not.toHaveBeenCalled()
-      expect(prismaMock.apiClient.findMany).not.toHaveBeenCalled()
     })
 
     it('does NOT emit for tasks with externalSource != sale', async () => {
@@ -128,12 +127,29 @@ describe('webhook', () => {
       expect(fetch).not.toHaveBeenCalled()
     })
 
-    it('emits for tasks with externalRef + externalSource=sale', async () => {
+    it('does NOT emit when externalClientId is missing', async () => {
+      prismaMock.task.findUnique.mockResolvedValue({
+        id: 'task-1', externalRef: 'SALE-001', externalSource: 'sale',
+        status: 'DONE', blocked: false,
+        assignees: [], resultData: { briefing: {} },
+        updatedAt: new Date(), deadline: null,
+      } as any)
+
+      prismaMock.user.findMany.mockResolvedValue([])
+      vi.stubGlobal('fetch', vi.fn())
+
+      const { emitTaskUpdated } = await import('@/lib/webhook')
+      await emitTaskUpdated('task-1', 'OPEN')
+
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
+    it('emits only to owning client via externalClientId', async () => {
       prismaMock.task.findUnique.mockResolvedValue({
         id: 'task-1', externalRef: 'SALE-001', externalSource: 'sale',
         status: 'DONE', blocked: false,
         assignees: [{ userId: 'u1', role: 'R02', isPrimary: true }],
-        resultData: { briefing: { decision: 'approved' } },
+        resultData: { externalClientId: 'c1', briefing: { decision: 'approved' } },
         updatedAt: new Date(), deadline: null,
       } as any)
 
@@ -141,17 +157,18 @@ describe('webhook', () => {
         { id: 'u1', fullName: 'User One' },
       ] as any)
 
-      prismaMock.apiClient.findMany.mockResolvedValue([
-        { id: 'c1', name: 'Sale', callbackUrl: 'https://sale.example.com/webhook', webhookSecret: 'sec', active: true },
-      ] as any)
+      prismaMock.apiClient.findFirst.mockResolvedValue({
+        id: 'c1', name: 'Sale', callbackUrl: 'https://sale.example.com/webhook', webhookSecret: 'sec', active: true,
+      } as any)
 
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }))
 
       const { emitTaskUpdated } = await import('@/lib/webhook')
       await emitTaskUpdated('task-1', 'IN_PROGRESS')
 
-      expect(prismaMock.apiClient.findMany).toHaveBeenCalled()
-      // fetch is fire-and-forget, give it a tick
+      expect(prismaMock.apiClient.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: 'c1' }) }),
+      )
       await new Promise(r => setTimeout(r, 50))
       expect(fetch).toHaveBeenCalledTimes(1)
     })

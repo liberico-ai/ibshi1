@@ -26,6 +26,8 @@ export async function runDailyDigest() {
     orderBy: { deadline: 'asc' },
   })
 
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000)
+
   const uids = new Set<string>()
   for (const t of tasks) for (const a of t.assignees) if (a.userId) uids.add(a.userId)
   const users = uids.size ? await prisma.user.findMany({ where: { id: { in: [...uids] } }, select: { id: true, fullName: true } }) : []
@@ -58,7 +60,11 @@ export async function runDailyDigest() {
     const overdue = isTaskOverdue(t)
     const daysOver = taskDaysOverdue(t)
     const isDueSoon = !!(dl && !overdue && dl >= todayStart && dl <= weekEnd)
-    const needsExec = !!(t.escalated || t.blocked || (overdue && daysOver >= 14))
+    const rd = (t.resultData && typeof t.resultData === 'object') ? (t.resultData as Record<string, unknown>) : {}
+    const briefing = (rd.briefing && typeof rd.briefing === 'object') ? (rd.briefing as Record<string, unknown>) : {}
+    const reviewedAt = typeof briefing.execReviewedAt === 'string' ? new Date(briefing.execReviewedAt) : null
+    const recentlyReviewed = !!(reviewedAt && reviewedAt > sevenDaysAgo)
+    const needsExec = !!(t.escalated || t.blocked || (overdue && daysOver >= 14)) && !recentlyReviewed
 
     if (!overdue && !isDueSoon && !needsExec) continue
 

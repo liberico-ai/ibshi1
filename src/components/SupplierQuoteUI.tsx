@@ -87,7 +87,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     const target = quotes.find(q => q.id === id)
     const priced = quotes.filter(q => q.totalAmount > 0)
     const min = priced.length > 0 ? Math.min(...priced.map(q => q.totalAmount)) : 0
-    if (target && min > 0 && target.totalAmount > min && !target.selectReason?.trim()) {
+    if (target && priced.length >= 2 && target.totalAmount > min && !target.selectReason?.trim()) {
       setReasonError(id)
       return
     }
@@ -239,6 +239,11 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                 {chosenNotMin && (
                   <div className="text-xs mt-1 px-2 py-1 rounded inline-block" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
                     ⚠ Không phải giá thấp nhất (thấp nhất: {fmt(minAmount, sorted[0]?.currency)})
+                  </div>
+                )}
+                {sorted.length < 2 && (
+                  <div className="text-xs mt-1 px-2 py-1 rounded inline-block" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                    ⚠ Thiếu giá để so sánh (cần ít nhất 2 báo giá có giá)
                   </div>
                 )}
               </div>
@@ -507,7 +512,12 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       {quotes.length > 0 && (
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>📊 So sánh báo giá</div>
-          {quotes.filter(q => q.totalAmount > 0).length < 3 && (
+          {sorted.length < 2 && (
+            <div className="text-xs mb-2 px-2 py-1.5 rounded-lg" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+              ⚠️ Thiếu giá để so sánh (cần ít nhất 2 báo giá có giá)
+            </div>
+          )}
+          {sorted.length >= 2 && sorted.length < 3 && (
             <div className="text-xs mb-2 px-2 py-1.5 rounded-lg" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
               ⚠️ Nên có ít nhất 3 báo giá để so sánh
             </div>

@@ -265,8 +265,8 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     expect(assigneeCall.data.userId).toBeUndefined()
   })
 
-  // ── Case 5: idempotent → apply same rows twice, second time updates existing instead of creating ──
-  it('(5) idempotent: second apply of same rows → created=0, updated=1 (upsert)', async () => {
+  // ── Case 5: action=create always creates new (no auto-upsert by title) ──
+  it('(5) action=create with existing same-title task → still creates new', async () => {
     const req1 = buildApplyRequest([{
       include: true,
       action: 'create',
@@ -319,8 +319,8 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     const json2 = await res2.json()
 
     expect(json2.ok).toBe(true)
-    expect(json2.summary.created).toBe(0)
-    expect(json2.summary.updated).toBe(1)
+    expect(json2.summary.created).toBe(1)
+    expect(json2.summary.updated).toBe(0)
     expect(json2.summary.projectsCreated).toBe(0)
   })
 

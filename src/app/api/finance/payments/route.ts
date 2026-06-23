@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createPaymentSchema } from '@/lib/schemas'
 import { formatNumber } from '@/lib/utils'
+import { FINANCE_WRITE_ROLES } from '@/lib/constants'
 
 // GET /api/finance/payments — list payments with invoice info
 export async function GET(req: NextRequest) {
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!(FINANCE_WRITE_ROLES as readonly string[]).includes(user.roleCode)) return forbiddenResponse('Không có quyền ghi tài chính')
 
     const result = await validateBody(req, createPaymentSchema)
     if (!result.success) return result.response

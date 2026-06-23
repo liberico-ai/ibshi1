@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createBudgetSchema } from '@/lib/schemas'
+import { FINANCE_WRITE_ROLES } from '@/lib/constants'
 
 // Map cashflow category to budget category
 const catMap: Record<string, string> = {
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
 
         // If manual budget provided actuals/committed, we might merge or prefer dynamic. We prefer dynamic.
         // Planned is from manual budget (if > 0) OR fallback to P1.2 approved budget
-        let planned = (mb && Number(mb.planned) > 0) ? Number(mb.planned) : (p12BudgetsMap[pid]?.[cat] || 0)
+        const planned = (mb && Number(mb.planned) > 0) ? Number(mb.planned) : (p12BudgetsMap[pid]?.[cat] || 0)
 
         // For demo/UI sake if manual was typed but dynamic is 0 we can fallback, but dynamic should override
         if (actual === 0 && mb?.actual) actual = Number(mb.actual)
@@ -139,6 +140,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!(FINANCE_WRITE_ROLES as readonly string[]).includes(user.roleCode)) return forbiddenResponse('Không có quyền ghi tài chính')
 
     const result = await validateBody(req, createBudgetSchema)
     if (!result.success) return result.response

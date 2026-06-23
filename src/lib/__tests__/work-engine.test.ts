@@ -188,6 +188,53 @@ describe('setTaskStatusAdmin', () => {
     await expect(setTaskStatusAdmin('t1', 'admin', { status: 'INVALID' }))
       .rejects.toThrow('Trạng thái không hợp lệ')
   })
+
+  it('giữ blocked khi không truyền blocked (decision only)', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({ ...baseTask, blocked: true } as never)
+    prismaMock.task.update.mockResolvedValue({} as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+    prismaMock.$executeRaw.mockResolvedValue(1 as never)
+
+    const r = await setTaskStatusAdmin('t1', 'admin', {
+      status: 'IN_PROGRESS',
+      briefingPatch: { decision: 'Duyệt' },
+    })
+    expect(r.status).toBe('IN_PROGRESS')
+    expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ blocked: true }),
+    }))
+  })
+
+  it('giữ blocked khi chỉ escalate', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({ ...baseTask, blocked: true, escalated: false } as never)
+    prismaMock.task.update.mockResolvedValue({} as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+    prismaMock.$executeRaw.mockResolvedValue(1 as never)
+    prismaMock.user.findUnique.mockResolvedValue(null)
+
+    const r = await setTaskStatusAdmin('t1', 'admin', {
+      status: 'IN_PROGRESS',
+      escalated: true,
+    })
+    expect(r.status).toBe('IN_PROGRESS')
+    expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ blocked: true, escalated: true }),
+    }))
+  })
+
+  it('DONE xóa blocked dù task đang Tắc', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({ ...baseTask, blocked: true } as never)
+    prismaMock.task.update.mockResolvedValue({} as never)
+    prismaMock.taskAssignee.updateMany.mockResolvedValue({ count: 2 } as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+    prismaMock.notification.create.mockResolvedValue({} as never)
+    prismaMock.$executeRaw.mockResolvedValue(1 as never)
+
+    const r = await setTaskStatusAdmin('t1', 'admin', { status: 'DONE' })
+    expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'DONE', blocked: false }),
+    }))
+  })
 })
 
 describe('suggestRoute', () => {

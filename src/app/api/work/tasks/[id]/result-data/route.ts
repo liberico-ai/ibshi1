@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { QUOTE_EDIT_ROLES } from '@/lib/constants'
+import { KEY_TO_FORM, canEditForm } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,13 +22,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const body = await req.json().catch(() => ({})) as { key?: string; value?: unknown }
     if (!body.key || !ALLOWED_KEYS.includes(body.key)) return errorResponse('Key không hợp lệ', 400)
 
-    const QUOTE_KEYS = ['supplierQuotes', 'chosenVendorId']
-    if (QUOTE_KEYS.includes(body.key) && !(QUOTE_EDIT_ROLES as readonly string[]).includes(payload.roleCode)) {
-      return errorResponse('Chỉ Thương mại / BGĐ được sửa báo giá NCC', 403)
-    }
-
-    const task = await prisma.task.findUnique({ where: { id }, select: { id: true, resultData: true } })
+    const task = await prisma.task.findUnique({
+      where: { id },
+      select: { id: true, resultData: true, createdBy: true, assignees: { select: { userId: true, role: true } } },
+    })
     if (!task) return errorResponse('Không tìm thấy công việc', 404)
+
+    const isParticipant = task.createdBy === payload.userId
+      || task.assignees.some(a => a.userId === payload.userId || a.role === payload.roleCode)
+    if (!isParticipant) return errorResponse('Bạn không có quyền sửa công việc này', 403)
+
+    const form = KEY_TO_FORM[body.key]
+    if (form && !canEditForm(form, payload.roleCode)) {
+      return errorResponse('Bạn không có quyền sửa biểu mẫu này', 403)
+    }
 
     if (body.key === 'chosenVendorId' && body.value) {
       const rd = (task.resultData && typeof task.resultData === 'object') ? (task.resultData as Record<string, unknown>) : {}
@@ -37,9 +44,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const chosen = quotes.find(q => q.vendorId === vendorId)
       if (!chosen) return errorResponse('NCC không nằm trong danh sách báo giá', 400)
       const priced = quotes.filter(q => (q.totalAmount ?? 0) > 0)
-      const minAmount = priced.length > 0 ? Math.min(...priced.map(q => q.totalAmount!)) : 0
-      if (minAmount > 0 && (chosen.totalAmount ?? 0) > minAmount && !chosen.selectReason?.trim()) {
-        return errorResponse('Phải nhập lý do khi chọn NCC không phải giá thấp nhất', 400)
+      if (priced.length >= 2) {
+        const minAmount = Math.min(...priced.map(q => q.totalAmount!))
+        if ((chosen.totalAmount ?? 0) > minAmount && !chosen.selectReason?.trim()) {
+          return errorResponse('Phải nhập lý do khi chọn NCC không phải giá thấp nhất', 400)
+        }
       }
     }
 

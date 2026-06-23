@@ -57,6 +57,27 @@ describe('POST /api/external/v1/tasks', () => {
     expect(json.ok).toBe(true)
     expect(json.data.taskId).toBe('task-1')
     expect(json.data.externalRef).toBe('SALE-001')
+    expect(mockCreateTask).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(),
+      expect.objectContaining({ externalRef: 'SALE-001', externalSource: 'sale', externalClientId: 'client-1' }),
+    )
+  })
+
+  it('handles P2002 race (concurrent POST same externalRef)', async () => {
+    mockCreateTask.mockRejectedValue({ code: 'P2002' })
+    prismaMock.task.findUnique.mockImplementation(async (args: any) => {
+      if (args.where?.externalRef === 'SALE-RACE') {
+        return { id: 'task-raced', externalRef: 'SALE-RACE', status: 'OPEN', createdAt: new Date() } as any
+      }
+      if (args.where?.username === 'api-system') return { id: 'sys', isActive: true } as any
+      return null
+    })
+    const res = await POST(makeReq({
+      externalRef: 'SALE-RACE', projectCode: 'TST-001', title: 'Race test', assignee: { role: 'R02' },
+    }))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.data.taskId).toBe('task-raced')
   })
 
   it('returns 200 for duplicate externalRef (idempotent)', async () => {

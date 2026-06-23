@@ -112,6 +112,37 @@ export const PR_EDIT_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a'
 // Roles allowed to create/edit supplier quotes
 export const QUOTE_EDIT_ROLES = ['R07', 'R07a', 'R01'] as const
 
+// Roles allowed to create/edit finance entries (payments, cashflow, budgets)
+export const FINANCE_WRITE_ROLES = ['R01', 'R03', 'R03a', 'R08', 'R08a'] as const
+
+// ── Form-level edit permissions (server + client) ──
+export const FORM_EDIT_ROLES = {
+  ESTIMATE: ['R01', 'R03', 'R03a'],
+  PR: PR_EDIT_ROLES as unknown as string[],
+  BBH: ['R01', 'R02', 'R02a'],
+  WBS: ['R01', 'R02', 'R02a'],
+  WELD_PAINT: ['R01', 'R04', 'R04a'],
+  BOM: ['R01', 'R04', 'R04a'],
+  SUPPLIER_QUOTE: QUOTE_EDIT_ROLES as unknown as string[],
+} as const
+
+export type FormKey = keyof typeof FORM_EDIT_ROLES
+
+export const KEY_TO_FORM: Record<string, FormKey> = {
+  totalMaterial: 'ESTIMATE', totalLabor: 'ESTIMATE', totalService: 'ESTIMATE',
+  totalOverhead: 'ESTIMATE', totalEstimate: 'ESTIMATE', dt02Detail: 'ESTIMATE', estimateFileName: 'ESTIMATE',
+  bomPr: 'PR',
+  momAttendants: 'BBH', momSections: 'BBH', momHeader: 'BBH',
+  wbsItems: 'WBS', milestones: 'WBS',
+  weldData: 'WELD_PAINT', paintData: 'WELD_PAINT',
+  bomItemsList: 'BOM',
+  supplierQuotes: 'SUPPLIER_QUOTE', chosenVendorId: 'SUPPLIER_QUOTE',
+}
+
+export function canEditForm(form: FormKey, roleCode: string): boolean {
+  return (FORM_EDIT_ROLES[form] as readonly string[]).includes(roleCode)
+}
+
 // Role-specific group priority: first group = expanded by default
 export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R01:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],

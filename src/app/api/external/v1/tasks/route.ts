@@ -175,25 +175,35 @@ export async function POST(req: NextRequest) {
 
   const systemUserId = await getApiSystemUserId()
 
-  const task = await createTask({
-    title,
-    description,
-    projectId: project.id,
-    taskType: 'FREE',
-    priority,
-    deadline,
-    assignees: taskAssignees.map((a, i) => ({ ...a, isPrimary: i === 0 })),
-  }, systemUserId)
+  try {
+    const task = await createTask({
+      title,
+      description,
+      projectId: project.id,
+      taskType: 'FREE',
+      priority,
+      deadline,
+      assignees: taskAssignees.map((a, i) => ({ ...a, isPrimary: i === 0 })),
+    }, systemUserId, { externalRef, externalSource: 'sale', externalClientId: client.id })
 
-  // Set externalRef + externalSource
-  await prisma.task.update({
-    where: { id: task.id },
-    data: { externalRef, externalSource: 'sale' },
-  })
+    console.log(`[ExternalAPI] Task created: ${task.id} externalRef=${externalRef} by client=${client.name}`)
 
-  console.log(`[ExternalAPI] Task created: ${task.id} externalRef=${externalRef} by client=${client.name}`)
-
-  return successResponse({
-    data: { taskId: task.id, externalRef, status: task.status, createdAt: task.createdAt },
-  }, undefined, 201)
+    return successResponse({
+      data: { taskId: task.id, externalRef, status: task.status, createdAt: task.createdAt },
+    }, undefined, 201)
+  } catch (err: unknown) {
+    const prismaErr = err as { code?: string }
+    if (prismaErr.code === 'P2002') {
+      const race = await prisma.task.findUnique({
+        where: { externalRef },
+        select: { id: true, externalRef: true, status: true, createdAt: true },
+      })
+      if (race) {
+        return successResponse({
+          data: { taskId: race.id, externalRef: race.externalRef, status: race.status, createdAt: race.createdAt },
+        })
+      }
+    }
+    throw err
+  }
 }

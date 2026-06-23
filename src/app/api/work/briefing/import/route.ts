@@ -42,12 +42,17 @@ interface PreviewRow {
   decision: string
   notes: string
   detail: string
+  titleCollision?: boolean
+  collisionTaskId?: string
+  collisionInfo?: { assignee: string; deadline: string | null; status: string }
 }
 
 interface FinalRow {
   include: boolean
   action: 'update' | 'create'
   taskId?: string
+  resolveTo?: 'create' | 'update'
+  collisionTaskId?: string
   projectMode: 'existing' | 'create' | 'none'
   projectId?: string
   projectCode?: string
@@ -118,6 +123,25 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
     ? await prisma.task.findMany({ where: { id: { in: updateIds } }, select: { id: true } })
     : []
   const existingIds = new Set(existingTasks.map((t) => t.id))
+
+  // Load existing briefing tasks for title-collision detection (one query)
+  const briefingTasks = await prisma.task.findMany({
+    where: { status: { notIn: ['CANCELLED'] } },
+    select: { id: true, title: true, projectId: true, status: true, deadline: true, resultData: true, assignees: { select: { userId: true, role: true } } },
+  })
+  const briefingByKey = new Map<string, typeof briefingTasks[0]>()
+  for (const bt of briefingTasks) {
+    const rd = (bt.resultData && typeof bt.resultData === 'object') ? bt.resultData as Record<string, unknown> : {}
+    if (!rd.briefing || typeof rd.briefing !== 'object') continue
+    const key = `${bt.projectId || ''}::${normalizeTitle(bt.title).toLowerCase()}`
+    briefingByKey.set(key, bt)
+  }
+
+  // Resolve assignee names for collision info
+  const allUserIds = briefingTasks.flatMap(bt => bt.assignees.map(a => a.userId).filter((uid): uid is string => !!uid))
+  const userNameMap = allUserIds.length > 0
+    ? new Map((await prisma.user.findMany({ where: { id: { in: [...new Set(allUserIds)] } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]))
+    : new Map<string, string>()
 
   const rows: PreviewRow[] = []
   const newProjectCodes = new Set<string>()
@@ -200,6 +224,21 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
       : assignees.every(am => am.match === 'ok') ? 'ok'
       : assignees.some(am => am.match === 'ambiguous') ? 'ambiguous' : 'none'
 
+    // Title-collision detection
+    const resolvedProjectId = projectExists ? (projectByNorm.get(normalizeCode(pc))?.id || null) : null
+    const collisionKey = `${resolvedProjectId || ''}::${normalizeTitle(a.row.title).toLowerCase()}`
+    const collision = briefingByKey.get(collisionKey)
+
+    let titleCollision: boolean | undefined
+    let collisionTaskId: string | undefined
+    let collisionInfo: { assignee: string; deadline: string | null; status: string } | undefined
+    if (collision) {
+      titleCollision = true
+      collisionTaskId = collision.id
+      const aNames = collision.assignees.map(ca => ca.userId ? (userNameMap.get(ca.userId) || 'NV') : (ca.role || '—')).join(', ')
+      collisionInfo = { assignee: aNames || '—', deadline: collision.deadline ? collision.deadline.toISOString().slice(0, 10) : null, status: collision.status }
+    }
+
     rows.push({
       rowIndex: a.row.rowIndex, action: 'create', taskId: null,
       projectCode: pc, projectNameNew: a.row.projectNameNew,
@@ -210,6 +249,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
       deadlineISO: a.row.deadlineISO, deadline: a.row.deadline, hasNoDeadline: !a.row.deadlineISO,
       status: a.row.status, criteria: a.row.criteria, proposal: a.row.proposal,
       decision: a.row.decision, notes: a.row.notes, detail,
+      titleCollision, collisionTaskId, collisionInfo,
     })
   }
 
@@ -219,6 +259,7 @@ async function handlePreview(req: NextRequest, payload: { userId: string; roleCo
     toUpdate: rows.filter((r) => r.action === 'update').length,
     projectsNew: newProjectCodes.size,
     errors: rows.filter((r) => r.action === 'error').length,
+    titleCollisions: rows.filter((r) => r.titleCollision).length,
   }
 
   return successResponse({ rows, summary, projects: dbProjects })
@@ -242,9 +283,11 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
   const projectById = new Set(dbProjects.map((p) => p.id))
 
   const allUserIds = [...new Set(included.flatMap((r) => r.assigneeUserIds || []).filter(Boolean))]
-  const validUsers = allUserIds.length > 0
-    ? new Set((await prisma.user.findMany({ where: { id: { in: allUserIds } }, select: { id: true } })).map((u) => u.id))
-    : new Set<string>()
+  const fetchedUsers = allUserIds.length > 0
+    ? await prisma.user.findMany({ where: { id: { in: allUserIds } }, select: { id: true, isActive: true, fullName: true } })
+    : []
+  const validUsers = new Set(fetchedUsers.filter(u => u.isActive).map(u => u.id))
+  const inactiveUsers = new Map(fetchedUsers.filter(u => !u.isActive).map(u => [u.id, u.fullName]))
 
   let created = 0, updated = 0, projectsCreated = 0, skipped = 0
   const errors: { row: number; reason: string }[] = []
@@ -304,32 +347,25 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
         }
       }
 
-      // Validate assignees — default to creator (PM) when row has no assignee/dept
+      // Validate assignees — filter inactive, warn, default to creator (PM)
       let assigneeIds = (r.assigneeUserIds || []).filter(Boolean)
-      const invalidIds = assigneeIds.filter(id => !validUsers.has(id))
+      const invalidIds = assigneeIds.filter(id => !validUsers.has(id) && !inactiveUsers.has(id))
       if (invalidIds.length > 0) {
         errors.push({ row: rowNum, reason: `User ID không tồn tại: ${invalidIds.join(', ')}` })
         continue
+      }
+      const inactiveIds = assigneeIds.filter(id => inactiveUsers.has(id))
+      if (inactiveIds.length > 0) {
+        const names = inactiveIds.map(id => inactiveUsers.get(id) || id).join(', ')
+        errors.push({ row: rowNum, reason: `Bỏ qua user đã vô hiệu: ${names}` })
+        assigneeIds = assigneeIds.filter(id => !inactiveUsers.has(id))
       }
       let effectiveRoleCode = r.roleCode || null
       if (assigneeIds.length === 0 && !effectiveRoleCode) {
         assigneeIds = [payload.userId]
       }
 
-      // Dedup key: normalized title + projectCode only
       const importKey = computeImportKey(r.title, r.projectCode || null)
-      const normTitle = normalizeTitle(r.title)
-
-      // Find existing briefing-import task with same (projectId + normalized title)
-      const existingTasks = await prisma.task.findMany({
-        where: { projectId },
-        select: { id: true, title: true, resultData: true },
-      })
-      const existingTask = existingTasks.find((t) => {
-        if (normalizeTitle(t.title).toLowerCase() !== normTitle.toLowerCase()) return false
-        const rd = (t.resultData && typeof t.resultData === 'object') ? t.resultData as Record<string, unknown> : {}
-        return rd.briefing && typeof rd.briefing === 'object'
-      })
 
       const hasDeadline = !!(r.deadlineISO && r.deadlineISO.trim())
       const briefingData: Record<string, unknown> = {
@@ -343,37 +379,41 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
       }
       if (!hasDeadline) briefingData.noDeadline = true
 
-      if (existingTask) {
-        // UPDATE existing task (deadline, assignees, briefing fields)
-        const oldRd = (existingTask.resultData && typeof existingTask.resultData === 'object') ? existingTask.resultData as Record<string, unknown> : {}
+      // PM chose "update existing" for a collision row
+      if (r.resolveTo === 'update' && r.collisionTaskId) {
+        const target = await prisma.task.findUnique({ where: { id: r.collisionTaskId }, select: { id: true, resultData: true } })
+        if (!target) {
+          errors.push({ row: rowNum, reason: `Task collision "${r.collisionTaskId}" không tồn tại` })
+          continue
+        }
+        const oldRd = (target.resultData && typeof target.resultData === 'object') ? target.resultData as Record<string, unknown> : {}
         const oldBriefing = (oldRd.briefing && typeof oldRd.briefing === 'object') ? oldRd.briefing as Record<string, unknown> : {}
         const mergedRd = { ...oldRd, briefing: { ...oldBriefing, ...briefingData } }
 
         await prisma.$transaction(async (tx) => {
           await tx.task.update({
-            where: { id: existingTask.id },
+            where: { id: target.id },
             data: {
               title: r.title,
               deadline: hasDeadline ? new Date(r.deadlineISO) : undefined,
               resultData: JSON.parse(JSON.stringify(mergedRd)),
             },
           })
-          // Replace assignees
-          await tx.taskAssignee.deleteMany({ where: { taskId: existingTask.id } })
+          await tx.taskAssignee.deleteMany({ where: { taskId: target.id } })
           if (assigneeIds.length > 0) {
             for (let j = 0; j < assigneeIds.length; j++) {
-              await tx.taskAssignee.create({ data: { taskId: existingTask.id, isPrimary: j === 0, userId: assigneeIds[j] } })
+              await tx.taskAssignee.create({ data: { taskId: target.id, isPrimary: j === 0, userId: assigneeIds[j] } })
             }
           } else if (effectiveRoleCode) {
-            await tx.taskAssignee.create({ data: { taskId: existingTask.id, isPrimary: true, role: effectiveRoleCode } })
+            await tx.taskAssignee.create({ data: { taskId: target.id, isPrimary: true, role: effectiveRoleCode } })
           }
           await tx.taskHistory.create({
-            data: { taskId: existingTask.id, action: 'UPDATED', byUserId: payload.userId, meta: JSON.parse(JSON.stringify({ source: 'briefing-import', reimport: true })) },
+            data: { taskId: target.id, action: 'UPDATED', byUserId: payload.userId, meta: JSON.parse(JSON.stringify({ source: 'briefing-import', reimport: true })) },
           })
         })
         updated++
       } else {
-        // CREATE new task
+        // Default: CREATE new task (no auto-update by title)
         await prisma.$transaction(async (tx) => {
           const t = await tx.task.create({
             data: {

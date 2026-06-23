@@ -98,15 +98,17 @@ export async function emitTaskUpdated(taskId: string, previousStatus?: string): 
       updatedAt: task.updatedAt,
     }
 
-    const clients = await prisma.apiClient.findMany({
-      where: { active: true, callbackUrl: { not: null } },
-    })
+    const externalClientId = typeof rd.externalClientId === 'string' ? rd.externalClientId : null
+    if (!externalClientId) return
 
-    for (const client of clients) {
-      sendTaskWebhook(client, payload).catch(err => {
-        console.error(`[Webhook] Fire-and-forget error for ${client.name}:`, err)
-      })
-    }
+    const client = await prisma.apiClient.findFirst({
+      where: { id: externalClientId, active: true, callbackUrl: { not: null } },
+    })
+    if (!client) return
+
+    sendTaskWebhook(client, payload).catch(err => {
+      console.error(`[Webhook] Fire-and-forget error for ${client.name}:`, err)
+    })
   } catch (err) {
     console.error('[Webhook] emitTaskUpdated error:', err)
   }

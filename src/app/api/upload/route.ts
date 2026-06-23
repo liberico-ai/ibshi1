@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, unauthorizedResponse, errorResponse } from '@/lib/auth'
-import { QUOTE_EDIT_ROLES } from '@/lib/constants'
+import { canEditForm } from '@/lib/constants'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 
@@ -59,8 +59,11 @@ export async function POST(req: NextRequest) {
     if (!ALLOWED_ENTITY_TYPES.has(entityType)) {
       return errorResponse('Tham số không hợp lệ', 400)
     }
-    if (entityType === 'TaskQuote' && !(QUOTE_EDIT_ROLES as readonly string[]).includes(user.roleCode)) {
+    if (entityType === 'TaskQuote' && !canEditForm('SUPPLIER_QUOTE', user.roleCode)) {
       return errorResponse('Chỉ Thương mại / BGĐ được upload báo giá NCC', 403)
+    }
+    if (entityType === 'PR' && !canEditForm('PR', user.roleCode)) {
+      return errorResponse('Bạn không có quyền upload file PR', 403)
     }
     if (!ENTITY_ID_REGEX.test(entityId)) {
       return errorResponse('Tham số không hợp lệ', 400)

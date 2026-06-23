@@ -125,7 +125,7 @@ async function notifyAssignees(
   } catch (e) { console.error('notifyAssignees Telegram error:', e) }
 }
 
-export async function createTask(input: CreateTaskInput, userId: string, opts?: { forwardedFromId?: string }) {
+export async function createTask(input: CreateTaskInput, userId: string, opts?: { forwardedFromId?: string; externalRef?: string; externalSource?: string; externalClientId?: string }) {
   const parent = input.parentId
     ? await prisma.task.findUnique({ where: { id: input.parentId }, select: { level: true } })
     : null
@@ -154,6 +154,9 @@ export async function createTask(input: CreateTaskInput, userId: string, opts?: 
         assignedAt: new Date(),
         status: TASK_STATUS.OPEN,
         checklistTemplateKey: input.checklistTemplateKey,
+        externalRef: opts?.externalRef || null,
+        externalSource: opts?.externalSource || null,
+        ...(opts?.externalClientId ? { resultData: { externalClientId: opts.externalClientId } } : {}),
       },
     })
     if (assignees.length) {
@@ -452,7 +455,9 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
   if (input.execReviewed === true) {
     briefingPatch.execReviewedAt = new Date().toISOString()
   }
-  briefingPatch.blocked = input.blocked ? 'true' : ''
+  if (input.blocked !== undefined) {
+    briefingPatch.blocked = input.blocked ? 'true' : ''
+  }
 
   // Atomic nested merge: resultData.briefing gets patched without losing sibling keys
   const briefingPatchStr = JSON.stringify(briefingPatch)
@@ -479,7 +484,7 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
   }
 
   const isDoneOrCancelled = input.status === TASK_STATUS.DONE || input.status === TASK_STATUS.CANCELLED
-  const blockedCol = isDoneOrCancelled ? false : !!input.blocked
+  const blockedCol = isDoneOrCancelled ? false : (input.blocked !== undefined ? !!input.blocked : task.blocked)
 
   const now = new Date()
   const updateData: Record<string, unknown> = {
@@ -501,7 +506,7 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
     updateData.escalatedBy = input.escalated ? byUserId : null
   }
 
-  const historyMeta = JSON.parse(JSON.stringify({ source: 'briefing', blocked: !!input.blocked, escalated: !!input.escalated }))
+  const historyMeta = JSON.parse(JSON.stringify({ source: 'briefing', blocked: blockedCol, escalated: !!input.escalated }))
 
   if (input.status === TASK_STATUS.DONE) {
     updateData.completedAt = now
@@ -534,7 +539,7 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
       prisma.taskHistory.create({ data: { taskId, action: 'STATUS_CANCELLED', byUserId, reason: input.reason, meta: historyMeta } }),
     ])
   } else {
-    const label = input.blocked ? `${input.status} (Tắc)` : input.status
+    const label = blockedCol ? `${input.status} (Tắc)` : input.status
     await prisma.$transaction([
       prisma.task.update({ where: { id: taskId }, data: updateData }),
       prisma.taskHistory.create({ data: { taskId, action: 'STATUS_SET', byUserId, reason: input.reason || `Chuyển: ${label}`, meta: historyMeta } }),

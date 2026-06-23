@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
-import { QUOTE_EDIT_ROLES, PR_EDIT_ROLES } from '@/lib/constants'
+import { QUOTE_EDIT_ROLES, canEditForm } from '@/lib/constants'
 import MomSectionsUI from '@/components/MomSectionsUI'
 import EstimateUploadUI from '@/components/EstimateUploadUI'
 import WbsMilestonesUploadUI from '@/components/WbsMilestonesUploadUI'
@@ -159,7 +159,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       {selected === 'ESTIMATE' && (
         <div style={{ marginTop: 12 }}>
           <EstimateUploadUI
-            isEditable={isEditable}
+            isEditable={isEditable && canEditForm('ESTIMATE', roleCode)}
             project={project || (projectCode ? { projectCode } : undefined)}
             estimateData={{
               totalMaterial: Number(resultData.totalMaterial) || 0,
@@ -178,7 +178,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       {selected === 'PR' && (
         <div style={{ marginTop: 12 }}>
           <BomPrUploadUI
-            isEditable={isEditable && (PR_EDIT_ROLES as readonly string[]).includes(roleCode)}
+            isEditable={isEditable && canEditForm('PR', roleCode)}
             bomPrData={prData || undefined}
             onChange={handlePrChange}
             projectCode={projectCode}
@@ -197,7 +197,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       {selected === 'BBH' && (
         <div style={{ marginTop: 12 }}>
           <MomSectionsUI
-            isEditable={isEditable}
+            isEditable={isEditable && canEditForm('BBH', roleCode)}
             attendantsData={momAttendants || undefined}
             sectionsData={momSections || undefined}
             onAttendantsChange={(val) => { setMomAttendants(val); saveField('momAttendants', val) }}
@@ -212,7 +212,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       {selected === 'WBS' && (
         <div style={{ marginTop: 12 }}>
           <WbsMilestonesUploadUI
-            isEditable={isEditable}
+            isEditable={isEditable && canEditForm('WBS', roleCode)}
             wbsData={wbsData || undefined}
             milestonesData={milestonesData || undefined}
             onWbsChange={(val) => { setWbsData(val); saveField('wbsItems', val) }}
@@ -225,7 +225,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       {selected === 'WELD_PAINT' && (
         <div style={{ marginTop: 12 }}>
           <WeldPaintUploadUI
-            isEditable={isEditable}
+            isEditable={isEditable && canEditForm('WELD_PAINT', roleCode)}
             weldData={weldData || undefined}
             paintData={paintData || undefined}
             onChangeWeld={(val) => { setWeldData(val); saveField('weldData', val) }}
@@ -238,7 +238,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       {selected === 'BOM' && (
         <div style={{ marginTop: 12 }}>
           <BomItemsUploadUI
-            isEditable={isEditable}
+            isEditable={isEditable && canEditForm('BOM', roleCode)}
             bomData={bomItems || undefined}
             onChange={(val) => { setBomItems(val); saveField('bomItemsList', val) }}
             projectCode={projectCode}
@@ -250,7 +250,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
         <div style={{ marginTop: 12 }}>
           <SupplierQuoteUI
             taskId={taskId}
-            isEditable={isEditable}
+            isEditable={isEditable && canEditForm('SUPPLIER_QUOTE', roleCode)}
             bomPrData={prData || (resultData.bomPr ? String(resultData.bomPr) : undefined)}
             value={resultData.supplierQuotes ? (Array.isArray(resultData.supplierQuotes) ? resultData.supplierQuotes : (() => { try { return JSON.parse(String(resultData.supplierQuotes)) } catch { return [] } })()) : undefined}
             onChange={async (quotes) => {

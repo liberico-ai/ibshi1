@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { FINANCE_WRITE_ROLES } from '@/lib/constants'
 
 // GET /api/finance/cashflow — monthly cashflow summary
 export async function GET(req: NextRequest) {
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!(FINANCE_WRITE_ROLES as readonly string[]).includes(user.roleCode)) return forbiddenResponse('Không có quyền ghi tài chính')
 
     const body = await req.json()
     const { entryCode, projectId, type, category, amount, description, entryDate, reference } = body
