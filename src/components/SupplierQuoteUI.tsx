@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import * as XLSX from 'xlsx'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import MultiFileUpload, { UploadedFile } from '@/components/MultiFileUpload'
 import { formatCurrency, formatNumber } from '@/lib/utils'
+import { QUOTE_EDIT_ROLES } from '@/lib/constants'
+import { parseQuoteExcel, matchQuoteLinesToPr, type QuoteLine, type PrItem } from '@/lib/quote-parser'
 
 export interface QuoteFile { id: string; fileName: string; fileUrl: string; kind: 'Báo giá' | 'Hợp đồng' | 'Khác' }
 
@@ -21,6 +24,7 @@ export interface SupplierQuote {
   files: QuoteFile[]
   selected: boolean
   selectReason: string
+  lines?: QuoteLine[]
 }
 
 interface Vendor { id: string; vendorCode: string; name: string; category: string }
@@ -39,7 +43,7 @@ function emptyQuote(): SupplierQuote {
   return {
     id: uid(), vendorName: '', quoteDate: new Date().toISOString().slice(0, 10),
     totalAmount: 0, currency: 'VND', leadTimeDays: 0, paymentTerms: '', note: '',
-    files: [], selected: false, selectReason: '',
+    files: [], selected: false, selectReason: '', lines: [],
   }
 }
 
@@ -47,7 +51,11 @@ function fmt(n: number, cur = 'VND') {
   return cur === 'VND' ? formatCurrency(n) : formatNumber(n) + ` ${cur}`
 }
 
-export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, onChange }: Props) {
+export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bomPrData, value, onChange }: Props) {
+  const roleCode = useAuthStore(s => s.user?.roleCode || '')
+  const canEditQuote = (QUOTE_EDIT_ROLES as readonly string[]).includes(roleCode)
+  const isEditable = isEditableProp && canEditQuote
+
   const [quotes, setQuotes] = useState<SupplierQuote[]>(value || [])
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [vendorSearch, setVendorSearch] = useState<Record<string, string>>({})
@@ -55,8 +63,6 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
   const [newVendor, setNewVendor] = useState({ name: '', vendorCode: '', category: 'NCC', contact: '', phone: '' })
   const [creatingVendor, setCreatingVendor] = useState(false)
   const [reasonError, setReasonError] = useState<string | null>(null)
-
-  const roleCode = useAuthStore(s => s.user?.roleCode || '')
 
   useEffect(() => {
     apiFetch('/api/vendors').then(r => {
@@ -104,6 +110,35 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
     if (row) updateRow(rowId, { files: row.files.map(f => f.id === fileId ? { ...f, kind } : f) })
   }
 
+  const [parseStatus, setParseStatus] = useState<Record<string, string>>({})
+
+  const handleParseQuoteFile = async (rowId: string, file: File) => {
+    setParseStatus(p => ({ ...p, [rowId]: 'parsing' }))
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: 'array' })
+      const sheetName = wb.SheetNames.find(n => /^bg$/i.test(n.trim())) || wb.SheetNames[0]
+      const sheet = wb.Sheets[sheetName]
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][]
+
+      let lines = parseQuoteExcel(data)
+      if (lines.length === 0) {
+        setParseStatus(p => ({ ...p, [rowId]: 'empty' }))
+        return
+      }
+
+      if (Array.isArray(parsedPrItems) && parsedPrItems.length > 0) {
+        lines = matchQuoteLinesToPr(lines, parsedPrItems)
+      }
+
+      const total = lines.reduce((s, l) => s + l.amount, 0)
+      updateRow(rowId, { lines, totalAmount: Math.round(total * 100) / 100 })
+      setParseStatus(p => ({ ...p, [rowId]: `ok:${lines.length}` }))
+    } catch {
+      setParseStatus(p => ({ ...p, [rowId]: 'error' }))
+    }
+  }
+
   const handleCreateVendor = async (rowId: string) => {
     if (!newVendor.name || !newVendor.vendorCode) return
     setCreatingVendor(true)
@@ -136,6 +171,17 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
 
   // PR reference table
   const prItems = bomPrData ? (() => { try { return JSON.parse(bomPrData) } catch { return null } })() : null
+  const parsedPrItems: PrItem[] = useMemo(() => {
+    if (!Array.isArray(prItems)) return []
+    return prItems.map((it: Record<string, unknown>) => ({
+      stt: String(it.stt || it.code || it.materialCode || ''),
+      description: String(it.description || it.materialName || it.name || ''),
+      profile: String(it.profile || ''),
+      grade: String(it.grade || ''),
+      unit: String(it.unit || it.uom || ''),
+      quantity: Number(it.quantity || it.qty || 0),
+    }))
+  }, [bomPrData]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Comparison
   const sorted = [...quotes].filter(q => q.totalAmount > 0).sort((a, b) => a.totalAmount - b.totalAmount)
@@ -247,6 +293,9 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
                 </table>
               </div>
             </div>
+
+            {/* Material matrix (review mode) */}
+            <MaterialMatrix quotes={quotes} prItems={parsedPrItems} chosen={chosen} />
           </>
         )}
       </div>
@@ -385,6 +434,27 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
                 ))}
               </div>
             )}
+            {/* Parse Excel quote file */}
+            <div className="mt-2 flex items-center gap-2">
+              <label className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                style={{ background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd' }}>
+                📄 Upload file báo giá Excel
+                <input type="file" accept=".xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleParseQuoteFile(q.id, f); e.target.value = '' }} />
+              </label>
+              {parseStatus[q.id] === 'parsing' && <span className="text-xs" style={{ color: '#64748b' }}>Đang parse...</span>}
+              {parseStatus[q.id] === 'empty' && <span className="text-xs" style={{ color: '#dc2626' }}>Không tìm thấy dòng báo giá</span>}
+              {parseStatus[q.id] === 'error' && <span className="text-xs" style={{ color: '#dc2626' }}>Lỗi đọc file</span>}
+              {parseStatus[q.id]?.startsWith('ok:') && <span className="text-xs" style={{ color: '#15803d' }}>✓ {parseStatus[q.id].split(':')[1]} dòng</span>}
+            </div>
+            {q.lines && q.lines.length > 0 && (
+              <div className="mt-2 text-xs" style={{ color: '#64748b' }}>
+                {q.lines.filter(l => l.matchedPrIndex !== null).length}/{q.lines.length} dòng khớp PR
+                {q.lines.some(l => l.matchedPrIndex === null) && (
+                  <span className="ml-2" style={{ color: '#f59e0b' }}>⚠ {q.lines.filter(l => l.matchedPrIndex === null).length} dòng ngoài PR</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Select reason */}
@@ -483,11 +553,164 @@ export default function SupplierQuoteUI({ taskId, isEditable, bomPrData, value, 
         </div>
       )}
 
-      {['R07', 'R07a', 'R01', 'R02'].includes(roleCode) && quotes.length === 0 && (
+      {/* D: Material comparison matrix */}
+      <MaterialMatrix quotes={quotes} prItems={parsedPrItems} chosen={chosen} />
+
+      {canEditQuote && quotes.length === 0 && (
         <div className="text-center py-6 rounded-xl" style={{ background: '#f0f9ff', border: '2px dashed #93c5fd' }}>
           <div className="text-3xl mb-2">💰</div>
           <div className="text-sm font-semibold" style={{ color: '#1d4ed8' }}>Bắt đầu tìm nhà cung cấp</div>
           <div className="text-xs mt-1" style={{ color: '#64748b' }}>Nhấn &quot;+ Thêm nhà cung cấp&quot; để thêm báo giá</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sub-component: Material comparison matrix ──
+function MaterialMatrix({ quotes, prItems, chosen }: { quotes: SupplierQuote[]; prItems: PrItem[]; chosen?: SupplierQuote }) {
+  const quotesWithLines = quotes.filter(q => q.lines && q.lines.length > 0)
+  if (quotesWithLines.length === 0 || prItems.length === 0) return null
+
+  type Row = { prIdx: number; code: string; desc: string; profile: string; unit: string; qty: number; prices: Record<string, number> }
+
+  const rows: Row[] = []
+  const extraRows: { quoteId: string; vendorName: string; line: QuoteLine }[] = []
+
+  for (let pi = 0; pi < prItems.length; pi++) {
+    const p = prItems[pi]
+    const prices: Record<string, number> = {}
+    for (const q of quotesWithLines) {
+      const match = q.lines!.find(l => l.matchedPrIndex === pi)
+      if (match) prices[q.id] = match.unitPrice
+    }
+    rows.push({
+      prIdx: pi,
+      code: p.stt || p.code || p.materialCode || '',
+      desc: p.description || p.materialName || p.name || '',
+      profile: p.profile || '',
+      unit: p.unit || p.uom || '',
+      qty: p.quantity || p.qty || 0,
+      prices,
+    })
+  }
+
+  for (const q of quotesWithLines) {
+    for (const l of q.lines!) {
+      if (l.matchedPrIndex === null) {
+        extraRows.push({ quoteId: q.id, vendorName: q.vendorName, line: l })
+      }
+    }
+  }
+
+  const nccTotals: Record<string, number> = {}
+  for (const q of quotesWithLines) {
+    nccTotals[q.id] = q.lines!.reduce((s, l) => s + l.amount, 0)
+  }
+
+  let cheapestId = ''
+  let cheapestTotal = Infinity
+  for (const [qid, total] of Object.entries(nccTotals)) {
+    if (total > 0 && total < cheapestTotal) { cheapestTotal = total; cheapestId = qid }
+  }
+
+  return (
+    <div className="rounded-xl p-4 mt-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+        📋 So sánh theo vật tư ({rows.length} dòng PR × {quotesWithLines.length} NCC)
+      </div>
+      {cheapestId && (
+        <div className="text-xs mb-2 px-2 py-1.5 rounded-lg inline-block" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd' }}>
+          NCC rẻ nhất toàn gói: <strong>{quotesWithLines.find(q => q.id === cheapestId)?.vendorName}</strong> — {formatCurrency(cheapestTotal)}
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'var(--surface-hover, #f1f5f9)' }}>
+              <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 60 }}>#</th>
+              <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 120 }}>Vật tư</th>
+              <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 60 }}>ĐVT</th>
+              <th className="text-right px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 50 }}>SL</th>
+              {quotesWithLines.map(q => (
+                <th key={q.id} className="text-right px-2 py-1.5 font-semibold" style={{ color: q.selected ? '#15803d' : 'var(--text-muted)', minWidth: 100 }}>
+                  {q.selected && '★ '}{q.vendorName || '—'}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => {
+              const priceVals = Object.values(r.prices).filter(p => p > 0)
+              const minPrice = priceVals.length > 0 ? Math.min(...priceVals) : 0
+              const missingCount = quotesWithLines.length - Object.keys(r.prices).length
+              return (
+                <tr key={ri} style={{ borderTop: '1px solid var(--border)' }}>
+                  <td className="px-2 py-1 font-mono" style={{ color: '#64748b' }}>{r.code || (ri + 1)}</td>
+                  <td className="px-2 py-1">
+                    {r.desc}{r.profile ? <span className="ml-1" style={{ color: '#64748b' }}>{r.profile}</span> : ''}
+                    {missingCount > 0 && <span className="ml-1" style={{ color: '#f59e0b' }} title={`${missingCount} NCC thiếu báo giá`}>⚠</span>}
+                  </td>
+                  <td className="px-2 py-1">{r.unit || '—'}</td>
+                  <td className="px-2 py-1 text-right font-semibold">{r.qty || '—'}</td>
+                  {quotesWithLines.map(q => {
+                    const price = r.prices[q.id]
+                    const isMin = price !== undefined && price > 0 && price === minPrice
+                    return (
+                      <td key={q.id} className="px-2 py-1 text-right font-mono"
+                        style={{ color: price === undefined ? '#94a3b8' : isMin ? '#1d4ed8' : 'var(--text-primary)', fontWeight: isMin ? 700 : 400, background: isMin ? '#eff6ff' : undefined }}>
+                        {price !== undefined ? formatNumber(price) : '—'}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+            {/* Totals row */}
+            <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
+              <td className="px-2 py-1.5" colSpan={4} style={{ color: 'var(--text-primary)' }}>Tổng</td>
+              {quotesWithLines.map(q => {
+                const total = nccTotals[q.id] || 0
+                const isCheapest = q.id === cheapestId
+                return (
+                  <td key={q.id} className="px-2 py-1.5 text-right font-mono"
+                    style={{ color: isCheapest ? '#1d4ed8' : 'var(--text-primary)', background: isCheapest ? '#eff6ff' : undefined }}>
+                    {formatCurrency(total)}
+                    {isCheapest && <span className="ml-1" style={{ fontSize: '0.65rem' }}>(thấp nhất)</span>}
+                  </td>
+                )
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {/* Extra rows (not in PR) */}
+      {extraRows.length > 0 && (
+        <div className="mt-3">
+          <div className="text-xs font-semibold mb-1" style={{ color: '#f59e0b' }}>⚠ Dòng ngoài PR ({extraRows.length})</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr style={{ background: '#fef3c7' }}>
+                {['NCC', 'Mã', 'Mô tả', 'Profile', 'ĐVT', 'SL', 'Đơn giá', 'Thành tiền'].map(h => (
+                  <th key={h} className="text-left px-2 py-1 font-semibold" style={{ color: '#92400e' }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {extraRows.map((er, i) => (
+                  <tr key={i} style={{ borderTop: '1px solid #fde68a' }}>
+                    <td className="px-2 py-1">{er.vendorName}</td>
+                    <td className="px-2 py-1 font-mono">{er.line.code}</td>
+                    <td className="px-2 py-1">{er.line.description}</td>
+                    <td className="px-2 py-1">{er.line.profile}</td>
+                    <td className="px-2 py-1">{er.line.unit}</td>
+                    <td className="px-2 py-1 text-right">{er.line.qty}</td>
+                    <td className="px-2 py-1 text-right">{formatNumber(er.line.unitPrice)}</td>
+                    <td className="px-2 py-1 text-right font-semibold">{formatCurrency(er.line.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

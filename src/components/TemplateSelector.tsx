@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { QUOTE_EDIT_ROLES } from '@/lib/constants'
 import MomSectionsUI from '@/components/MomSectionsUI'
 import EstimateUploadUI from '@/components/EstimateUploadUI'
 import WbsMilestonesUploadUI from '@/components/WbsMilestonesUploadUI'
@@ -179,7 +180,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
             onChange={handlePrChange}
             projectCode={projectCode}
           />
-          {['R07', 'R07a', 'R01', 'R02'].includes(roleCode) && !resultData.supplierQuotes && (
+          {(QUOTE_EDIT_ROLES as readonly string[]).includes(roleCode) && !resultData.supplierQuotes && (
             <button
               onClick={() => handleSelectTemplate('SUPPLIER_QUOTE')}
               style={{ marginTop: 10, padding: '8px 16px', borderRadius: 10, border: '2px dashed #93c5fd', background: '#f0f9ff', color: '#1d4ed8', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', width: '100%' }}

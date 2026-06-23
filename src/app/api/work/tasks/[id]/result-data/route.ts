@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { QUOTE_EDIT_ROLES } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params
     const body = await req.json().catch(() => ({})) as { key?: string; value?: unknown }
     if (!body.key || !ALLOWED_KEYS.includes(body.key)) return errorResponse('Key không hợp lệ', 400)
+
+    const QUOTE_KEYS = ['supplierQuotes', 'chosenVendorId']
+    if (QUOTE_KEYS.includes(body.key) && !(QUOTE_EDIT_ROLES as readonly string[]).includes(payload.roleCode)) {
+      return errorResponse('Chỉ Thương mại / BGĐ được sửa báo giá NCC', 403)
+    }
 
     const task = await prisma.task.findUnique({ where: { id }, select: { id: true, resultData: true } })
     if (!task) return errorResponse('Không tìm thấy công việc', 404)

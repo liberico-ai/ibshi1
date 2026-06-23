@@ -106,6 +106,9 @@ export const MENU_GROUPS = [
   { key: 'system', label: 'Hệ thống', labelEn: 'System', icon: '⚙️', priority: 10 },
 ] as const
 
+// Roles allowed to create/edit supplier quotes
+export const QUOTE_EDIT_ROLES = ['R07', 'R07a', 'R01'] as const
+
 // Role-specific group priority: first group = expanded by default
 export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R01:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
