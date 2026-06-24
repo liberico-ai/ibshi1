@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
         name: nameById.get(a.userId!) || 'NV',
       }))
       const actionItems = Array.isArray(briefing.actionItems) ? briefing.actionItems as { taskId: string; title: string }[] : []
+      const discussedAt = (typeof briefing.discussedAt === 'string') ? briefing.discussedAt : ''
       return {
         id: t.id,
         taskType: t.taskType,
@@ -103,6 +104,7 @@ export async function GET(req: NextRequest) {
         assigneeNames,
         assignees,
         actionItems,
+        discussedAt,
         projectCode: t.project?.projectCode || '',
         criteria: briefing.criteria || '',
         proposal: briefing.proposal || '',

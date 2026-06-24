@@ -27,6 +27,7 @@ interface BriefingTask {
   assigneeNames: string[]
   assignees: { userId: string; name: string }[]
   actionItems: { taskId: string; title: string }[]
+  discussedAt: string
   projectCode: string
   criteria: string
   proposal: string
@@ -154,6 +155,19 @@ function fmtDate(d: string | null): string {
 
 const rmDiacritics = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, c => c === 'đ' ? 'd' : 'D')
 
+function getMonday(): Date {
+  const d = new Date(); d.setHours(0, 0, 0, 0)
+  const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  d.setDate(diff); return d
+}
+function needsDiscussion(t: BriefingTask): boolean {
+  return t.status !== 'DONE' && t.status !== 'CANCELLED' && (t.isOverdue || t.blocked || t.needsExecDecision || t.isDueSoon)
+}
+function discussedThisWeek(t: BriefingTask): boolean {
+  if (!t.discussedAt) return false
+  return new Date(t.discussedAt) >= getMonday()
+}
+
 // ── UserAutocomplete ──
 
 function UserAutocomplete({ value, users, warning, onChange }: {
@@ -266,8 +280,17 @@ export default function BriefingPage() {
   const [cellEditing, setCellEditing] = useState<string | null>(null)
   const [filterExecOnly, setFilterExecOnly] = useState(false)
 
-  // Action menu state
+  // Meeting mode
+  const [meetingMode, setMeetingMode] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('briefing_meeting') === '1'
+    return false
+  })
+  const [meetingIdx, setMeetingIdx] = useState(0)
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map())
+
+  // Action menu state — portal-style positioning
   const [actionMenu, setActionMenu] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; flipUp: boolean } | null>(null)
   const [actionMode, setActionMode] = useState<{ taskId: string; mode: 'reassign' | 'deadline' | 'action-item' } | null>(null)
   const [actionUsers, setActionUsers] = useState<DBUser[]>([])
   const [actionSaving, setActionSaving] = useState(false)
@@ -279,7 +302,6 @@ export default function BriefingPage() {
   const [actionItemPicks, setActionItemPicks] = useState<string[]>([])
   const [actionItemQuery, setActionItemQuery] = useState('')
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
-  const actionMenuRef = useRef<HTMLDivElement>(null)
 
   // Import state
   const fileRef = useRef<HTMLInputElement>(null)
@@ -310,12 +332,15 @@ export default function BriefingPage() {
   }, [toast])
 
   useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) setActionMenu(null)
-    }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
+    if (!actionMenu) return
+    const h = () => { setActionMenu(null); setMenuPos(null) }
+    const timer = setTimeout(() => document.addEventListener('click', h), 0)
+    return () => { clearTimeout(timer); document.removeEventListener('click', h) }
+  }, [actionMenu])
+
+  useEffect(() => {
+    localStorage.setItem('briefing_meeting', meetingMode ? '1' : '0')
+  }, [meetingMode])
 
   const loadUsers = useCallback(async () => {
     if (actionUsers.length > 0) return
@@ -325,6 +350,7 @@ export default function BriefingPage() {
 
   const openAction = async (taskId: string, mode: 'reassign' | 'deadline' | 'action-item') => {
     setActionMenu(null)
+    setMenuPos(null)
     setActionSaving(false)
     setReassignPicks([])
     setReassignQuery('')
@@ -390,7 +416,7 @@ export default function BriefingPage() {
   }
 
   const handleToggleBlocked = async (taskId: string, currentBlocked: boolean) => {
-    setActionMenu(null)
+    setActionMenu(null); setMenuPos(null)
     const newBlocked = !currentBlocked
     // Optimistic
     setGroups(gs => gs.map(g => ({ ...g, tasks: g.tasks.map(t => t.id === taskId ? { ...t, blocked: newBlocked } : t) })))
@@ -607,8 +633,18 @@ export default function BriefingPage() {
       if (['RETURNED', 'IN_PROGRESS', 'OPEN', 'AWAITING_REVIEW'].includes(t.status)) return 4
       return 5 // DONE
     }
+    function meetingSort(a: BriefingTask, b: BriefingTask): number {
+      const ab = a.blocked ? 0 : 1, bb = b.blocked ? 0 : 1
+      if (ab !== bb) return ab - bb
+      const ae = a.needsExecDecision ? 0 : 1, be = b.needsExecDecision ? 0 : 1
+      if (ae !== be) return ae - be
+      if (a.daysOverdue !== b.daysOverdue) return b.daysOverdue - a.daysOverdue
+      const as = a.isDueSoon ? 0 : 1, bs = b.isDueSoon ? 0 : 1
+      return as - bs
+    }
     return groups.map((g) => {
       let tasks = g.tasks
+      if (meetingMode) tasks = tasks.filter(needsDiscussion)
       if (filterExecOnly) tasks = tasks.filter((t) => t.needsExecDecision)
       if (filterStatus) tasks = tasks.filter((t) => t.status === filterStatus)
       if (filterBlocked === 'yes') tasks = tasks.filter((t) => t.blocked)
@@ -624,19 +660,30 @@ export default function BriefingPage() {
           t.assigneeNames.some((n) => rmDiacritics(n.toLowerCase()).includes(q))
         )
       }
-      const sorted = [...tasks].sort((a, b) => {
-        const ra = urgencyRank(a), rb = urgencyRank(b)
-        if (ra !== rb) return ra - rb
-        if (ra === 1) return b.daysOverdue - a.daysOverdue
-        const da = a.deadline ? new Date(a.deadline).getTime() : Infinity
-        const db = b.deadline ? new Date(b.deadline).getTime() : Infinity
-        return da - db
-      })
-      const activeTasks = sorted.filter((t) => urgencyRank(t) <= 4)
-      const doneTasks = sorted.filter((t) => urgencyRank(t) === 5)
+      const sorted = meetingMode
+        ? [...tasks].sort(meetingSort)
+        : [...tasks].sort((a, b) => {
+          const ra = urgencyRank(a), rb = urgencyRank(b)
+          if (ra !== rb) return ra - rb
+          if (ra === 1) return b.daysOverdue - a.daysOverdue
+          const da = a.deadline ? new Date(a.deadline).getTime() : Infinity
+          const db = b.deadline ? new Date(b.deadline).getTime() : Infinity
+          return da - db
+        })
+      const activeTasks = meetingMode ? sorted : sorted.filter((t) => urgencyRank(t) <= 4)
+      const doneTasks = meetingMode ? [] : sorted.filter((t) => urgencyRank(t) === 5)
       return { ...g, tasks: sorted, activeTasks, doneTasks, totalTasks: tasks.length }
     }).filter((g) => g.tasks.length > 0)
-  }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch, filterExecOnly])
+  }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch, filterExecOnly, meetingMode])
+
+  // Meeting mode: flat list of tasks that need discussion, for prev/next navigation
+  const meetingTasks = useMemo(() => {
+    if (!meetingMode) return []
+    return filteredGroups.flatMap(g => g.activeTasks).filter(t => !discussedThisWeek(t))
+  }, [filteredGroups, meetingMode])
+
+  const meetingTotal = useMemo(() => filteredGroups.flatMap(g => g.activeTasks).length, [filteredGroups])
+  const meetingDiscussed = useMemo(() => filteredGroups.flatMap(g => g.activeTasks).filter(discussedThisWeek).length, [filteredGroups])
 
   const execTasks = useMemo(() => {
     return groups.flatMap((g) => g.tasks.filter((t) => t.needsExecDecision))
@@ -707,6 +754,43 @@ export default function BriefingPage() {
     else alert(r.error || 'Lỗi cập nhật')
   }
 
+  const handleDiscussed = async (taskId: string, checked: boolean) => {
+    setGroups(prev => prev.map(g => ({
+      ...g,
+      tasks: g.tasks.map(t => t.id === taskId ? { ...t, discussedAt: checked ? new Date().toISOString() : '' } : t),
+    })))
+    const r = await apiFetch('/api/work/briefing/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, briefingPatch: { discussedAt: checked ? new Date().toISOString() : '' } }),
+    })
+    if (r.ok) {
+      setToast({ msg: checked ? 'Đã đánh dấu bàn xong' : 'Đã bỏ đánh dấu', ok: true })
+      setTimeout(() => setToast(null), 2000)
+    } else {
+      load()
+      setToast({ msg: r.error || 'Lỗi cập nhật', ok: false })
+      setTimeout(() => setToast(null), 3000)
+    }
+  }
+
+  const openActionMenu = (taskId: string, btnEl: HTMLButtonElement) => {
+    if (actionMenu === taskId) { setActionMenu(null); setMenuPos(null); return }
+    const rect = btnEl.getBoundingClientRect()
+    const flipUp = rect.bottom + 200 > window.innerHeight
+    setMenuPos({ top: flipUp ? rect.top : rect.bottom + 4, left: rect.right - 160, flipUp })
+    setActionMenu(taskId)
+  }
+
+  const goMeetingTask = (direction: 1 | -1) => {
+    if (!meetingTasks.length) return
+    const next = meetingIdx + direction
+    const idx = next < 0 ? meetingTasks.length - 1 : next >= meetingTasks.length ? 0 : next
+    setMeetingIdx(idx)
+    const el = rowRefs.current.get(meetingTasks[idx].id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
@@ -715,7 +799,16 @@ export default function BriefingPage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Giao ban tuần</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{kpi.active} việc đang mở · {kpi.overdue} quá hạn · {groups.length} dự án</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => { setMeetingMode(m => !m); setMeetingIdx(0) }}
+            className="text-sm px-4 py-2 rounded-lg font-semibold transition-all"
+            style={meetingMode
+              ? { background: '#dc2626', color: '#fff', border: '1px solid #dc2626' }
+              : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+          >
+            {meetingMode ? '✕ Tắt chế độ họp' : '🎯 Chế độ họp'}
+          </button>
           <button onClick={load} className="text-sm px-4 py-2 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>Tải lại</button>
           <label className="text-sm px-4 py-2 rounded-lg cursor-pointer" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
             Import biên bản
@@ -790,6 +883,42 @@ export default function BriefingPage() {
               </div>
             ))}
           </div>
+
+          {/* Meeting mode bar */}
+          {meetingMode && (
+            <div className="rounded-xl px-5 py-3 flex items-center justify-between flex-wrap gap-3" style={{ background: '#fef2f2', border: '1px solid #fca5a5' }}>
+              <div className="flex-1 min-w-[200px]">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold" style={{ color: '#991b1b' }}>Đã bàn {meetingDiscussed}/{meetingTotal} việc cần bàn</span>
+                  <span className="text-xs font-semibold" style={{ color: '#dc2626' }}>{meetingTotal > 0 ? Math.round(meetingDiscussed / meetingTotal * 100) : 0}%</span>
+                </div>
+                <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: '#fecaca' }}>
+                  <div className="h-full rounded-full transition-all" style={{ width: `${meetingTotal > 0 ? meetingDiscussed / meetingTotal * 100 : 0}%`, background: '#dc2626' }} />
+                </div>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button
+                  onClick={() => goMeetingTask(-1)}
+                  disabled={meetingTasks.length === 0}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold disabled:opacity-30"
+                  style={{ background: '#fff', border: '1px solid #fca5a5', color: '#991b1b' }}
+                >
+                  ← Trước
+                </button>
+                <span className="text-xs font-medium" style={{ color: '#991b1b' }}>
+                  {meetingTasks.length > 0 ? `${meetingIdx + 1}/${meetingTasks.length} chưa bàn` : 'Đã bàn hết!'}
+                </span>
+                <button
+                  onClick={() => goMeetingTask(1)}
+                  disabled={meetingTasks.length === 0}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold disabled:opacity-30"
+                  style={{ background: '#991b1b', color: '#fff', border: '1px solid #991b1b' }}
+                >
+                  Tiếp theo →
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Filters */}
           <div className="flex gap-2 flex-wrap items-center">
@@ -958,8 +1087,14 @@ export default function BriefingPage() {
                   : (STATUS_LABELS[t.status] || { label: t.status, color: '#475569', bg: '#f1f5f9' })
                 const isEditingThis = statusEditing === t.id
                 const isActive = t.status !== 'DONE' && t.status !== 'CANCELLED'
+                const isHighlighted = meetingMode && meetingTasks[meetingIdx]?.id === t.id
                 return (
-                  <tr key={t.id} className="border-t hover:bg-opacity-50" style={{ borderColor: 'var(--border)', opacity: dimmed ? 0.55 : 1 }}>
+                  <tr
+                    key={t.id}
+                    ref={el => { if (el) rowRefs.current.set(t.id, el); else rowRefs.current.delete(t.id) }}
+                    className={`border-t hover:bg-opacity-50 transition-colors ${isHighlighted ? 'ring-2 ring-inset ring-red-400' : ''}`}
+                    style={{ borderColor: 'var(--border)', opacity: dimmed ? 0.55 : 1, background: isHighlighted ? '#fef2f2' : undefined }}
+                  >
                     <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{t.taskType !== 'FREE' ? t.taskType : '—'}</td>
                     <td className="px-4 py-2.5">
                       {t.needsExecDecision && <span className="mr-1" title="Cần BGĐ quyết">🔺</span>}
@@ -1078,32 +1213,25 @@ export default function BriefingPage() {
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.notes || '—'}</td>
+                    {meetingMode && (
+                      <td className="px-2 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={discussedThisWeek(t)}
+                          onChange={(e) => handleDiscussed(t.id, e.target.checked)}
+                          className="w-4 h-4 rounded cursor-pointer accent-green-600"
+                          title={discussedThisWeek(t) ? 'Đã bàn — bỏ dấu?' : 'Đánh dấu đã bàn'}
+                        />
+                      </td>
+                    )}
                     <td className="px-2 py-2.5 text-center">
                       {isActive && (
-                        <div className="relative inline-block" ref={actionMenu === t.id ? actionMenuRef : undefined}>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === t.id ? null : t.id) }}
-                            className="text-sm px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
-                            style={{ color: 'var(--text-muted)' }}
-                            title="Hành động"
-                          >⋯</button>
-                          {actionMenu === t.id && (
-                            <div className="absolute right-0 z-40 mt-1 py-1 rounded-lg shadow-lg min-w-[160px]" style={{ background: 'var(--surface, #fff)', border: '1px solid var(--border)' }}>
-                              <button onClick={() => openAction(t.id, 'reassign')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
-                                <span>👤</span> Đổi người
-                              </button>
-                              <button onClick={() => openAction(t.id, 'deadline')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
-                                <span>📅</span> Đổi hạn
-                              </button>
-                              <button onClick={() => handleToggleBlocked(t.id, t.blocked)} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
-                                <span>{t.blocked ? '🟢' : '🔴'}</span> {t.blocked ? 'Gỡ tắc' : 'Đánh dấu tắc'}
-                              </button>
-                              <button onClick={() => openAction(t.id, 'action-item')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
-                                <span>➕</span> Tạo việc từ đề xuất
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openActionMenu(t.id, e.currentTarget) }}
+                          className="text-sm px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                          style={{ color: 'var(--text-muted)' }}
+                          title="Hành động"
+                        >⋯</button>
                       )}
                     </td>
                   </tr>
@@ -1148,6 +1276,7 @@ export default function BriefingPage() {
                               <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 180 }}>Đề xuất/hướng xử lý</th>
                               <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 180 }}>Quyết định BGĐ</th>
                               <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Ghi chú</th>
+                              {meetingMode && <th className="text-center px-2 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 50 }}>Bàn</th>}
                               <th className="text-center px-2 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 40 }}></th>
                             </tr>
                           </thead>
@@ -1156,7 +1285,7 @@ export default function BriefingPage() {
                             {g.doneTasks.length > 0 && (
                               <>
                                 <tr>
-                                  <td colSpan={10} className="px-4 py-2">
+                                  <td colSpan={meetingMode ? 11 : 10} className="px-4 py-2">
                                     <button
                                       onClick={() => setDoneExpanded((prev) => { const s = new Set(prev); if (s.has(groupKey)) s.delete(groupKey); else s.add(groupKey); return s })}
                                       className="text-xs font-medium"
@@ -1178,6 +1307,37 @@ export default function BriefingPage() {
               )
             })
           )}
+          {/* ═══ Action Dropdown (portal-style fixed) ═══ */}
+          {actionMenu && menuPos && (() => {
+            const t = filteredGroups.flatMap(g => g.tasks).find(x => x.id === actionMenu)
+            if (!t) return null
+            return (
+              <div
+                className="fixed z-[9999] py-1 rounded-lg shadow-lg min-w-[160px]"
+                style={{
+                  top: menuPos.flipUp ? undefined : menuPos.top,
+                  bottom: menuPos.flipUp ? (window.innerHeight - menuPos.top + 4) : undefined,
+                  left: menuPos.left,
+                  background: 'var(--surface, #fff)',
+                  border: '1px solid var(--border)',
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <button onClick={() => openAction(t.id, 'reassign')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+                  <span>👤</span> Đổi người
+                </button>
+                <button onClick={() => openAction(t.id, 'deadline')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+                  <span>📅</span> Đổi hạn
+                </button>
+                <button onClick={() => handleToggleBlocked(t.id, t.blocked)} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+                  <span>{t.blocked ? '🟢' : '🔴'}</span> {t.blocked ? 'Gỡ tắc' : 'Đánh dấu tắc'}
+                </button>
+                <button onClick={() => openAction(t.id, 'action-item')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+                  <span>➕</span> Tạo việc từ đề xuất
+                </button>
+              </div>
+            )
+          })()}
           {/* ═══ Action Modal ═══ */}
           {actionMode && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setActionMode(null)}>
