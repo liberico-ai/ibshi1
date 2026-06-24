@@ -25,7 +25,6 @@ import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
-import crypto from 'crypto'
 
 // ── Target structure ──
 
@@ -91,7 +90,8 @@ async function main() {
   log(`${'='.repeat(60)}\n`)
 
   const stats = { roleUpsert: 0, deptUpsert: 0, userReassign: 0, userSkipTO: 0,
-    toParented: 0, toDeleted: 0, r11Deactivated: 0, deptDeleted: 0, manhResult: '' }
+    toParented: 0, toDeleted: 0, r11Deactivated: 0, deptDeleted: 0, manhResult: '',
+    empSynced: 0, empNulled: 0 }
 
   // ═══════════════════════════════════════════════
   // a. Upsert Role R13, rename deputy roles
@@ -150,6 +150,15 @@ async function main() {
   const deptIdByCode = new Map(allDepts.map(d => [d.code, d.id]))
   const deptById = new Map(allDepts.map(d => [d.id, d]))
 
+  // In dry-run, target depts may not exist yet — use placeholder IDs so reassign logic proceeds
+  for (const td of TARGET_DEPTS) {
+    if (!deptIdByCode.has(td.code)) {
+      const placeholderId = `__pending_${td.code}`
+      deptIdByCode.set(td.code, placeholderId)
+      deptById.set(placeholderId, { id: placeholderId, code: td.code, name: td.name } as typeof allDepts[0])
+    }
+  }
+
   const users = await prisma.user.findMany({
     select: { id: true, username: true, fullName: true, roleCode: true, departmentId: true, isActive: true, userLevel: true },
     orderBy: { roleCode: 'asc' },
@@ -206,21 +215,30 @@ async function main() {
   }
 
   // ═══════════════════════════════════════════════
-  // e. Trần Sỹ Mạnh → R13 + TBCG
+  // e. Trần Sỹ Mạnh → R13 + TBCG + username manhts
   // ═══════════════════════════════════════════════
-  log('\n[e] Trần Sỹ Mạnh → R13 + TBCG')
+  log('\n[e] Trần Sỹ Mạnh → R13 + TBCG + username manhts')
 
   const manh = users.find(u => u.username === 'manhtv')
   const tbcgId = deptIdByCode.get('TBCG')
+  const NEW_USERNAME = 'manhts'
 
   if (manh) {
+    // Check for username collision
+    const existing = await prisma.user.findUnique({ where: { username: NEW_USERNAME } })
+    if (existing) {
+      log(`    ❌ DỪNG: username '${NEW_USERNAME}' đã tồn tại (id=${existing.id})! Không thể đổi.`)
+      await prisma.$disconnect()
+      process.exit(1)
+    }
+
     const oldDept = manh.departmentId ? deptById.get(manh.departmentId) : null
-    stats.manhResult = `${manh.fullName} (${manh.username}): role ${manh.roleCode}→R13, dept ${oldDept?.code || '(none)'}→TBCG`
+    stats.manhResult = `${manh.fullName}: username manhtv→${NEW_USERNAME}, role ${manh.roleCode}→R13, dept ${oldDept?.code || '(none)'}→TBCG`
     log(`    ${stats.manhResult}`)
     if (APPLY && tbcgId) {
       await prisma.user.update({
         where: { id: manh.id },
-        data: { roleCode: 'R13', departmentId: tbcgId, userLevel: 1, isActive: true },
+        data: { username: NEW_USERNAME, roleCode: 'R13', departmentId: tbcgId, userLevel: 1, isActive: true },
       })
       log('    ✅ Đã cập nhật')
     }
@@ -261,9 +279,63 @@ async function main() {
   }
 
   // ═══════════════════════════════════════════════
-  // g. Delete empty legacy depts
+  // g. Sync Employee.departmentId (trước khi xoá dept)
   // ═══════════════════════════════════════════════
-  log('\n[g] Xoá dept thừa (0 user sau reassign)')
+  log('\n[g] Sync Employee.departmentId')
+
+  // Build set of dept IDs that will be deleted (legacy + PB-HCNS + empty TO-*)
+  const keepDeptCodes = new Set([...TARGET_CODES, ...toDepts.filter(d => users.some(u => u.departmentId === d.id)).map(d => d.code)])
+  const deletingDeptIds = new Set(allDepts.filter(d => !keepDeptCodes.has(d.code)).map(d => d.id))
+
+  const employees = await prisma.employee.findMany({
+    where: { departmentId: { not: null } },
+    select: { id: true, userId: true, departmentId: true, fullName: true },
+  })
+
+  let empSynced = 0
+  let empNulled = 0
+  for (const emp of employees) {
+    if (!emp.departmentId || !deletingDeptIds.has(emp.departmentId)) continue
+    const oldDeptObj = deptById.get(emp.departmentId)
+
+    // Try to follow the user's new dept
+    let newDeptId: string | null = null
+    if (emp.userId) {
+      const linkedUser = users.find(u => u.id === emp.userId)
+      if (linkedUser && linkedUser.isActive && linkedUser.roleCode !== 'R11') {
+        const targetCode = ROLE_TO_DEPT[linkedUser.roleCode]
+        if (targetCode) {
+          const tid = deptIdByCode.get(targetCode)
+          if (tid) newDeptId = tid
+        }
+        // If user is in TO-*, use their current dept (it stays)
+        if (!newDeptId && linkedUser.departmentId) {
+          const ud = deptById.get(linkedUser.departmentId)
+          if (ud && ud.code.startsWith('TO-')) newDeptId = linkedUser.departmentId
+        }
+      }
+    }
+
+    if (newDeptId) {
+      const newDeptObj = deptById.get(newDeptId)
+      log(`    ${emp.fullName}: ${oldDeptObj?.code || '?'} → ${newDeptObj?.code || '?'} (theo User)`)
+      if (APPLY) await prisma.employee.update({ where: { id: emp.id }, data: { departmentId: newDeptId } })
+      empSynced++
+    } else {
+      log(`    ${emp.fullName}: ${oldDeptObj?.code || '?'} → null`)
+      if (APPLY) await prisma.employee.update({ where: { id: emp.id }, data: { departmentId: null } })
+      empNulled++
+    }
+  }
+
+  stats.empSynced = empSynced
+  stats.empNulled = empNulled
+  log(`    (${empSynced} theo User, ${empNulled} → null, tổng ${empSynced + empNulled})`)
+
+  // ═══════════════════════════════════════════════
+  // h. Delete empty legacy depts
+  // ═══════════════════════════════════════════════
+  log('\n[h] Xoá dept thừa (0 user sau reassign)')
 
   // Refresh after changes
   const refreshDepts = await prisma.department.findMany({
@@ -294,8 +366,15 @@ async function main() {
     }
 
     if (APPLY ? liveCount === 0 : simCount === 0) {
+      if (APPLY) {
+        const empLeft = await prisma.employee.count({ where: { departmentId: d.id } })
+        if (empLeft > 0) {
+          log(`    ⚠ ${d.code} "${d.name}": 0 user nhưng ${empLeft} employee CÒN → KHÔNG XOÁ`)
+          continue
+        }
+        await prisma.department.delete({ where: { id: d.id } })
+      }
       log(`    ${d.code} "${d.name}": 0 user → XOÁ`)
-      if (APPLY) await prisma.department.delete({ where: { id: d.id } })
       stats.deptDeleted++
     } else {
       const cnt = APPLY ? liveCount : simCount
@@ -314,6 +393,7 @@ async function main() {
   log(`  TO-* parent=SX: ${stats.toParented}, TO-* xoá: ${stats.toDeleted}`)
   log(`  Trần Sỹ Mạnh: ${stats.manhResult}`)
   log(`  R11 deactivated: ${stats.r11Deactivated}`)
+  log(`  Employee sync: ${stats.empSynced} theo User, ${stats.empNulled} → null`)
   log(`  Dept xoá: ${stats.deptDeleted}`)
   if (!APPLY) {
     log(`\n  → Chạy lại với --apply để áp dụng.`)
