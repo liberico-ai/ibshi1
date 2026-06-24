@@ -1,30 +1,32 @@
-// Cơ cấu tổ chức mới (hiệu lực Q3/2026) + ánh xạ role cũ (R0x) → phòng mới.
-// Dùng cho định tuyến/gợi ý phòng ban trong workflow động. Không thay RBAC/role hiện có.
+// Cơ cấu tổ chức chuẩn 10 phòng (hiệu lực Q3/2026).
+// ROLE_TO_DEPT là nguồn gốc duy nhất cho ánh xạ role → phòng.
 
-export interface DeptDef { code: string; name: string; block: string }
+export interface DeptDef { code: string; name: string }
 
 export const DEPARTMENTS_V2: DeptDef[] = [
-  { code: 'BOM', name: 'Ban Giám đốc (BOM)', block: 'BOM' },
-  { code: 'PKT', name: 'Phòng Kỹ thuật', block: 'KHOI1' },
-  { code: 'PQAQC', name: 'Phòng QA/QC', block: 'KHOI1' },
-  { code: 'PSXDA', name: 'Phòng Sản xuất + Dự án', block: 'KHOI1' },
-  { code: 'PTTBCG', name: 'Phòng Trang thiết bị + Cơ giới', block: 'KHOI1' },
-  { code: 'PKTKT', name: 'Phòng Kinh Tế Kỹ thuật', block: 'KHOI2' },
-  { code: 'PTCKTKHO', name: 'Phòng TCKT + Kho', block: 'KHOI2' },
-  { code: 'HCNS', name: 'Phòng Hành chính Nhân sự', block: 'KHOI2' },
-  { code: 'HSE', name: 'Ban An toàn (HSE)', block: 'KHOI2' },
-  { code: 'BPCNTT', name: 'BP CNTT & Dữ liệu', block: 'KHOITT' },
+  { code: 'BGD', name: 'Ban Giám đốc' },
+  { code: 'CNTT', name: 'CNTT & Dữ liệu' },
+  { code: 'TK', name: 'Phòng Kỹ thuật' },
+  { code: 'KTKH', name: 'Kinh tế Kế hoạch' },
+  { code: 'TM', name: 'Thương mại' },
+  { code: 'QLDA', name: 'Quản lý Dự án' },
+  { code: 'SX', name: 'Sản xuất' },
+  { code: 'TCKT', name: 'Tài chính Kế toán & Kho' },
+  { code: 'QC', name: 'QA/QC' },
+  { code: 'TBCG', name: 'Thiết bị & Cơ giới' },
 ]
 
-// roleCode (cũ) → deptCode (mới). Giữ R-code làm chức danh bên trong phòng.
 export const ROLE_TO_DEPT: Record<string, string> = {
-  R01: 'BOM',
-  R02: 'PSXDA', R02a: 'PSXDA', R06: 'PSXDA', R06a: 'PSXDA', R06b: 'PSXDA',
-  R04: 'PKT', R04a: 'PKT',
-  R09: 'PQAQC', R09a: 'PQAQC',
-  R03: 'PKTKT', R03a: 'PKTKT', R07: 'PKTKT', R07a: 'PKTKT',
-  R08: 'PTCKTKHO', R08a: 'PTCKTKHO', R05: 'PTCKTKHO', R05a: 'PTCKTKHO',
-  R10: 'BPCNTT', R00: 'BPCNTT',
+  R01: 'BGD',
+  R02: 'QLDA', R02a: 'QLDA',
+  R03: 'KTKH', R03a: 'KTKH',
+  R04: 'TK', R04a: 'TK',
+  R05: 'TCKT', R05a: 'TCKT', R08: 'TCKT', R08a: 'TCKT',
+  R06: 'SX', R06a: 'SX', R06b: 'SX',
+  R07: 'TM', R07a: 'TM',
+  R09: 'QC', R09a: 'QC',
+  R10: 'CNTT',
+  R11: 'TBCG',
 }
 
 export const DEPT_NAME: Record<string, string> = Object.fromEntries(
@@ -36,22 +38,20 @@ export function deptOfRole(roleCode?: string | null): string | null {
   return ROLE_TO_DEPT[roleCode] ?? null
 }
 
-// Role đại diện của mỗi phòng (để gán "cả phòng" qua 1 roleCode khi gợi ý)
 export const DEPT_PRIMARY_ROLE: Record<string, string> = {
-  BOM: 'R01', PKT: 'R04', PQAQC: 'R09', PSXDA: 'R02', PTTBCG: 'R06',
-  PKTKT: 'R03', PTCKTKHO: 'R08', HCNS: 'R10', HSE: 'R09', BPCNTT: 'R10',
+  BGD: 'R01', CNTT: 'R10', TK: 'R04', KTKH: 'R03', TM: 'R07',
+  QLDA: 'R02', SX: 'R06', TCKT: 'R08', QC: 'R09', TBCG: 'R11',
 }
 
-// Từ điển từ khóa → phòng (suy từ chức năng nhiệm vụ + quy trình). Lowercase, so khớp 'includes'.
 export const DEPT_KEYWORDS: Record<string, string[]> = {
-  BOM: ['phê duyệt', 'duyệt', 'triển khai', 'phê chuẩn', 'chủ trương', 'đóng dự án', 'quyết định', 'ban giám đốc', 'bgđ'],
-  PKT: ['thiết kế', 'bản vẽ', 'shop drawing', 'bom', 'định mức', 'apl', 'dttc', 'dự toán kỹ thuật', 'kết cấu', 'quy cách', 'vẽ', 'kỹ thuật', 'eco', 'as-built'],
-  PQAQC: ['nghiệm thu', 'chất lượng', 'qc', 'qaqc', 'ncr', 'itp', 'kiểm tra', 'inspection', 'mdr', 'hold point', 'kiểm định', 'chứng chỉ', 'mill cert'],
-  PSXDA: ['sản xuất', 'lệnh sản xuất', 'lsx', 'tổ đội', 'thi công', 'hàn', 'cắt', 'lắp', 'tiến độ', 's-curve', 'war zone', 'wbs', 'milestone', 'kickoff', 'thầu phụ', 'kế hoạch', 'job card', 'phiếu công việc'],
-  PKTKT: ['vật tư', 'mua', 'báo giá', 'nhà cung cấp', 'ncc', 'pr ', 'po ', 'đặt hàng', 'đề nghị mua', 'thương mại', 'hợp đồng', 'đấu thầu', 'rfq', 'định giá', 'cung ứng', 'đề xuất vật tư'],
-  PTCKTKHO: ['nhập kho', 'xuất kho', 'tồn kho', 'kho', 'thanh toán', 'công nợ', 'hóa đơn', 'kế toán', 'quyết toán', 'dòng tiền', 'giải ngân', 'cấp phát', 'cấp vt'],
-  HSE: ['an toàn', 'hse', 'sự cố', 'tai nạn', 'môi trường', 'sức khỏe'],
-  HCNS: ['nhân sự', 'tuyển', 'lương', 'khoán', 'bhxh', 'đào tạo', 'hợp đồng lao động', 'chấm công', 'nghỉ phép'],
-  PTTBCG: ['thiết bị', 'máy móc', 'bảo dưỡng', 'cơ giới', 'cẩu', 'xe nâng', 'sửa chữa', 'phụ tùng'],
-  BPCNTT: ['phần mềm', 'ibs one', 'dữ liệu', 'hệ thống', 'cntt', 'automation', 'ai'],
+  BGD: ['phê duyệt', 'duyệt', 'triển khai', 'phê chuẩn', 'chủ trương', 'đóng dự án', 'quyết định', 'ban giám đốc', 'bgđ'],
+  TK: ['thiết kế', 'bản vẽ', 'shop drawing', 'bom', 'định mức', 'apl', 'dttc', 'dự toán kỹ thuật', 'kết cấu', 'quy cách', 'vẽ', 'kỹ thuật', 'eco', 'as-built'],
+  QC: ['nghiệm thu', 'chất lượng', 'qc', 'qaqc', 'ncr', 'itp', 'kiểm tra', 'inspection', 'mdr', 'hold point', 'kiểm định', 'chứng chỉ', 'mill cert'],
+  SX: ['sản xuất', 'lệnh sản xuất', 'lsx', 'tổ đội', 'thi công', 'hàn', 'cắt', 'lắp', 'tiến độ', 's-curve', 'war zone', 'wbs', 'milestone', 'kickoff', 'thầu phụ', 'job card', 'phiếu công việc'],
+  QLDA: ['dự án', 'kế hoạch', 'tiến độ dự án', 'rủi ro', 'quản lý', 'war zone'],
+  KTKH: ['kinh tế', 'kế hoạch', 'hợp đồng', 'định giá', 'vật tư', 'đề xuất vật tư', 'pr ', 'đề nghị mua'],
+  TM: ['mua', 'báo giá', 'nhà cung cấp', 'ncc', 'po ', 'đặt hàng', 'thương mại', 'đấu thầu', 'rfq', 'cung ứng'],
+  TCKT: ['nhập kho', 'xuất kho', 'tồn kho', 'kho', 'thanh toán', 'công nợ', 'hóa đơn', 'kế toán', 'quyết toán', 'dòng tiền', 'giải ngân', 'cấp phát', 'cấp vt'],
+  TBCG: ['thiết bị', 'máy móc', 'bảo dưỡng', 'cơ giới', 'cẩu', 'xe nâng', 'sửa chữa', 'phụ tùng'],
+  CNTT: ['phần mềm', 'ibs one', 'dữ liệu', 'hệ thống', 'cntt', 'automation', 'ai'],
 }

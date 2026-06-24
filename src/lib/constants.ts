@@ -2,23 +2,24 @@
 export const ROLES = {
   R01: { code: 'R01', name: 'Ban Giám đốc', nameEn: 'Board of Directors' },
   R02: { code: 'R02', name: 'Quản lý Dự án', nameEn: 'Project Manager' },
-  R02a: { code: 'R02a', name: 'Phó Quản lý DA', nameEn: 'Deputy PM' },
+  R02a: { code: 'R02a', name: 'Nhân viên Quản lý Dự án', nameEn: 'Project Staff' },
   R03: { code: 'R03', name: 'Kinh tế Kế hoạch', nameEn: 'Planning & Economics' },
-  R03a: { code: 'R03a', name: 'Phó Kinh tế KH', nameEn: 'Deputy Planning' },
+  R03a: { code: 'R03a', name: 'Nhân viên Kinh tế Kế hoạch', nameEn: 'Planning Staff' },
   R04: { code: 'R04', name: 'Thiết kế', nameEn: 'Engineering' },
-  R04a: { code: 'R04a', name: 'Phó Thiết kế', nameEn: 'Deputy Engineering' },
+  R04a: { code: 'R04a', name: 'Nhân viên Thiết kế', nameEn: 'Engineering Staff' },
   R05: { code: 'R05', name: 'Kho', nameEn: 'Warehouse' },
-  R05a: { code: 'R05a', name: 'Phó Kho', nameEn: 'Deputy Warehouse' },
+  R05a: { code: 'R05a', name: 'Nhân viên Kho', nameEn: 'Warehouse Staff' },
   R06: { code: 'R06', name: 'Quản lý Sản xuất', nameEn: 'Production Manager' },
-  R06a: { code: 'R06a', name: 'Phó Sản xuất', nameEn: 'Deputy Production' },
+  R06a: { code: 'R06a', name: 'Nhân viên Sản xuất', nameEn: 'Production Staff' },
   R06b: { code: 'R06b', name: 'Tổ trưởng sản xuất', nameEn: 'Team Leader' },
   R07: { code: 'R07', name: 'Thương mại', nameEn: 'Commercial' },
-  R07a: { code: 'R07a', name: 'Phó Thương mại', nameEn: 'Deputy Commercial' },
+  R07a: { code: 'R07a', name: 'Nhân viên Thương mại', nameEn: 'Commercial Staff' },
   R08: { code: 'R08', name: 'Kế toán', nameEn: 'Accounting' },
-  R08a: { code: 'R08a', name: 'Phó Kế toán', nameEn: 'Deputy Accounting' },
+  R08a: { code: 'R08a', name: 'Nhân viên Kế toán', nameEn: 'Accounting Staff' },
   R09: { code: 'R09', name: 'Chất lượng (QC)', nameEn: 'Quality Control' },
   R09a: { code: 'R09a', name: 'Kiểm tra viên', nameEn: 'Inspector' },
   R10: { code: 'R10', name: 'Quản trị Hệ thống', nameEn: 'System Admin' },
+  R11: { code: 'R11', name: 'Trưởng phòng Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical Head' },
 } as const
 
 export type RoleCode = keyof typeof ROLES
@@ -29,12 +30,12 @@ export const DEPARTMENTS = [
   { code: 'QLDA', name: 'Quản lý Dự án', nameEn: 'Project Management' },
   { code: 'KTKH', name: 'Kinh tế Kế hoạch', nameEn: 'Planning & Economics' },
   { code: 'TK', name: 'Thiết kế', nameEn: 'Engineering' },
-  { code: 'KHO', name: 'Kho vận', nameEn: 'Warehouse & Logistics' },
   { code: 'SX', name: 'Sản xuất', nameEn: 'Production' },
   { code: 'TM', name: 'Thương mại', nameEn: 'Commercial' },
-  { code: 'KT', name: 'Kế toán', nameEn: 'Accounting' },
-  { code: 'QC', name: 'Chất lượng', nameEn: 'Quality Control' },
-  { code: 'HCNS', name: 'Hành chính Nhân sự', nameEn: 'HR & Admin' },
+  { code: 'TCKT', name: 'Tài chính Kế toán & Kho', nameEn: 'Finance & Warehouse' },
+  { code: 'QC', name: 'QA/QC', nameEn: 'Quality Control' },
+  { code: 'TBCG', name: 'Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical' },
+  { code: 'CNTT', name: 'CNTT & Dữ liệu', nameEn: 'IT & Data' },
 ] as const
 
 // ── Project Types (loại dự án — quyết định luồng) ──
@@ -164,6 +165,7 @@ export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R09:  ['overview', 'qc', 'reports'],
   R09a: ['overview', 'qc', 'reports'],
   R10:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
+  R11:  ['overview', 'production', 'reports'],
 }
 
 // ── Menu Items with Group ──
@@ -174,7 +176,7 @@ export const MENU_ITEMS = [
   // [ẨN: luồng 36 bước cũ — đang test hệ động. Bật lại bằng cách bỏ comment dòng dưới]
   // { key: 'tasks', label: 'Công việc (cũ)', labelEn: 'Tasks (legacy)', icon: 'ClipboardList', href: '/dashboard/tasks', roles: 'all', group: 'overview' },
   { key: 'work', label: 'Công việc', labelEn: 'Work Inbox', icon: 'Inbox', href: '/dashboard/work', roles: 'all', group: 'overview' },
-  { key: 'work-team', label: 'Phòng của tôi', labelEn: 'My Department', icon: 'Users', href: '/dashboard/work/team', roles: ['R01', 'R02', 'R03', 'R04', 'R06', 'R08', 'R09', 'R10'], group: 'overview' },
+  { key: 'work-team', label: 'Phòng của tôi', labelEn: 'My Department', icon: 'Users', href: '/dashboard/work/team', roles: ['R01', 'R02', 'R03', 'R04', 'R06', 'R08', 'R09', 'R10', 'R11'], group: 'overview' },
   { key: 'work-meetings', label: 'Lịch họp', labelEn: 'Meetings', icon: 'CalendarCheck', href: '/dashboard/work/meetings', roles: 'all', group: 'overview' },
   { key: 'notifications', label: 'Thông báo', labelEn: 'Notifications', icon: 'Bell', href: '/dashboard/notifications', roles: 'all', group: 'overview' },
 
@@ -244,7 +246,7 @@ export const MENU_ITEMS = [
   { key: 'settlement', label: 'Quyết toán', labelEn: 'Settlement', icon: 'Calculator', href: '/dashboard/finance/settlement', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a'], group: 'finance' },
 
   // ── Reports ──
-  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R08', 'R08a', 'R09', 'R09a'], group: 'reports' },
+  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R08', 'R08a', 'R09', 'R09a', 'R11'], group: 'reports' },
   { key: 'audit-log', label: 'Nhật ký', labelEn: 'Audit Log', icon: 'ScrollText', href: '/dashboard/audit-log', roles: ['R01', 'R10'], group: 'reports' },
   { key: 'error-logs', label: 'Error Logs', labelEn: 'Error Logs', icon: 'AlertTriangle', href: '/dashboard/admin/error-logs', roles: ['R01', 'R10'], group: 'reports' },
 

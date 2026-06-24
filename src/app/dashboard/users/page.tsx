@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { ROLES, DEPARTMENTS } from '@/lib/constants'
+import { ROLE_TO_DEPT as ORG_ROLE_TO_DEPT } from '@/lib/org-map'
 import { SearchBar } from '@/components/SearchPagination'
 import { PageHeader, Button } from '@/components/ui'
 
@@ -318,12 +319,6 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: UserItem; onClose
 }
 
 /* ── Create User Form ── */
-const ROLE_TO_DEPT: Record<string, string> = {
-  R01: 'BGD', R02: 'QLDA', R02a: 'QLDA', R03: 'KTKH', R03a: 'KTKH',
-  R04: 'TK', R04a: 'TK', R05: 'KHO', R05a: 'KHO',
-  R06: 'SX', R06a: 'SX', R06b: 'SX', R07: 'TM', R07a: 'TM',
-  R08: 'KT', R08a: 'KT', R09: 'QC', R09a: 'QC', R10: 'HCNS',
-}
 
 function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated: (u: unknown) => void }) {
   const [form, setForm] = useState({
@@ -334,7 +329,7 @@ function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated
   const [submitting, setSubmitting] = useState(false)
 
   const handleRoleChange = (roleCode: string) => {
-    const dept = ROLE_TO_DEPT[roleCode] || form.departmentCode
+    const dept = ORG_ROLE_TO_DEPT[roleCode] || form.departmentCode
     const level = roleCode.endsWith('a') ? 1 : 2
     setForm({ ...form, roleCode, departmentCode: dept, userLevel: level })
   }
