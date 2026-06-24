@@ -323,6 +323,7 @@ export default function BriefingPage() {
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewDiffOpen, setReviewDiffOpen] = useState(false)
   const [snapshotSaving, setSnapshotSaving] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [snapshotHistory, setSnapshotHistory] = useState<{ id: string; weekOf: string; createdAt: string; kpi: Record<string, number> }[]>([])
 
@@ -827,6 +828,28 @@ export default function BriefingPage() {
     }
   }
 
+  const handlePublish = async (force = false) => {
+    setPublishing(true)
+    const r = await apiFetch('/api/work/briefing/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force }),
+    })
+    setPublishing(false)
+    if (r.ok && r.alreadyPublished && !force) {
+      const again = confirm(`Kỳ này đã phát hành lúc ${new Date(r.publishedAt).toLocaleString('vi-VN')}. Phát hành lại?`)
+      if (again) { handlePublish(true); return }
+      return
+    }
+    if (r.ok && r.published) {
+      setToast({ msg: `Đã gửi thông báo cho ${r.sentTo} người + nhóm`, ok: true })
+      setTimeout(() => setToast(null), 3000)
+    } else if (!r.ok) {
+      setToast({ msg: r.error || 'Lỗi phát hành', ok: false })
+      setTimeout(() => setToast(null), 3000)
+    }
+  }
+
   const loadHistory = async () => {
     setHistoryOpen(true)
     const r = await apiFetch('/api/work/briefing/snapshot?list=1')
@@ -858,6 +881,9 @@ export default function BriefingPage() {
           </label>
           <button onClick={handleSnapshot} disabled={snapshotSaving || kpi.total === 0} className="text-sm px-4 py-2 rounded-lg font-semibold disabled:opacity-50" style={{ background: '#059669', color: '#fff', border: '1px solid #059669' }}>
             {snapshotSaving ? 'Đang chốt...' : '📌 Chốt kỳ'}
+          </button>
+          <button onClick={() => handlePublish()} disabled={publishing} className="text-sm px-4 py-2 rounded-lg font-semibold disabled:opacity-50" style={{ background: '#7c3aed', color: '#fff', border: '1px solid #7c3aed' }}>
+            {publishing ? 'Đang gửi...' : '📣 Phát hành'}
           </button>
           <button onClick={handleExport} disabled={exporting || kpi.total === 0} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
             {exporting ? 'Đang xuất...' : 'Xuất biên bản'}

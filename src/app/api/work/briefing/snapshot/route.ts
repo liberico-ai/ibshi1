@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const snapshots = await prisma.briefingSnapshot.findMany({
       orderBy: { weekOf: 'desc' },
       take: 20,
-      select: { id: true, weekOf: true, createdBy: true, createdAt: true, kpi: true },
+      select: { id: true, weekOf: true, createdBy: true, createdAt: true, publishedAt: true, kpi: true },
     })
     return successResponse({ snapshots })
   } catch (err) {

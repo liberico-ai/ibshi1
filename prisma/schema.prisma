@@ -1613,14 +1613,15 @@ model ApiClient {
 }
 
 model BriefingSnapshot {
-  id             String   @id @default(cuid())
-  weekOf         DateTime @map("week_of")
-  createdBy      String   @map("created_by")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id             String    @id @default(cuid())
+  weekOf         DateTime  @map("week_of")
+  createdBy      String    @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  publishedAt    DateTime? @map("published_at")
   kpi            Json
-  tasksSnapshot  Json     @map("tasks_snapshot")
+  tasksSnapshot  Json      @map("tasks_snapshot")
   decisions      Json
-  actionItems    Json     @map("action_items")
+  actionItems    Json      @map("action_items")
 
   @@unique([weekOf])
   @@index([weekOf])
