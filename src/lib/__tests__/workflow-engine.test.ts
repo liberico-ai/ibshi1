@@ -14,8 +14,13 @@ vi.mock('@/lib/validation-rules', () => ({
   runValidationRules: vi.fn().mockResolvedValue({ valid: true, errors: [], warnings: [] }),
 }))
 
+// Mock work-engine resolveRoleToUser
+vi.mock('@/lib/work-engine', () => ({
+  resolveRoleToUser: vi.fn().mockResolvedValue({ id: 'resolved-user-1', fullName: 'Resolved User' }),
+  getDeptHead: vi.fn().mockResolvedValue(null),
+}))
+
 import {
-  initializeProjectWorkflow,
   completeTask,
   rejectTask,
   activateTask,
@@ -49,32 +54,6 @@ function makeTask(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
-
-// ────────────────────────────────────────────────
-// initializeProjectWorkflow (still uses workflowTask)
-// ────────────────────────────────────────────────
-
-describe('initializeProjectWorkflow', () => {
-  beforeEach(() => {
-    prismaMock.workflowTask.createMany.mockResolvedValue({ count: 36 })
-    prismaMock.workflowTask.updateMany.mockResolvedValue({ count: 1 })
-    prismaMock.task.updateMany.mockResolvedValue({ count: 1 })
-    prismaMock.project.findUnique.mockResolvedValue(null)
-    prismaMock.user.findMany.mockResolvedValue([])
-    prismaMock.workflowTask.findFirst.mockResolvedValue(null)
-    prismaMock.task.findFirst.mockResolvedValue(null)
-  })
-
-  it('creates tasks for all non-dynamic workflow steps', async () => {
-    await initializeProjectWorkflow(PROJECT_ID)
-
-    expect(prismaMock.workflowTask.createMany).toHaveBeenCalledOnce()
-    const call = prismaMock.workflowTask.createMany.mock.calls[0][0]
-    const data = call.data as unknown[]
-    const DYNAMIC_STEPS = ['P4.3', 'P4.4', 'P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A']
-    expect(data).toHaveLength(Object.keys(WORKFLOW_RULES).length - DYNAMIC_STEPS.length)
-  })
-})
 
 // ────────────────────────────────────────────────
 // activateTask (now uses prisma.task)

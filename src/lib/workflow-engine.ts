@@ -4,6 +4,7 @@ import { WORKFLOW_RULES } from './workflow-constants'
 import { logChangeEvent, runReverseHooks } from './sync-engine'
 import { runValidationRules } from './validation-rules'
 import { notifyTaskActivated, notifyTaskRejected } from './telegram-notifications'
+import { resolveRoleToUser } from './work-engine'
 
 // Re-export client-safe items for backward compatibility
 export { WORKFLOW_RULES, PHASE_LABELS, getWorkflowProgress } from './workflow-constants'
@@ -11,33 +12,10 @@ export type { WorkflowStep } from './workflow-constants'
 
 // ── Workflow Engine Core Functions (Server-only) ──
 
-// Steps that are created dynamically (multi-instance), not during project init
-// Dynamic = NOT created in initializeProjectWorkflow + skipped by next-step activation
-// (created on-demand by their own triggers: GRN handler, daily/weekly cronjobs, etc.)
 const DYNAMIC_STEPS = [
-  'P4.3', 'P4.4',                                             // per-PO, created by api/grn POST
-  'P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A', // production reports + acceptance
+  'P4.3', 'P4.4',
+  'P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A',
 ]
-
-export async function initializeProjectWorkflow(projectId: string): Promise<void> {
-  const steps = Object.values(WORKFLOW_RULES).filter(s => !DYNAMIC_STEPS.includes(s.code))
-  const tasks = steps.map((step) => ({
-    projectId,
-    stepCode: step.code,
-    stepName: step.name,
-    stepNameEn: step.nameEn,
-    assignedRole: step.role,
-    status: TASK_STATUS.PENDING,
-    deadline: step.deadlineDays
-      ? new Date(Date.now() + step.deadlineDays * 24 * 60 * 60 * 1000)
-      : null,
-  }))
-
-  await prisma.workflowTask.createMany({ data: tasks })
-
-  // Activate first step
-  await activateTask(projectId, 'P1.1')
-}
 
 export async function completeTask(
   taskId: string,
@@ -145,7 +123,9 @@ export async function completeTask(
             resultData: { poId: rd.poId, poCode: rd.poCode },
           },
         })
-        await prisma.taskAssignee.create({ data: { taskId: newP44.id, role: p44Rule?.role || 'R05', isPrimary: true } })
+        const p44Role = p44Rule?.role || 'R05'
+        const p44User = await resolveRoleToUser(p44Role, projectId)
+        await prisma.taskAssignee.create({ data: { taskId: newP44.id, role: p44Role, userId: p44User.id, isPrimary: true } })
       }
     }
   }
@@ -164,7 +144,8 @@ export async function completeTask(
       }
     })
     const p53aRole = WORKFLOW_RULES['P5.3A']?.role || 'R09'
-    await prisma.taskAssignee.create({ data: { taskId: newP53a.id, role: p53aRole, isPrimary: true } })
+    const p53aUser = await resolveRoleToUser(p53aRole, projectId)
+    await prisma.taskAssignee.create({ data: { taskId: newP53a.id, role: p53aRole, userId: p53aUser.id, isPrimary: true } })
 
     // Notify for P5.3A
     try {
@@ -301,7 +282,8 @@ export async function ensureDailyReportTasks(projectId: string, createdByUserId?
         startedAt: new Date(),
       },
     })
-    await prisma.taskAssignee.create({ data: { taskId: newP51.id, role: rule.role, isPrimary: true } })
+    const p51User = await resolveRoleToUser(rule.role, projectId)
+    await prisma.taskAssignee.create({ data: { taskId: newP51.id, role: rule.role, userId: p51User.id, isPrimary: true } })
     try {
       const users = await prisma.user.findMany({ where: { roleCode: rule.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
       const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
@@ -339,7 +321,8 @@ export async function ensureDailyReportTasks(projectId: string, createdByUserId?
           startedAt: new Date(),
         },
       })
-      await prisma.taskAssignee.create({ data: { taskId: newP51A.id, role: ruleP51A.role, isPrimary: true } })
+      const p51aUser = await resolveRoleToUser(ruleP51A.role, projectId)
+      await prisma.taskAssignee.create({ data: { taskId: newP51A.id, role: ruleP51A.role, userId: p51aUser.id, isPrimary: true } })
       try {
         const users = await prisma.user.findMany({ where: { roleCode: ruleP51A.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
         const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })

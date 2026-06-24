@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, computeImportKey, normalizeTitle, splitAssigneeNames, matchUserName, type UserMatchResult } from '@/lib/briefing-import-parser'
-import { setTaskStatusAdmin } from '@/lib/work-engine'
+import { setTaskStatusAdmin, resolveRoleToUser } from '@/lib/work-engine'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -405,7 +405,8 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
               await tx.taskAssignee.create({ data: { taskId: target.id, isPrimary: j === 0, userId: assigneeIds[j] } })
             }
           } else if (effectiveRoleCode) {
-            await tx.taskAssignee.create({ data: { taskId: target.id, isPrimary: true, role: effectiveRoleCode } })
+            const resolvedUser = await resolveRoleToUser(effectiveRoleCode, projectId)
+            await tx.taskAssignee.create({ data: { taskId: target.id, isPrimary: true, role: effectiveRoleCode, userId: resolvedUser.id } })
           }
           await tx.taskHistory.create({
             data: { taskId: target.id, action: 'UPDATED', byUserId: payload.userId, meta: JSON.parse(JSON.stringify({ source: 'briefing-import', reimport: true })) },
@@ -433,7 +434,8 @@ async function handleApply(req: NextRequest, payload: { userId: string; roleCode
               await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: j === 0, userId: assigneeIds[j] } })
             }
           } else if (effectiveRoleCode) {
-            await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: true, role: effectiveRoleCode } })
+            const resolvedUser = await resolveRoleToUser(effectiveRoleCode, projectId)
+            await tx.taskAssignee.create({ data: { taskId: t.id, isPrimary: true, role: effectiveRoleCode, userId: resolvedUser.id } })
           }
           await tx.taskHistory.create({
             data: { taskId: t.id, action: 'CREATED', byUserId: payload.userId, meta: JSON.parse(JSON.stringify({ source: 'briefing-import' })) },

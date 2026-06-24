@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { getTaskById, assignTask } from '@/lib/task-engine'
 import { completeTask, processP45PartialIssue, WORKFLOW_RULES } from '@/lib/workflow-engine'
+import { resolveRoleToUser } from '@/lib/work-engine'
 import prisma from '@/lib/db'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { validateParams } from '@/lib/api-helpers'
@@ -750,8 +751,9 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
           startedAt: new Date(),
         },
       })
+      const p36User = await resolveRoleToUser('R01', task.projectId)
       await prisma.taskAssignee.create({
-        data: { taskId: newP36.id, role: 'R01', isPrimary: true },
+        data: { taskId: newP36.id, role: 'R01', userId: p36User.id, isPrimary: true },
       })
     }
 

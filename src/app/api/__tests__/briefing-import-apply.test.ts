@@ -20,6 +20,14 @@ vi.mock('@/lib/auth', async () => {
   }
 })
 
+vi.mock('@/lib/work-engine', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/work-engine')>('@/lib/work-engine')
+  return {
+    ...actual,
+    resolveRoleToUser: vi.fn().mockResolvedValue({ id: 'resolved-role-user', fullName: 'Resolved User' }),
+  }
+})
+
 import { POST } from '@/app/api/work/briefing/import/route'
 
 function buildApplyRequest(rows: unknown[]): NextRequest {
@@ -233,8 +241,8 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     expect(taskCreateCall.data.projectId).toBe('new-proj-1')
   })
 
-  // ── Case 4: create assigned by role (no userId) ──
-  it('(4) create with role assignment → TaskAssignee has role, no userId', async () => {
+  // ── Case 4: create assigned by role → resolves to specific user ──
+  it('(4) create with role assignment → TaskAssignee has role AND userId', async () => {
     const req = buildApplyRequest([{
       include: true,
       action: 'create',
@@ -258,11 +266,10 @@ describe('POST /api/work/briefing/import (apply via JSON)', () => {
     expect(prismaMock.taskAssignee.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         role: 'R09',
+        userId: 'resolved-role-user',
         isPrimary: true,
       }),
     })
-    const assigneeCall = prismaMock.taskAssignee.create.mock.calls[0][0] as { data: Record<string, unknown> }
-    expect(assigneeCall.data.userId).toBeUndefined()
   })
 
   // ── Case 5: action=create always creates new (no auto-upsert by title) ──

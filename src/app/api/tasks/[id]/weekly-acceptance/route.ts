@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { notifyTaskActivated } from '@/lib/telegram-notifications'
-import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
+import { resolveRoleToUser } from '@/lib/work-engine'
 
 const MAX_VOLUME = 1_000_000
 
@@ -24,9 +24,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       where: { id: params.id },
       select: { projectId: true, taskType: true, resultData: true },
     })
-    if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
+    if (!task) return errorResponse('Task not found', 404)
     if (!['P5.3', 'P5.4'].includes(task.taskType)) {
-      return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
+      return errorResponse('Invalid task type', 400)
     }
 
     const rd = (task.resultData as Record<string, any>) || {}
@@ -34,7 +34,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const weekEnd = rd.weekEndDate ? new Date(rd.weekEndDate) : null
 
     if (!weekStart || !weekEnd) {
-      return NextResponse.json({ success: false, error: 'Thiếu thông tin tuần (weekStartDate/weekEndDate)' }, { status: 400 })
+      return errorResponse('Thiếu thông tin tuần (weekStartDate/weekEndDate)', 400)
     }
 
     // 1. Get all DailyProductionLog entries within the week range
@@ -193,8 +193,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     const items = Array.from(matrixMap.values())
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       weekNumber: rd.weekNumber,
       year: rd.year,
       weekStartDate: rd.weekStartDate,
@@ -203,7 +202,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     })
   } catch (err: any) {
     console.error('Weekly Acceptance GET error:', err)
-    return NextResponse.json({ success: false, error: err.message || 'Internal Server Error' }, { status: 500 })
+    return errorResponse(err.message || 'Internal Server Error', 500)
   }
 }
 
@@ -221,12 +220,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         project: { select: { projectCode: true, projectName: true } },
       },
     })
-    if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
+    if (!task) return errorResponse('Task not found', 404)
     if (!['P5.3', 'P5.4'].includes(task.taskType)) {
-      return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
+      return errorResponse('Invalid task type', 400)
     }
     if (task.status === 'DONE') {
-      return NextResponse.json({ success: false, error: 'Task đã hoàn thành' }, { status: 400 })
+      return errorResponse('Task đã hoàn thành', 400)
     }
 
     const body = await request.json()
@@ -237,12 +236,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const userId = payload.userId
 
     if (!acceptanceData || !Array.isArray(acceptanceData)) {
-      return NextResponse.json({ success: false, error: 'Missing acceptanceData' }, { status: 400 })
+      return errorResponse('Missing acceptanceData', 400)
     }
 
     for (const item of acceptanceData) {
       if (item.acceptedVolume != null && item.acceptedVolume > MAX_VOLUME) {
-        return NextResponse.json({ success: false, error: `Khối lượng vượt giới hạn cho phép (${MAX_VOLUME})` }, { status: 400 })
+        return errorResponse(`Khối lượng vượt giới hạn cho phép (${MAX_VOLUME})`, 400)
       }
     }
 
@@ -382,9 +381,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             },
           },
         })
-        // Assign to R06b
+        const p511User = await resolveRoleToUser('R06b', task.projectId)
         await prisma.taskAssignee.create({
-          data: { taskId: newP511.id, role: 'R06b', isPrimary: true },
+          data: { taskId: newP511.id, role: 'R06b', userId: p511User.id, isPrimary: true },
         })
         await prisma.taskHistory.create({
           data: { taskId: newP511.id, action: 'CREATED', byUserId: userId, toRole: 'R06b' },
@@ -518,19 +517,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     await completeTask(task.id, userId, finalResultData, finalNotes)
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       message: `Đã lưu ${savedLogs.length} bản ghi nghiệm thu (${role}). Dữ liệu được bảo vệ vĩnh viễn.`,
       savedCount: savedLogs.length,
     })
   } catch (err: any) {
     if (err.code === 'P2002') {
-      return NextResponse.json({
-        success: false,
-        error: 'Phiếu nghiệm thu tuần này đã được gửi trước đó. Dữ liệu không thể sửa đổi.',
-      }, { status: 409 })
+      return errorResponse('Phiếu nghiệm thu tuần này đã được gửi trước đó. Dữ liệu không thể sửa đổi.', 409)
     }
     console.error('Weekly Acceptance POST error:', err)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
+    return errorResponse('Lỗi máy chủ nội bộ', 500)
   }
 }

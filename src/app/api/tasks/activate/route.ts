@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import prisma from '@/lib/db'
+import { resolveRoleToUser } from '@/lib/work-engine'
 
 // POST /api/tasks/activate — Create an independent multi-instance task (e.g., P4.5)
 export async function POST(req: NextRequest) {
@@ -60,7 +61,8 @@ export async function POST(req: NextRequest) {
         } : undefined
       }
     })
-    await prisma.taskAssignee.create({ data: { taskId: newTask.id, role: rule.role, isPrimary: true } })
+    const activateUser = await resolveRoleToUser(rule.role, projectId)
+    await prisma.taskAssignee.create({ data: { taskId: newTask.id, role: rule.role, userId: activateUser.id, isPrimary: true } })
 
     return successResponse({
       taskId: newTask.id,

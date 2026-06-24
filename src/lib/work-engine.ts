@@ -26,12 +26,41 @@ export async function getDeptHead(roleCode: string): Promise<{ id: string; fullN
   return head ? { id: head.id, fullName: head.fullName, deptCode: dept, deptName: DEPT_NAME[dept] || dept } : null
 }
 
-// Quy đổi danh sách người nhận:
-//  - Chọn nhân sự cụ thể → giữ nguyên.
-//  - Chọn cấp phòng (role) mà phòng ĐÃ có nhân sự cụ thể được chọn → bỏ qua (không gắn trưởng phòng).
-//  - Chọn cấp phòng mà KHÔNG có nhân sự nào của phòng → gắn trưởng phòng; phòng không có trưởng phòng → báo lỗi.
-async function resolveAssignees(assignees: { role?: string; userId?: string; isPrimary?: boolean }[]) {
-  // Phòng nào đã được chọn nhân sự cụ thể (suy từ roleCode của user)
+// Resolve role → người cụ thể. Ưu tiên:
+// (a) user active CÓ ĐÚNG roleCode, L1 (trưởng) trước
+// (b) getDeptHead (trưởng phòng, có thể khác roleCode — e.g. R05 → R08 trưởng TCKT)
+// (c) PM của dự án (nếu có projectId)
+// (d) throw — buộc chọn nhân sự cụ thể
+export async function resolveRoleToUser(roleCode: string, projectId?: string | null): Promise<{ id: string; fullName: string }> {
+  const exact = await prisma.user.findFirst({
+    where: { roleCode, isActive: true },
+    orderBy: [{ userLevel: 'asc' }, { createdAt: 'asc' }],
+    select: { id: true, fullName: true },
+  })
+  if (exact) return exact
+
+  const head = await getDeptHead(roleCode)
+  if (head) return { id: head.id, fullName: head.fullName }
+
+  if (projectId) {
+    const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { pmUserId: true } })
+    if (proj?.pmUserId) {
+      const pm = await prisma.user.findUnique({ where: { id: proj.pmUserId }, select: { id: true, fullName: true, isActive: true } })
+      if (pm?.isActive) return { id: pm.id, fullName: pm.fullName }
+    }
+    const r02 = await prisma.user.findFirst({
+      where: { roleCode: 'R02', isActive: true },
+      orderBy: [{ userLevel: 'asc' }],
+      select: { id: true, fullName: true },
+    })
+    if (r02) return r02
+  }
+
+  throw new Error(`Không tìm được người nhận cho role ${roleCode} — phải chọn nhân sự cụ thể`)
+}
+
+// Quy đổi danh sách người nhận — mọi assignee PHẢI có userId khi trả về.
+async function resolveAssignees(assignees: { role?: string; userId?: string; isPrimary?: boolean }[], projectId?: string | null) {
   const explicitUserIds = assignees.map((a) => a.userId).filter((x): x is string => !!x)
   const users = explicitUserIds.length
     ? await prisma.user.findMany({ where: { id: { in: explicitUserIds } }, select: { id: true, fullName: true, username: true, roleCode: true, isActive: true } })
@@ -45,28 +74,27 @@ async function resolveAssignees(assignees: { role?: string; userId?: string; isP
 
   const coveredDepts = new Set(users.map((u) => ROLE_TO_DEPT[u.roleCode]).filter(Boolean))
 
-  const out: { role: string | null; userId: string | null; isPrimary: boolean }[] = []
-  const needExplicit = new Set<string>()
+  const out: { role: string | null; userId: string; isPrimary: boolean }[] = []
   for (let i = 0; i < assignees.length; i++) {
     const a = assignees[i]
     if (a.userId) { out.push({ role: a.role || null, userId: a.userId, isPrimary: a.isPrimary ?? i === 0 }); continue }
     if (a.role) {
       const dept = ROLE_TO_DEPT[a.role]
-      if (dept && coveredDepts.has(dept)) continue // phòng đã có nhân sự cụ thể → không cần trưởng phòng
-      const head = await getDeptHead(a.role)
-      if (head) out.push({ role: a.role, userId: head.id, isPrimary: a.isPrimary ?? i === 0 })
-      else needExplicit.add(DEPT_NAME[dept] || a.role)
+      if (dept && coveredDepts.has(dept)) continue
+      const resolved = await resolveRoleToUser(a.role, projectId)
+      out.push({ role: a.role, userId: resolved.id, isPrimary: a.isPrimary ?? i === 0 })
     }
   }
-  if (needExplicit.size > 0) {
-    throw new Error(`Phòng chưa có trưởng phòng, vui lòng chọn nhân sự cụ thể: ${[...needExplicit].join(', ')}`)
+
+  if (out.some((a) => !a.userId)) {
+    throw new Error('Lỗi nội bộ: assignee thiếu userId sau resolve')
   }
+
   // khử trùng theo userId (giữ bản primary nếu có)
-  const byUser = new Map<string, { role: string | null; userId: string | null; isPrimary: boolean }>()
+  const byUser = new Map<string, { role: string | null; userId: string; isPrimary: boolean }>()
   for (const a of out) {
-    const key = a.userId || `role:${a.role}`
-    const prev = byUser.get(key)
-    if (!prev) byUser.set(key, a)
+    const prev = byUser.get(a.userId)
+    if (!prev) byUser.set(a.userId, a)
     else if (a.isPrimary) prev.isPrimary = true
   }
   return [...byUser.values()]
@@ -131,8 +159,7 @@ export async function createTask(input: CreateTaskInput, userId: string, opts?: 
     : null
   const level = parent ? parent.level + 1 : 2
 
-  // Giao cấp phòng (role-only) → tự gắn trưởng phòng; phòng không có trưởng phòng → buộc chọn người cụ thể.
-  const assignees = await resolveAssignees(input.assignees || [])
+  const assignees = await resolveAssignees(input.assignees || [], input.projectId)
 
   if (assignees.length === 0) {
     throw new Error('Phải có ít nhất 1 người/phòng nhận việc')
@@ -162,7 +189,7 @@ export async function createTask(input: CreateTaskInput, userId: string, opts?: 
     if (assignees.length) {
       await tx.taskAssignee.createMany({
         data: assignees.map((a, i) => ({
-          taskId: t.id, role: a.role || null, userId: a.userId || null,
+          taskId: t.id, role: a.role || null, userId: a.userId,
           isPrimary: a.isPrimary ?? i === 0,
         })),
       })
@@ -572,28 +599,20 @@ export async function reassignTask(taskId: string, userId: string, input: Reassi
   const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true, status: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
 
-  const reassignUserIds = (input.assignees || []).map((a) => a.userId).filter((x): x is string => !!x)
-  if (reassignUserIds.length > 0) {
-    const reassignUsers = await prisma.user.findMany({ where: { id: { in: reassignUserIds } }, select: { id: true, fullName: true, username: true, isActive: true } })
-    const inactive = reassignUsers.filter((u) => !u.isActive)
-    if (inactive.length > 0) {
-      const names = inactive.map((u) => `${u.fullName} (${u.username})`).join(', ')
-      throw new Error(`Tài khoản đã vô hiệu, chọn tài khoản đang hoạt động: ${names}`)
-    }
-  }
+  const resolved = await resolveAssignees(input.assignees || [], task.projectId)
 
   await prisma.$transaction([
     prisma.taskAssignee.deleteMany({ where: { taskId } }),
-    prisma.taskAssignee.createMany({ data: input.assignees.map((a, i) => ({ taskId, role: a.role || null, userId: a.userId || null, isPrimary: a.isPrimary ?? i === 0 })) }),
+    prisma.taskAssignee.createMany({ data: resolved.map((a, i) => ({ taskId, role: a.role || null, userId: a.userId, isPrimary: a.isPrimary ?? i === 0 })) }),
     prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.OPEN, assignedAt: new Date() } }),
-    prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, toRole: input.assignees[0]?.role || null, toUserId: input.assignees[0]?.userId || null, reason: input.note } }),
+    prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, toRole: resolved[0]?.role || null, toUserId: resolved[0]?.userId || null, reason: input.note } }),
   ])
   emitTaskUpdated(taskId, task.status).catch(() => {})
   const [project, creator] = await Promise.all([
     task.projectId ? prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } }) : null,
     prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }),
   ])
-  await notifyAssignees(taskId, task.title, input.assignees, {
+  await notifyAssignees(taskId, task.title, resolved, {
     projectCode: project?.projectCode, projectName: project?.projectName,
     createdByName: creator?.fullName, deadline: task.deadline,
   })
@@ -813,7 +832,10 @@ async function spawnTemplateStep(step: TStep, projectId: string, byUser: string)
       deadline: step.deadlineDays ? new Date(Date.now() + step.deadlineDays * 86400000) : null,
     },
   })
-  if (step.roleCode) await prisma.taskAssignee.create({ data: { taskId: t.id, role: step.roleCode, isPrimary: true } })
+  if (step.roleCode) {
+    const stepUser = await resolveRoleToUser(step.roleCode, projectId)
+    await prisma.taskAssignee.create({ data: { taskId: t.id, role: step.roleCode, userId: stepUser.id, isPrimary: true } })
+  }
   await prisma.taskHistory.create({ data: { taskId: t.id, action: 'CREATED', byUserId: byUser, toRole: step.roleCode } })
   const [project, creator] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } }),

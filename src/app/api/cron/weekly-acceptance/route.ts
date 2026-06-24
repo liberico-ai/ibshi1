@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import { notifyTaskActivated } from '@/lib/telegram-notifications'
+import { successResponse, errorResponse } from '@/lib/auth'
+import { resolveRoleToUser } from '@/lib/work-engine'
 
 function getISOWeekNumber(date: Date): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
@@ -13,7 +14,7 @@ function getISOWeekNumber(date: Date): number {
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization')
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return errorResponse('Unauthorized', 401)
   }
 
   try {
@@ -100,9 +101,9 @@ export async function GET(request: Request) {
             resultData: JSON.parse(JSON.stringify(taskPayload)),
           },
         })
-        // Assign to the correct role
+        const cronUser = await resolveRoleToUser(rule.role, project.id)
         await prisma.taskAssignee.create({
-          data: { taskId: newTask.id, role: rule.role, isPrimary: true },
+          data: { taskId: newTask.id, role: rule.role, userId: cronUser.id, isPrimary: true },
         })
         await prisma.taskHistory.create({
           data: { taskId: newTask.id, action: 'CREATED', byUserId: 'SYSTEM', toRole: rule.role },
@@ -150,8 +151,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       message: `Weekly Acceptance CronJob completed. Created ${createdCount} tasks for ${activeProjects.length} active projects.`,
       weekNumber,
       year,
@@ -159,6 +159,6 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     console.error('Weekly Acceptance Cron Error:', error)
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
+    return errorResponse(error.message || 'Internal server error', 500)
   }
 }

@@ -4,6 +4,7 @@ import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import prisma from '@/lib/db'
 import { TASK_STATUS } from '@/lib/constants'
 import { notifyTaskActivated } from '@/lib/telegram-notifications'
+import { resolveRoleToUser } from '@/lib/work-engine'
 
 /**
  * POST /api/tasks/check-p511
@@ -186,7 +187,9 @@ export async function POST(req: NextRequest) {
           },
         },
       })
-      await prisma.taskAssignee.create({ data: { taskId: newTask.id, role: rule?.role || 'R06', isPrimary: true } })
+      const p511Role = rule?.role || 'R06'
+      const p511User = await resolveRoleToUser(p511Role, projectId)
+      await prisma.taskAssignee.create({ data: { taskId: newTask.id, role: p511Role, userId: p511User.id, isPrimary: true } })
 
       // Notify users
       const notifyRole = rule?.role || 'R06'
