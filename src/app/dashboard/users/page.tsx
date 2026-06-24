@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
-import { ROLES, DEPARTMENTS } from '@/lib/constants'
-import { ROLE_TO_DEPT as ORG_ROLE_TO_DEPT } from '@/lib/org-map'
+import { ROLES } from '@/lib/constants'
+import { DEPARTMENTS_V2, DEPT_NAME, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
 import { SearchBar } from '@/components/SearchPagination'
 import { PageHeader, Button } from '@/components/ui'
 
@@ -13,18 +13,9 @@ interface UserItem {
   department: { code: string; name: string } | null;
 }
 
-const ROLE_FILTERS = [
+const DEPT_FILTERS = [
   { value: '', label: 'Tất cả' },
-  { value: 'R01', label: 'BGĐ' },
-  { value: 'R02', label: 'PM' },
-  { value: 'R03', label: 'KT-KH' },
-  { value: 'R04', label: 'Thiết kế' },
-  { value: 'R05', label: 'Kho' },
-  { value: 'R06', label: 'SX' },
-  { value: 'R07', label: 'TM' },
-  { value: 'R08', label: 'Kế toán' },
-  { value: 'R09', label: 'QC' },
-  { value: 'R10', label: 'Admin' },
+  ...DEPARTMENTS_V2.map((d) => ({ value: d.code, label: d.name })),
 ]
 
 export default function UsersPage() {
@@ -32,7 +23,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState('')
+  const [deptFilter, setDeptFilter] = useState('')
   const [editUser, setEditUser] = useState<UserItem | null>(null)
   const [resetUser, setResetUser] = useState<UserItem | null>(null)
   const [toast, setToast] = useState('')
@@ -71,7 +62,7 @@ export default function UsersPage() {
   }
 
   const filtered = allUsers.filter((u) => {
-    if (roleFilter && u.roleCode !== roleFilter && !u.roleCode.startsWith(roleFilter)) return false
+    if (deptFilter && ROLE_TO_DEPT[u.roleCode] !== deptFilter) return false
     if (search) {
       const q = search.toLowerCase()
       return u.username.toLowerCase().includes(q) ||
@@ -121,9 +112,9 @@ export default function UsersPage() {
       <div className="flex gap-3 items-center flex-wrap">
         <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm username, họ tên, email..." /></div>
         <div className="flex gap-2 flex-wrap">
-          {ROLE_FILTERS.map((f) => (
-            <button key={f.value} onClick={() => setRoleFilter(f.value)}
-              className={`filter-pill ${roleFilter === f.value ? 'active' : ''}`}>
+          {DEPT_FILTERS.map((f) => (
+            <button key={f.value} onClick={() => setDeptFilter(f.value)}
+              className={`filter-pill ${deptFilter === f.value ? 'active' : ''}`}>
               {f.label}
             </button>
           ))}
@@ -265,7 +256,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: UserItem; onClose: ()
           <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Phòng ban</label>
             <select className="input" value={form.departmentCode} onChange={e => setForm({ ...form, departmentCode: e.target.value })}>
               <option value="">— Chưa phân bổ —</option>
-              {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
+              {DEPARTMENTS_V2.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
             </select></div>
           <div className="col-span-2 flex gap-3 justify-end">
             <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
@@ -329,7 +320,7 @@ function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated
   const [submitting, setSubmitting] = useState(false)
 
   const handleRoleChange = (roleCode: string) => {
-    const dept = ORG_ROLE_TO_DEPT[roleCode] || form.departmentCode
+    const dept = ROLE_TO_DEPT[roleCode] || form.departmentCode
     const level = roleCode.endsWith('a') ? 1 : 2
     setForm({ ...form, roleCode, departmentCode: dept, userLevel: level })
   }
@@ -365,7 +356,7 @@ function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated
           </select></div>
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Phòng ban</label>
           <select className="input" value={form.departmentCode} onChange={(e) => setForm({ ...form, departmentCode: e.target.value })}>
-            {DEPARTMENTS.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
+            {DEPARTMENTS_V2.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
           </select></div>
         <div className="col-span-2 flex gap-3 justify-end">
           <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>

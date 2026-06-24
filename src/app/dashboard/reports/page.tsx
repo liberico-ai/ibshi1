@@ -12,7 +12,7 @@ const TABS: { key: Tab; label: string; emoji: string }[] = [
   { key: 'financial', label: 'Tài chính', emoji: '💰' },
   { key: 'production', label: 'Sản xuất', emoji: '🏭' },
   { key: 'qc', label: 'Chất lượng', emoji: '🔍' },
-  { key: 'warehouse', label: 'Kho vận', emoji: '📦' },
+  { key: 'warehouse', label: 'Tài chính KT & Kho', emoji: '📦' },
   { key: 'hr', label: 'Nhân sự & KPI', emoji: '👥' },
   { key: 'safety', label: 'An toàn', emoji: '🦺' },
   { key: 'procurement', label: 'Mua hàng', emoji: '🛒' },

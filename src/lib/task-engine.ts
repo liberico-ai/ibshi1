@@ -2,6 +2,7 @@ import prisma from './db'
 import { TASK_STATUS } from './constants'
 import { WORKFLOW_RULES } from './workflow-constants'
 import { todayStart, isTaskOverdue } from './utils'
+import { ROLE_TO_DEPT } from './org-map'
 
 // ── Compatibility adapter: reads from Task (dynamic) table,
 // returns WorkflowTask-shaped objects so downstream routes work unchanged. ──
@@ -195,13 +196,6 @@ export async function getProjectsOverview() {
     prisma.templateStep.count({ where: { template: { code: 'SX-PROD' } } }),
   ])
 
-  const ROLE_DEPT: Record<string, string> = {
-    R01: 'BGĐ', R02: 'PM', R02a: 'PM', R03: 'KTKH', R03a: 'KTKH',
-    R04: 'TK', R04a: 'TK', R05: 'KHO', R05a: 'KHO',
-    R06: 'SX', R06a: 'SX', R06b: 'SX', R07: 'TM', R07a: 'TM',
-    R08: 'KT', R08a: 'KT', R09: 'QC', R09a: 'QC', R10: 'HT',
-  }
-
   return projects.map((p) => {
     const tasks = p.dynamicTasks as unknown as {
       taskType: string; status: string; deadline: Date | null;
@@ -219,7 +213,7 @@ export async function getProjectsOverview() {
     const deptMap: Record<string, { done: number; total: number }> = {}
     for (const t of tasks) {
       const role = t.assignees?.[0]?.role || WORKFLOW_RULES[t.taskType]?.role || ''
-      const dept = ROLE_DEPT[role] || role
+      const dept = ROLE_TO_DEPT[role] || role
       if (!deptMap[dept]) deptMap[dept] = { done: 0, total: 0 }
       deptMap[dept].total++
       if (t.status === TASK_STATUS.DONE) deptMap[dept].done++

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { DEPARTMENTS_V2, DEPT_NAME, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
 
 // ── Types ──
 
@@ -133,18 +134,9 @@ const STATUS_OPTIONS = [
   { value: 'Hủy', label: 'Hủy' },
 ]
 
-const DEPT_OPTIONS = [
-  { value: 'R01', label: 'Ban GĐ' },
-  { value: 'R02', label: 'Dự án' },
-  { value: 'R03', label: 'Kế hoạch' },
-  { value: 'R04', label: 'Thiết kế' },
-  { value: 'R05', label: 'Kho' },
-  { value: 'R06', label: 'Sản xuất' },
-  { value: 'R07', label: 'Thương mại' },
-  { value: 'R08', label: 'Kế toán' },
-  { value: 'R09', label: 'QC' },
-  { value: 'R10', label: 'HCNS' },
-]
+const DEPT_OPTIONS = DEPARTMENTS_V2
+  .filter((d) => DEPT_PRIMARY_ROLE[d.code])
+  .map((d) => ({ value: DEPT_PRIMARY_ROLE[d.code], label: d.name }))
 
 function overdueSeverity(days: number): { color: string; bg: string } {
   if (days > 14) return { color: '#dc2626', bg: '#fef2f2' }
@@ -214,7 +206,7 @@ function UserAutocomplete({ value, users, warning, onChange }: {
               className="w-full text-left text-xs px-2 py-1.5 hover:bg-blue-50"
               onClick={() => { onChange(u.fullName, u.id); setQuery(u.fullName); setOpen(false) }}
             >
-              {u.fullName} <span style={{ color: 'var(--text-muted)' }}>({DEPT_OPTIONS.find((d) => d.value === u.roleCode)?.label || u.roleCode})</span>
+              {u.fullName} <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
             </button>
           ))}
         </div>
@@ -1257,7 +1249,7 @@ function GroupSection({ grp, dbUsers, updateRow }: {
                 value={r.roleCode || ''}
                 onChange={(e) => {
                   const rc = e.target.value || null
-                  updateRow(idx, { roleCode: rc, deptText: DEPT_OPTIONS.find((d) => d.value === rc)?.label || '' })
+                  updateRow(idx, { roleCode: rc, deptText: (rc ? DEPT_NAME[ROLE_TO_DEPT[rc]] : '') || '' })
                 }}
               >
                 <option value="">—</option>

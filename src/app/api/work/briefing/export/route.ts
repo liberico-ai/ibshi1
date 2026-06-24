@@ -10,18 +10,9 @@ export const runtime = 'nodejs'
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
-const DEPT_ROLE_LABEL: Record<string, string> = {
-  R01: 'Ban GĐ',
-  R02: 'Dự án',
-  R02a: 'Dự án',
-  R03: 'Kế hoạch',
-  R04: 'Thiết kế',
-  R05: 'Kho',
-  R06: 'Sản xuất',
-  R07: 'Thương mại',
-  R08: 'Kế toán',
-  R09: 'QC',
-  R10: 'HCNS',
+function deptLabelForRole(roleCode: string): string {
+  const deptCode = ROLE_TO_DEPT[roleCode]
+  return deptCode ? (DEPT_NAME[deptCode] || deptCode) : ''
 }
 
 function statusLabel(status: string, blocked: boolean): string {
@@ -75,7 +66,7 @@ export async function GET(req: NextRequest) {
         'Dự án': t.project?.projectCode || 'Công việc chung',
         'Tên dự án': t.project?.projectName || '',
         'Nội dung công việc': t.title,
-        'Phòng xử lý': DEPT_ROLE_LABEL[deptRole] || '',
+        'Phòng xử lý': deptLabelForRole(deptRole),
         'Người thực hiện': assigneeNames,
         'Ngày mở': t.startedAt ? formatDate(t.startedAt) : formatDate(t.createdAt),
         'Hạn': t.deadline ? formatDate(t.deadline) : '',
