@@ -78,6 +78,11 @@ export async function GET(req: NextRequest) {
       const assigneeNames = t.assignees.map((a) =>
         a.userId ? (nameById.get(a.userId) || 'NV') : (DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—')
       )
+      const assignees = t.assignees.filter(a => a.userId).map(a => ({
+        userId: a.userId!,
+        name: nameById.get(a.userId!) || 'NV',
+      }))
+      const actionItems = Array.isArray(briefing.actionItems) ? briefing.actionItems as { taskId: string; title: string }[] : []
       return {
         id: t.id,
         taskType: t.taskType,
@@ -96,6 +101,8 @@ export async function GET(req: NextRequest) {
         isDoneThisWeek,
         isNewThisWeek,
         assigneeNames,
+        assignees,
+        actionItems,
         projectCode: t.project?.projectCode || '',
         criteria: briefing.criteria || '',
         proposal: briefing.proposal || '',

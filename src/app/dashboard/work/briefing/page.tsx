@@ -25,6 +25,8 @@ interface BriefingTask {
   isDoneThisWeek: boolean
   isNewThisWeek: boolean
   assigneeNames: string[]
+  assignees: { userId: string; name: string }[]
+  actionItems: { taskId: string; title: string }[]
   projectCode: string
   criteria: string
   proposal: string
@@ -264,6 +266,21 @@ export default function BriefingPage() {
   const [cellEditing, setCellEditing] = useState<string | null>(null)
   const [filterExecOnly, setFilterExecOnly] = useState(false)
 
+  // Action menu state
+  const [actionMenu, setActionMenu] = useState<string | null>(null)
+  const [actionMode, setActionMode] = useState<{ taskId: string; mode: 'reassign' | 'deadline' | 'action-item' } | null>(null)
+  const [actionUsers, setActionUsers] = useState<DBUser[]>([])
+  const [actionSaving, setActionSaving] = useState(false)
+  const [reassignPicks, setReassignPicks] = useState<string[]>([])
+  const [reassignQuery, setReassignQuery] = useState('')
+  const [newDeadline, setNewDeadline] = useState('')
+  const [actionItemTitle, setActionItemTitle] = useState('')
+  const [actionItemDeadline, setActionItemDeadline] = useState('')
+  const [actionItemPicks, setActionItemPicks] = useState<string[]>([])
+  const [actionItemQuery, setActionItemQuery] = useState('')
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const actionMenuRef = useRef<HTMLDivElement>(null)
+
   // Import state
   const fileRef = useRef<HTMLInputElement>(null)
   const [previewing, setPreviewing] = useState(false)
@@ -287,6 +304,133 @@ export default function BriefingPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (toast) { const h = setTimeout(() => setToast(null), 3000); return () => clearTimeout(h) }
+  }, [toast])
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) setActionMenu(null)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  const loadUsers = useCallback(async () => {
+    if (actionUsers.length > 0) return
+    const data = await apiFetch('/api/users')
+    if (data.ok) setActionUsers((data.users || []).filter((u: DBUser) => u.isActive))
+  }, [actionUsers.length])
+
+  const openAction = async (taskId: string, mode: 'reassign' | 'deadline' | 'action-item') => {
+    setActionMenu(null)
+    setActionSaving(false)
+    setReassignPicks([])
+    setReassignQuery('')
+    setActionItemPicks([])
+    setActionItemQuery('')
+    setActionItemTitle('')
+    setActionItemDeadline('')
+    if (mode === 'deadline') {
+      const task = groups.flatMap(g => g.tasks).find(t => t.id === taskId)
+      setNewDeadline(task?.deadline ? new Date(task.deadline).toISOString().slice(0, 10) : '')
+    }
+    if (mode === 'action-item') {
+      const task = groups.flatMap(g => g.tasks).find(t => t.id === taskId)
+      setActionItemTitle(task?.proposal || task?.notes || '')
+    }
+    if (mode === 'reassign' || mode === 'action-item') await loadUsers()
+    setActionMode({ taskId, mode })
+  }
+
+  const handleReassign = async () => {
+    if (!actionMode || reassignPicks.length === 0) return
+    setActionSaving(true)
+    const prev = groups.flatMap(g => g.tasks).find(t => t.id === actionMode.taskId)
+    const prevNames = prev?.assigneeNames || []
+    // Optimistic update
+    setGroups(gs => gs.map(g => ({
+      ...g,
+      tasks: g.tasks.map(t => t.id === actionMode.taskId
+        ? { ...t, assigneeNames: reassignPicks.map(uid => actionUsers.find(u => u.id === uid)?.fullName || '?'), assignees: reassignPicks.map(uid => ({ userId: uid, name: actionUsers.find(u => u.id === uid)?.fullName || '?' })) }
+        : t),
+    })))
+    const r = await apiFetch('/api/work/briefing/reassign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: actionMode.taskId, assigneeUserIds: reassignPicks }),
+    })
+    if (r.ok) {
+      setToast({ msg: 'Đã đổi người', ok: true })
+      load()
+    } else {
+      setToast({ msg: r.error || 'Lỗi đổi người', ok: false })
+      setGroups(gs => gs.map(g => ({
+        ...g,
+        tasks: g.tasks.map(t => t.id === actionMode.taskId ? { ...t, assigneeNames: prevNames } : t),
+      })))
+    }
+    setActionSaving(false)
+    setActionMode(null)
+  }
+
+  const handleDeadlineChange = async () => {
+    if (!actionMode) return
+    setActionSaving(true)
+    const r = await apiFetch('/api/work/briefing/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: actionMode.taskId, deadline: newDeadline || null }),
+    })
+    if (r.ok) { setToast({ msg: 'Đã đổi hạn', ok: true }); load() }
+    else setToast({ msg: r.error || 'Lỗi đổi hạn', ok: false })
+    setActionSaving(false)
+    setActionMode(null)
+  }
+
+  const handleToggleBlocked = async (taskId: string, currentBlocked: boolean) => {
+    setActionMenu(null)
+    const newBlocked = !currentBlocked
+    // Optimistic
+    setGroups(gs => gs.map(g => ({ ...g, tasks: g.tasks.map(t => t.id === taskId ? { ...t, blocked: newBlocked } : t) })))
+    const r = await apiFetch('/api/work/briefing/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, blocked: newBlocked }),
+    })
+    if (r.ok) { setToast({ msg: newBlocked ? 'Đã đánh dấu tắc' : 'Đã gỡ tắc', ok: true }); load() }
+    else { setToast({ msg: r.error || 'Lỗi', ok: false }); load() }
+  }
+
+  const handleCreateActionItem = async () => {
+    if (!actionMode || !actionItemTitle.trim() || actionItemPicks.length === 0) return
+    setActionSaving(true)
+    const r = await apiFetch('/api/work/briefing/action-item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceTaskId: actionMode.taskId,
+        title: actionItemTitle.trim(),
+        assigneeUserIds: actionItemPicks,
+        deadline: actionItemDeadline || undefined,
+      }),
+    })
+    if (r.ok) {
+      setToast({ msg: 'Đã tạo việc mới', ok: true })
+      load()
+    } else {
+      setToast({ msg: r.error || 'Lỗi tạo việc', ok: false })
+    }
+    setActionSaving(false)
+    setActionMode(null)
+  }
+
+  const filteredActionUsers = useMemo(() => {
+    if (!reassignQuery.trim() && !actionItemQuery.trim()) return actionUsers.slice(0, 20)
+    const q = rmDiacritics((reassignQuery || actionItemQuery).toLowerCase())
+    return actionUsers.filter(u => rmDiacritics(u.fullName.toLowerCase()).includes(q)).slice(0, 20)
+  }, [actionUsers, reassignQuery, actionItemQuery])
 
   const toggleProject = (pid: string) => {
     setExpanded((prev) => {
@@ -813,6 +957,7 @@ export default function BriefingPage() {
                   ? { label: 'Tắc', color: '#c2410c', bg: '#fff7ed' }
                   : (STATUS_LABELS[t.status] || { label: t.status, color: '#475569', bg: '#f1f5f9' })
                 const isEditingThis = statusEditing === t.id
+                const isActive = t.status !== 'DONE' && t.status !== 'CANCELLED'
                 return (
                   <tr key={t.id} className="border-t hover:bg-opacity-50" style={{ borderColor: 'var(--border)', opacity: dimmed ? 0.55 : 1 }}>
                     <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{t.taskType !== 'FREE' ? t.taskType : '—'}</td>
@@ -821,7 +966,10 @@ export default function BriefingPage() {
                       <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
                       {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
                       {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}
-                      {!t.needsExecDecision && !t.escalated && t.status !== 'DONE' && t.status !== 'CANCELLED' && (
+                      {t.actionItems.length > 0 && (
+                        <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{t.actionItems.length} việc tạo</span>
+                      )}
+                      {!t.needsExecDecision && !t.escalated && isActive && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleEscalate(t.id, true) }}
                           className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded transition-all opacity-40 hover:opacity-100"
@@ -930,6 +1078,34 @@ export default function BriefingPage() {
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.notes || '—'}</td>
+                    <td className="px-2 py-2.5 text-center">
+                      {isActive && (
+                        <div className="relative inline-block" ref={actionMenu === t.id ? actionMenuRef : undefined}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === t.id ? null : t.id) }}
+                            className="text-sm px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                            title="Hành động"
+                          >⋯</button>
+                          {actionMenu === t.id && (
+                            <div className="absolute right-0 z-40 mt-1 py-1 rounded-lg shadow-lg min-w-[160px]" style={{ background: 'var(--surface, #fff)', border: '1px solid var(--border)' }}>
+                              <button onClick={() => openAction(t.id, 'reassign')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+                                <span>👤</span> Đổi người
+                              </button>
+                              <button onClick={() => openAction(t.id, 'deadline')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+                                <span>📅</span> Đổi hạn
+                              </button>
+                              <button onClick={() => handleToggleBlocked(t.id, t.blocked)} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+                                <span>{t.blocked ? '🟢' : '🔴'}</span> {t.blocked ? 'Gỡ tắc' : 'Đánh dấu tắc'}
+                              </button>
+                              <button onClick={() => openAction(t.id, 'action-item')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
+                                <span>➕</span> Tạo việc từ đề xuất
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 )
               }
@@ -972,6 +1148,7 @@ export default function BriefingPage() {
                               <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 180 }}>Đề xuất/hướng xử lý</th>
                               <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 180 }}>Quyết định BGĐ</th>
                               <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Ghi chú</th>
+                              <th className="text-center px-2 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 40 }}></th>
                             </tr>
                           </thead>
                           <tbody>
@@ -979,7 +1156,7 @@ export default function BriefingPage() {
                             {g.doneTasks.length > 0 && (
                               <>
                                 <tr>
-                                  <td colSpan={9} className="px-4 py-2">
+                                  <td colSpan={10} className="px-4 py-2">
                                     <button
                                       onClick={() => setDoneExpanded((prev) => { const s = new Set(prev); if (s.has(groupKey)) s.delete(groupKey); else s.add(groupKey); return s })}
                                       className="text-xs font-medium"
@@ -1000,6 +1177,151 @@ export default function BriefingPage() {
                 </div>
               )
             })
+          )}
+          {/* ═══ Action Modal ═══ */}
+          {actionMode && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setActionMode(null)}>
+              <div className="rounded-xl shadow-xl w-full max-w-md mx-4 p-5 space-y-4" style={{ background: 'var(--surface, #fff)' }} onClick={e => e.stopPropagation()}>
+                {actionMode.mode === 'reassign' && (
+                  <>
+                    <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Đổi người thực hiện</h3>
+                    <div className="space-y-2">
+                      <input
+                        className="w-full text-sm px-3 py-2 rounded-lg border"
+                        style={{ borderColor: 'var(--border)', background: '#f8fafc' }}
+                        placeholder="Tìm tên..."
+                        value={reassignQuery}
+                        onChange={e => setReassignQuery(e.target.value)}
+                      />
+                      <div className="max-h-48 overflow-y-auto rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+                        {filteredActionUsers.map(u => (
+                          <label key={u.id} className="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs">
+                            <input
+                              type="checkbox"
+                              checked={reassignPicks.includes(u.id)}
+                              onChange={e => {
+                                if (e.target.checked) setReassignPicks(p => [...p, u.id])
+                                else setReassignPicks(p => p.filter(x => x !== u.id))
+                              }}
+                            />
+                            <span>{u.fullName}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+                          </label>
+                        ))}
+                      </div>
+                      {reassignPicks.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {reassignPicks.map(uid => {
+                            const u = actionUsers.find(x => x.id === uid)
+                            return <span key={uid} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{u?.fullName || uid}</span>
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setActionMode(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                      <button onClick={handleReassign} disabled={actionSaving || reassignPicks.length === 0} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
+                        {actionSaving ? 'Đang lưu...' : 'Xác nhận'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {actionMode.mode === 'deadline' && (
+                  <>
+                    <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Đổi hạn hoàn thành</h3>
+                    <input
+                      type="date"
+                      className="w-full text-sm px-3 py-2 rounded-lg border"
+                      style={{ borderColor: 'var(--border)', background: '#f8fafc' }}
+                      value={newDeadline}
+                      onChange={e => setNewDeadline(e.target.value)}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setActionMode(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                      <button onClick={handleDeadlineChange} disabled={actionSaving} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
+                        {actionSaving ? 'Đang lưu...' : 'Xác nhận'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {actionMode.mode === 'action-item' && (
+                  <>
+                    <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Tạo việc từ đề xuất</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Tiêu đề *</label>
+                        <input
+                          className="w-full text-sm px-3 py-2 rounded-lg border"
+                          style={{ borderColor: 'var(--border)', background: '#f8fafc' }}
+                          value={actionItemTitle}
+                          onChange={e => setActionItemTitle(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Người nhận *</label>
+                        <input
+                          className="w-full text-sm px-3 py-2 rounded-lg border"
+                          style={{ borderColor: 'var(--border)', background: '#f8fafc' }}
+                          placeholder="Tìm tên..."
+                          value={actionItemQuery}
+                          onChange={e => setActionItemQuery(e.target.value)}
+                        />
+                        <div className="max-h-36 overflow-y-auto rounded-lg border mt-1" style={{ borderColor: 'var(--border)' }}>
+                          {filteredActionUsers.map(u => (
+                            <label key={u.id} className="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs">
+                              <input
+                                type="checkbox"
+                                checked={actionItemPicks.includes(u.id)}
+                                onChange={e => {
+                                  if (e.target.checked) setActionItemPicks(p => [...p, u.id])
+                                  else setActionItemPicks(p => p.filter(x => x !== u.id))
+                                }}
+                              />
+                              <span>{u.fullName}</span>
+                              <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+                            </label>
+                          ))}
+                        </div>
+                        {actionItemPicks.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {actionItemPicks.map(uid => {
+                              const u = actionUsers.find(x => x.id === uid)
+                              return <span key={uid} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{u?.fullName || uid}</span>
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Hạn (tuỳ chọn)</label>
+                        <input
+                          type="date"
+                          className="w-full text-sm px-3 py-2 rounded-lg border"
+                          style={{ borderColor: 'var(--border)', background: '#f8fafc' }}
+                          value={actionItemDeadline}
+                          onChange={e => setActionItemDeadline(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setActionMode(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                      <button onClick={handleCreateActionItem} disabled={actionSaving || !actionItemTitle.trim() || actionItemPicks.length === 0} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
+                        {actionSaving ? 'Đang tạo...' : 'Tạo việc'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Toast */}
+          {toast && (
+            <div className="fixed bottom-6 right-6 z-50 rounded-lg px-4 py-3 shadow-lg text-sm font-medium animate-fade-in"
+              style={{ background: toast.ok ? '#ecfdf5' : '#fef2f2', color: toast.ok ? '#065f46' : '#991b1b', border: `1px solid ${toast.ok ? '#a7f3d0' : '#fecaca'}` }}>
+              {toast.msg}
+            </div>
           )}
         </>
       )}
