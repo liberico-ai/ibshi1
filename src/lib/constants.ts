@@ -19,7 +19,8 @@ export const ROLES = {
   R09: { code: 'R09', name: 'Chất lượng (QC)', nameEn: 'Quality Control' },
   R09a: { code: 'R09a', name: 'Kiểm tra viên', nameEn: 'Inspector' },
   R10: { code: 'R10', name: 'Quản trị Hệ thống', nameEn: 'System Admin' },
-  R11: { code: 'R11', name: 'Trưởng phòng Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical Head' },
+  R11: { code: 'R11', name: 'Nhân viên HCNS', nameEn: 'HR & Admin Staff' },
+  R13: { code: 'R13', name: 'Trưởng phòng Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical Head' },
 } as const
 
 export type RoleCode = keyof typeof ROLES
@@ -165,7 +166,7 @@ export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R09:  ['overview', 'qc', 'reports'],
   R09a: ['overview', 'qc', 'reports'],
   R10:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
-  R11:  ['overview', 'production', 'reports'],
+  R13:  ['overview', 'production', 'reports'],
 }
 
 // ── Menu Items with Group ──
@@ -176,7 +177,7 @@ export const MENU_ITEMS = [
   // [ẨN: luồng 36 bước cũ — đang test hệ động. Bật lại bằng cách bỏ comment dòng dưới]
   // { key: 'tasks', label: 'Công việc (cũ)', labelEn: 'Tasks (legacy)', icon: 'ClipboardList', href: '/dashboard/tasks', roles: 'all', group: 'overview' },
   { key: 'work', label: 'Công việc', labelEn: 'Work Inbox', icon: 'Inbox', href: '/dashboard/work', roles: 'all', group: 'overview' },
-  { key: 'work-team', label: 'Phòng của tôi', labelEn: 'My Department', icon: 'Users', href: '/dashboard/work/team', roles: ['R01', 'R02', 'R03', 'R04', 'R06', 'R08', 'R09', 'R10', 'R11'], group: 'overview' },
+  { key: 'work-team', label: 'Phòng của tôi', labelEn: 'My Department', icon: 'Users', href: '/dashboard/work/team', roles: ['R01', 'R02', 'R03', 'R04', 'R06', 'R08', 'R09', 'R10', 'R13'], group: 'overview' },
   { key: 'work-meetings', label: 'Lịch họp', labelEn: 'Meetings', icon: 'CalendarCheck', href: '/dashboard/work/meetings', roles: 'all', group: 'overview' },
   { key: 'notifications', label: 'Thông báo', labelEn: 'Notifications', icon: 'Bell', href: '/dashboard/notifications', roles: 'all', group: 'overview' },
 
@@ -246,7 +247,7 @@ export const MENU_ITEMS = [
   { key: 'settlement', label: 'Quyết toán', labelEn: 'Settlement', icon: 'Calculator', href: '/dashboard/finance/settlement', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a'], group: 'finance' },
 
   // ── Reports ──
-  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R08', 'R08a', 'R09', 'R09a', 'R11'], group: 'reports' },
+  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R08', 'R08a', 'R09', 'R09a', 'R13'], group: 'reports' },
   { key: 'audit-log', label: 'Nhật ký', labelEn: 'Audit Log', icon: 'ScrollText', href: '/dashboard/audit-log', roles: ['R01', 'R10'], group: 'reports' },
   { key: 'error-logs', label: 'Error Logs', labelEn: 'Error Logs', icon: 'AlertTriangle', href: '/dashboard/admin/error-logs', roles: ['R01', 'R10'], group: 'reports' },
 

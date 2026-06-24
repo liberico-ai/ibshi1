@@ -31,13 +31,17 @@ model User {
 }
 
 model Department {
-  id        String     @id @default(cuid())
-  code      String     @unique
+  id        String       @id @default(cuid())
+  code      String       @unique
   name      String
-  nameEn    String     @default("") @map("name_en")
+  nameEn    String       @default("") @map("name_en")
+  parentId  String?      @map("parent_id")
+  parent    Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children  Department[] @relation("DeptHierarchy")
   employees Employee[]
   users     User[]
 
+  @@index([parentId])
   @@map("departments")
 }
 

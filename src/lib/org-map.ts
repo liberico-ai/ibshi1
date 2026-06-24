@@ -26,7 +26,7 @@ export const ROLE_TO_DEPT: Record<string, string> = {
   R07: 'TM', R07a: 'TM',
   R09: 'QC', R09a: 'QC',
   R10: 'CNTT',
-  R11: 'TBCG',
+  R13: 'TBCG',
 }
 
 export const DEPT_NAME: Record<string, string> = Object.fromEntries(
@@ -40,7 +40,7 @@ export function deptOfRole(roleCode?: string | null): string | null {
 
 export const DEPT_PRIMARY_ROLE: Record<string, string> = {
   BGD: 'R01', CNTT: 'R10', TK: 'R04', KTKH: 'R03', TM: 'R07',
-  QLDA: 'R02', SX: 'R06', TCKT: 'R08', QC: 'R09', TBCG: 'R11',
+  QLDA: 'R02', SX: 'R06', TCKT: 'R08', QC: 'R09', TBCG: 'R13',
 }
 
 export const DEPT_KEYWORDS: Record<string, string[]> = {

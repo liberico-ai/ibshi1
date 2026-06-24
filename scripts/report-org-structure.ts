@@ -34,7 +34,8 @@ const ROLES: Record<string, { code: string; name: string }> = {
   R09: { code: 'R09', name: 'Chất lượng (QC)' },
   R09a: { code: 'R09a', name: 'Kiểm tra viên' },
   R10: { code: 'R10', name: 'Quản trị Hệ thống' },
-  R11: { code: 'R11', name: 'Trưởng phòng Thiết bị & Cơ giới' },
+  R11: { code: 'R11', name: 'Nhân viên HCNS' },
+  R13: { code: 'R13', name: 'Trưởng phòng Thiết bị & Cơ giới' },
 }
 
 const ROLE_TO_DEPT: Record<string, string> = {
@@ -47,7 +48,7 @@ const ROLE_TO_DEPT: Record<string, string> = {
   R07: 'TM', R07a: 'TM',
   R09: 'QC', R09a: 'QC',
   R10: 'CNTT',
-  R11: 'TBCG',
+  R13: 'TBCG',
 }
 
 const DEPT_NAME: Record<string, string> = {
@@ -273,6 +274,118 @@ async function main() {
     log('_(không có)_')
   }
   log('')
+
+  // ═══════════════════════════════════════════════════════════════
+  // 3f. Chi tiết mọi roleCode đang có user (ai giữ R11?)
+  // ═══════════════════════════════════════════════════════════════
+  log('### 3f. MỌI roleCode đang có user trên DB')
+  log('')
+  log('| roleCode | Tên role (DB) | Active | Inactive | Tổng |')
+  log('|----------|---------------|--------|----------|------|')
+
+  const dbRoles = await prisma.role.findMany({ orderBy: { code: 'asc' } })
+  const dbRoleMap = new Map(dbRoles.map(r => [r.code, r]))
+  for (const rc of sortedRoles) {
+    const list = byRole.get(rc)!
+    const active = list.filter(u => u.isActive).length
+    const inactive = list.length - active
+    const dbRole = dbRoleMap.get(rc)
+    const roleName = dbRole?.name || ROLES[rc]?.name || '_(không có trong bảng Role)_'
+    log(`| ${rc} | ${roleName} | ${active} | ${inactive} | ${list.length} |`)
+  }
+  log('')
+
+  // Detail for R11
+  const r11Users = byRole.get('R11')
+  if (r11Users && r11Users.length > 0) {
+    const allDeptsMap = new Map((await prisma.department.findMany()).map(d => [d.id, d]))
+    log('**Chi tiết R11:**')
+    log('')
+    log('| Họ tên | Username | Dept (DB) | Active | Level |')
+    log('|--------|----------|-----------|--------|-------|')
+    for (const u of r11Users) {
+      const deptObj = u.departmentId ? allDeptsMap.get(u.departmentId) : null
+      log(`| ${u.fullName} | ${u.username} | ${deptObj ? `${deptObj.name} (${deptObj.code})` : '(none)'} | ${u.isActive ? '✓' : '✗'} | ${u.userLevel} |`)
+    }
+    log('')
+  } else {
+    log('**R11: 0 user trên DB.**')
+    log('')
+  }
+
+  // Role defined in DB but 0 user
+  const dbRoleCodesNoUser = dbRoles.filter(r => !byRole.has(r.code))
+  if (dbRoleCodesNoUser.length > 0) {
+    log('**Role có trong bảng Role nhưng 0 user:**')
+    log('')
+    log('| roleCode | Tên | Có trong ROLE_TO_DEPT? |')
+    log('|----------|-----|-----------------------|')
+    for (const r of dbRoleCodesNoUser) {
+      log(`| ${r.code} | ${r.name} | ${ROLE_TO_DEPT[r.code] ? 'Có → ' + ROLE_TO_DEPT[r.code] : 'KHÔNG'} |`)
+    }
+    log('')
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 3g. Role có user nhưng KHÔNG nằm trong ROLE_TO_DEPT
+  // ═══════════════════════════════════════════════════════════════
+  const unmappedRoles = sortedRoles.filter(rc => !(rc in ROLE_TO_DEPT))
+  log(`### 3g. Role có user nhưng KHÔNG trong ROLE_TO_DEPT (mồ côi): ${unmappedRoles.length}`)
+  log('')
+  if (unmappedRoles.length > 0) {
+    for (const rc of unmappedRoles) {
+      const list = byRole.get(rc)!
+      const dbRole = dbRoleMap.get(rc)
+      log(`#### ${rc} — "${dbRole?.name || '?'}" — ${list.length} user`)
+      log('')
+      log('| Họ tên | Username | Active | Level |')
+      log('|--------|----------|--------|-------|')
+      for (const u of list) {
+        log(`| ${u.fullName} | ${u.username} | ${u.isActive ? '✓' : '✗'} | ${u.userLevel} |`)
+      }
+      log('')
+    }
+  } else {
+    log('_(không có)_')
+    log('')
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 3h. Cấu trúc Tổ sản xuất (TO-*, PB-*, BP-*) còn user
+  // ═══════════════════════════════════════════════════════════════
+  log('### 3h. Cấu trúc Tổ/Phòng sản xuất (TO-*, PB-*, BP-*) từ DB')
+  log('')
+
+  const shopFloorDepts = (await prisma.department.findMany({
+    include: {
+      users: {
+        select: { id: true, username: true, fullName: true, roleCode: true, isActive: true, userLevel: true },
+        orderBy: [{ roleCode: 'asc' }, { fullName: 'asc' }],
+      },
+    },
+    orderBy: { code: 'asc' },
+  })).filter(d => /^(TO-|PB-|BP-)/.test(d.code))
+
+  if (shopFloorDepts.length > 0) {
+    for (const d of shopFloorDepts) {
+      const active = d.users.filter((u: {isActive: boolean}) => u.isActive).length
+      log(`#### ${d.name} (${d.code}) — ${active} active / ${d.users.length} tổng`)
+      log('')
+      if (d.users.length > 0) {
+        log('| roleCode | Họ tên | Username | Active | Level |')
+        log('|----------|--------|----------|--------|-------|')
+        for (const u of d.users) {
+          log(`| ${u.roleCode} | ${u.fullName} | ${u.username} | ${u.isActive ? '✓' : '✗'} | ${u.userLevel} |`)
+        }
+      } else {
+        log('_(trống)_')
+      }
+      log('')
+    }
+  } else {
+    log('_(không có dept TO-*/PB-*/BP-*)_')
+    log('')
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // 4. TỔNG HỢP
