@@ -1611,3 +1611,18 @@ model ApiClient {
 
   @@map("api_clients")
 }
+
+model BriefingSnapshot {
+  id             String   @id @default(cuid())
+  weekOf         DateTime @map("week_of")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  kpi            Json
+  tasksSnapshot  Json     @map("tasks_snapshot")
+  decisions      Json
+  actionItems    Json     @map("action_items")
+
+  @@unique([weekOf])
+  @@index([weekOf])
+  @@map("briefing_snapshots")
+}

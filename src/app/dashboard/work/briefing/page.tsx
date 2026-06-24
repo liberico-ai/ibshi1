@@ -312,6 +312,20 @@ export default function BriefingPage() {
   const [applying, setApplying] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
 
+  // Review / Snapshot state
+  interface ReviewData {
+    hasSnapshot: boolean
+    lastSnapshot: { id: string; weekOf: string; createdAt: string; kpi: Record<string, number> } | null
+    followUp: { taskId: string; title: string; decision?: string; byName?: string; type?: string; currentStatus: string; isDone: boolean; isOverdue: boolean; daysOverdue: number }[]
+    diff: { new: { taskId: string; title: string; status: string }[]; closed: { taskId: string; title: string; currentStatus: string }[]; slipped: { taskId: string; title: string; oldDeadline: string; newDeadline: string; daysOverdue: number }[] }
+  }
+  const [review, setReview] = useState<ReviewData | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewDiffOpen, setReviewDiffOpen] = useState(false)
+  const [snapshotSaving, setSnapshotSaving] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [snapshotHistory, setSnapshotHistory] = useState<{ id: string; weekOf: string; createdAt: string; kpi: Record<string, number> }[]>([])
+
   const load = useCallback(() => {
     setLoading(true)
     apiFetch('/api/work/briefing/agenda').then((r) => {
@@ -325,7 +339,13 @@ export default function BriefingPage() {
     })
   }, [])
 
-  useEffect(() => { load() }, [load])
+  const loadReview = useCallback(() => {
+    apiFetch('/api/work/briefing/review').then(r => {
+      if (r.ok) setReview(r as unknown as ReviewData)
+    })
+  }, [])
+
+  useEffect(() => { load(); loadReview() }, [load, loadReview])
 
   useEffect(() => {
     if (toast) { const h = setTimeout(() => setToast(null), 3000); return () => clearTimeout(h) }
@@ -340,6 +360,7 @@ export default function BriefingPage() {
 
   useEffect(() => {
     localStorage.setItem('briefing_meeting', meetingMode ? '1' : '0')
+    if (meetingMode) setReviewOpen(true)
   }, [meetingMode])
 
   const loadUsers = useCallback(async () => {
@@ -791,6 +812,27 @@ export default function BriefingPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
+  const handleSnapshot = async () => {
+    setSnapshotSaving(true)
+    const r = await apiFetch('/api/work/briefing/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    setSnapshotSaving(false)
+    if (r.ok) {
+      const wk = r.snapshot?.weekOf ? new Date(r.snapshot.weekOf).toLocaleDateString('vi-VN') : ''
+      setToast({ msg: `Đã chốt kỳ giao ban tuần ${wk}`, ok: true })
+      setTimeout(() => setToast(null), 3000)
+      loadReview()
+    } else {
+      setToast({ msg: r.error || 'Lỗi chốt kỳ', ok: false })
+      setTimeout(() => setToast(null), 3000)
+    }
+  }
+
+  const loadHistory = async () => {
+    setHistoryOpen(true)
+    const r = await apiFetch('/api/work/briefing/snapshot?list=1')
+    if (r.ok) setSnapshotHistory(r.snapshots || [])
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
@@ -814,6 +856,9 @@ export default function BriefingPage() {
             Import biên bản
             <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={handleFileSelect} />
           </label>
+          <button onClick={handleSnapshot} disabled={snapshotSaving || kpi.total === 0} className="text-sm px-4 py-2 rounded-lg font-semibold disabled:opacity-50" style={{ background: '#059669', color: '#fff', border: '1px solid #059669' }}>
+            {snapshotSaving ? 'Đang chốt...' : '📌 Chốt kỳ'}
+          </button>
           <button onClick={handleExport} disabled={exporting || kpi.total === 0} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
             {exporting ? 'Đang xuất...' : 'Xuất biên bản'}
           </button>
@@ -917,6 +962,98 @@ export default function BriefingPage() {
                   Tiếp theo →
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Đối chiếu kỳ trước */}
+          {review && (review.followUp.length > 0 || review.diff.new.length > 0 || review.diff.closed.length > 0 || review.diff.slipped.length > 0) && (
+            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <button
+                onClick={() => setReviewOpen(!reviewOpen)}
+                className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-opacity-80 transition-colors"
+                style={{ background: '#f0f4ff' }}
+              >
+                <span className="font-bold text-sm" style={{ color: '#1d4ed8' }}>
+                  {reviewOpen ? '▾' : '▸'} Đối chiếu kỳ trước
+                  {review.lastSnapshot && <span className="font-normal text-xs ml-2" style={{ color: '#64748b' }}>chốt {new Date(review.lastSnapshot.weekOf).toLocaleDateString('vi-VN')}</span>}
+                </span>
+                <div className="flex gap-2">
+                  {review.diff.new.length > 0 && <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#dbeafe', color: '#1d4ed8' }}>{review.diff.new.length} mới</span>}
+                  {review.diff.closed.length > 0 && <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#dcfce7', color: '#16a34a' }}>{review.diff.closed.length} đóng</span>}
+                  {review.diff.slipped.length > 0 && <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef2f2', color: '#dc2626' }}>{review.diff.slipped.length} trượt hạn</span>}
+                </div>
+              </button>
+              {reviewOpen && (
+                <div className="px-5 py-4 space-y-4 border-t" style={{ borderColor: 'var(--border)' }}>
+                  {review.followUp.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: '#475569' }}>Việc đã giao/quyết kỳ trước → hiện tại</h4>
+                      <div className="space-y-1">
+                        {review.followUp.map((f, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs py-1.5 px-3 rounded-lg" style={{ background: f.isDone ? '#f0fdf4' : f.isOverdue ? '#fef2f2' : '#f8fafc' }}>
+                            <span className="font-semibold px-2 py-0.5 rounded-full" style={{ background: f.isDone ? '#dcfce7' : f.isOverdue ? '#fecaca' : '#e2e8f0', color: f.isDone ? '#16a34a' : f.isOverdue ? '#dc2626' : '#475569' }}>
+                              {f.isDone ? 'Xong' : f.isOverdue ? `Trễ ${f.daysOverdue}d` : f.currentStatus === 'IN_PROGRESS' ? 'Đang làm' : f.currentStatus}
+                            </span>
+                            <a href={`/dashboard/work/${f.taskId}`} className="hover:underline flex-1" style={{ color: 'var(--text-primary)' }}>{f.title}</a>
+                            {f.decision && <span className="text-[10px] truncate max-w-[200px]" style={{ color: '#64748b' }}>QĐ: {f.decision}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(review.diff.new.length > 0 || review.diff.closed.length > 0 || review.diff.slipped.length > 0) && (
+                    <div>
+                      <button onClick={() => setReviewDiffOpen(!reviewDiffOpen)} className="text-xs font-bold uppercase tracking-wide" style={{ color: '#475569' }}>
+                        {reviewDiffOpen ? '▾' : '▸'} Diff so với kỳ trước
+                      </button>
+                      {reviewDiffOpen && (
+                        <div className="mt-2 space-y-2">
+                          {review.diff.new.length > 0 && (
+                            <div>
+                              <span className="text-[11px] font-semibold" style={{ color: '#1d4ed8' }}>Việc mới ({review.diff.new.length}):</span>
+                              <div className="ml-3 mt-1 space-y-0.5">
+                                {review.diff.new.slice(0, 10).map(t => (
+                                  <div key={t.taskId} className="text-xs"><a href={`/dashboard/work/${t.taskId}`} className="hover:underline" style={{ color: 'var(--text-primary)' }}>{t.title}</a></div>
+                                ))}
+                                {review.diff.new.length > 10 && <div className="text-[10px]" style={{ color: '#94a3b8' }}>+{review.diff.new.length - 10} khác</div>}
+                              </div>
+                            </div>
+                          )}
+                          {review.diff.closed.length > 0 && (
+                            <div>
+                              <span className="text-[11px] font-semibold" style={{ color: '#16a34a' }}>Đã đóng ({review.diff.closed.length}):</span>
+                              <div className="ml-3 mt-1 space-y-0.5">
+                                {review.diff.closed.slice(0, 10).map(t => (
+                                  <div key={t.taskId} className="text-xs" style={{ color: '#64748b' }}>{t.title} → {t.currentStatus}</div>
+                                ))}
+                                {review.diff.closed.length > 10 && <div className="text-[10px]" style={{ color: '#94a3b8' }}>+{review.diff.closed.length - 10} khác</div>}
+                              </div>
+                            </div>
+                          )}
+                          {review.diff.slipped.length > 0 && (
+                            <div>
+                              <span className="text-[11px] font-semibold" style={{ color: '#dc2626' }}>Trượt hạn ({review.diff.slipped.length}):</span>
+                              <div className="ml-3 mt-1 space-y-0.5">
+                                {review.diff.slipped.map(t => (
+                                  <div key={t.taskId} className="text-xs">
+                                    <a href={`/dashboard/work/${t.taskId}`} className="hover:underline" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
+                                    <span className="ml-1 text-[10px]" style={{ color: '#dc2626' }}>trễ {t.daysOverdue}d</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={loadHistory} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }}>
+                      Lịch sử kỳ
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1471,6 +1608,40 @@ export default function BriefingPage() {
                       </button>
                     </div>
                   </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* History modal */}
+          {historyOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setHistoryOpen(false)}>
+              <div className="rounded-xl shadow-xl w-full max-w-lg mx-4 p-5 space-y-3" style={{ background: 'var(--surface, #fff)' }} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Lịch sử kỳ giao ban</h3>
+                  <button onClick={() => setHistoryOpen(false)} className="text-lg" style={{ color: 'var(--text-muted)' }}>✕</button>
+                </div>
+                {snapshotHistory.length === 0 ? (
+                  <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>Chưa có kỳ nào được chốt.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {snapshotHistory.map(s => (
+                      <div key={s.id} className="flex items-center justify-between px-4 py-3 rounded-lg" style={{ background: '#f8fafc', border: '1px solid var(--border)' }}>
+                        <div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Tuần {new Date(s.weekOf).toLocaleDateString('vi-VN')}</div>
+                          <div className="text-[11px]" style={{ color: '#64748b' }}>Chốt lúc {new Date(s.createdAt).toLocaleString('vi-VN')}</div>
+                        </div>
+                        <div className="flex gap-2 text-[11px]">
+                          {s.kpi && (
+                            <>
+                              <span className="px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{(s.kpi as Record<string, number>).active || 0} active</span>
+                              <span className="px-2 py-0.5 rounded-full" style={{ background: '#fef2f2', color: '#dc2626' }}>{(s.kpi as Record<string, number>).overdue || 0} quá hạn</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>

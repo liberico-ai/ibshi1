@@ -6,18 +6,17 @@ import { DEPT_KEYWORDS, DEPT_PRIMARY_ROLE, DEPT_NAME } from '@/lib/org-map'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-// Ánh xạ trực tiếp tên phòng trong cột "Người thực hiện" (ưu tiên cao nhất)
+// Ánh xạ trực tiếp tên phòng trong cột "Người thực hiện" → mã phòng theo org-map.ts
 const ACTION_BY_DEPT: { re: RegExp; dept: string }[] = [
-  { re: /(phòng\s*)?d\.?a\b|dự án/i, dept: 'PSXDA' },
-  { re: /(phòng\s*)?sx\b|sản xuất|thầu phụ|tổ\s/i, dept: 'PSXDA' },
-  { re: /(phòng\s*)?(tk|thiết kế|kỹ thuật)\b/i, dept: 'PKT' },
-  { re: /\bqc\b|qa\/qc|nghiệm thu|chất lượng/i, dept: 'PQAQC' },
-  { re: /(phòng\s*)?(tm|thương mại|kinh doanh|mua|cung ứng)\b/i, dept: 'PKTKT' },
-  { re: /(kinh tế|ktkt|dự toán|bóc tách)/i, dept: 'PKTKT' },
-  { re: /(kế toán|tckt|tài chính|kho|thủ kho|thanh toán)/i, dept: 'PTCKTKHO' },
-  { re: /\bhse\b|an toàn/i, dept: 'HSE' },
-  { re: /(nhân sự|hcns|tuyển dụng)/i, dept: 'HCNS' },
-  { re: /(bgđ|ban giám đốc|giám đốc|phê duyệt)/i, dept: 'BOM' },
+  { re: /(phòng\s*)?d\.?a\b|dự án|quản lý dự án/i, dept: 'QLDA' },
+  { re: /(phòng\s*)?sx\b|sản xuất|thầu phụ|tổ\s/i, dept: 'SX' },
+  { re: /(phòng\s*)?(tk|thiết kế|kỹ thuật)\b/i, dept: 'TK' },
+  { re: /\bqc\b|qa\/qc|nghiệm thu|chất lượng/i, dept: 'QC' },
+  { re: /(phòng\s*)?(tm|thương mại|kinh doanh|mua|cung ứng)\b/i, dept: 'TM' },
+  { re: /(kinh tế|ktkt|ktkh|dự toán|bóc tách)/i, dept: 'KTKH' },
+  { re: /(kế toán|tckt|tài chính|kho|thủ kho|thanh toán)/i, dept: 'TCKT' },
+  { re: /(thiết bị|cơ giới|tbcg)\b/i, dept: 'TBCG' },
+  { re: /(bgđ|ban giám đốc|giám đốc|phê duyệt)/i, dept: 'BGD' },
 ]
 
 // Gợi ý phòng cho 1 mục hành động: (1) ánh xạ cột "Người thực hiện" → (2) từ khóa nội dung
