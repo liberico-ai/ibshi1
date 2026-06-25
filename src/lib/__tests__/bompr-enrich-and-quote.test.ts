@@ -355,3 +355,129 @@ describe('quote template round-trip', () => {
     expect(dataRows.length).toBe(2) // I-001 (needToBuy=5) and I-003 (qty=10, no needToBuy)
   })
 })
+
+// ── Comparison logic tests (coverage, split-cheapest, VAT) ──
+
+describe('canonicalCode display priority', () => {
+  it('prefers canonicalCode over stt, marks items without canonicalCode', () => {
+    const withCanonical: PrItem = { canonicalCode: 'VLC.U100-006', stt: 'I112-VTC01-044', description: 'Thép', unit: 'm' }
+    const withoutCanonical: PrItem = { stt: 'I112-VTC01-044', description: 'Thép', unit: 'm' }
+    const noCode: PrItem = { description: 'Thép', unit: 'm' }
+
+    const display1 = withCanonical.canonicalCode || withCanonical.stt || ''
+    expect(display1).toBe('VLC.U100-006')
+    expect(!!withCanonical.canonicalCode).toBe(true)
+
+    const display2 = withoutCanonical.canonicalCode || withoutCanonical.stt || ''
+    expect(display2).toBe('I112-VTC01-044')
+    expect(!!withoutCanonical.canonicalCode).toBe(false)
+
+    const display3 = noCode.canonicalCode || noCode.stt || noCode.code || ''
+    expect(display3).toBe('')
+  })
+})
+
+describe('NCC detail totals with VAT', () => {
+  it('computes before-VAT, VAT amount, and after-VAT totals correctly', () => {
+    const lines: QuoteLine[] = makeLines([
+      { code: 'A', qty: 10, unitPrice: 100, amount: 1000, vatPercent: 10, matchedPrIndex: 0 },
+      { code: 'B', qty: 5, unitPrice: 200, amount: 1000, vatPercent: 8, matchedPrIndex: 1 },
+    ])
+    const totalPre = lines.reduce((s, l) => s + l.amount, 0)
+    const totalVat = lines.reduce((s, l) => s + l.amount * ((l.vatPercent ?? 10) / 100), 0)
+    const totalAfter = totalPre + totalVat
+
+    expect(totalPre).toBe(2000)
+    expect(totalVat).toBe(100 + 80) // 1000*10% + 1000*8%
+    expect(totalAfter).toBe(2180)
+  })
+
+  it('defaults to 10% VAT when vatPercent is undefined', () => {
+    const lines: QuoteLine[] = makeLines([
+      { code: 'A', qty: 10, unitPrice: 100, amount: 1000, matchedPrIndex: 0 },
+    ])
+    const vat = lines[0].vatPercent ?? 10
+    expect(vat).toBe(10)
+    const afterVat = lines[0].amount * (1 + vat / 100)
+    expect(afterVat).toBe(1100)
+  })
+})
+
+describe('coverage calculation', () => {
+  it('identifies full vs partial coverage correctly', () => {
+    type PI = { unitPrice: number; vatPct: number }
+    const rows = [
+      { prices: { q1: { unitPrice: 100, vatPct: 10 }, q2: { unitPrice: 120, vatPct: 10 } } as Record<string, PI> },
+      { prices: { q1: { unitPrice: 200, vatPct: 10 } } as Record<string, PI> },
+      { prices: { q1: { unitPrice: 50, vatPct: 10 }, q2: { unitPrice: 60, vatPct: 10 } } as Record<string, PI> },
+    ]
+    const computeCoverage = (qId: string) => {
+      const covered = rows.filter(r => r.prices[qId]?.unitPrice > 0).length
+      return { covered, total: rows.length, full: covered === rows.length }
+    }
+    expect(computeCoverage('q1')).toEqual({ covered: 3, total: 3, full: true })
+    expect(computeCoverage('q2')).toEqual({ covered: 2, total: 3, full: false })
+  })
+})
+
+describe('split-cheapest comparison', () => {
+  it('picks cheapest NCC per item and computes savings vs trọn gói', () => {
+    type PI = { unitPrice: number; vatPct: number }
+    const avPrice = (p: PI) => p.unitPrice * (1 + p.vatPct / 100)
+
+    const rows = [
+      { prIdx: 0, needToBuy: 10, prices: { q1: { unitPrice: 100, vatPct: 10 }, q2: { unitPrice: 90, vatPct: 10 } } as Record<string, PI> },
+      { prIdx: 1, needToBuy: 5, prices: { q1: { unitPrice: 200, vatPct: 10 }, q2: { unitPrice: 250, vatPct: 10 } } as Record<string, PI> },
+    ]
+
+    const splitWinners: Record<number, string> = {}
+    let splitTotal = 0
+    for (const r of rows) {
+      let bestQId = ''
+      let bestAv = Infinity
+      for (const [qId, p] of Object.entries(r.prices)) {
+        const av = avPrice(p)
+        if (av < bestAv) { bestAv = av; bestQId = qId }
+      }
+      if (bestQId) {
+        splitWinners[r.prIdx] = bestQId
+        splitTotal += bestAv * r.needToBuy
+      }
+    }
+
+    // q2 cheaper for item 0 (90*1.1=99 vs 100*1.1=110)
+    expect(splitWinners[0]).toBe('q2')
+    // q1 cheaper for item 1 (200*1.1=220 vs 250*1.1=275)
+    expect(splitWinners[1]).toBe('q1')
+
+    // split total: 99*10 + 220*5 = 990 + 1100 = 2090
+    expect(Math.round(splitTotal)).toBe(2090)
+
+    // q1 trọn gói (has full coverage): 110*10 + 220*5 = 1100+1100 = 2200
+    const q1Total = Math.round(rows.reduce((s, r) => s + avPrice(r.prices.q1) * r.needToBuy, 0))
+    expect(q1Total).toBe(2200)
+
+    // savings = 2200 - 2090 = 110
+    expect(q1Total - Math.round(splitTotal)).toBe(110)
+  })
+
+  it('handles mixed VAT rates correctly in split comparison', () => {
+    type PI = { unitPrice: number; vatPct: number }
+    const avPrice = (p: PI) => p.unitPrice * (1 + p.vatPct / 100)
+
+    const rows = [
+      { prIdx: 0, needToBuy: 10, prices: {
+        q1: { unitPrice: 100, vatPct: 10 },
+        q2: { unitPrice: 95, vatPct: 8 },
+      } as Record<string, PI> },
+    ]
+
+    // q1 after VAT: 100*1.10 = 110
+    // q2 after VAT: 95*1.08 = 102.6
+    const q1Av = avPrice(rows[0].prices.q1)
+    const q2Av = avPrice(rows[0].prices.q2)
+    expect(q1Av).toBeCloseTo(110)
+    expect(q2Av).toBeCloseTo(102.6)
+    expect(q2Av).toBeLessThan(q1Av)
+  })
+})

@@ -11,6 +11,7 @@ export interface QuoteLine {
   qty: number
   unitPrice: number
   amount: number
+  vatPercent?: number
   matchedPrIndex: number | null
   matchedPrCode: string | null
 }
@@ -77,6 +78,7 @@ export function parseQuoteExcel(data: unknown[][]): QuoteLine[] {
   const cQty = isStd ? findLast(qtyRe) : find(qtyRe)
   const cUnitPrice = find(/[đd][ơo]n\s*gi[áa]|unit\s*price/i)
   const cAmount = find(/th[àa]nh\s*ti[ềe]n|amount|total/i)
+  const cVat = find(/\bvat\b/i)
 
   let start = headerIdx + 1
   while (start < data.length) {
@@ -108,11 +110,15 @@ export function parseQuoteExcel(data: unknown[][]): QuoteLine[] {
 
     if (qty === 0 && unitPrice === 0 && amount === 0) continue
 
+    const rawVat = cVat >= 0 ? N(row[cVat]) : undefined
+    const vatPercent = rawVat !== undefined && rawVat > 0 ? (rawVat < 1 ? Math.round(rawVat * 100) : rawVat <= 100 ? rawVat : undefined) : undefined
+
     lines.push({
       code, description, profile, grade, unit,
       qty: Math.round(qty * 1000) / 1000,
       unitPrice: Math.round(unitPrice * 100) / 100,
       amount: Math.round(amount * 100) / 100,
+      vatPercent,
       matchedPrIndex: null,
       matchedPrCode: null,
     })
