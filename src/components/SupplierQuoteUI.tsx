@@ -64,8 +64,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   const [creatingVendor, setCreatingVendor] = useState(false)
   const [reasonError, setReasonError] = useState<string | null>(null)
   const [poState, setPoState] = useState<{ loading: boolean; poId?: string; poCode?: string; error?: string }>({ loading: false })
-  const [prSearch, setPrSearch] = useState('')
-  const [showAllPr, setShowAllPr] = useState(false)
+
 
   useEffect(() => {
     apiFetch('/api/vendors').then(r => {
@@ -303,123 +302,20 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
 
   const missingEnrichment = parsedPrItems.length > 0 && parsedPrItems.every(p => p.availableQty === undefined)
 
-  const prRef = (() => {
-    if (!Array.isArray(prItems) || prItems.length === 0) return null
-    const arr = prItems as Record<string, unknown>[]
-    const totalNeeded = arr.reduce((s, it) => s + (typeof it.neededQty === 'number' ? (it.neededQty as number) : (Number(it.quantity || it.qty) || 0)), 0)
-    const totalToBuy = arr.reduce((s, it) => s + (typeof it.needToBuyQty === 'number' ? (it.needToBuyQty as number) : (Number(it.quantity || it.qty) || 0)), 0)
-    const hasRequiredDate = arr.some(it => typeof it.requiredDate === 'string' && it.requiredDate)
-    const withIdx = arr.map((item, idx) => ({ item, idx }))
-    const filteredPr = prSearch
-      ? withIdx.filter(({ item }) => {
-          const q = prSearch.toLowerCase()
-          return String(item.stt || item.canonicalCode || '').toLowerCase().includes(q)
-            || String(item.description || item.materialName || item.name || '').toLowerCase().includes(q)
-            || String(item.profile || '').toLowerCase().includes(q)
-        })
-      : withIdx
-    const shown = showAllPr || filteredPr.length <= 50 ? filteredPr : filteredPr.slice(0, 50)
-    return (
-      <div className="rounded-xl p-4" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-semibold" style={{ color: '#0369a1' }}>📦 Vật tư cần mua (từ PR)</div>
-          <div className="flex items-center gap-2">
-            {missingEnrichment && <span className="text-xs" style={{ color: '#b45309' }}>⚠ Chưa tính tồn kho</span>}
-            <button
-              onClick={handleReEnrich}
-              disabled={enriching}
-              className="px-3 py-1 rounded text-xs font-semibold"
-              style={{ background: enriching ? '#94a3b8' : '#0284c7', color: '#fff' }}
-            >
-              {enriching ? '...' : '🔄 Tính lại từ kho'}
-            </button>
-            {enrichMsg && <span className="text-xs" style={{ color: enrichMsg.startsWith('Đã') ? '#16a34a' : '#dc2626' }}>{enrichMsg}</span>}
-          </div>
-        </div>
-        {arr.length > 20 && (
-          <div className="flex items-center gap-2 mb-2">
-            <input
-              type="text"
-              value={prSearch}
-              onChange={e => { setPrSearch(e.target.value); setShowAllPr(false) }}
-              placeholder="Tìm mã / tên / profile..."
-              className="text-xs px-2 py-1 rounded-lg flex-1"
-              style={{ border: '1px solid #bae6fd', background: '#fff', maxWidth: 280 }}
-            />
-            <span className="text-xs" style={{ color: '#64748b' }}>
-              {filteredPr.length === arr.length ? `${arr.length} dòng` : `${filteredPr.length}/${arr.length} dòng`}
-            </span>
-          </div>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead><tr style={{ background: '#e0f2fe' }}>
-              {['#', 'Mã', 'Tên vật tư', 'ĐVT', 'SL cần', 'Tồn khả dụng', 'Còn phải mua', ...(hasRequiredDate ? ['Ngày cần'] : [])].map(h => (
-                <th key={h} className="text-left px-2 py-1.5 font-semibold" style={{ color: '#0c4a6e' }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {shown.map(({ item, idx }) => {
-                const needed = typeof item.neededQty === 'number' ? (item.neededQty as number) : (Number(item.quantity || item.qty) || null)
-                const avail = typeof item.availableQty === 'number' ? (item.availableQty as number) : null
-                const toBuy = typeof item.needToBuyQty === 'number' ? (item.needToBuyQty as number) : (Number(item.quantity || item.qty) || null)
-                const sufficient = toBuy !== null && toBuy === 0
-                const unit = String(item.stockUnit || item.unit || item.uom || '')
-                const rd = typeof item.requiredDate === 'string' ? item.requiredDate : ''
-                return (
-                  <tr key={idx} style={{ borderTop: '1px solid #bae6fd', ...(sufficient ? { background: '#f1f5f9', opacity: 0.7 } : {}) }}>
-                    <td className="px-2 py-1" style={{ color: '#64748b' }}>{idx + 1}</td>
-                    <td className="px-2 py-1 font-mono text-xs">{String(item.canonicalCode || item.stt || '—')}</td>
-                    <td className="px-2 py-1">{String(item.description || item.materialName || item.name || '—')}</td>
-                    <td className="px-2 py-1">{unit || '—'}</td>
-                    <td className="px-2 py-1 font-semibold">{needed !== null ? formatNumber(needed) : '—'}</td>
-                    <td className="px-2 py-1" style={{ color: avail !== null && avail > 0 ? '#16a34a' : '#9ca3af' }}>
-                      {avail !== null ? formatNumber(avail) : '—'}
-                      {item.stockConvertedFromKg === true && <span style={{ fontSize: '0.6rem', color: '#6b7280' }}> (kg)</span>}
-                      {item.stockUnitMismatch === true && <span style={{ fontSize: '0.6rem', color: '#b45309' }}> ⚠ khác ĐVT</span>}
-                    </td>
-                    <td className="px-2 py-1 font-semibold" style={{ color: sufficient ? '#16a34a' : toBuy !== null ? '#dc2626' : '#9ca3af' }}>
-                      {sufficient
-                        ? <span style={{ background: '#dcfce7', padding: '1px 6px', borderRadius: 4, color: '#166534', fontWeight: 700, fontSize: '0.65rem' }}>đủ kho</span>
-                        : toBuy !== null ? formatNumber(toBuy) : '—'}
-                    </td>
-                    {hasRequiredDate && (
-                      <td className="px-2 py-1 whitespace-nowrap" style={{ color: rd ? '#0369a1' : '#9ca3af', fontSize: '0.7rem' }}>
-                        {rd ? rd.split('-').reverse().join('/') : '—'}
-                      </td>
-                    )}
-                  </tr>
-                )
-              })}
-            </tbody>
-            {totalNeeded > 0 && (
-              <tfoot>
-                <tr style={{ borderTop: '2px solid #0284c7', background: '#e0f2fe', fontWeight: 700 }}>
-                  <td colSpan={4} className="px-2 py-1.5 text-right" style={{ color: '#0c4a6e' }}>Tổng</td>
-                  <td className="px-2 py-1.5" style={{ color: '#0c4a6e' }}>{formatNumber(totalNeeded)}</td>
-                  <td className="px-2 py-1.5" />
-                  <td className="px-2 py-1.5" style={{ color: totalToBuy > 0 ? '#dc2626' : '#16a34a' }}>
-                    {totalToBuy > 0 ? formatNumber(totalToBuy) : 'Đủ kho'}
-                  </td>
-                  {hasRequiredDate && <td />}
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-        {filteredPr.length > 50 && !showAllPr && (
-          <button onClick={() => setShowAllPr(true)} className="text-xs mt-1 px-2 py-1 rounded" style={{ color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd' }}>
-            Xem tất cả {filteredPr.length} dòng
-          </button>
-        )}
-        {showAllPr && filteredPr.length > 50 && (
-          <button onClick={() => setShowAllPr(false)} className="text-xs mt-1 underline" style={{ color: '#64748b' }}>
-            Thu gọn (50 dòng đầu)
-          </button>
-        )}
-      </div>
-    )
-  })()
+  const enrichToolbar = parsedPrItems.length > 0 ? (
+    <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
+      {missingEnrichment && <span className="text-xs" style={{ color: '#b45309' }}>⚠ Chưa tính tồn kho</span>}
+      <button
+        onClick={handleReEnrich}
+        disabled={enriching}
+        className="px-3 py-1 rounded text-xs font-semibold"
+        style={{ background: enriching ? '#94a3b8' : '#0284c7', color: '#fff' }}
+      >
+        {enriching ? '...' : '🔄 Tính lại từ kho'}
+      </button>
+      {enrichMsg && <span className="text-xs" style={{ color: enrichMsg.startsWith('Đã') ? '#16a34a' : '#dc2626' }}>{enrichMsg}</span>}
+    </div>
+  ) : null
 
   // ── READ-ONLY REVIEW MODE ──
   if (!isEditable) {
@@ -427,7 +323,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     const chosenNotMin = chosen && minAmount > 0 && chosenAmount > minAmount
     return (
       <div className="space-y-4">
-        {prRef}
+        {enrichToolbar}
 
         {quotes.length === 0 && (
           <div className="text-sm" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có báo giá NCC</div>
@@ -523,7 +419,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   // ── EDITABLE MODE ──
   return (
     <div className="space-y-4">
-      {prRef}
+      {enrichToolbar}
 
       {/* B: Supplier rows */}
       {quotes.map((q, idx) => (

@@ -54,7 +54,8 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       if (r.ok && r.resultData) {
         const rd = r.resultData as Record<string, unknown>
         setResultData(rd)
-        if (rd.bomPr) setPrData(String(rd.bomPr))
+        const prSrc = rd.bomPrItems || rd.bomPr
+        if (prSrc) setPrData(String(prSrc))
         if (rd.momAttendants) setMomAttendants(String(rd.momAttendants))
         if (rd.momSections) setMomSections(String(rd.momSections))
         if (rd.weldData) setWeldData(String(rd.weldData))
@@ -248,10 +249,20 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
 
       {selected === 'SUPPLIER_QUOTE' && (
         <div style={{ marginTop: 12 }}>
+          {!!(prData || resultData.bomPrItems || resultData.bomPr) && (
+            <BomPrUploadUI
+              isEditable={false}
+              bomPrData={prData || (resultData.bomPrItems ? String(resultData.bomPrItems) : resultData.bomPr ? String(resultData.bomPr) : undefined)}
+              onChange={(val) => setPrData(val)}
+              projectCode={projectCode}
+              roleCode={roleCode}
+              taskId={taskId}
+            />
+          )}
           <SupplierQuoteUI
             taskId={taskId}
             isEditable={isEditable && canEditForm('SUPPLIER_QUOTE', roleCode)}
-            bomPrData={prData || (resultData.bomPr ? String(resultData.bomPr) : undefined)}
+            bomPrData={prData || (resultData.bomPrItems ? String(resultData.bomPrItems) : resultData.bomPr ? String(resultData.bomPr) : undefined)}
             value={resultData.supplierQuotes ? (Array.isArray(resultData.supplierQuotes) ? resultData.supplierQuotes : (() => { try { return JSON.parse(String(resultData.supplierQuotes)) } catch { return [] } })()) : undefined}
             onChange={async (quotes) => {
               const chosen = quotes.find(q => q.selected)
