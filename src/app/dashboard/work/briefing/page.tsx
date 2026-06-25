@@ -28,6 +28,9 @@ interface BriefingTask {
   assignees: { userId: string; name: string }[]
   actionItems: { taskId: string; title: string }[]
   discussedAt: string
+  discussNote: string
+  escalateType: string
+  escalateQuestion: string
   projectCode: string
   criteria: string
   proposal: string
@@ -303,6 +306,20 @@ export default function BriefingPage() {
   const [actionItemPicks, setActionItemPicks] = useState<string[]>([])
   const [actionItemQuery, setActionItemQuery] = useState('')
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  // Escalation modal state
+  const [escModal, setEscModal] = useState<string | null>(null)
+  const [escType, setEscType] = useState('')
+  const [escQuestion, setEscQuestion] = useState('')
+  const [escSaving, setEscSaving] = useState(false)
+
+  // Discuss note state
+  const [discussNoteId, setDiscussNoteId] = useState<string | null>(null)
+  const [discussNoteText, setDiscussNoteText] = useState('')
+
+  // Presentation mode
+  const [presentMode, setPresentMode] = useState(false)
+  const [presentIdx, setPresentIdx] = useState(0)
 
   // Import state
   const fileRef = useRef<HTMLInputElement>(null)
@@ -778,6 +795,14 @@ export default function BriefingPage() {
       })
   }, [groups])
 
+  const presentTasks = useMemo(() => {
+    if (!presentMode) return []
+    return filteredGroups.flatMap(g => g.activeTasks.map(t => ({ ...t, _projectCode: g.project?.projectCode || 'Chung', _projectName: g.project?.projectName || '' })))
+  }, [filteredGroups, presentMode])
+
+  const presentCurrent = presentTasks[presentIdx] || null
+  const presentDiscussedCount = presentTasks.filter(discussedThisWeek).length
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -817,11 +842,30 @@ export default function BriefingPage() {
     else alert(r.error || 'Lỗi cập nhật')
   }
 
-  const handleEscalate = async (taskId: string, escalated: boolean) => {
+  const openEscalateModal = (taskId: string) => {
+    setEscModal(taskId)
+    setEscType('')
+    setEscQuestion('')
+  }
+
+  const handleEscalateSubmit = async () => {
+    if (!escModal || !escType.trim() || !escQuestion.trim()) return
+    setEscSaving(true)
     const r = await apiFetch('/api/work/briefing/status', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId, escalated }),
+      body: JSON.stringify({ taskId: escModal, escalated: true, escalateType: escType, escalateQuestion: escQuestion }),
+    })
+    setEscSaving(false)
+    if (r.ok) { setEscModal(null); load() }
+    else alert(r.error || 'Lỗi cập nhật')
+  }
+
+  const handleDeescalate = async (taskId: string) => {
+    const r = await apiFetch('/api/work/briefing/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, escalated: false }),
     })
     if (r.ok) load()
     else alert(r.error || 'Lỗi cập nhật')
@@ -837,25 +881,28 @@ export default function BriefingPage() {
     else alert(r.error || 'Lỗi cập nhật')
   }
 
-  const handleDiscussed = async (taskId: string, checked: boolean) => {
+  const handleDiscussed = async (taskId: string, checked: boolean, note?: string) => {
+    const patch: Record<string, unknown> = { discussedAt: checked ? new Date().toISOString() : '' }
+    if (note !== undefined) patch.discussNote = note
     setGroups(prev => prev.map(g => ({
       ...g,
-      tasks: g.tasks.map(t => t.id === taskId ? { ...t, discussedAt: checked ? new Date().toISOString() : '' } : t),
+      tasks: g.tasks.map(t => t.id === taskId ? { ...t, discussedAt: checked ? new Date().toISOString() : '', discussNote: note !== undefined ? note : t.discussNote } : t),
     })))
+    setDiscussNoteId(null)
     const r = await apiFetch('/api/work/briefing/status', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId, briefingPatch: { discussedAt: checked ? new Date().toISOString() : '' } }),
+      body: JSON.stringify({ taskId, briefingPatch: patch }),
     })
     if (r.ok) {
       setToast({ msg: checked ? 'Đã đánh dấu bàn xong' : 'Đã bỏ đánh dấu', ok: true })
-      setTimeout(() => setToast(null), 2000)
     } else {
       load()
       setToast({ msg: r.error || 'Lỗi cập nhật', ok: false })
-      setTimeout(() => setToast(null), 3000)
     }
   }
+
+  const hasOutcome = (t: BriefingTask) => !!(t.decision || t.discussNote || t.notes)
 
   // openActionMenu removed — actions now inline in expandable detail row
   void actionMenu; void menuPos
@@ -930,6 +977,17 @@ export default function BriefingPage() {
           >
             {meetingMode ? '✕ Tắt họp' : '🎯 Chế độ họp'}
           </button>
+          {meetingMode && (
+            <button
+              onClick={() => { setPresentMode(m => !m); setPresentIdx(0) }}
+              className="text-sm px-4 py-2 rounded-lg font-semibold transition-all"
+              style={presentMode
+                ? { background: '#1d4ed8', color: '#fff', border: '1px solid #1d4ed8' }
+                : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+            >
+              {presentMode ? '✕ Tắt trình chiếu' : '📺 Trình chiếu'}
+            </button>
+          )}
           <button onClick={load} className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>↻</button>
           <div className="relative">
             <button
@@ -981,8 +1039,109 @@ export default function BriefingPage() {
         </button>
       </div>
 
+      {/* ════ Presentation Mode (fullscreen card-by-card) ════ */}
+      {presentMode && activeTab === 'dashboard' && (
+        <div className="space-y-5">
+          {/* Progress bar */}
+          <div className="rounded-xl px-6 py-4" style={{ background: '#0f172a', color: '#fff' }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-lg font-bold">Giao ban tuần — Trình chiếu</span>
+              <span className="text-sm font-semibold">{presentDiscussedCount}/{presentTasks.length} đã bàn</span>
+            </div>
+            <div className="w-full h-3 rounded-full overflow-hidden" style={{ background: '#334155' }}>
+              <div className="h-full rounded-full transition-all" style={{ width: `${presentTasks.length > 0 ? presentDiscussedCount / presentTasks.length * 100 : 0}%`, background: '#22c55e' }} />
+            </div>
+            <div className="text-xs mt-1 text-center" style={{ color: '#94a3b8' }}>Việc {presentTasks.length > 0 ? presentIdx + 1 : 0}/{presentTasks.length} cần bàn</div>
+          </div>
+
+          {/* Collapsed counts */}
+          <div className="flex gap-3 flex-wrap text-xs">
+            {review?.doneSincePrev && review.doneSincePrev.length > 0 && (
+              <button onClick={() => setDoneSincePrevOpen(v => !v)} className="px-3 py-1.5 rounded-full font-semibold" style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #05966922' }}>
+                {doneSincePrevOpen ? '▾' : '▸'} Xong kỳ trước ({review.doneSincePrev.length})
+              </button>
+            )}
+            {review && (review.diff.new.length + review.diff.closed.length + review.diff.slipped.length > 0) && (
+              <button onClick={() => setReviewDiffOpen(v => !v)} className="px-3 py-1.5 rounded-full font-semibold" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #1d4ed822' }}>
+                {reviewDiffOpen ? '▾' : '▸'} Diff ({review.diff.new.length + review.diff.closed.length + review.diff.slipped.length})
+              </button>
+            )}
+          </div>
+
+          {/* Current task card — large for projector */}
+          {presentCurrent ? (
+            <div className="rounded-2xl shadow-lg overflow-hidden" style={{ background: 'var(--surface, #fff)', border: '2px solid var(--border)' }}>
+              <div className="px-8 py-6 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="text-xs font-mono font-bold mb-1" style={{ color: '#1d4ed8' }}>{presentCurrent._projectCode}{presentCurrent._projectName ? ` — ${presentCurrent._projectName}` : ''}</div>
+                    <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{presentCurrent.title}</h2>
+                  </div>
+                  <div className="flex gap-2 items-start flex-shrink-0">
+                    {presentCurrent.blocked && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fff7ed', color: '#c2410c' }}>Tắc</span>}
+                    {presentCurrent.escalated && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#faf5ff', color: '#7c3aed' }}>BLĐ</span>}
+                    {presentCurrent.isOverdue && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fef2f2', color: '#dc2626' }}>Quá hạn {presentCurrent.daysOverdue}d</span>}
+                    <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: (STATUS_LABELS[presentCurrent.status] || STATUS_LABELS.OPEN).bg, color: (STATUS_LABELS[presentCurrent.status] || STATUS_LABELS.OPEN).color }}>{(STATUS_LABELS[presentCurrent.status] || STATUS_LABELS.OPEN).label}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-6 text-base" style={{ color: 'var(--text-secondary)' }}>
+                  <div><span className="font-semibold text-sm block mb-0.5" style={{ color: 'var(--text-muted)' }}>Người thực hiện</span>{presentCurrent.assigneeNames.join(', ') || '—'}</div>
+                  <div><span className="font-semibold text-sm block mb-0.5" style={{ color: 'var(--text-muted)' }}>Hạn</span>{fmtDate(presentCurrent.deadline)}</div>
+                  <div><span className="font-semibold text-sm block mb-0.5" style={{ color: 'var(--text-muted)' }}>Ưu tiên</span>{presentCurrent.priority === 'URGENT' ? 'Gấp' : presentCurrent.priority === 'HIGH' ? 'Cao' : 'Bình thường'}</div>
+                </div>
+                {(presentCurrent.escalateType || presentCurrent.escalateQuestion) && (
+                  <div className="rounded-lg px-4 py-3" style={{ background: '#faf5ff', border: '1px solid #7c3aed33' }}>
+                    <span className="text-sm font-bold" style={{ color: '#7c3aed' }}>{presentCurrent.escalateType}: </span>
+                    <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{presentCurrent.escalateQuestion}</span>
+                  </div>
+                )}
+                {presentCurrent.proposal && <div className="text-sm"><span className="font-semibold" style={{ color: 'var(--text-muted)' }}>Đề xuất: </span>{presentCurrent.proposal}</div>}
+                {presentCurrent.decision && <div className="text-sm"><span className="font-semibold" style={{ color: '#059669' }}>Quyết định: </span>{presentCurrent.decision}</div>}
+                {discussedThisWeek(presentCurrent) && presentCurrent.discussNote && <div className="text-sm"><span className="font-semibold" style={{ color: '#059669' }}>Kết luận: </span>{presentCurrent.discussNote}</div>}
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-3 border-t flex-wrap" style={{ borderColor: 'var(--border)' }}>
+                  <button onClick={() => openAction(presentCurrent.id, 'reassign')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>👤 Đổi người</button>
+                  <button onClick={() => openAction(presentCurrent.id, 'deadline')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>📅 Đổi hạn</button>
+                  <button onClick={() => handleToggleBlocked(presentCurrent.id, presentCurrent.blocked)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>{presentCurrent.blocked ? '🟢 Gỡ tắc' : '🔴 Tắc'}</button>
+                  {!presentCurrent.escalated && <button onClick={() => openEscalateModal(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid #7c3aed33', color: '#7c3aed' }}>▲ Đẩy BGĐ</button>}
+                  <button onClick={() => setCellEditing(`${presentCurrent.id}:decision`)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Ghi quyết định</button>
+                  {!discussedThisWeek(presentCurrent) ? (
+                    <button onClick={() => { setDiscussNoteId(presentCurrent.id); setDiscussNoteText(presentCurrent.discussNote || '') }} className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>✓ Đã bàn</button>
+                  ) : (
+                    <span className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: '#ecfdf5', color: '#059669' }}>✓ Đã bàn</span>
+                  )}
+                </div>
+                {cellEditing === `${presentCurrent.id}:decision` && (
+                  <textarea autoFocus defaultValue={presentCurrent.decision} placeholder="Ghi quyết định BGĐ..." className="w-full text-sm px-3 py-2 rounded-lg border resize-none" style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 50 }} onBlur={(e) => handleBriefingPatch(presentCurrent.id, 'decision', e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }} />
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl p-12 text-center shadow-lg" style={{ background: 'var(--surface)', border: '2px solid #22c55e' }}>
+              <div className="text-4xl mb-3">✅</div>
+              <div className="text-xl font-bold" style={{ color: '#059669' }}>Đã bàn hết, chốt kỳ?</div>
+              <button onClick={handleSnapshot} disabled={snapshotSaving} className="mt-4 text-sm px-6 py-2.5 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>{snapshotSaving ? 'Đang chốt...' : '📌 Chốt kỳ'}</button>
+            </div>
+          )}
+
+          {/* Navigation — large buttons for projector */}
+          <div className="flex items-center justify-center gap-6 py-3">
+            <button onClick={() => setPresentIdx(i => Math.max(0, i - 1))} disabled={presentIdx <= 0} className="text-lg px-8 py-3 rounded-xl font-bold disabled:opacity-30" style={{ background: 'var(--surface)', border: '2px solid var(--border)', color: 'var(--text-primary)' }}>
+              ← Trước
+            </button>
+            <span className="text-base font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              {presentTasks.length > 0 ? `${presentIdx + 1} / ${presentTasks.length}` : '—'}
+            </span>
+            <button onClick={() => setPresentIdx(i => Math.min(presentTasks.length - 1, i + 1))} disabled={presentIdx >= presentTasks.length - 1} className="text-lg px-8 py-3 rounded-xl font-bold disabled:opacity-30" style={{ background: '#0f172a', color: '#fff', border: '2px solid #0f172a' }}>
+              Tiếp theo →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ════ Dashboard Tab ════ */}
-      {activeTab === 'dashboard' && (
+      {activeTab === 'dashboard' && !presentMode && (
         <>
           {/* KPI Row 1: Action (large) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1245,11 +1404,6 @@ export default function BriefingPage() {
                   </thead>
                   <tbody>
                     {execTasks.map((t) => {
-                      const isAuto = t.blocked || (t.isOverdue && t.daysOverdue >= 14)
-                      const isManual = t.escalated && !isAuto
-                      const reason = isAuto
-                        ? (t.blocked ? 'Tự: tắc' : `Tự: quá hạn ${t.daysOverdue}d`)
-                        : (t.escalated ? 'PM đẩy' : `Quá hạn ${t.daysOverdue}d`)
                       return (
                         <tr key={t.id} className="border-t" style={{ borderColor: '#b91c1c22', background: 'white' }}>
                           <td className="px-4 py-2.5 text-xs font-mono font-semibold" style={{ color: '#475569' }}>{t.projectCode || '—'}</td>
@@ -1258,9 +1412,10 @@ export default function BriefingPage() {
                           </td>
                           <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
                           <td className="px-4 py-2.5">
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: isAuto ? '#f1f5f9' : t.escalated ? '#faf5ff' : '#fef2f2', color: isAuto ? '#64748b' : t.escalated ? '#7c3aed' : '#dc2626' }}>
-                              {reason}
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>
+                              {t.escalateType || 'PM đẩy'}
                             </span>
+                            {t.escalateQuestion && <div className="text-[10px] mt-0.5" style={{ color: '#64748b' }}>{t.escalateQuestion}</div>}
                           </td>
                           <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
                             {cellEditing === `${t.id}:proposal` ? (
@@ -1298,18 +1453,14 @@ export default function BriefingPage() {
                             )}
                           </td>
                           <td className="px-4 py-2.5 text-center">
-                            {isAuto ? (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#f1f5f9', color: '#94a3b8' }}>tự động</span>
-                            ) : isManual ? (
                               <button
-                                onClick={() => handleEscalate(t.id, false)}
+                                onClick={() => handleDeescalate(t.id)}
                                 className="text-[10px] font-semibold px-2 py-1 rounded-full transition-all"
                                 style={{ background: '#faf5ff', color: '#7c3aed', border: '1px solid #7c3aed33' }}
                                 title="Gỡ khỏi BGĐ"
                               >
                                 Gỡ
                               </button>
-                            ) : null}
                           </td>
                           <td className="px-4 py-2.5 text-center">
                             <button
@@ -1417,13 +1568,19 @@ export default function BriefingPage() {
                       </td>
                       {meetingMode && (
                         <td className="px-2 py-2.5 text-center" onClick={e => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={discussedThisWeek(t)}
-                            onChange={(e) => handleDiscussed(t.id, e.target.checked)}
-                            className="w-4 h-4 rounded cursor-pointer accent-green-600"
-                            title={discussedThisWeek(t) ? 'Đã bàn — bỏ dấu?' : 'Đánh dấu đã bàn'}
-                          />
+                          <div className="flex items-center gap-1 justify-center">
+                            <input
+                              type="checkbox"
+                              checked={discussedThisWeek(t)}
+                              onChange={(e) => {
+                                if (e.target.checked) { setDiscussNoteId(t.id); setDiscussNoteText(t.discussNote || '') }
+                                else handleDiscussed(t.id, false)
+                              }}
+                              className="w-4 h-4 rounded cursor-pointer accent-green-600"
+                              title={discussedThisWeek(t) ? 'Đã bàn — bỏ dấu?' : 'Đánh dấu đã bàn'}
+                            />
+                            {discussedThisWeek(t) && t.discussNote && <span className="text-[10px] max-w-[80px] truncate" style={{ color: '#059669' }} title={t.discussNote}>KL</span>}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -1499,7 +1656,7 @@ export default function BriefingPage() {
                                 ➕ Tạo việc
                               </button>
                               {!t.needsExecDecision && !t.escalated && (
-                                <button onClick={(e) => { e.stopPropagation(); handleEscalate(t.id, true) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors" style={{ border: '1px solid #7c3aed33', color: '#7c3aed' }}>
+                                <button onClick={(e) => { e.stopPropagation(); openEscalateModal(t.id) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors" style={{ border: '1px solid #7c3aed33', color: '#7c3aed' }}>
                                   ▲ Đẩy BGĐ
                                 </button>
                               )}
@@ -1562,6 +1719,57 @@ export default function BriefingPage() {
             })
           )}
           {/* Action dropdown removed — actions now inline in expandable detail row */}
+          {/* ═══ Escalation Modal ═══ */}
+          {escModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setEscModal(null)}>
+              <div className="rounded-xl shadow-xl w-full max-w-md mx-4 p-5 space-y-4" style={{ background: 'var(--surface, #fff)' }} onClick={e => e.stopPropagation()}>
+                <h3 className="font-bold text-sm" style={{ color: '#7c3aed' }}>▲ Đẩy BLĐ quyết</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Loại lý do *</label>
+                    <select value={escType} onChange={e => setEscType(e.target.value)} className="w-full text-sm px-3 py-2 rounded-lg border" style={{ borderColor: !escType ? '#f59e0b' : 'var(--border)', background: '#f8fafc' }}>
+                      <option value="">— Chọn —</option>
+                      <option value="Vượt thẩm quyền/ngân sách">Vượt thẩm quyền/ngân sách</option>
+                      <option value="Phê duyệt giá-NCC-thay đổi">Phê duyệt giá-NCC-thay đổi</option>
+                      <option value="Rủi ro/tranh chấp">Rủi ro/tranh chấp</option>
+                      <option value="Tắc cần BLĐ tháo gỡ">Tắc cần BLĐ tháo gỡ</option>
+                      <option value="Khác">Khác</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>BLĐ cần quyết gì? *</label>
+                    <textarea value={escQuestion} onChange={e => setEscQuestion(e.target.value)} placeholder="Câu hỏi / đề xuất cho BLĐ..." className="w-full text-sm px-3 py-2 rounded-lg border resize-none" style={{ borderColor: !escQuestion.trim() ? '#f59e0b' : 'var(--border)', background: '#f8fafc', minHeight: 60 }} />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setEscModal(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                  <button onClick={handleEscalateSubmit} disabled={escSaving || !escType || !escQuestion.trim()} className="text-sm px-4 py-2 rounded-lg font-semibold disabled:opacity-50" style={{ background: '#7c3aed', color: '#fff' }}>
+                    {escSaving ? 'Đang đẩy...' : '▲ Đẩy BLĐ'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ Discuss Note Modal ═══ */}
+          {discussNoteId && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => { handleDiscussed(discussNoteId, true, discussNoteText); }}>
+              <div className="rounded-xl shadow-xl w-full max-w-sm mx-4 p-5 space-y-3" style={{ background: 'var(--surface, #fff)' }} onClick={e => e.stopPropagation()}>
+                <h3 className="font-bold text-sm" style={{ color: '#059669' }}>Kết luận / Hành động</h3>
+                <textarea value={discussNoteText} onChange={e => setDiscussNoteText(e.target.value)} placeholder="Kết luận cuộc bàn (không bắt buộc)..." className="w-full text-sm px-3 py-2 rounded-lg border resize-none" style={{ borderColor: 'var(--border)', background: '#f8fafc', minHeight: 50 }} autoFocus />
+                {!discussNoteText.trim() && (
+                  <p className="text-[11px]" style={{ color: '#d97706' }}>Bàn xong chưa có kết luận?</p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setDiscussNoteId(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                  <button onClick={() => handleDiscussed(discussNoteId, true, discussNoteText)} className="text-sm px-4 py-2 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>
+                    Đã bàn
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ═══ Action Modal ═══ */}
           {actionMode && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setActionMode(null)}>

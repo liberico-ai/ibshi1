@@ -61,11 +61,7 @@ export async function GET(req: NextRequest) {
       const execReviewedAt = briefing.execReviewedAt ? new Date(briefing.execReviewedAt as string) : null
       const reviewedRecently = !!(execReviewedAt && (now.getTime() - execReviewedAt.getTime()) < 7 * 86400000)
 
-      const needsExecDecision = t.status !== 'DONE' && t.status !== 'CANCELLED' && (
-        t.escalated === true ||
-        t.blocked === true ||
-        (isOverdue && daysOverdue >= 14)
-      ) && !reviewedRecently
+      const needsExecDecision = t.status !== 'DONE' && t.status !== 'CANCELLED' && t.escalated === true && !reviewedRecently
 
       if (isOverdue) kpiOverdue++
       if (isDueSoon) kpiDueSoon++
@@ -84,6 +80,7 @@ export async function GET(req: NextRequest) {
       }))
       const actionItems = Array.isArray(briefing.actionItems) ? briefing.actionItems as { taskId: string; title: string }[] : []
       const discussedAt = (typeof briefing.discussedAt === 'string') ? briefing.discussedAt : ''
+      const esc = (briefing.escalate && typeof briefing.escalate === 'object') ? briefing.escalate as Record<string, string> : {}
       return {
         id: t.id,
         taskType: t.taskType,
@@ -113,6 +110,9 @@ export async function GET(req: NextRequest) {
         decisionAt: briefing.decisionAt || '',
         execReviewedAt: briefing.execReviewedAt || '',
         notes: briefing.notes || '',
+        escalateType: esc.type || '',
+        escalateQuestion: esc.question || '',
+        discussNote: (typeof briefing.discussNote === 'string') ? briefing.discussNote : '',
       }
     }
 

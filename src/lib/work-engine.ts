@@ -455,7 +455,7 @@ export interface SetStatusAdminInput {
   escalated?: boolean
   execReviewed?: boolean
   reason?: string
-  briefingPatch?: Partial<{ criteria: string; proposal: string; decision: string; notes: string }>
+  briefingPatch?: Partial<{ criteria: string; proposal: string; decision: string; notes: string; discussedAt: string; discussNote: string; escalate: { type: string; question: string; byName: string; at: string } }>
   deadline?: string | null
 }
 
@@ -470,7 +470,8 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
   const briefingPatch: Record<string, unknown> = {}
   if (input.briefingPatch) {
     for (const [k, v] of Object.entries(input.briefingPatch)) {
-      if (v && v.trim()) briefingPatch[k] = v.trim()
+      if (v && typeof v === 'string') { if (v.trim()) briefingPatch[k] = v.trim() }
+      else if (v && typeof v === 'object') briefingPatch[k] = v
     }
     if (input.briefingPatch.decision && input.briefingPatch.decision.trim()) {
       const decider = await prisma.user.findUnique({ where: { id: byUserId }, select: { fullName: true } })

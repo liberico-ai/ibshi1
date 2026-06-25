@@ -16,10 +16,15 @@ export async function PATCH(req: NextRequest) {
     if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được cập nhật trạng thái')
 
     const body = await req.json()
-    const { taskId, status, blocked, escalated, execReviewed, reason, briefingPatch, deadline } = body as { taskId?: string; status?: string; escalated?: boolean; execReviewed?: boolean } & Partial<SetStatusAdminInput>
+    const { taskId, status, blocked, escalated, execReviewed, reason, briefingPatch, deadline, escalateType, escalateQuestion } = body as { taskId?: string; status?: string; escalated?: boolean; execReviewed?: boolean; escalateType?: string; escalateQuestion?: string } & Partial<SetStatusAdminInput>
 
     if (!taskId) return errorResponse('Cần taskId', 400)
     if (!status && !briefingPatch && escalated === undefined && execReviewed === undefined) return errorResponse('Cần status, briefingPatch, escalated, hoặc execReviewed', 400)
+
+    if (escalated === true) {
+      if (!escalateType?.trim()) return errorResponse('Cần chọn loại lý do đẩy BLĐ', 400)
+      if (!escalateQuestion?.trim()) return errorResponse('Cần nhập nội dung BLĐ cần quyết gì', 400)
+    }
 
     let effectiveStatus = status
     if (!effectiveStatus) {
@@ -28,7 +33,12 @@ export async function PATCH(req: NextRequest) {
       effectiveStatus = task.status
     }
 
-    const result = await setTaskStatusAdmin(taskId, payload.userId, { status: effectiveStatus, blocked, escalated, execReviewed, reason, briefingPatch, deadline })
+    const mergedPatch = { ...(briefingPatch || {}) }
+    if (escalated === true && escalateType) {
+      mergedPatch.escalate = { type: escalateType.trim(), question: (escalateQuestion || '').trim(), byName: payload.fullName || payload.username || 'PM', at: new Date().toISOString() }
+    }
+
+    const result = await setTaskStatusAdmin(taskId, payload.userId, { status: effectiveStatus, blocked, escalated, execReviewed, reason, briefingPatch: Object.keys(mergedPatch).length ? mergedPatch : briefingPatch, deadline })
 
     if (result.wasEscalated) {
       const task = await prisma.task.findUnique({
@@ -40,7 +50,7 @@ export async function PATCH(req: NextRequest) {
         const users = uids.length ? await prisma.user.findMany({ where: { id: { in: uids } }, select: { fullName: true } }) : []
         const assigneeName = users.map(u => u.fullName).join(', ') || '—'
         const daysOverdue = taskDaysOverdue(task)
-        const reasonText = task.blocked ? 'Tắc' : daysOverdue > 0 ? `Quá hạn ${daysOverdue}d` : 'PM đẩy'
+        const reasonText = escalateType ? `${escalateType}: ${(escalateQuestion || '').slice(0, 80)}` : (task.blocked ? 'Tắc' : daysOverdue > 0 ? `Quá hạn ${daysOverdue}d` : 'PM đẩy')
         notifyExecEscalation({
           projectCode: task.project?.projectCode || '—',
           projectName: task.project?.projectName || '',
