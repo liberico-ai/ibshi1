@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
-import { isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
+import { isTaskOverdue, taskDaysOverdue, daysUntilDeadline } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,6 +94,7 @@ export async function GET(req: NextRequest) {
         deadline: t.deadline,
         completedAt: t.completedAt,
         daysOverdue,
+        daysUntil: daysUntilDeadline(t),
         isOverdue,
         isDueSoon,
         isDoneThisWeek,

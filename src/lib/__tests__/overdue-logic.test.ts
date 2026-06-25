@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   isOverdueForDoer, isLateForReview, isTaskOverdue,
   taskDaysOverdue, isCompletedLate, overdueForUser, reviewDueDate,
+  daysUntilDeadline,
 } from '@/lib/utils'
 
 function day(offset: number): Date {
@@ -195,5 +196,23 @@ describe('overdueForUser', () => {
       { status: 'AWAITING_REVIEW', deadline: day(-10), submittedAt: day(-5), createdBy: 'u2', assignees: [{ userId: 'u1' }] },
       'u1',
     )).toBeNull()
+  })
+})
+
+describe('daysUntilDeadline', () => {
+  it('returns positive for future deadline', () => {
+    expect(daysUntilDeadline({ deadline: day(5) })).toBe(5)
+  })
+
+  it('returns 0 for deadline today', () => {
+    expect(daysUntilDeadline({ deadline: day(0) })).toBe(0)
+  })
+
+  it('returns negative for past deadline', () => {
+    expect(daysUntilDeadline({ deadline: day(-3) })).toBe(-3)
+  })
+
+  it('returns null when no deadline', () => {
+    expect(daysUntilDeadline({ deadline: null })).toBeNull()
   })
 })

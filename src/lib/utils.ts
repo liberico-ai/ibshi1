@@ -153,6 +153,11 @@ export function taskDaysOverdue(t: OverdueTask): number {
   return 0
 }
 
+export function daysUntilDeadline(t: { deadline: Date | string | null }): number | null {
+  if (!t.deadline) return null
+  return Math.floor((startOfDay(t.deadline) - startOfDay(Date.now())) / DAY_MS)
+}
+
 export function isCompletedLate(t: OverdueTask): boolean {
   return t.status === 'DONE' && !!t.deadline && !!t.completedAt && startOfDay(t.completedAt) > startOfDay(t.deadline)
 }

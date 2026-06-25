@@ -20,6 +20,7 @@ interface BriefingTask {
   deadline: string | null
   completedAt: string | null
   daysOverdue: number
+  daysUntil: number | null
   isOverdue: boolean
   isDueSoon: boolean
   isDoneThisWeek: boolean
@@ -1081,6 +1082,7 @@ export default function BriefingPage() {
                     {presentCurrent.blocked && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fff7ed', color: '#c2410c' }}>Tắc</span>}
                     {presentCurrent.escalated && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#faf5ff', color: '#7c3aed' }}>BLĐ</span>}
                     {presentCurrent.isOverdue && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fef2f2', color: '#dc2626' }}>Quá hạn {presentCurrent.daysOverdue}d</span>}
+                    {!presentCurrent.isOverdue && presentCurrent.isDueSoon && presentCurrent.daysUntil != null && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fffbeb', color: '#d97706' }}>còn {presentCurrent.daysUntil} ngày</span>}
                     <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: (STATUS_LABELS[presentCurrent.status] || STATUS_LABELS.OPEN).bg, color: (STATUS_LABELS[presentCurrent.status] || STATUS_LABELS.OPEN).color }}>{(STATUS_LABELS[presentCurrent.status] || STATUS_LABELS.OPEN).label}</span>
                   </div>
                 </div>
@@ -1528,8 +1530,8 @@ export default function BriefingPage() {
                         <span style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.deadline)}</span>
                         {t.isOverdue ? (
                           <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: tsev.bg, color: tsev.color }}>{t.daysOverdue}d</span>
-                        ) : t.isDueSoon ? (
-                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>còn {-t.daysOverdue}d</span>
+                        ) : t.isDueSoon && t.daysUntil != null ? (
+                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>còn {t.daysUntil} ngày</span>
                         ) : null}
                       </td>
                       <td className="px-4 py-2.5 text-center">
