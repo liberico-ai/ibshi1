@@ -22,6 +22,7 @@ interface Hist {
 interface LinkTask { id: string; title: string; status: string; taskType?: string }
 interface LinkMeeting { id: string; title: string; status: string; startsAt: string }
 interface Usr { id: string; fullName?: string; username?: string; roleCode: string }
+interface EvidenceFile { id: string; fileName: string; fileUrl: string; fileSize: number | null; mimeType: string | null; createdAt: string; uploadedBy: string; uploadedByName?: string | null }
 interface Task {
   id: string; title: string; description: string | null; status: string; priority: string; deadline: string | null
   createdBy: string; createdByName?: string | null; completedByName?: string | null; returnCount: number; taskType: string
@@ -32,6 +33,7 @@ interface Task {
   parent?: LinkTask | null; forwardedFrom?: LinkTask | null; forwards?: LinkTask[]
   meetings?: LinkMeeting[]
   resultData?: Record<string, unknown> | null
+  evidenceFiles?: EvidenceFile[]
 }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
 const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao việc', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành phần việc', SUBMITTED_TO_CREATOR: '↩ Trả kết quả', COMPLETED: '✓ Hoàn thành tất cả', CLOSED: '🏁 Kết thúc công việc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: '🔄 Giao lại', SUBTASK_CREATED: '+ Tạo việc con', COMMENT: '💬 Trao đổi', EDITED: '✏️ Chỉnh sửa' }
@@ -112,6 +114,9 @@ export default function WorkDetailPage() {
   })
 
   const doComplete = async (mode: 'RETURN_CREATOR' | 'FORWARD', forward?: unknown) => {
+    if (mode === 'RETURN_CREATOR' && (!task.evidenceFiles || task.evidenceFiles.length === 0)) {
+      if (!confirm('Chưa đính kèm bằng chứng thực hiện — vẫn hoàn thành?')) return
+    }
     setBusy(true)
     const res = await apiFetch(`/api/work/tasks/${id}/complete`, { method: 'POST', body: JSON.stringify(buildCompleteBody(mode, forward)) })
     setBusy(false)
@@ -306,6 +311,34 @@ export default function WorkDetailPage() {
             ))}
           </div>
         )}
+
+        {/* 📎 Bằng chứng thực hiện */}
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="text-sm font-semibold mb-2">📎 Bằng chứng thực hiện</div>
+          {isAssignee && !myDone && task.status !== 'DONE' ? (
+            <MultiFileUpload
+              label=""
+              entityType="TaskEvidence"
+              entityId={`${id}_evidence`}
+              existingFiles={(task.evidenceFiles || []).map(ef => ({ id: ef.id, fileName: ef.fileName, fileUrl: ef.fileUrl, fileSize: ef.fileSize || 0, mimeType: ef.mimeType, createdAt: ef.createdAt }))}
+              accept=".pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.heic,.zip,.rar"
+              compact
+            />
+          ) : (task.evidenceFiles && task.evidenceFiles.length > 0) ? (
+            <div className="space-y-1.5">
+              {task.evidenceFiles.map((ef) => (
+                <div key={ef.id} className="flex items-center gap-2 text-sm py-1.5 px-3 rounded-lg" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <a href={ef.fileUrl} target="_blank" rel="noopener noreferrer" className="flex-1 hover:underline" style={{ color: '#1d4ed8' }}>{ef.fileName}</a>
+                  {ef.fileSize != null && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{ef.fileSize < 1024 * 1024 ? `${(ef.fileSize / 1024).toFixed(0)} KB` : `${(ef.fileSize / (1024 * 1024)).toFixed(1)} MB`}</span>}
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{ef.uploadedByName || '—'}</span>
+                  <span className="text-xs" style={{ color: '#94a3b8' }}>{formatShortDateTime(ef.createdAt)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Chưa có bằng chứng nào.</div>
+          )}
+        </div>
 
         {/* Trao đổi & lịch sử (cột chính) */}
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

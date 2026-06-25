@@ -20,7 +20,15 @@ export async function DELETE(
       return errorResponse('File không tồn tại', 404)
     }
 
-    if (attachment.uploadedBy !== user.userId && user.roleCode !== 'R01') {
+    if (attachment.entityType === 'TaskEvidence') {
+      const taskId = attachment.entityId.replace(/_evidence$/, '')
+      const isAssignee = await prisma.taskAssignee.findFirst({
+        where: { taskId, userId: user.userId },
+      })
+      if (!isAssignee && user.roleCode !== 'R01') {
+        return errorResponse('Chỉ người nhận việc được xoá bằng chứng', 403)
+      }
+    } else if (attachment.uploadedBy !== user.userId && user.roleCode !== 'R01') {
       return errorResponse('Bạn không có quyền xóa file này', 403)
     }
 

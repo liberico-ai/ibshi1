@@ -6,7 +6,7 @@ import { saveAttachmentFromBuffer, validateFileName, ENTITY_ID_REGEX } from '@/l
 
 const ALLOWED_ENTITY_TYPES = new Set([
   'TaskDoc', 'TaskQuote', 'Project', 'ProjectDoc', 'ProjectDraft',
-  'PO', 'PR', 'GRN', 'Meeting', 'General', 'Task',
+  'PO', 'PR', 'GRN', 'Meeting', 'General', 'Task', 'TaskEvidence',
 ])
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -30,6 +30,15 @@ export async function POST(req: NextRequest) {
     }
     if (entityType === 'PR' && !canEditForm('PR', user.roleCode)) {
       return errorResponse('Bạn không có quyền upload file PR', 403)
+    }
+    if (entityType === 'TaskEvidence') {
+      const taskId = entityId.replace(/_evidence$/, '')
+      const isAssignee = await prisma.taskAssignee.findFirst({
+        where: { taskId, userId: user.userId },
+      })
+      if (!isAssignee) {
+        return errorResponse('Chỉ người nhận việc được upload bằng chứng', 403)
+      }
     }
     if (!ENTITY_ID_REGEX.test(entityId)) {
       return errorResponse('Tham số không hợp lệ', 400)

@@ -731,12 +731,20 @@ export async function getTaskDetail(id: string) {
     orderBy: { startsAt: 'desc' },
   })
 
+  // (1c) Bằng chứng thực hiện
+  const evidenceFiles = await prisma.fileAttachment.findMany({
+    where: { entityType: 'TaskEvidence', entityId: `${id}_evidence` },
+    select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true, uploadedBy: true },
+    orderBy: { createdAt: 'desc' },
+  })
+
   // (2) Phân giải tên người cho từng dòng lịch sử (ai tạo / giao cho ai / ai đã đọc)
   const userIds = new Set<string>()
   if (task.createdBy) userIds.add(task.createdBy)
   if (task.completedBy) userIds.add(task.completedBy)
   for (const a of task.assignees) { if (a.userId) userIds.add(a.userId); if (a.doneBy) userIds.add(a.doneBy) }
   for (const d of task.docs) for (const ak of d.acks) userIds.add(ak.userId)
+  for (const ef of evidenceFiles) if (ef.uploadedBy) userIds.add(ef.uploadedBy)
   for (const h of task.history) {
     if (h.byUserId) userIds.add(h.byUserId)
     if (h.fromUserId) userIds.add(h.fromUserId)
@@ -782,8 +790,12 @@ export async function getTaskDetail(id: string) {
     createdByName: nameOf(task.createdBy),
     completedByName: nameOf(task.completedBy),
     assignees,
-    progress: { done: doneCount, total: assignees.length }, // tiến độ hoàn thành theo người
-    meetings, // lịch họp tạo từ task này
+    progress: { done: doneCount, total: assignees.length },
+    meetings,
+    evidenceFiles: evidenceFiles.map((ef) => ({
+      ...ef,
+      uploadedByName: nameOf(ef.uploadedBy),
+    })),
   }
 }
 
