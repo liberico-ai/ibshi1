@@ -653,20 +653,38 @@ export async function getDeptUsers(roleCode: string) {
 export async function getInbox(userId: string, roleCode: string, tab: string, page: number, opts?: { q?: string; projectId?: string }) {
   const PAGE = 20
   const deptRoles = rolesInSameDept(roleCode)
-  const active = { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS] }
+  const pending = { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS, TASK_STATUS.RETURNED] }
+  const myAssignee = { some: { OR: [{ userId }, { role: roleCode }] } }
   let where: Record<string, unknown>
-  if (tab === 'created') where = { createdBy: userId }
-  else if (tab === 'dept') where = { status: active, assignees: { some: { role: { in: deptRoles } } } }
-  else if (tab === 'overdue') where = { status: active, deadline: { lt: todayStart() }, assignees: { some: { OR: [{ userId }, { role: roleCode }] } } }
-  // assigned: việc tôi đang nhận + việc tôi giao đang CHỜ TÔI KẾT THÚC hoặc BỊ TRẢ LẠI
-  else where = {
-    OR: [
-      { status: active, assignees: { some: { OR: [{ userId }, { role: roleCode }] } } },
-      { status: TASK_STATUS.AWAITING_REVIEW, createdBy: userId },
-      { status: TASK_STATUS.RETURNED, createdBy: userId },
-    ],
+
+  if (tab === 'assigned') {
+    where = { status: pending, assignees: myAssignee }
+  } else if (tab === 'review') {
+    where = { status: TASK_STATUS.AWAITING_REVIEW, createdBy: userId }
+  } else if (tab === 'created') {
+    where = { createdBy: userId, status: { notIn: ['DONE', 'CANCELLED'] } }
+  } else if (tab === 'dept') {
+    where = { status: { notIn: ['DONE', 'CANCELLED'] }, assignees: { some: { role: { in: deptRoles } } } }
+  } else if (tab === 'overdue') {
+    where = {
+      deadline: { lt: todayStart() },
+      OR: [
+        { status: pending, assignees: myAssignee },
+        { status: TASK_STATUS.AWAITING_REVIEW, createdBy: userId },
+      ],
+    }
+  } else if (tab === 'done') {
+    where = {
+      status: 'DONE',
+      OR: [
+        { assignees: myAssignee },
+        { createdBy: userId },
+      ],
+    }
+  } else {
+    where = { status: pending, assignees: myAssignee }
   }
-  // Lọc thêm: từ khóa tiêu đề + dự án
+
   const extra: Record<string, unknown>[] = []
   if (opts?.q?.trim()) extra.push({ title: { contains: opts.q.trim(), mode: 'insensitive' } })
   if (opts?.projectId) extra.push({ projectId: opts.projectId })
@@ -681,20 +699,25 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
         assignees: true,
         _count: { select: { children: true, docs: true } },
       },
-      orderBy: [{ priority: 'desc' }, { deadline: 'asc' }, { createdAt: 'desc' }],
+      orderBy: tab === 'done'
+        ? [{ completedAt: 'desc' }]
+        : [{ priority: 'desc' }, { deadline: 'asc' }, { createdAt: 'desc' }],
       skip: (page - 1) * PAGE, take: PAGE,
     }),
   ])
-  // Gắn tên người nhận + createdBy (để hiển thị "ai" và nhãn "cần bạn kết thúc")
+
   const uids = new Set<string>()
   for (const t of tasks) { uids.add(t.createdBy); for (const a of t.assignees) if (a.userId) uids.add(a.userId) }
   const users = uids.size ? await prisma.user.findMany({ where: { id: { in: [...uids] } }, select: { id: true, fullName: true, roleCode: true } }) : []
   const nameById = new Map(users.map((u) => [u.id, u.fullName]))
+
   const tasksOut = tasks.map((t) => ({
     ...t,
     assigneeNames: t.assignees.map((a) => a.userId ? (nameById.get(a.userId) || 'NV') : (DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—')),
+    createdByName: nameById.get(t.createdBy) || 'Người dùng',
     needsMyReview: t.status === TASK_STATUS.AWAITING_REVIEW && t.createdBy === userId,
   }))
+
   return { tasks: tasksOut, pagination: { page, limit: PAGE, total, totalPages: Math.ceil(total / PAGE) } }
 }
 

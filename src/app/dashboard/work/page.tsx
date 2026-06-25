@@ -8,15 +8,17 @@ interface Task {
   id: string; title: string; status: string; priority: string; deadline: string | null; taskType: string
   blocked: boolean
   project: { projectCode: string; projectName: string } | null
-  assigneeNames: string[]; needsMyReview: boolean; _count: { children: number; docs: number }
+  assigneeNames: string[]; createdByName: string; needsMyReview: boolean; _count: { children: number; docs: number }
 }
 interface Proj { id: string; projectCode: string; projectName: string }
 
 const TABS = [
   { key: 'assigned', label: 'Được giao cho tôi' },
-  { key: 'dept', label: 'Phòng tôi' },
+  { key: 'review', label: 'Chờ tôi kết thúc' },
   { key: 'created', label: 'Tôi tạo' },
+  { key: 'dept', label: 'Phòng tôi' },
   { key: 'overdue', label: 'Quá hạn' },
+  { key: 'done', label: 'Đã xong' },
 ]
 const ST: Record<string, { l: string; c: string; b: string }> = {
   OPEN: { l: 'Mới', c: '#475569', b: '#f1f5f9' },
@@ -42,9 +44,16 @@ function dueInfo(d: string | null, status: string) {
   return { txt: `Còn ${days} ngày`, over: false }
 }
 
+function isOverdue(d: string | null, status: string): boolean {
+  if (!d || status === 'DONE' || status === 'CANCELLED') return false
+  return startOfDay(d) <= startOfDay(Date.now())
+}
+
+type TabKey = 'assigned' | 'review' | 'created' | 'dept' | 'overdue' | 'done'
+
 export default function WorkInboxPage() {
   const router = useRouter()
-  const [tab, setTab] = useState('assigned')
+  const [tab, setTab] = useState<TabKey>('assigned')
   const [tasks, setTasks] = useState<Task[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
@@ -76,10 +85,11 @@ export default function WorkInboxPage() {
     })
   }, [tab, page, q, projectId])
   useEffect(() => { load() }, [load])
-  // auto-refresh mỗi 30s
   useEffect(() => { const iv = setInterval(load, 30000); return () => clearInterval(iv) }, [load])
-  // đổi tab/lọc → về trang 1
   useEffect(() => { setPage(1) }, [tab, q, projectId])
+
+  const showCreator = tab === 'assigned' || tab === 'overdue'
+  const showAssignees = tab === 'created' || tab === 'dept' || tab === 'review' || tab === 'done'
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -94,13 +104,15 @@ export default function WorkInboxPage() {
       <div className="flex gap-2 flex-wrap">
         {TABS.map((t) => {
           const cnt = tabCounts[t.key]
+          const isOverdueTab = t.key === 'overdue'
+          const isReviewTab = t.key === 'review'
           return (
-            <button key={t.key} onClick={() => setTab(t.key)}
+            <button key={t.key} onClick={() => setTab(t.key as TabKey)}
               className="text-sm px-4 py-2 rounded-full font-semibold flex items-center gap-1.5"
               style={{ background: tab === t.key ? 'var(--navy,#0a2540)' : 'var(--surface)', color: tab === t.key ? '#fff' : 'var(--text-muted)', border: '1px solid var(--border)' }}>
               {t.label}
               {cnt != null && cnt > 0 && (
-                <span style={{ minWidth: 18, height: 18, borderRadius: 9, fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', background: tab === t.key ? 'rgba(255,255,255,0.25)' : (t.key === 'overdue' ? '#fef2f2' : '#f1f5f9'), color: tab === t.key ? '#fff' : (t.key === 'overdue' ? '#dc2626' : '#475569') }}>
+                <span style={{ minWidth: 18, height: 18, borderRadius: 9, fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', background: tab === t.key ? 'rgba(255,255,255,0.25)' : (isOverdueTab ? '#fef2f2' : isReviewTab ? '#fffbeb' : '#f1f5f9'), color: tab === t.key ? '#fff' : (isOverdueTab ? '#dc2626' : isReviewTab ? '#b45309' : '#475569') }}>
                   {cnt > 99 ? '99+' : cnt}
                 </span>
               )}
@@ -137,6 +149,10 @@ export default function WorkInboxPage() {
           {tasks.map((t, idx) => {
             const st = t.blocked ? { l: 'Tắc', c: '#c2410c', b: '#fff7ed' } : (ST[t.status] || ST.OPEN)
             const due = dueInfo(t.deadline, t.status)
+            const taskOverdue = isOverdue(t.deadline, t.status)
+            const isAwaitingReview = t.status === 'AWAITING_REVIEW'
+            const overdueForAssignee = taskOverdue && !isAwaitingReview
+            const overdueForCreator = taskOverdue && isAwaitingReview
             const pc = t.priority === 'URGENT' ? '#e63946' : t.priority === 'HIGH' ? '#d97706' : 'var(--border)'
             const rowNum = (page - 1) * 20 + idx + 1
             return (
@@ -146,13 +162,17 @@ export default function WorkInboxPage() {
                 <div className="flex items-start gap-2 flex-wrap">
                   <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: '#f1f5f9', color: '#64748b' }}>{rowNum}</span>
                   <div className="font-bold flex-1" style={{ color: 'var(--text-primary)', minWidth: 180 }}>{t.title}</div>
-                  {t.needsMyReview && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef9c3', color: '#a16207' }}>⏳ Cần bạn kết thúc</span>}
+                  {tab === 'review' && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef9c3', color: '#a16207' }}>⏳ Cần kết thúc</span>}
+                  {tab === 'overdue' && overdueForCreator && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef9c3', color: '#a16207' }}>Trễ nghiệm thu</span>}
                   <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                   {t.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {t.project.projectCode}</span>}
-                  {t.assigneeNames.length > 0 && <span>Giao: <b>{t.assigneeNames.join(', ')}</b></span>}
-                  {due && <span className="px-2 py-0.5 rounded" style={{ background: due.over ? '#fef2f2' : '#fffbeb', color: due.over ? '#e63946' : '#d97706' }}>⏰ {due.txt}</span>}
+                  {showCreator && <span>Người giao: <b>{t.createdByName}</b></span>}
+                  {showAssignees && t.assigneeNames.length > 0 && <span>Người thực hiện: <b>{t.assigneeNames.join(', ')}</b></span>}
+                  {due && (tab === 'assigned' || tab === 'dept' ? overdueForAssignee : tab === 'review' ? overdueForCreator : true) && (
+                    <span className="px-2 py-0.5 rounded" style={{ background: due.over ? '#fef2f2' : '#fffbeb', color: due.over ? '#e63946' : '#d97706' }}>⏰ {due.txt}</span>
+                  )}
                   {t._count.children > 0 && <span>↳ {t._count.children} việc con</span>}
                   {t._count.docs > 0 && <span>📎 {t._count.docs} tài liệu</span>}
                 </div>
