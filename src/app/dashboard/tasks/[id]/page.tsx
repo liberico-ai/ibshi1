@@ -4818,6 +4818,8 @@ export default function TaskDetailPage() {
                 bomPrData={formData['bomPrItems'] as string | undefined}
                 onChange={(val) => handleFieldChange('bomPrItems', val)}
                 projectCode={task.project?.projectCode}
+                roleCode={currentUser?.roleCode}
+                taskId={task.id}
               />
             )}
 

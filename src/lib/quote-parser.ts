@@ -19,6 +19,7 @@ export interface PrItem {
   stt?: string
   code?: string
   materialCode?: string
+  canonicalCode?: string
   description?: string
   materialName?: string
   name?: string
@@ -29,7 +30,9 @@ export interface PrItem {
   quantity?: number
   qty?: number
   neededQty?: number
+  availableQty?: number
   needToBuyQty?: number
+  requiredDate?: string
 }
 
 // ── Helpers ──
@@ -119,20 +122,35 @@ export function matchQuoteLinesToPr(lines: QuoteLine[], prItems: PrItem[]): Quot
   const prUsed = new Set<number>()
 
   const getPrCode = (p: PrItem) => p.stt || p.code || p.materialCode || ''
+  const getCanonical = (p: PrItem) => p.canonicalCode || ''
   const getPrDesc = (p: PrItem) => p.description || p.materialName || p.name || ''
   const getPrProfile = (p: PrItem) => p.profile || ''
   const getPrGrade = (p: PrItem) => p.grade || ''
   const getPrUnit = (p: PrItem) => (p.unit || p.uom || '').toLowerCase()
 
   return lines.map(line => {
-    // Strategy 1: exact code match
+    // Strategy 0: match by canonicalCode (VLC-* material code assigned from inventory)
+    const canonIdx = prItems.findIndex((p, i) => !prUsed.has(i) && getCanonical(p) && getCanonical(p) === line.code)
+    if (canonIdx >= 0) {
+      prUsed.add(canonIdx)
+      return { ...line, matchedPrIndex: canonIdx, matchedPrCode: getCanonical(prItems[canonIdx]) }
+    }
+
+    // Strategy 1: exact STT/code match
     const codeIdx = prItems.findIndex((p, i) => !prUsed.has(i) && getPrCode(p) && getPrCode(p) === line.code)
     if (codeIdx >= 0) {
       prUsed.add(codeIdx)
       return { ...line, matchedPrIndex: codeIdx, matchedPrCode: getPrCode(prItems[codeIdx]) }
     }
 
-    // Strategy 2: section type + dimensions + grade + unit
+    // Strategy 1.5: quote line code matches a PR item's canonicalCode
+    const revIdx = prItems.findIndex((p, i) => !prUsed.has(i) && getCanonical(p) && line.code && getCanonical(p) === line.code)
+    if (revIdx >= 0) {
+      prUsed.add(revIdx)
+      return { ...line, matchedPrIndex: revIdx, matchedPrCode: getCanonical(prItems[revIdx]) }
+    }
+
+    // Strategy 2: profile+grade matching via section type + dimensions
     const lineText = `${line.description} ${line.profile}`
     const lineSection = detectSectionType(lineText)
     const lineDims = normalizeDims(line.profile || line.description)

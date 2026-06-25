@@ -89,6 +89,8 @@ interface BomPrUploadUIProps {
   bomPrData: string | undefined  // JSON string of PrMaterialItem[]
   onChange: (val: string) => void
   projectCode?: string
+  roleCode?: string
+  taskId?: string
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -501,7 +503,10 @@ function enrichItems(
 // Component
 // ══════════════════════════════════════════════════════════════
 
-export default function BomPrUploadUI({ isEditable, bomPrData, onChange, projectCode }: BomPrUploadUIProps) {
+const REQUIRED_DATE_ROLES = ['R01', 'R02', 'R02a']
+
+export default function BomPrUploadUI({ isEditable, bomPrData, onChange, projectCode, roleCode, taskId }: BomPrUploadUIProps) {
+  const canSetRequiredDate = REQUIRED_DATE_ROLES.includes(roleCode || '')
   // Parse stored data
   let items: PrMaterialItem[] = []
   try {
@@ -635,6 +640,16 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
     const next = items.map((it, i) => (i === globalIdx ? { ...it, ...patch } : it))
     onChange(JSON.stringify(next))
   }, [items, onChange])
+
+  const saveRequiredDateServer = useCallback(async (globalIdx: number, value: string) => {
+    if (!taskId) return
+    try {
+      await apiFetch(`/api/work/tasks/${taskId}/bom-pr`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'set-required-dates', requiredDates: { [String(globalIdx)]: value } }),
+      })
+    } catch { /* best-effort */ }
+  }, [taskId])
 
   // ── Remove data ───────────────────────────────────────────
   const handleClear = useCallback(() => {
@@ -1071,10 +1086,13 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                               </div>
                             ) : '—'}
                           </td>
-                          {/* Ngày cần hàng về (PM điền để theo dõi tiến độ mua) */}
+                          {/* Ngày cần hàng về (PM điền ngay cả khi form khoá) */}
                           <td style={{ padding: cellPad, borderLeft: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
-                            {isEditable
-                              ? <input type="date" value={item.requiredDate || ''} onChange={(e) => patchItem(globalIdx, { requiredDate: e.target.value })} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }} />
+                            {isEditable || canSetRequiredDate
+                              ? <input type="date" value={item.requiredDate || ''} onChange={(e) => {
+                                  if (isEditable) { patchItem(globalIdx, { requiredDate: e.target.value }) }
+                                  else { saveRequiredDateServer(globalIdx, e.target.value); patchItem(globalIdx, { requiredDate: e.target.value }) }
+                                }} style={{ fontSize: '0.68rem', padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4 }} />
                               : <span style={{ fontSize: '0.7rem', color: item.requiredDate ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{item.requiredDate ? formatDate(item.requiredDate) : '—'}</span>}
                           </td>
                           {/* Tiến độ mua — tính theo khả dụng (chung + DA này) */}

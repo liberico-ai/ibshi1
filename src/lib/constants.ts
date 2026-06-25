@@ -114,6 +114,9 @@ export const PR_EDIT_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a'
 // Roles allowed to create/edit supplier quotes
 export const QUOTE_EDIT_ROLES = ['R07', 'R07a', 'R01'] as const
 
+// Roles allowed to set requiredDate on PR items (field-level carve-out)
+export const REQUIRED_DATE_EDIT_ROLES = ['R01', 'R02', 'R02a'] as const
+
 // Roles allowed to create/edit finance entries (payments, cashflow, budgets)
 export const FINANCE_WRITE_ROLES = ['R01', 'R03', 'R03a', 'R08', 'R08a'] as const
 

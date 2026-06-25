@@ -184,19 +184,42 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     }
   }
 
+  const handleReEnrich = async () => {
+    setEnriching(true)
+    setEnrichMsg('')
+    try {
+      const res = await apiFetch(`/api/work/tasks/${taskId}/bom-pr`, { method: 'POST', body: JSON.stringify({ action: 'enrich' }) })
+      if (res.ok) {
+        setEnrichMsg(`Đã cập nhật tồn kho cho ${res.count || '?'} dòng`)
+        window.location.reload()
+      } else {
+        setEnrichMsg(res.error || 'Lỗi')
+      }
+    } catch {
+      setEnrichMsg('Lỗi kết nối')
+    }
+    setEnriching(false)
+  }
+
   // PR reference table
   const prItems = bomPrData ? (() => { try { return JSON.parse(bomPrData) } catch { return null } })() : null
+  const [enriching, setEnriching] = useState(false)
+  const [enrichMsg, setEnrichMsg] = useState('')
+
   const parsedPrItems: PrItem[] = useMemo(() => {
     if (!Array.isArray(prItems)) return []
     return prItems.map((it: Record<string, unknown>) => ({
       stt: String(it.stt || it.code || it.materialCode || ''),
+      canonicalCode: it.canonicalCode ? String(it.canonicalCode) : undefined,
       description: String(it.description || it.materialName || it.name || ''),
       profile: String(it.profile || ''),
       grade: String(it.grade || ''),
       unit: String(it.unit || it.uom || ''),
       quantity: Number(it.quantity || it.qty || 0),
       neededQty: typeof it.neededQty === 'number' ? it.neededQty : undefined,
+      availableQty: typeof it.availableQty === 'number' ? it.availableQty : undefined,
       needToBuyQty: typeof it.needToBuyQty === 'number' ? it.needToBuyQty : undefined,
+      requiredDate: typeof it.requiredDate === 'string' ? it.requiredDate : undefined,
     }))
   }, [bomPrData]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -253,19 +276,36 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     )
   })()
 
+  const missingEnrichment = parsedPrItems.length > 0 && parsedPrItems.every(p => p.needToBuyQty === undefined)
+
   const prRef = (() => {
     if (!Array.isArray(prItems) || prItems.length === 0) return null
     const arr = prItems as Record<string, unknown>[]
     const shown = arr.slice(0, 50)
     const totalNeeded = arr.reduce((s, it) => s + (typeof it.neededQty === 'number' ? (it.neededQty as number) : 0), 0)
     const totalToBuy = arr.reduce((s, it) => s + (typeof it.needToBuyQty === 'number' ? (it.needToBuyQty as number) : 0), 0)
+    const hasRequiredDate = arr.some(it => typeof it.requiredDate === 'string' && it.requiredDate)
     return (
       <div className="rounded-xl p-4" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-        <div className="text-sm font-semibold mb-2" style={{ color: '#0369a1' }}>📦 Vật tư cần mua (từ PR)</div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-semibold" style={{ color: '#0369a1' }}>📦 Vật tư cần mua (từ PR)</div>
+          <div className="flex items-center gap-2">
+            {missingEnrichment && <span className="text-xs" style={{ color: '#b45309' }}>⚠ Chưa tính tồn kho</span>}
+            <button
+              onClick={handleReEnrich}
+              disabled={enriching}
+              className="px-3 py-1 rounded text-xs font-semibold"
+              style={{ background: enriching ? '#94a3b8' : '#0284c7', color: '#fff' }}
+            >
+              {enriching ? '...' : '🔄 Tính lại từ kho'}
+            </button>
+            {enrichMsg && <span className="text-xs" style={{ color: enrichMsg.startsWith('Đã') ? '#16a34a' : '#dc2626' }}>{enrichMsg}</span>}
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr style={{ background: '#e0f2fe' }}>
-              {['#', 'Mã', 'Tên vật tư', 'ĐVT', 'SL cần', 'Tồn khả dụng', 'Còn phải mua'].map(h => (
+              {['#', 'Mã', 'Tên vật tư', 'ĐVT', 'SL cần', 'Tồn khả dụng', 'Còn phải mua', ...(hasRequiredDate ? ['Ngày cần'] : [])].map(h => (
                 <th key={h} className="text-left px-2 py-1.5 font-semibold" style={{ color: '#0c4a6e' }}>{h}</th>
               ))}
             </tr></thead>
@@ -276,6 +316,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                 const toBuy = typeof item.needToBuyQty === 'number' ? (item.needToBuyQty as number) : null
                 const sufficient = toBuy !== null && toBuy === 0
                 const unit = String(item.stockUnit || item.unit || item.uom || '')
+                const rd = typeof item.requiredDate === 'string' ? item.requiredDate : ''
                 return (
                   <tr key={i} style={{ borderTop: '1px solid #bae6fd', ...(sufficient ? { background: '#f1f5f9', opacity: 0.7 } : {}) }}>
                     <td className="px-2 py-1" style={{ color: '#64748b' }}>{i + 1}</td>
@@ -293,6 +334,11 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                         ? <span style={{ background: '#dcfce7', padding: '1px 6px', borderRadius: 4, color: '#166534', fontWeight: 700, fontSize: '0.65rem' }}>đủ kho</span>
                         : toBuy !== null ? formatNumber(toBuy) : '—'}
                     </td>
+                    {hasRequiredDate && (
+                      <td className="px-2 py-1 whitespace-nowrap" style={{ color: rd ? '#0369a1' : '#9ca3af', fontSize: '0.7rem' }}>
+                        {rd ? rd.split('-').reverse().join('/') : '—'}
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -306,6 +352,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                   <td className="px-2 py-1.5" style={{ color: totalToBuy > 0 ? '#dc2626' : '#16a34a' }}>
                     {totalToBuy > 0 ? formatNumber(totalToBuy) : 'Đủ kho'}
                   </td>
+                  {hasRequiredDate && <td />}
                 </tr>
               </tfoot>
             )}
@@ -712,7 +759,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
     }
     allRows.push({
       prIdx: pi,
-      code: p.stt || p.code || p.materialCode || '',
+      code: p.canonicalCode || p.stt || p.code || p.materialCode || '',
       desc: p.description || p.materialName || p.name || '',
       profile: p.profile || '',
       unit: p.unit || p.uom || '',
