@@ -103,17 +103,67 @@ export function todayStart(): Date {
   const d = new Date(); d.setHours(0, 0, 0, 0); return d
 }
 
-export function isTaskOverdue(t: { status: string; deadline: Date | string | null; completedAt?: Date | string | null }): boolean {
-  if (!t.deadline) return false
-  const dl = startOfDay(t.deadline)
-  if (t.status === 'DONE') return !!(t.completedAt && startOfDay(t.completedAt) > dl)
-  if (t.status === 'CANCELLED') return false
-  return startOfDay(Date.now()) > dl
+interface OverdueTask {
+  status: string
+  deadline: Date | string | null
+  submittedAt?: Date | string | null
+  completedAt?: Date | string | null
 }
 
-export function taskDaysOverdue(t: { status: string; deadline: Date | string | null; completedAt?: Date | string | null }): number {
-  if (!isTaskOverdue(t)) return 0
-  const dl = startOfDay(t.deadline!)
-  const ref = t.status === 'DONE' && t.completedAt ? startOfDay(t.completedAt) : startOfDay(Date.now())
-  return Math.ceil((ref - dl) / 86400000)
+const DOER_STATUSES = new Set(['OPEN', 'IN_PROGRESS', 'RETURNED'])
+const DAY_MS = 86400000
+const REVIEW_GRACE_DAYS = 2
+
+export function isOverdueForDoer(t: OverdueTask): boolean {
+  if (!t.deadline || !DOER_STATUSES.has(t.status)) return false
+  return startOfDay(Date.now()) > startOfDay(t.deadline)
+}
+
+export function reviewDueDate(t: OverdueTask): Date | null {
+  if (t.status !== 'AWAITING_REVIEW' || !t.deadline) return null
+  const dl = startOfDay(t.deadline)
+  const submitted = t.submittedAt ? startOfDay(t.submittedAt) + REVIEW_GRACE_DAYS * DAY_MS : dl
+  return new Date(Math.max(dl, submitted))
+}
+
+export function isLateForReview(t: OverdueTask): boolean {
+  if (t.status !== 'AWAITING_REVIEW') return false
+  const due = reviewDueDate(t)
+  if (!due) return false
+  return startOfDay(Date.now()) > due.getTime()
+}
+
+export function isTaskOverdue(t: OverdueTask): boolean {
+  return isOverdueForDoer(t) || isLateForReview(t)
+}
+
+export function taskDaysOverdue(t: OverdueTask): number {
+  if (t.status === 'DONE' || t.status === 'CANCELLED') {
+    if (!t.deadline || !t.completedAt) return 0
+    const diff = startOfDay(t.completedAt) - startOfDay(t.deadline)
+    return diff > 0 ? Math.ceil(diff / DAY_MS) : 0
+  }
+  if (isOverdueForDoer(t)) {
+    return Math.ceil((startOfDay(Date.now()) - startOfDay(t.deadline!)) / DAY_MS)
+  }
+  if (isLateForReview(t)) {
+    const due = reviewDueDate(t)!
+    return Math.ceil((startOfDay(Date.now()) - due.getTime()) / DAY_MS)
+  }
+  return 0
+}
+
+export function isCompletedLate(t: OverdueTask): boolean {
+  return t.status === 'DONE' && !!t.deadline && !!t.completedAt && startOfDay(t.completedAt) > startOfDay(t.deadline)
+}
+
+export function overdueForUser(t: OverdueTask & { createdBy?: string; assignees?: { userId?: string | null; role?: string | null }[] }, userId: string, roleCode?: string): 'doer' | 'review' | null {
+  if (isOverdueForDoer(t)) {
+    const isAssignee = t.assignees?.some(a => a.userId === userId || a.role === roleCode)
+    if (isAssignee) return 'doer'
+  }
+  if (isLateForReview(t)) {
+    if (t.createdBy === userId) return 'review'
+  }
+  return null
 }

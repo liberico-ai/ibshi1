@@ -4,7 +4,7 @@ import { ROLE_TO_DEPT, DEPT_KEYWORDS, DEPT_PRIMARY_ROLE, DEPT_NAME } from './org
 import { runHooks } from './work-hooks'
 import { emitTaskUpdated } from './webhook'
 import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
-import { todayStart } from './utils'
+import { whereDoerOverdue, whereReviewLate } from './task-where'
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -407,7 +407,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
       // Task ad-hoc: trả về NGƯỜI GIAO để xem & kết thúc (chờ duyệt). Người giao sẽ chọn:
       // (1) Hoàn thành & kết thúc  hoặc  (2) Tạo việc tiếp theo.
       await prisma.$transaction([
-        prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.AWAITING_REVIEW, resultData: input.resultData ? JSON.parse(JSON.stringify(input.resultData)) : undefined } }),
+        prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.AWAITING_REVIEW, submittedAt: new Date(), resultData: input.resultData ? JSON.parse(JSON.stringify(input.resultData)) : undefined } }),
         prisma.taskHistory.create({ data: { taskId, action: 'SUBMITTED_TO_CREATOR', byUserId: userId, toUserId: task.createdBy } }),
         prisma.notification.create({ data: { userId: task.createdBy, title: `Cần xem & kết thúc: ${task.title}`, message: 'Người nhận đã hoàn thành và trả lại. Hãy kết thúc hoặc tạo việc tiếp theo.', type: 'task_review', linkUrl: `/dashboard/work/${taskId}` } }),
       ])
@@ -667,10 +667,9 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
     where = { status: { notIn: ['DONE', 'CANCELLED'] }, assignees: { some: { role: { in: deptRoles } } } }
   } else if (tab === 'overdue') {
     where = {
-      deadline: { lt: todayStart() },
       OR: [
-        { status: pending, assignees: myAssignee },
-        { status: TASK_STATUS.AWAITING_REVIEW, createdBy: userId },
+        { ...whereDoerOverdue(), assignees: myAssignee },
+        { ...whereReviewLate(), createdBy: userId },
       ],
     }
   } else if (tab === 'done') {

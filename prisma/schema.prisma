@@ -1403,6 +1403,7 @@ model Task {
   createdBy            String              @map("created_by")
   assignedAt           DateTime?           @map("assigned_at")
   startedAt            DateTime?           @map("started_at")
+  submittedAt          DateTime?           @map("submitted_at")
   completedAt          DateTime?           @map("completed_at")
   completedBy          String?             @map("completed_by")
   resultData           Json?               @map("result_data")

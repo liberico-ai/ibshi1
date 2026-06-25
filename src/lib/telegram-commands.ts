@@ -8,7 +8,8 @@ import prisma from '@/lib/db'
 import { ROLES } from '@/lib/constants'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { escapeHtml, formatDeadline } from '@/lib/telegram'
-import { formatNumber, todayStart } from '@/lib/utils'
+import { formatNumber, isTaskOverdue } from '@/lib/utils'
+import { whereOverdue } from '@/lib/task-where'
 import { runDailyDigest } from '@/lib/cron-jobs'
 
 // ── Command menu (registered with Telegram) ─────────────────
@@ -237,7 +238,7 @@ export function registerCommands(bot: Bot): void {
   bot.command('overdue', async (ctx: Context) => {
     const now = new Date()
     const tasks = await prisma.task.findMany({
-      where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } },
+      where: whereOverdue(),
       include: {
         project: { select: { projectCode: true, projectName: true } },
         assignees: { select: { role: true } },
@@ -252,7 +253,7 @@ export function registerCommands(bot: Bot): void {
     }
 
     const total = await prisma.task.count({
-      where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } },
+      where: whereOverdue(),
     })
 
     const lines = tasks.map((t) => {
@@ -489,7 +490,7 @@ export function registerCommands(bot: Bot): void {
         take: 30,
       }),
       prisma.task.count({
-        where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } },
+        where: whereOverdue(),
       }),
     ])
 
@@ -499,7 +500,7 @@ export function registerCommands(bot: Bot): void {
     const projectLines = projects.map(p => {
       const done = p.dynamicTasks.filter(t => t.status === 'DONE').length
       const pct = p.dynamicTasks.length > 0 ? Math.round((done / p.dynamicTasks.length) * 100) : 0
-      const od = p.dynamicTasks.filter(t => t.status === 'IN_PROGRESS' && t.deadline && new Date(t.deadline) < new Date()).length
+      const od = p.dynamicTasks.filter(t => isTaskOverdue(t)).length
       const odTag = od > 0 ? ` ⚠️${od}` : ''
       return `  ${progressBar(pct, 8)} ${String(pct).padStart(3)}% <b>${escapeHtml(p.projectCode)}</b>${odTag}`
     })

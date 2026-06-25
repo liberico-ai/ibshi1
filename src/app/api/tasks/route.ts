@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { getTaskInbox } from '@/lib/task-engine'
 import { withCache } from '@/lib/cache'
+import { isTaskOverdue } from '@/lib/utils'
 
 // GET /api/tasks — Task inbox for current user
 export async function GET(req: NextRequest) {
@@ -27,13 +28,11 @@ export async function GET(req: NextRequest) {
       const now = new Date()
       const categorized = tasks.map((t) => {
         let urgency: 'overdue' | 'today' | 'this_week' | 'normal' = 'normal'
-        if (t.deadline) {
-          const dl = new Date(t.deadline)
-          const diffMs = dl.getTime() - now.getTime()
-          const diffHours = diffMs / (1000 * 60 * 60)
-          if (diffHours < 0) urgency = 'overdue'
-          else if (diffHours < 24) urgency = 'today'
-          else if (diffHours < 168) urgency = 'this_week'
+        if (isTaskOverdue(t)) { urgency = 'overdue' }
+        else if (t.deadline) {
+          const diffHours = (new Date(t.deadline).getTime() - now.getTime()) / 3600000
+          if (diffHours >= 0 && diffHours < 24) urgency = 'today'
+          else if (diffHours >= 0 && diffHours < 168) urgency = 'this_week'
         }
         return { ...t, urgency }
       })

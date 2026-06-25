@@ -1,6 +1,7 @@
 import prisma from './db'
 import { ROLE_TO_DEPT, DEPT_NAME } from './org-map'
-import { isTaskOverdue, todayStart } from './utils'
+import { isTaskOverdue } from './utils'
+import { whereOverdue } from './task-where'
 
 // ── Phase 4: KPI hiệu suất + tổng quan dự án (đọc dữ liệu thật) ──
 
@@ -133,7 +134,7 @@ export async function getDynamicDashboardStats(userId?: string, roleCode?: strin
     prisma.task.count({ where: { ...base, status: 'OPEN' } }),
     prisma.task.count({ where: { ...base, status: { in: ACTIVE } } }),
     prisma.task.count({ where: { ...base, status: 'DONE' } }),
-    prisma.task.count({ where: { ...base, status: { in: ACTIVE }, deadline: { lt: todayStart() } } }),
+    prisma.task.count({ where: { ...base, ...whereOverdue() } }),
   ])
   return { totalTasks, pendingTasks, inProgressTasks, completedTasks, overdueTasks }
 }

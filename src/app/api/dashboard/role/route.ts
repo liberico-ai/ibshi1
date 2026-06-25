@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { withCache } from '@/lib/cache'
+import { whereOverdue } from '@/lib/task-where'
 
 // GET /api/dashboard/role — Role-specific dashboard widgets
 export async function GET(req: NextRequest) {
@@ -34,10 +35,9 @@ async function fetchRoleWidgets(user: { userId: string; roleCode: string }) {
     // Role-specific widgets
     if (['R01', 'R02'].includes(role)) {
       // BGĐ / PM — project overview
-      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
       const [projects, overdueCount] = await Promise.all([
         prisma.project.count({ where: { status: { not: 'CLOSED' } } }),
-        prisma.task.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: startOfToday } } }),
+        prisma.task.count({ where: whereOverdue() }),
       ])
       widgets.activeProjects = projects
       widgets.overdueTasks = overdueCount

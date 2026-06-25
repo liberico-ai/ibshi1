@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { todayStart } from '@/lib/utils'
+import { whereOverdue } from '@/lib/task-where'
 
 // GET /api/reports — Aggregated reports data — supports 13+ report types
 export async function GET(req: NextRequest) {
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
         prisma.project.count({ where: { status: 'CLOSED' } }),
         prisma.task.count(),
         prisma.task.count({ where: { status: 'DONE' } }),
-        prisma.task.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } } }),
+        prisma.task.count({ where: whereOverdue() }),
         prisma.workOrder.count({ where: { status: 'IN_PROGRESS' } }),
         prisma.nonConformanceReport.count({ where: { status: { not: 'CLOSED' } } }),
       ])
@@ -263,7 +263,7 @@ export async function GET(req: NextRequest) {
       const [totalTasks, doneTasks, overdueTasks, totalInsp, passedInsp, totalWO, completedWO] = await Promise.all([
         prisma.task.count(),
         prisma.task.count({ where: { status: 'DONE' } }),
-        prisma.task.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW'] }, deadline: { lt: todayStart() } } }),
+        prisma.task.count({ where: whereOverdue() }),
         prisma.inspection.count(),
         prisma.inspection.count({ where: { status: 'PASSED' } }),
         prisma.workOrder.count(),

@@ -6,7 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 
 interface Task {
   id: string; title: string; status: string; priority: string; deadline: string | null; taskType: string
-  blocked: boolean
+  blocked: boolean; submittedAt: string | null
   project: { projectCode: string; projectName: string } | null
   assigneeNames: string[]; createdByName: string; needsMyReview: boolean; _count: { children: number; docs: number }
 }
@@ -28,25 +28,49 @@ const ST: Record<string, { l: string; c: string; b: string }> = {
   DONE: { l: 'Hoàn thành', c: '#059669', b: '#ecfdf5' },
 }
 
+const DAY_MS = 86400000
+const REVIEW_GRACE = 2
+
 function startOfDay(d: Date | string | number): number {
   const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime()
 }
 
 function dueInfo(d: string | null, status: string) {
-  if (!d) return null
-  if (status === 'DONE' || status === 'CANCELLED') return null
+  if (!d || status === 'DONE' || status === 'CANCELLED') return null
   const dlDay = startOfDay(d)
   const todayDay = startOfDay(Date.now())
-  const diffMs = dlDay - todayDay
-  const days = Math.round(diffMs / 86400000)
+  const days = Math.round((dlDay - todayDay) / DAY_MS)
   if (days < 0) return { txt: `Quá hạn ${-days} ngày`, over: true }
   if (days === 0) return { txt: 'Hết hạn hôm nay', over: true }
   return { txt: `Còn ${days} ngày`, over: false }
 }
 
-function isOverdue(d: string | null, status: string): boolean {
-  if (!d || status === 'DONE' || status === 'CANCELLED') return false
-  return startOfDay(d) <= startOfDay(Date.now())
+function isDoerOverdue(t: Task): boolean {
+  if (!t.deadline) return false
+  const doerStatuses = ['OPEN', 'IN_PROGRESS', 'RETURNED']
+  if (!doerStatuses.includes(t.status)) return false
+  return startOfDay(Date.now()) > startOfDay(t.deadline)
+}
+
+function reviewDueDateMs(t: Task): number | null {
+  if (t.status !== 'AWAITING_REVIEW' || !t.deadline) return null
+  const dl = startOfDay(t.deadline)
+  const submitted = t.submittedAt ? startOfDay(t.submittedAt) + REVIEW_GRACE * DAY_MS : dl
+  return Math.max(dl, submitted)
+}
+
+function isReviewLate(t: Task): boolean {
+  if (t.status !== 'AWAITING_REVIEW') return false
+  const due = reviewDueDateMs(t)
+  if (due == null) return false
+  return startOfDay(Date.now()) > due
+}
+
+function reviewDaysLate(t: Task): number {
+  const due = reviewDueDateMs(t)
+  if (due == null) return 0
+  const diff = startOfDay(Date.now()) - due
+  return diff > 0 ? Math.ceil(diff / DAY_MS) : 0
 }
 
 type TabKey = 'assigned' | 'review' | 'created' | 'dept' | 'overdue' | 'done'
@@ -149,10 +173,9 @@ export default function WorkInboxPage() {
           {tasks.map((t, idx) => {
             const st = t.blocked ? { l: 'Tắc', c: '#c2410c', b: '#fff7ed' } : (ST[t.status] || ST.OPEN)
             const due = dueInfo(t.deadline, t.status)
-            const taskOverdue = isOverdue(t.deadline, t.status)
-            const isAwaitingReview = t.status === 'AWAITING_REVIEW'
-            const overdueForAssignee = taskOverdue && !isAwaitingReview
-            const overdueForCreator = taskOverdue && isAwaitingReview
+            const doerOver = isDoerOverdue(t)
+            const revLate = isReviewLate(t)
+            const revDays = reviewDaysLate(t)
             const pc = t.priority === 'URGENT' ? '#e63946' : t.priority === 'HIGH' ? '#d97706' : 'var(--border)'
             const rowNum = (page - 1) * 20 + idx + 1
             return (
@@ -162,15 +185,15 @@ export default function WorkInboxPage() {
                 <div className="flex items-start gap-2 flex-wrap">
                   <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: '#f1f5f9', color: '#64748b' }}>{rowNum}</span>
                   <div className="font-bold flex-1" style={{ color: 'var(--text-primary)', minWidth: 180 }}>{t.title}</div>
-                  {tab === 'review' && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef9c3', color: '#a16207' }}>⏳ Cần kết thúc</span>}
-                  {tab === 'overdue' && overdueForCreator && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef9c3', color: '#a16207' }}>Trễ nghiệm thu</span>}
+                  {tab === 'review' && !revLate && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef9c3', color: '#a16207' }}>Cần kết thúc</span>}
+                  {revLate && (tab === 'review' || tab === 'overdue') && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef2f2', color: '#e63946' }}>Trễ nghiệm thu ({revDays} ngày)</span>}
                   <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                   {t.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {t.project.projectCode}</span>}
                   {showCreator && <span>Người giao: <b>{t.createdByName}</b></span>}
                   {showAssignees && t.assigneeNames.length > 0 && <span>Người thực hiện: <b>{t.assigneeNames.join(', ')}</b></span>}
-                  {due && (tab === 'assigned' || tab === 'dept' ? overdueForAssignee : tab === 'review' ? overdueForCreator : true) && (
+                  {due && (tab === 'assigned' || tab === 'dept' ? doerOver : tab === 'review' ? revLate : true) && (
                     <span className="px-2 py-0.5 rounded" style={{ background: due.over ? '#fef2f2' : '#fffbeb', color: due.over ? '#e63946' : '#d97706' }}>⏰ {due.txt}</span>
                   )}
                   {t._count.children > 0 && <span>↳ {t._count.children} việc con</span>}
