@@ -57,18 +57,24 @@ const CATEGORY_ROW = /^[A-Z]\.\s|^(VTC|VPK|VDK|VHN)\d{0,2}\b/i
 // ── Parse quote Excel ──
 
 export function parseQuoteExcel(data: unknown[][]): QuoteLine[] {
+  const isStd = data.slice(0, 10).some(row =>
+    Array.isArray(row) && row.some(cell => /BG\s*chu[ẩa]n\s*h[oó]a/i.test(S(cell)))
+  )
+
   const headerIdx = findHeaderRow(data)
   if (headerIdx < 0) return []
 
   const H = (data[headerIdx] as unknown[]).map(S)
   const find = (re: RegExp) => H.findIndex(h => re.test(h))
+  const findLast = (re: RegExp) => { for (let i = H.length - 1; i >= 0; i--) if (re.test(H[i])) return i; return -1 }
 
   const cCode = Math.max(0, find(/\bitem\b|\bstt\b|\bm[ãa]\b/i))
   const cDesc = find(/description|chi ti[ếê]t|di[ễê]n gi[ảa]i|t[êe]n\s*v[ậa]t\s*t[ưu]/i)
   const cProfile = find(/profile|quy\s*c[áa]ch/i)
   const cGrade = find(/grade|m[áa]c/i)
   const cUnit = find(/\bunit\b|[đd][ơo]n\s*v[ịi]|[đd]vt/i)
-  const cQty = find(/s[ốo]\s*l[ưu][ợo]ng|quantity|\bq\.?ty\b|\bsl\b/i)
+  const qtyRe = /s[ốo]\s*l[ưu][ợo]ng|quantity|\bq\.?ty\b|\bsl\b/i
+  const cQty = isStd ? findLast(qtyRe) : find(qtyRe)
   const cUnitPrice = find(/[đd][ơo]n\s*gi[áa]|unit\s*price/i)
   const cAmount = find(/th[àa]nh\s*ti[ềe]n|amount|total/i)
 

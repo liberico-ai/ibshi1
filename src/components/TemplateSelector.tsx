@@ -249,20 +249,12 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
 
       {selected === 'SUPPLIER_QUOTE' && (
         <div style={{ marginTop: 12 }}>
-          {!!(prData || resultData.bomPrItems || resultData.bomPr) && (
-            <BomPrUploadUI
-              isEditable={false}
-              bomPrData={prData || (resultData.bomPrItems ? String(resultData.bomPrItems) : resultData.bomPr ? String(resultData.bomPr) : undefined)}
-              onChange={(val) => setPrData(val)}
-              projectCode={projectCode}
-              roleCode={roleCode}
-              taskId={taskId}
-            />
-          )}
           <SupplierQuoteUI
             taskId={taskId}
             isEditable={isEditable && canEditForm('SUPPLIER_QUOTE', roleCode)}
             bomPrData={prData || (resultData.bomPrItems ? String(resultData.bomPrItems) : resultData.bomPr ? String(resultData.bomPr) : undefined)}
+            projectCode={projectCode}
+            projectName={project?.projectName}
             value={resultData.supplierQuotes ? (Array.isArray(resultData.supplierQuotes) ? resultData.supplierQuotes : (() => { try { return JSON.parse(String(resultData.supplierQuotes)) } catch { return [] } })()) : undefined}
             onChange={async (quotes) => {
               const chosen = quotes.find(q => q.selected)

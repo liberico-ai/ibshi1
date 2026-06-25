@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { matchQuoteLinesToPr, normSpec, type QuoteLine, type PrItem } from '../quote-parser'
+import * as XLSX from 'xlsx'
+import { parseQuoteExcel, matchQuoteLinesToPr, normSpec, type QuoteLine, type PrItem } from '../quote-parser'
 import { matchInventoryServer, type InventoryRow } from '../bompr-enrich'
+import { exportQuoteTemplate } from '../quote-template-export'
 
 // ── Quote matcher tests ──
 
@@ -241,5 +243,115 @@ describe('matchInventoryServer — attribute matching', () => {
     expect(result.get(0)?.inv?.materialCode).toBe('VLC-C100')
     expect(result.get(1)?.inv).toBeNull()
     expect(result.get(2)?.inv?.materialCode).toBe('VLC-PL10')
+  })
+})
+
+// ── Standardized template export + parse round-trip ──
+
+describe('quote template round-trip', () => {
+  const prItems: PrItem[] = [
+    { stt: 'I112-VTC01-001', description: 'THÉP HÌNH C', profile: 'C100X50X5X7.5', grade: 'SS400', unit: 'm', quantity: 50, needToBuyQty: 30 },
+    { stt: 'I112-VTC01-002', description: 'THÉP TẤM', profile: 'PL10', grade: 'SS400', unit: 'm2', quantity: 40, needToBuyQty: 20 },
+    { stt: 'I112-VPK01-001', description: 'BOLT', profile: 'BOLT-M16X50-8.8-HDG', unit: 'cái', quantity: 200, needToBuyQty: 150 },
+  ]
+
+  it('(a) export → parse → match achieves 100% by Item code', () => {
+    const wb = exportQuoteTemplate(prItems, { projectCode: 'DA-TEST' })
+    const ws = wb.Sheets['BG']
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
+
+    // Simulate NCC filling in qty + unit price
+    for (const row of data) {
+      const code = String(row[0] || '')
+      if (!code.startsWith('I112-')) continue
+      row[6] = row[5] // Copy IBS qty to NCC qty
+      row[7] = 50000   // Unit price
+    }
+
+    const lines = parseQuoteExcel(data)
+    expect(lines.length).toBe(3)
+
+    const matched = matchQuoteLinesToPr(lines, prItems)
+    expect(matched.every(l => l.matchedPrIndex !== null)).toBe(true)
+    expect(matched[0].matchedPrCode).toBe('I112-VTC01-001')
+    expect(matched[1].matchedPrCode).toBe('I112-VTC01-002')
+    expect(matched[2].matchedPrCode).toBe('I112-VPK01-001')
+  })
+
+  it('(b) parser reads Item/Đơn giá from standardized template', () => {
+    const data: unknown[][] = [
+      ['BG chuẩn hóa'],
+      ['Dự án:', 'DA-001'],
+      [],
+      [],
+      ['', '', 'Yêu cầu (IBS)', '', '', '', 'Đề xuất (NCC)', '', ''],
+      ['Item', 'Description', 'Profile', 'Grade', 'ĐVT', 'Cần mua', 'Số lượng', 'Đơn giá', 'Thành tiền'],
+      ['VTC'],
+      ['I-VTC-001', 'THÉP C', 'C100', 'SS400', 'm', 30, 25, 45000, 1125000],
+      ['I-VTC-002', 'THÉP TẤM', 'PL10', 'SS400', 'm2', 20, 15, 120000, 1800000],
+    ]
+
+    const lines = parseQuoteExcel(data)
+    expect(lines.length).toBe(2)
+    expect(lines[0].code).toBe('I-VTC-001')
+    expect(lines[0].qty).toBe(25)
+    expect(lines[0].unitPrice).toBe(45000)
+    expect(lines[1].code).toBe('I-VTC-002')
+    expect(lines[1].qty).toBe(15)
+    expect(lines[1].unitPrice).toBe(120000)
+  })
+
+  it('(c) compact table logic: needToBuyQty preferred over quantity', () => {
+    const items: Partial<PrItem>[] = [
+      { needToBuyQty: 5, quantity: 10 },
+      { quantity: 8 },
+      { needToBuyQty: 0, quantity: 10 },
+      { needToBuyQty: undefined, quantity: 0 },
+    ]
+    const display = items.map(p => (p as PrItem).needToBuyQty ?? (p as PrItem).quantity ?? 0)
+    expect(display).toEqual([5, 8, 0, 0])
+  })
+
+  it('(d) free-form NCC files still fuzzy-match (backward compat)', () => {
+    const data: unknown[][] = [
+      ['STT', 'Mô tả', 'Quy cách', 'Mác', 'ĐVT', 'Số lượng', 'Đơn giá', 'Thành tiền'],
+      ['BG-001', 'THÉP HÌNH C', 'C100X50X5X7.5', 'SS400', 'm', 30, 45000, 1350000],
+    ]
+
+    const lines = parseQuoteExcel(data)
+    expect(lines.length).toBe(1)
+
+    const prItemsFreeForm: PrItem[] = [
+      { stt: 'I-VTC-001', description: 'THÉP HÌNH C', profile: 'C100X50X5X7.5-12000L', grade: 'SS400', unit: 'm', quantity: 50 },
+    ]
+    const matched = matchQuoteLinesToPr(lines, prItemsFreeForm)
+    expect(matched[0].matchedPrIndex).toBe(0)
+  })
+
+  it('export groups items by category (VTC/VPK)', () => {
+    const wb = exportQuoteTemplate(prItems, { projectCode: 'DA-001', projectName: 'Test Project' })
+    const ws = wb.Sheets['BG']
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
+
+    expect(String(data[0][0])).toBe('BG chuẩn hóa')
+    expect(String(data[1][1])).toBe('DA-001')
+    expect(String(data[2][1])).toBe('Test Project')
+
+    const catRows = data.filter(r => /^(VTC|VPK|VDK|Grating|Khác)$/.test(String(r[0] || '')))
+    expect(catRows.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('export only includes items with needToBuyQty > 0', () => {
+    const mixedItems: PrItem[] = [
+      { stt: 'I-001', description: 'A', unit: 'm', quantity: 10, needToBuyQty: 5 },
+      { stt: 'I-002', description: 'B', unit: 'm', quantity: 10, needToBuyQty: 0 },
+      { stt: 'I-003', description: 'C', unit: 'm', quantity: 10 },
+    ]
+    const wb = exportQuoteTemplate(mixedItems)
+    const ws = wb.Sheets['BG']
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
+
+    const dataRows = data.filter(r => String(r[0] || '').startsWith('I-'))
+    expect(dataRows.length).toBe(2) // I-001 (needToBuy=5) and I-003 (qty=10, no needToBuy)
   })
 })

@@ -7,6 +7,7 @@ import MultiFileUpload, { UploadedFile } from '@/components/MultiFileUpload'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { QUOTE_EDIT_ROLES } from '@/lib/constants'
 import { parseQuoteExcel, matchQuoteLinesToPr, type QuoteLine, type PrItem } from '@/lib/quote-parser'
+import { exportQuoteTemplate } from '@/lib/quote-template-export'
 
 export interface QuoteFile { id: string; fileName: string; fileUrl: string; kind: 'Báo giá' | 'Hợp đồng' | 'Khác' }
 
@@ -33,6 +34,8 @@ interface Props {
   taskId: string
   isEditable: boolean
   bomPrData?: string
+  projectCode?: string
+  projectName?: string
   value?: SupplierQuote[]
   onChange: (quotes: SupplierQuote[]) => void
 }
@@ -51,7 +54,7 @@ function fmt(n: number, cur = 'VND') {
   return cur === 'VND' ? formatCurrency(n) : formatNumber(n) + ` ${cur}`
 }
 
-export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bomPrData, value, onChange }: Props) {
+export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bomPrData, projectCode, projectName, value, onChange }: Props) {
   const roleCode = useAuthStore(s => s.user?.roleCode || '')
   const canEditQuote = (QUOTE_EDIT_ROLES as readonly string[]).includes(roleCode)
   const isEditable = isEditableProp && canEditQuote
@@ -64,6 +67,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   const [creatingVendor, setCreatingVendor] = useState(false)
   const [reasonError, setReasonError] = useState<string | null>(null)
   const [poState, setPoState] = useState<{ loading: boolean; poId?: string; poCode?: string; error?: string }>({ loading: false })
+  const [prSearch, setPrSearch] = useState('')
+  const [showAllPr, setShowAllPr] = useState(false)
 
 
   useEffect(() => {
@@ -202,6 +207,12 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     setEnriching(false)
   }
 
+  const handleExportTemplate = () => {
+    if (parsedPrItems.length === 0) return
+    const wb = exportQuoteTemplate(parsedPrItems, { projectCode, projectName })
+    XLSX.writeFile(wb, `BG_${projectCode || 'template'}.xlsx`)
+  }
+
   const resetQuoteData = (id: string) => {
     fire(quotes.map(q => q.id === id ? { ...q, lines: [], files: [], totalAmount: 0 } : q))
   }
@@ -232,6 +243,20 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       requiredDate: typeof it.requiredDate === 'string' ? it.requiredDate : undefined,
     }))
   }, [bomPrData]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const compactPrItems = useMemo(() => {
+    let items = parsedPrItems
+    if (!showAllPr) items = items.filter(p => ((p.needToBuyQty ?? p.quantity ?? p.qty ?? 0) > 0))
+    if (prSearch) {
+      const q = prSearch.toLowerCase()
+      items = items.filter(p => {
+        const code = (p.canonicalCode || p.stt || p.code || p.materialCode || '').toLowerCase()
+        const desc = (p.description || p.materialName || p.name || '').toLowerCase()
+        return code.includes(q) || desc.includes(q) || (p.profile || '').toLowerCase().includes(q)
+      })
+    }
+    return items
+  }, [parsedPrItems, prSearch, showAllPr])
 
   // Auto-enrich on mount when no item has availableQty yet
   useEffect(() => {
@@ -302,18 +327,94 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
 
   const missingEnrichment = parsedPrItems.length > 0 && parsedPrItems.every(p => p.availableQty === undefined)
 
-  const enrichToolbar = parsedPrItems.length > 0 ? (
-    <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-      {missingEnrichment && <span className="text-xs" style={{ color: '#b45309' }}>⚠ Chưa tính tồn kho</span>}
-      <button
-        onClick={handleReEnrich}
-        disabled={enriching}
-        className="px-3 py-1 rounded text-xs font-semibold"
-        style={{ background: enriching ? '#94a3b8' : '#0284c7', color: '#fff' }}
-      >
-        {enriching ? '...' : '🔄 Tính lại từ kho'}
-      </button>
-      {enrichMsg && <span className="text-xs" style={{ color: enrichMsg.startsWith('Đã') ? '#16a34a' : '#dc2626' }}>{enrichMsg}</span>}
+  const prReferenceSection = parsedPrItems.length > 0 ? (
+    <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          📦 Vật tư cần mua ({compactPrItems.length}{!showAllPr && parsedPrItems.length !== compactPrItems.length ? `/${parsedPrItems.length}` : ''})
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            placeholder="Tìm vật tư..."
+            value={prSearch}
+            onChange={e => setPrSearch(e.target.value)}
+            className="text-xs px-2 py-1 rounded-lg"
+            style={{ border: '1px solid var(--border)', background: 'var(--bg-secondary)', width: 140 }}
+          />
+          <label className="text-xs flex items-center gap-1 cursor-pointer" style={{ color: 'var(--text-muted)' }}>
+            <input type="checkbox" checked={showAllPr} onChange={e => setShowAllPr(e.target.checked)} />
+            Tất cả
+          </label>
+          <button
+            onClick={handleReEnrich}
+            disabled={enriching}
+            className="px-2 py-1 rounded text-xs font-semibold"
+            style={{ background: enriching ? '#94a3b8' : '#0284c7', color: '#fff' }}
+          >
+            {enriching ? '...' : '🔄 Tính lại từ kho'}
+          </button>
+          {isEditable && (
+            <button
+              onClick={handleExportTemplate}
+              className="px-2 py-1 rounded text-xs font-semibold"
+              style={{ background: '#059669', color: '#fff' }}
+            >
+              📤 Xuất mẫu BG cho NCC
+            </button>
+          )}
+        </div>
+      </div>
+      {enrichMsg && <div className="text-xs mb-2" style={{ color: enrichMsg.startsWith('Đã') ? '#16a34a' : '#dc2626' }}>{enrichMsg}</div>}
+      {missingEnrichment && <div className="text-xs mb-2" style={{ color: '#b45309' }}>⚠ Chưa tính tồn kho — nhấn &quot;Tính lại từ kho&quot;</div>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'var(--surface-hover, #f1f5f9)' }}>
+              {['#', 'Mã', 'Chi tiết/Tên', 'Quy cách', 'Mác', 'ĐVT'].map(h => (
+                <th key={h} className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
+              ))}
+              {['SL cần mua', 'Tồn khả dụng'].map(h => (
+                <th key={h} className="text-right px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
+              ))}
+              <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)' }}>Ngày cần</th>
+            </tr>
+          </thead>
+          <tbody>
+            {compactPrItems.map((p, i) => {
+              const code = p.canonicalCode || p.stt || p.code || p.materialCode || ''
+              const desc = p.description || p.materialName || p.name || ''
+              const needToBuy = p.needToBuyQty ?? p.quantity ?? p.qty ?? 0
+              const avail = typeof p.availableQty === 'number' ? p.availableQty : null
+              return (
+                <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                  <td className="px-2 py-1 font-mono" style={{ color: '#64748b' }}>{i + 1}</td>
+                  <td className="px-2 py-1 font-mono text-xs" style={{ color: '#1d4ed8' }}>{code || '—'}</td>
+                  <td className="px-2 py-1">{desc}</td>
+                  <td className="px-2 py-1" style={{ color: '#64748b' }}>{p.profile || '—'}</td>
+                  <td className="px-2 py-1" style={{ color: '#64748b' }}>{p.grade || '—'}</td>
+                  <td className="px-2 py-1">{p.unit || p.uom || '—'}</td>
+                  <td className="px-2 py-1 text-right font-semibold" style={{ color: needToBuy > 0 ? '#dc2626' : '#16a34a' }}>{needToBuy || '—'}</td>
+                  <td className="px-2 py-1 text-right" style={{ color: avail !== null && avail > 0 ? '#16a34a' : '#94a3b8' }}>
+                    {avail !== null ? avail : '—'}
+                  </td>
+                  <td className="px-2 py-1 text-xs" style={{ color: '#64748b' }}>{p.requiredDate || '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  ) : null
+
+  const warningLegend = quotes.length > 0 ? (
+    <div className="flex flex-wrap gap-3 text-xs px-3 py-2 rounded-lg mt-2" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+      <span className="font-semibold" style={{ color: '#92400e' }}>Chú thích:</span>
+      <span title="Dòng trong file báo giá NCC không khớp với dòng nào trong PR" style={{ color: '#f59e0b' }}>⚠ Dòng ngoài PR</span>
+      <span title="Số dòng PR mà NCC này không có báo giá" style={{ color: '#f59e0b' }}>⚠ thiếu N dòng</span>
+      <span title="NCC được chọn không phải là NCC có giá thấp nhất" style={{ color: '#dc2626' }}>⚠ không phải giá thấp nhất</span>
+      <span title="Cần ít nhất 2 báo giá có giá để so sánh" style={{ color: '#f59e0b' }}>⚠ thiếu giá để so sánh</span>
     </div>
   ) : null
 
@@ -323,7 +424,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     const chosenNotMin = chosen && minAmount > 0 && chosenAmount > minAmount
     return (
       <div className="space-y-4">
-        {enrichToolbar}
+        {prReferenceSection}
 
         {quotes.length === 0 && (
           <div className="text-sm" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có báo giá NCC</div>
@@ -409,6 +510,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             {/* Material matrix (review mode) */}
             <MaterialMatrix quotes={quotes} prItems={parsedPrItems} />
 
+            {warningLegend}
+
             {poButton}
           </>
         )}
@@ -419,7 +522,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   // ── EDITABLE MODE ──
   return (
     <div className="space-y-4">
-      {enrichToolbar}
+      {prReferenceSection}
 
       {/* B: Supplier rows */}
       {quotes.map((q, idx) => (
@@ -690,6 +793,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
 
       {/* D: Material comparison matrix */}
       <MaterialMatrix quotes={quotes} prItems={parsedPrItems} />
+
+      {warningLegend}
 
       {poButton}
 
