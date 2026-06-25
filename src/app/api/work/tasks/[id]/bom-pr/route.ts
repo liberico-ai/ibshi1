@@ -35,9 +35,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const isParticipant = task.createdBy === payload.userId
       || task.assignees.some(a => a.userId === payload.userId || a.role === payload.roleCode)
-    if (!isParticipant) return errorResponse('Bạn không có quyền sửa công việc này', 403)
 
-    // PM sets requiredDate per line — carve-out: no PR edit role needed
+    // PM sets requiredDate per line — carve-out: no PR edit role needed, no participant check
     if (action === 'set-required-dates') {
       if (!REQUIRED_DATE_ROLES.includes(payload.roleCode)) {
         return errorResponse('Chỉ PM / BGĐ được đặt ngày cần hàng', 403)
@@ -64,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return successResponse({ updated: true })
     }
 
-    // Enrich: re-calculate stock breakdown for existing bomPr items
+    // Enrich: re-calculate stock breakdown — any authenticated user can trigger
     if (action === 'enrich') {
       const rd = task.resultData as Record<string, unknown> | null
       const existing = rd?.bomPrItems || rd?.bomPr || ''
@@ -83,7 +82,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return successResponse({ enriched: true, count: enriched.length })
     }
 
-    // Default: save bomPr data + auto-enrich
+    // Default: save bomPr data + auto-enrich — requires participant + PR edit role
+    if (!isParticipant) return errorResponse('Bạn không có quyền sửa công việc này', 403)
     if (!canEditForm('PR', payload.roleCode)) {
       return errorResponse('Bạn không có quyền sửa biểu mẫu PR', 403)
     }
