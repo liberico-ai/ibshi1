@@ -375,7 +375,7 @@ export async function enrichBomPrItems(
     return {
       ...item,
       ...patch,
-      ...(inv ? { materialId: inv.id } : {}),
+      ...(inv ? { materialId: inv.id, canonicalCode: item.canonicalCode || inv.materialCode } : {}),
     }
   })
 }

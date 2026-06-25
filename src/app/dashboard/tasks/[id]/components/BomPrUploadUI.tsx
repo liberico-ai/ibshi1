@@ -466,6 +466,8 @@ function enrichItems(
       return { ...item, neededQty: needed, availableQty: 0, needToBuyQty: needed, stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: false }
     }
 
+    const base = { ...item, ...(m.inventoryCode && !item.canonicalCode ? { canonicalCode: m.inventoryCode, materialId: m.inventoryId ?? undefined } : {}) }
+
     const sameUnit = !!(m.inventoryUnit && item.unit &&
       m.inventoryUnit.toLowerCase() === item.unit.toLowerCase())
     const needKg = item.weight > 0 ? item.weight :
@@ -481,21 +483,21 @@ function enrichItems(
 
     if (sameUnit) {
       const a = r3(avail)
-      return { ...item, neededQty: needed, availableQty: a, needToBuyQty: r3(Math.max(0, needed - a)), stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: false }
+      return { ...base, neededQty: needed, availableQty: a, needToBuyQty: r3(Math.max(0, needed - a)), stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: false }
     }
 
     if (canKg && item.unitWeight > 0) {
       const a = r3(avail / item.unitWeight)
-      return { ...item, neededQty: needed, availableQty: a, needToBuyQty: r3(Math.max(0, needed - a)), stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: false }
+      return { ...base, neededQty: needed, availableQty: a, needToBuyQty: r3(Math.max(0, needed - a)), stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: false }
     }
 
     if (canKg) {
       const nk = r2(needKg)
       const ak = r2(avail)
-      return { ...item, neededQty: nk, availableQty: ak, needToBuyQty: r2(Math.max(0, nk - ak)), stockUnit: 'kg', stockConvertedFromKg: true, stockUnitMismatch: false }
+      return { ...base, neededQty: nk, availableQty: ak, needToBuyQty: r2(Math.max(0, nk - ak)), stockUnit: 'kg', stockConvertedFromKg: true, stockUnitMismatch: false }
     }
 
-    return { ...item, neededQty: needed, availableQty: 0, needToBuyQty: needed, stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: true }
+    return { ...base, neededQty: needed, availableQty: 0, needToBuyQty: needed, stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: true }
   })
 }
 
