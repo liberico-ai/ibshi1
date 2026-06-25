@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { DEPARTMENTS_V2, DEPT_NAME, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
@@ -278,6 +278,8 @@ export default function BriefingPage() {
   const [statusSaving, setStatusSaving] = useState(false)
   const [cellEditing, setCellEditing] = useState<string | null>(null)
   const [filterExecOnly, setFilterExecOnly] = useState(false)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
 
   // Meeting mode
   const [meetingMode, setMeetingMode] = useState(() => {
@@ -327,10 +329,7 @@ export default function BriefingPage() {
   const [publishing, setPublishing] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [snapshotHistory, setSnapshotHistory] = useState<{ id: string; weekOf: string; createdAt: string; kpi: Record<string, number> }[]>([])
-  const [doneSincePrevOpen, setDoneSincePrevOpen] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('briefing_meeting') === '1'
-    return false
-  })
+  const [doneSincePrevOpen, setDoneSincePrevOpen] = useState(false)
 
   // Project task modal
   const [projectTaskModal, setProjectTaskModal] = useState<{ projectId: string; projectCode: string } | null>(null)
@@ -347,8 +346,12 @@ export default function BriefingPage() {
       if (r.ok) {
         setGroups(r.groups || [])
         setKpi(r.kpi || { total: 0, active: 0, overdue: 0, dueSoon: 0, blocked: 0, execDecision: 0, doneThisWeek: 0, newThisWeek: 0 })
-        const allIds = new Set<string>((r.groups || []).map((g: ProjectGroup) => g.project?.id || '__general__'))
-        setExpanded(allIds)
+        const autoOpen = new Set<string>()
+        for (const g of (r.groups || []) as ProjectGroup[]) {
+          const key = g.project?.id || '__general__'
+          if (g.tasks.some((t: BriefingTask) => t.blocked || t.needsExecDecision)) autoOpen.add(key)
+        }
+        setExpanded(autoOpen)
       }
       setLoading(false)
     })
@@ -372,6 +375,13 @@ export default function BriefingPage() {
     const timer = setTimeout(() => document.addEventListener('click', h), 0)
     return () => { clearTimeout(timer); document.removeEventListener('click', h) }
   }, [actionMenu])
+
+  useEffect(() => {
+    if (!toolsMenuOpen) return
+    const h = () => setToolsMenuOpen(false)
+    const timer = setTimeout(() => document.addEventListener('click', h), 0)
+    return () => { clearTimeout(timer); document.removeEventListener('click', h) }
+  }, [toolsMenuOpen])
 
   useEffect(() => {
     localStorage.setItem('briefing_meeting', meetingMode ? '1' : '0')
@@ -847,13 +857,8 @@ export default function BriefingPage() {
     }
   }
 
-  const openActionMenu = (taskId: string, btnEl: HTMLButtonElement) => {
-    if (actionMenu === taskId) { setActionMenu(null); setMenuPos(null); return }
-    const rect = btnEl.getBoundingClientRect()
-    const flipUp = rect.bottom + 200 > window.innerHeight
-    setMenuPos({ top: flipUp ? rect.top : rect.bottom + 4, left: rect.right - 160, flipUp })
-    setActionMenu(taskId)
-  }
+  // openActionMenu removed — actions now inline in expandable detail row
+  void actionMenu; void menuPos
 
   const goMeetingTask = (direction: 1 | -1) => {
     if (!meetingTasks.length) return
@@ -923,22 +928,38 @@ export default function BriefingPage() {
               ? { background: '#dc2626', color: '#fff', border: '1px solid #dc2626' }
               : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
           >
-            {meetingMode ? '✕ Tắt chế độ họp' : '🎯 Chế độ họp'}
+            {meetingMode ? '✕ Tắt họp' : '🎯 Chế độ họp'}
           </button>
-          <button onClick={load} className="text-sm px-4 py-2 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>Tải lại</button>
-          <label className="text-sm px-4 py-2 rounded-lg cursor-pointer" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-            Import biên bản
-            <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={handleFileSelect} />
-          </label>
-          <button onClick={handleSnapshot} disabled={snapshotSaving || kpi.total === 0} className="text-sm px-4 py-2 rounded-lg font-semibold disabled:opacity-50" style={{ background: '#059669', color: '#fff', border: '1px solid #059669' }}>
-            {snapshotSaving ? 'Đang chốt...' : '📌 Chốt kỳ'}
-          </button>
-          <button onClick={() => handlePublish()} disabled={publishing} className="text-sm px-4 py-2 rounded-lg font-semibold disabled:opacity-50" style={{ background: '#7c3aed', color: '#fff', border: '1px solid #7c3aed' }}>
-            {publishing ? 'Đang gửi...' : '📣 Phát hành'}
-          </button>
-          <button onClick={handleExport} disabled={exporting || kpi.total === 0} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
-            {exporting ? 'Đang xuất...' : 'Xuất biên bản'}
-          </button>
+          <button onClick={load} className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>↻</button>
+          <div className="relative">
+            <button
+              onClick={(e) => { e.stopPropagation(); setToolsMenuOpen(v => !v) }}
+              className="text-sm px-4 py-2 rounded-lg font-semibold"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+            >
+              Thao tác kỳ ⋯
+            </button>
+            {toolsMenuOpen && (
+              <div className="absolute right-0 mt-1 z-30 rounded-lg shadow-lg py-1 min-w-[180px]" style={{ background: 'var(--surface, #fff)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                <button onClick={() => { setToolsMenuOpen(false); handleSnapshot() }} disabled={snapshotSaving || kpi.total === 0} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
+                  📌 {snapshotSaving ? 'Đang chốt...' : 'Chốt kỳ'}
+                </button>
+                <button onClick={() => { setToolsMenuOpen(false); handlePublish() }} disabled={publishing} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
+                  📣 {publishing ? 'Đang gửi...' : 'Phát hành'}
+                </button>
+                <button onClick={() => { setToolsMenuOpen(false); handleExport() }} disabled={exporting || kpi.total === 0} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
+                  📥 {exporting ? 'Đang xuất...' : 'Xuất biên bản'}
+                </button>
+                <label className="block text-xs px-4 py-2.5 hover:bg-blue-50 cursor-pointer">
+                  📂 Import biên bản
+                  <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { setToolsMenuOpen(false); handleFileSelect(e) }} />
+                </label>
+                <button onClick={() => { setToolsMenuOpen(false); loadHistory() }} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50">
+                  🕘 Lịch sử kỳ
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -986,24 +1007,12 @@ export default function BriefingPage() {
               </div>
             ))}
           </div>
-          {/* KPI Row 2: Context (small) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              { label: 'Tổng task', value: kpi.total, color: '#475569', bg: '#f8fafc', filter: '' },
-              { label: 'Đang xử lý', value: kpi.active, color: '#1d4ed8', bg: '#f0f4ff', filter: '' },
-              { label: 'Xong tuần này', value: kpi.doneThisWeek, color: '#059669', bg: '#f0fdf4', filter: 'done_week' },
-              { label: 'Mới tuần này', value: kpi.newThisWeek, color: '#7c3aed', bg: '#faf5ff', filter: 'new_week' },
-            ].map((card) => (
-              <div
-                key={card.label}
-                className={`rounded-lg px-3 py-2 flex items-center justify-between cursor-pointer hover:ring-1 hover:ring-offset-1 transition-all ${card.filter && card.filter === filterOverdue ? 'ring-1 ring-offset-1' : ''}`}
-                style={{ background: card.bg, border: `1px solid ${card.color}15`, '--tw-ring-color': card.color } as React.CSSProperties}
-                onClick={() => { if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter) }}
-              >
-                <span className="text-[11px] font-medium" style={{ color: card.color }}>{card.label}</span>
-                <span className="text-base font-bold" style={{ color: card.color }}>{card.value}</span>
-              </div>
-            ))}
+          {/* KPI Row 2: Context (compact single line) */}
+          <div className="flex items-center gap-4 px-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <span>Tổng <b style={{ color: '#475569' }}>{kpi.total}</b></span>
+            <span>Đang xử lý <b style={{ color: '#1d4ed8' }}>{kpi.active}</b></span>
+            <span className="cursor-pointer hover:underline" style={filterOverdue === 'done_week' ? { color: '#059669', fontWeight: 700 } : undefined} onClick={() => setFilterOverdue(filterOverdue === 'done_week' ? '' : 'done_week')}>Xong tuần <b style={{ color: '#059669' }}>{kpi.doneThisWeek}</b></span>
+            <span className="cursor-pointer hover:underline" style={filterOverdue === 'new_week' ? { color: '#7c3aed', fontWeight: 700 } : undefined} onClick={() => setFilterOverdue(filterOverdue === 'new_week' ? '' : 'new_week')}>Mới tuần <b style={{ color: '#7c3aed' }}>{kpi.newThisWeek}</b></span>
           </div>
 
           {/* Meeting mode bar */}
@@ -1167,11 +1176,7 @@ export default function BriefingPage() {
                       )}
                     </div>
                   )}
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={loadHistory} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }}>
-                      Lịch sử kỳ
-                    </button>
-                  </div>
+                  {/* Lịch sử kỳ moved to "Thao tác kỳ" dropdown */}
                 </div>
               )}
             </div>
@@ -1336,7 +1341,10 @@ export default function BriefingPage() {
               const groupKey = g.project?.id || '__general__'
               const isOpen = expanded.has(groupKey)
               const sev = g.totalOverdue > 0 ? overdueSeverity(g.maxDaysOverdue) : { color: '#059669', bg: '#ecfdf5' }
-              const renderRow = (t: BriefingTask, dimmed?: boolean) => {
+              const blockedCount = g.tasks.filter(t => t.blocked).length
+              const execCount = g.tasks.filter(t => t.needsExecDecision).length
+
+              const renderCompactRow = (t: BriefingTask) => {
                 const tsev = t.isOverdue ? overdueSeverity(t.daysOverdue) : { color: '#475569', bg: '#f1f5f9' }
                 const statusDisplay = t.blocked
                   ? { label: 'Tắc', color: '#c2410c', bg: '#fff7ed' }
@@ -1344,176 +1352,184 @@ export default function BriefingPage() {
                 const isEditingThis = statusEditing === t.id
                 const isActive = t.status !== 'DONE' && t.status !== 'CANCELLED'
                 const isHighlighted = meetingMode && meetingTasks[meetingIdx]?.id === t.id
+                const isExpanded = expandedTaskId === t.id
+                const colCount = meetingMode ? 5 : 4
                 return (
-                  <tr
-                    key={t.id}
-                    ref={el => { if (el) rowRefs.current.set(t.id, el); else rowRefs.current.delete(t.id) }}
-                    className={`border-t hover:bg-opacity-50 transition-colors ${isHighlighted ? 'ring-2 ring-inset ring-red-400' : ''}`}
-                    style={{ borderColor: 'var(--border)', opacity: dimmed ? 0.55 : 1, background: isHighlighted ? '#fef2f2' : undefined }}
-                  >
-                    <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{t.taskType !== 'FREE' ? t.taskType : '—'}</td>
-                    <td className="px-4 py-2.5">
-                      {t.needsExecDecision && <span className="mr-1" title="Cần BGĐ quyết">🔺</span>}
-                      <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }}>{t.title}</a>
-                      {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
-                      {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}
-                      {t.actionItems.length > 0 && (
-                        <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{t.actionItems.length} việc tạo</span>
-                      )}
-                      {!t.needsExecDecision && !t.escalated && isActive && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleEscalate(t.id, true) }}
-                          className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded transition-all opacity-40 hover:opacity-100"
-                          style={{ color: '#7c3aed', border: '1px solid #7c3aed33' }}
-                          title="Đẩy lên BGĐ"
-                        >
-                          ▲ Đẩy
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
-                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.deadline)}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      {t.isOverdue ? (
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: tsev.bg, color: tsev.color }}>{t.daysOverdue}d</span>
-                      ) : t.isDueSoon ? (
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>còn {-t.daysOverdue}d</span>
-                      ) : t.daysOverdue < 0 ? (
-                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{-t.daysOverdue}d</span>
-                      ) : (
-                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-center">
-                      {isEditingThis ? (
-                        <select
-                          autoFocus
-                          disabled={statusSaving}
-                          className="text-xs px-1 py-1 rounded border"
-                          style={{ borderColor: '#3b82f6', background: '#eff6ff' }}
-                          defaultValue={t.blocked ? 'BLOCKED' : t.status}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            if (v === 'BLOCKED') handleStatusChange(t.id, 'IN_PROGRESS', true)
-                            else handleStatusChange(t.id, v, false)
-                          }}
-                          onBlur={() => setStatusEditing(null)}
-                        >
-                          <option value="OPEN">Mới</option>
-                          <option value="IN_PROGRESS">Đang xử lý</option>
-                          <option value="BLOCKED">Tắc</option>
-                          <option value="AWAITING_REVIEW">Chờ kết thúc</option>
-                          <option value="RETURNED">Bị trả lại</option>
-                          <option value="DONE">Hoàn thành</option>
-                        </select>
-                      ) : (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setStatusEditing(t.id) }}
-                          className="text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all"
-                          style={{ background: statusDisplay.bg, color: statusDisplay.color }}
-                          title="Nhấn để đổi trạng thái"
-                        >
-                          {statusDisplay.label}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {cellEditing === `${t.id}:proposal` ? (
-                        <textarea
-                          autoFocus
-                          defaultValue={t.proposal}
-                          className="w-full text-xs px-2 py-1 rounded border resize-none"
-                          style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 48 }}
-                          onBlur={(e) => handleBriefingPatch(t.id, 'proposal', e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
-                        />
-                      ) : (
-                        <span
-                          className="cursor-pointer block min-h-[20px]"
-                          onClick={() => setCellEditing(`${t.id}:proposal`)}
-                          title="Nhấn để sửa"
-                        >
-                          {t.proposal || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {cellEditing === `${t.id}:decision` ? (
-                        <textarea
-                          autoFocus
-                          defaultValue={t.decision}
-                          className="w-full text-xs px-2 py-1 rounded border resize-none"
-                          style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 48 }}
-                          onBlur={(e) => handleBriefingPatch(t.id, 'decision', e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
-                        />
-                      ) : (
-                        <span
-                          className="cursor-pointer block min-h-[20px]"
-                          onClick={() => setCellEditing(`${t.id}:decision`)}
-                          title="Nhấn để sửa"
-                        >
-                          {t.decision || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
-                        </span>
-                      )}
-                      {t.decision && t.decisionByName && (
-                        <span className="block text-[10px] mt-0.5" style={{ color: '#94a3b8' }}>
-                          — {t.decisionByName}, {t.decisionAt ? formatDate(t.decisionAt) : ''}
-                        </span>
-                      )}
-                      {t.execReviewedAt && (
-                        <span className="inline-flex items-center gap-1 text-[10px] mt-0.5" style={{ color: '#059669' }}>
-                          ✓ đã bàn
-                          <button onClick={(e) => { e.stopPropagation(); handleExecReview(t.id, false) }} className="underline" style={{ color: '#94a3b8' }}>bỏ</button>
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.notes || '—'}</td>
-                    {meetingMode && (
-                      <td className="px-2 py-2.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={discussedThisWeek(t)}
-                          onChange={(e) => handleDiscussed(t.id, e.target.checked)}
-                          className="w-4 h-4 rounded cursor-pointer accent-green-600"
-                          title={discussedThisWeek(t) ? 'Đã bàn — bỏ dấu?' : 'Đánh dấu đã bàn'}
-                        />
+                  <React.Fragment key={t.id}>
+                    <tr
+                      ref={el => { if (el) rowRefs.current.set(t.id, el); else rowRefs.current.delete(t.id) }}
+                      className={`border-t cursor-pointer hover:bg-blue-50/40 transition-colors ${isHighlighted ? 'ring-2 ring-inset ring-red-400' : ''}`}
+                      style={{ borderColor: 'var(--border)', background: isHighlighted ? '#fef2f2' : isExpanded ? '#f0f4ff' : undefined }}
+                      onClick={() => setExpandedTaskId(isExpanded ? null : t.id)}
+                    >
+                      <td className="px-4 py-2.5">
+                        {t.needsExecDecision && <span className="mr-1" title="Cần BGĐ quyết">🔺</span>}
+                        {t.blocked && <span className="mr-1" title="Tắc">🔴</span>}
+                        <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }} onClick={e => e.stopPropagation()}>{t.title}</a>
+                        {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
+                        {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}
+                        {t.actionItems.length > 0 && (
+                          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{t.actionItems.length} việc</span>
+                        )}
                       </td>
-                    )}
-                    <td className="px-2 py-2.5 text-center">
-                      {isActive && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openActionMenu(t.id, e.currentTarget) }}
-                          className="text-sm px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
-                          style={{ color: 'var(--text-muted)' }}
-                          title="Hành động"
-                        >⋯</button>
+                      <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{t.assigneeNames.join(', ') || '—'}</td>
+                      <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                        <span style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.deadline)}</span>
+                        {t.isOverdue ? (
+                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: tsev.bg, color: tsev.color }}>{t.daysOverdue}d</span>
+                        ) : t.isDueSoon ? (
+                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>còn {-t.daysOverdue}d</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        {isEditingThis ? (
+                          <select
+                            autoFocus
+                            disabled={statusSaving}
+                            className="text-xs px-1 py-1 rounded border"
+                            style={{ borderColor: '#3b82f6', background: '#eff6ff' }}
+                            defaultValue={t.blocked ? 'BLOCKED' : t.status}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              if (v === 'BLOCKED') handleStatusChange(t.id, 'IN_PROGRESS', true)
+                              else handleStatusChange(t.id, v, false)
+                            }}
+                            onBlur={() => setStatusEditing(null)}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <option value="OPEN">Mới</option>
+                            <option value="IN_PROGRESS">Đang xử lý</option>
+                            <option value="BLOCKED">Tắc</option>
+                            <option value="AWAITING_REVIEW">Chờ kết thúc</option>
+                            <option value="RETURNED">Bị trả lại</option>
+                            <option value="DONE">Hoàn thành</option>
+                          </select>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setStatusEditing(t.id) }}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all"
+                            style={{ background: statusDisplay.bg, color: statusDisplay.color }}
+                            title="Nhấn để đổi trạng thái"
+                          >
+                            {statusDisplay.label}
+                          </button>
+                        )}
+                      </td>
+                      {meetingMode && (
+                        <td className="px-2 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={discussedThisWeek(t)}
+                            onChange={(e) => handleDiscussed(t.id, e.target.checked)}
+                            className="w-4 h-4 rounded cursor-pointer accent-green-600"
+                            title={discussedThisWeek(t) ? 'Đã bàn — bỏ dấu?' : 'Đánh dấu đã bàn'}
+                          />
+                        </td>
                       )}
-                    </td>
-                  </tr>
+                    </tr>
+                    {/* Expandable detail row */}
+                    {isExpanded && (
+                      <tr style={{ background: '#f8fafc' }}>
+                        <td colSpan={colCount} className="px-5 py-3 border-t" style={{ borderColor: '#e2e8f0' }}>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <span className="font-semibold block mb-1" style={{ color: 'var(--text-muted)' }}>Đề xuất / hướng xử lý</span>
+                              {cellEditing === `${t.id}:proposal` ? (
+                                <textarea
+                                  autoFocus
+                                  defaultValue={t.proposal}
+                                  className="w-full text-xs px-2 py-1 rounded border resize-none"
+                                  style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 48 }}
+                                  onBlur={(e) => handleBriefingPatch(t.id, 'proposal', e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
+                                  onClick={e => e.stopPropagation()}
+                                />
+                              ) : (
+                                <span className="cursor-pointer block min-h-[20px]" onClick={(e) => { e.stopPropagation(); setCellEditing(`${t.id}:proposal`) }}>
+                                  {t.proposal || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-semibold block mb-1" style={{ color: 'var(--text-muted)' }}>Quyết định BGĐ</span>
+                              {cellEditing === `${t.id}:decision` ? (
+                                <textarea
+                                  autoFocus
+                                  defaultValue={t.decision}
+                                  className="w-full text-xs px-2 py-1 rounded border resize-none"
+                                  style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 48 }}
+                                  onBlur={(e) => handleBriefingPatch(t.id, 'decision', e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
+                                  onClick={e => e.stopPropagation()}
+                                />
+                              ) : (
+                                <span className="cursor-pointer block min-h-[20px]" onClick={(e) => { e.stopPropagation(); setCellEditing(`${t.id}:decision`) }}>
+                                  {t.decision || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                                </span>
+                              )}
+                              {t.decision && t.decisionByName && (
+                                <span className="block text-[10px] mt-0.5" style={{ color: '#94a3b8' }}>
+                                  — {t.decisionByName}, {t.decisionAt ? formatDate(t.decisionAt) : ''}
+                                </span>
+                              )}
+                              {t.execReviewedAt && (
+                                <span className="inline-flex items-center gap-1 text-[10px] mt-0.5" style={{ color: '#059669' }}>
+                                  ✓ đã bàn
+                                  <button onClick={(e) => { e.stopPropagation(); handleExecReview(t.id, false) }} className="underline" style={{ color: '#94a3b8' }}>bỏ</button>
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-semibold block mb-1" style={{ color: 'var(--text-muted)' }}>Ghi chú</span>
+                              <span style={{ color: 'var(--text-secondary)' }}>{t.notes || '—'}</span>
+                            </div>
+                          </div>
+                          {isActive && (
+                            <div className="flex gap-2 mt-3 pt-2 border-t flex-wrap" style={{ borderColor: '#e2e8f0' }}>
+                              <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'reassign') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                                👤 Đổi người
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'deadline') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                                📅 Đổi hạn
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); handleToggleBlocked(t.id, t.blocked) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                                {t.blocked ? '🟢 Gỡ tắc' : '🔴 Đánh dấu tắc'}
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'action-item') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                                ➕ Tạo việc
+                              </button>
+                              {!t.needsExecDecision && !t.escalated && (
+                                <button onClick={(e) => { e.stopPropagation(); handleEscalate(t.id, true) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors" style={{ border: '1px solid #7c3aed33', color: '#7c3aed' }}>
+                                  ▲ Đẩy BGĐ
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 )
               }
 
               return (
                 <div key={groupKey} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                  <button onClick={() => toggleProject(groupKey)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-opacity-80 transition-colors" style={{ background: 'var(--surface)' }}>
+                  <button onClick={() => toggleProject(groupKey)} className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-opacity-80 transition-colors" style={{ background: 'var(--surface)' }}>
                     <div className="flex items-center gap-3">
-                      <span className="text-lg font-mono" style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>
-                      <div>
-                        <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{g.project?.projectCode || 'Công việc chung'}</span>
-                        {g.project && <span className="text-sm ml-2" style={{ color: 'var(--text-secondary)' }}>{g.project.projectName}</span>}
-                      </div>
+                      <span className="text-sm font-mono" style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>
+                      <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                        {g.project?.projectCode || 'Công việc chung'}
+                        {g.project && <span className="font-normal text-xs ml-1.5" style={{ color: 'var(--text-secondary)' }}>{g.project.projectName}</span>}
+                      </span>
                     </div>
-                    <div className="flex gap-2 items-center">
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#f1f5f9', color: '#475569' }}>{g.totalTasks} tồn đọng</span>
-                      {g.totalOverdue > 0 && (
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: sev.bg, color: sev.color }}>
-                          {g.totalOverdue} quá hạn
-                        </span>
-                      )}
+                    <div className="flex gap-2 items-center text-xs">
+                      <span className="font-medium px-2 py-0.5 rounded-full" style={{ background: '#f1f5f9', color: '#475569' }}>{g.totalTasks} tồn đọng</span>
+                      {g.totalOverdue > 0 && <span className="font-semibold px-2 py-0.5 rounded-full" style={{ background: sev.bg, color: sev.color }}>{g.totalOverdue} quá hạn</span>}
+                      {blockedCount > 0 && <span className="font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#c2410c' }}>{blockedCount} tắc</span>}
+                      {execCount > 0 && <span className="font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fef2f2', color: '#b91c1c' }}>{execCount} BGĐ</span>}
                       <button
                         onClick={(e) => { e.stopPropagation(); openProjectTask(g.project?.id || '', g.project?.projectCode || 'Chung') }}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-lg hover:ring-1 transition-all"
+                        className="font-semibold px-2.5 py-1 rounded-lg hover:ring-1 transition-all"
                         style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #1d4ed822' }}
                       >
                         + Thêm việc
@@ -1524,24 +1540,18 @@ export default function BriefingPage() {
                   {isOpen && (
                     <div className="border-t" style={{ borderColor: 'var(--border)' }}>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm" style={{ minWidth: 1200 }}>
+                        <table className="w-full text-sm">
                           <thead>
                             <tr style={{ background: 'var(--surface-alt, #f8fafc)' }}>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 70 }}>Mã</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)' }}>Nội dung</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Người thực hiện</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 85 }}>Hạn</th>
-                              <th className="text-center px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 70 }}>Quá hạn</th>
-                              <th className="text-center px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 120 }}>Trạng thái</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 180 }}>Đề xuất/hướng xử lý</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 180 }}>Quyết định BGĐ</th>
-                              <th className="text-left px-4 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Ghi chú</th>
-                              {meetingMode && <th className="text-center px-2 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 50 }}>Bàn</th>}
-                              <th className="text-center px-2 py-2.5 font-semibold" style={{ color: 'var(--text-muted)', width: 40 }}></th>
+                              <th className="text-left px-4 py-2 font-semibold" style={{ color: 'var(--text-muted)' }}>Nội dung</th>
+                              <th className="text-left px-4 py-2 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Người</th>
+                              <th className="text-left px-4 py-2 font-semibold" style={{ color: 'var(--text-muted)', width: 130 }}>Hạn</th>
+                              <th className="text-center px-4 py-2 font-semibold" style={{ color: 'var(--text-muted)', width: 110 }}>Trạng thái</th>
+                              {meetingMode && <th className="text-center px-2 py-2 font-semibold" style={{ color: 'var(--text-muted)', width: 50 }}>Bàn</th>}
                             </tr>
                           </thead>
                           <tbody>
-                            {g.activeTasks.map((t) => renderRow(t))}
+                            {g.activeTasks.map((t) => renderCompactRow(t))}
                           </tbody>
                         </table>
                       </div>
@@ -1551,37 +1561,7 @@ export default function BriefingPage() {
               )
             })
           )}
-          {/* ═══ Action Dropdown (portal-style fixed) ═══ */}
-          {actionMenu && menuPos && (() => {
-            const t = filteredGroups.flatMap(g => g.tasks).find(x => x.id === actionMenu)
-            if (!t) return null
-            return (
-              <div
-                className="fixed z-[9999] py-1 rounded-lg shadow-lg min-w-[160px]"
-                style={{
-                  top: menuPos.flipUp ? undefined : menuPos.top,
-                  bottom: menuPos.flipUp ? (window.innerHeight - menuPos.top + 4) : undefined,
-                  left: menuPos.left,
-                  background: 'var(--surface, #fff)',
-                  border: '1px solid var(--border)',
-                }}
-                onClick={e => e.stopPropagation()}
-              >
-                <button onClick={() => openAction(t.id, 'reassign')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
-                  <span>👤</span> Đổi người
-                </button>
-                <button onClick={() => openAction(t.id, 'deadline')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
-                  <span>📅</span> Đổi hạn
-                </button>
-                <button onClick={() => handleToggleBlocked(t.id, t.blocked)} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
-                  <span>{t.blocked ? '🟢' : '🔴'}</span> {t.blocked ? 'Gỡ tắc' : 'Đánh dấu tắc'}
-                </button>
-                <button onClick={() => openAction(t.id, 'action-item')} className="w-full text-left text-xs px-3 py-2 hover:bg-blue-50 flex items-center gap-2">
-                  <span>➕</span> Tạo việc từ đề xuất
-                </button>
-              </div>
-            )
-          })()}
+          {/* Action dropdown removed — actions now inline in expandable detail row */}
           {/* ═══ Action Modal ═══ */}
           {actionMode && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setActionMode(null)}>
