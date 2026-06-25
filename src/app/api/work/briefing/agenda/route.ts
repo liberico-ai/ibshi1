@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
       const actionItems = Array.isArray(briefing.actionItems) ? briefing.actionItems as { taskId: string; title: string }[] : []
       const discussedAt = (typeof briefing.discussedAt === 'string') ? briefing.discussedAt : ''
       const esc = (briefing.escalate && typeof briefing.escalate === 'object') ? briefing.escalate as Record<string, string> : {}
+      const blockRes = (briefing.blockResolver && typeof briefing.blockResolver === 'object') ? briefing.blockResolver as Record<string, string> : {}
       return {
         id: t.id,
         taskType: t.taskType,
@@ -114,6 +115,9 @@ export async function GET(req: NextRequest) {
         escalateType: esc.type || '',
         escalateQuestion: esc.question || '',
         discussNote: (typeof briefing.discussNote === 'string') ? briefing.discussNote : '',
+        blockReason: (typeof briefing.blockReason === 'string') ? briefing.blockReason : '',
+        blockResolverName: blockRes.name || '',
+        blockedAt: (typeof briefing.blockedAt === 'string') ? briefing.blockedAt : '',
       }
     }
 

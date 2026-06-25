@@ -455,7 +455,7 @@ export interface SetStatusAdminInput {
   escalated?: boolean
   execReviewed?: boolean
   reason?: string
-  briefingPatch?: Partial<{ criteria: string; proposal: string; decision: string; notes: string; discussedAt: string; discussNote: string; escalate: { type: string; question: string; byName: string; at: string } }>
+  briefingPatch?: Partial<{ criteria: string; proposal: string; decision: string; notes: string; discussedAt: string; discussNote: string; escalate: { type: string; question: string; byName: string; at: string }; blockReason: string; blockResolver: { userId: string | null; role: string | null; name: string } | null; blockedAt: string; blockSuggestion: string; _resolverNotifyId: string | null }>
   deadline?: string | null
 }
 
@@ -572,6 +572,13 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
       prisma.task.update({ where: { id: taskId }, data: updateData }),
       prisma.taskHistory.create({ data: { taskId, action: 'STATUS_SET', byUserId, reason: input.reason || `Chuyển: ${label}`, meta: historyMeta } }),
     ])
+  }
+
+  if (input.blocked === true && !task.blocked) {
+    const reason = input.briefingPatch?.blockReason || ''
+    await prisma.taskHistory.create({ data: { taskId, action: 'BLOCKED', byUserId, reason: reason || 'Đánh dấu tắc', meta: JSON.parse(JSON.stringify({ source: 'briefing' })) } })
+  } else if (input.blocked === false && task.blocked) {
+    await prisma.taskHistory.create({ data: { taskId, action: 'UNBLOCKED', byUserId, reason: 'Gỡ tắc', meta: JSON.parse(JSON.stringify({ source: 'briefing' })) } })
   }
 
   emitTaskUpdated(taskId, task.status).catch(() => {})

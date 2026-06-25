@@ -4,6 +4,8 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { setTaskStatusAdmin, type SetStatusAdminInput } from '@/lib/work-engine'
 import { notifyExecEscalation } from '@/lib/telegram-notifications'
 import { taskDaysOverdue } from '@/lib/utils'
+import { sendDirectMessage } from '@/lib/telegram'
+import { ROLE_TO_DEPT, DEPT_PRIMARY_ROLE, DEPT_NAME } from '@/lib/org-map'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +18,7 @@ export async function PATCH(req: NextRequest) {
     if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được cập nhật trạng thái')
 
     const body = await req.json()
-    const { taskId, status, blocked, escalated, execReviewed, reason, briefingPatch, deadline, escalateType, escalateQuestion } = body as { taskId?: string; status?: string; escalated?: boolean; execReviewed?: boolean; escalateType?: string; escalateQuestion?: string } & Partial<SetStatusAdminInput>
+    const { taskId, status, blocked, escalated, execReviewed, reason, briefingPatch, deadline, escalateType, escalateQuestion, blockReason, blockResolverUserId, blockResolverRole, blockSuggestion } = body as { taskId?: string; status?: string; escalated?: boolean; execReviewed?: boolean; escalateType?: string; escalateQuestion?: string; blockReason?: string; blockResolverUserId?: string; blockResolverRole?: string; blockSuggestion?: string } & Partial<SetStatusAdminInput>
 
     if (!taskId) return errorResponse('Cần taskId', 400)
     if (!status && !briefingPatch && escalated === undefined && execReviewed === undefined) return errorResponse('Cần status, briefingPatch, escalated, hoặc execReviewed', 400)
@@ -34,9 +36,38 @@ export async function PATCH(req: NextRequest) {
     }
 
     const mergedPatch = { ...(briefingPatch || {}) }
+    if (blocked === true && blockReason) {
+      let resolverName = ''
+      let resolverNotifyId: string | null = null
+      if (blockResolverUserId) {
+        const ru = await prisma.user.findUnique({ where: { id: blockResolverUserId }, select: { fullName: true } })
+        resolverName = ru?.fullName || ''
+        resolverNotifyId = blockResolverUserId
+      } else if (blockResolverRole) {
+        const dept = ROLE_TO_DEPT[blockResolverRole]
+        resolverName = dept ? (DEPT_NAME[dept] || blockResolverRole) : blockResolverRole
+        const head = await prisma.user.findFirst({ where: { roleCode: blockResolverRole, isActive: true }, select: { id: true } })
+        resolverNotifyId = head?.id || null
+      }
+      mergedPatch.blockReason = blockReason.trim()
+      mergedPatch.blockResolver = { userId: blockResolverUserId || null, role: blockResolverRole || null, name: resolverName }
+      mergedPatch.blockedAt = new Date().toISOString()
+      if (blockSuggestion) mergedPatch.blockSuggestion = blockSuggestion.trim()
+      // Store resolverNotifyId for notification after save
+      ;(mergedPatch as Record<string, unknown>)._resolverNotifyId = resolverNotifyId
+    }
+    if (blocked === false) {
+      mergedPatch.blockReason = ''
+      mergedPatch.blockResolver = null
+      mergedPatch.blockedAt = ''
+      mergedPatch.blockSuggestion = ''
+    }
     if (escalated === true && escalateType) {
       mergedPatch.escalate = { type: escalateType.trim(), question: (escalateQuestion || '').trim(), byName: payload.fullName || payload.username || 'PM', at: new Date().toISOString() }
     }
+
+    const resolverNotifyId = (mergedPatch as Record<string, unknown>)._resolverNotifyId as string | null | undefined
+    delete (mergedPatch as Record<string, unknown>)._resolverNotifyId
 
     const result = await setTaskStatusAdmin(taskId, payload.userId, { status: effectiveStatus, blocked, escalated, execReviewed, reason, briefingPatch: Object.keys(mergedPatch).length ? mergedPatch : briefingPatch, deadline })
 
@@ -62,6 +93,18 @@ export async function PATCH(req: NextRequest) {
           daysOverdue: daysOverdue > 0 ? daysOverdue : undefined,
         }).catch(() => {})
       }
+    }
+
+    // Block notification to resolver
+    if (blocked === true && blockReason && resolverNotifyId) {
+      const task = await prisma.task.findUnique({ where: { id: taskId }, select: { title: true, project: { select: { projectCode: true } } } })
+      const projCode = task?.project?.projectCode || ''
+      const notifMsg = `Cần tháo gỡ: ${task?.title || taskId} — ${blockReason.trim().slice(0, 100)}${projCode ? ` (${projCode})` : ''}`
+      prisma.notification.create({
+        data: { userId: resolverNotifyId, title: '🔴 ' + notifMsg, message: blockSuggestion ? `Đề xuất: ${blockSuggestion.trim()}` : notifMsg, type: 'task_blocked', linkUrl: `/dashboard/work/${taskId}` },
+      }).catch(() => {})
+      const teleMsg = `🔴 <b>Cần tháo gỡ</b>\n${projCode ? `📁 ${projCode}\n` : ''}📋 ${task?.title || taskId}\n❌ ${blockReason.trim()}\n👤 Báo bởi: ${payload.fullName || payload.username || 'PM'}${blockSuggestion ? `\n💡 Đề xuất: ${blockSuggestion.trim()}` : ''}`
+      sendDirectMessage(resolverNotifyId, teleMsg).catch(() => {})
     }
 
     return successResponse(result)

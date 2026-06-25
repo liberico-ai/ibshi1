@@ -40,6 +40,9 @@ interface BriefingTask {
   decisionAt: string
   execReviewedAt: string
   notes: string
+  blockReason: string
+  blockResolverName: string
+  blockedAt: string
 }
 interface ProjectGroup {
   project: { id: string; projectCode: string; projectName: string } | null
@@ -322,6 +325,16 @@ export default function BriefingPage() {
   const [presentMode, setPresentMode] = useState(false)
   const [presentIdx, setPresentIdx] = useState(0)
 
+  // Block modal state
+  const [blockModal, setBlockModal] = useState<string | null>(null)
+  const [blockReason, setBlockReason] = useState('')
+  const [blockResolverType, setBlockResolverType] = useState<'user' | 'role'>('user')
+  const [blockResolverUserId, setBlockResolverUserId] = useState('')
+  const [blockResolverRole, setBlockResolverRole] = useState('')
+  const [blockSuggestion, setBlockSuggestion] = useState('')
+  const [blockSaving, setBlockSaving] = useState(false)
+  const [blockUserQuery, setBlockUserQuery] = useState('')
+
   // Import state
   const fileRef = useRef<HTMLInputElement>(null)
   const [previewing, setPreviewing] = useState(false)
@@ -479,17 +492,41 @@ export default function BriefingPage() {
     setActionMode(null)
   }
 
-  const handleToggleBlocked = async (taskId: string, currentBlocked: boolean) => {
+  const openBlockModal = async (taskId: string) => {
     setActionMenu(null); setMenuPos(null)
-    const newBlocked = !currentBlocked
-    // Optimistic
-    setGroups(gs => gs.map(g => ({ ...g, tasks: g.tasks.map(t => t.id === taskId ? { ...t, blocked: newBlocked } : t) })))
+    setBlockReason(''); setBlockResolverType('user'); setBlockResolverUserId(''); setBlockResolverRole(''); setBlockSuggestion(''); setBlockUserQuery('')
+    await loadUsers()
+    setBlockModal(taskId)
+  }
+
+  const handleBlockSubmit = async () => {
+    if (!blockModal || !blockReason.trim()) return
+    const resolverOk = blockResolverType === 'user' ? !!blockResolverUserId : !!blockResolverRole
+    if (!resolverOk) return
+    setBlockSaving(true)
     const r = await apiFetch('/api/work/briefing/status', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId, blocked: newBlocked }),
+      body: JSON.stringify({
+        taskId: blockModal, blocked: true, blockReason: blockReason.trim(),
+        ...(blockResolverType === 'user' ? { blockResolverUserId } : { blockResolverRole }),
+        ...(blockSuggestion.trim() ? { blockSuggestion: blockSuggestion.trim() } : {}),
+      }),
     })
-    if (r.ok) { setToast({ msg: newBlocked ? 'Đã đánh dấu tắc' : 'Đã gỡ tắc', ok: true }); load() }
+    setBlockSaving(false)
+    if (r.ok) { setBlockModal(null); setToast({ msg: 'Đã đánh dấu tắc + thông báo người tháo gỡ', ok: true }); load() }
+    else { setToast({ msg: r.error || 'Lỗi', ok: false }) }
+  }
+
+  const handleUnblock = async (taskId: string) => {
+    setActionMenu(null); setMenuPos(null)
+    setGroups(gs => gs.map(g => ({ ...g, tasks: g.tasks.map(t => t.id === taskId ? { ...t, blocked: false } : t) })))
+    const r = await apiFetch('/api/work/briefing/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, blocked: false }),
+    })
+    if (r.ok) { setToast({ msg: 'Đã gỡ tắc', ok: true }); load() }
     else { setToast({ msg: r.error || 'Lỗi', ok: false }); load() }
   }
 
@@ -1079,7 +1116,7 @@ export default function BriefingPage() {
                     <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{presentCurrent.title}</h2>
                   </div>
                   <div className="flex gap-2 items-start flex-shrink-0">
-                    {presentCurrent.blocked && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fff7ed', color: '#c2410c' }}>Tắc</span>}
+                    {presentCurrent.blocked && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fff7ed', color: '#c2410c' }}>{presentCurrent.blockReason ? `Tắc: ${presentCurrent.blockReason.slice(0, 30)}` : 'Tắc'}</span>}
                     {presentCurrent.escalated && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#faf5ff', color: '#7c3aed' }}>BLĐ</span>}
                     {presentCurrent.isOverdue && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fef2f2', color: '#dc2626' }}>Quá hạn {presentCurrent.daysOverdue}d</span>}
                     {!presentCurrent.isOverdue && presentCurrent.isDueSoon && presentCurrent.daysUntil != null && <span className="text-sm px-3 py-1 rounded-full font-bold" style={{ background: '#fffbeb', color: '#d97706' }}>còn {presentCurrent.daysUntil} ngày</span>}
@@ -1091,6 +1128,13 @@ export default function BriefingPage() {
                   <div><span className="font-semibold text-sm block mb-0.5" style={{ color: 'var(--text-muted)' }}>Hạn</span>{fmtDate(presentCurrent.deadline)}</div>
                   <div><span className="font-semibold text-sm block mb-0.5" style={{ color: 'var(--text-muted)' }}>Ưu tiên</span>{presentCurrent.priority === 'URGENT' ? 'Gấp' : presentCurrent.priority === 'HIGH' ? 'Cao' : 'Bình thường'}</div>
                 </div>
+                {presentCurrent.blocked && presentCurrent.blockReason && (
+                  <div className="rounded-lg px-4 py-3" style={{ background: '#fff7ed', border: '1px solid #c2410c33' }}>
+                    <span className="text-sm font-bold" style={{ color: '#c2410c' }}>Tắc: </span>
+                    <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{presentCurrent.blockReason}</span>
+                    {presentCurrent.blockResolverName && <span className="text-sm" style={{ color: '#64748b' }}> · chờ {presentCurrent.blockResolverName}</span>}
+                  </div>
+                )}
                 {(presentCurrent.escalateType || presentCurrent.escalateQuestion) && (
                   <div className="rounded-lg px-4 py-3" style={{ background: '#faf5ff', border: '1px solid #7c3aed33' }}>
                     <span className="text-sm font-bold" style={{ color: '#7c3aed' }}>{presentCurrent.escalateType}: </span>
@@ -1105,7 +1149,9 @@ export default function BriefingPage() {
                 <div className="flex gap-3 pt-3 border-t flex-wrap" style={{ borderColor: 'var(--border)' }}>
                   <button onClick={() => openAction(presentCurrent.id, 'reassign')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>👤 Đổi người</button>
                   <button onClick={() => openAction(presentCurrent.id, 'deadline')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>📅 Đổi hạn</button>
-                  <button onClick={() => handleToggleBlocked(presentCurrent.id, presentCurrent.blocked)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>{presentCurrent.blocked ? '🟢 Gỡ tắc' : '🔴 Tắc'}</button>
+                  {presentCurrent.blocked
+                    ? <button onClick={() => handleUnblock(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>🟢 Gỡ tắc</button>
+                    : <button onClick={() => openBlockModal(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>🔴 Tắc</button>}
                   {!presentCurrent.escalated && <button onClick={() => openEscalateModal(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid #7c3aed33', color: '#7c3aed' }}>▲ Đẩy BGĐ</button>}
                   <button onClick={() => setCellEditing(`${presentCurrent.id}:decision`)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Ghi quyết định</button>
                   {!discussedThisWeek(presentCurrent) ? (
@@ -1499,6 +1545,7 @@ export default function BriefingPage() {
 
               const renderCompactRow = (t: BriefingTask) => {
                 const tsev = t.isOverdue ? overdueSeverity(t.daysOverdue) : { color: '#475569', bg: '#f1f5f9' }
+                const blockedDays = t.blocked && t.blockedAt ? Math.max(0, Math.floor((Date.now() - new Date(t.blockedAt).getTime()) / 86400000)) : 0
                 const statusDisplay = t.blocked
                   ? { label: 'Tắc', color: '#c2410c', bg: '#fff7ed' }
                   : (STATUS_LABELS[t.status] || { label: t.status, color: '#475569', bg: '#f1f5f9' })
@@ -1517,8 +1564,18 @@ export default function BriefingPage() {
                     >
                       <td className="px-4 py-2.5">
                         {t.needsExecDecision && <span className="mr-1" title="Cần BGĐ quyết">🔺</span>}
-                        {t.blocked && <span className="mr-1" title="Tắc">🔴</span>}
+                        {t.blocked && <span className="mr-1" title={t.blockReason || 'Tắc'}>🔴</span>}
                         <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }} onClick={e => e.stopPropagation()}>{t.title}</a>
+                        {t.blocked && t.blockReason && (
+                          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#c2410c' }} title={`${t.blockReason}${t.blockResolverName ? ` · chờ ${t.blockResolverName}` : ''}${blockedDays > 0 ? ` · ${blockedDays}d` : ''}`}>
+                            Tắc{blockedDays > 0 ? ` ${blockedDays}d` : ''}{t.blockResolverName ? ` · ${t.blockResolverName}` : ''}
+                          </span>
+                        )}
+                        {t.blocked && blockedDays >= 3 && !t.escalated && (
+                          <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full cursor-pointer" style={{ background: '#faf5ff', color: '#7c3aed' }} onClick={(e) => { e.stopPropagation(); openEscalateModal(t.id) }} title="Tắc lâu — cân nhắc đẩy BLĐ">
+                            ▲ Đẩy?
+                          </span>
+                        )}
                         {t.isDoneThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>xong</span>}
                         {t.isNewThisWeek && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#7c3aed' }}>mới</span>}
                         {t.actionItems.length > 0 && (
@@ -1651,9 +1708,15 @@ export default function BriefingPage() {
                               <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'deadline') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
                                 📅 Đổi hạn
                               </button>
-                              <button onClick={(e) => { e.stopPropagation(); handleToggleBlocked(t.id, t.blocked) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                                {t.blocked ? '🟢 Gỡ tắc' : '🔴 Đánh dấu tắc'}
-                              </button>
+                              {t.blocked ? (
+                                <button onClick={(e) => { e.stopPropagation(); handleUnblock(t.id) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors" style={{ border: '1px solid #05966933', color: '#059669' }}>
+                                  🟢 Gỡ tắc
+                                </button>
+                              ) : (
+                                <button onClick={(e) => { e.stopPropagation(); openBlockModal(t.id) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors" style={{ border: '1px solid #dc262633', color: '#dc2626' }}>
+                                  🔴 Đánh dấu tắc
+                                </button>
+                              )}
                               <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'action-item') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
                                 ➕ Tạo việc
                               </button>
@@ -1766,6 +1829,55 @@ export default function BriefingPage() {
                   <button onClick={() => setDiscussNoteId(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
                   <button onClick={() => handleDiscussed(discussNoteId, true, discussNoteText)} className="text-sm px-4 py-2 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>
                     Đã bàn
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ Block Modal ═══ */}
+          {blockModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setBlockModal(null)}>
+              <div className="rounded-xl shadow-xl w-full max-w-md mx-4 p-5 space-y-4" style={{ background: 'var(--surface, #fff)' }} onClick={e => e.stopPropagation()}>
+                <h3 className="font-bold text-sm" style={{ color: '#c2410c' }}>🔴 Đánh dấu tắc</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Lý do tắc *</label>
+                    <textarea value={blockReason} onChange={e => setBlockReason(e.target.value)} placeholder="Tại sao việc bị tắc?..." className="w-full text-sm px-3 py-2 rounded-lg border resize-none" style={{ borderColor: !blockReason.trim() ? '#f59e0b' : 'var(--border)', background: '#f8fafc', minHeight: 50 }} autoFocus />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Người/phòng cần tháo gỡ *</label>
+                    <div className="flex gap-2 mb-2">
+                      <button onClick={() => setBlockResolverType('user')} className="text-xs px-3 py-1.5 rounded-lg" style={blockResolverType === 'user' ? { background: '#1d4ed8', color: '#fff' } : { border: '1px solid var(--border)' }}>Cá nhân</button>
+                      <button onClick={() => setBlockResolverType('role')} className="text-xs px-3 py-1.5 rounded-lg" style={blockResolverType === 'role' ? { background: '#1d4ed8', color: '#fff' } : { border: '1px solid var(--border)' }}>Phòng/Role</button>
+                    </div>
+                    {blockResolverType === 'user' ? (
+                      <div>
+                        <input value={blockUserQuery} onChange={e => setBlockUserQuery(e.target.value)} placeholder="Tìm tên..." className="w-full text-sm px-3 py-2 rounded-lg border mb-1" style={{ borderColor: 'var(--border)', background: '#f8fafc' }} />
+                        <div className="max-h-32 overflow-y-auto space-y-0.5 rounded-lg border p-1" style={{ borderColor: 'var(--border)' }}>
+                          {actionUsers.filter(u => !blockUserQuery || u.fullName.toLowerCase().includes(blockUserQuery.toLowerCase())).slice(0, 15).map(u => (
+                            <div key={u.id} onClick={() => { setBlockResolverUserId(u.id); setBlockUserQuery(u.fullName) }} className="text-xs px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50" style={{ background: blockResolverUserId === u.id ? '#eff6ff' : undefined }}>
+                              {u.fullName} <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <select value={blockResolverRole} onChange={e => setBlockResolverRole(e.target.value)} className="w-full text-sm px-3 py-2 rounded-lg border" style={{ borderColor: !blockResolverRole ? '#f59e0b' : 'var(--border)', background: '#f8fafc' }}>
+                        <option value="">— Chọn phòng —</option>
+                        {DEPT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Đề xuất hướng gỡ</label>
+                    <input value={blockSuggestion} onChange={e => setBlockSuggestion(e.target.value)} placeholder="(không bắt buộc)" className="w-full text-sm px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--border)', background: '#f8fafc' }} />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setBlockModal(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                  <button onClick={handleBlockSubmit} disabled={blockSaving || !blockReason.trim() || (blockResolverType === 'user' ? !blockResolverUserId : !blockResolverRole)} className="text-sm px-4 py-2 rounded-lg font-semibold disabled:opacity-50" style={{ background: '#c2410c', color: '#fff' }}>
+                    {blockSaving ? 'Đang lưu...' : '🔴 Đánh dấu tắc'}
                   </button>
                 </div>
               </div>
