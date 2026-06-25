@@ -21,6 +21,28 @@ export async function GET(req: NextRequest) {
       orderBy: { weekOf: 'desc' },
     })
 
+    const sinceDate = lastSnapshot ? new Date(lastSnapshot.weekOf) : new Date(Date.now() - 7 * 86400000)
+    const doneRaw = await prisma.task.findMany({
+      where: { status: 'DONE', completedAt: { gte: sinceDate } },
+      include: {
+        project: { select: { projectCode: true } },
+        assignees: true,
+      },
+      orderBy: { completedAt: 'desc' },
+    })
+    const doneUserIds = new Set<string>()
+    for (const t of doneRaw) for (const a of t.assignees) if (a.userId) doneUserIds.add(a.userId)
+    const doneUsers = doneUserIds.size ? await prisma.user.findMany({ where: { id: { in: [...doneUserIds] } }, select: { id: true, fullName: true } }) : []
+    const doneNameById = new Map(doneUsers.map(u => [u.id, u.fullName]))
+    const doneSincePrev = doneRaw.map(t => ({
+      taskId: t.id,
+      code: t.taskType !== 'FREE' ? t.taskType : '',
+      title: t.title,
+      assigneeNames: t.assignees.filter(a => a.userId).map(a => doneNameById.get(a.userId!) || '').filter(Boolean),
+      projectCode: t.project?.projectCode || '',
+      completedAt: t.completedAt?.toISOString() || '',
+    }))
+
     if (!lastSnapshot) {
       const weekAgo = new Date(Date.now() - 7 * 86400000)
       const tasks = await prisma.task.findMany({
@@ -55,6 +77,7 @@ export async function GET(req: NextRequest) {
         lastSnapshot: null,
         followUp,
         diff: { new: [], closed: [], slipped: [] },
+        doneSincePrev,
       })
     }
 
@@ -143,6 +166,7 @@ export async function GET(req: NextRequest) {
       lastSnapshot: { id: lastSnapshot.id, weekOf: lastSnapshot.weekOf, createdAt: lastSnapshot.createdAt, kpi: lastSnapshot.kpi },
       followUp,
       diff: { new: newTasks, closed: closedTasks, slipped: slippedTasks },
+      doneSincePrev,
     })
   } catch (err) {
     console.error('GET /api/work/briefing/review error:', err)

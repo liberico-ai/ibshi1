@@ -276,7 +276,6 @@ export default function BriefingPage() {
   const [filterSearch, setFilterSearch] = useState('')
   const [statusEditing, setStatusEditing] = useState<string | null>(null)
   const [statusSaving, setStatusSaving] = useState(false)
-  const [doneExpanded, setDoneExpanded] = useState<Set<string>>(new Set())
   const [cellEditing, setCellEditing] = useState<string | null>(null)
   const [filterExecOnly, setFilterExecOnly] = useState(false)
 
@@ -313,11 +312,13 @@ export default function BriefingPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
 
   // Review / Snapshot state
+  interface DoneSincePrevItem { taskId: string; code: string; title: string; assigneeNames: string[]; projectCode: string; completedAt: string }
   interface ReviewData {
     hasSnapshot: boolean
     lastSnapshot: { id: string; weekOf: string; createdAt: string; kpi: Record<string, number> } | null
     followUp: { taskId: string; title: string; decision?: string; byName?: string; type?: string; currentStatus: string; isDone: boolean; isOverdue: boolean; daysOverdue: number }[]
     diff: { new: { taskId: string; title: string; status: string }[]; closed: { taskId: string; title: string; currentStatus: string }[]; slipped: { taskId: string; title: string; oldDeadline: string; newDeadline: string; daysOverdue: number }[] }
+    doneSincePrev: DoneSincePrevItem[]
   }
   const [review, setReview] = useState<ReviewData | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -326,6 +327,19 @@ export default function BriefingPage() {
   const [publishing, setPublishing] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [snapshotHistory, setSnapshotHistory] = useState<{ id: string; weekOf: string; createdAt: string; kpi: Record<string, number> }[]>([])
+  const [doneSincePrevOpen, setDoneSincePrevOpen] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('briefing_meeting') === '1'
+    return false
+  })
+
+  // Project task modal
+  const [projectTaskModal, setProjectTaskModal] = useState<{ projectId: string; projectCode: string } | null>(null)
+  const [ptTitle, setPtTitle] = useState('')
+  const [ptDeadline, setPtDeadline] = useState('')
+  const [ptDescription, setPtDescription] = useState('')
+  const [ptPicks, setPtPicks] = useState<string[]>([])
+  const [ptQuery, setPtQuery] = useState('')
+  const [ptSaving, setPtSaving] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -361,7 +375,7 @@ export default function BriefingPage() {
 
   useEffect(() => {
     localStorage.setItem('briefing_meeting', meetingMode ? '1' : '0')
-    if (meetingMode) setReviewOpen(true)
+    if (meetingMode) { setReviewOpen(true); setDoneSincePrevOpen(true) }
   }, [meetingMode])
 
   const loadUsers = useCallback(async () => {
@@ -473,6 +487,42 @@ export default function BriefingPage() {
     setActionSaving(false)
     setActionMode(null)
   }
+
+  const openProjectTask = async (projectId: string, projectCode: string) => {
+    setPtTitle(''); setPtDeadline(''); setPtDescription(''); setPtPicks([]); setPtQuery(''); setPtSaving(false)
+    await loadUsers()
+    setProjectTaskModal({ projectId, projectCode })
+  }
+
+  const handleProjectTask = async () => {
+    if (!projectTaskModal || !ptTitle.trim() || ptPicks.length === 0) return
+    setPtSaving(true)
+    const r = await apiFetch('/api/work/briefing/project-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: projectTaskModal.projectId || undefined,
+        title: ptTitle.trim(),
+        assigneeUserIds: ptPicks,
+        deadline: ptDeadline || undefined,
+        description: ptDescription.trim() || undefined,
+      }),
+    })
+    if (r.ok) {
+      setToast({ msg: 'Đã tạo việc mới', ok: true })
+      load()
+    } else {
+      setToast({ msg: r.error || 'Lỗi tạo việc', ok: false })
+    }
+    setPtSaving(false)
+    setProjectTaskModal(null)
+  }
+
+  const filteredPtUsers = useMemo(() => {
+    if (!ptQuery.trim()) return actionUsers.slice(0, 20)
+    const q = rmDiacritics(ptQuery.toLowerCase())
+    return actionUsers.filter(u => rmDiacritics(u.fullName.toLowerCase()).includes(q)).slice(0, 20)
+  }, [actionUsers, ptQuery])
 
   const filteredActionUsers = useMemo(() => {
     if (!reassignQuery.trim() && !actionItemQuery.trim()) return actionUsers.slice(0, 20)
@@ -665,7 +715,7 @@ export default function BriefingPage() {
       return as - bs
     }
     return groups.map((g) => {
-      let tasks = g.tasks
+      let tasks = g.tasks.filter(t => t.status !== 'DONE' && t.status !== 'CANCELLED')
       if (meetingMode) tasks = tasks.filter(needsDiscussion)
       if (filterExecOnly) tasks = tasks.filter((t) => t.needsExecDecision)
       if (filterStatus) tasks = tasks.filter((t) => t.status === filterStatus)
@@ -692,9 +742,10 @@ export default function BriefingPage() {
           const db = b.deadline ? new Date(b.deadline).getTime() : Infinity
           return da - db
         })
-      const activeTasks = meetingMode ? sorted : sorted.filter((t) => urgencyRank(t) <= 4)
-      const doneTasks = meetingMode ? [] : sorted.filter((t) => urgencyRank(t) === 5)
-      return { ...g, tasks: sorted, activeTasks, doneTasks, totalTasks: tasks.length }
+      const activeTasks = sorted
+      const totalOverdue = sorted.filter(t => t.isOverdue).length
+      const maxDaysOverdue = sorted.reduce((max, t) => t.isOverdue ? Math.max(max, t.daysOverdue) : max, 0)
+      return { ...g, tasks: sorted, activeTasks, doneTasks: [] as BriefingTask[], totalTasks: sorted.length, totalOverdue, maxDaysOverdue }
     }).filter((g) => g.tasks.length > 0)
   }, [groups, filterStatus, filterBlocked, filterOverdue, filterSearch, filterExecOnly, meetingMode])
 
@@ -991,6 +1042,49 @@ export default function BriefingPage() {
             </div>
           )}
 
+          {/* ✅ Đã hoàn thành kể từ kỳ trước */}
+          {review?.doneSincePrev && review.doneSincePrev.length > 0 && (
+            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <button
+                onClick={() => setDoneSincePrevOpen(!doneSincePrevOpen)}
+                className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-opacity-80 transition-colors"
+                style={{ background: '#ecfdf5' }}
+              >
+                <span className="font-bold text-sm" style={{ color: '#059669' }}>
+                  {doneSincePrevOpen ? '▾' : '▸'} ✅ Đã hoàn thành kể từ kỳ trước ({review.doneSincePrev.length})
+                </span>
+                {review.lastSnapshot && <span className="text-xs" style={{ color: '#64748b' }}>từ {new Date(review.lastSnapshot.weekOf).toLocaleDateString('vi-VN')}</span>}
+              </button>
+              {doneSincePrevOpen && (
+                <div className="px-5 py-4 space-y-3 border-t" style={{ borderColor: 'var(--border)' }}>
+                  {(() => {
+                    const byProject = new Map<string, DoneSincePrevItem[]>()
+                    for (const d of review.doneSincePrev) {
+                      const key = d.projectCode || '__general__'
+                      if (!byProject.has(key)) byProject.set(key, [])
+                      byProject.get(key)!.push(d)
+                    }
+                    return Array.from(byProject.entries()).map(([code, items]) => (
+                      <div key={code}>
+                        <div className="text-xs font-bold mb-1.5" style={{ color: '#475569' }}>{code === '__general__' ? 'Công việc chung' : code}</div>
+                        <div className="space-y-1">
+                          {items.map(d => (
+                            <div key={d.taskId} className="flex items-center gap-3 text-xs py-1.5 px-3 rounded-lg" style={{ background: '#f0fdf4' }}>
+                              <span className="font-mono w-12 shrink-0" style={{ color: '#64748b' }}>{d.code || '—'}</span>
+                              <a href={`/dashboard/work/${d.taskId}`} className="hover:underline flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{d.title}</a>
+                              <span className="shrink-0 text-[11px]" style={{ color: '#64748b' }}>{d.assigneeNames.join(', ') || '—'}</span>
+                              <span className="shrink-0 text-[11px]" style={{ color: '#94a3b8' }}>{fmtDate(d.completedAt)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Đối chiếu kỳ trước */}
           {review && (review.followUp.length > 0 || review.diff.new.length > 0 || review.diff.closed.length > 0 || review.diff.slipped.length > 0) && (
             <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -1231,18 +1325,17 @@ export default function BriefingPage() {
             </div>
           )}
 
-          {/* Grouped table */}
+          {/* Tồn đọng cần xử lý */}
+          <h2 className="text-base font-bold mt-2" style={{ color: 'var(--text-primary)' }}>Tồn đọng cần xử lý</h2>
           {filteredGroups.length === 0 ? (
             <div className="rounded-xl p-8 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <p className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>Không có việc nào khớp bộ lọc</p>
+              <p className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>Không có việc tồn đọng</p>
             </div>
           ) : (
             filteredGroups.map((g) => {
               const groupKey = g.project?.id || '__general__'
               const isOpen = expanded.has(groupKey)
               const sev = g.totalOverdue > 0 ? overdueSeverity(g.maxDaysOverdue) : { color: '#059669', bg: '#ecfdf5' }
-              const isDoneOpen = doneExpanded.has(groupKey)
-
               const renderRow = (t: BriefingTask, dimmed?: boolean) => {
                 const tsev = t.isOverdue ? overdueSeverity(t.daysOverdue) : { color: '#475569', bg: '#f1f5f9' }
                 const statusDisplay = t.blocked
@@ -1412,15 +1505,19 @@ export default function BriefingPage() {
                       </div>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#f1f5f9', color: '#475569' }}>{g.totalTasks} việc</span>
-                      {g.activeTasks.length > 0 && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{g.activeTasks.length} cần xem</span>
-                      )}
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#f1f5f9', color: '#475569' }}>{g.totalTasks} tồn đọng</span>
                       {g.totalOverdue > 0 && (
                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: sev.bg, color: sev.color }}>
                           {g.totalOverdue} quá hạn
                         </span>
                       )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openProjectTask(g.project?.id || '', g.project?.projectCode || 'Chung') }}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-lg hover:ring-1 transition-all"
+                        style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #1d4ed822' }}
+                      >
+                        + Thêm việc
+                      </button>
                     </div>
                   </button>
 
@@ -1445,22 +1542,6 @@ export default function BriefingPage() {
                           </thead>
                           <tbody>
                             {g.activeTasks.map((t) => renderRow(t))}
-                            {g.doneTasks.length > 0 && (
-                              <>
-                                <tr>
-                                  <td colSpan={meetingMode ? 11 : 10} className="px-4 py-2">
-                                    <button
-                                      onClick={() => setDoneExpanded((prev) => { const s = new Set(prev); if (s.has(groupKey)) s.delete(groupKey); else s.add(groupKey); return s })}
-                                      className="text-xs font-medium"
-                                      style={{ color: 'var(--text-muted)' }}
-                                    >
-                                      {isDoneOpen ? '▾' : '▸'} ✓ {g.doneTasks.length} việc đã xong — {isDoneOpen ? 'ẩn' : 'bấm để xem'}
-                                    </button>
-                                  </td>
-                                </tr>
-                                {isDoneOpen && g.doneTasks.map((t) => renderRow(t, true))}
-                              </>
-                            )}
                           </tbody>
                         </table>
                       </div>
@@ -1635,6 +1716,86 @@ export default function BriefingPage() {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Project task modal */}
+          {projectTaskModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setProjectTaskModal(null)}>
+              <div className="rounded-xl shadow-xl w-full max-w-md mx-4 p-5 space-y-4" style={{ background: 'var(--surface, #fff)' }} onClick={e => e.stopPropagation()}>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm việc — {projectTaskModal.projectCode}</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Tiêu đề *</label>
+                    <input
+                      className="w-full text-sm px-3 py-2 rounded-lg border"
+                      style={{ borderColor: 'var(--border)', background: '#f8fafc' }}
+                      value={ptTitle}
+                      onChange={e => setPtTitle(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Người nhận *</label>
+                    <input
+                      className="w-full text-sm px-3 py-2 rounded-lg border"
+                      style={{ borderColor: 'var(--border)', background: '#f8fafc' }}
+                      placeholder="Tìm tên..."
+                      value={ptQuery}
+                      onChange={e => setPtQuery(e.target.value)}
+                    />
+                    <div className="max-h-36 overflow-y-auto rounded-lg border mt-1" style={{ borderColor: 'var(--border)' }}>
+                      {filteredPtUsers.map(u => (
+                        <label key={u.id} className="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs">
+                          <input
+                            type="checkbox"
+                            checked={ptPicks.includes(u.id)}
+                            onChange={e => {
+                              if (e.target.checked) setPtPicks(p => [...p, u.id])
+                              else setPtPicks(p => p.filter(x => x !== u.id))
+                            }}
+                          />
+                          <span>{u.fullName}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+                        </label>
+                      ))}
+                    </div>
+                    {ptPicks.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {ptPicks.map(uid => {
+                          const u = actionUsers.find(x => x.id === uid)
+                          return <span key={uid} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{u?.fullName || uid}</span>
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Hạn (tuỳ chọn)</label>
+                    <input
+                      type="date"
+                      className="w-full text-sm px-3 py-2 rounded-lg border"
+                      style={{ borderColor: 'var(--border)', background: '#f8fafc' }}
+                      value={ptDeadline}
+                      onChange={e => setPtDeadline(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Mô tả (tuỳ chọn)</label>
+                    <textarea
+                      className="w-full text-sm px-3 py-2 rounded-lg border resize-none"
+                      style={{ borderColor: 'var(--border)', background: '#f8fafc', minHeight: 60 }}
+                      value={ptDescription}
+                      onChange={e => setPtDescription(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setProjectTaskModal(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                  <button onClick={handleProjectTask} disabled={ptSaving || !ptTitle.trim() || ptPicks.length === 0} className="btn-primary text-sm px-4 py-2 rounded-lg disabled:opacity-50">
+                    {ptSaving ? 'Đang tạo...' : 'Tạo việc'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
