@@ -64,6 +64,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   const [creatingVendor, setCreatingVendor] = useState(false)
   const [reasonError, setReasonError] = useState<string | null>(null)
   const [poState, setPoState] = useState<{ loading: boolean; poId?: string; poCode?: string; error?: string }>({ loading: false })
+  const [prSearch, setPrSearch] = useState('')
+  const [showAllPr, setShowAllPr] = useState(false)
 
   useEffect(() => {
     apiFetch('/api/vendors').then(r => {
@@ -201,6 +203,15 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     setEnriching(false)
   }
 
+  const resetQuoteData = (id: string) => {
+    fire(quotes.map(q => q.id === id ? { ...q, lines: [], files: [], totalAmount: 0 } : q))
+  }
+
+  const resetAllQuotes = () => {
+    if (!confirm('Xóa toàn bộ báo giá đã nhập? (Giữ danh sách NCC)')) return
+    fire(quotes.map(q => ({ ...q, lines: [], files: [], totalAmount: 0, selected: false, selectReason: '' })))
+  }
+
   // PR reference table
   const prItems = bomPrData ? (() => { try { return JSON.parse(bomPrData) } catch { return null } })() : null
   const [enriching, setEnriching] = useState(false)
@@ -295,10 +306,19 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   const prRef = (() => {
     if (!Array.isArray(prItems) || prItems.length === 0) return null
     const arr = prItems as Record<string, unknown>[]
-    const shown = arr.slice(0, 50)
     const totalNeeded = arr.reduce((s, it) => s + (typeof it.neededQty === 'number' ? (it.neededQty as number) : (Number(it.quantity || it.qty) || 0)), 0)
     const totalToBuy = arr.reduce((s, it) => s + (typeof it.needToBuyQty === 'number' ? (it.needToBuyQty as number) : (Number(it.quantity || it.qty) || 0)), 0)
     const hasRequiredDate = arr.some(it => typeof it.requiredDate === 'string' && it.requiredDate)
+    const withIdx = arr.map((item, idx) => ({ item, idx }))
+    const filteredPr = prSearch
+      ? withIdx.filter(({ item }) => {
+          const q = prSearch.toLowerCase()
+          return String(item.stt || item.canonicalCode || '').toLowerCase().includes(q)
+            || String(item.description || item.materialName || item.name || '').toLowerCase().includes(q)
+            || String(item.profile || '').toLowerCase().includes(q)
+        })
+      : withIdx
+    const shown = showAllPr || filteredPr.length <= 50 ? filteredPr : filteredPr.slice(0, 50)
     return (
       <div className="rounded-xl p-4" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
         <div className="flex items-center justify-between mb-2">
@@ -316,6 +336,21 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             {enrichMsg && <span className="text-xs" style={{ color: enrichMsg.startsWith('Đã') ? '#16a34a' : '#dc2626' }}>{enrichMsg}</span>}
           </div>
         </div>
+        {arr.length > 20 && (
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="text"
+              value={prSearch}
+              onChange={e => { setPrSearch(e.target.value); setShowAllPr(false) }}
+              placeholder="Tìm mã / tên / profile..."
+              className="text-xs px-2 py-1 rounded-lg flex-1"
+              style={{ border: '1px solid #bae6fd', background: '#fff', maxWidth: 280 }}
+            />
+            <span className="text-xs" style={{ color: '#64748b' }}>
+              {filteredPr.length === arr.length ? `${arr.length} dòng` : `${filteredPr.length}/${arr.length} dòng`}
+            </span>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr style={{ background: '#e0f2fe' }}>
@@ -324,7 +359,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
               ))}
             </tr></thead>
             <tbody>
-              {shown.map((item, i) => {
+              {shown.map(({ item, idx }) => {
                 const needed = typeof item.neededQty === 'number' ? (item.neededQty as number) : (Number(item.quantity || item.qty) || null)
                 const avail = typeof item.availableQty === 'number' ? (item.availableQty as number) : null
                 const toBuy = typeof item.needToBuyQty === 'number' ? (item.needToBuyQty as number) : (Number(item.quantity || item.qty) || null)
@@ -332,8 +367,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                 const unit = String(item.stockUnit || item.unit || item.uom || '')
                 const rd = typeof item.requiredDate === 'string' ? item.requiredDate : ''
                 return (
-                  <tr key={i} style={{ borderTop: '1px solid #bae6fd', ...(sufficient ? { background: '#f1f5f9', opacity: 0.7 } : {}) }}>
-                    <td className="px-2 py-1" style={{ color: '#64748b' }}>{i + 1}</td>
+                  <tr key={idx} style={{ borderTop: '1px solid #bae6fd', ...(sufficient ? { background: '#f1f5f9', opacity: 0.7 } : {}) }}>
+                    <td className="px-2 py-1" style={{ color: '#64748b' }}>{idx + 1}</td>
                     <td className="px-2 py-1 font-mono text-xs">{String(item.canonicalCode || item.stt || '—')}</td>
                     <td className="px-2 py-1">{String(item.description || item.materialName || item.name || '—')}</td>
                     <td className="px-2 py-1">{unit || '—'}</td>
@@ -372,7 +407,16 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             )}
           </table>
         </div>
-        {arr.length > 50 && <div className="text-xs mt-1" style={{ color: '#64748b' }}>... và {arr.length - 50} dòng nữa</div>}
+        {filteredPr.length > 50 && !showAllPr && (
+          <button onClick={() => setShowAllPr(true)} className="text-xs mt-1 px-2 py-1 rounded" style={{ color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd' }}>
+            Xem tất cả {filteredPr.length} dòng
+          </button>
+        )}
+        {showAllPr && filteredPr.length > 50 && (
+          <button onClick={() => setShowAllPr(false)} className="text-xs mt-1 underline" style={{ color: '#64748b' }}>
+            Thu gọn (50 dòng đầu)
+          </button>
+        )}
       </div>
     )
   })()
@@ -499,6 +543,11 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
               )}
               {q.selected && (
                 <span className="text-xs px-2 py-1 rounded-lg font-semibold" style={{ background: '#22c55e', color: '#fff' }}>✓ Đã chọn</span>
+              )}
+              {((q.lines?.length ?? 0) > 0 || q.files.length > 0 || q.totalAmount > 0) && (
+                <button onClick={() => resetQuoteData(q.id)} className="text-xs px-2 py-1 rounded-lg" style={{ color: '#b45309', border: '1px solid #fde68a', background: '#fffbeb' }}>
+                  🗑 Xóa báo giá
+                </button>
               )}
               <button onClick={() => removeRow(q.id)} className="text-xs px-2 py-1 rounded-lg" style={{ color: '#dc2626', border: '1px solid #fecaca', background: '#fef2f2' }}>Xóa</button>
             </div>
@@ -673,9 +722,16 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
         </div>
       ))}
 
-      <button onClick={addRow} className="w-full text-sm py-2.5 rounded-xl font-semibold" style={{ border: '2px dashed var(--border)', color: '#1d4ed8', background: 'none', cursor: 'pointer' }}>
-        + Thêm nhà cung cấp
-      </button>
+      <div className="flex items-center gap-3">
+        <button onClick={addRow} className="flex-1 text-sm py-2.5 rounded-xl font-semibold" style={{ border: '2px dashed var(--border)', color: '#1d4ed8', background: 'none', cursor: 'pointer' }}>
+          + Thêm nhà cung cấp
+        </button>
+        {quotes.some(q => (q.lines?.length ?? 0) > 0 || q.totalAmount > 0) && (
+          <button onClick={resetAllQuotes} className="text-xs px-3 py-1.5 rounded-lg" style={{ color: '#dc2626', border: '1px solid #fecaca', background: '#fef2f2' }}>
+            Xóa toàn bộ báo giá
+          </button>
+        )}
+      </div>
 
       {/* C: Comparison */}
       {quotes.length > 0 && (

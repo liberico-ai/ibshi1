@@ -40,6 +40,17 @@ export interface PrItem {
 const S = (v: unknown): string => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim())
 const N = (v: unknown): number => { const n = Number(v); return isNaN(n) ? 0 : n }
 
+export function normSpec(s: string): string {
+  return s.toUpperCase().replace(/[\s\-\.\/]/g, '')
+}
+
+function normSpecMatch(a: string, b: string): boolean {
+  if (a === b) return true
+  if (a.length < 5 || b.length < 5) return false
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a]
+  return long.includes(short) && short.length >= long.length * 0.5
+}
+
 const SKIP_ROW = /^(total|tổng|sub\s*total|cộng|ghi\s*ch[úu]|note|remarks|priority|name\/|signature\/|date\/)/i
 const CATEGORY_ROW = /^[A-Z]\.\s|^(VTC|VPK|VDK|VHN)\d{0,2}\b/i
 
@@ -148,6 +159,23 @@ export function matchQuoteLinesToPr(lines: QuoteLine[], prItems: PrItem[]): Quot
     if (revIdx >= 0) {
       prUsed.add(revIdx)
       return { ...line, matchedPrIndex: revIdx, matchedPrCode: getCanonical(prItems[revIdx]) }
+    }
+
+    // Strategy 1.7: normalized specification match (bolts, nuts, washers, misc)
+    const lineNorm = normSpec(line.profile || line.description)
+    if (lineNorm.length >= 3) {
+      for (let i = 0; i < prItems.length; i++) {
+        if (prUsed.has(i)) continue
+        const p = prItems[i]
+        const pNorm = normSpec(getPrProfile(p) || getPrDesc(p))
+        if (!pNorm || pNorm.length < 3) continue
+        if (normSpecMatch(lineNorm, pNorm)) {
+          const pUnit = getPrUnit(p)
+          if (line.unit && pUnit && line.unit !== pUnit) continue
+          prUsed.add(i)
+          return { ...line, matchedPrIndex: i, matchedPrCode: getPrCode(p) }
+        }
+      }
     }
 
     // Strategy 2: profile+grade matching via section type + dimensions

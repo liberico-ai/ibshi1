@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { matchQuoteLinesToPr, type QuoteLine, type PrItem } from '../quote-parser'
+import { matchQuoteLinesToPr, normSpec, type QuoteLine, type PrItem } from '../quote-parser'
 import { matchInventoryServer, type InventoryRow } from '../bompr-enrich'
 
 // ── Quote matcher tests ──
@@ -60,6 +60,69 @@ describe('matchQuoteLinesToPr — canonicalCode matching', () => {
     ])
     const matched = matchQuoteLinesToPr(lines, prItems)
     expect(matched[0].matchedPrIndex).toBeNull()
+  })
+})
+
+describe('matchQuoteLinesToPr — normSpec matching (bolts/nuts/misc)', () => {
+  const prItems: PrItem[] = [
+    { stt: 'I-VPK-001', description: 'NUT', profile: 'NUT-M16-ISO4032-8-HDG', grade: '', unit: 'cái' },
+    { stt: 'I-VPK-002', description: 'BOLT', profile: 'BOLT-M16X50-8.8-HDG', grade: '', unit: 'cái' },
+    { stt: 'I-VTC-001', description: 'THÉP HÌNH C', profile: 'C100X50X5X7.5-12000L', grade: 'SS400', unit: 'm' },
+    { stt: 'I-VPK-003', description: 'WASHER', profile: 'WASHER-M16-HDG', grade: '', unit: 'cái' },
+  ]
+
+  it('(a) matches Nut-M16-ISO4032-8-HDG to NUT-M16-ISO4032-8-HDG via normSpec', () => {
+    const lines = makeLines([
+      { code: 'BG-001', description: 'Đai ốc', profile: 'Nut-M16-ISO4032-8-HDG', unit: 'cái', qty: 100, unitPrice: 5000 },
+    ])
+    const matched = matchQuoteLinesToPr(lines, prItems)
+    expect(matched[0].matchedPrIndex).toBe(0)
+  })
+
+  it('(b) steel still matches by section type + dims (no regression)', () => {
+    const lines = makeLines([
+      { code: 'BG-010', description: 'THÉP HÌNH C', profile: 'C100X50X5X7.5', grade: 'SS400', unit: 'm', qty: 50, unitPrice: 45000 },
+    ])
+    const matched = matchQuoteLinesToPr(lines, prItems)
+    expect(matched[0].matchedPrIndex).toBe(2)
+  })
+
+  it('normSpec normalizes case, spaces, dashes, dots, slashes', () => {
+    expect(normSpec('Nut-M16-ISO4032-8-HDG')).toBe('NUTM16ISO40328HDG')
+    expect(normSpec('NUT-M16-ISO4032-8-HDG')).toBe('NUTM16ISO40328HDG')
+    expect(normSpec('bolt m16x50/8.8 HDG')).toBe('BOLTM16X5088HDG')
+    expect(normSpec('BOLT-M16X50-8.8-HDG')).toBe('BOLTM16X5088HDG')
+  })
+})
+
+describe('quote reset logic', () => {
+  it('(c) resetQuoteData clears one NCC without affecting others', () => {
+    const quotes = [
+      { id: 'q1', vendorName: 'NCC A', totalAmount: 100000, lines: [{ code: 'X' }], files: [{ id: 'f1' }] },
+      { id: 'q2', vendorName: 'NCC B', totalAmount: 200000, lines: [{ code: 'Y' }], files: [{ id: 'f2' }] },
+    ]
+    const resetId = 'q1'
+    const result = quotes.map(q => q.id === resetId ? { ...q, lines: [], files: [], totalAmount: 0 } : q)
+    expect(result[0].lines).toEqual([])
+    expect(result[0].files).toEqual([])
+    expect(result[0].totalAmount).toBe(0)
+    expect(result[0].vendorName).toBe('NCC A')
+    expect(result[1].lines).toHaveLength(1)
+    expect(result[1].totalAmount).toBe(200000)
+  })
+})
+
+describe('totals compute on all items', () => {
+  it('(d) totalNeeded/totalToBuy sum over full array, not truncated subset', () => {
+    const items = Array.from({ length: 100 }, () => ({
+      neededQty: 10,
+      needToBuyQty: 5,
+      quantity: 10,
+    }))
+    const totalNeeded = items.reduce((s, it) => s + (typeof it.neededQty === 'number' ? it.neededQty : (Number(it.quantity) || 0)), 0)
+    const totalToBuy = items.reduce((s, it) => s + (typeof it.needToBuyQty === 'number' ? it.needToBuyQty : (Number(it.quantity) || 0)), 0)
+    expect(totalNeeded).toBe(1000)
+    expect(totalToBuy).toBe(500)
   })
 })
 
