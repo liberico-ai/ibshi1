@@ -223,9 +223,23 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     }))
   }, [bomPrData]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-enrich on mount when no item has availableQty yet
+  useEffect(() => {
+    if (!bomPrData || parsedPrItems.length === 0) return
+    if (parsedPrItems.some(p => p.availableQty !== undefined)) return
+    const key = `enrich-${taskId}`
+    if (sessionStorage.getItem(key)) return
+    sessionStorage.setItem(key, '1')
+    apiFetch(`/api/work/tasks/${taskId}/bom-pr`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'enrich' }),
+    }).then(r => { if (r.ok) window.location.reload() })
+      .catch(() => {})
+  }, [taskId, bomPrData, parsedPrItems])
+
   // Comparison
-  const hasNeedToBuy = parsedPrItems.some(p => typeof p.needToBuyQty === 'number')
-  const hasItemsToBuy = parsedPrItems.some(p => typeof p.needToBuyQty === 'number' && p.needToBuyQty > 0)
+  const hasNeedToBuy = parsedPrItems.some(p => typeof p.needToBuyQty === 'number' || (p.quantity ?? 0) > 0)
+  const hasItemsToBuy = parsedPrItems.some(p => ((p.needToBuyQty ?? p.quantity) ?? 0) > 0)
   const needToBuyTotals: Record<string, number> = useMemo(() => {
     if (!hasNeedToBuy) return {}
     const totals: Record<string, number> = {}
@@ -276,14 +290,14 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     )
   })()
 
-  const missingEnrichment = parsedPrItems.length > 0 && parsedPrItems.every(p => p.needToBuyQty === undefined)
+  const missingEnrichment = parsedPrItems.length > 0 && parsedPrItems.every(p => p.availableQty === undefined)
 
   const prRef = (() => {
     if (!Array.isArray(prItems) || prItems.length === 0) return null
     const arr = prItems as Record<string, unknown>[]
     const shown = arr.slice(0, 50)
-    const totalNeeded = arr.reduce((s, it) => s + (typeof it.neededQty === 'number' ? (it.neededQty as number) : 0), 0)
-    const totalToBuy = arr.reduce((s, it) => s + (typeof it.needToBuyQty === 'number' ? (it.needToBuyQty as number) : 0), 0)
+    const totalNeeded = arr.reduce((s, it) => s + (typeof it.neededQty === 'number' ? (it.neededQty as number) : (Number(it.quantity || it.qty) || 0)), 0)
+    const totalToBuy = arr.reduce((s, it) => s + (typeof it.needToBuyQty === 'number' ? (it.needToBuyQty as number) : (Number(it.quantity || it.qty) || 0)), 0)
     const hasRequiredDate = arr.some(it => typeof it.requiredDate === 'string' && it.requiredDate)
     return (
       <div className="rounded-xl p-4" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
@@ -311,9 +325,9 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             </tr></thead>
             <tbody>
               {shown.map((item, i) => {
-                const needed = typeof item.neededQty === 'number' ? (item.neededQty as number) : null
+                const needed = typeof item.neededQty === 'number' ? (item.neededQty as number) : (Number(item.quantity || item.qty) || null)
                 const avail = typeof item.availableQty === 'number' ? (item.availableQty as number) : null
-                const toBuy = typeof item.needToBuyQty === 'number' ? (item.needToBuyQty as number) : null
+                const toBuy = typeof item.needToBuyQty === 'number' ? (item.needToBuyQty as number) : (Number(item.quantity || item.qty) || null)
                 const sufficient = toBuy !== null && toBuy === 0
                 const unit = String(item.stockUnit || item.unit || item.uom || '')
                 const rd = typeof item.requiredDate === 'string' ? item.requiredDate : ''
@@ -743,7 +757,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
   const quotesWithLines = quotes.filter(q => q.lines && q.lines.length > 0)
   if (quotesWithLines.length === 0 || prItems.length === 0) return null
 
-  const hasBreakdown = prItems.some(p => typeof p.needToBuyQty === 'number')
+  const hasBreakdown = prItems.some(p => typeof p.needToBuyQty === 'number' || (p.quantity ?? 0) > 0)
 
   type Row = { prIdx: number; code: string; desc: string; profile: string; unit: string; qty: number; needToBuy: number; prices: Record<string, number> }
 
