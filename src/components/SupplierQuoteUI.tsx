@@ -392,17 +392,16 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
           </thead>
           <tbody>
             {compactPrItems.map((p, i) => {
-              const hasCanonical = !!p.canonicalCode
-              const displayCode = p.canonicalCode || p.stt || p.code || p.materialCode || ''
               const desc = p.description || p.materialName || p.name || ''
               const needToBuy = p.needToBuyQty ?? p.quantity ?? p.qty ?? 0
               const avail = typeof p.availableQty === 'number' ? p.availableQty : null
               return (
                 <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                   <td className="px-2 py-1 font-mono" style={{ color: '#64748b' }}>{i + 1}</td>
-                  <td className="px-2 py-1 font-mono text-xs" style={{ color: '#1d4ed8' }}>
-                    {displayCode || '—'}
-                    {!hasCanonical && displayCode && <span className="ml-1 font-normal" style={{ fontSize: '0.6rem', color: '#b45309', background: '#fef3c7', padding: '0 3px', borderRadius: 3 }}>chưa map</span>}
+                  <td className="px-2 py-1 text-xs" style={{ color: p.canonicalCode ? '#1d4ed8' : '#94a3b8' }}>
+                    {p.canonicalCode
+                      ? <span className="font-mono">{p.canonicalCode}</span>
+                      : <span style={{ fontStyle: 'italic' }}>Chưa có mã</span>}
                   </td>
                   <td className="px-2 py-1">{desc}</td>
                   <td className="px-2 py-1" style={{ color: '#64748b' }}>{p.profile || '—'}</td>
@@ -920,7 +919,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
     }
     allRows.push({
       prIdx: pi,
-      code: p.canonicalCode || p.stt || p.code || p.materialCode || '',
+      code: p.canonicalCode || '',
       desc: p.description || p.materialName || p.name || '',
       profile: p.profile || '',
       unit: p.unit || p.uom || '',
