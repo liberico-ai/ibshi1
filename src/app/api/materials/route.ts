@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, logAudit, getClientIP } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
@@ -96,8 +96,7 @@ export async function GET(req: NextRequest) {
 
     const REUSABLE_KINDS = new Set(['COMMON', 'RETURN'])
 
-    return NextResponse.json({
-      ok: true,
+    return successResponse({
       materials: materials.map((m) => {
         const base = {
           id: m.id, materialCode: m.materialCode, name: m.name, unit: m.unit,
@@ -122,7 +121,7 @@ export async function GET(req: NextRequest) {
     })
   } catch (err) {
     console.error('Materials API error:', err)
-    return NextResponse.json({ ok: false, error: 'Lỗi khi tải danh sách vật tư' }, { status: 500 })
+    return errorResponse('Lỗi khi tải danh sách vật tư', 500)
   }
 }
 

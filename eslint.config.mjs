@@ -11,6 +11,20 @@ const eslintConfig = defineConfig([
       'react-hooks/exhaustive-deps': 'warn',
     },
   },
+  {
+    files: ['src/app/api/**/*.ts'],
+    ignores: [
+      'src/app/api/docs/**',
+      'src/app/api/telegram/webhook/**',
+      'src/lib/auth.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': ['warn', {
+        selector: "MemberExpression[object.name='NextResponse'][property.name='json']",
+        message: 'Use successResponse/errorResponse from @/lib/auth instead of NextResponse.json.',
+      }],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

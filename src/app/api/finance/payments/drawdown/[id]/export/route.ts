@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { authenticateRequest } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     const { id } = await params
     
@@ -14,9 +14,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       include: { beneficiaryLines: { include: { vendor: true } } }
     })
     
-    if (!drawdown) return NextResponse.json({ error: 'Hồ sơ không tồn tại' }, { status: 404 })
+    if (!drawdown) return errorResponse('Hồ sơ không tồn tại', 404)
     if (drawdown.status !== 'APPROVED' && drawdown.status !== 'EXECUTED') {
-      return NextResponse.json({ error: 'Hồ sơ phải được phê duyệt trước khi export' }, { status: 400 })
+      return errorResponse('Hồ sơ phải được phê duyệt trước khi export', 400)
     }
 
     // Removed exportStatus update as it's not in schema
@@ -30,9 +30,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       'Diễn giải': `Thanh toán hồ sơ ${drawdown.drawdownNo}`,
     }))
 
-    return NextResponse.json({ ok: true, data: vpbankData, filename: `VPBank_Export_${drawdown.drawdownNo}.xlsx` })
+    return successResponse({ data: vpbankData, filename: `VPBank_Export_${drawdown.drawdownNo}.xlsx` })
   } catch (err) {
     console.error('Export Drawdown error:', err)
-    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
+    return errorResponse('Lỗi máy chủ nội bộ', 500)
   }
 }

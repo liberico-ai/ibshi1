@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
     if (!['R01', 'R02'].includes(user.roleCode)) {
-      return NextResponse.json({ ok: false, error: 'Không có quyền' }, { status: 403 })
+      return forbiddenResponse('Không có quyền')
     }
 
     const body = await req.json()

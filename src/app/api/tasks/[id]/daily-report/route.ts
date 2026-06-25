@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 const MAX_VOLUME = 1_000_000
@@ -16,8 +15,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       select: { projectId: true, taskType: true }
     })
 
-    if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
-    if (task.taskType !== 'P5.1' && task.taskType !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
+    if (!task) return errorResponse('Task not found', 404)
+    if (task.taskType !== 'P5.1' && task.taskType !== 'P5.1A') return errorResponse('Invalid task type')
 
     // 1. Tìm TẤT CẢ các task P3.3/P3.4 của dự án (bất kể status)
     const p3Tasks = await prisma.task.findMany({
@@ -204,11 +203,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       }
     })
 
-    return NextResponse.json({ success: true, items: uniqueLsxItems })
+    return successResponse({ items: uniqueLsxItems })
 
   } catch (err) {
     console.error('Daily Report fetch error:', err)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
+    return errorResponse('Lỗi máy chủ nội bộ', 500)
   }
 }
 
@@ -224,8 +223,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       select: { projectId: true, taskType: true }
     })
 
-    if (!task) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 })
-    if (task.taskType !== 'P5.1' && task.taskType !== 'P5.1A') return NextResponse.json({ success: false, error: 'Invalid task type' }, { status: 400 })
+    if (!task) return errorResponse('Task not found', 404)
+    if (task.taskType !== 'P5.1' && task.taskType !== 'P5.1A') return errorResponse('Invalid task type')
 
     const body = await request.json()
     const { items, date } = body as {
@@ -235,16 +234,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const userId = payload.userId
 
     if (!items || !Array.isArray(items) || !date) {
-      return NextResponse.json({ success: false, error: 'Dữ liệu không hợp lệ' }, { status: 400 })
+      return errorResponse('Dữ liệu không hợp lệ')
     }
 
     if (!DATE_REGEX.test(date)) {
-      return NextResponse.json({ success: false, error: 'Định dạng ngày không hợp lệ (YYYY-MM-DD)' }, { status: 400 })
+      return errorResponse('Định dạng ngày không hợp lệ (YYYY-MM-DD)')
     }
 
     for (const item of items) {
       if (item.reportedVolume > MAX_VOLUME) {
-        return NextResponse.json({ success: false, error: `Khối lượng vượt giới hạn cho phép (${MAX_VOLUME})` }, { status: 400 })
+        return errorResponse(`Khối lượng vượt giới hạn cho phép (${MAX_VOLUME})`)
       }
     }
 
@@ -289,9 +288,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
     })
 
-    return NextResponse.json({ success: true, savedCount, message: `Đã lưu báo cáo cho ${savedCount} công đoạn.` })
+    return successResponse({ savedCount, message: `Đã lưu báo cáo cho ${savedCount} công đoạn.` })
   } catch (err) {
     console.error('Daily Report save error:', err)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ khi lưu báo cáo' }, { status: 500 })
+    return errorResponse('Lỗi máy chủ khi lưu báo cáo', 500)
   }
 }

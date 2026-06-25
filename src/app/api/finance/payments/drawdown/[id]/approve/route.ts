@@ -1,16 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { authenticateRequest } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     // Segregation of Duties Check: Only Head of Accounting or Admin can approve
     // assuming R01 = admin, R02 = Kế toán trưởng
     if (!['R01', 'R08', 'R08a', 'R10'].includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Chỉ Kế toán trưởng mới có quyền phê duyệt hồ sơ giải ngân.' }, { status: 403 })
+      return errorResponse('Chỉ Kế toán trưởng mới có quyền phê duyệt hồ sơ giải ngân.', 403)
     }
 
     const { id } = await params
@@ -21,9 +21,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { beneficiaryLines: true }
     })
     
-    if (!drawdown) return NextResponse.json({ error: 'Hồ sơ không tồn tại' }, { status: 404 })
+    if (!drawdown) return errorResponse('Hồ sơ không tồn tại', 404)
     if (drawdown.status !== 'PENDING_APPROVAL') {
-      return NextResponse.json({ error: 'Hồ sơ không ở trạng thái hợp lệ để duyệt' }, { status: 400 })
+      return errorResponse('Hồ sơ không ở trạng thái hợp lệ để duyệt', 400)
     }
 
     // Approve the drawdown
@@ -45,9 +45,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return res
     })
 
-    return NextResponse.json({ ok: true, drawdown: updated })
+    return successResponse({ drawdown: updated })
   } catch (err: any) {
     console.error('Approve Drawdown error:', err)
-    return NextResponse.json({ error: 'Lỗi hệ thống khi phê duyệt giải ngân' }, { status: 500 })
+    return errorResponse('Lỗi hệ thống khi phê duyệt giải ngân', 500)
   }
 }

@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { authenticateRequest } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     const FINANCE_ROLES = ['R01', 'R02', 'R02a', 'R08', 'R08a', 'R10']
     if (!FINANCE_ROLES.includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Forbidden. Chỉ bộ phận Tài chính mới có quyền truy cập.' }, { status: 403 })
+      return errorResponse('Forbidden. Chỉ bộ phận Tài chính mới có quyền truy cập.', 403)
     }
 
     // Build the query to get all drawdowns with relations
@@ -37,28 +37,28 @@ export async function GET(req: NextRequest) {
       misaSynced: syncedRefs.has(dd.drawdownNo)
     }))
 
-    return NextResponse.json({ ok: true, drawdowns: drawdownsWithSync })
+    return successResponse({ drawdowns: drawdownsWithSync })
   } catch (err) {
     console.error('Fetch Drawdowns error:', err)
-    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
+    return errorResponse('Lỗi máy chủ nội bộ', 500)
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     const FINANCE_ROLES = ['R01', 'R08', 'R08a', 'R10']
     if (!FINANCE_ROLES.includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Forbidden. Chỉ Kế toán mới có quyền tạo hồ sơ giải ngân.' }, { status: 403 })
+      return errorResponse('Forbidden. Chỉ Kế toán mới có quyền tạo hồ sơ giải ngân.', 403)
     }
 
     const body = await req.json()
     const { contractId, invoices, notes } = body 
 
     if (!contractId || !invoices || invoices.length === 0) {
-      return NextResponse.json({ error: 'Missing required data: contractId or invoices' }, { status: 400 })
+      return errorResponse('Missing required data: contractId or invoices', 400)
     }
 
     const totalAmount = invoices.reduce((sum: number, inv: any) => sum + Number(inv.totalAmount || 0), 0)
@@ -154,10 +154,10 @@ export async function POST(req: NextRequest) {
       return drawdown
     })
 
-    return NextResponse.json({ ok: true, drawdown: result })
+    return successResponse({ drawdown: result })
 
   } catch (err) {
     console.error('Create Drawdown error:', err)
-    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
+    return errorResponse('Lỗi máy chủ nội bộ', 500)
   }
 }

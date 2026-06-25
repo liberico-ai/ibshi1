@@ -1,22 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     // Check roles (only treasury/finance + PMs)
     const allowedRoles = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a']
     if (!allowedRoles.includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Forbidden. Role not allowed.' }, { status: 403 })
+      return errorResponse('Forbidden. Role not allowed.', 403)
     }
 
     const { projectId, customerId, scopeDescription, contractValue, budgetLines, monthlyCashflows } = await req.json()
 
     if (!projectId) {
-      return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+      return errorResponse('projectId is required', 400)
     }
 
     // Run transaction to replace whole plan
@@ -84,18 +84,18 @@ export async function POST(req: NextRequest) {
       return plan
     })
 
-    return NextResponse.json({ ok: true, plan: result })
+    return successResponse({ plan: result })
 
   } catch (err: any) {
     console.error('Save Finance Plan error:', err)
-    return NextResponse.json({ error: 'Lỗi hệ thống khi lưu kế hoạch tài chính' }, { status: 500 })
+    return errorResponse('Lỗi hệ thống khi lưu kế hoạch tài chính', 500)
   }
 }
 
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
       const plans = await prisma.projectFinancePlan.findMany({
         include: { project: true }
       })
-      return NextResponse.json({ ok: true, plans })
+      return successResponse({ plans })
     }
 
     const plan = await prisma.projectFinancePlan.findUnique({
@@ -116,9 +116,9 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({ ok: true, plan })
+    return successResponse({ plan })
 
   } catch (err: any) {
-    return NextResponse.json({ error: 'Lỗi hệ thống khi tải kế hoạch tài chính' }, { status: 500 })
+    return errorResponse('Lỗi hệ thống khi tải kế hoạch tài chính', 500)
   }
 }

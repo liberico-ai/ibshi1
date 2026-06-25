@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, unauthorizedResponse, successResponse, errorResponse } from '@/lib/auth'
 import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -45,13 +45,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { success: true, trackingList: allApprovedGroups },
-      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
-    )
+    const res = successResponse({ trackingList: allApprovedGroups })
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    return res
   } catch (error: any) {
     console.error('procurement-tracking GET ERROR:', error)
-    return NextResponse.json({ error: 'Lỗi hệ thống khi tải theo dõi mua sắm' }, { status: 500 })
+    return errorResponse('Lỗi hệ thống khi tải theo dõi mua sắm', 500)
   }
 }
 
@@ -64,13 +63,13 @@ export async function PUT(request: NextRequest) {
     const { taskId, groupId, action, deliveryDate } = body
 
     const task = await prisma.task.findUnique({ where: { id: taskId } })
-    if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    if (!task) return errorResponse('Task not found', 404)
 
     const rd = (task.resultData as any) || {}
     let groups = rd.groups || []
     
     const blockIndex = groups.findIndex((g: any) => g.id === groupId)
-    if (blockIndex === -1) return NextResponse.json({ error: 'Group not found' }, { status: 404 })
+    if (blockIndex === -1) return errorResponse('Group not found', 404)
     
     const g = groups[blockIndex]
 
@@ -194,9 +193,9 @@ export async function PUT(request: NextRequest) {
       data: { resultData: { ...rd, groups } }
     })
 
-    return NextResponse.json({ success: true, message: 'Đã cập nhật thành công' })
+    return successResponse({ message: 'Đã cập nhật thành công' })
   } catch (error) {
     console.error('procurement-tracking PUT ERROR:', error)
-    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
+    return errorResponse('Lỗi máy chủ nội bộ', 500)
   }
 }

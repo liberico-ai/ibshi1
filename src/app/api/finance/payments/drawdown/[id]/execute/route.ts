@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { authenticateRequest } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     // Validating roles if needed
     if (!['R01', 'R08', 'R08a', 'R10'].includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Chỉ Kế toán mới có quyền chốt giải ngân.' }, { status: 403 })
+      return errorResponse('Chỉ Kế toán mới có quyền chốt giải ngân.', 403)
     }
 
     const { id } = await params
@@ -19,9 +19,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { beneficiaryLines: { include: { invoice: true } } }
     })
     
-    if (!drawdown) return NextResponse.json({ error: 'Hồ sơ không tồn tại' }, { status: 404 })
+    if (!drawdown) return errorResponse('Hồ sơ không tồn tại', 404)
     if (drawdown.status !== 'APPROVED') {
-      return NextResponse.json({ error: 'Hồ sơ phải ở trạng thái Đã phê duyệt mới có thể chốt giải ngân.' }, { status: 400 })
+      return errorResponse('Hồ sơ phải ở trạng thái Đã phê duyệt mới có thể chốt giải ngân.', 400)
     }
 
     // Execute the drawdown -> Mark POs as PAID
@@ -61,9 +61,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return res
     })
 
-    return NextResponse.json({ ok: true, drawdown: updated })
+    return successResponse({ drawdown: updated })
   } catch (err) {
     console.error('Execute Drawdown error:', err)
-    return NextResponse.json({ error: 'Lỗi máy chủ nội bộ' }, { status: 500 })
+    return errorResponse('Lỗi máy chủ nội bộ', 500)
   }
 }

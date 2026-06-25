@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, unauthorizedResponse, errorResponse } from '@/lib/auth'
+import { authenticateRequest, unauthorizedResponse, successResponse, errorResponse } from '@/lib/auth'
 import { canEditForm } from '@/lib/constants'
 import { saveAttachmentFromBuffer, validateFileName, ENTITY_ID_REGEX } from '@/lib/save-attachment'
 
@@ -57,10 +57,7 @@ export async function POST(req: NextRequest) {
       uploadedBy: user.userId,
     })
 
-    return NextResponse.json({ ok: true, attachment }, {
-      status: 201,
-      headers: { 'Content-Disposition': 'attachment' },
-    })
+    return successResponse({ attachment }, undefined, 201)
   } catch (err) {
     console.error('POST /api/upload error:', err)
     return errorResponse('Lỗi upload', 500)
@@ -93,7 +90,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({ ok: true, attachments })
+    return successResponse({ attachments })
   } catch (err) {
     console.error('GET /api/upload error:', err)
     return errorResponse('Lỗi hệ thống', 500)

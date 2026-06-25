@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { authenticateRequest } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     const { id } = await params
     
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { beneficiaryLines: true }
     })
 
-    if (!drawdown) return NextResponse.json({ error: 'Hồ sơ không tồn tại' }, { status: 404 })
+    if (!drawdown) return errorResponse('Hồ sơ không tồn tại', 404)
 
     // Check if already synced
     const existing = await prisma.cashflowEntry.findFirst({
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     if (existing) {
-      return NextResponse.json({ error: 'Hồ sơ này đã được đồng bộ với Misa SME trước đó' }, { status: 400 })
+      return errorResponse('Hồ sơ này đã được đồng bộ với Misa SME trước đó', 400)
     }
 
     // Fetch contract to get projectId safely outside nested includes
@@ -59,10 +59,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     })
 
-    return NextResponse.json({ ok: true, synced: true })
+    return successResponse({ synced: true })
 
   } catch (error: any) {
     console.error('Misa Sync Error:', error)
-    return NextResponse.json({ error: 'Lỗi hệ thống khi đồng bộ Misa' }, { status: 500 })
+    return errorResponse('Lỗi hệ thống khi đồng bộ Misa', 500)
   }
 }

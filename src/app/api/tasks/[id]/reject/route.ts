@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { rejectTask } from '@/lib/workflow-engine'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
-import { authenticateRequest } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { validateBody, validateParams } from '@/lib/api-helpers'
 import { rejectTaskSchema, idParamSchema } from '@/lib/schemas'
@@ -14,7 +14,7 @@ export async function POST(
   try {
     const payload = await authenticateRequest(request)
     if (!payload) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorizedResponse()
     }
 
     const pResult = validateParams(await params, idParamSchema)
@@ -28,31 +28,22 @@ export async function POST(
     // Verify task exists and is in-progress
     const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
     if (!task) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+      return errorResponse('Task not found', 404)
     }
 
     if (task.status !== 'IN_PROGRESS') {
-      return NextResponse.json(
-        { error: `Task is ${task.status}, can only reject IN_PROGRESS tasks` },
-        { status: 400 }
-      )
+      return errorResponse(`Task is ${task.status}, can only reject IN_PROGRESS tasks`)
     }
 
     // Role-based authorization: only the assigned role (or admin) can reject
     const taskRole = task.assignees?.[0]?.role || ''
     if (payload.roleCode !== taskRole && payload.roleCode !== 'R00') {
-      return NextResponse.json(
-        { error: `Bạn (${payload.roleCode}) không có quyền từ chối bước này. Chỉ ${taskRole} mới được phép.` },
-        { status: 403 }
-      )
+      return errorResponse(`Bạn (${payload.roleCode}) không có quyền từ chối bước này. Chỉ ${taskRole} mới được phép.`, 403)
     }
 
     const rule = WORKFLOW_RULES[task.taskType]
     if (!rule?.rejectTo && !overrideRejectTo) {
-      return NextResponse.json(
-        { error: `Step ${task.taskType} has no reject destination defined` },
-        { status: 400 }
-      )
+      return errorResponse(`Step ${task.taskType} has no reject destination defined`)
     }
 
     // Use userId from JWT token, not from body
@@ -65,8 +56,7 @@ export async function POST(
     ])
 
     const targetRule = WORKFLOW_RULES[result.returnedTo]
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       returnedTo: result.returnedTo,
       returnedToName: targetRule?.name || result.returnedTo,
       message: `Đã từ chối. Quay về bước ${result.returnedTo}: ${targetRule?.name || ''}`,
@@ -74,6 +64,6 @@ export async function POST(
   } catch (error) {
     console.error('Reject task error:', error)
     const message = error instanceof Error ? error.message : 'Internal server error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(message, 500)
   }
 }

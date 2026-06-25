@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { authenticateRequest } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorizedResponse()
 
     const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R08', 'R08a', 'R10']
     if (!ALLOWED_ROLES.includes(user.roleCode)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return errorResponse('Forbidden', 403)
     }
 
     // Fetch PurchaseOrders that are APPROVED and not yet fully PAID
@@ -23,9 +23,9 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' }
     })
 
-    return NextResponse.json({ ok: true, purchaseOrders: pos })
+    return successResponse({ purchaseOrders: pos })
   } catch (err: any) {
     console.error('Fetch POs error:', err)
-    return NextResponse.json({ error: 'Lỗi hệ thống' }, { status: 500 })
+    return errorResponse('Lỗi hệ thống', 500)
   }
 }

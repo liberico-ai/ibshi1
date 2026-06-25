@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, record }, { status: 201 })
+    return successResponse({ record }, undefined, 201)
   } catch (err) {
     console.error('POST /api/hr/attendance error:', err)
     return errorResponse('Lỗi hệ thống', 500)
