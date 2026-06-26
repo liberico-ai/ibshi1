@@ -533,7 +533,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                     <button type="button" onClick={() => toggleDetail(q.id)} className="w-full text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}>
                       {expandedDetails.has(q.id) ? '▾' : '▸'} {q.vendorName}: Chi tiết ({q.lines!.length} dòng)
                     </button>
-                    {expandedDetails.has(q.id) && renderQuoteDetailTable(q.lines!)}
+                    {expandedDetails.has(q.id) && renderQuoteDetailTable(q.lines!, parsedPrItems)}
                   </div>
                 ))}
               </div>
@@ -712,7 +712,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                     {expandedDetails.has(q.id) ? 'Ẩn chi tiết' : `Chi tiết (${q.lines.length} dòng)`}
                   </button>
                 </div>
-                {expandedDetails.has(q.id) && renderQuoteDetailTable(q.lines!)}
+                {expandedDetails.has(q.id) && renderQuoteDetailTable(q.lines!, parsedPrItems)}
               </div>
             )}
           </div>
@@ -851,7 +851,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
 }
 
 // ── Helper: Quote detail table ──
-function renderQuoteDetailTable(lines: QuoteLine[]) {
+function renderQuoteDetailTable(lines: QuoteLine[], prItems: PrItem[]) {
   if (lines.length === 0) return null
   const totalPre = lines.reduce((s, l) => s + l.amount, 0)
   const totalVatAmt = lines.reduce((s, l) => s + l.amount * ((l.vatPercent ?? 10) / 100), 0)
@@ -862,7 +862,7 @@ function renderQuoteDetailTable(lines: QuoteLine[]) {
       <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: '#f8fafc' }}>
-            {['Mã', 'Tên/Quy cách', 'ĐVT', 'SL', 'Đơn giá', 'Thành tiền', '%VAT', 'Sau VAT'].map(h => (
+            {['Mã Item', 'Mã vật tư', 'Tên/Quy cách', 'ĐVT', 'SL', 'Đơn giá', 'Thành tiền', '%VAT', 'Sau VAT'].map(h => (
               <th key={h} className="text-left px-2 py-1 font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
             ))}
           </tr>
@@ -871,9 +871,11 @@ function renderQuoteDetailTable(lines: QuoteLine[]) {
           {lines.map((l, li) => {
             const vat = l.vatPercent ?? 10
             const afterVat = l.amount * (1 + vat / 100)
+            const matchedPr = l.matchedPrIndex != null ? prItems[l.matchedPrIndex] : null
             return (
               <tr key={li} style={{ borderTop: '1px solid var(--border)', background: l.matchedPrIndex === null ? '#fffbeb' : undefined }}>
                 <td className="px-2 py-1 font-mono">{l.code}{l.matchedPrIndex === null && <span className="ml-1" style={{ fontSize: '0.55rem', color: '#f59e0b' }}>ngoài PR</span>}</td>
+                <td className="px-2 py-1 font-mono">{matchedPr?.canonicalCode ? <>{matchedPr.canonicalCode}{!!(matchedPr as Record<string, unknown>).provisionalCode && <span className="ml-1" style={{ fontSize: '0.55rem', background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '0 3px' }}>tạm</span>}</> : '—'}</td>
                 <td className="px-2 py-1">{l.description}{l.profile ? ` ${l.profile}` : ''}</td>
                 <td className="px-2 py-1">{l.unit}</td>
                 <td className="px-2 py-1 text-right">{l.qty}</td>
@@ -887,7 +889,7 @@ function renderQuoteDetailTable(lines: QuoteLine[]) {
         </tbody>
         <tfoot>
           <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
-            <td colSpan={5} className="px-2 py-1.5 text-right">TỔNG CỘNG:</td>
+            <td colSpan={6} className="px-2 py-1.5 text-right">TỔNG CỘNG:</td>
             <td className="px-2 py-1.5 text-right">{formatCurrency(Math.round(totalPre))}</td>
             <td className="px-2 py-1.5 text-center">{vatRates.size === 1 ? `${[...vatRates][0]}%` : 'hỗn hợp'}</td>
             <td className="px-2 py-1.5 text-right" style={{ color: '#1d4ed8' }}>{formatCurrency(Math.round(totalAfter))}</td>
