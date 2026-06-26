@@ -3,6 +3,8 @@ import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import { formatDateTime, isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
 
+const TEST_PROJECT_RE = /test/i
+
 export async function runDailyDigest() {
   const now = new Date()
 
@@ -27,6 +29,7 @@ export async function runDailyDigest() {
   })
 
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000)
+  const DAY_MS = 86400000
 
   const uids = new Set<string>()
   for (const t of tasks) for (const a of t.assignees) if (a.userId) uids.add(a.userId)
@@ -34,95 +37,158 @@ export async function runDailyDigest() {
   const nameById = new Map(users.map(u => [u.id, u.fullName]))
 
   function resolveAssignee(assignees: { userId: string | null; role: string | null }[]) {
-    if (assignees.length === 0) return '⚠ CHƯA CÓ NGƯỜI PHỤ TRÁCH'
+    if (assignees.length === 0) return '—'
     return assignees.map(a => {
       if (a.userId) return nameById.get(a.userId) || 'NV'
       const dept = DEPT_NAME[ROLE_TO_DEPT[a.role || '']] || a.role || '—'
-      return `Phòng ${dept} (chưa cử người)`
+      return `P.${dept}`
     }).join(', ')
   }
 
-  interface DigestTask {
-    title: string; assignee: string; deadline: Date
-    daysOverdue: number; isOverdue: boolean; isDueSoon: boolean; needsExec: boolean
-  }
-  interface ProjectDigest {
-    code: string; name: string
-    overdue: DigestTask[]; dueSoon: DigestTask[]; exec: DigestTask[]
-  }
+  interface ExecTask { title: string; assignee: string; projCode: string; escalateType: string; escalateQuestion: string }
+  interface BlockedTask { title: string; projCode: string; resolverName: string; blockedDays: number }
+  interface OverdueTask { title: string; assignee: string; projCode: string; daysOverdue: number }
 
-  const byProject = new Map<string, ProjectDigest>()
-  let totalOverdue = 0, totalDueSoon = 0, totalExec = 0
+  const execTasks: ExecTask[] = []
+  const blockedTasks: BlockedTask[] = []
+  const overdueTasks: OverdueTask[] = []
+  let totalDueSoon = 0
+  const projectIds = new Set<string>()
+
+  const overdueByProject: Map<string, number> = new Map()
+  const overdueByAssignee: Map<string, number> = new Map()
 
   for (const t of tasks) {
     if (!t.deadline) continue
+    const projCode = t.project?.projectCode || ''
+    const projName = t.project?.projectName || ''
+    if (TEST_PROJECT_RE.test(projCode) || TEST_PROJECT_RE.test(projName)) continue
+
     const dl = new Date(t.deadline)
     const overdue = isTaskOverdue(t)
     const daysOver = taskDaysOverdue(t)
     const isDueSoon = !!(dl && !overdue && dl >= todayStart && dl <= weekEnd)
+
     const rd = (t.resultData && typeof t.resultData === 'object') ? (t.resultData as Record<string, unknown>) : {}
     const briefing = (rd.briefing && typeof rd.briefing === 'object') ? (rd.briefing as Record<string, unknown>) : {}
     const reviewedAt = typeof briefing.execReviewedAt === 'string' ? new Date(briefing.execReviewedAt) : null
     const recentlyReviewed = !!(reviewedAt && reviewedAt > sevenDaysAgo)
-    const needsExec = !!(t.escalated || t.blocked || (overdue && daysOver >= 14)) && !recentlyReviewed
 
-    if (!overdue && !isDueSoon && !needsExec) continue
+    const needsExec = t.escalated === true && !recentlyReviewed
+
+    if (!overdue && !isDueSoon && !needsExec && !t.blocked) continue
+
+    if (t.project?.id) projectIds.add(t.project.id)
 
     const assignee = resolveAssignee(t.assignees)
-    const dt: DigestTask = { title: t.title, assignee, deadline: dl, daysOverdue: daysOver, isOverdue: overdue, isDueSoon, needsExec }
 
-    const pid = t.project?.id || '__general__'
-    if (!byProject.has(pid)) {
-      const code = t.project?.projectCode || 'Chung'
-      const name = t.project?.projectName || ''
-      byProject.set(pid, { code, name, overdue: [], dueSoon: [], exec: [] })
+    if (needsExec) {
+      const esc = (briefing.escalate && typeof briefing.escalate === 'object') ? (briefing.escalate as Record<string, string>) : {}
+      execTasks.push({ title: t.title, assignee, projCode, escalateType: esc.type || '', escalateQuestion: esc.question || '' })
     }
-    const pg = byProject.get(pid)!
-    if (overdue) { pg.overdue.push(dt); totalOverdue++ }
-    if (isDueSoon) { pg.dueSoon.push(dt); totalDueSoon++ }
-    if (needsExec) { pg.exec.push(dt); totalExec++ }
+
+    if (t.blocked) {
+      const blockRes = (briefing.blockResolver && typeof briefing.blockResolver === 'object') ? (briefing.blockResolver as Record<string, string>) : {}
+      const blockedAt = typeof briefing.blockedAt === 'string' ? new Date(briefing.blockedAt) : null
+      const blockedDays = blockedAt ? Math.max(0, Math.floor((now.getTime() - blockedAt.getTime()) / DAY_MS)) : 0
+      blockedTasks.push({ title: t.title, projCode, resolverName: blockRes.name || '—', blockedDays })
+    }
+
+    if (overdue) {
+      overdueTasks.push({ title: t.title, assignee, projCode, daysOverdue: daysOver })
+      overdueByProject.set(projCode || 'Chung', (overdueByProject.get(projCode || 'Chung') || 0) + 1)
+      const names = t.assignees.filter(a => a.userId).map(a => nameById.get(a.userId!) || 'NV')
+      for (const n of names) overdueByAssignee.set(n, (overdueByAssignee.get(n) || 0) + 1)
+    }
+
+    if (isDueSoon) totalDueSoon++
   }
+
+  overdueTasks.sort((a, b) => b.daysOverdue - a.daysOverdue)
+  blockedTasks.sort((a, b) => b.blockedDays - a.blockedDays)
+
+  const hotProject = [...overdueByProject.entries()].sort((a, b) => b[1] - a[1])[0]
+  const hotAssignee = [...overdueByAssignee.entries()].sort((a, b) => b[1] - a[1])[0]
+
+  const totalOverdue = overdueTasks.length
+  const totalBlocked = blockedTasks.length
+  const totalExec = execTasks.length
+
+  // ── Build message ──
+  const dateFmt = new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' })
+  const dateStr = dateFmt.format(now)
 
   const lines: string[] = []
-  lines.push('📋 <b>TỔNG HỢP CÔNG VIỆC — CẦN HÀNH ĐỘNG</b>')
-  lines.push(`🕐 ${formatDateTime(now)}`)
-  lines.push('━━━━━━━━━━━━━━━━━━━━')
+  lines.push(`📋 <b>GIAO BAN NHANH — ${dateStr}</b>`)
+  const summary = [
+    totalOverdue > 0 ? `🔴 ${totalOverdue} quá hạn` : null,
+    totalDueSoon > 0 ? `🟡 ${totalDueSoon} sắp hạn` : null,
+    totalExec > 0 ? `🔺 ${totalExec} cần BLĐ quyết` : null,
+    totalBlocked > 0 ? `🔒 ${totalBlocked} tắc` : null,
+    `${projectIds.size} dự án`,
+  ].filter(Boolean).join(' · ')
+  lines.push(summary)
 
-  for (const [, pg] of byProject) {
-    if (pg.overdue.length === 0 && pg.dueSoon.length === 0 && pg.exec.length === 0) continue
+  if (hotProject || hotAssignee) {
+    const parts: string[] = []
+    if (hotProject) parts.push(`DA nhiều QH nhất: ${escapeHtml(hotProject[0])} (${hotProject[1]})`)
+    if (hotAssignee) parts.push(`người: ${escapeHtml(hotAssignee[0])} (${hotAssignee[1]})`)
+    lines.push(`🔥 <b>Điểm nóng:</b> ${parts.join('; ')}`)
+  }
 
-    const label = pg.name && pg.name !== pg.code
-      ? `${escapeHtml(pg.code)} — ${escapeHtml(pg.name)}`
-      : escapeHtml(pg.code)
+  // 🔺 Cần BLĐ quyết
+  if (totalExec > 0) {
     lines.push('')
-    lines.push(`📁 <b>${label}</b>`)
-    if (pg.overdue.length) lines.push(`   🔴 Quá hạn: <b>${pg.overdue.length}</b>`)
-    if (pg.dueSoon.length) lines.push(`   🟡 Sắp hạn (≤CN): <b>${pg.dueSoon.length}</b>`)
-    if (pg.exec.length) lines.push(`   🔺 Cần BGĐ quyết: <b>${pg.exec.length}</b>`)
-
-    pg.overdue.sort((a, b) => b.daysOverdue - a.daysOverdue)
-    const urgent = [
-      ...pg.exec,
-      ...pg.overdue.filter(t => !t.needsExec),
-      ...pg.dueSoon.filter(t => !t.needsExec && !t.isOverdue),
-    ]
-    for (const t of urgent.slice(0, 5)) {
-      const icon = t.needsExec ? '🔺' : t.isOverdue ? '🔴' : '🟡'
-      const dlStr = formatDeadline(t.deadline)
-      const overStr = t.isOverdue ? ` (+${t.daysOverdue}d)` : ` (còn ${Math.abs(t.daysOverdue)}d)`
-      lines.push(`   ${icon} ${escapeHtml(t.title.slice(0, 40))} · 👤 ${escapeHtml(t.assignee)} · DL ${dlStr}${overStr}`)
+    lines.push(`🔺 <b>CẦN BLĐ QUYẾT (${totalExec})</b>`)
+    for (const t of execTasks) {
+      const proj = t.projCode ? `${escapeHtml(t.projCode)} ` : ''
+      const q = t.escalateQuestion ? ` — "${escapeHtml(t.escalateQuestion.slice(0, 60))}"` : ''
+      const ty = t.escalateType ? ` [${escapeHtml(t.escalateType)}]` : ''
+      lines.push(`• ${proj}${escapeHtml(t.title.slice(0, 40))} · 👤 ${escapeHtml(t.assignee)}${ty}${q}`)
     }
-    if (urgent.length > 5) lines.push(`   ... và ${urgent.length - 5} việc khác`)
   }
 
-  if (totalOverdue === 0 && totalDueSoon === 0 && totalExec === 0) {
+  // 🔒 Tắc
+  if (totalBlocked > 0) {
     lines.push('')
-    lines.push('✅ Không có việc quá hạn, sắp hạn hoặc cần quyết định.')
+    lines.push(`🔒 <b>TẮC (${totalBlocked})</b>`)
+    for (const t of blockedTasks) {
+      const proj = t.projCode ? `${escapeHtml(t.projCode)} ` : ''
+      lines.push(`• ${proj}${escapeHtml(t.title.slice(0, 40))} — chờ ${escapeHtml(t.resolverName)} · tắc ${t.blockedDays}d`)
+    }
   }
 
+  // 🔴 Quá hạn nặng (≥7d)
+  const heavyOverdue = overdueTasks.filter(t => t.daysOverdue >= 7)
+  const lightOverdue = overdueTasks.filter(t => t.daysOverdue < 7)
+  if (heavyOverdue.length > 0) {
+    lines.push('')
+    lines.push(`🔴 <b>QUÁ HẠN NẶNG ≥7d (${heavyOverdue.length})</b>`)
+    const MAX_LINES = 8
+    for (const t of heavyOverdue.slice(0, MAX_LINES)) {
+      const proj = t.projCode ? `${escapeHtml(t.projCode)} ` : ''
+      lines.push(`• ${proj}${escapeHtml(t.title.slice(0, 40))} · 👤 ${escapeHtml(t.assignee)} (+${t.daysOverdue}d)`)
+    }
+    if (heavyOverdue.length > MAX_LINES) lines.push(`  … và ${heavyOverdue.length - MAX_LINES} việc QH nặng khác`)
+  }
+
+  // Remaining overdue + due soon summary
+  const remaining: string[] = []
+  if (lightOverdue.length > 0) remaining.push(`🔴 ${lightOverdue.length} quá hạn <7d`)
+  if (totalDueSoon > 0) remaining.push(`🟡 ${totalDueSoon} sắp đến hạn`)
+  if (remaining.length > 0) {
+    lines.push('')
+    lines.push(remaining.join(' · '))
+  }
+
+  if (totalOverdue === 0 && totalDueSoon === 0 && totalExec === 0 && totalBlocked === 0) {
+    lines.push('')
+    lines.push('✅ Không có việc quá hạn, sắp hạn, tắc hoặc cần quyết định.')
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ibshi1.lab.liberico.com.vn'
   lines.push('')
-  lines.push('━━━━━━━━━━━━━━━━━━━━')
-  lines.push(`📊 <b>Tổng:</b> 🔴 ${totalOverdue} quá hạn · 🟡 ${totalDueSoon} sắp hạn · 🔺 ${totalExec} cần quyết`)
+  lines.push(`📊 Xem chi tiết: <a href="${appUrl}/dashboard/work/briefing">Giao ban tuần</a>`)
 
   const message = lines.join('\n')
   if (message.length > 4096) {
@@ -138,5 +204,5 @@ export async function runDailyDigest() {
     await sendGroupMessage(message)
   }
 
-  return { overdue: totalOverdue, dueSoon: totalDueSoon, exec: totalExec, projects: byProject.size, sentAt: now.toISOString() }
+  return { overdue: totalOverdue, dueSoon: totalDueSoon, exec: totalExec, blocked: totalBlocked, projects: projectIds.size, sentAt: now.toISOString() }
 }
