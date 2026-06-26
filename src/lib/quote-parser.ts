@@ -233,3 +233,68 @@ export function matchQuoteLinesToPr(lines: QuoteLine[], prItems: PrItem[]): Quot
     return line
   })
 }
+
+// ── Quote coverage analysis ──
+
+export interface CoverageResult {
+  totalNeedToBuy: number
+  coveredCount: number
+  coveragePercent: number
+  missingItems: Array<{ index: number; stt: string; canonicalCode: string; description: string; needToBuyQty: number }>
+  perItemVendorCount: Record<number, number>
+}
+
+export function computeQuoteCoverage(prItems: PrItem[], allQuotes: Array<{ lines?: QuoteLine[] }>): CoverageResult {
+  const needToBuyItems = prItems
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => typeof p.needToBuyQty === 'number' && p.needToBuyQty > 0)
+
+  const totalNeedToBuy = needToBuyItems.length
+  const perItemVendorCount: Record<number, number> = {}
+
+  for (const { i } of needToBuyItems) {
+    let count = 0
+    for (const q of allQuotes) {
+      if (!q.lines) continue
+      const hasPrice = q.lines.some(l => l.matchedPrIndex === i && l.unitPrice > 0)
+      if (hasPrice) count++
+    }
+    perItemVendorCount[i] = count
+  }
+
+  const coveredCount = needToBuyItems.filter(({ i }) => perItemVendorCount[i] > 0).length
+  const coveragePercent = totalNeedToBuy > 0 ? Math.round((coveredCount / totalNeedToBuy) * 100) : 100
+
+  const missingItems = needToBuyItems
+    .filter(({ i }) => !perItemVendorCount[i])
+    .map(({ p, i }) => ({
+      index: i,
+      stt: p.stt || '',
+      canonicalCode: p.canonicalCode || '',
+      description: p.description || p.materialName || p.name || '',
+      needToBuyQty: p.needToBuyQty!,
+    }))
+
+  return { totalNeedToBuy, coveredCount, coveragePercent, missingItems, perItemVendorCount }
+}
+
+export interface QtyMismatch {
+  lineIndex: number
+  qtyQuote: number
+  qtyPr: number
+  delta: number
+}
+
+export function computeQtyMismatches(lines: QuoteLine[], prItems: PrItem[]): QtyMismatch[] {
+  const result: QtyMismatch[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]
+    if (l.matchedPrIndex == null) continue
+    const pr = prItems[l.matchedPrIndex]
+    if (!pr || typeof pr.needToBuyQty !== 'number') continue
+    if (l.qty !== pr.needToBuyQty) {
+      result.push({ lineIndex: i, qtyQuote: l.qty, qtyPr: pr.needToBuyQty, delta: l.qty - pr.needToBuyQty })
+    }
+  }
+  return result
+}

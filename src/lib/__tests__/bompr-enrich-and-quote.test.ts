@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as XLSX from 'xlsx'
-import { parseQuoteExcel, matchQuoteLinesToPr, normSpec, type QuoteLine, type PrItem } from '../quote-parser'
+import { parseQuoteExcel, matchQuoteLinesToPr, normSpec, computeQuoteCoverage, computeQtyMismatches, type QuoteLine, type PrItem } from '../quote-parser'
 import { matchInventoryServer, detectPrefixSubgroup, type InventoryRow } from '../bompr-enrich'
 import { exportQuoteTemplate } from '../quote-template-export'
 
@@ -601,5 +601,97 @@ describe('provisional dedup key is deterministic', () => {
     const a: PrItem = { profile: 'C100X50', grade: 'SS400', unit: 'm' }
     const b: PrItem = { profile: 'H300X150', grade: 'SS400', unit: 'm' }
     expect(key(a)).not.toBe(key(b))
+  })
+})
+
+// ── Qty mismatch tests ──
+
+describe('computeQtyMismatches', () => {
+  const prItems: PrItem[] = [
+    { stt: 'A-001', needToBuyQty: 100, description: 'Thép C', unit: 'm' },
+    { stt: 'A-002', needToBuyQty: 50, description: 'Thép H', unit: 'm' },
+    { stt: 'A-003', needToBuyQty: 200, description: 'Tôn', unit: 'm2' },
+  ]
+
+  it('detects surplus (NCC > PR)', () => {
+    const lines = makeLines([{ code: 'A-001', qty: 120, matchedPrIndex: 0 }])
+    const mm = computeQtyMismatches(lines, prItems)
+    expect(mm).toHaveLength(1)
+    expect(mm[0].delta).toBe(20)
+  })
+
+  it('detects shortage (NCC < PR)', () => {
+    const lines = makeLines([{ code: 'A-002', qty: 30, matchedPrIndex: 1 }])
+    const mm = computeQtyMismatches(lines, prItems)
+    expect(mm).toHaveLength(1)
+    expect(mm[0].delta).toBe(-20)
+  })
+
+  it('returns empty when quantities match', () => {
+    const lines = makeLines([{ code: 'A-003', qty: 200, matchedPrIndex: 2 }])
+    const mm = computeQtyMismatches(lines, prItems)
+    expect(mm).toHaveLength(0)
+  })
+
+  it('skips unmatched lines (ngoài PR)', () => {
+    const lines = makeLines([{ code: 'X-999', qty: 10, matchedPrIndex: null }])
+    const mm = computeQtyMismatches(lines, prItems)
+    expect(mm).toHaveLength(0)
+  })
+})
+
+// ── Quote coverage tests ──
+
+describe('computeQuoteCoverage', () => {
+  const prItems: PrItem[] = [
+    { stt: 'A-001', canonicalCode: 'VLC-001', description: 'Thép C', needToBuyQty: 100 },
+    { stt: 'A-002', canonicalCode: 'VLC-002', description: 'Thép H', needToBuyQty: 50 },
+    { stt: 'A-003', canonicalCode: 'VLC-003', description: 'Tôn', needToBuyQty: 200 },
+    { stt: 'A-004', canonicalCode: 'VLC-004', description: 'Đủ kho', needToBuyQty: 0 },
+  ]
+
+  it('counts items with ≥1 vendor quoting (unitPrice>0)', () => {
+    const quotes = [
+      { lines: makeLines([{ matchedPrIndex: 0, unitPrice: 5000 }, { matchedPrIndex: 1, unitPrice: 6000 }]) },
+    ]
+    const c = computeQuoteCoverage(prItems, quotes)
+    expect(c.totalNeedToBuy).toBe(3)
+    expect(c.coveredCount).toBe(2)
+    expect(c.coveragePercent).toBe(67)
+  })
+
+  it('returns 100% when all needToBuy items have at least 1 quote', () => {
+    const quotes = [
+      { lines: makeLines([{ matchedPrIndex: 0, unitPrice: 5000 }, { matchedPrIndex: 1, unitPrice: 6000 }, { matchedPrIndex: 2, unitPrice: 7000 }]) },
+    ]
+    const c = computeQuoteCoverage(prItems, quotes)
+    expect(c.coveragePercent).toBe(100)
+    expect(c.missingItems).toHaveLength(0)
+  })
+
+  it('lists missing items correctly', () => {
+    const quotes = [
+      { lines: makeLines([{ matchedPrIndex: 0, unitPrice: 5000 }]) },
+    ]
+    const c = computeQuoteCoverage(prItems, quotes)
+    expect(c.missingItems).toHaveLength(2)
+    expect(c.missingItems.map(m => m.stt)).toEqual(['A-002', 'A-003'])
+  })
+
+  it('excludes needToBuyQty=0 items from coverage calculation', () => {
+    const quotes = [{ lines: [] as QuoteLine[] }]
+    const c = computeQuoteCoverage(prItems, quotes)
+    expect(c.totalNeedToBuy).toBe(3)
+  })
+
+  it('tracks per-item vendor count', () => {
+    const quotes = [
+      { lines: makeLines([{ matchedPrIndex: 0, unitPrice: 5000 }, { matchedPrIndex: 1, unitPrice: 6000 }]) },
+      { lines: makeLines([{ matchedPrIndex: 0, unitPrice: 4800 }]) },
+    ]
+    const c = computeQuoteCoverage(prItems, quotes)
+    expect(c.perItemVendorCount[0]).toBe(2)
+    expect(c.perItemVendorCount[1]).toBe(1)
+    expect(c.perItemVendorCount[2]).toBe(0)
   })
 })

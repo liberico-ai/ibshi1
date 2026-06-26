@@ -6,7 +6,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import MultiFileUpload, { UploadedFile } from '@/components/MultiFileUpload'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { QUOTE_EDIT_ROLES } from '@/lib/constants'
-import { parseQuoteExcel, matchQuoteLinesToPr, type QuoteLine, type PrItem } from '@/lib/quote-parser'
+import { parseQuoteExcel, matchQuoteLinesToPr, computeQuoteCoverage, computeQtyMismatches, type QuoteLine, type PrItem } from '@/lib/quote-parser'
 import { exportQuoteTemplate } from '@/lib/quote-template-export'
 
 export interface QuoteFile { id: string; fileName: string; fileUrl: string; kind: 'Báo giá' | 'Hợp đồng' | 'Khác' }
@@ -539,6 +539,9 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
               </div>
             )}
 
+            {/* Quote coverage panel (review mode) */}
+            <QuoteCoveragePanel quotes={quotes} prItems={parsedPrItems} />
+
             {/* Material matrix (review mode) */}
             <MaterialMatrix quotes={quotes} prItems={parsedPrItems} />
 
@@ -832,6 +835,9 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
         </div>
       )}
 
+      {/* D: Quote coverage panel */}
+      <QuoteCoveragePanel quotes={quotes} prItems={parsedPrItems} />
+
       {/* D: Material comparison matrix */}
       <MaterialMatrix quotes={quotes} prItems={parsedPrItems} />
 
@@ -857,12 +863,15 @@ function renderQuoteDetailTable(lines: QuoteLine[], prItems: PrItem[]) {
   const totalVatAmt = lines.reduce((s, l) => s + l.amount * ((l.vatPercent ?? 10) / 100), 0)
   const totalAfter = totalPre + totalVatAmt
   const vatRates = new Set(lines.map(l => l.vatPercent ?? 10))
+  const mismatches = computeQtyMismatches(lines, prItems)
+  const mismatchSet = new Set(mismatches.map(m => m.lineIndex))
+  const matchedCount = lines.filter(l => l.matchedPrIndex != null).length
   return (
     <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--border)' }}>
       <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: '#f8fafc' }}>
-            {['Mã Item', 'Mã vật tư', 'Tên/Quy cách', 'ĐVT', 'SL', 'Đơn giá', 'Thành tiền', '%VAT', 'Sau VAT'].map(h => (
+            {['Mã Item', 'Mã vật tư', 'Tên/Quy cách', 'ĐVT', 'SL (NCC)', 'SL cần (PR)', 'Đơn giá', 'Thành tiền', '%VAT', 'Sau VAT'].map(h => (
               <th key={h} className="text-left px-2 py-1 font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
             ))}
           </tr>
@@ -872,13 +881,16 @@ function renderQuoteDetailTable(lines: QuoteLine[], prItems: PrItem[]) {
             const vat = l.vatPercent ?? 10
             const afterVat = l.amount * (1 + vat / 100)
             const matchedPr = l.matchedPrIndex != null ? prItems[l.matchedPrIndex] : null
+            const prNeed = matchedPr && typeof matchedPr.needToBuyQty === 'number' ? matchedPr.needToBuyQty : null
+            const mm = mismatchSet.has(li) ? mismatches.find(m => m.lineIndex === li) : null
             return (
               <tr key={li} style={{ borderTop: '1px solid var(--border)', background: l.matchedPrIndex === null ? '#fffbeb' : undefined }}>
                 <td className="px-2 py-1 font-mono">{l.code}{l.matchedPrIndex === null && <span className="ml-1" style={{ fontSize: '0.55rem', color: '#f59e0b' }}>ngoài PR</span>}</td>
                 <td className="px-2 py-1 font-mono">{matchedPr?.canonicalCode ? <>{matchedPr.canonicalCode}{!!(matchedPr as Record<string, unknown>).provisionalCode && <span className="ml-1" style={{ fontSize: '0.55rem', background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '0 3px' }}>tạm</span>}</> : '—'}</td>
                 <td className="px-2 py-1">{l.description}{l.profile ? ` ${l.profile}` : ''}</td>
                 <td className="px-2 py-1">{l.unit}</td>
-                <td className="px-2 py-1 text-right">{l.qty}</td>
+                <td className="px-2 py-1 text-right">{l.qty}{mm && <span className="ml-1" style={{ fontSize: '0.55rem', color: '#f59e0b' }}>{mm.delta > 0 ? `dư ${mm.delta}` : `thiếu ${Math.abs(mm.delta)}`}</span>}</td>
+                <td className="px-2 py-1 text-right">{prNeed != null ? prNeed : '—'}</td>
                 <td className="px-2 py-1 text-right">{formatNumber(l.unitPrice)}</td>
                 <td className="px-2 py-1 text-right">{formatCurrency(Math.round(l.amount))}</td>
                 <td className="px-2 py-1 text-center">{vat}%</td>
@@ -889,13 +901,82 @@ function renderQuoteDetailTable(lines: QuoteLine[], prItems: PrItem[]) {
         </tbody>
         <tfoot>
           <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
-            <td colSpan={6} className="px-2 py-1.5 text-right">TỔNG CỘNG:</td>
+            <td colSpan={7} className="px-2 py-1.5 text-right">
+              TỔNG CỘNG:
+              <span className="ml-2 font-normal" style={{ fontSize: '0.6rem', color: '#64748b' }}>
+                {matchedCount}/{lines.length} dòng khớp PR
+                {mismatches.length > 0 && <span style={{ color: '#f59e0b' }}> · {mismatches.length} dòng lệch SL</span>}
+              </span>
+            </td>
             <td className="px-2 py-1.5 text-right">{formatCurrency(Math.round(totalPre))}</td>
             <td className="px-2 py-1.5 text-center">{vatRates.size === 1 ? `${[...vatRates][0]}%` : 'hỗn hợp'}</td>
             <td className="px-2 py-1.5 text-right" style={{ color: '#1d4ed8' }}>{formatCurrency(Math.round(totalAfter))}</td>
           </tr>
         </tfoot>
       </table>
+    </div>
+  )
+}
+
+// ── Sub-component: Quote coverage panel ──
+function QuoteCoveragePanel({ quotes, prItems }: { quotes: SupplierQuote[]; prItems: PrItem[] }) {
+  const [showMissing, setShowMissing] = useState(false)
+  const quotesWithLines = quotes.filter(q => q.lines && q.lines.length > 0)
+  const coverage = useMemo(() => computeQuoteCoverage(prItems, quotesWithLines), [prItems, quotesWithLines])
+  if (coverage.totalNeedToBuy === 0) return null
+
+  const isFull = coverage.coveragePercent === 100
+  const missingCount = coverage.missingItems.length
+  const fewVendors = Object.entries(coverage.perItemVendorCount).filter(([, c]) => c === 1).length
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: `1px solid ${isFull ? '#86efac' : '#fde68a'}` }}>
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          📊 Độ phủ báo giá: {coverage.coveredCount}/{coverage.totalNeedToBuy} món ({coverage.coveragePercent}%)
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: '#e2e8f0', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${coverage.coveragePercent}%`, borderRadius: 3, background: isFull ? '#22c55e' : '#f59e0b', transition: 'width 0.3s' }} />
+      </div>
+      {isFull ? (
+        <div className="mt-2 text-xs" style={{ color: '#166534' }}>✅ Đã đủ báo giá 100% vật tư cần mua</div>
+      ) : (
+        <div className="mt-2">
+          <div className="text-xs" style={{ color: '#92400e' }}>
+            ⚠ Còn thiếu {missingCount} món chưa có báo giá
+            <button type="button" onClick={() => setShowMissing(!showMissing)} className="ml-2 underline" style={{ color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit' }}>
+              {showMissing ? 'Ẩn' : 'Xem danh sách'}
+            </button>
+          </div>
+          {showMissing && (
+            <div className="mt-2 overflow-x-auto rounded-lg" style={{ border: '1px solid var(--border)' }}>
+              <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                <thead><tr style={{ background: '#fef3c7' }}>
+                  {['Mã Item', 'Mã vật tư', 'Tên', 'SL cần'].map(h => (
+                    <th key={h} className="text-left px-2 py-1 font-semibold" style={{ color: '#92400e' }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {coverage.missingItems.map(m => (
+                    <tr key={m.index} style={{ borderTop: '1px solid var(--border)' }}>
+                      <td className="px-2 py-1 font-mono">{m.stt || '—'}</td>
+                      <td className="px-2 py-1 font-mono">{m.canonicalCode || '—'}</td>
+                      <td className="px-2 py-1">{m.description}</td>
+                      <td className="px-2 py-1 text-right">{m.needToBuyQty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+      {fewVendors > 0 && (
+        <div className="mt-1 text-xs" style={{ color: '#64748b' }}>
+          💡 {fewVendors} món chỉ có 1 NCC báo giá — nên có ≥2-3 NCC để so sánh
+        </div>
+      )}
     </div>
   )
 }
