@@ -1,11 +1,9 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
-
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
 interface SnapshotTask { taskId: string; projectCode: string; title: string; status: string; deadline: string | null; daysOverdue: number; assigneeNames: string[] }
 interface SnapshotDecision { taskId: string; title: string; decision: string; byName: string; at: string }
@@ -15,7 +13,6 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ')
 
     const lastSnapshot = await prisma.briefingSnapshot.findFirst({
       orderBy: { weekOf: 'desc' },

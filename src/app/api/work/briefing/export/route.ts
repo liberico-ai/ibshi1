@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { authenticateRequest, unauthorizedResponse } from '@/lib/auth'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import * as XLSX from 'xlsx'
 import { isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
 function statusLabel(status: string, blocked: boolean): string {
   if (status === 'IN_PROGRESS' && blocked) return 'Tắc'
@@ -42,7 +40,6 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được xuất biên bản')
 
     const now = new Date()
     const weekOf = getMonday()

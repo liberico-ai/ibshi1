@@ -1,18 +1,15 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import { isTaskOverdue, taskDaysOverdue, daysUntilDeadline } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
-
 export async function GET(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được truy cập giao ban tuần')
 
     const now = new Date()
     const weekAgo = new Date(now.getTime() - 7 * 86400000)

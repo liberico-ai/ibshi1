@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { setTaskStatusAdmin, type SetStatusAdminInput } from '@/lib/work-engine'
 import { notifyExecEscalation } from '@/lib/telegram-notifications'
 import { taskDaysOverdue } from '@/lib/utils'
@@ -9,13 +10,11 @@ import { ROLE_TO_DEPT, DEPT_PRIMARY_ROLE, DEPT_NAME } from '@/lib/org-map'
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
-
 export async function PATCH(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được cập nhật trạng thái')
+    if (!(BRIEFING_WRITE_ROLES as readonly string[]).includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / NV QLDA / IT được thao tác giao ban')
 
     const body = await req.json()
     const { taskId, status, blocked, escalated, execReviewed, reason, briefingPatch, deadline, escalateType, escalateQuestion, blockReason, blockResolverUserId, blockResolverRole, blockSuggestion } = body as { taskId?: string; status?: string; escalated?: boolean; execReviewed?: boolean; escalateType?: string; escalateQuestion?: string; blockReason?: string; blockResolverUserId?: string; blockResolverRole?: string; blockSuggestion?: string } & Partial<SetStatusAdminInput>

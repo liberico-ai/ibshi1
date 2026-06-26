@@ -1,11 +1,10 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { sendGroupMessage, sendDirectMessage, escapeHtml } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
-
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
 function getMonday(d: Date = new Date()): Date {
   const out = new Date(d)
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được phát hành')
+    if (!(BRIEFING_WRITE_ROLES as readonly string[]).includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / NV QLDA / IT được phát hành')
 
     const body = await req.json().catch(() => ({})) as { weekOf?: string; force?: boolean }
     const weekOf = body.weekOf ? getMonday(new Date(body.weekOf)) : getMonday()

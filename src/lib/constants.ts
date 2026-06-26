@@ -120,6 +120,9 @@ export const REQUIRED_DATE_EDIT_ROLES = ['R01', 'R02', 'R02a'] as const
 // Roles allowed to create/edit finance entries (payments, cashflow, budgets)
 export const FINANCE_WRITE_ROLES = ['R01', 'R03', 'R03a', 'R08', 'R08a'] as const
 
+// Briefing: XEM = mọi user đã đăng nhập; GHI = PM + NV QLDA + IT
+export const BRIEFING_WRITE_ROLES = ['R02', 'R02a', 'R10'] as const
+
 // ── Form-level edit permissions (server + client) ──
 export const FORM_EDIT_ROLES = {
   ESTIMATE: ['R01', 'R03', 'R03a'],
@@ -186,7 +189,7 @@ export const MENU_ITEMS = [
 
   // ── Management (điều hành / dashboard cấp quản lý) ──
   { key: 'work-overview', label: 'Tổng quan dự án', labelEn: 'Project Overview', icon: 'PieChart', href: '/dashboard/work/overview', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'management' },
-  { key: 'work-briefing', label: 'Giao ban tuần', labelEn: 'Weekly Briefing', icon: 'FileBarChart', href: '/dashboard/work/briefing', roles: ['R01', 'R02', 'R02a', 'R10'], group: 'management' },
+  { key: 'work-briefing', label: 'Giao ban tuần', labelEn: 'Weekly Briefing', icon: 'FileBarChart', href: '/dashboard/work/briefing', roles: 'all', group: 'management' },
   { key: 'work-perf', label: 'Hiệu suất & KPI', labelEn: 'Performance', icon: 'BarChart3', href: '/dashboard/work/performance', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'], group: 'management' },
 
   // ── Project ──

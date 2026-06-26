@@ -1,8 +1,9 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { DEPARTMENTS_V2, DEPT_NAME, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
 
 // ── Types ──
@@ -269,6 +270,9 @@ function groupRowsByProject(rows: EditableRow[]): RowGroup[] {
 // ════════════════════════════════════════
 
 export default function BriefingPage() {
+  const user = useAuthStore(s => s.user)
+  const canEdit = (BRIEFING_WRITE_ROLES as readonly string[]).includes(user?.roleCode || '')
+
   const [activeTab, setActiveTab] = useState<'dashboard' | 'import'>('dashboard')
   const [groups, setGroups] = useState<ProjectGroup[]>([])
   const [kpi, setKpi] = useState<KPI>({ total: 0, active: 0, overdue: 0, dueSoon: 0, blocked: 0, execDecision: 0, doneThisWeek: 0, newThisWeek: 0 })
@@ -1037,19 +1041,19 @@ export default function BriefingPage() {
             </button>
             {toolsMenuOpen && (
               <div className="absolute right-0 mt-1 z-30 rounded-lg shadow-lg py-1 min-w-[180px]" style={{ background: 'var(--surface, #fff)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-                <button onClick={() => { setToolsMenuOpen(false); handleSnapshot() }} disabled={snapshotSaving || kpi.total === 0} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
+                {canEdit && <button onClick={() => { setToolsMenuOpen(false); handleSnapshot() }} disabled={snapshotSaving || kpi.total === 0} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
                   📌 {snapshotSaving ? 'Đang chốt...' : 'Chốt kỳ'}
-                </button>
-                <button onClick={() => { setToolsMenuOpen(false); handlePublish() }} disabled={publishing} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
+                </button>}
+                {canEdit && <button onClick={() => { setToolsMenuOpen(false); handlePublish() }} disabled={publishing} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
                   📣 {publishing ? 'Đang gửi...' : 'Phát hành'}
-                </button>
+                </button>}
                 <button onClick={() => { setToolsMenuOpen(false); handleExport() }} disabled={exporting || kpi.total === 0} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
                   📥 {exporting ? 'Đang xuất...' : 'Xuất biên bản'}
                 </button>
-                <label className="block text-xs px-4 py-2.5 hover:bg-blue-50 cursor-pointer">
+                {canEdit && <label className="block text-xs px-4 py-2.5 hover:bg-blue-50 cursor-pointer">
                   📂 Import biên bản
                   <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { setToolsMenuOpen(false); handleFileSelect(e) }} />
-                </label>
+                </label>}
                 <button onClick={() => { setToolsMenuOpen(false); loadHistory() }} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50">
                   🕘 Lịch sử kỳ
                 </button>
@@ -1068,13 +1072,13 @@ export default function BriefingPage() {
         >
           Dashboard giao ban
         </button>
-        <button
+        {canEdit && <button
           onClick={() => setActiveTab('import')}
           className="text-sm px-4 py-2 font-semibold border-b-2 -mb-px transition-colors"
           style={{ borderColor: activeTab === 'import' ? '#1d4ed8' : 'transparent', color: activeTab === 'import' ? '#1d4ed8' : 'var(--text-muted)' }}
         >
           Import & Quá hạn
-        </button>
+        </button>}
       </div>
 
       {/* ════ Presentation Mode (fullscreen card-by-card) ════ */}
@@ -1145,8 +1149,8 @@ export default function BriefingPage() {
                 {presentCurrent.decision && <div className="text-sm"><span className="font-semibold" style={{ color: '#059669' }}>Quyết định: </span>{presentCurrent.decision}</div>}
                 {discussedThisWeek(presentCurrent) && presentCurrent.discussNote && <div className="text-sm"><span className="font-semibold" style={{ color: '#059669' }}>Kết luận: </span>{presentCurrent.discussNote}</div>}
 
-                {/* Actions */}
-                <div className="flex gap-3 pt-3 border-t flex-wrap" style={{ borderColor: 'var(--border)' }}>
+                {/* Actions — chỉ hiện khi canEdit */}
+                {canEdit && <div className="flex gap-3 pt-3 border-t flex-wrap" style={{ borderColor: 'var(--border)' }}>
                   <button onClick={() => openAction(presentCurrent.id, 'reassign')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>👤 Đổi người</button>
                   <button onClick={() => openAction(presentCurrent.id, 'deadline')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>📅 Đổi hạn</button>
                   {presentCurrent.blocked
@@ -1159,8 +1163,8 @@ export default function BriefingPage() {
                   ) : (
                     <span className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: '#ecfdf5', color: '#059669' }}>✓ Đã bàn</span>
                   )}
-                </div>
-                {cellEditing === `${presentCurrent.id}:decision` && (
+                </div>}
+                {canEdit && cellEditing === `${presentCurrent.id}:decision` && (
                   <textarea autoFocus defaultValue={presentCurrent.decision} placeholder="Ghi quyết định BGĐ..." className="w-full text-sm px-3 py-2 rounded-lg border resize-none" style={{ borderColor: '#3b82f6', background: '#eff6ff', minHeight: 50 }} onBlur={(e) => handleBriefingPatch(presentCurrent.id, 'decision', e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }} />
                 )}
               </div>
@@ -1168,8 +1172,8 @@ export default function BriefingPage() {
           ) : (
             <div className="rounded-2xl p-12 text-center shadow-lg" style={{ background: 'var(--surface)', border: '2px solid #22c55e' }}>
               <div className="text-4xl mb-3">✅</div>
-              <div className="text-xl font-bold" style={{ color: '#059669' }}>Đã bàn hết, chốt kỳ?</div>
-              <button onClick={handleSnapshot} disabled={snapshotSaving} className="mt-4 text-sm px-6 py-2.5 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>{snapshotSaving ? 'Đang chốt...' : '📌 Chốt kỳ'}</button>
+              <div className="text-xl font-bold" style={{ color: '#059669' }}>Đã bàn hết{canEdit ? ', chốt kỳ?' : '!'}</div>
+              {canEdit && <button onClick={handleSnapshot} disabled={snapshotSaving} className="mt-4 text-sm px-6 py-2.5 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>{snapshotSaving ? 'Đang chốt...' : '📌 Chốt kỳ'}</button>}
             </div>
           )}
 
@@ -1466,7 +1470,7 @@ export default function BriefingPage() {
                             {t.escalateQuestion && <div className="text-[10px] mt-0.5" style={{ color: '#64748b' }}>{t.escalateQuestion}</div>}
                           </td>
                           <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                            {cellEditing === `${t.id}:proposal` ? (
+                            {canEdit && cellEditing === `${t.id}:proposal` ? (
                               <textarea
                                 autoFocus defaultValue={t.proposal}
                                 className="w-full text-xs px-2 py-1 rounded border resize-none"
@@ -1475,13 +1479,13 @@ export default function BriefingPage() {
                                 onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
                               />
                             ) : (
-                              <span className="cursor-pointer block min-h-[20px]" onClick={() => setCellEditing(`${t.id}:proposal`)}>
-                                {t.proposal || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                              <span className={canEdit ? 'cursor-pointer block min-h-[20px]' : 'block min-h-[20px]'} onClick={canEdit ? () => setCellEditing(`${t.id}:proposal`) : undefined}>
+                                {t.proposal || (canEdit ? <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span> : '—')}
                               </span>
                             )}
                           </td>
                           <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                            {cellEditing === `${t.id}:decision` ? (
+                            {canEdit && cellEditing === `${t.id}:decision` ? (
                               <textarea
                                 autoFocus defaultValue={t.decision}
                                 className="w-full text-xs px-2 py-1 rounded border resize-none"
@@ -1490,8 +1494,8 @@ export default function BriefingPage() {
                                 onKeyDown={(e) => { if (e.key === 'Escape') setCellEditing(null) }}
                               />
                             ) : (
-                              <span className="cursor-pointer block min-h-[20px]" onClick={() => setCellEditing(`${t.id}:decision`)}>
-                                {t.decision || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                              <span className={canEdit ? 'cursor-pointer block min-h-[20px]' : 'block min-h-[20px]'} onClick={canEdit ? () => setCellEditing(`${t.id}:decision`) : undefined}>
+                                {t.decision || (canEdit ? <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span> : '—')}
                               </span>
                             )}
                             {t.decision && t.decisionByName && (
@@ -1501,24 +1505,24 @@ export default function BriefingPage() {
                             )}
                           </td>
                           <td className="px-4 py-2.5 text-center">
-                              <button
+                            {canEdit && <button
                                 onClick={() => handleDeescalate(t.id)}
                                 className="text-[10px] font-semibold px-2 py-1 rounded-full transition-all"
                                 style={{ background: '#faf5ff', color: '#7c3aed', border: '1px solid #7c3aed33' }}
                                 title="Gỡ khỏi BGĐ"
                               >
                                 Gỡ
-                              </button>
+                              </button>}
                           </td>
                           <td className="px-4 py-2.5 text-center">
-                            <button
+                            {canEdit && <button
                               onClick={() => handleExecReview(t.id, true)}
                               className="text-[10px] font-semibold px-2 py-1 rounded-full transition-all"
                               style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #05966922' }}
                               title="Đánh dấu đã bàn trong tuần"
                             >
                               ✓ Đã bàn
-                            </button>
+                            </button>}
                           </td>
                         </tr>
                       )
@@ -1571,7 +1575,7 @@ export default function BriefingPage() {
                             Tắc{blockedDays > 0 ? ` ${blockedDays}d` : ''}{t.blockResolverName ? ` · ${t.blockResolverName}` : ''}
                           </span>
                         )}
-                        {t.blocked && blockedDays >= 3 && !t.escalated && (
+                        {canEdit && t.blocked && blockedDays >= 3 && !t.escalated && (
                           <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full cursor-pointer" style={{ background: '#faf5ff', color: '#7c3aed' }} onClick={(e) => { e.stopPropagation(); openEscalateModal(t.id) }} title="Tắc lâu — cân nhắc đẩy BLĐ">
                             ▲ Đẩy?
                           </span>
@@ -1592,7 +1596,7 @@ export default function BriefingPage() {
                         ) : null}
                       </td>
                       <td className="px-4 py-2.5 text-center">
-                        {isEditingThis ? (
+                        {canEdit && isEditingThis ? (
                           <select
                             autoFocus
                             disabled={statusSaving}
@@ -1614,7 +1618,7 @@ export default function BriefingPage() {
                             <option value="RETURNED">Bị trả lại</option>
                             <option value="DONE">Hoàn thành</option>
                           </select>
-                        ) : (
+                        ) : canEdit ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); setStatusEditing(t.id) }}
                             className="text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all"
@@ -1623,6 +1627,10 @@ export default function BriefingPage() {
                           >
                             {statusDisplay.label}
                           </button>
+                        ) : (
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: statusDisplay.bg, color: statusDisplay.color }}>
+                            {statusDisplay.label}
+                          </span>
                         )}
                       </td>
                       {meetingMode && (
@@ -1631,12 +1639,13 @@ export default function BriefingPage() {
                             <input
                               type="checkbox"
                               checked={discussedThisWeek(t)}
-                              onChange={(e) => {
+                              onChange={canEdit ? (e) => {
                                 if (e.target.checked) { setDiscussNoteId(t.id); setDiscussNoteText(t.discussNote || '') }
                                 else handleDiscussed(t.id, false)
-                              }}
+                              } : undefined}
+                              disabled={!canEdit}
                               className="w-4 h-4 rounded cursor-pointer accent-green-600"
-                              title={discussedThisWeek(t) ? 'Đã bàn — bỏ dấu?' : 'Đánh dấu đã bàn'}
+                              title={!canEdit ? 'Chỉ xem' : discussedThisWeek(t) ? 'Đã bàn — bỏ dấu?' : 'Đánh dấu đã bàn'}
                             />
                             {discussedThisWeek(t) && t.discussNote && <span className="text-[10px] max-w-[80px] truncate" style={{ color: '#059669' }} title={t.discussNote}>KL</span>}
                           </div>
@@ -1650,7 +1659,7 @@ export default function BriefingPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                             <div>
                               <span className="font-semibold block mb-1" style={{ color: 'var(--text-muted)' }}>Đề xuất / hướng xử lý</span>
-                              {cellEditing === `${t.id}:proposal` ? (
+                              {canEdit && cellEditing === `${t.id}:proposal` ? (
                                 <textarea
                                   autoFocus
                                   defaultValue={t.proposal}
@@ -1661,14 +1670,14 @@ export default function BriefingPage() {
                                   onClick={e => e.stopPropagation()}
                                 />
                               ) : (
-                                <span className="cursor-pointer block min-h-[20px]" onClick={(e) => { e.stopPropagation(); setCellEditing(`${t.id}:proposal`) }}>
-                                  {t.proposal || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                                <span className={canEdit ? 'cursor-pointer block min-h-[20px]' : 'block min-h-[20px]'} onClick={canEdit ? (e) => { e.stopPropagation(); setCellEditing(`${t.id}:proposal`) } : undefined}>
+                                  {t.proposal || (canEdit ? <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span> : '—')}
                                 </span>
                               )}
                             </div>
                             <div>
                               <span className="font-semibold block mb-1" style={{ color: 'var(--text-muted)' }}>Quyết định BGĐ</span>
-                              {cellEditing === `${t.id}:decision` ? (
+                              {canEdit && cellEditing === `${t.id}:decision` ? (
                                 <textarea
                                   autoFocus
                                   defaultValue={t.decision}
@@ -1679,8 +1688,8 @@ export default function BriefingPage() {
                                   onClick={e => e.stopPropagation()}
                                 />
                               ) : (
-                                <span className="cursor-pointer block min-h-[20px]" onClick={(e) => { e.stopPropagation(); setCellEditing(`${t.id}:decision`) }}>
-                                  {t.decision || <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span>}
+                                <span className={canEdit ? 'cursor-pointer block min-h-[20px]' : 'block min-h-[20px]'} onClick={canEdit ? (e) => { e.stopPropagation(); setCellEditing(`${t.id}:decision`) } : undefined}>
+                                  {t.decision || (canEdit ? <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>+ thêm</span> : '—')}
                                 </span>
                               )}
                               {t.decision && t.decisionByName && (
@@ -1691,7 +1700,7 @@ export default function BriefingPage() {
                               {t.execReviewedAt && (
                                 <span className="inline-flex items-center gap-1 text-[10px] mt-0.5" style={{ color: '#059669' }}>
                                   ✓ đã bàn
-                                  <button onClick={(e) => { e.stopPropagation(); handleExecReview(t.id, false) }} className="underline" style={{ color: '#94a3b8' }}>bỏ</button>
+                                  {canEdit && <button onClick={(e) => { e.stopPropagation(); handleExecReview(t.id, false) }} className="underline" style={{ color: '#94a3b8' }}>bỏ</button>}
                                 </span>
                               )}
                             </div>
@@ -1700,7 +1709,7 @@ export default function BriefingPage() {
                               <span style={{ color: 'var(--text-secondary)' }}>{t.notes || '—'}</span>
                             </div>
                           </div>
-                          {isActive && (
+                          {isActive && canEdit && (
                             <div className="flex gap-2 mt-3 pt-2 border-t flex-wrap" style={{ borderColor: '#e2e8f0' }}>
                               <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'reassign') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
                                 👤 Đổi người
@@ -1749,13 +1758,13 @@ export default function BriefingPage() {
                       {g.totalOverdue > 0 && <span className="font-semibold px-2 py-0.5 rounded-full" style={{ background: sev.bg, color: sev.color }}>{g.totalOverdue} quá hạn</span>}
                       {blockedCount > 0 && <span className="font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#c2410c' }}>{blockedCount} tắc</span>}
                       {execCount > 0 && <span className="font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fef2f2', color: '#b91c1c' }}>{execCount} BGĐ</span>}
-                      <button
+                      {canEdit && <button
                         onClick={(e) => { e.stopPropagation(); openProjectTask(g.project?.id || '', g.project?.projectCode || 'Chung') }}
                         className="font-semibold px-2.5 py-1 rounded-lg hover:ring-1 transition-all"
                         style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #1d4ed822' }}
                       >
                         + Thêm việc
-                      </button>
+                      </button>}
                     </div>
                   </button>
 

@@ -1,13 +1,12 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { parseBriefingXlsx, classifyRows, mapStatusLabel, mapDept, computeImportKey, normalizeTitle, splitAssigneeNames, matchUserName, type UserMatchResult } from '@/lib/briefing-import-parser'
 import { setTaskStatusAdmin, resolveRoleToUser } from '@/lib/work-engine'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
 function normalizeCode(s: string): string {
   return s.replace(/[\s\-_]/g, '').toUpperCase()
@@ -76,7 +75,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được import biên bản')
+    if (!(BRIEFING_WRITE_ROLES as readonly string[]).includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / NV QLDA / IT được import biên bản')
 
     const contentType = req.headers.get('content-type') || ''
 

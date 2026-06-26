@@ -1,16 +1,15 @@
 import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { reassignTask } from '@/lib/work-engine'
 
 export const dynamic = 'force-dynamic'
-
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
 export async function POST(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được đổi người')
+    if (!(BRIEFING_WRITE_ROLES as readonly string[]).includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / NV QLDA / IT được đổi người')
 
     const { taskId, assigneeUserIds } = await req.json() as { taskId?: string; assigneeUserIds?: string[] }
     if (!taskId) return errorResponse('Cần taskId', 400)

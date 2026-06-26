@@ -1,12 +1,11 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import { isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
-
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
 function getMonday(d: Date = new Date()): Date {
   const out = new Date(d)
@@ -20,7 +19,6 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ')
 
     const snapshots = await prisma.briefingSnapshot.findMany({
       orderBy: { weekOf: 'desc' },
@@ -38,7 +36,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!ALLOWED_ROLES.includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / BGĐ được chốt kỳ')
+    if (!(BRIEFING_WRITE_ROLES as readonly string[]).includes(payload.roleCode)) return forbiddenResponse('Chỉ PM / NV QLDA / IT được chốt kỳ')
 
     const weekOf = getMonday()
     const now = new Date()
@@ -85,9 +83,8 @@ export async function POST(req: NextRequest) {
       const briefing = (rd.briefing && typeof rd.briefing === 'object') ? rd.briefing as Record<string, unknown> : {}
       const execReviewedAt = briefing.execReviewedAt ? new Date(briefing.execReviewedAt as string) : null
       const reviewedRecently = !!(execReviewedAt && (now.getTime() - execReviewedAt.getTime()) < 7 * 86400000)
-      const needsExec = t.status !== 'DONE' && t.status !== 'CANCELLED' && (
-        t.escalated === true || t.blocked === true || (overdue && daysOver >= 14)
-      ) && !reviewedRecently
+      const needsExec = t.status !== 'DONE' && t.status !== 'CANCELLED' &&
+        t.escalated === true && !reviewedRecently
       if (needsExec) kpiExecDecision++
 
       if (t.status !== 'DONE') {
