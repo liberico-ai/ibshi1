@@ -163,7 +163,7 @@ export async function runDailyDigest() {
   const lightOverdue = overdueTasks.filter(t => t.daysOverdue < 7)
   if (heavyOverdue.length > 0) {
     lines.push('')
-    lines.push(`🔴 <b>QUÁ HẠN NẶNG ≥7d (${heavyOverdue.length})</b>`)
+    lines.push(`🔴 <b>QUÁ HẠN NẶNG ≥7 ngày (${heavyOverdue.length})</b>`)
     const MAX_LINES = 8
     for (const t of heavyOverdue.slice(0, MAX_LINES)) {
       const proj = t.projCode ? `${escapeHtml(t.projCode)} ` : ''
@@ -174,7 +174,7 @@ export async function runDailyDigest() {
 
   // Remaining overdue + due soon summary
   const remaining: string[] = []
-  if (lightOverdue.length > 0) remaining.push(`🔴 ${lightOverdue.length} quá hạn <7d`)
+  if (lightOverdue.length > 0) remaining.push(`🔴 ${lightOverdue.length} quá hạn dưới 7d`)
   if (totalDueSoon > 0) remaining.push(`🟡 ${totalDueSoon} sắp đến hạn`)
   if (remaining.length > 0) {
     lines.push('')
