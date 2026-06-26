@@ -1,5 +1,6 @@
 import prisma from '@/lib/db'
 import { detectSectionType, normalizeDims, dimsMatch } from './section-type'
+import { generateMaterialCode } from './material-code'
 
 // ── Types (mirror FE BomPrUploadUI) ──
 
@@ -23,6 +24,7 @@ interface PrItem {
   stockUnit?: string
   stockConvertedFromKg?: boolean
   stockUnitMismatch?: boolean
+  provisionalCode?: boolean
   [key: string]: unknown
 }
 
@@ -354,6 +356,115 @@ function computeEnrichment(
   return { neededQty: needed, availableQty: 0, needToBuyQty: needed, stockUnit: item.unit, stockConvertedFromKg: false, stockUnitMismatch: true }
 }
 
+// ── Auto-create provisional material codes ──
+
+export function detectPrefixSubgroup(item: { description?: string; profile?: string }): { prefix: string; subgroup: string } {
+  const desc = `${item.description || ''} ${item.profile || ''}`.toLowerCase()
+  if (/grating/i.test(desc)) return { prefix: 'GRT', subgroup: 'GRTN' }
+  if (/bu[\s-]?l[oô]ng/i.test(desc)) return { prefix: 'BAH', subgroup: 'BULO' }
+  if (/[eê][\s-]?cu|đai\s*[oố]c/i.test(desc)) return { prefix: 'BAH', subgroup: 'ECUA' }
+  if (/b[ií]ch|flange/i.test(desc)) return { prefix: 'BAH', subgroup: 'BICH' }
+  if (/inox|stainless/i.test(desc)) return { prefix: 'VLI', subgroup: 'INOX' }
+  if (/t[oô]n|plate|t[aấ]m/i.test(desc)) return { prefix: 'VLC', subgroup: 'TAM' }
+  if (/h[iì]nh|beam|channel|angle/i.test(desc)) return { prefix: 'VLC', subgroup: 'HINH' }
+  if (/[oôố]ng|pipe|tube/i.test(desc)) return { prefix: 'VLC', subgroup: 'ONG' }
+  if (/flat[\s-]?bar|x[eẹ]p|d[eẹ]t/i.test(desc)) return { prefix: 'VLC', subgroup: 'DEP' }
+  if (/s[oơ]n|paint/i.test(desc)) return { prefix: 'VLP', subgroup: 'SON' }
+  if (/que\s*h[aà]n|d[aâ]y\s*h[aà]n|weld/i.test(desc)) return { prefix: 'VLH', subgroup: 'HAN' }
+  if (/th[eé]p/i.test(desc)) return { prefix: 'VLC', subgroup: 'THEP' }
+  return { prefix: 'VLP', subgroup: 'KHAC' }
+}
+
+function provisionalDedupeKey(item: PrItem): string {
+  return [
+    (item.profile || '').trim().toLowerCase(),
+    (item.grade || '').trim().toLowerCase(),
+    (item.unit || '').trim().toLowerCase(),
+  ].join('|')
+}
+
+async function autoCreateProvisionalCodes(
+  items: PrItem[],
+  matchMap: Map<number, MatchResult>,
+): Promise<Map<number, { code: string; materialId: string }>> {
+  const result = new Map<number, { code: string; materialId: string }>()
+
+  const needsCode: { idx: number; item: PrItem; key: string }[] = []
+  for (let i = 0; i < items.length; i++) {
+    if (matchMap.get(i)?.inv) continue
+    if (items[i].canonicalCode) continue
+    if (!items[i].profile && !items[i].description) continue
+    needsCode.push({ idx: i, item: items[i], key: provisionalDedupeKey(items[i]) })
+  }
+
+  if (needsCode.length === 0) return result
+
+  const groups = new Map<string, typeof needsCode>()
+  for (const entry of needsCode) {
+    if (!groups.has(entry.key)) groups.set(entry.key, [])
+    groups.get(entry.key)!.push(entry)
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const [, entries] of groups) {
+        const rep = entries[0].item
+        const spec = (rep.profile || '').trim()
+        const grade = (rep.grade || '').trim()
+        const unit = (rep.unit || '').trim()
+
+        const existing = await tx.material.findFirst({
+          where: {
+            isProvisional: true,
+            specification: spec || null,
+            unit: unit || undefined,
+            grade: grade || null,
+          },
+          select: { id: true, materialCode: true },
+        })
+
+        if (existing) {
+          for (const e of entries) {
+            result.set(e.idx, { code: existing.materialCode, materialId: existing.id })
+          }
+          continue
+        }
+
+        const { prefix, subgroup } = detectPrefixSubgroup(rep)
+        let code: string | null = null
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const candidate = await generateMaterialCode(tx, prefix, subgroup)
+          const clash = await tx.material.findUnique({ where: { materialCode: candidate }, select: { id: true } })
+          if (!clash) { code = candidate; break }
+        }
+        if (!code) continue
+
+        const material = await tx.material.create({
+          data: {
+            materialCode: code,
+            name: (rep.description || '').trim() || spec || 'Vật tư tạm',
+            unit: unit || 'cái',
+            category: prefix,
+            specification: spec || undefined,
+            grade: grade || undefined,
+            status: 'PENDING',
+            isProvisional: true,
+            createdByUnit: 'SYSTEM',
+          },
+        })
+
+        for (const e of entries) {
+          result.set(e.idx, { code: material.materialCode, materialId: material.id })
+        }
+      }
+    })
+  } catch (err) {
+    console.error('autoCreateProvisionalCodes error:', err)
+  }
+
+  return result
+}
+
 // ── Public API ──
 
 export async function enrichBomPrItems(
@@ -368,14 +479,18 @@ export async function enrichBomPrItems(
 
   const matchMap = matchInventoryServer(items, inventory, codeResolved)
 
+  const provisionalMap = await autoCreateProvisionalCodes(items, matchMap)
+
   return items.map((item, idx) => {
     const match = matchMap.get(idx)
     const inv = match?.inv || null
     const patch = computeEnrichment(item, inv, projectCode)
+    const provisional = provisionalMap.get(idx)
     return {
       ...item,
       ...patch,
       ...(inv ? { materialId: inv.id, canonicalCode: item.canonicalCode || inv.materialCode } : {}),
+      ...(!inv && provisional ? { materialId: provisional.materialId, canonicalCode: provisional.code, provisionalCode: true } : {}),
     }
   })
 }

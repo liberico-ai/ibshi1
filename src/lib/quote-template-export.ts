@@ -38,8 +38,8 @@ export function exportQuoteTemplate(prItems: PrItem[], opts: ExportOpts = {}): X
   aoa.push(['Dự án:', opts.projectCode || '', null, 'Ngày:', opts.date || new Date().toISOString().slice(0, 10)])
   aoa.push(['Tên DA:', opts.projectName || ''])
   aoa.push([])
-  aoa.push([null, null, 'Yêu cầu (IBS)', null, null, null, 'Đề xuất (NCC)', null, null])
-  aoa.push(['Item', 'Description', 'Profile', 'Grade', 'ĐVT', 'Cần mua', 'Số lượng', 'Đơn giá', 'Thành tiền'])
+  aoa.push([null, null, null, 'Yêu cầu (IBS)', null, null, null, null, 'Đề xuất (NCC)', null, null])
+  aoa.push(['Item', 'Mã vật tư', 'Description', 'Profile', 'Grade', 'ĐVT', 'Cần mua', 'Số lượng', 'Đơn giá', 'Thành tiền'])
 
   let excelRow = 7
   const formulaCells: [string, string][] = []
@@ -62,8 +62,9 @@ export function exportQuoteTemplate(prItems: PrItem[], opts: ExportOpts = {}): X
       const unit = item.unit || item.uom || ''
       const qty = typeof item.needToBuyQty === 'number' ? item.needToBuyQty : (item.quantity || item.qty || 0)
 
-      aoa.push([code, desc, profile, grade, unit, qty, null, null, null])
-      formulaCells.push([`I${excelRow}`, `G${excelRow}*H${excelRow}`])
+      const matCode = item.canonicalCode || ''
+      aoa.push([code, matCode, desc, profile, grade, unit, qty, null, null, null])
+      formulaCells.push([`J${excelRow}`, `H${excelRow}*I${excelRow}`])
       excelRow++
     }
   }
@@ -72,17 +73,17 @@ export function exportQuoteTemplate(prItems: PrItem[], opts: ExportOpts = {}): X
   excelRow++
 
   const totalRow = excelRow
-  aoa.push([null, null, null, null, null, null, null, 'Cộng:', null])
-  formulaCells.push([`I${totalRow}`, `SUM(I7:I${totalRow - 2})`])
+  aoa.push([null, null, null, null, null, null, null, null, 'Cộng:', null])
+  formulaCells.push([`J${totalRow}`, `SUM(J7:J${totalRow - 2})`])
   excelRow++
 
   const vatRow = excelRow
-  aoa.push([null, null, null, null, null, null, null, 'VAT 10%:', null])
-  formulaCells.push([`I${vatRow}`, `I${totalRow}*0.1`])
+  aoa.push([null, null, null, null, null, null, null, null, 'VAT 10%:', null])
+  formulaCells.push([`J${vatRow}`, `J${totalRow}*0.1`])
   excelRow++
 
-  aoa.push([null, null, null, null, null, null, null, 'Tổng cộng:', null])
-  formulaCells.push([`I${excelRow}`, `I${totalRow}+I${vatRow}`])
+  aoa.push([null, null, null, null, null, null, null, null, 'Tổng cộng:', null])
+  formulaCells.push([`J${excelRow}`, `J${totalRow}+J${vatRow}`])
 
   const ws = XLSX.utils.aoa_to_sheet(aoa)
 
@@ -91,7 +92,7 @@ export function exportQuoteTemplate(prItems: PrItem[], opts: ExportOpts = {}): X
   }
 
   ws['!cols'] = [
-    { wch: 20 }, { wch: 30 }, { wch: 25 }, { wch: 10 },
+    { wch: 20 }, { wch: 18 }, { wch: 30 }, { wch: 25 }, { wch: 10 },
     { wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 18 },
   ]
 

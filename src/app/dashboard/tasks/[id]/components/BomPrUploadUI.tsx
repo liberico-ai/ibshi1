@@ -927,12 +927,13 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
             {/* Category items */}
             {isExpanded && (
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', minWidth: 1650 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', minWidth: 1750 }}>
                   <thead>
                     {/* Group header row */}
                     <tr style={{ background: '#0a2540' }}>
                       <th rowSpan={2} style={thStyle}>#</th>
-                      <th rowSpan={2} style={thStyle}>Mã VT</th>
+                      <th rowSpan={2} style={thStyle}>Mã Item</th>
+                      <th rowSpan={2} style={thStyle}>Mã vật tư</th>
                       <th rowSpan={2} style={thStyle}>Chi tiết</th>
                       <th rowSpan={2} style={thStyle}>Profile / Vật tư</th>
                       <th rowSpan={2} style={thStyle}>Mác VL</th>
@@ -980,6 +981,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                       return (
                         <tr key={globalIdx} style={{ borderBottom: '1px solid var(--border)', background: duplicateMap.has(globalIdx) ? '#fef2f2' : catIdx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
                           <td style={{ padding: cellPad, color: 'var(--text-muted)', fontSize: '0.68rem', textAlign: 'center' }}>{catIdx + 1}</td>
+                          <td style={{ padding: cellPad, fontSize: '0.68rem', fontFamily: 'monospace', color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.stt}>{item.stt}</td>
                           <td style={{ padding: cellPad, minWidth: 140 }}>
                             {newCodes.has(globalIdx) ? (() => {
                               const nc = newCodes.get(globalIdx)!

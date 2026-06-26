@@ -60,12 +60,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const quoteLines = chosenQuote?.lines ?? []
 
   const bomPr = typeof rd.bomPr === 'string' ? (() => { try { return JSON.parse(rd.bomPr) } catch { return null } })() : null
-  const prItems: Array<{ stt?: string; canonicalCode?: string; description?: string; profile?: string; grade?: string; unit?: string; needToBuyQty?: number }> =
+  const prItems: Array<{ stt?: string; canonicalCode?: string; materialId?: string; description?: string; profile?: string; grade?: string; unit?: string; needToBuyQty?: number }> =
     Array.isArray(bomPr) ? bomPr : []
 
   // Build PO items: only lines matched to PR items with needToBuyQty > 0
   const poItems: Array<{
-    itemCode: string; description: string; profile: string; grade: string;
+    itemCode: string; materialId: string | null; description: string; profile: string; grade: string;
     unit: string; quantity: number; unitPrice: number;
   }> = []
 
@@ -77,7 +77,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (needToBuy <= 0) continue
 
     poItems.push({
-      itemCode: prItem.canonicalCode || prItem.stt || line.code || '',
+      itemCode: prItem.stt || line.code || '',
+      materialId: prItem.materialId || null,
       description: prItem.description || line.description || '',
       profile: prItem.profile || line.profile || '',
       grade: prItem.grade || line.grade || '',
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       totalValue: Math.round(totalValue),
       items: {
         create: poItems.map(it => ({
-          materialId: null,
+          materialId: it.materialId,
           itemCode: it.itemCode,
           description: it.description,
           profile: it.profile,

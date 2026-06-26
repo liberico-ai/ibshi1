@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as XLSX from 'xlsx'
 import { parseQuoteExcel, matchQuoteLinesToPr, normSpec, type QuoteLine, type PrItem } from '../quote-parser'
-import { matchInventoryServer, type InventoryRow } from '../bompr-enrich'
+import { matchInventoryServer, detectPrefixSubgroup, type InventoryRow } from '../bompr-enrich'
 import { exportQuoteTemplate } from '../quote-template-export'
 
 // ── Quote matcher tests ──
@@ -260,12 +260,12 @@ describe('quote template round-trip', () => {
     const ws = wb.Sheets['BG']
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
 
-    // Simulate NCC filling in qty + unit price
+    // Simulate NCC filling in qty + unit price (col H=Số lượng, col I=Đơn giá after Mã vật tư insertion)
     for (const row of data) {
       const code = String(row[0] || '')
       if (!code.startsWith('I112-')) continue
-      row[6] = row[5] // Copy IBS qty to NCC qty
-      row[7] = 50000   // Unit price
+      row[7] = row[6] // Copy IBS "Cần mua" (col G) to NCC "Số lượng" (col H)
+      row[8] = 50000   // Unit price (col I)
     }
 
     const lines = parseQuoteExcel(data)
@@ -479,5 +479,127 @@ describe('split-cheapest comparison', () => {
     expect(q1Av).toBeCloseTo(110)
     expect(q2Av).toBeCloseTo(102.6)
     expect(q2Av).toBeLessThan(q1Av)
+  })
+})
+
+// ── detectPrefixSubgroup tests ──
+
+describe('detectPrefixSubgroup', () => {
+  it('detects steel plate (tôn/tấm) → VLC-TAM', () => {
+    expect(detectPrefixSubgroup({ description: 'THÉP TẤM', profile: 'PL10' })).toEqual({ prefix: 'VLC', subgroup: 'TAM' })
+    expect(detectPrefixSubgroup({ description: 'TÔN TẤM 6mm' })).toEqual({ prefix: 'VLC', subgroup: 'TAM' })
+  })
+
+  it('detects steel section (hình) → VLC-HINH', () => {
+    expect(detectPrefixSubgroup({ description: 'THÉP HÌNH C', profile: 'C100X50' })).toEqual({ prefix: 'VLC', subgroup: 'HINH' })
+    expect(detectPrefixSubgroup({ description: 'H Beam', profile: 'H300X150' })).toEqual({ prefix: 'VLC', subgroup: 'HINH' })
+  })
+
+  it('detects bolts → BAH-BULO', () => {
+    expect(detectPrefixSubgroup({ description: 'BU LÔNG M16' })).toEqual({ prefix: 'BAH', subgroup: 'BULO' })
+  })
+
+  it('detects pipe → VLC-ONG', () => {
+    expect(detectPrefixSubgroup({ description: 'THÉP ỐNG', profile: 'Ø42x3.5' })).toEqual({ prefix: 'VLC', subgroup: 'ONG' })
+  })
+
+  it('detects grating → GRT-GRTN', () => {
+    expect(detectPrefixSubgroup({ description: 'Steel Grating 30x100' })).toEqual({ prefix: 'GRT', subgroup: 'GRTN' })
+  })
+
+  it('defaults to VLP-KHAC for unknown', () => {
+    expect(detectPrefixSubgroup({ description: 'Bảo hộ lao động' })).toEqual({ prefix: 'VLP', subgroup: 'KHAC' })
+  })
+
+  it('is deterministic — same inputs always produce same output', () => {
+    const item = { description: 'THÉP HÌNH C', profile: 'C100X50X5X7.5' }
+    const a = detectPrefixSubgroup(item)
+    const b = detectPrefixSubgroup(item)
+    expect(a).toEqual(b)
+  })
+})
+
+// ── Export template with dual codes ──
+
+describe('export template has Item + Mã vật tư columns', () => {
+  const prItems: PrItem[] = [
+    { stt: 'I-VTC-001', canonicalCode: 'VLC-HINH-001', description: 'THÉP C', profile: 'C100', grade: 'SS400', unit: 'm', needToBuyQty: 30 },
+    { stt: 'I-VTC-002', description: 'SƠN', unit: 'lít', needToBuyQty: 10 },
+  ]
+
+  it('header row includes Item and Mã vật tư', () => {
+    const wb = exportQuoteTemplate(prItems)
+    const ws = wb.Sheets['BG']
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
+    const headerRow = data.find(r => String(r[0]) === 'Item')
+    expect(headerRow).toBeDefined()
+    expect(String(headerRow![1])).toBe('Mã vật tư')
+    expect(String(headerRow![2])).toBe('Description')
+  })
+
+  it('data rows have canonicalCode in column B', () => {
+    const wb = exportQuoteTemplate(prItems)
+    const ws = wb.Sheets['BG']
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
+    const itemRow = data.find(r => String(r[0]) === 'I-VTC-001')
+    expect(itemRow).toBeDefined()
+    expect(String(itemRow![1])).toBe('VLC-HINH-001')
+  })
+
+  it('item without canonicalCode has empty column B', () => {
+    const wb = exportQuoteTemplate(prItems)
+    const ws = wb.Sheets['BG']
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
+    const itemRow = data.find(r => String(r[0]) === 'I-VTC-002')
+    expect(itemRow).toBeDefined()
+    expect(String(itemRow![1])).toBe('')
+  })
+
+  it('round-trip: export → parse → match still works with new format', () => {
+    const wb = exportQuoteTemplate(prItems)
+    const ws = wb.Sheets['BG']
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][]
+
+    for (const row of data) {
+      const code = String(row[0] || '')
+      if (!code.startsWith('I-VTC-')) continue
+      row[7] = row[6]
+      row[8] = 50000
+    }
+
+    const lines = parseQuoteExcel(data)
+    expect(lines.length).toBe(2)
+
+    const matched = matchQuoteLinesToPr(lines, prItems)
+    expect(matched[0].matchedPrIndex).toBe(0)
+    expect(matched[1].matchedPrIndex).toBe(1)
+  })
+})
+
+// ── Dedup key determinism ──
+
+describe('provisional dedup key is deterministic', () => {
+  it('same profile+grade+unit always produce same key', () => {
+    const key = (p: PrItem) => [
+      (p.profile || '').trim().toLowerCase(),
+      (p.grade || '').trim().toLowerCase(),
+      (p.unit || p.uom || '').trim().toLowerCase(),
+    ].join('|')
+
+    const a: PrItem = { stt: 'A-001', description: 'THÉP HÌNH C', profile: 'C100X50', grade: 'SS400', unit: 'm' }
+    const b: PrItem = { stt: 'B-002', description: 'THÉP C KHÁC', profile: 'C100X50', grade: 'SS400', unit: 'm' }
+    expect(key(a)).toBe(key(b))
+  })
+
+  it('different profile produces different key', () => {
+    const key = (p: PrItem) => [
+      (p.profile || '').trim().toLowerCase(),
+      (p.grade || '').trim().toLowerCase(),
+      (p.unit || p.uom || '').trim().toLowerCase(),
+    ].join('|')
+
+    const a: PrItem = { profile: 'C100X50', grade: 'SS400', unit: 'm' }
+    const b: PrItem = { profile: 'H300X150', grade: 'SS400', unit: 'm' }
+    expect(key(a)).not.toBe(key(b))
   })
 })

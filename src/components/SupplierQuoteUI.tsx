@@ -381,7 +381,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
         <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--surface-hover, #f1f5f9)' }}>
-              {['#', 'Mã', 'Chi tiết/Tên', 'Quy cách', 'Mác', 'ĐVT'].map(h => (
+              {['#', 'Mã Item', 'Mã vật tư', 'Chi tiết/Tên', 'Quy cách', 'Mác', 'ĐVT'].map(h => (
                 <th key={h} className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
               ))}
               {['SL cần mua', 'Tồn khả dụng'].map(h => (
@@ -398,10 +398,11 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
               return (
                 <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                   <td className="px-2 py-1 font-mono" style={{ color: '#64748b' }}>{i + 1}</td>
+                  <td className="px-2 py-1 font-mono text-xs" style={{ color: '#64748b' }}>{p.stt || p.code || p.materialCode || '—'}</td>
                   <td className="px-2 py-1 text-xs" style={{ color: p.canonicalCode ? '#1d4ed8' : '#94a3b8' }}>
                     {p.canonicalCode
-                      ? <span className="font-mono">{p.canonicalCode}</span>
-                      : <span style={{ fontStyle: 'italic' }}>Chưa có mã</span>}
+                      ? <span className="font-mono">{p.canonicalCode}{!!(p as Record<string, unknown>).provisionalCode && <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#e0e7ff', color: '#3730a3' }}>tạm</span>}</span>
+                      : <span style={{ fontStyle: 'italic' }}>—</span>}
                   </td>
                   <td className="px-2 py-1">{desc}</td>
                   <td className="px-2 py-1" style={{ color: '#64748b' }}>{p.profile || '—'}</td>
@@ -905,7 +906,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
   const hasBreakdown = prItems.some(p => typeof p.needToBuyQty === 'number' || (p.quantity ?? 0) > 0)
 
   type PriceInfo = { unitPrice: number; vatPct: number }
-  type Row = { prIdx: number; code: string; desc: string; profile: string; unit: string; qty: number; needToBuy: number; prices: Record<string, PriceInfo> }
+  type Row = { prIdx: number; stt: string; code: string; desc: string; profile: string; unit: string; qty: number; needToBuy: number; prices: Record<string, PriceInfo> }
 
   const allRows: Row[] = []
   const extraRows: { quoteId: string; vendorName: string; line: QuoteLine }[] = []
@@ -919,6 +920,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
     }
     allRows.push({
       prIdx: pi,
+      stt: p.stt || p.code || p.materialCode || '',
       code: p.canonicalCode || '',
       desc: p.description || p.materialName || p.name || '',
       profile: p.profile || '',
@@ -1041,7 +1043,8 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
         <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--surface-hover, #f1f5f9)' }}>
-              <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 60 }}>#</th>
+              <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 50 }}>Mã Item</th>
+              <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 50 }}>Mã VT</th>
               <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 120 }}>Vật tư</th>
               <th className="text-left px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 60 }}>ĐVT</th>
               <th className="text-right px-2 py-1.5 font-semibold" style={{ color: 'var(--text-muted)', minWidth: 50 }}>{hasBreakdown ? 'Cần mua' : 'SL'}</th>
@@ -1061,7 +1064,8 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
               const minAv = priceEntries.length > 0 ? Math.min(...priceEntries.map(([, p]) => avPrice(p))) : 0
               return (
                 <tr key={ri} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td className="px-2 py-1 font-mono" style={{ color: '#64748b' }}>{r.code || (ri + 1)}</td>
+                  <td className="px-2 py-1 font-mono text-xs" style={{ color: '#64748b' }}>{r.stt || (ri + 1)}</td>
+                  <td className="px-2 py-1 font-mono text-xs" style={{ color: r.code ? '#1d4ed8' : '#94a3b8' }}>{r.code || '—'}</td>
                   <td className="px-2 py-1">
                     {r.desc}{r.profile ? <span className="ml-1" style={{ color: '#64748b' }}>{r.profile}</span> : ''}
                   </td>
