@@ -14,7 +14,7 @@ import { useAuthStore } from '@/hooks/useAuth'
 
 export type TemplateType = 'ESTIMATE' | 'PR' | 'BBH' | 'WBS' | 'WELD_PAINT' | 'BOM' | 'SUPPLIER_QUOTE' | null
 
-const TEMPLATES: { value: NonNullable<TemplateType>; label: string; icon: string; desc: string }[] = [
+export const TEMPLATES: { value: NonNullable<TemplateType>; label: string; icon: string; desc: string }[] = [
   { value: 'ESTIMATE', label: 'Dự toán thi công', icon: '📊', desc: 'Upload Excel dự toán (DT01-DT07), parse tổng hợp chi phí' },
   { value: 'PR', label: 'Đề xuất vật tư (PR)', icon: '📦', desc: 'Upload file PR, parse danh sách vật tư chính, đối chiếu kho' },
   { value: 'BBH', label: 'Biên bản họp (BBH)', icon: '📋', desc: 'Upload BB họp Excel, parse nội dung & phân công' },

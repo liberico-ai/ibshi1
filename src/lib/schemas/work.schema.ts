@@ -26,8 +26,9 @@ export const createTaskSchema = z.object({
   assignees: z.array(taskAssigneeInput).min(1, 'Cần ít nhất 1 nơi nhận'),
   docs: z.array(taskDocInput).optional(),
   checklistTemplateKey: z.string().optional(),
-  draftId: z.string().optional(), // id nháp để gắn tệp đính kèm đã upload trước khi task có id
-  forwardedFromId: z.string().optional(), // liên kết "việc tiếp theo" sinh từ task nguồn (truy vết)
+  draftId: z.string().optional(),
+  forwardedFromId: z.string().optional(),
+  template: z.enum(['ESTIMATE', 'PR', 'BBH', 'WBS', 'WELD_PAINT', 'BOM', 'SUPPLIER_QUOTE']).optional(),
 })
 export type CreateTaskInput = z.infer<typeof createTaskSchema>
 

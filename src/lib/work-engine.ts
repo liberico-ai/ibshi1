@@ -183,7 +183,12 @@ export async function createTask(input: CreateTaskInput, userId: string, opts?: 
         checklistTemplateKey: input.checklistTemplateKey,
         externalRef: opts?.externalRef || null,
         externalSource: opts?.externalSource || null,
-        ...(opts?.externalClientId ? { resultData: { externalClientId: opts.externalClientId } } : {}),
+        ...((opts?.externalClientId || input.template) ? {
+          resultData: {
+            ...(opts?.externalClientId ? { externalClientId: opts.externalClientId } : {}),
+            ...(input.template ? { templateType: input.template } : {}),
+          },
+        } : {}),
       },
     })
     if (assignees.length) {

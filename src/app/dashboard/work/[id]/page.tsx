@@ -241,11 +241,12 @@ export default function WorkDetailPage() {
 
       <TemplateSelector
         taskId={id}
-        isEditable={isAssignee && !myDone && task.status !== 'DONE'}
+        isEditable={(isAssignee || isCreator) && task.status !== 'DONE'}
         projectCode={task.project?.projectCode}
         project={task.project}
         projectId={task.projectId || undefined}
         taskTitle={task.title}
+        initialTemplate={(task.resultData?.templateType as string) as import('@/components/TemplateSelector').TemplateType || undefined}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
