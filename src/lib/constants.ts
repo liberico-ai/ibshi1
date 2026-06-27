@@ -129,7 +129,7 @@ export const FORM_EDIT_ROLES = {
   PR: PR_EDIT_ROLES as unknown as string[],
   BBH: ['R01', 'R02', 'R02a'],
   WBS: ['R01', 'R02', 'R02a'],
-  WELD_PAINT: ['R01', 'R04', 'R04a'],
+  WELD_PAINT: ['R01', 'R02', 'R02a', 'R04', 'R04a'],
   BOM: ['R01', 'R04', 'R04a'],
   SUPPLIER_QUOTE: QUOTE_EDIT_ROLES as unknown as string[],
 } as const
