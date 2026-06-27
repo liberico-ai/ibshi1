@@ -57,7 +57,7 @@ export function getTokenFromRequest(req: NextRequest): string | null {
   if (authHeader?.startsWith('Bearer ')) {
     return authHeader.substring(7)
   }
-  return null
+  return req.cookies.get('ibs_token')?.value || null
 }
 
 export async function authenticateRequest(req: NextRequest): Promise<TokenPayload | null> {

@@ -27,6 +27,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('ibs_token', token)
       sessionStorage.setItem('ibs_user', JSON.stringify(user))
+      document.cookie = `ibs_token=${token}; path=/api/upload; SameSite=Strict`
     }
     set({ token, user, isAuthenticated: true })
   },
@@ -35,6 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('ibs_token')
       sessionStorage.removeItem('ibs_user')
+      document.cookie = 'ibs_token=; path=/api/upload; max-age=0'
     }
     set({ token: null, user: null, isAuthenticated: false })
   },
@@ -46,6 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (token && userStr) {
       try {
         const user = JSON.parse(userStr) as User
+        document.cookie = `ibs_token=${token}; path=/api/upload; SameSite=Strict`
         set({ token, user, isAuthenticated: true })
       } catch {
         set({ token: null, user: null, isAuthenticated: false })
