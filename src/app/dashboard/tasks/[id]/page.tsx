@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useParams, useRouter, redirect } from 'next/navigation'
-import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
 import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
@@ -5005,16 +5005,14 @@ export default function TaskDetailPage() {
                       {step.files.map(f => (
                         <a
                           key={f.id}
-                          href={`/api/upload/${f.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
+                          href="#"
+                          onClick={(e) => { e.preventDefault(); openAuthedFile(f.id, f.fileName, f.mimeType) }}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 8,
                             padding: '6px 10px', borderRadius: 8,
                             background: 'var(--bg-secondary)', textDecoration: 'none',
                             color: 'var(--text-primary)', fontSize: '0.85rem',
-                            border: '1px solid var(--border)',
+                            border: '1px solid var(--border)', cursor: 'pointer',
                           }}
                         >
                           <span style={{ fontSize: '1rem' }}>

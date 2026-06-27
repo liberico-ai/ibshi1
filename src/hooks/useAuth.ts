@@ -57,6 +57,46 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 }))
 
+const INLINE_MIME = new Set([
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'text/plain', 'text/csv',
+])
+
+export async function openAuthedFile(id: string, fileName: string, mimeType?: string | null) {
+  const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
+  try {
+    const res = await fetch(`/api/upload/${id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) {
+      const msg = await res.json().then(d => d.error).catch(() => res.statusText)
+      alert(`Không tải được file: ${msg}`)
+      return
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const mime = mimeType || blob.type || ''
+    if (INLINE_MIME.has(mime)) {
+      const w = window.open(url, '_blank')
+      if (w) {
+        const timer = setTimeout(() => URL.revokeObjectURL(url), 60_000)
+        w.addEventListener('beforeunload', () => { clearTimeout(timer); URL.revokeObjectURL(url) })
+      }
+    } else {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 5_000)
+    }
+  } catch {
+    alert('Không tải được file — lỗi mạng')
+  }
+}
+
 // Auth-aware fetch helper
 export async function apiFetch(url: string, options: RequestInit = {}) {
   const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null

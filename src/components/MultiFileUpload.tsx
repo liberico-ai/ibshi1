@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, openAuthedFile } from '@/hooks/useAuth'
 
 export interface UploadedFile {
   id: string
@@ -217,10 +217,9 @@ export default function MultiFileUpload({
             }}>
               <span style={{ flexShrink: 0 }}>{getFileIcon(f.fileName)}</span>
               <a
-                href={`/api/upload/${f.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ flex: 1, fontSize: '0.8rem', color: '#15803d', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}
+                href="#"
+                onClick={(e) => { e.preventDefault(); openAuthedFile(f.id, f.fileName, f.mimeType) }}
+                style={{ flex: 1, fontSize: '0.8rem', color: '#15803d', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none', cursor: 'pointer' }}
               >
                 {f.fileName}
               </a>
@@ -228,9 +227,9 @@ export default function MultiFileUpload({
                 {formatBytes(f.fileSize)}
               </span>
               <a
-                href={`/api/upload/${f.id}`}
-                download
-                style={{ fontSize: '0.75rem', color: '#166534', flexShrink: 0, textDecoration: 'none' }}
+                href="#"
+                onClick={(e) => { e.preventDefault(); openAuthedFile(f.id, f.fileName) }}
+                style={{ fontSize: '0.75rem', color: '#166534', flexShrink: 0, textDecoration: 'none', cursor: 'pointer' }}
                 title="Tải xuống"
               >
                 ↓

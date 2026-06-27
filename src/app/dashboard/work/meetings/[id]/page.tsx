@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
 import MultiFileUpload from '@/components/MultiFileUpload'
 import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
 import { formatShortDateTime } from '@/lib/utils'
@@ -177,7 +177,7 @@ export default function MeetingDetailPage() {
           <div className="text-sm font-semibold mb-2">📎 Tài liệu họp</div>
           {m.files.length === 0 && <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Chưa có tài liệu.</div>}
           {m.files.map((f) => (
-            <a key={f.id} href={`/api/upload/${f.id}`} target="_blank" rel="noopener noreferrer" className="block text-sm py-1" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>📄 {f.fileName} ↗</a>
+            <a key={f.id} href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(f.id, f.fileName) }} className="block text-sm py-1" style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>📄 {f.fileName} ↗</a>
           ))}
           {isOrganizer && !isClosed && <div className="mt-2"><MultiFileUpload label="" entityType="Meeting" entityId={id} compact onUploaded={() => load()} /></div>}
         </div>

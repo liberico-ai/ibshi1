@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
@@ -264,7 +264,7 @@ export default function WorkDetailPage() {
                   <div className="flex-1">
                     <div>{d.label}</div>
                     {d.file ? (
-                      <a href={`/api/upload/${d.file.id}`} target="_blank" rel="noopener noreferrer" className="text-xs" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>{d.file.fileName} ↗</a>
+                      <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }} className="text-xs" style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{d.file.fileName} ↗</a>
                     ) : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(không có tệp đính kèm)</span>}
                   </div>
                 </div>
@@ -296,7 +296,7 @@ export default function WorkDetailPage() {
                 {d.fulfilled ? (
                   <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                     {d.note && <div>📝 {d.note}</div>}
-                    {d.file && <a href={`/api/upload/${d.file.id}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>{d.file.fileName} ↗</a>}
+                    {d.file && <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }} style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{d.file.fileName} ↗</a>}
                   </div>
                 ) : isAssignee && !myDone && task.status !== 'DONE' ? (
                   <div className="mt-1.5 space-y-1.5">
@@ -328,7 +328,7 @@ export default function WorkDetailPage() {
             <div className="space-y-1.5">
               {task.evidenceFiles.map((ef) => (
                 <div key={ef.id} className="flex items-center gap-2 text-sm py-1.5 px-3 rounded-lg" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                  <a href={`/api/upload/${ef.id}`} target="_blank" rel="noopener noreferrer" className="flex-1 hover:underline" style={{ color: '#1d4ed8' }}>{ef.fileName}</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(ef.id, ef.fileName, ef.mimeType) }} className="flex-1 hover:underline" style={{ color: '#1d4ed8', cursor: 'pointer' }}>{ef.fileName}</a>
                   {ef.fileSize != null && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{ef.fileSize < 1024 * 1024 ? `${(ef.fileSize / 1024).toFixed(0)} KB` : `${(ef.fileSize / (1024 * 1024)).toFixed(1)} MB`}</span>}
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{ef.uploadedByName || '—'}</span>
                   <span className="text-xs" style={{ color: '#94a3b8' }}>{formatShortDateTime(ef.createdAt)}</span>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import { formatDateTime, formatShortDateTime } from '@/lib/utils'
@@ -106,8 +106,8 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{d.label}</div>
                   {d.file ? (
-                    <a href={`/api/upload/${d.file.id}`} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: '0.78rem', color: '#1d4ed8', textDecoration: 'underline', wordBreak: 'break-all' }}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }}
+                      style={{ fontSize: '0.78rem', color: '#1d4ed8', textDecoration: 'underline', wordBreak: 'break-all', cursor: 'pointer' }}>
                       {d.file.fileName} ↗
                     </a>
                   ) : (
@@ -148,7 +148,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
               {d.fulfilled ? (
                 <div style={{ fontSize: '0.78rem', marginTop: 4, color: 'var(--text-secondary)' }}>
                   {d.note && <div>📝 {d.note}</div>}
-                  {d.file && <a href={`/api/upload/${d.file.id}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>{d.file.fileName} ↗</a>}
+                  {d.file && <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }} style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{d.file.fileName} ↗</a>}
                 </div>
               ) : isAssignee && isActive && !myDone ? (
                 <div style={{ marginTop: 6 }}>
