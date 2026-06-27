@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Geist',system-ui,sans-serif;color:#3A3F47;background:#fff;-webkit-font-smoothing:antialiased;line-height:1.5}.m{font-family:'Geist Mono',monospace}</style>
+</helmet>
+<div style="background:#fff">
+  <!-- cover -->
+  <div style="background:#141518;color:#fff;padding:44px 32px">
+    <div style="max-width:1080px;margin:0 auto">
+      <div style="font:600 11px 'Geist Mono';letter-spacing:.18em;color:#E1251B;text-transform:uppercase;margin-bottom:10px">Bản đồ Module · bàn giao VS Code</div>
+      <h1 style="font:700 32px/1.15 'Space Grotesk';letter-spacing:-.02em">Toàn cảnh hệ thống IBS-ERP</h1>
+      <p style="font:400 14px/1.65 'Geist';color:#9AA0A8;max-width:720px;margin-top:14px">Cây điều hướng · trạng thái tận dụng/bù/tạo mới · điểm nối module · màn mobile · thứ tự build. Xương sống: <b style="color:#C6CAD0">Task động</b>. Bám <span class="m" style="color:#C6CAD0">constants.ts · org-map.ts · workflow-constants.ts · HIDDEN_MENU_KEYS</span>.</p>
+    </div>
+  </div>
+
+  <!-- 1. NAV TREE -->
+  <section style="max-width:1080px;margin:0 auto;padding:46px 32px 8px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:18px"><span class="m" style="font:600 13px;color:#E1251B">01</span><h2 style="font:600 22px 'Space Grotesk';color:#17191D">Cây điều hướng — nhóm → trang → role</h2></div>
+    <sc-for list="{{ navTree }}" as="g" hint-placeholder-count="11">
+      <div style="display:grid;grid-template-columns:200px 1fr;gap:16px;padding:12px 0;border-bottom:1px solid #F4F5F7">
+        <div><div style="font:600 12.5px 'Geist';color:#17191D">{{ g.group }}</div><div class="m" style="font:500 10.5px;color:{{ g.tagColor }};margin-top:3px">{{ g.tag }}</div></div>
+        <div><div style="font:500 12.5px 'Geist';color:#3A3F47">{{ g.pages }}</div><div class="m" style="font:500 11px;color:#8A9099;margin-top:3px">role: {{ g.roles }}</div></div>
+      </div>
+    </sc-for>
+  </section>
+
+  <!-- 2. STATUS TABLE -->
+  <section style="max-width:1080px;margin:0 auto;padding:40px 32px 8px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:8px"><span class="m" style="font:600 13px;color:#E1251B">02</span><h2 style="font:600 22px 'Space Grotesk';color:#17191D">Từng cụm × trạng thái</h2></div>
+    <div style="display:flex;gap:14px;margin-bottom:18px;font:600 11px 'Geist'"><span style="color:#1E8E5A;background:#E6F4EC;padding:3px 10px;border-radius:6px">TẬN DỤNG</span><span style="color:#C97A0E;background:#FBF1DF;padding:3px 10px;border-radius:6px">BÙ</span><span style="color:#C8372B;background:#FDECEA;padding:3px 10px;border-radius:6px">TẠO MỚI</span></div>
+    <sc-for list="{{ clusters }}" as="c" hint-placeholder-count="7">
+      <div style="border:1px solid #EAECEF;border-radius:12px;padding:16px 18px;margin-bottom:12px">
+        <div style="font:600 14px 'Space Grotesk';color:#17191D;margin-bottom:10px">{{ c.name }}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div><div style="font:600 10px 'Geist';color:#1E8E5A;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Tận dụng</div><div style="font:500 11.5px/1.5 'Geist';color:#5B6068">{{ c.reuse }}</div></div>
+          <div><div style="font:600 10px 'Geist';color:#C97A0E;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Bù</div><div style="font:500 11.5px/1.5 'Geist';color:#5B6068">{{ c.fix }}</div></div>
+          <div><div style="font:600 10px 'Geist';color:#C8372B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Tạo mới</div><div style="font:500 11.5px/1.5 'Geist';color:#5B6068">{{ c.new }}</div></div>
+        </div>
+      </div>
+    </sc-for>
+    <!-- entity migration -->
+    <div style="border:1.5px solid #F3C6C1;background:#FEF7F6;border-radius:13px;padding:18px 20px;margin-top:8px">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span style="width:9px;height:9px;border-radius:50%;background:#C8372B"></span><div style="font:600 14px 'Space Grotesk';color:#C8372B">⚠ Entity TẠO MỚI — Prisma migration THẬN TRỌNG (DB production)</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <sc-for list="{{ newEntities }}" as="e" hint-placeholder-count="8"><span class="m" style="font:600 11.5px;color:#C8372B;background:#FDECEA;border:1px solid #F3C6C1;padding:4px 11px;border-radius:7px">{{ e }}</span></sc-for>
+      </div>
+      <div style="font:500 11.5px/1.55 'Geist';color:#8A6A66;margin-top:13px"><b style="color:#7A140D">Delivery</b> — đã có (kiểm tra <span class="m">/api/delivery</span>): tận dụng, không tạo mới. Mỗi entity: <span class="m">prisma migrate deploy</span> (không reset) + pg_dump trước + RBAC theo role + API <span class="m">successResponse/errorResponse</span>. BomVersion là điểm giao thoa — làm tiệm tiến qua adapter, KHÔNG big-bang.</div>
+    </div>
+  </section>
+
+  <!-- 3. CROSS-LINKS -->
+  <section style="max-width:1080px;margin:0 auto;padding:40px 32px 8px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:18px"><span class="m" style="font:600 13px;color:#E1251B">03</span><h2 style="font:600 22px 'Space Grotesk';color:#17191D">Điểm nối giữa module</h2></div>
+    <sc-for list="{{ links }}" as="l" hint-placeholder-count="6">
+      <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #F4F5F7">
+        <span style="font:600 12px 'Geist';color:#17191D;width:115px;flex-shrink:0">{{ l.from }}</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E1251B" stroke-width="2" style="flex-shrink:0"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <span style="font:600 12px 'Geist';color:#17191D;width:115px;flex-shrink:0">{{ l.to }}</span>
+        <span style="font:500 11.5px 'Geist';color:#5B6068">{{ l.note }}</span>
+      </div>
+    </sc-for>
+    <div style="display:flex;align-items:center;gap:11px;margin-top:14px;background:#FBF7F2;border:1px solid #F0E6D8;border-radius:11px;padding:13px 16px"><span style="width:22px;height:22px;border-radius:7px;background:#FCEFD9;color:#C97A0E;display:flex;align-items:center;justify-content:center;flex-shrink:0;font:700 12px 'Space Grotesk'">★</span><span style="font:500 12px 'Geist';color:#8A7B68"><b style="color:#5B5040">Điểm chung:</b> mọi phát sinh (PR điều chỉnh, bảo trì, sự cố, permit, đóng kiện, bàn giao) đều tạo qua <b style="color:#5B5040">Task động (createTask)</b> — không hệ riêng, không hồi sinh 36 bước.</span></div>
+  </section>
+
+  <!-- 4. MOBILE -->
+  <section style="max-width:1080px;margin:0 auto;padding:40px 32px 8px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:18px"><span class="m" style="font:600 13px;color:#E1251B">04</span><h2 style="font:600 22px 'Space Grotesk';color:#17191D">Màn cần Mobile (xưởng / hiện trường) — 12 màn</h2></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <sc-for list="{{ mobile }}" as="m" hint-placeholder-count="12">
+        <div style="display:flex;align-items:center;gap:11px;border:1px solid #EAECEF;border-radius:11px;padding:12px 15px">
+          <span style="width:24px;height:24px;border-radius:7px;background:#E8F0FA;color:#2D6CB5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/></svg></span>
+          <span style="flex:1;font:600 12px 'Geist';color:#17191D">{{ m.screen }}</span>
+          <span class="m" style="font:600 10px;color:#E1251B;background:#FDECEA;padding:3px 8px;border-radius:6px">{{ m.role }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- 5. BUILD ORDER -->
+  <section style="max-width:1080px;margin:0 auto;padding:40px 32px 60px">
+    <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:18px"><span class="m" style="font:600 13px;color:#E1251B">05</span><h2 style="font:600 22px 'Space Grotesk';color:#17191D">Thứ tự build + phụ thuộc</h2></div>
+    <sc-for list="{{ buildOrder }}" as="b" hint-placeholder-count="6">
+      <div style="display:flex;gap:14px;padding-bottom:14px">
+        <span style="display:flex;flex-direction:column;align-items:center;flex-shrink:0"><span class="m" style="width:28px;height:28px;border-radius:9px;background:#17191D;color:#fff;display:flex;align-items:center;justify-content:center;font:700 12px">{{ b.n }}</span><span style="width:1.5px;flex:1;background:#EEF0F2;margin-top:4px"></span></span>
+        <div style="flex:1;padding-top:2px"><div style="font:600 13.5px 'Geist';color:#17191D">{{ b.title }}</div><div style="font:500 11.5px/1.5 'Geist';color:#757B83;margin-top:2px">{{ b.detail }}</div><div class="m" style="font:500 10.5px;color:#C8372B;margin-top:3px">phụ thuộc: {{ b.dep }}</div></div>
+      </div>
+    </sc-for>
+    <div style="margin-top:14px;padding-top:18px;border-top:1px solid #EEF0F2;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><span style="font:500 11.5px 'Geist';color:#9AA0A8">IBS-ERP Module Map · bàn giao VS Code · bám Design System v1.0</span><span class="m" style="font:500 11px;color:#C2C7CD">Task động = xương sống · không hồi sinh 36 bước</span></div>
+  </section>
+</div>
+<template id="__bundler_thumbnail"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#141518"/><g transform="translate(30 34)"><rect x="0" y="0" width="14" height="10" rx="2" fill="#E1251B"/><rect x="0" y="14" width="14" height="10" rx="2" fill="#E1251B"/><rect x="26" y="0" width="14" height="10" rx="2" fill="#fff" opacity=".85"/><rect x="26" y="14" width="14" height="10" rx="2" fill="#fff" opacity=".5"/><path d="M14 5h12M14 19h12" stroke="#888" stroke-width="1.5"/></g></svg></template>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      navTree: [
+        { group: 'TỔNG QUAN', tag: 'overview', tagColor: '#9AA0A8', pages: 'Bảng điều khiển · Công việc (hệ động) · Phòng của tôi · Lịch họp · Thông báo', roles: 'all' },
+        { group: 'ĐIỀU HÀNH', tag: 'management', tagColor: '#9AA0A8', pages: 'Tổng quan dự án · Giao ban tuần · Hiệu suất & KPI', roles: 'R01 R02 R03 (R10)' },
+        { group: 'DỰ ÁN', tag: 'project', tagColor: '#9AA0A8', pages: 'Dự án · Cột mốc · Thầu phụ · Bài học · An toàn', roles: 'R01 R02 R03 R04 R06' },
+        { group: 'KỸ THUẬT — REVISION', tag: 'rev (mới)', tagColor: '#C8372B', pages: 'Sổ revision · Tạo Rev · So sánh Diff · Phân tích tác động', roles: 'R04 R04a thao tác · R02/R01 duyệt' },
+        { group: 'KHO & MUA HÀNG', tag: 'warehouse', tagColor: '#9AA0A8', pages: 'Tồn kho · PO · Báo giá→PO · GRN · Xuất kho · NCC · Mã VT', roles: 'R05 R05a R07 R03 R01' },
+        { group: 'QA / QC', tag: 'qc', tagColor: '#9AA0A8', pages: 'Bảng QC · ITP · Nghiệm thu · NCR · Cert+MillCert · FAT/SAT · MRB', roles: 'R09 R09a R01' },
+        { group: 'SẢN XUẤT', tag: 'production', tagColor: '#9AA0A8', pages: 'Lệnh SX theo tổ · Tiến độ · Phiếu công đoạn · Weld map', roles: 'R06 R06a R06b · R02/R01 xem' },
+        { group: 'LOGISTICS / GIAO HÀNG', tag: 'log (mới)', tagColor: '#C8372B', pages: 'Đóng kiện · Vận chuyển · Bàn giao site · MDR', roles: 'R05 R05a R07 R02 R01' },
+        { group: 'THIẾT BỊ & CƠ GIỚI', tag: 'tbcg (mới)', tagColor: '#C8372B', pages: 'Sổ thiết bị · Bảo trì · Điều phối thiết bị', roles: 'R13 R06 R01' },
+        { group: 'AN TOÀN — HSE', tag: 'hse (mới)', tagColor: '#C8372B', pages: 'Sự cố/Tai nạn · Permit-to-work · Toolbox & Bảng an toàn', roles: 'R01 R10 · R06 tham gia' },
+        { group: 'TÀI CHÍNH · NHÂN SỰ · BÁO CÁO · HỆ THỐNG', tag: 'existing', tagColor: '#9AA0A8', pages: 'Ngân sách/Thanh toán/Quyết toán · Nhân viên/Lương/Khoán · Báo cáo/Nhật ký · Quản trị', roles: 'R08 R03 R02 R01 R10' },
+      ],
+      clusters: [
+        { name: 'Revision & Cascade vật tư (Mục 4)', reuse: 'BOM/PR (đang lưu JSON trong resultData task)', fix: 'Bọc lớp version qua adapter, giữ luồng PR→khớp tồn→báo giá→PO 100%', new: 'BomVersion · DrawingRevision · BomLine · Norm (định mức hàn/sơn/tiêu hao)' },
+        { name: 'Kho & Mua hàng', reuse: 'Material · PO · GRN · Vendor · báo giá NCC (2 mã Item+VT)', fix: 'Truy xuất Heat/Lot + mill cert · merge mã provisional · cấp phát theo Lệnh SX', new: 'HeatLot (field trên Material)' },
+        { name: 'QA / QC', reuse: 'Inspection · ITPCheckpoint · NCR/NcrAction · CertificateRegistry · MillCertificate', fix: 'Checkpoint Hold/Witness status · NCR vòng đời đóng · cert renew · gộp qc↔inspections', new: 'NDTReport · CoatingInspection (DFT) — nếu tách riêng' },
+        { name: 'Sản xuất', reuse: 'WorkOrder · JobCard · Workshop · Department TO-*', fix: 'JobCard actualQty/giờ + filter (bug) · tiến độ theo TẤN & piece-mark', new: 'WeldMap · WelderQualification (WPS/PQR/WPQ)' },
+        { name: 'Logistics / Giao hàng', reuse: 'Delivery (đã có /api/delivery)', fix: '% giao theo tấn & piece-mark (đồng bộ SX)', new: 'PackingList · Shipment' },
+        { name: 'TBCG (Thiết bị & Cơ giới)', reuse: '— (gần như chưa có)', fix: '—', new: 'Equipment · Maintenance' },
+        { name: 'HSE (An toàn)', reuse: '— (chưa có)', fix: '—', new: 'Incident · WorkPermit · ToolboxTalk' },
+      ],
+      newEntities: ['BomVersion', 'PackingList', 'Shipment', 'Equipment', 'Maintenance', 'Incident', 'WorkPermit', 'ToolboxTalk', '+ WeldMap', '+ HeatLot(field)'],
+      links: [
+        { from: 'Revision', to: 'BOM / PR', note: 'Cascade vật tư (Mục 4): diff theo 5 nhóm → sinh PR điều chỉnh qua Task động' },
+        { from: 'Weld map (SX)', to: 'QC', note: 'Mỗi mối hàn → NDT/nghiệm thu (UT/RT) ở module QC; lỗi → mở NCR' },
+        { from: 'Packing (Log)', to: 'QC verdict', note: 'Chỉ piece-mark có Inspection “Đạt” mới gom được vào kiện' },
+        { from: 'MDR (Log)', to: 'QC MRB', note: 'Cổng chặn phát hành: NCR đóng + FAT + checkpoint xong mới cho giao khách' },
+        { from: 'Điều phối (TBCG)', to: 'Sản xuất WO', note: 'Thiết bị gắn tổ/WorkOrder — tổ nào đang dùng cẩu/máy nào' },
+        { from: 'Tiến độ (SX)', to: 'Logistics', note: '% theo tấn & piece-mark đồng bộ một cách đo từ chế tạo → giao hàng' },
+      ],
+      mobile: [
+        { screen: 'QC · Nghiệm thu (ghi verdict + ảnh)', role: 'R09' },
+        { screen: 'QC · ITP (tick Hold/Witness pass-fail)', role: 'R09' },
+        { screen: 'QC · NDT / DFT (nhập số đo tại chỗ)', role: 'R09' },
+        { screen: 'SX · Phiếu công đoạn (nhập sản lượng/giờ)', role: 'R06b' },
+        { screen: 'SX · Weld map (xác nhận mối, quét piece-mark)', role: 'R06b' },
+        { screen: 'SX · Lệnh SX theo tổ (nhận/giao việc)', role: 'R06' },
+        { screen: 'Log · Đóng kiện/Xuất (quét mã, ảnh kiện)', role: 'R05' },
+        { screen: 'Log · Bàn giao site (ký nhận điện tử)', role: 'R07/R02' },
+        { screen: 'HSE · Ghi sự cố (ảnh + vị trí)', role: 'R06/all' },
+        { screen: 'HSE · Xác nhận permit tại chỗ', role: 'R06' },
+        { screen: 'HSE · Toolbox đầu ca (tổ trưởng)', role: 'R06' },
+        { screen: 'TBCG · Tick bảo trì tại máy', role: 'R13' },
+      ],
+      buildOrder: [
+        { n: '1', title: 'Design System → code (nền)', detail: 'Tokens Tailwind + thư viện src/components/ui (Button/Badge/DataTable/DiffTable/Timeline/…) + trang /dashboard/style-guide (R10).', dep: '— (làm trước tất cả)' },
+        { n: '2', title: 'Revision + BomVersion (cascade)', detail: 'Drawing/DrawingRevision/BomVersion/BomLine + Diff/Impact. Adapter giữ luồng PR→PO. Migration thận trọng.', dep: 'Design System' },
+        { n: '3', title: 'Heat/Lot (Kho) + QC bù', detail: 'HeatLot trên Material; checkpoint status, NCR close, cert renew, gộp dashboard QC.', dep: 'Revision (truy xuất BOM/rev)' },
+        { n: '4', title: 'Sản xuất (WO tổ + tiến độ + WeldMap)', detail: 'Fix JobCard actualQty; tiến độ tấn/piece-mark; WeldMap + WelderQual nối QC.', dep: 'Revision (BOM) · QC (weld→NDT)' },
+        { n: '5', title: 'Logistics (Packing + Shipment)', detail: 'Đóng kiện theo piece-mark đạt; vận chuyển; MDR handover.', dep: 'Sản xuất (piece-mark) · QC (verdict/MRB)' },
+        { n: '6', title: 'TBCG + HSE', detail: 'Equipment/Maintenance · Incident/WorkPermit/ToolboxTalk. Độc lập, gắn Task động.', dep: 'Design System + Task động (có sẵn)' },
+      ],
+    }
+  }
+}
+</script>
+</body>
+</html>

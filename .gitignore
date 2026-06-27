@@ -43,7 +43,8 @@ next-env.d.ts
 /src/generated/prisma
 
 # Non-essential project files
-/docs/
+/docs/*
+!/docs/handoff/
 /.agent/
 /.gemini/
 /public/uploads/

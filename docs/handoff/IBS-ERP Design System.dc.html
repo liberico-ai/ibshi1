@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Geist',system-ui,sans-serif;color:#3A3F47;background:#FFFFFF;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;line-height:1.5}
+  ::selection{background:#FDD9D6;color:#7A140D}
+  ::-webkit-scrollbar{width:11px}
+  ::-webkit-scrollbar-thumb{background:#D5D8DD;border-radius:6px;border:3px solid #fff}
+  .mono{font-family:'Geist Mono',monospace}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#FFFFFF">
+
+  <!-- ═══ COVER ═══ -->
+  <div style="background:#141518;color:#fff;padding:54px 32px 48px;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-140px;right:-100px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(225,37,27,.2),transparent 70%)"></div>
+    <div style="max-width:1080px;margin:0 auto;position:relative">
+      <div style="display:flex;align-items:center;gap:13px;margin-bottom:34px">
+        <div style="display:flex;align-items:flex-end;gap:2.5px">
+          <div style="width:15px;height:26px;background:#E1251B;border-radius:2px;display:flex;align-items:center;justify-content:center"><span style="font:700 14px 'Space Grotesk';color:#fff;line-height:1">i</span></div>
+          <div style="width:15px;height:35px;background:#E1251B;border-radius:2px;display:flex;align-items:center;justify-content:center"><span style="font:700 16px 'Space Grotesk';color:#fff;line-height:1">b</span></div>
+          <div style="width:15px;height:30px;background:#E1251B;border-radius:2px;display:flex;align-items:center;justify-content:center"><span style="font:700 15px 'Space Grotesk';color:#fff;line-height:1">s</span></div>
+        </div>
+        <div><div style="font:700 16px 'Space Grotesk';letter-spacing:-.01em">IBS HEAVY INDUSTRY</div><div style="font:600 9px 'Geist';letter-spacing:.22em;color:#6B7178;margin-top:2px">ENTERPRISE RESOURCE PLANNING</div></div>
+      </div>
+      <div style="font:600 11px 'Geist Mono';letter-spacing:.18em;color:#E1251B;text-transform:uppercase;margin-bottom:12px">Design System · v1.0</div>
+      <h1 style="font:700 40px/1.12 'Space Grotesk';letter-spacing:-.025em;max-width:760px">Một ngôn ngữ thiết kế chung cho toàn hệ thống IBS-ERP</h1>
+      <p style="font:400 15px/1.7 'Geist';color:#9AA0A8;max-width:680px;margin-top:18px">Tokens, bản đồ màu trạng thái và bộ component dùng lại cho mọi thực thể — bám đúng <span class="mono" style="color:#C6CAD0">org-map.ts · constants.ts · workflow-constants.ts</span>. Nguồn chuẩn để VS Code triển khai vào code thật và Claude Design dựng UI.</p>
+      <div style="display:flex;gap:34px;margin-top:34px;flex-wrap:wrap">
+        <div><div style="font:700 22px 'Geist Mono'">#E1251B</div><div style="font:500 11.5px 'Geist';color:#6B7178;margin-top:3px">Đỏ IBS — màu thương hiệu</div></div>
+        <div><div style="font:700 22px 'Space Grotesk'">Aa</div><div style="font:500 11.5px 'Geist';color:#6B7178;margin-top:3px">Space Grotesk · Geist · Geist Mono</div></div>
+        <div><div style="font:700 22px 'Geist Mono'">11</div><div style="font:500 11.5px 'Geist';color:#6B7178;margin-top:3px">component dùng chung</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 01 · BRAND & TOKENS MÀU ═══ -->
+  <section style="max-width:1080px;margin:0 auto;padding:52px 32px 12px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:7px"><span class="mono" style="font:600 13px 'Geist Mono';color:#E1251B">01</span><h2 style="font:600 24px 'Space Grotesk';color:#17191D;letter-spacing:-.02em">Bảng màu — Brand</h2></div>
+    <p style="font:400 14px/1.6 'Geist';color:#757B83;max-width:680px;margin-bottom:26px">Đỏ IBS là điểm nhấn duy nhất (CTA, trạng thái đang hoạt động, thương hiệu). Đen/than làm cấu trúc, trắng + xám làm nền. Không dùng cầu vồng màu.</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+      <sc-for list="{{ brand }}" as="c" hint-placeholder-count="8">
+        <div style="border:1px solid #EAECEF;border-radius:12px;overflow:hidden">
+          <div style="height:74px;background:{{ c.hex }}"></div>
+          <div style="padding:11px 13px">
+            <div style="font:600 12.5px 'Geist';color:#17191D">{{ c.name }}</div>
+            <div class="mono" style="font:500 12px 'Geist Mono';color:#E1251B;margin-top:3px">{{ c.hex }}</div>
+            <div style="font:500 11px 'Geist';color:#9AA0A8;margin-top:4px">{{ c.use }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <h3 style="font:600 14px 'Space Grotesk';color:#17191D;margin:32px 0 14px">Xám trung tính — chữ, nền, viền</h3>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px">
+      <sc-for list="{{ grays }}" as="g" hint-placeholder-count="9">
+        <div>
+          <div style="height:54px;border-radius:10px;border:1px solid #EAECEF;background:{{ g.hex }}"></div>
+          <div style="font:600 11.5px 'Geist';color:#17191D;margin-top:8px">{{ g.name }}</div>
+          <div class="mono" style="font:500 11px 'Geist Mono';color:#9AA0A8;margin-top:1px">{{ g.hex }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <h3 style="font:600 14px 'Space Grotesk';color:#17191D;margin:32px 0 14px">Màu ngữ nghĩa — dùng cho mọi trạng thái</h3>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px">
+      <sc-for list="{{ semantic }}" as="s" hint-placeholder-count="5">
+        <div style="border:1px solid #EAECEF;border-radius:12px;padding:14px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;border-radius:4px;background:{{ s.color }}"></span><span style="font:600 12.5px 'Geist';color:#17191D">{{ s.name }}</span></div>
+          <div class="mono" style="font:500 11.5px 'Geist Mono';color:#5B6068;margin-top:9px">chữ {{ s.color }}</div>
+          <div class="mono" style="font:500 11.5px 'Geist Mono';color:#5B6068;margin-top:2px">nền {{ s.bg }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ═══ 02 · BẢN ĐỒ MÀU TRẠNG THÁI ═══ -->
+  <section style="max-width:1080px;margin:0 auto;padding:48px 32px 12px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:7px"><span class="mono" style="font:600 13px 'Geist Mono';color:#E1251B">02</span><h2 style="font:600 24px 'Space Grotesk';color:#17191D;letter-spacing:-.02em">Bản đồ màu trạng thái</h2></div>
+    <p style="font:400 14px/1.6 'Geist';color:#757B83;max-width:720px;margin-bottom:26px">Mã trạng thái khớp <span class="mono" style="color:#E1251B">workflow-constants.ts</span> &amp; Blueprint Mục 6. Mỗi badge = nhãn tiếng Việt + mã code + hex chữ/nền để VS Code map trực tiếp.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <sc-for list="{{ statusGroups }}" as="grp" hint-placeholder-count="4">
+        <div style="border:1px solid #EAECEF;border-radius:14px;overflow:hidden">
+          <div style="padding:14px 18px;border-bottom:1px solid #F0F1F3;background:#FAFBFC">
+            <div style="font:600 14px 'Space Grotesk';color:#17191D">{{ grp.title }}</div>
+            <div style="font:500 11.5px 'Geist';color:#9AA0A8;margin-top:2px">{{ grp.note }}</div>
+          </div>
+          <sc-for list="{{ grp.items }}" as="s" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:1.4fr 1.2fr 1fr;gap:10px;align-items:center;padding:10px 18px;border-bottom:1px solid #F4F5F7">
+              <span style="justify-self:start;font:600 11.5px 'Geist';color:{{ s.color }};background:{{ s.bg }};padding:4px 11px;border-radius:7px;white-space:nowrap">{{ s.label }}</span>
+              <span class="mono" style="font:500 11px 'Geist Mono';color:#5B6068">{{ s.code }}</span>
+              <span class="mono" style="font:500 10.5px 'Geist Mono';color:#9AA0A8;text-align:right">{{ s.color }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <!-- flags -->
+    <h3 style="font:600 14px 'Space Grotesk';color:#17191D;margin:28px 0 14px">Cờ đánh dấu (overlay lên mọi thực thể)</h3>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:11px;border:1px solid #EAECEF;border-radius:11px;padding:12px 16px">
+        <span style="font:600 11.5px 'Geist';color:#C8372B;background:#FDECEA;padding:4px 11px;border-radius:7px">● Quá hạn</span>
+        <span class="mono" style="font:500 11px 'Geist Mono';color:#9AA0A8">overdue · #C8372B</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;border:1px solid #EAECEF;border-radius:11px;padding:12px 16px">
+        <span style="font:600 11.5px 'Geist';color:#fff;background:#E1251B;padding:4px 11px;border-radius:7px">▲ Cần BLĐ quyết</span>
+        <span class="mono" style="font:500 11px 'Geist Mono';color:#9AA0A8">escalated · #E1251B</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;border:1px solid #EAECEF;border-radius:11px;padding:12px 16px">
+        <span style="font:600 11.5px 'Geist';color:#C2410C;background:#FCEEE4;padding:4px 11px;border-radius:7px">◼ Tắc / Blocked</span>
+        <span class="mono" style="font:500 11px 'Geist Mono';color:#9AA0A8">blocked · #C2410C</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 03 · SPACING / TYPE / RADIUS ═══ -->
+  <section style="max-width:1080px;margin:0 auto;padding:48px 32px 12px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:7px"><span class="mono" style="font:600 13px 'Geist Mono';color:#E1251B">03</span><h2 style="font:600 24px 'Space Grotesk';color:#17191D;letter-spacing:-.02em">Spacing · Typography · Bo góc</h2></div>
+    <div style="display:grid;grid-template-columns:1fr 1.25fr;gap:34px;margin-top:22px">
+      <!-- spacing + radius -->
+      <div>
+        <h3 style="font:600 14px 'Space Grotesk';color:#17191D;margin-bottom:14px">Spacing scale (8-pt)</h3>
+        <sc-for list="{{ spacing }}" as="sp" hint-placeholder-count="8">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:9px">
+            <span class="mono" style="font:500 11.5px 'Geist Mono';color:#9AA0A8;width:42px">{{ sp.px }}</span>
+            <span style="height:14px;border-radius:3px;background:#FBD9D5;width:{{ sp.px }}"></span>
+          </div>
+        </sc-for>
+        <h3 style="font:600 14px 'Space Grotesk';color:#17191D;margin:26px 0 14px">Bo góc</h3>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <sc-for list="{{ radii }}" as="r" hint-placeholder-count="5">
+            <div style="text-align:center">
+              <div style="width:54px;height:54px;background:#F4F5F7;border:1px solid #E2E4E8;border-radius:{{ r.px }}"></div>
+              <div style="font:600 11px 'Geist';color:#17191D;margin-top:7px">{{ r.name }}</div>
+              <div class="mono" style="font:500 10px 'Geist Mono';color:#9AA0A8">{{ r.px }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <!-- type -->
+      <div>
+        <h3 style="font:600 14px 'Space Grotesk';color:#17191D;margin-bottom:6px">Typography</h3>
+        <p style="font:400 12.5px/1.55 'Geist';color:#757B83;margin-bottom:16px"><b style="color:#17191D">Space Grotesk</b> cho tiêu đề · <b style="color:#17191D">Geist</b> cho nội dung/UI · <b style="color:#17191D">Geist Mono</b> bắt buộc cho <b style="color:#17191D">mã, số lượng, tiền, ngày, Heat/Lot</b>.</p>
+        <div style="border:1px solid #EAECEF;border-radius:13px;overflow:hidden">
+          <sc-for list="{{ typeScale }}" as="t" hint-placeholder-count="6">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:13px 18px;border-bottom:1px solid #F4F5F7">
+              <span style="{{ t.style }}">{{ t.sample }}</span>
+              <span class="mono" style="font:500 10.5px 'Geist Mono';color:#9AA0A8;white-space:nowrap;flex-shrink:0">{{ t.meta }}</span>
+            </div>
+          </sc-for>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;background:#FAFBFC">
+            <span class="mono" style="font:600 16px 'Geist Mono';color:#17191D;letter-spacing:-.01em">DA-26-014 · 8.420 kg · 1.236.480.000 ₫</span>
+            <span class="mono" style="font:500 10.5px 'Geist Mono';color:#9AA0A8">Mono · tabular-nums</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 04 · COMPONENT DÙNG CHUNG ═══ -->
+  <section style="max-width:1080px;margin:0 auto;padding:48px 32px 12px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:7px"><span class="mono" style="font:600 13px 'Geist Mono';color:#E1251B">04</span><h2 style="font:600 24px 'Space Grotesk';color:#17191D;letter-spacing:-.02em">Component dùng chung</h2></div>
+    <p style="font:400 14px/1.6 'Geist';color:#757B83;max-width:680px;margin-bottom:26px">11 component nền tảng — mỗi loại một mẫu chuẩn, dùng lại cho mọi thực thể (Task, PO, Drawing, NCR, Vật tư…).</p>
+
+    <!-- Buttons -->
+    <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px;margin-bottom:18px">
+      <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">Button — primary · secondary · nguy hiểm · ghost</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button style="background:#E1251B;color:#fff;border:none;border-radius:10px;padding:10px 18px;font:600 13px 'Geist';cursor:pointer;box-shadow:0 1px 2px rgba(225,37,27,.3)">Tạo / Lưu</button>
+        <button style="background:#fff;color:#3A3F47;border:1.5px solid #D5D8DD;border-radius:10px;padding:9px 17px;font:600 13px 'Geist';cursor:pointer">Hủy</button>
+        <button style="background:#1E8E5A;color:#fff;border:none;border-radius:10px;padding:10px 18px;font:600 13px 'Geist';cursor:pointer">Hoàn thành bước</button>
+        <button style="background:#fff;color:#C8372B;border:1px solid #F3C6C1;border-radius:10px;padding:9px 17px;font:600 13px 'Geist';cursor:pointer">Xóa / Trả lại</button>
+        <button style="background:transparent;color:#5B6068;border:none;border-radius:8px;padding:9px 13px;font:600 13px 'Geist';cursor:pointer">Ghost</button>
+        <button style="background:#E1251B;color:#fff;border:none;border-radius:8px;padding:6px 13px;font:600 11.5px 'Geist';cursor:pointer">Nhỏ</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+      <!-- KPI card -->
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px">
+        <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">KPI card</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div style="background:#fff;border:1px solid #EAECEF;border-radius:13px;padding:16px 18px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font:500 12px 'Geist';color:#757B83">Việc cần xử lý</span><span style="width:9px;height:9px;border-radius:50%;background:#C8372B"></span></div><div class="mono" style="font:700 28px 'Geist Mono';color:#17191D;margin-top:8px">7</div><div style="font:500 11px 'Geist';color:#C8372B;margin-top:2px">2 quá hạn</div></div>
+          <div style="background:#fff;border:1px solid #EAECEF;border-radius:13px;padding:16px 18px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font:500 12px 'Geist';color:#757B83">Giá trị tồn</span><span style="width:9px;height:9px;border-radius:50%;background:#1E8E5A"></span></div><div class="mono" style="font:700 28px 'Geist Mono';color:#17191D;margin-top:8px">4,2 tỷ</div><div style="font:500 11px 'Geist';color:#1E8E5A;margin-top:2px">+3% tuần</div></div>
+        </div>
+      </div>
+      <!-- Filter / search -->
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px">
+        <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">Thanh lọc / tìm</div>
+        <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 13px;background:#F4F5F7;border:1px solid #EAECEF;border-radius:10px;margin-bottom:12px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9AA0A8" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+          <span style="font:500 13px 'Geist';color:#9AA0A8">Tìm mã, tên, dự án…</span>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <span style="font:600 12px 'Geist';color:#fff;background:#17191D;border:1px solid #17191D;padding:6px 13px;border-radius:8px">Tất cả</span>
+          <span style="font:600 12px 'Geist';color:#5B6068;background:#fff;border:1px solid #E2E4E8;padding:6px 13px;border-radius:8px">Đang chạy</span>
+          <span style="font:600 12px 'Geist';color:#5B6068;background:#fff;border:1px solid #E2E4E8;padding:6px 13px;border-radius:8px">Hoàn thành</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data table -->
+    <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px;margin-bottom:18px">
+      <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">Bảng dữ liệu — header xám, hàng cao 44–48px, mã/số mono, badge trạng thái, cuộn ngang khi hẹp</div>
+      <div style="border:1px solid #EAECEF;border-radius:11px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:120px 1.6fr 110px 120px 120px;gap:14px;padding:11px 18px;background:#FAFBFC;border-bottom:1px solid #EAECEF">
+          <span style="font:600 10.5px 'Geist';letter-spacing:.06em;color:#9AA0A8;text-transform:uppercase">Mã PO</span>
+          <span style="font:600 10.5px 'Geist';letter-spacing:.06em;color:#9AA0A8;text-transform:uppercase">Nhà cung cấp</span>
+          <span style="font:600 10.5px 'Geist';letter-spacing:.06em;color:#9AA0A8;text-transform:uppercase;text-align:right">Giá trị</span>
+          <span style="font:600 10.5px 'Geist';letter-spacing:.06em;color:#9AA0A8;text-transform:uppercase">Trạng thái</span>
+          <span style="font:600 10.5px 'Geist';letter-spacing:.06em;color:#9AA0A8;text-transform:uppercase">Ngày giao</span>
+        </div>
+        <sc-for list="{{ tableRows }}" as="r" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:120px 1.6fr 110px 120px 120px;gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid #F4F5F7">
+            <span class="mono" style="font:600 12px 'Geist Mono';color:#E1251B">{{ r.code }}</span>
+            <span style="font:600 13px 'Geist';color:#17191D">{{ r.vendor }}</span>
+            <span class="mono" style="font:700 12.5px 'Geist Mono';color:#17191D;text-align:right">{{ r.value }}</span>
+            <span><span style="font:600 11px 'Geist';color:{{ r.sColor }};background:{{ r.sBg }};padding:4px 10px;border-radius:7px;white-space:nowrap">{{ r.status }}</span></span>
+            <span class="mono" style="font:500 12px 'Geist Mono';color:#5B6068">{{ r.date }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- Detail header -->
+    <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px;margin-bottom:18px">
+      <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">Header chi tiết — mã + tiêu đề + badge + meta + hành động (theo RBAC)</div>
+      <div style="border:1px solid #EAECEF;border-radius:12px;padding:20px;background:#fff">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap">
+          <div>
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+              <span class="mono" style="font:600 12px 'Geist Mono';color:#fff;background:#E1251B;padding:4px 9px;border-radius:6px">DWG-014-S02</span>
+              <span style="font:600 11px 'Geist';color:#1E8E5A;background:#E6F4EC;padding:4px 10px;border-radius:7px">ISSUED · Rev B</span>
+              <span style="font:600 11px 'Geist';color:#C8372B;background:#FDECEA;padding:4px 10px;border-radius:7px">● Quá hạn</span>
+            </div>
+            <h3 style="font:600 19px 'Space Grotesk';color:#17191D;letter-spacing:-.01em">Bản vẽ chế tạo thân bồn — Mặt cắt A</h3>
+            <div style="display:flex;gap:18px;margin-top:9px;flex-wrap:wrap">
+              <span style="font:500 12px 'Geist';color:#757B83">Dự án <span class="mono" style="color:#E1251B;font-weight:600">DA-26-014</span></span>
+              <span style="font:500 12px 'Geist';color:#757B83">Phòng <b style="color:#3A3F47">Kỹ thuật (R04)</b></span>
+              <span style="font:500 12px 'Geist';color:#757B83">Phát hành <span class="mono" style="color:#3A3F47">24/06/26</span></span>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-shrink:0">
+            <button style="background:#fff;color:#3A3F47;border:1.5px solid #D5D8DD;border-radius:10px;padding:9px 15px;font:600 12.5px 'Geist';cursor:pointer">So sánh rev</button>
+            <button style="background:#E1251B;color:#fff;border:none;border-radius:10px;padding:10px 16px;font:600 12.5px 'Geist';cursor:pointer">Phát hành Rev mới</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:18px;margin-bottom:18px">
+      <!-- Timeline -->
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px">
+        <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:18px">Timeline lịch sử / truy vết</div>
+        <sc-for list="{{ timeline }}" as="tl" hint-placeholder-count="4">
+          <div style="display:flex;gap:12px;padding-bottom:15px">
+            <span style="display:flex;flex-direction:column;align-items:center;flex-shrink:0"><span style="width:9px;height:9px;border-radius:50%;background:{{ tl.dot }};margin-top:3px"></span><span style="width:1.5px;flex:1;background:#EEF0F2;margin-top:3px"></span></span>
+            <span style="flex:1"><span style="display:block;font:600 12.5px 'Geist';color:#17191D">{{ tl.title }}</span><span style="display:block;font:500 11.5px 'Geist';color:#8A9099;margin-top:1px">{{ tl.who }}</span><span class="mono" style="display:block;font:500 11px 'Geist Mono';color:#A7ACB3;margin-top:2px">{{ tl.time }}</span></span>
+          </div>
+        </sc-for>
+      </div>
+      <!-- Diff table -->
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px">
+        <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">Diff table — so revision BOM (Rev A → B)</div>
+        <div style="border:1px solid #EAECEF;border-radius:11px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:1.4fr 80px 70px 80px;gap:8px;padding:9px 14px;background:#FAFBFC;border-bottom:1px solid #EAECEF">
+            <span style="font:600 10px 'Geist';color:#9AA0A8;text-transform:uppercase">Cấu kiện</span>
+            <span style="font:600 10px 'Geist';color:#9AA0A8;text-transform:uppercase">Nhóm</span>
+            <span style="font:600 10px 'Geist';color:#9AA0A8;text-transform:uppercase;text-align:right">Rev A</span>
+            <span style="font:600 10px 'Geist';color:#9AA0A8;text-transform:uppercase;text-align:right">Rev B</span>
+          </div>
+          <sc-for list="{{ diffRows }}" as="d" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:1.4fr 80px 70px 80px;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid #F4F5F7;background:{{ d.rowBg }}">
+              <span style="min-width:0"><span class="mono" style="font:600 11px 'Geist Mono';color:#17191D">{{ d.mark }}</span><span style="display:block;font:500 10px 'Geist';color:{{ d.tagColor }}">{{ d.tag }}</span></span>
+              <span style="font:500 10.5px 'Geist';color:#5B6068">{{ d.group }}</span>
+              <span class="mono" style="font:500 11px 'Geist Mono';color:#9AA0A8;text-align:right">{{ d.a }}</span>
+              <span class="mono" style="font:700 11px 'Geist Mono';color:{{ d.tagColor }};text-align:right">{{ d.b }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px">
+      <!-- Modal / Form -->
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px">
+        <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">Modal / Form</div>
+        <div style="border:1px solid #EAECEF;border-radius:12px;box-shadow:0 8px 28px rgba(10,20,40,.08);overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid #F0F1F3"><span style="font:600 15px 'Space Grotesk';color:#17191D">Thêm nhà cung cấp</span><span style="font:500 16px 'Geist';color:#B9BDC4;cursor:pointer">✕</span></div>
+          <div style="padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div><label style="display:block;font:600 11px 'Geist';color:#757B83;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Mã NCC</label><div style="height:40px;border:1.5px solid #E2E4E8;border-radius:10px;display:flex;align-items:center;padding:0 12px"><span class="mono" style="font:500 13px 'Geist Mono';color:#9AA0A8">NCC-0xx</span></div></div>
+            <div><label style="display:block;font:600 11px 'Geist';color:#757B83;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Tên NCC</label><div style="height:40px;border:1.5px solid #E1251B;border-radius:10px;display:flex;align-items:center;padding:0 12px;box-shadow:0 0 0 3px rgba(225,37,27,.08)"><span style="font:500 13px 'Geist';color:#17191D">Thép Hòa Phát</span></div></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 18px 18px"><button style="background:#fff;color:#3A3F47;border:1.5px solid #D5D8DD;border-radius:10px;padding:8px 16px;font:600 12.5px 'Geist';cursor:pointer">Hủy</button><button style="background:#E1251B;color:#fff;border:none;border-radius:10px;padding:9px 17px;font:600 12.5px 'Geist';cursor:pointer">Thêm</button></div>
+        </div>
+      </div>
+      <!-- Empty + Pagination -->
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px;flex:1">
+          <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">Empty state</div>
+          <div style="text-align:center;padding:18px 0">
+            <div style="width:46px;height:46px;border-radius:13px;background:#F4F5F7;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B9BDC4" stroke-width="1.7"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h6M8 12h8"/></svg></div>
+            <div style="font:600 13.5px 'Geist';color:#17191D">Chưa có dữ liệu</div>
+            <div style="font:500 12px 'Geist';color:#9AA0A8;margin-top:3px">Nhấn “Tạo mới” để bắt đầu</div>
+          </div>
+        </div>
+        <div style="border:1px solid #EAECEF;border-radius:14px;padding:22px">
+          <div style="font:600 11px 'Geist Mono';letter-spacing:.1em;color:#A7ACB3;text-transform:uppercase;margin-bottom:16px">Phân trang</div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font:500 12px 'Geist';color:#9AA0A8">1–20 / <span class="mono" style="color:#5B6068">218</span></span>
+            <div style="display:flex;gap:6px">
+              <span style="width:32px;height:32px;border-radius:8px;border:1px solid #E2E4E8;display:flex;align-items:center;justify-content:center;font:600 12px 'Geist';color:#9AA0A8">‹</span>
+              <span style="width:32px;height:32px;border-radius:8px;background:#17191D;color:#fff;display:flex;align-items:center;justify-content:center;font:600 12px 'Geist'">1</span>
+              <span style="width:32px;height:32px;border-radius:8px;border:1px solid #E2E4E8;display:flex;align-items:center;justify-content:center;font:600 12px 'Geist';color:#5B6068">2</span>
+              <span style="width:32px;height:32px;border-radius:8px;border:1px solid #E2E4E8;display:flex;align-items:center;justify-content:center;font:600 12px 'Geist';color:#5B6068">3</span>
+              <span style="width:32px;height:32px;border-radius:8px;border:1px solid #E2E4E8;display:flex;align-items:center;justify-content:center;font:600 12px 'Geist';color:#5B6068">›</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 05 · PATTERN CHUẨN ═══ -->
+  <section style="max-width:1080px;margin:0 auto;padding:48px 32px 12px;border-bottom:1px solid #EEF0F2">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:7px"><span class="mono" style="font:600 13px 'Geist Mono';color:#E1251B">05</span><h2 style="font:600 24px 'Space Grotesk';color:#17191D;letter-spacing:-.02em">Pattern chuẩn — dùng lại cho mọi thực thể</h2></div>
+    <p style="font:400 14px/1.6 'Geist';color:#757B83;max-width:700px;margin-bottom:24px">Task · PO · Drawing/Revision · NCR · Vật tư · Vendor — tất cả theo cùng một khung 3 bước.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:20px">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px"><span class="mono" style="width:26px;height:26px;border-radius:8px;background:#FDECEA;color:#E1251B;display:flex;align-items:center;justify-content:center;font:700 12px 'Geist Mono'">1</span><span style="font:600 14px 'Space Grotesk';color:#17191D">List</span></div>
+        <p style="font:500 12.5px/1.6 'Geist';color:#757B83">Bảng dữ liệu + thanh lọc/tìm + KPI tóm tắt + phân trang. Mã/số dạng mono, trạng thái dạng badge.</p>
+      </div>
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:20px">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px"><span class="mono" style="width:26px;height:26px;border-radius:8px;background:#FDECEA;color:#E1251B;display:flex;align-items:center;justify-content:center;font:700 12px 'Geist Mono'">2</span><span style="font:600 14px 'Space Grotesk';color:#17191D">Chi tiết</span></div>
+        <p style="font:500 12.5px/1.6 'Geist';color:#757B83">Header chi tiết + Timeline lịch sử + truy vết ngược (dự án / bản vẽ / rev / Heat-Lot). Diff table khi so version.</p>
+      </div>
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:20px">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px"><span class="mono" style="width:26px;height:26px;border-radius:8px;background:#FDECEA;color:#E1251B;display:flex;align-items:center;justify-content:center;font:700 12px 'Geist Mono'">3</span><span style="font:600 14px 'Space Grotesk';color:#17191D">Hành động (RBAC)</span></div>
+        <p style="font:500 12.5px/1.6 'Geist';color:#757B83">Nút thao tác hiện theo role; ghi <b style="color:#3A3F47">chặn ở server</b> (FORM_EDIT_ROLES), không chỉ ẩn UI.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 06 · RÀNG BUỘC & MOBILE ═══ -->
+  <section style="max-width:1080px;margin:0 auto;padding:48px 32px 64px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:7px"><span class="mono" style="font:600 13px 'Geist Mono';color:#E1251B">06</span><h2 style="font:600 24px 'Space Grotesk';color:#17191D;letter-spacing:-.02em">Ràng buộc &amp; Mobile</h2></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px">
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:20px 22px">
+        <div style="font:600 14px 'Space Grotesk';color:#17191D;margin-bottom:12px">Nguyên tắc bắt buộc</div>
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <div style="display:flex;gap:10px"><span style="width:6px;height:6px;border-radius:50%;background:#E1251B;margin-top:6px;flex-shrink:0"></span><span style="font:500 12.5px/1.55 'Geist';color:#5B6068"><b style="color:#17191D">Hệ động là xương sống</b> — mọi giao/nhận việc qua <b style="color:#17191D">Công việc</b> + <b style="color:#17191D">Giao ban tuần</b>; biểu mẫu gắn vào Task qua <span class="mono">resultData</span>.</span></div>
+          <div style="display:flex;gap:10px"><span style="width:6px;height:6px;border-radius:50%;background:#E1251B;margin-top:6px;flex-shrink:0"></span><span style="font:500 12.5px/1.55 'Geist';color:#5B6068"><b style="color:#17191D">Ẩn module legacy</b> theo <span class="mono">HIDDEN_MENU_KEYS</span> — không hồi sinh luồng 36 bước cũ.</span></div>
+          <div style="display:flex;gap:10px"><span style="width:6px;height:6px;border-radius:50%;background:#E1251B;margin-top:6px;flex-shrink:0"></span><span style="font:500 12.5px/1.55 'Geist';color:#5B6068"><b style="color:#17191D">Role-aware</b> — ẩn/hiện theo role; thao tác ghi <b style="color:#17191D">chặn ở server</b> (<span class="mono">FORM_EDIT_ROLES</span>), UI chỉ ẩn.</span></div>
+          <div style="display:flex;gap:10px"><span style="width:6px;height:6px;border-radius:50%;background:#E1251B;margin-top:6px;flex-shrink:0"></span><span style="font:500 12.5px/1.55 'Geist';color:#5B6068"><b style="color:#17191D">Một nguồn sự thật</b> mã/role/phòng — <span class="mono">org-map.ts · constants.ts · workflow-constants.ts</span>.</span></div>
+        </div>
+      </div>
+      <div style="border:1px solid #EAECEF;border-radius:14px;padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span style="width:24px;height:24px;border-radius:7px;background:#E8F0FA;color:#2D6CB5;display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></span><div style="font:600 14px 'Space Grotesk';color:#17191D">Màn cần Mobile (xưởng)</div></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:9px;border-bottom:1px solid #F4F5F7"><span style="font:600 12.5px 'Geist';color:#17191D">Công nhân — nhận việc, báo SX theo ngày, đính kèm ảnh</span><span style="font:600 10px 'Geist';color:#E1251B;background:#FDECEA;padding:3px 8px;border-radius:6px">R06b</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:9px;border-bottom:1px solid #F4F5F7"><span style="font:600 12.5px 'Geist';color:#17191D">QC — ghi nghiệm thu / NDT / DFT tại hiện trường</span><span style="font:600 10px 'Geist';color:#E1251B;background:#FDECEA;padding:3px 8px;border-radius:6px">R09</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:9px;border-bottom:1px solid #F4F5F7"><span style="font:600 12.5px 'Geist';color:#17191D">Kho — cấp phát / nhận hàng, quét mã, Heat/Lot</span><span style="font:600 10px 'Geist';color:#E1251B;background:#FDECEA;padding:3px 8px;border-radius:6px">R05</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span style="font:600 12.5px 'Geist';color:#17191D">Mọi role — duyệt nhanh & thông báo (in-app/Telegram)</span><span style="font:600 10px 'Geist';color:#5B6068;background:#F0F1F3;padding:3px 8px;border-radius:6px">all</span></div>
+        </div>
+        <p style="font:500 11.5px/1.55 'Geist';color:#9AA0A8;margin-top:13px">Mobile: hit target ≥ 44px, 1 hành động chính/màn, hỗ trợ găng tay & ánh sáng xưởng (tương phản cao).</p>
+      </div>
+    </div>
+    <div style="margin-top:26px;padding-top:20px;border-top:1px solid #EEF0F2;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <span style="font:500 11.5px 'Geist';color:#9AA0A8">IBS-ERP Design System · v1.0 · 2026-06 — nguồn chuẩn cho VS Code &amp; Claude Design</span>
+      <span class="mono" style="font:500 11px 'Geist Mono';color:#C2C7CD">#E1251B · #17191D · Space Grotesk · Geist · Geist Mono</span>
+    </div>
+  </section>
+</div>
+
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#141518"/><g transform="translate(34 30)"><rect x="0" y="6" width="9" height="28" rx="1.5" fill="#E1251B"/><rect x="11.5" y="0" width="9" height="40" rx="1.5" fill="#E1251B"/><rect x="23" y="3" width="9" height="34" rx="1.5" fill="#E1251B"/></g><rect x="30" y="78" width="40" height="5" rx="2.5" fill="#fff" opacity="0.85"/></svg>
+</template>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      brand: [
+        { name: 'Đỏ IBS', hex: '#E1251B', use: 'CTA · active · thương hiệu' },
+        { name: 'Đỏ đậm (hover)', hex: '#C01D14', use: 'Trạng thái hover nút đỏ' },
+        { name: 'Đỏ nền nhạt', hex: '#FDECEA', use: 'Nền badge/active nhạt' },
+        { name: 'Ink — Mực', hex: '#17191D', use: 'Tiêu đề · sidebar tối · nền cover' },
+        { name: 'Than', hex: '#2A2D34', use: 'Khối nền tối phụ' },
+        { name: 'Trắng', hex: '#FFFFFF', use: 'Nền chính · thẻ' },
+        { name: 'Nền trang', hex: '#F6F7F9', use: 'Nền app phía sau thẻ' },
+        { name: 'Nền phụ', hex: '#FAFBFC', use: 'Header bảng · zebra nhẹ' },
+      ],
+      grays: [
+        { name: 'Heading', hex: '#17191D' },
+        { name: 'Body', hex: '#3A3F47' },
+        { name: 'Secondary', hex: '#5B6068' },
+        { name: 'Muted', hex: '#757B83' },
+        { name: 'Faint', hex: '#9AA0A8' },
+        { name: 'Disabled', hex: '#C2C7CD' },
+        { name: 'Border', hex: '#EAECEF' },
+        { name: 'Border đậm', hex: '#D5D8DD' },
+        { name: 'Line nhạt', hex: '#F0F1F3' },
+      ],
+      semantic: [
+        { name: 'Success', color: '#1E8E5A', bg: '#E6F4EC' },
+        { name: 'Warning', color: '#C97A0E', bg: '#FBF1DF' },
+        { name: 'Danger', color: '#C8372B', bg: '#FDECEA' },
+        { name: 'Info', color: '#2D6CB5', bg: '#E8F0FA' },
+        { name: 'Neutral', color: '#64748B', bg: '#F1F3F5' },
+      ],
+      statusGroups: [
+        { title: 'Task — Công việc (hệ động)', note: 'workflow: OPEN → IN_PROGRESS → AWAITING_REVIEW → DONE', items: [
+          { label: 'Mới', code: 'OPEN', color: '#64748B', bg: '#F1F3F5' },
+          { label: 'Đang xử lý', code: 'IN_PROGRESS', color: '#2D6CB5', bg: '#E8F0FA' },
+          { label: 'Tắc', code: 'blocked (flag)', color: '#C2410C', bg: '#FCEEE4' },
+          { label: 'Chờ kết thúc', code: 'AWAITING_REVIEW', color: '#C97A0E', bg: '#FBF1DF' },
+          { label: 'Bị trả lại', code: 'RETURNED', color: '#C8372B', bg: '#FDECEA' },
+          { label: 'Hoàn thành', code: 'DONE', color: '#1E8E5A', bg: '#E6F4EC' },
+          { label: 'Đã hủy', code: 'CANCELLED', color: '#9AA0A8', bg: '#F4F5F7' },
+        ] },
+        { title: 'PO — Đơn mua hàng', note: 'Nháp → … → Thanh toán → Nhận → Hoàn thành', items: [
+          { label: 'Nháp', code: 'DRAFT', color: '#64748B', bg: '#F1F3F5' },
+          { label: 'Chờ duyệt', code: 'PENDING', color: '#C97A0E', bg: '#FBF1DF' },
+          { label: 'Đã duyệt', code: 'APPROVED', color: '#1E8E5A', bg: '#E6F4EC' },
+          { label: 'Đã gửi NCC', code: 'SENT', color: '#2D6CB5', bg: '#E8F0FA' },
+          { label: 'Đã thanh toán', code: 'PAID', color: '#0E8C8C', bg: '#E2F4F4' },
+          { label: 'Nhận 1 phần', code: 'PARTIAL_RECEIVED', color: '#C2410C', bg: '#FCEEE4' },
+          { label: 'Đã nhận', code: 'RECEIVED', color: '#2D6CB5', bg: '#E8F0FA' },
+          { label: 'Hoàn thành', code: 'COMPLETED', color: '#157347', bg: '#E6F4EC' },
+        ] },
+        { title: 'Revision — Bản vẽ / BOM version', note: 'Blueprint Mục 4 — kiểm soát version', items: [
+          { label: 'DRAFT', code: 'DRAFT', color: '#64748B', bg: '#F1F3F5' },
+          { label: 'ISSUED (hiệu lực)', code: 'ISSUED', color: '#1E8E5A', bg: '#E6F4EC' },
+          { label: 'SUPERSEDED', code: 'SUPERSEDED', color: '#9AA0A8', bg: '#F4F5F7' },
+        ] },
+        { title: 'NCR — Báo cáo không phù hợp', note: 'QA/QC — raise → xử lý → đóng', items: [
+          { label: 'Mở', code: 'OPEN', color: '#C8372B', bg: '#FDECEA' },
+          { label: 'Đang xử lý', code: 'IN_PROGRESS', color: '#C97A0E', bg: '#FBF1DF' },
+          { label: 'Đã đóng', code: 'CLOSED', color: '#1E8E5A', bg: '#E6F4EC' },
+        ] },
+      ],
+      spacing: [
+        { px: '4px' }, { px: '8px' }, { px: '12px' }, { px: '16px' }, { px: '20px' }, { px: '24px' }, { px: '32px' }, { px: '40px' },
+      ],
+      radii: [
+        { name: 'sm', px: '6px' }, { name: 'base', px: '10px' }, { name: 'card', px: '14px' }, { name: 'lg', px: '18px' }, { name: 'pill', px: '999px' },
+      ],
+      typeScale: [
+        { sample: 'Tiêu đề màn', style: "font:600 24px 'Space Grotesk';color:#17191D;letter-spacing:-.02em", meta: 'Space Grotesk · 24 · 600' },
+        { sample: 'Tiêu đề mục', style: "font:600 19px 'Space Grotesk';color:#17191D;letter-spacing:-.01em", meta: 'Space Grotesk · 19 · 600' },
+        { sample: 'Tiêu đề thẻ', style: "font:600 15px 'Space Grotesk';color:#17191D", meta: 'Space Grotesk · 15 · 600' },
+        { sample: 'Nội dung chính', style: "font:500 14px 'Geist';color:#3A3F47", meta: 'Geist · 14 · 500' },
+        { sample: 'Phụ / mô tả', style: "font:500 12.5px 'Geist';color:#757B83", meta: 'Geist · 12.5 · 500' },
+        { sample: 'NHÃN / CAPTION', style: "font:600 11px 'Geist';color:#9AA0A8;letter-spacing:.05em;text-transform:uppercase", meta: 'Geist · 11 · 600' },
+      ],
+      tableRows: [
+        { code: 'PO-26-031', vendor: 'Thép Hòa Phát', value: '1,24 tỷ', status: 'Chờ duyệt', sColor: '#C97A0E', sBg: '#FBF1DF', date: '05/07/26' },
+        { code: 'PO-26-029', vendor: 'Que hàn Kim Tín', value: '96 tr', status: 'Đã thanh toán', sColor: '#0E8C8C', sBg: '#E2F4F4', date: '28/06/26' },
+        { code: 'PO-26-025', vendor: 'Jotun Vietnam', value: '142 tr', status: 'Đã nhận', sColor: '#2D6CB5', sBg: '#E8F0FA', date: '22/06/26' },
+      ],
+      timeline: [
+        { dot: '#E1251B', title: 'Phát hành Rev B', who: 'Trần Minh Thiết · R04', time: '24/06/26 · 16:40' },
+        { dot: '#2D6CB5', title: 'PM duyệt thay đổi (impact chi phí)', who: 'Nguyễn Văn Khánh · R02', time: '24/06/26 · 09:12' },
+        { dot: '#9AA0A8', title: 'Tạo Rev B (DRAFT) từ Rev A', who: 'Trần Minh Thiết · R04', time: '23/06/26 · 14:05' },
+        { dot: '#1E8E5A', title: 'Rev A — ISSUED', who: 'BGĐ phê duyệt', time: '02/06/26 · 11:00' },
+      ],
+      diffRows: [
+        { mark: 'BM-04', tag: '+ Thêm mới', tagColor: '#1E8E5A', group: 'Chính', a: '—', b: '12 ea', rowBg: '#F4FBF6' },
+        { mark: 'BM-01', tag: 'Δ Tăng SL', tagColor: '#C97A0E', group: 'Chính', a: '8 ea', b: '14 ea', rowBg: '#FFFDF6' },
+        { mark: 'WLD-2', tag: 'Tính lại (norm)', tagColor: '#2D6CB5', group: 'Hàn', a: '60 kg', b: '92 kg', rowBg: '#F6FAFE' },
+        { mark: 'PNT-1', tag: '− Bỏ', tagColor: '#C8372B', group: 'Sơn', a: '40 lít', b: '—', rowBg: '#FEF6F5' },
+      ],
+    }
+  }
+}
+</script>
+</body>
+</html>
