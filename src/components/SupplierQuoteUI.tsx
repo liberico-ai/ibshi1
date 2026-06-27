@@ -1303,7 +1303,7 @@ function ReviewFileList({ taskId, quoteId, savedFiles }: { taskId: string; quote
   return (
     <div className="flex flex-col gap-0.5">
       {files.map(f => (
-        <a key={f.id} href={f.fileUrl} target="_blank" rel="noopener noreferrer"
+        <a key={f.id} href={`/api/upload/${f.id}`} target="_blank" rel="noopener noreferrer"
           className="text-xs hover:underline" style={{ color: '#1d4ed8' }}>
           {f.kind !== 'Khác' ? `[${f.kind}] ` : ''}{f.fileName.length > 25 ? f.fileName.slice(0, 22) + '...' : f.fileName}
         </a>

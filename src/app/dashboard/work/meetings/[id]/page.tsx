@@ -177,7 +177,7 @@ export default function MeetingDetailPage() {
           <div className="text-sm font-semibold mb-2">📎 Tài liệu họp</div>
           {m.files.length === 0 && <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Chưa có tài liệu.</div>}
           {m.files.map((f) => (
-            <a key={f.id} href={f.fileUrl} target="_blank" rel="noopener noreferrer" className="block text-sm py-1" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>📄 {f.fileName} ↗</a>
+            <a key={f.id} href={`/api/upload/${f.id}`} target="_blank" rel="noopener noreferrer" className="block text-sm py-1" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>📄 {f.fileName} ↗</a>
           ))}
           {isOrganizer && !isClosed && <div className="mt-2"><MultiFileUpload label="" entityType="Meeting" entityId={id} compact onUploaded={() => load()} /></div>}
         </div>

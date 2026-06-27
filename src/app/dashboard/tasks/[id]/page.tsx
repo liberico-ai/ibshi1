@@ -5005,7 +5005,7 @@ export default function TaskDetailPage() {
                       {step.files.map(f => (
                         <a
                           key={f.id}
-                          href={f.fileUrl}
+                          href={`/api/upload/${f.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           download

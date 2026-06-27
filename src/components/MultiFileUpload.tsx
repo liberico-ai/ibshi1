@@ -217,7 +217,7 @@ export default function MultiFileUpload({
             }}>
               <span style={{ flexShrink: 0 }}>{getFileIcon(f.fileName)}</span>
               <a
-                href={f.fileUrl}
+                href={`/api/upload/${f.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ flex: 1, fontSize: '0.8rem', color: '#15803d', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}
@@ -228,7 +228,7 @@ export default function MultiFileUpload({
                 {formatBytes(f.fileSize)}
               </span>
               <a
-                href={f.fileUrl}
+                href={`/api/upload/${f.id}`}
                 download
                 style={{ fontSize: '0.75rem', color: '#166534', flexShrink: 0, textDecoration: 'none' }}
                 title="Tải xuống"

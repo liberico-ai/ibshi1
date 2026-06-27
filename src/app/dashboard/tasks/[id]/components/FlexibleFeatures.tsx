@@ -106,7 +106,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{d.label}</div>
                   {d.file ? (
-                    <a href={d.file.fileUrl} target="_blank" rel="noopener noreferrer"
+                    <a href={`/api/upload/${d.file.id}`} target="_blank" rel="noopener noreferrer"
                       style={{ fontSize: '0.78rem', color: '#1d4ed8', textDecoration: 'underline', wordBreak: 'break-all' }}>
                       {d.file.fileName} ↗
                     </a>
@@ -148,7 +148,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
               {d.fulfilled ? (
                 <div style={{ fontSize: '0.78rem', marginTop: 4, color: 'var(--text-secondary)' }}>
                   {d.note && <div>📝 {d.note}</div>}
-                  {d.file && <a href={d.file.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>{d.file.fileName} ↗</a>}
+                  {d.file && <a href={`/api/upload/${d.file.id}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>{d.file.fileName} ↗</a>}
                 </div>
               ) : isAssignee && isActive && !myDone ? (
                 <div style={{ marginTop: 6 }}>
