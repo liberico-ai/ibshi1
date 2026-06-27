@@ -2,15 +2,18 @@
 
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateQuery } from '@/lib/api-helpers'
 import { searchFilterSchema } from '@/lib/schemas'
+
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a']
 
 // GET /api/purchase-orders — List POs
 export async function GET(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
+    if (!requireRoles(payload.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     const qResult = validateQuery(req.url, searchFilterSchema)
     if (!qResult.success) return qResult.response

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { PageHeader, StatusBadge, Button, EmptyState, Modal, InputField, SelectField } from '@/components/ui'
+import { STATUS_COLORS } from '@/lib/design-tokens'
 
 interface BOM {
   id: string; bomCode: string; name: string; revision: string; status: string; createdAt: string;
@@ -10,17 +12,26 @@ interface BOM {
     material: { materialCode: string; name: string; unit: string } }>;
 }
 
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  DRAFT: { label: 'Nháp', color: '#475569', bg: '#f1f5f9' },
-  APPROVED: { label: 'Đã duyệt', color: '#16a34a', bg: '#f0fdf4' },
-  RELEASED: { label: 'Phát hành', color: '#2563eb', bg: '#eff6ff' },
+interface Project {
+  id: string; projectCode: string; projectName: string;
 }
+
+const CAN_CREATE_ROLES = ['R01', 'R04', 'R02']
 
 export default function BOMPage() {
   const [boms, setBoms] = useState<BOM[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const user = useAuthStore(s => s.user)
+
+  // Create modal state
+  const [showCreate, setShowCreate] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [formName, setFormName] = useState('')
+  const [formProjectId, setFormProjectId] = useState('')
+  const [formRevision, setFormRevision] = useState('A')
+  const [formError, setFormError] = useState('')
 
   const loadData = async () => {
     setLoading(true)
@@ -29,83 +40,205 @@ export default function BOMPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadData() }, [])
+  const loadProjects = async () => {
+    const res = await apiFetch('/api/projects?limit=200')
+    if (res.ok) setProjects(res.projects || [])
+  }
 
-  if (loading) return <div className="space-y-4 animate-fade-in">{[1,2].map(i => <div key={i} className="h-24 skeleton rounded-xl" />)}</div>
+  useEffect(() => { loadData() }, []) // load once on mount
+
+  const openCreateModal = () => {
+    setFormName('')
+    setFormProjectId('')
+    setFormRevision('A')
+    setFormError('')
+    setShowCreate(true)
+    loadProjects()
+  }
+
+  const handleCreate = async () => {
+    if (!formName.trim()) { setFormError('Tên BOM là bắt buộc'); return }
+    if (!formProjectId) { setFormError('Vui lòng chọn dự án'); return }
+
+    setCreating(true)
+    setFormError('')
+    const res = await apiFetch('/api/design/bom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: formName.trim(), projectId: formProjectId }),
+    })
+    setCreating(false)
+
+    if (res.ok) {
+      setShowCreate(false)
+      loadData()
+    } else {
+      setFormError(res.error || 'Không thể tạo BOM')
+    }
+  }
+
+  const canCreate = CAN_CREATE_ROLES.includes(user?.roleCode || '')
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {[1, 2].map(i => <div key={i} className="h-24 skeleton rounded-xl" />)}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Bill of Materials</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Danh mục vật tư theo dự án</p>
-        </div>
-        {['R01', 'R04', 'R02'].includes(user?.roleCode || '') && (
-          <button className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold" style={{ background: 'var(--accent)' }}>
-            + Tạo BOM
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Bill of Materials"
+        subtitle="Danh mục vật tư theo dự án"
+        actions={
+          canCreate ? (
+            <Button variant="accent" icon={<span>+</span>} onClick={openCreateModal}>
+              Tạo BOM
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <div className="space-y-3">
-        {boms.length === 0 && (
-          <div className="card p-12 text-center">
-            <p className="text-4xl mb-3">📦</p>
-            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Chưa có BOM nào</p>
-          </div>
-        )}
-        {boms.map(bom => {
-          const st = STATUS_MAP[bom.status] || STATUS_MAP.DRAFT
-          const isExpanded = expanded === bom.id
-          return (
-            <div key={bom.id} className="card overflow-hidden transition-all hover:shadow-md">
-              <div className="p-4 cursor-pointer" onClick={() => setExpanded(isExpanded ? null : bom.id)}>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold" style={{ background: st.bg, color: st.color }}>
-                    {bom.items.length}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{bom.bomCode}</span>
-                      <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: st.bg, color: st.color }}>{st.label}</span>
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Rev {bom.revision}</span>
+      {boms.length === 0 ? (
+        <EmptyState
+          icon="📦"
+          title="Chưa có BOM nào"
+          description="Tạo BOM đầu tiên để quản lý danh mục vật tư cho dự án"
+          action={
+            canCreate ? (
+              <Button variant="accent" onClick={openCreateModal}>+ Tạo BOM</Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="space-y-3">
+          {boms.map(bom => {
+            const isExpanded = expanded === bom.id
+            const colors = (STATUS_COLORS.bom as Record<string, { bg: string; text: string }>)[bom.status]
+            return (
+              <div key={bom.id} className="card overflow-hidden transition-all hover:shadow-md">
+                <div className="p-4 cursor-pointer" onClick={() => setExpanded(isExpanded ? null : bom.id)}>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold font-mono"
+                      style={{
+                        background: colors?.bg || '#F1F3F5',
+                        color: colors?.text || '#64748B',
+                      }}
+                    >
+                      {bom.items.length}
                     </div>
-                    <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{bom.name}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>DA: {bom.project.projectCode} • {bom.items.length} items</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>
+                          {bom.bomCode}
+                        </span>
+                        <StatusBadge category="bom" status={bom.status} />
+                        <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                          Rev {bom.revision}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                        {bom.name}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        DA: {bom.project.projectCode} &bull; {bom.items.length} items
+                      </p>
+                    </div>
+                    <span
+                      className="text-sm transition-transform"
+                      style={{
+                        color: 'var(--text-muted)',
+                        transform: isExpanded ? 'rotate(180deg)' : 'none',
+                      }}
+                    >
+                      &#x25BC;
+                    </span>
                   </div>
-                  <span className="text-sm transition-transform" style={{ color: 'var(--text-muted)', transform: isExpanded ? 'rotate(180deg)' : 'none' }}>▼</span>
                 </div>
+                {isExpanded && bom.items.length > 0 && (
+                  <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-light)' }}>
+                    <div className="dt-wrapper">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: 'left' }}>#</th>
+                            <th style={{ textAlign: 'left' }}>Mã VT</th>
+                            <th style={{ textAlign: 'left' }}>Tên</th>
+                            <th style={{ textAlign: 'right' }}>SL</th>
+                            <th style={{ textAlign: 'left' }}>ĐVT</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bom.items.map((item, i) => (
+                            <tr key={item.id}>
+                              <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                              <td>
+                                <span className="font-mono" style={{ color: 'var(--accent)' }}>
+                                  {item.material.materialCode}
+                                </span>
+                              </td>
+                              <td style={{ color: 'var(--text-primary)' }}>{item.material.name}</td>
+                              <td className="font-mono" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {Number(item.quantity)}
+                              </td>
+                              <td style={{ color: 'var(--text-muted)' }}>{item.unit}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
-              {isExpanded && bom.items.length > 0 && (
-                <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-light)' }}>
-                  <table style={{ width: '100%', fontSize: '12px' }}>
-                    <thead>
-                      <tr style={{ color: 'var(--text-muted)' }}>
-                        <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>#</th>
-                        <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>Mã VT</th>
-                        <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>Tên</th>
-                        <th style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>SL</th>
-                        <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>ĐVT</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bom.items.map((item, i) => (
-                        <tr key={item.id} style={{ borderTop: '1px solid var(--border-light)' }}>
-                          <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{i + 1}</td>
-                          <td style={{ padding: '6px 8px', fontFamily: 'monospace', color: 'var(--accent)' }}>{item.material.materialCode}</td>
-                          <td style={{ padding: '6px 8px', color: 'var(--text-primary)' }}>{item.material.name}</td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)' }}>{Number(item.quantity)}</td>
-                          <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{item.unit}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Create BOM Modal */}
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Tạo BOM mới"
+        size="sm"
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setShowCreate(false)}>Hủy</Button>
+            <Button variant="accent" loading={creating} onClick={handleCreate}>Tạo BOM</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <InputField
+            label="Tên BOM"
+            placeholder="Nhập tên BOM..."
+            value={formName}
+            onChange={e => setFormName(e.target.value)}
+            autoFocus
+          />
+          <SelectField
+            label="Dự án"
+            value={formProjectId}
+            onChange={e => setFormProjectId(e.target.value)}
+            options={[
+              { value: '', label: '-- Chọn dự án --' },
+              ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` })),
+            ]}
+          />
+          <InputField
+            label="Revision"
+            value={formRevision}
+            onChange={e => setFormRevision(e.target.value)}
+            placeholder="A"
+          />
+          {formError && (
+            <p className="text-sm" style={{ color: 'var(--danger, #C8372B)' }}>{formError}</p>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }

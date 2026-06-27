@@ -1,8 +1,10 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP, requireRoles } from '@/lib/auth'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
+
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R09', 'R09a']
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   OPEN: ['INVESTIGATING'],
@@ -16,6 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     const pResult = validateParams(await params, idParamSchema)
     if (!pResult.success) return pResult.response

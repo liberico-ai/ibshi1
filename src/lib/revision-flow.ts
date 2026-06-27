@@ -1,0 +1,230 @@
+import prisma from './db'
+import { isEnabled } from './feature-flags'
+
+// ── Types ──
+
+interface CreateRevisionWithEcoParams {
+  drawingId: string
+  revCode: string
+  description: string
+  bomId: string
+  ecoTitle: string
+  ecoDescription: string
+  changeType: string
+  userId: string
+  projectId: string
+}
+
+// ── Helpers ──
+
+async function generateEcoCode(tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]): Promise<string> {
+  const year = new Date().getFullYear().toString().slice(-2)
+  const count = await tx.engineeringChangeOrder.count()
+  return `ECO-${year}-${String(count + 1).padStart(3, '0')}`
+}
+
+// ── 1. Create revision + ECO + BOM version in one transaction ──
+
+export async function createRevisionWithEco(params: CreateRevisionWithEcoParams) {
+  const {
+    drawingId, revCode, description, bomId,
+    ecoTitle, ecoDescription, changeType,
+    userId, projectId,
+  } = params
+
+  return prisma.$transaction(async (tx) => {
+    // 1. Create DrawingRevision (DRAFT — issuedDate = now, issuedBy = userId)
+    const drawingRevision = await tx.drawingRevision.create({
+      data: {
+        drawingId,
+        revision: revCode,
+        description,
+        issuedDate: new Date(),
+        issuedBy: userId,
+      },
+    })
+
+    // 2. Create ECO (DRAFT)
+    const ecoCode = await generateEcoCode(tx)
+    const eco = await tx.engineeringChangeOrder.create({
+      data: {
+        ecoCode,
+        projectId,
+        title: ecoTitle,
+        description: ecoDescription,
+        changeType,
+        requestedBy: userId,
+        status: 'DRAFT',
+      },
+    })
+
+    // 3. Create BomVersion (DRAFT) copying lines from the ACTIVE version
+    const activeVersion = await tx.bomVersion.findFirst({
+      where: { bomId, status: 'ACTIVE' },
+      include: { lines: true },
+    })
+
+    // Determine next versionNo
+    const maxVersion = await tx.bomVersion.aggregate({
+      where: { bomId },
+      _max: { versionNo: true },
+    })
+    const nextVersionNo = (maxVersion._max.versionNo ?? 0) + 1
+
+    const bomVersion = await tx.bomVersion.create({
+      data: {
+        bomId,
+        versionNo: nextVersionNo,
+        status: 'DRAFT',
+        sourceRevisionId: drawingRevision.id,
+        ecoId: eco.id,
+        reason: description,
+        createdBy: userId,
+      },
+    })
+
+    // Copy BomItems from ACTIVE version → new version, remapping parentId
+    if (activeVersion && activeVersion.lines.length > 0) {
+      // Build old-id → new-id map in two passes:
+      // Pass 1: create all items without parentId to get new IDs
+      // Pass 2: update items that had a parentId
+
+      const oldIdToNewId = new Map<string, string>()
+
+      // Sort so root items (parentId = null) come first
+      const rootItems = activeVersion.lines.filter((item) => !item.parentId)
+      const childItems = activeVersion.lines.filter((item) => item.parentId)
+
+      // Create root items
+      for (const item of rootItems) {
+        const created = await tx.bomItem.create({
+          data: {
+            bomId,
+            bomVersionId: bomVersion.id,
+            materialId: item.materialId,
+            parentId: null,
+            category: item.category,
+            pieceMark: item.pieceMark,
+            quantity: item.quantity,
+            unit: item.unit,
+            profile: item.profile,
+            grade: item.grade,
+            remarks: item.remarks,
+            sortOrder: item.sortOrder,
+          },
+        })
+        oldIdToNewId.set(item.id, created.id)
+      }
+
+      // Create child items (may be multi-level — iterate until all are placed)
+      const pending = [...childItems]
+      let safetyLimit = pending.length * pending.length + 1 // avoid infinite loops on bad data
+      while (pending.length > 0 && safetyLimit > 0) {
+        safetyLimit--
+        const item = pending.shift()!
+        const newParentId = oldIdToNewId.get(item.parentId!)
+        if (!newParentId) {
+          // Parent hasn't been created yet — push to end
+          pending.push(item)
+          continue
+        }
+        const created = await tx.bomItem.create({
+          data: {
+            bomId,
+            bomVersionId: bomVersion.id,
+            materialId: item.materialId,
+            parentId: newParentId,
+            category: item.category,
+            pieceMark: item.pieceMark,
+            quantity: item.quantity,
+            unit: item.unit,
+            profile: item.profile,
+            grade: item.grade,
+            remarks: item.remarks,
+            sortOrder: item.sortOrder,
+          },
+        })
+        oldIdToNewId.set(item.id, created.id)
+      }
+
+      if (pending.length > 0) {
+        throw new Error(
+          `Không thể copy ${pending.length} BomItem do cây parentId bị vòng lặp hoặc thiếu gốc`
+        )
+      }
+    }
+
+    return { drawingRevision, eco, bomVersion }
+  })
+}
+
+// ── 2. Approve a BOM version (DRAFT → ACTIVE) ──
+
+export async function approveRevision(bomVersionId: string, userId: string) {
+  return prisma.$transaction(async (tx) => {
+    // 1. Find the BomVersion, verify it's DRAFT
+    const version = await tx.bomVersion.findUnique({
+      where: { id: bomVersionId },
+    })
+    if (!version) {
+      throw new Error('BomVersion không tồn tại')
+    }
+    if (version.status !== 'DRAFT') {
+      throw new Error(`BomVersion đang ở trạng thái "${version.status}", chỉ DRAFT mới duyệt được`)
+    }
+
+    // 2. Find the linked ECO, verify it's APPROVED
+    if (version.ecoId) {
+      const eco = await tx.engineeringChangeOrder.findUnique({
+        where: { id: version.ecoId },
+      })
+      if (!eco) {
+        throw new Error('ECO liên kết không tồn tại')
+      }
+      if (eco.status !== 'APPROVED') {
+        throw new Error(
+          `ECO "${eco.ecoCode}" đang ở trạng thái "${eco.status}" — cần APPROVED trước khi duyệt BOM version`
+        )
+      }
+    }
+
+    // 3. Set old ACTIVE version → SUPERSEDED
+    await tx.bomVersion.updateMany({
+      where: { bomId: version.bomId, status: 'ACTIVE' },
+      data: { status: 'SUPERSEDED' },
+    })
+
+    // 4. Set this version → ACTIVE
+    const updated = await tx.bomVersion.update({
+      where: { id: bomVersionId },
+      data: {
+        status: 'ACTIVE',
+        approvedBy: userId,
+        approvedAt: new Date(),
+      },
+    })
+
+    // ── Cascade: auto-create procurement tasks when BOM version is activated ──
+    if (isEnabled('BOM_REVISION_CASCADE')) {
+      // TODO: Wire up cascade task creation here.
+      // When enabled, this will call work-engine helpers to create
+      // procurement adjustment tasks based on BOM diff (added/changed items).
+      // For now this is a placeholder — the feature flag keeps it OFF by default.
+    }
+
+    return updated
+  })
+}
+
+// ── 3. Get revision history for a BOM ──
+
+export async function getRevisionHistory(bomId: string) {
+  return prisma.bomVersion.findMany({
+    where: { bomId },
+    orderBy: { versionNo: 'desc' },
+    include: {
+      sourceRevision: true,
+      eco: true,
+    },
+  })
+}

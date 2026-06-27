@@ -1,12 +1,15 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+
+const ALLOWED_ROLES = ['R01', 'R09', 'R09a']
 
 // GET /api/qc/mrb?projectId= — MRB compilation for project
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
@@ -16,12 +19,20 @@ export async function GET(req: NextRequest) {
       prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true, clientName: true } }),
       prisma.inspection.findMany({ where: { projectId }, orderBy: { createdAt: 'desc' } }),
       prisma.nonConformanceReport.findMany({ where: { projectId }, orderBy: { createdAt: 'desc' } }),
-      prisma.certificateRegistry.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
+      prisma.certificateRegistry.findMany({
+        where: { holderId: projectId },
+        orderBy: { createdAt: 'desc' },
+      }),
       prisma.iTPCheckpoint.findMany({
         where: { itp: { projectId } },
         include: { itp: { select: { itpCode: true } } },
       }),
-      prisma.millCertificate.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
+      prisma.millCertificate.findMany({
+        where: {
+          material: { poItems: { some: { purchaseOrder: { projectId } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
     ])
 
     if (!project) return errorResponse('Dự án không tồn tại', 404)

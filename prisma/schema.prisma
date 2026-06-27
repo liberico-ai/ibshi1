@@ -742,15 +742,16 @@ model Drawing {
 }
 
 model DrawingRevision {
-  id          String   @id @default(cuid())
-  drawingId   String   @map("drawing_id")
+  id          String       @id @default(cuid())
+  drawingId   String       @map("drawing_id")
   revision    String
   description String?
-  issuedDate  DateTime @map("issued_date")
-  issuedBy    String   @map("issued_by")
-  fileUrl     String?  @map("file_url")
-  createdAt   DateTime @default(now()) @map("created_at")
-  drawing     Drawing  @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+  issuedDate  DateTime     @map("issued_date")
+  issuedBy    String       @map("issued_by")
+  fileUrl     String?      @map("file_url")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  drawing     Drawing      @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+  bomVersions BomVersion[]
 
   @@unique([drawingId, revision])
   @@index([drawingId])
@@ -758,63 +759,115 @@ model DrawingRevision {
 }
 
 model BillOfMaterial {
-  id         String    @id @default(cuid())
-  bomCode    String    @unique @map("bom_code")
-  projectId  String    @map("project_id")
+  id         String       @id @default(cuid())
+  bomCode    String       @unique @map("bom_code")
+  projectId  String       @map("project_id")
   name       String
-  revision   String    @default("R0")
-  status     String    @default("DRAFT")
-  createdBy  String    @map("created_by")
-  approvedBy String?   @map("approved_by")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-  project    Project   @relation(fields: [projectId], references: [id])
+  revision   String       @default("R0")
+  status     String       @default("DRAFT")
+  createdBy  String       @map("created_by")
+  approvedBy String?      @map("approved_by")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+  project    Project      @relation(fields: [projectId], references: [id])
   items      BomItem[]
+  versions   BomVersion[]
 
   @@index([projectId])
   @@map("bill_of_materials")
 }
 
+model BomVersion {
+  id               String                @id @default(cuid())
+  bomId            String                @map("bom_id")
+  versionNo        Int                   @map("version_no")
+  status           String                @default("DRAFT") // DRAFT | ACTIVE | SUPERSEDED
+  sourceRevisionId String?               @map("source_revision_id")
+  ecoId            String?               @map("eco_id")
+  reason           String?
+  createdBy        String                @map("created_by")
+  approvedBy       String?               @map("approved_by")
+  approvedAt       DateTime?             @map("approved_at")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  bom              BillOfMaterial        @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  sourceRevision   DrawingRevision?      @relation(fields: [sourceRevisionId], references: [id])
+  eco              EngineeringChangeOrder? @relation(fields: [ecoId], references: [id])
+  lines            BomItem[]             @relation("VersionLines")
+
+  @@unique([bomId, versionNo])
+  @@index([bomId])
+  @@index([status])
+  @@map("bom_versions")
+}
+
 model BomItem {
-  id         String         @id @default(cuid())
-  bomId      String         @map("bom_id")
-  materialId String         @map("material_id")
-  parentId   String?        @map("parent_id")
-  quantity   Decimal
-  unit       String
-  remarks    String?
-  sortOrder  Int            @default(0) @map("sort_order")
-  bom        BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
-  material   Material       @relation(fields: [materialId], references: [id])
-  parent     BomItem?       @relation("BomHierarchy", fields: [parentId], references: [id])
-  children   BomItem[]      @relation("BomHierarchy")
+  id            String         @id @default(cuid())
+  bomId         String         @map("bom_id")
+  bomVersionId  String?        @map("bom_version_id")
+  materialId    String         @map("material_id")
+  parentId      String?        @map("parent_id")
+  category      String         @default("MAIN") // MAIN | WELD | PAINT | AUX | CONSUMABLE
+  pieceMark     String?        @map("piece_mark")
+  quantity      Decimal
+  unit          String
+  profile       String?
+  grade         String?
+  remarks       String?
+  sortOrder     Int            @default(0) @map("sort_order")
+  bom           BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  bomVersion    BomVersion?    @relation("VersionLines", fields: [bomVersionId], references: [id])
+  material      Material       @relation(fields: [materialId], references: [id])
+  parent        BomItem?       @relation("BomHierarchy", fields: [parentId], references: [id])
+  children      BomItem[]      @relation("BomHierarchy")
 
   @@index([bomId])
+  @@index([bomVersionId])
   @@index([materialId])
   @@map("bom_items")
 }
 
 model EngineeringChangeOrder {
-  id             String    @id @default(cuid())
-  ecoCode        String    @unique @map("eco_code")
-  projectId      String    @map("project_id")
+  id             String       @id @default(cuid())
+  ecoCode        String       @unique @map("eco_code")
+  projectId      String       @map("project_id")
   title          String
   description    String
-  changeType     String    @map("change_type")
-  impactCost     Decimal?  @map("impact_cost")
-  impactSchedule Int?      @map("impact_schedule")
-  status         String    @default("DRAFT")
-  requestedBy    String    @map("requested_by")
-  approvedBy     String?   @map("approved_by")
-  approvedAt     DateTime? @map("approved_at")
-  implementedAt  DateTime? @map("implemented_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  project        Project   @relation(fields: [projectId], references: [id])
+  changeType     String       @map("change_type")
+  impactCost     Decimal?     @map("impact_cost")
+  impactSchedule Int?         @map("impact_schedule")
+  status         String       @default("DRAFT")
+  requestedBy    String       @map("requested_by")
+  approvedBy     String?      @map("approved_by")
+  approvedAt     DateTime?    @map("approved_at")
+  implementedAt  DateTime?    @map("implemented_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  project        Project      @relation(fields: [projectId], references: [id])
+  bomVersions    BomVersion[]
 
   @@index([projectId])
   @@index([status])
   @@map("engineering_change_orders")
+}
+
+model Norm {
+  id          String   @id @default(cuid())
+  projectId   String?  @map("project_id")
+  category    String   // WELD | PAINT | CONSUMABLE
+  code        String   @unique
+  name        String
+  unit        String   // kg/m, L/m², kg/kg, etc.
+  rate        Decimal  // consumption rate
+  basisUnit   String   @map("basis_unit") // m (weld length), m² (surface area), kg (steel weight)
+  materialId  String?  @map("material_id")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([projectId])
+  @@map("norms")
 }
 
 model Employee {
@@ -1419,6 +1472,7 @@ model Task {
   externalRef          String?             @unique @map("external_ref")
   externalSource       String?             @map("external_source")
   forwardedFromId      String?             @map("forwarded_from_id") // việc này được "chuyển tiếp" từ task nào (truy vết)
+  bomVersionId         String?             @map("bom_version_id")
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
   project              Project?            @relation("ProjectDynamicTasks", fields: [projectId], references: [id])

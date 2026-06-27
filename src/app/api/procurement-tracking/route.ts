@@ -1,14 +1,17 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { authenticateRequest, unauthorizedResponse, successResponse, errorResponse } from '@/lib/auth'
+import { authenticateRequest, unauthorizedResponse, successResponse, errorResponse, requireRoles } from '@/lib/auth'
 import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
+
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a']
 
 export async function GET(request: NextRequest) {
   try {
     const payload = await authenticateRequest(request)
     if (!payload?.userId) return unauthorizedResponse()
+    if (!requireRoles(payload.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     // Find all P3.6 Tasks
     const tasks = await prisma.task.findMany({
@@ -58,6 +61,7 @@ export async function PUT(request: NextRequest) {
   try {
     const payload = await authenticateRequest(request)
     if (!payload?.userId) return unauthorizedResponse()
+    if (!requireRoles(payload.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     const body = await request.json()
     const { taskId, groupId, action, deliveryDate } = body

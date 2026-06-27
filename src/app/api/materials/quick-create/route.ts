@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles, logAudit, getClientIP } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { quickCreateMaterialSchema } from '@/lib/schemas'
 import { generateMaterialCode } from '@/lib/material-code'
 
 export const dynamic = 'force-dynamic'
+
+const ALLOWED_ROLES = ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R10']
 
 // POST /api/materials/quick-create
 // Auto-generate a PROVISIONAL canonical code for a brand-new material raised in a PR.
@@ -15,6 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
+    if (!requireRoles(payload.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     const result = await validateBody(req, quickCreateMaterialSchema)
     if (!result.success) return result.response

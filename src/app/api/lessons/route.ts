@@ -1,12 +1,15 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a']
 
 // GET /api/lessons — list lesson learned grouped by project
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     const body = await req.json()
     const { projectId, category, description, rootCause, actionTaken, recommendation } = body

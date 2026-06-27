@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
-import { PageHeader, StatCard, Button } from '@/components/ui'
+import { PageHeader, KPICard, StatusBadge, Button, EmptyState, Modal, InputField, SelectField } from '@/components/ui'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ChevronRight } from 'lucide-react'
 
 interface Inspection {
@@ -28,12 +29,13 @@ const QC_TYPES = [
   { value: 'sat', label: 'SAT' },
 ]
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; border: string }> = {
-  PENDING: { label: 'Chờ kiểm', bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' },
-  PASSED: { label: 'Đạt', bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
-  FAILED: { label: 'Không đạt', bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
-  CONDITIONAL: { label: 'Đạt ĐK', bg: '#fefce8', color: '#ca8a04', border: '#fde68a' },
-}
+const STATUS_FILTERS = [
+  { value: '', label: 'Tất cả' },
+  { value: 'PENDING', label: 'Chờ kiểm' },
+  { value: 'PASSED', label: 'Đạt' },
+  { value: 'FAILED', label: 'Không đạt' },
+  { value: 'CONDITIONAL', label: 'Đạt ĐK' },
+]
 
 export default function QCPage() {
   const router = useRouter()
@@ -46,16 +48,12 @@ export default function QCPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
-  useEffect(() => { loadProjects() }, [])
-  useEffect(() => { setPage(1) }, [search, statusFilter])
-  useEffect(() => { loadData() }, [search, statusFilter, page])
-
-  async function loadProjects() {
+  const loadProjects = useCallback(async () => {
     const res = await apiFetch('/api/projects')
     if (res.ok) setProjects(res.projects)
-  }
+  }, [])
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     if (search) params.set('search', search)
@@ -63,7 +61,11 @@ export default function QCPage() {
     const res = await apiFetch(`/api/qc?${params}`)
     if (res.ok) { setInspections(res.inspections); setPagination(res.pagination) }
     setLoading(false)
-  }
+  }, [search, statusFilter, page])
+
+  useEffect(() => { loadProjects() }, [loadProjects])
+  useEffect(() => { setPage(1) }, [search, statusFilter])
+  useEffect(() => { loadData() }, [loadData])
 
   async function handleVerdict(e: React.MouseEvent, id: string, status: string) {
     e.stopPropagation()
@@ -95,21 +97,30 @@ export default function QCPage() {
         actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Tạo biên bản</Button>}
       />
 
-      {/* ═══ QC KPI Summary ═══ */}
+      {/* KPI Summary */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 stagger-children">
-        <StatCard label="Tổng biên bản" value={pagination.total} color="var(--primary)" />
-        <StatCard label="Đạt ✓" value={passCount} color="#16a34a" />
-        <StatCard label="Không đạt ✗" value={failCount} color="#dc2626" />
-        <StatCard label="Chờ / ĐK" value={pendCount + condCount} color="#f59e0b" />
-        <StatCard label="Tỷ lệ đạt" value={`${passRate}%`} color={passRate >= 80 ? '#16a34a' : passRate >= 50 ? '#f59e0b' : '#dc2626'} />
+        <KPICard label="Tổng biên bản" value={pagination.total} accentColor={SEMANTIC_COLORS.info.solid} />
+        <KPICard label="Đạt" value={passCount} accentColor={SEMANTIC_COLORS.success.solid} />
+        <KPICard label="Không đạt" value={failCount} accentColor={SEMANTIC_COLORS.danger.solid} />
+        <KPICard label="Chờ / ĐK" value={pendCount + condCount} accentColor={SEMANTIC_COLORS.warning.solid} />
+        <KPICard
+          label="Tỷ lệ đạt"
+          value={`${passRate}%`}
+          accentColor={passRate >= 80 ? SEMANTIC_COLORS.success.solid : passRate >= 50 ? SEMANTIC_COLORS.warning.solid : SEMANTIC_COLORS.danger.solid}
+        />
       </div>
 
-      {showCreate && <CreateInspectionForm projects={projects} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); loadData() }} />}
+      <CreateInspectionModal
+        open={showCreate}
+        projects={projects}
+        onClose={() => setShowCreate(false)}
+        onCreated={() => { setShowCreate(false); loadData() }}
+      />
 
       <div className="flex gap-3 items-center">
         <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã biên bản..." /></div>
         <div className="flex gap-2">
-          {[{ value: '', label: 'Tất cả' }, ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ value: k, label: v.label }))].map((f) => (
+          {STATUS_FILTERS.map((f) => (
             <button key={f.value} onClick={() => setStatusFilter(f.value)}
               className={`filter-pill ${statusFilter === f.value ? 'active' : ''}`}>{f.label}</button>
           ))}
@@ -117,14 +128,22 @@ export default function QCPage() {
       </div>
 
       {/* Inspection table */}
-      <div className="card overflow-hidden">
+      <div className="dt-wrapper">
         <table className="data-table">
           <thead>
-            <tr><th>Mã biên bản</th><th>Loại kiểm tra</th><th>Dự án</th><th>Bước WF</th><th>Kết quả</th><th>Checklist</th><th>Ngày KT</th><th></th></tr>
+            <tr>
+              <th>Mã biên bản</th>
+              <th>Loại kiểm tra</th>
+              <th>Dự án</th>
+              <th>Bước WF</th>
+              <th>Kết quả</th>
+              <th>Checklist</th>
+              <th>Ngày KT</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             {inspections.map((insp) => {
-              const cfg = STATUS_CONFIG[insp.status] || STATUS_CONFIG.PENDING
               const project = projects.find(p => p.id === insp.projectId)
               const qcType = QC_TYPES.find(t => t.value === insp.type)
               return (
@@ -133,17 +152,17 @@ export default function QCPage() {
                   <td style={{ color: 'var(--text-primary)' }}>{qcType?.label || insp.type}</td>
                   <td><span className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{project?.projectCode || '-'}</span></td>
                   <td><span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{insp.stepCode}</span></td>
-                  <td><span className="badge" style={{ background: cfg.bg, color: cfg.color, borderColor: cfg.border, borderWidth: '1px' }}>{cfg.label}</span></td>
+                  <td><StatusBadge category="qc" status={insp.status} /></td>
                   <td>
                     {insp.totalItems > 0 ? (
                       <div className="flex items-center gap-1">
-                        <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: '#e2e8f0' }}>
+                        <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: SEMANTIC_COLORS.neutral.bg }}>
                           <div className="h-full rounded-full" style={{
                             width: `${(insp.passedItems / insp.totalItems) * 100}%`,
-                            background: insp.failedItems > 0 ? '#dc2626' : '#16a34a',
+                            background: insp.failedItems > 0 ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid,
                           }} />
                         </div>
-                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{insp.passedItems}/{insp.totalItems}</span>
+                        <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{insp.passedItems}/{insp.totalItems}</span>
                       </div>
                     ) : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
@@ -151,8 +170,10 @@ export default function QCPage() {
                   <td>
                     {insp.status === 'PENDING' ? (
                       <div className="flex gap-1">
-                        <button onClick={(e) => handleVerdict(e, insp.id, 'PASSED')} className="text-xs px-2 py-1 rounded" style={{ background: '#f0fdf4', color: '#16a34a' }}>Đạt</button>
-                        <button onClick={(e) => handleVerdict(e, insp.id, 'FAILED')} className="text-xs px-2 py-1 rounded" style={{ background: '#fef2f2', color: '#dc2626' }}>Lỗi</button>
+                        <Button size="sm" variant="ghost" onClick={(e) => handleVerdict(e, insp.id, 'PASSED')}
+                          style={{ background: SEMANTIC_COLORS.success.bg, color: SEMANTIC_COLORS.success.solid }}>Đạt</Button>
+                        <Button size="sm" variant="ghost" onClick={(e) => handleVerdict(e, insp.id, 'FAILED')}
+                          style={{ background: SEMANTIC_COLORS.danger.bg, color: SEMANTIC_COLORS.danger.solid }}>Lỗi</Button>
                       </div>
                     ) : (
                       <ChevronRight size={16} stroke="var(--text-muted)" />
@@ -162,7 +183,7 @@ export default function QCPage() {
               )
             })}
             {inspections.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có biên bản QC</td></tr>
+              <tr><td colSpan={8}><EmptyState icon="📋" title="Chưa có biên bản QC" /></td></tr>
             )}
           </tbody>
         </table>
@@ -174,7 +195,9 @@ export default function QCPage() {
   )
 }
 
-function CreateInspectionForm({ projects, onClose, onCreated }: { projects: ProjectOption[]; onClose: () => void; onCreated: () => void }) {
+function CreateInspectionModal({ open, projects, onClose, onCreated }: {
+  open: boolean; projects: ProjectOption[]; onClose: () => void; onCreated: () => void
+}) {
   const [form, setForm] = useState({
     inspectionCode: '', projectId: '', type: 'material_incoming', stepCode: '',
     checklistItems: [{ checkItem: '', standard: '' }],
@@ -205,36 +228,52 @@ function CreateInspectionForm({ projects, onClose, onCreated }: { projects: Proj
   }
 
   return (
-    <div className="card p-6 animate-fade-in">
-      <h3 className="text-base font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Tạo biên bản kiểm tra</h3>
-      {error && <div className="mb-3 p-2 rounded text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>{error}</div>}
+    <Modal open={open} onClose={onClose} title="Tạo biên bản kiểm tra" size="lg">
+      {error && <div className="mb-3 p-2 rounded text-sm" style={{ background: SEMANTIC_COLORS.danger.bg, color: SEMANTIC_COLORS.danger.solid, border: `1px solid ${SEMANTIC_COLORS.danger.solid}20` }}>{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-4 gap-4">
-          <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Mã biên bản *</label>
-            <input className="input" value={form.inspectionCode} onChange={(e) => setForm({ ...form, inspectionCode: e.target.value })} placeholder="QC-2026-001" required /></div>
-          <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Dự án *</label>
-            <select className="input" value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} required>
-              <option value="">Chọn dự án</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode}</option>)}
-            </select></div>
-          <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Loại kiểm tra *</label>
-            <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              {QC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select></div>
-          <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Bước Workflow *</label>
-            <input className="input" value={form.stepCode} onChange={(e) => setForm({ ...form, stepCode: e.target.value })} placeholder="P4.3_QC" required /></div>
+        <div className="grid grid-cols-2 gap-4">
+          <InputField
+            label="Mã biên bản *"
+            value={form.inspectionCode}
+            onChange={(e) => setForm({ ...form, inspectionCode: e.target.value })}
+            placeholder="QC-2026-001"
+            required
+          />
+          <SelectField
+            label="Dự án *"
+            value={form.projectId}
+            onChange={(e) => setForm({ ...form, projectId: e.target.value })}
+            options={[{ value: '', label: 'Chọn dự án' }, ...projects.map(p => ({ value: p.id, label: p.projectCode }))]}
+            required
+          />
+          <SelectField
+            label="Loại kiểm tra *"
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+            options={QC_TYPES}
+          />
+          <InputField
+            label="Bước Workflow *"
+            value={form.stepCode}
+            onChange={(e) => setForm({ ...form, stepCode: e.target.value })}
+            placeholder="P4.3_QC"
+            required
+          />
         </div>
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Danh mục kiểm tra</label>
-            <button type="button" onClick={addCheckItem} className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-secondary)', color: 'var(--primary)' }}>+ Thêm</button>
+            <label className="input-label">Danh mục kiểm tra</label>
+            <Button type="button" variant="ghost" size="sm" onClick={addCheckItem}>+ Thêm</Button>
           </div>
           <div className="space-y-2">
             {form.checklistItems.map((ci, i) => (
               <div key={i} className="flex gap-2 items-center">
                 <input className="input flex-1" placeholder="Nội dung kiểm tra" value={ci.checkItem} onChange={(e) => updateCheckItem(i, 'checkItem', e.target.value)} />
                 <input className="input w-48" placeholder="Tiêu chuẩn" value={ci.standard} onChange={(e) => updateCheckItem(i, 'standard', e.target.value)} />
-                {form.checklistItems.length > 1 && <button type="button" onClick={() => removeCheckItem(i)} className="text-xs px-2 py-1 rounded" style={{ color: '#dc2626' }}>×</button>}
+                {form.checklistItems.length > 1 && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeCheckItem(i)}
+                    style={{ color: SEMANTIC_COLORS.danger.solid }}>x</Button>
+                )}
               </div>
             ))}
           </div>
@@ -244,6 +283,6 @@ function CreateInspectionForm({ projects, onClose, onCreated }: { projects: Proj
           <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo'}</Button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }

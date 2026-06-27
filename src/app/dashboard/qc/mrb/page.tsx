@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import {
+  PageHeader, FilterBar, KPICard, EmptyState, StatusBadge,
+} from '@/components/ui'
 
 interface MRBData {
   project: { projectCode: string; projectName: string; clientName: string } | null
@@ -40,23 +44,29 @@ export default function MRBPage() {
     })
   }, [projectId])
 
+  const tabFilters = data ? [
+    { value: 'overview', label: 'Tong quan' },
+    { value: 'inspections', label: `Inspections (${data.summary.inspections.total})` },
+    { value: 'ncr', label: `NCR (${data.summary.ncr.total})` },
+  ] : []
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📋 Hồ sơ QC — MRB (Manufacturer Record Book)</h1>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Tổng hợp hồ sơ chất lượng theo dự án</p>
-      </div>
+      <PageHeader
+        title="Ho so QC -- MRB (Manufacturer Record Book)"
+        subtitle="Tong hop ho so chat luong theo du an"
+      />
 
+      {/* Project Selector */}
       <div className="card p-4">
-        <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Chọn dự án</label>
+        <label className="input-label">Chon du an</label>
         <select
           value={projectId}
           onChange={e => setProjectId(e.target.value)}
-          className="mt-1 w-full p-2 rounded-lg text-sm"
-          style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+          className="input mt-1"
         >
-          <option value="">— Chọn —</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
+          <option value="">-- Chon --</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode} -- {p.projectName}</option>)}
         </select>
       </div>
 
@@ -64,65 +74,102 @@ export default function MRBPage() {
 
       {data && data.summary && (
         <>
-          {/* Summary Cards */}
+          {/* KPI Summary Cards */}
           <div className="grid grid-cols-5 gap-4">
-            {[
-              { label: 'Inspections', value: `${data.summary.inspections.passed}/${data.summary.inspections.total}`, sub: `${data.summary.inspections.pending} pending`, color: '#16a34a' },
-              { label: 'NCR', value: `${data.summary.ncr.open} open`, sub: `${data.summary.ncr.total} total`, color: data.summary.ncr.open > 0 ? '#dc2626' : '#16a34a' },
-              { label: 'Certificates', value: String(data.summary.certificates), sub: 'certs', color: '#0ea5e9' },
-              { label: 'Mill Certs', value: String(data.summary.millCertificates), sub: 'MTR', color: '#8b5cf6' },
-              { label: 'ITP Progress', value: `${data.summary.itp.progress}%`, sub: `${data.summary.itp.completed}/${data.summary.itp.total}`, color: '#f59e0b' },
-            ].map((c, i) => (
-              <div key={i} className="card p-4 text-center">
-                <p className="text-2xl font-bold" style={{ color: c.color }}>{c.value}</p>
-                <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{c.label}</p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.sub}</p>
-              </div>
-            ))}
+            <KPICard
+              label="Inspections"
+              value={`${data.summary.inspections.passed}/${data.summary.inspections.total}`}
+              delta={`${data.summary.inspections.pending} pending`}
+              deltaType="neutral"
+              accentColor={SEMANTIC_COLORS.success.solid}
+            />
+            <KPICard
+              label="NCR"
+              value={`${data.summary.ncr.open} open`}
+              delta={`${data.summary.ncr.total} total`}
+              deltaType={data.summary.ncr.open > 0 ? 'down' : 'neutral'}
+              accentColor={data.summary.ncr.open > 0 ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid}
+            />
+            <KPICard
+              label="Certificates"
+              value={data.summary.certificates}
+              delta="certs"
+              deltaType="neutral"
+              accentColor={SEMANTIC_COLORS.info.solid}
+            />
+            <KPICard
+              label="Mill Certs"
+              value={data.summary.millCertificates}
+              delta="MTR"
+              deltaType="neutral"
+              accentColor="#8b5cf6"
+            />
+            <KPICard
+              label="ITP Progress"
+              value={`${data.summary.itp.progress}%`}
+              delta={`${data.summary.itp.completed}/${data.summary.itp.total}`}
+              deltaType="neutral"
+              accentColor={SEMANTIC_COLORS.warning.solid}
+            />
           </div>
 
           {/* Overall Status */}
           <div className="card p-4 flex items-center gap-3">
             <span className="text-2xl">{data.summary.overallStatus === 'READY' ? '✅' : '⏳'}</span>
             <div>
-              <p className="font-bold" style={{ color: data.summary.overallStatus === 'READY' ? '#16a34a' : '#f59e0b' }}>
-                {data.summary.overallStatus === 'READY' ? 'MRB sẵn sàng đóng gói' : 'MRB chưa hoàn chỉnh'}
+              <p className="font-heading font-bold" style={{
+                color: data.summary.overallStatus === 'READY' ? SEMANTIC_COLORS.success.solid : SEMANTIC_COLORS.warning.solid,
+              }}>
+                {data.summary.overallStatus === 'READY' ? 'MRB san sang dong goi' : 'MRB chua hoan chinh'}
               </p>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 {data.summary.inspections.failed > 0 && `${data.summary.inspections.failed} inspections failed • `}
-                {data.summary.ncr.open > 0 && `${data.summary.ncr.open} NCR chưa đóng • `}
+                {data.summary.ncr.open > 0 && `${data.summary.ncr.open} NCR chua dong • `}
                 {data.summary.inspections.pending > 0 && `${data.summary.inspections.pending} inspections pending`}
               </p>
             </div>
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2">
-            {[
-              { key: 'overview' as const, label: 'Tổng quan' },
-              { key: 'inspections' as const, label: `Inspections (${data.summary.inspections.total})` },
-              { key: 'ncr' as const, label: `NCR (${data.summary.ncr.total})` },
-            ].map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                style={{ background: tab === t.key ? 'var(--primary)' : 'var(--bg-card)', color: tab === t.key ? '#fff' : 'var(--text-muted)' }}
-              >{t.label}</button>
-            ))}
-          </div>
+          <FilterBar
+            filters={tabFilters}
+            value={tab}
+            onChange={v => setTab(v as 'overview' | 'inspections' | 'ncr')}
+          />
 
+          {/* Inspections Tab */}
           {tab === 'inspections' && (
-            <div className="card overflow-hidden">
+            <div className="dt-wrapper">
               <table className="data-table">
-                <thead><tr><th>Code</th><th>Type</th><th>Status</th><th>Date</th></tr></thead>
+                <thead>
+                  <tr><th>Code</th><th>Type</th><th>Status</th><th>Date</th></tr>
+                </thead>
                 <tbody>
-                  {data.inspections.map(i => (
+                  {data.inspections.length === 0 ? (
+                    <tr>
+                      <td colSpan={4}>
+                        <EmptyState icon="🔍" title="Chua co inspection nao" />
+                      </td>
+                    </tr>
+                  ) : data.inspections.map(i => (
                     <tr key={i.id}>
-                      <td className="font-mono text-xs" style={{ color: 'var(--primary)' }}>{i.inspectionCode}</td>
+                      <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{i.inspectionCode}</td>
                       <td className="text-xs">{i.type}</td>
-                      <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
-                        background: i.status === 'PASSED' ? '#16a34a20' : i.status === 'FAILED' ? '#dc262620' : '#f59e0b20',
-                        color: i.status === 'PASSED' ? '#16a34a' : i.status === 'FAILED' ? '#dc2626' : '#f59e0b',
-                      }}>{i.status}</span></td>
+                      <td>
+                        <span
+                          className="badge text-xs"
+                          style={{
+                            background: i.status === 'PASSED' ? SEMANTIC_COLORS.success.bg
+                              : i.status === 'FAILED' ? SEMANTIC_COLORS.danger.bg
+                              : SEMANTIC_COLORS.warning.bg,
+                            color: i.status === 'PASSED' ? SEMANTIC_COLORS.success.solid
+                              : i.status === 'FAILED' ? SEMANTIC_COLORS.danger.solid
+                              : SEMANTIC_COLORS.warning.solid,
+                          }}
+                        >
+                          {i.status}
+                        </span>
+                      </td>
                       <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(i.createdAt)}</td>
                     </tr>
                   ))}
@@ -131,20 +178,36 @@ export default function MRBPage() {
             </div>
           )}
 
+          {/* NCR Tab */}
           {tab === 'ncr' && (
-            <div className="card overflow-hidden">
+            <div className="dt-wrapper">
               <table className="data-table">
-                <thead><tr><th>Code</th><th>Severity</th><th>Status</th><th>Description</th></tr></thead>
+                <thead>
+                  <tr><th>Code</th><th>Severity</th><th>Status</th><th>Description</th></tr>
+                </thead>
                 <tbody>
-                  {data.ncrs.map(n => (
+                  {data.ncrs.length === 0 ? (
+                    <tr>
+                      <td colSpan={4}>
+                        <EmptyState icon="📋" title="Chua co NCR nao" />
+                      </td>
+                    </tr>
+                  ) : data.ncrs.map(n => (
                     <tr key={n.id}>
-                      <td className="font-mono text-xs" style={{ color: '#dc2626' }}>{n.ncrCode}</td>
-                      <td className="text-xs font-bold" style={{ color: n.severity === 'CRITICAL' ? '#dc2626' : n.severity === 'MAJOR' ? '#f59e0b' : '#888' }}>{n.severity}</td>
-                      <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
-                        background: n.status === 'CLOSED' ? '#16a34a20' : '#dc262620',
-                        color: n.status === 'CLOSED' ? '#16a34a' : '#dc2626',
-                      }}>{n.status}</span></td>
-                      <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{n.description?.slice(0, 60) || '—'}</td>
+                      <td className="font-mono text-xs" style={{ color: SEMANTIC_COLORS.danger.solid }}>{n.ncrCode}</td>
+                      <td>
+                        <span className="text-xs font-bold" style={{
+                          color: n.severity === 'CRITICAL' ? SEMANTIC_COLORS.danger.solid
+                            : n.severity === 'MAJOR' ? SEMANTIC_COLORS.warning.solid
+                            : SEMANTIC_COLORS.neutral.solid,
+                        }}>
+                          {n.severity}
+                        </span>
+                      </td>
+                      <td>
+                        <StatusBadge category="ncr" status={n.status} />
+                      </td>
+                      <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{n.description?.slice(0, 60) || '--'}</td>
                     </tr>
                   ))}
                 </tbody>

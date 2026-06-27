@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import {
+  PageHeader, Button, FilterBar, KPICard, EmptyState, Modal,
+  InputField, SelectField,
+} from '@/components/ui'
 
 interface Certificate {
   id: string; certType: string; certNumber: string; holderName: string;
@@ -42,73 +47,98 @@ export default function CertificatePage() {
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1,2].map(i => <div key={i} className="h-20 skeleton rounded-xl" />)}</div>
 
+  const filterOptions = [
+    { value: '', label: 'Tat ca', count: certs.length },
+    ...Object.entries(TYPE_MAP).map(([k, v]) => ({
+      value: k,
+      label: `${v.icon} ${v.label}`,
+    })),
+  ]
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Certificate Registry</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sổ chứng chỉ & hiệu chuẩn</p>
-        </div>
-        {canCreate && (
-          <button onClick={() => setShowForm(true)} className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:shadow-lg" style={{ background: 'var(--accent)' }}>
-            + Thêm chứng chỉ
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Certificate Registry"
+        subtitle="So chung chi & hieu chuan"
+        actions={canCreate ? (
+          <Button variant="accent" size="md" onClick={() => setShowForm(true)}>
+            + Them chung chi
+          </Button>
+        ) : undefined}
+      />
 
-      {/* Stats */}
+      {/* KPI Stats */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="card p-4">
-          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Tổng CC</p>
-          <p className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{certs.length}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>✅ Còn hạn</p>
-          <p className="text-xl font-bold" style={{ color: '#16a34a' }}>{certs.length - expiredCount}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>⚠️ Sắp hết hạn</p>
-          <p className="text-xl font-bold" style={{ color: '#f59e0b' }}>{expiringSoonCount}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>🔴 Hết hạn</p>
-          <p className="text-xl font-bold" style={{ color: '#dc2626' }}>{expiredCount}</p>
-        </div>
+        <KPICard
+          label="Tong CC"
+          value={certs.length}
+          accentColor={SEMANTIC_COLORS.info.solid}
+        />
+        <KPICard
+          label="Con han"
+          value={certs.length - expiredCount}
+          icon={<span>&#x2705;</span>}
+          accentColor={SEMANTIC_COLORS.success.solid}
+        />
+        <KPICard
+          label="Sap het han"
+          value={expiringSoonCount}
+          icon={<span>&#x26A0;&#xFE0F;</span>}
+          accentColor={SEMANTIC_COLORS.warning.solid}
+        />
+        <KPICard
+          label="Het han"
+          value={expiredCount}
+          icon={<span>&#x1F534;</span>}
+          accentColor={SEMANTIC_COLORS.danger.solid}
+        />
       </div>
 
       {/* Filters */}
-      <div className="flex gap-1">
-        {[{ v: '', l: 'Tất cả' }, ...Object.entries(TYPE_MAP).map(([k, v]) => ({ v: k, l: `${v.icon} ${v.label}` }))].map(f => (
-          <button key={f.v} onClick={() => setFilterType(f.v)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={{ background: filterType === f.v ? 'var(--accent)' : 'var(--bg-primary)', color: filterType === f.v ? 'white' : 'var(--text-muted)' }}>
-            {f.l}
-          </button>
-        ))}
-      </div>
+      <FilterBar
+        filters={filterOptions}
+        value={filterType}
+        onChange={setFilterType}
+      />
 
       {/* Cert List */}
       <div className="space-y-2">
         {certs.length === 0 && (
-          <div className="card p-12 text-center">
-            <p className="text-4xl mb-3">🎓</p>
-            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Chưa có chứng chỉ nào</p>
-          </div>
+          <EmptyState
+            icon="🎓"
+            title="Chua co chung chi nao"
+            description="Them chung chi moi de bat dau theo doi"
+          />
         )}
         {certs.map(cert => {
           const tp = TYPE_MAP[cert.certType] || { label: cert.certType, icon: '📄' }
-          const borderColor = cert.isExpired ? '#dc2626' : cert.isExpiringSoon ? '#f59e0b' : '#16a34a'
+          const borderColor = cert.isExpired
+            ? SEMANTIC_COLORS.danger.solid
+            : cert.isExpiringSoon
+              ? SEMANTIC_COLORS.warning.solid
+              : SEMANTIC_COLORS.success.solid
+          const badgeBg = cert.isExpired
+            ? SEMANTIC_COLORS.danger.bg
+            : cert.isExpiringSoon
+              ? SEMANTIC_COLORS.warning.bg
+              : SEMANTIC_COLORS.success.bg
           return (
             <div key={cert.id} className="card p-4 transition-all hover:shadow-md" style={{ borderLeft: `4px solid ${borderColor}` }}>
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: cert.isExpired ? '#fef2f2' : '#f0fdf4' }}>
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+                  style={{ background: cert.isExpired ? SEMANTIC_COLORS.danger.bg : SEMANTIC_COLORS.success.bg }}
+                >
                   {tp.icon}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{cert.holderName}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{ background: cert.isExpired ? '#fef2f2' : cert.isExpiringSoon ? '#fef9c3' : '#f0fdf4', color: borderColor }}>
-                      {cert.isExpired ? 'HẾT HẠN' : cert.isExpiringSoon ? `${cert.daysToExpiry} ngày` : `${cert.daysToExpiry} ngày`}
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded font-bold"
+                      style={{ background: badgeBg, color: borderColor }}
+                    >
+                      {cert.isExpired ? 'HET HAN' : `${cert.daysToExpiry} ngay`}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -119,7 +149,7 @@ export default function CertificatePage() {
                   </div>
                 </div>
                 <div className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>
-                  <p>Cấp: {formatDate(cert.issueDate)}</p>
+                  <p>Cap: {formatDate(cert.issueDate)}</p>
                   <p className="font-semibold" style={{ color: borderColor }}>
                     HH: {formatDate(cert.expiryDate)}
                   </p>
@@ -141,74 +171,90 @@ function CreateCertModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const update = (f: string, v: string) => setForm({ ...form, [f]: v })
 
   const submit = async () => {
-    if (!form.certNumber || !form.holderName || !form.issuedBy || !form.issueDate || !form.expiryDate) return alert('Điền đầy đủ thông tin')
+    if (!form.certNumber || !form.holderName || !form.issuedBy || !form.issueDate || !form.expiryDate) return alert('Dien day du thong tin')
     setSubmitting(true)
     const res = await apiFetch('/api/qc/certificates', { method: 'POST', body: JSON.stringify(form) })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi tạo chứng chỉ')
+    else alert(res.error || 'Loi tao chung chi')
   }
 
-  const inputStyle = { width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid var(--border-light)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', outline: 'none' }
+  const typeOptions = Object.entries(TYPE_MAP).map(([k, v]) => ({
+    value: k,
+    label: `${v.icon} ${v.label}`,
+  }))
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
-      <div className="card p-6 w-full max-w-lg animate-fade-in" style={{ background: 'var(--bg-card)' }}>
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Thêm chứng chỉ</h2>
-          <button onClick={onClose} className="text-xl" style={{ color: 'var(--text-muted)' }}>✕</button>
+    <Modal
+      open={true}
+      onClose={onClose}
+      title="Them chung chi"
+      size="lg"
+      actions={
+        <div className="flex gap-3 w-full">
+          <Button variant="ghost" onClick={onClose} className="flex-1">Huy</Button>
+          <Button variant="accent" onClick={submit} loading={submitting} className="flex-1">
+            Them chung chi
+          </Button>
         </div>
-        <div className="space-y-3 mb-5">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Loại *</label>
-              <select value={form.certType} onChange={e => update('certType', e.target.value)} style={inputStyle}>
-                {Object.entries(TYPE_MAP).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Số chứng chỉ *</label>
-              <input value={form.certNumber} onChange={e => update('certNumber', e.target.value)} style={inputStyle} placeholder="AWS-..." />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Tên người/TB *</label>
-              <input value={form.holderName} onChange={e => update('holderName', e.target.value)} style={inputStyle} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Cơ quan cấp *</label>
-              <input value={form.issuedBy} onChange={e => update('issuedBy', e.target.value)} style={inputStyle} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Ngày cấp *</label>
-              <input type="date" value={form.issueDate} onChange={e => update('issueDate', e.target.value)} style={inputStyle} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn *</label>
-              <input type="date" value={form.expiryDate} onChange={e => update('expiryDate', e.target.value)} style={inputStyle} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Tiêu chuẩn</label>
-              <input value={form.standard} onChange={e => update('standard', e.target.value)} style={inputStyle} placeholder="AWS D1.1, ASNT..." />
-            </div>
-            <div>
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Phạm vi</label>
-              <input value={form.scope} onChange={e => update('scope', e.target.value)} style={inputStyle} placeholder="SMAW, GTAW..." />
-            </div>
-          </div>
+      }
+    >
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Loai *"
+            value={form.certType}
+            onChange={e => update('certType', e.target.value)}
+            options={typeOptions}
+          />
+          <InputField
+            label="So chung chi *"
+            value={form.certNumber}
+            onChange={e => update('certNumber', e.target.value)}
+            placeholder="AWS-..."
+          />
         </div>
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold" style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Hủy</button>
-          <button onClick={submit} disabled={submitting} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: submitting ? '#94a3b8' : 'var(--accent)' }}>
-            {submitting ? 'Đang lưu...' : 'Thêm chứng chỉ'}
-          </button>
+        <div className="grid grid-cols-2 gap-3">
+          <InputField
+            label="Ten nguoi/TB *"
+            value={form.holderName}
+            onChange={e => update('holderName', e.target.value)}
+          />
+          <InputField
+            label="Co quan cap *"
+            value={form.issuedBy}
+            onChange={e => update('issuedBy', e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <InputField
+            label="Ngay cap *"
+            type="date"
+            value={form.issueDate}
+            onChange={e => update('issueDate', e.target.value)}
+          />
+          <InputField
+            label="Ngay het han *"
+            type="date"
+            value={form.expiryDate}
+            onChange={e => update('expiryDate', e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <InputField
+            label="Tieu chuan"
+            value={form.standard}
+            onChange={e => update('standard', e.target.value)}
+            placeholder="AWS D1.1, ASNT..."
+          />
+          <InputField
+            label="Pham vi"
+            value={form.scope}
+            onChange={e => update('scope', e.target.value)}
+            placeholder="SMAW, GTAW..."
+          />
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

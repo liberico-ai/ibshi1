@@ -16,10 +16,13 @@ export async function GET(req: NextRequest) {
   const page = parseInt(url.searchParams.get('page') || '1')
   const limit = parseInt(url.searchParams.get('limit') || '20')
 
+  const workType = url.searchParams.get('workType') || undefined
+
   const where: Record<string, unknown> = {}
   if (woId) where.workOrderId = woId
   if (teamCode) where.teamCode = teamCode
   if (status) where.status = status
+  if (workType) where.workType = workType
 
   const [total, jobCards] = await Promise.all([
     prisma.jobCard.count({ where }),
@@ -56,7 +59,7 @@ export async function POST(req: NextRequest) {
 
   const result = await validateBody(req, createJobCardSchema)
   if (!result.success) return result.response
-  const { workOrderId, workType, description, plannedQty, unit, workDate, manpower, notes } = result.data
+  const { workOrderId, workType, description, plannedQty, actualQty, unit, workDate, manpower, notes } = result.data
 
   const wo = await prisma.workOrder.findUnique({ where: { id: workOrderId } })
   if (!wo) return errorResponse('Không tìm thấy WO')
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
       workType,
       description: description || `${workType} — ${wo.woCode}`,
       plannedQty: plannedQty || null,
-      actualQty: null,
+      actualQty: actualQty ?? null,
       unit: unit || 'kg',
       workDate: new Date(workDate),
       manpower: manpower || null,

@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import {
+  PageHeader, StatusBadge, Button, FilterBar,
+  EmptyState, Modal, InputField, SelectField,
+} from '@/components/ui'
 
 interface Drawing {
   id: string; drawingCode: string; title: string; discipline: string; currentRev: string;
@@ -12,9 +17,20 @@ interface Drawing {
 }
 
 const discLabel: Record<string, string> = { structural: 'Kết cấu', piping: 'Đường ống', electrical: 'Điện', mechanical: 'Cơ khí' }
-const discColor: Record<string, string> = { structural: '#0ea5e9', piping: '#f59e0b', electrical: '#dc2626', mechanical: '#16a34a' }
-const statusLabel: Record<string, string> = { IFR: 'Chờ duyệt', IFC: 'Thi công', AFC: 'Hoàn công' }
-const statusColor: Record<string, string> = { IFR: '#f59e0b', IFC: '#0ea5e9', AFC: '#16a34a' }
+const discColor: Record<string, string> = {
+  structural: SEMANTIC_COLORS.info.solid,
+  piping: SEMANTIC_COLORS.warning.solid,
+  electrical: SEMANTIC_COLORS.danger.solid,
+  mechanical: SEMANTIC_COLORS.success.solid,
+}
+
+const TRANSITIONS: Record<string, { next: string; label: string; variant: 'outline' | 'accent' | 'primary' }[]> = {
+  IFR: [{ next: 'IFC', label: 'IFC', variant: 'accent' }],
+  IFC: [
+    { next: 'AFC', label: 'AFC', variant: 'primary' },
+    { next: 'IFR', label: 'IFR', variant: 'outline' },
+  ],
+}
 
 export default function DrawingRegisterPage() {
   const [drawings, setDrawings] = useState<Drawing[]>([])
@@ -24,14 +40,6 @@ export default function DrawingRegisterPage() {
   const [filter, setFilter] = useState('')
   const [projectList, setProjectList] = useState<{ id: string; projectCode: string; projectName: string }[]>([])
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-
-  const TRANSITIONS: Record<string, { next: string; label: string; color: string }[]> = {
-    IFR: [{ next: 'IFC', label: '→ IFC', color: '#0ea5e9' }],
-    IFC: [
-      { next: 'AFC', label: '→ AFC', color: '#16a34a' },
-      { next: 'IFR', label: '← IFR', color: '#f59e0b' },
-    ],
-  }
 
   const load = () => {
     const url = filter ? `/api/drawings?status=${filter}` : '/api/drawings'
@@ -73,87 +81,176 @@ export default function DrawingRegisterPage() {
     setActionLoading(null)
   }
 
-  if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
+  const totalCount = Object.values(stats).reduce((s, c) => s + c, 0)
+
+  const filterOptions = [
+    { value: '', label: 'Tất cả', count: totalCount },
+    { value: 'IFR', label: 'Chờ duyệt', count: stats['IFR'] || 0 },
+    { value: 'IFC', label: 'Thi công', count: stats['IFC'] || 0 },
+    { value: 'AFC', label: 'Hoàn công', count: stats['AFC'] || 0 },
+  ]
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📐 Sổ bản vẽ</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{drawings.length} bản vẽ</p>
-        </div>
-        <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm bản vẽ</button>
-      </div>
+      <PageHeader
+        title="Sổ bản vẽ"
+        subtitle={`${drawings.length} bản vẽ`}
+        actions={
+          <Button variant="primary" size="sm" onClick={openForm}>
+            + Thêm bản vẽ
+          </Button>
+        }
+      />
 
-      {/* Status filter */}
-      <div className="flex gap-2">
-        <button onClick={() => setFilter('')} className="text-xs px-3 py-1 rounded-full font-medium"
-          style={{ background: !filter ? 'var(--accent)' : 'var(--surface-hover)', color: !filter ? '#fff' : 'var(--text-muted)' }}>
-          Tất cả ({Object.values(stats).reduce((s, c) => s + c, 0)})
-        </button>
-        {Object.entries(statusLabel).map(([k, v]) => (
-          <button key={k} onClick={() => setFilter(k)} className="text-xs px-3 py-1 rounded-full font-medium"
-            style={{ background: filter === k ? statusColor[k] : 'var(--surface-hover)', color: filter === k ? '#fff' : 'var(--text-muted)' }}>
-            {v} ({stats[k] || 0})
-          </button>
-        ))}
-      </div>
+      <FilterBar
+        filters={filterOptions}
+        value={filter}
+        onChange={setFilter}
+      />
 
-      {/* Form */}
-      {showForm && (
-        <form onSubmit={handleSubmit} className="card p-5 space-y-3">
-          <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Thêm bản vẽ</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <input name="drawingCode" required placeholder="Mã bản vẽ *" className="input-field text-sm" />
-            <select name="projectId" required className="input-field text-sm">
-              <option value="">— Dự án —</option>
-              {projectList.map(p => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
-            </select>
-            <input name="title" required placeholder="Tiêu đề *" className="input-field text-sm" />
-            <select name="discipline" required className="input-field text-sm">
-              <option value="">— Bộ môn —</option>
-              {Object.entries(discLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button type="submit" className="btn-primary text-sm px-4 py-2 rounded-lg">Lưu</button>
-            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary text-sm px-4 py-2 rounded-lg">Hủy</button>
+      {/* Create drawing modal */}
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title="Thêm bản vẽ"
+        size="lg"
+      >
+        <form onSubmit={handleSubmit} id="drawing-create-form">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputField
+              name="drawingCode"
+              label="Mã bản vẽ"
+              required
+              placeholder="VD: DWG-001"
+            />
+            <SelectField
+              name="projectId"
+              label="Dự án"
+              required
+              options={[
+                { value: '', label: '-- Chọn dự án --' },
+                ...projectList.map(p => ({
+                  value: p.id,
+                  label: `${p.projectCode} — ${p.projectName}`,
+                })),
+              ]}
+            />
+            <InputField
+              name="title"
+              label="Tiêu đề"
+              required
+              placeholder="Tên bản vẽ"
+            />
+            <SelectField
+              name="discipline"
+              label="Bộ môn"
+              required
+              options={[
+                { value: '', label: '-- Chọn bộ môn --' },
+                ...Object.entries(discLabel).map(([k, v]) => ({
+                  value: k,
+                  label: v,
+                })),
+              ]}
+            />
           </div>
         </form>
-      )}
+        <div className="flex gap-2 justify-end mt-4">
+          <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+            Hủy
+          </Button>
+          <Button variant="primary" size="sm" type="submit" form="drawing-create-form">
+            Lưu
+          </Button>
+        </div>
+      </Modal>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="dt-wrapper">
         <table className="data-table">
-          <thead><tr><th>Mã BV</th><th>Tiêu đề</th><th>Bộ môn</th><th>Dự án</th><th>Rev</th><th>Trạng thái</th><th>Sửa đổi gần nhất</th><th>Thao tác</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Mã BV</th>
+              <th>Tiêu đề</th>
+              <th>Bộ môn</th>
+              <th>Dự án</th>
+              <th>Rev</th>
+              <th>Trạng thái</th>
+              <th>Sửa đổi gần nhất</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
           <tbody>
             {drawings.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có bản vẽ</td></tr>
+              <tr>
+                <td colSpan={8}>
+                  <EmptyState
+                    icon="📐"
+                    title="Chưa có bản vẽ"
+                    description="Bấm nút 'Thêm bản vẽ' để bắt đầu"
+                  />
+                </td>
+              </tr>
             ) : drawings.map(d => (
               <tr key={d.id}>
-                <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{d.drawingCode}</span></td>
-                <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{d.title}</td>
-                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${discColor[d.discipline]}20`, color: discColor[d.discipline] }}>{discLabel[d.discipline] || d.discipline}</span></td>
-                <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{d.project.projectCode}</td>
-                <td className="text-xs font-mono font-bold" style={{ color: '#0ea5e9' }}>{d.currentRev}</td>
-                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${statusColor[d.status]}20`, color: statusColor[d.status] }}>{statusLabel[d.status]}</span></td>
+                <td>
+                  <span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>
+                    {d.drawingCode}
+                  </span>
+                </td>
+                <td className="text-xs" style={{ color: 'var(--text-primary)' }}>
+                  {d.title}
+                </td>
+                <td>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{
+                      background: `${discColor[d.discipline]}20`,
+                      color: discColor[d.discipline],
+                    }}
+                  >
+                    {discLabel[d.discipline] || d.discipline}
+                  </span>
+                </td>
+                <td>
+                  <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {d.project.projectCode}
+                  </span>
+                </td>
+                <td>
+                  <span className="font-mono text-xs font-bold" style={{ color: SEMANTIC_COLORS.info.solid }}>
+                    {d.currentRev}
+                  </span>
+                </td>
+                <td>
+                  <StatusBadge category="drawing" status={d.status} />
+                </td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {d.revisions[0] ? `${d.revisions[0].revision} — ${formatDate(d.revisions[0].issuedDate)}` : '—'}
+                  {d.revisions[0]
+                    ? `${d.revisions[0].revision} — ${formatDate(d.revisions[0].issuedDate)}`
+                    : '—'}
                 </td>
                 <td>
                   <div className="flex gap-1">
                     {(TRANSITIONS[d.status] || []).map(t => (
-                      <button
+                      <Button
                         key={t.next}
+                        variant={t.variant}
+                        size="sm"
                         onClick={() => handleTransition(d.id, t.next)}
-                        disabled={actionLoading === d.id}
-                        className="text-xs px-2 py-1 rounded font-bold transition-colors"
-                        style={{ background: `${t.color}20`, color: t.color }}
+                        loading={actionLoading === d.id}
                       >
                         {t.label}
-                      </button>
+                      </Button>
                     ))}
-                    {actionLoading === d.id && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>⏳</span>}
                   </div>
                 </td>
               </tr>

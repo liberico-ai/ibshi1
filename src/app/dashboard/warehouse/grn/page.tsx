@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
+import { PageHeader, Button, EmptyState, Modal, KPICard, SelectField } from '@/components/ui'
 
 interface GRN {
   id: string; type: string; reason: string; quantity: number; referenceNo: string | null;
@@ -101,11 +102,11 @@ export default function GRNPage() {
     setSubmitting(false)
 
     if (res.ok) {
-      alert(`✅ Đã nhận ${validItems.length} mục. PO status: ${res.poStatus}`)
+      alert(`Đã nhận ${validItems.length} mục. PO status: ${res.poStatus}`)
       setShowReceiveForm(false)
       loadReceipts()
     } else {
-      alert('❌ Lỗi: ' + (res.message || 'Không rõ'))
+      alert('Lỗi: ' + (res.message || 'Không rõ'))
     }
   }
 
@@ -115,97 +116,200 @@ export default function GRNPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📦 Nhận hàng (GRN)</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{receipts.length} phiếu nhận • Tổng SL: {formatNumber(totalQty)}</p>
-        </div>
-        <button onClick={openReceiveForm} className="btn-primary">+ Nhận hàng từ PO</button>
+      <PageHeader
+        title="Nhận hàng (GRN)"
+        subtitle={`${receipts.length} phiếu nhận`}
+        actions={
+          <Button variant="accent" onClick={openReceiveForm}>
+            + Nhận hàng từ PO
+          </Button>
+        }
+      />
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <KPICard
+          label="Phiếu nhận"
+          value={receipts.length}
+          icon={<span>📦</span>}
+        />
+        <KPICard
+          label="Tổng SL nhận"
+          value={formatNumber(totalQty)}
+          icon={<span>📊</span>}
+          accentColor="var(--success)"
+        />
+        <KPICard
+          label="Vật tư đã nhận"
+          value={new Set(receipts.map(r => r.material?.materialCode).filter(Boolean)).size}
+          icon={<span>🔩</span>}
+          accentColor="var(--info)"
+        />
       </div>
 
-      {/* ── Receive Form Modal ── */}
-      {showReceiveForm && (
-        <div className="card p-6 space-y-4" style={{ border: '2px solid var(--accent)', background: 'var(--ibs-red-50)' }}>
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-bold" style={{ color: 'var(--accent)' }}>Nhận hàng theo PO</h2>
-            <button onClick={() => setShowReceiveForm(false)} className="btn-ghost text-sm">✕ Đóng</button>
-          </div>
-
+      {/* Receive Form Modal */}
+      <Modal
+        open={showReceiveForm}
+        onClose={() => setShowReceiveForm(false)}
+        title="Nhận hàng theo PO"
+        size="lg"
+        actions={
+          selectedPO && receiveItems.length > 0 ? (
+            <Button variant="accent" onClick={submitReceive} loading={submitting}>
+              Xác nhận nhận hàng
+            </Button>
+          ) : undefined
+        }
+      >
+        <div className="space-y-4">
           {/* PO Selector */}
-          <div>
-            <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Chọn PO</label>
-            <select className="input" onChange={e => selectPO(e.target.value)} defaultValue="">
-              <option value="" disabled>— Chọn PO —</option>
-              {poList.map(po => (
-                <option key={po.id} value={po.id}>{po.poCode} — {po.vendor?.name || 'N/A'} ({po.status})</option>
-              ))}
-            </select>
-          </div>
+          <SelectField
+            label="Chọn PO"
+            value=""
+            onChange={e => selectPO(e.target.value)}
+            options={[
+              { value: '', label: '— Chọn PO —' },
+              ...poList.map(po => ({
+                value: po.id,
+                label: `${po.poCode} — ${po.vendor?.name || 'N/A'} (${po.status})`,
+              })),
+            ]}
+          />
 
-          {/* Items */}
+          {/* Items Table */}
           {selectedPO && receiveItems.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Danh sách vật tư ({selectedPO.poCode})</h3>
-              <table className="data-table">
-                <thead>
-                  <tr><th>Vật tư</th><th>Còn lại</th><th>SL Nhận</th><th>Heat No.</th><th>Lot No.</th><th>Ghi chú</th></tr>
-                </thead>
-                <tbody>
-                  {receiveItems.map((item, idx) => (
-                    <tr key={item.poItemId}>
-                      <td className="text-xs">{item.materialName}</td>
-                      <td className="text-xs font-bold">{item.maxQty} {item.unit}</td>
-                      <td>
-                        <input type="number" min={0} max={item.maxQty} value={item.receivedQty || ''}
-                          onChange={e => updateItem(idx, 'receivedQty', Math.min(Number(e.target.value), item.maxQty))}
-                          className="input" style={{ width: '80px', padding: '4px 8px', fontSize: '0.8rem' }} />
-                      </td>
-                      <td>
-                        <input type="text" value={item.heatNumber} placeholder="Heat"
-                          onChange={e => updateItem(idx, 'heatNumber', e.target.value)}
-                          className="input" style={{ width: '90px', padding: '4px 8px', fontSize: '0.8rem' }} />
-                      </td>
-                      <td>
-                        <input type="text" value={item.lotNumber} placeholder="Lot"
-                          onChange={e => updateItem(idx, 'lotNumber', e.target.value)}
-                          className="input" style={{ width: '90px', padding: '4px 8px', fontSize: '0.8rem' }} />
-                      </td>
-                      <td>
-                        <input type="text" value={item.notes} placeholder="Ghi chú"
-                          onChange={e => updateItem(idx, 'notes', e.target.value)}
-                          className="input" style={{ width: '120px', padding: '4px 8px', fontSize: '0.8rem' }} />
-                      </td>
+              <h3 className="font-heading text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                Danh sách vật tư ({selectedPO.poCode})
+              </h3>
+              <div className="dt-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Vật tư</th>
+                      <th>Còn lại</th>
+                      <th>SL Nhận</th>
+                      <th>Heat No.</th>
+                      <th>Lot No.</th>
+                      <th>Ghi chú</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button onClick={submitReceive} disabled={submitting} className="btn-accent">
-                {submitting ? '⏳ Đang xử lý...' : '✅ Xác nhận nhận hàng'}
-              </button>
+                  </thead>
+                  <tbody>
+                    {receiveItems.map((item, idx) => (
+                      <tr key={item.poItemId}>
+                        <td className="text-xs">{item.materialName}</td>
+                        <td>
+                          <span className="font-mono text-xs font-bold">
+                            {item.maxQty} {item.unit}
+                          </span>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min={0}
+                            max={item.maxQty}
+                            value={item.receivedQty || ''}
+                            onChange={e => updateItem(idx, 'receivedQty', Math.min(Number(e.target.value), item.maxQty))}
+                            className="input font-mono"
+                            style={{ width: '80px', padding: '4px 8px', fontSize: '0.8rem' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={item.heatNumber}
+                            placeholder="Heat"
+                            onChange={e => updateItem(idx, 'heatNumber', e.target.value)}
+                            className="input font-mono"
+                            style={{ width: '90px', padding: '4px 8px', fontSize: '0.8rem' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={item.lotNumber}
+                            placeholder="Lot"
+                            onChange={e => updateItem(idx, 'lotNumber', e.target.value)}
+                            className="input font-mono"
+                            style={{ width: '90px', padding: '4px 8px', fontSize: '0.8rem' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={item.notes}
+                            placeholder="Ghi chú"
+                            onChange={e => updateItem(idx, 'notes', e.target.value)}
+                            className="input"
+                            style={{ width: '120px', padding: '4px 8px', fontSize: '0.8rem' }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
           {selectedPO && receiveItems.length === 0 && (
-            <p className="text-sm" style={{ color: 'var(--success)' }}>✅ PO này đã nhận đủ tất cả vật tư.</p>
+            <EmptyState
+              icon="✅"
+              title="PO đã nhận đủ"
+              description="PO này đã nhận đủ tất cả vật tư."
+            />
           )}
         </div>
-      )}
+      </Modal>
 
-      {/* ── Receipt History ── */}
-      <div className="card overflow-hidden">
+      {/* Receipt History Table */}
+      <div className="dt-wrapper">
         <table className="data-table">
-          <thead><tr><th>PO</th><th>Vật tư</th><th>SL</th><th>ĐVT</th><th>Heat No.</th><th>Lot No.</th><th>Ghi chú</th><th>Ngày</th></tr></thead>
+          <thead>
+            <tr>
+              <th>PO</th>
+              <th>Vật tư</th>
+              <th>SL</th>
+              <th>ĐVT</th>
+              <th>Heat No.</th>
+              <th>Lot No.</th>
+              <th>Ghi chú</th>
+              <th>Ngày</th>
+            </tr>
+          </thead>
           <tbody>
             {receipts.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có phiếu nhận</td></tr>
+              <tr>
+                <td colSpan={8}>
+                  <EmptyState icon="📦" title="Chưa có phiếu nhận" description="Chưa có phiếu nhận hàng nào" />
+                </td>
+              </tr>
             ) : receipts.map(r => (
               <tr key={r.id}>
-                <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{r.referenceNo || '—'}</span></td>
-                <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{r.material ? `${r.material.materialCode} — ${r.material.name}` : '—'}</td>
-                <td className="text-xs font-bold" style={{ color: '#16a34a' }}>{formatNumber(r.quantity)}</td>
+                <td>
+                  <span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>
+                    {r.referenceNo || '—'}
+                  </span>
+                </td>
+                <td className="text-xs" style={{ color: 'var(--text-primary)' }}>
+                  {r.material ? `${r.material.materialCode} — ${r.material.name}` : '—'}
+                </td>
+                <td>
+                  <span className="font-mono text-xs font-bold" style={{ color: 'var(--success)' }}>
+                    {formatNumber(r.quantity)}
+                  </span>
+                </td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.material?.unit || '—'}</td>
-                <td className="text-xs font-mono" style={{ color: '#0ea5e9' }}>{r.heatNumber || '—'}</td>
-                <td className="text-xs font-mono" style={{ color: '#f59e0b' }}>{r.lotNumber || '—'}</td>
+                <td>
+                  <span className="font-mono text-xs" style={{ color: 'var(--info)' }}>
+                    {r.heatNumber || '—'}
+                  </span>
+                </td>
+                <td>
+                  <span className="font-mono text-xs" style={{ color: 'var(--warning)' }}>
+                    {r.lotNumber || '—'}
+                  </span>
+                </td>
                 <td className="text-xs max-w-32 truncate" style={{ color: 'var(--text-muted)' }}>{r.notes || '—'}</td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(r.createdAt)}</td>
               </tr>

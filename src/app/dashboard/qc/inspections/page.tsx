@@ -3,21 +3,21 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { PageHeader, StatusBadge, EmptyState } from '@/components/ui'
 
-interface InspectionRecord {
-  id: string; inspectionCode: string; type: string; status: string; result: string | null;
-  inspectionDate: string | null; createdAt: string;
-  workOrder: { woCode: string } | null
-  items: { id: string }[]
+interface Inspection {
+  id: string; inspectionCode: string; type: string; stepCode: string;
+  status: string; totalItems: number; passedItems: number; failedItems: number;
+  inspectedAt: string | null; createdAt: string;
 }
 
-const typeLabel: Record<string, string> = { DIMENSIONAL: 'Kích thước', VISUAL: 'Ngoại quan', NDT: 'NDT', PRESSURE: 'Áp lực', WELDING: 'Hàn', PAINTING: 'Sơn' }
-const statusLabel: Record<string, string> = { PENDING: 'Chờ', IN_PROGRESS: 'Đang KT', COMPLETED: 'Xong', FAILED: 'Không đạt' }
-const statusColor: Record<string, string> = { PENDING: '#888', IN_PROGRESS: '#0ea5e9', COMPLETED: '#16a34a', FAILED: '#dc2626' }
-const resultColor: Record<string, string> = { PASS: '#16a34a', FAIL: '#dc2626', CONDITIONAL: '#f59e0b' }
+const QC_TYPES: Record<string, string> = {
+  material_incoming: 'Nghiệm thu VT', ndt: 'NDT', pressure_test: 'Thử áp',
+  dimensional: 'Kích thước', visual: 'Trực quan', fat: 'FAT', sat: 'SAT',
+}
 
 export default function InspectionsPage() {
-  const [inspections, setInspections] = useState<InspectionRecord[]>([])
+  const [inspections, setInspections] = useState<Inspection[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -29,31 +29,36 @@ export default function InspectionsPage() {
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
 
-  const passCount = inspections.filter(i => i.result === 'PASS').length
-  const failCount = inspections.filter(i => i.result === 'FAIL').length
+  const passCount = inspections.filter(i => i.status === 'PASSED').length
+  const failCount = inspections.filter(i => i.status === 'FAILED').length
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🔍 Kiểm tra chất lượng</h1>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{inspections.length} lần kiểm tra • ✓ {passCount} đạt • ✗ {failCount} không đạt</p>
-      </div>
+      <PageHeader
+        title="Kiểm tra chất lượng"
+        subtitle={`${inspections.length} biên bản · ✓ ${passCount} đạt · ✗ ${failCount} không đạt`}
+      />
 
-      <div className="card overflow-hidden">
+      <div className="dt-wrapper">
         <table className="data-table">
-          <thead><tr><th>Mã KT</th><th>WO</th><th>Loại</th><th>Trạng thái</th><th>Kết quả</th><th>Items</th><th>Ngày</th></tr></thead>
+          <thead>
+            <tr><th>Mã KT</th><th>Loại</th><th>Bước WF</th><th>Trạng thái</th><th>Checklist</th><th>Ngày KT</th></tr>
+          </thead>
           <tbody>
             {inspections.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có kiểm tra</td></tr>
+              <tr><td colSpan={6}><EmptyState icon="🔍" title="Chưa có biên bản kiểm tra" /></td></tr>
             ) : inspections.map(i => (
               <tr key={i.id}>
-                <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{i.inspectionCode}</span></td>
-                <td className="text-xs font-mono" style={{ color: '#0ea5e9' }}>{i.workOrder?.woCode || '—'}</td>
-                <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{typeLabel[i.type] || i.type}</td>
-                <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${statusColor[i.status] || '#888'}20`, color: statusColor[i.status] || '#888' }}>{statusLabel[i.status] || i.status}</span></td>
-                <td>{i.result ? <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${resultColor[i.result] || '#888'}20`, color: resultColor[i.result] || '#888' }}>{i.result}</span> : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                <td className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{i.items?.length || 0}</td>
-                <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{i.inspectionDate ? formatDate(i.inspectionDate) : '—'}</td>
+                <td><span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent)' }}>{i.inspectionCode}</span></td>
+                <td>{QC_TYPES[i.type] || i.type}</td>
+                <td className="font-mono" style={{ color: 'var(--text-muted)' }}>{i.stepCode}</td>
+                <td><StatusBadge category="task" status={i.status === 'PASSED' ? 'DONE' : i.status === 'FAILED' ? 'RETURNED' : i.status === 'CONDITIONAL' ? 'AWAITING_REVIEW' : 'OPEN'} /></td>
+                <td>
+                  {i.totalItems > 0 ? (
+                    <span className="font-mono">{i.passedItems}/{i.totalItems}</span>
+                  ) : '—'}
+                </td>
+                <td style={{ color: 'var(--text-muted)' }}>{i.inspectedAt ? formatDate(i.inspectedAt) : '—'}</td>
               </tr>
             ))}
           </tbody>

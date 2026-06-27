@@ -4,8 +4,12 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
-import { SearchBar, Pagination } from '@/components/SearchPagination'
-import { PageHeader, StatCard, Button } from '@/components/ui'
+import { SearchBar } from '@/components/SearchPagination'
+import {
+  PageHeader, Button, FilterBar, StatusBadge,
+  EmptyState, KPICard, Modal, InputField, SelectField, TextareaField,
+  Pagination,
+} from '@/components/ui'
 import { Clock } from 'lucide-react'
 
 interface WorkOrder {
@@ -18,12 +22,13 @@ interface WorkOrder {
 interface ProjectOption { id: string; projectCode: string; projectName: string }
 interface PaginationData { page: number; limit: number; total: number; totalPages: number }
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; border: string }> = {
-  OPEN: { label: 'Chờ', bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' },
-  IN_PROGRESS: { label: 'Đang chạy', bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
-  COMPLETED: { label: 'Hoàn thành', bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
-  CANCELLED: { label: 'Đã hủy', bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
-}
+const STATUS_FILTERS = [
+  { value: '', label: 'Tất cả' },
+  { value: 'OPEN', label: 'Chờ' },
+  { value: 'IN_PROGRESS', label: 'Đang chạy' },
+  { value: 'COMPLETED', label: 'Hoàn thành' },
+  { value: 'CANCELLED', label: 'Đã hủy' },
+]
 
 export default function ProductionPage() {
   const router = useRouter()
@@ -36,16 +41,12 @@ export default function ProductionPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
-  useEffect(() => { loadProjects() }, [])
-  useEffect(() => { setPage(1) }, [search, statusFilter])
-  useEffect(() => { loadData() }, [search, statusFilter, page])
-
-  async function loadProjects() {
+  const loadProjects = async () => {
     const res = await apiFetch('/api/projects')
     if (res.ok) setProjects(res.projects)
   }
 
-  async function loadData() {
+  const loadData = async () => {
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     if (search) params.set('search', search)
@@ -55,7 +56,7 @@ export default function ProductionPage() {
     setLoading(false)
   }
 
-  async function handleAction(e: React.MouseEvent, id: string, action: string) {
+  const handleAction = async (e: React.MouseEvent, id: string, action: string) => {
     e.stopPropagation()
     const res = await apiFetch(`/api/production/${id}`, {
       method: 'PUT', body: JSON.stringify({ action }),
@@ -63,10 +64,15 @@ export default function ProductionPage() {
     if (res.ok) loadData()
   }
 
+  useEffect(() => { loadProjects() }, [])
+  useEffect(() => { setPage(1) }, [search, statusFilter])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadData() }, [search, statusFilter, page])
+
   if (loading) return (
     <div className="space-y-4 animate-fade-in">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="h-24 rounded-xl animate-pulse" style={{ background: 'var(--bg-card)' }} />
+        <div key={i} className="h-24 rounded-xl skeleton" />
       ))}
     </div>
   )
@@ -74,7 +80,6 @@ export default function ProductionPage() {
   const openCount = workOrders.filter(w => w.status === 'OPEN').length
   const inProgressCount = workOrders.filter(w => w.status === 'IN_PROGRESS').length
   const completedCount = workOrders.filter(w => w.status === 'COMPLETED').length
-  const cancelledCount = workOrders.filter(w => w.status === 'CANCELLED').length
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -86,37 +91,46 @@ export default function ProductionPage() {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-4 gap-4 stagger-children">
-        <StatCard label="Tổng WO" value={pagination.total} color="#0a2540" icon={<span style={{ fontSize: 20 }}>🏭</span>} />
-        <StatCard label="Chờ bắt đầu" value={openCount} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>⏳</span>} />
-        <StatCard label="Đang chạy" value={inProgressCount} color="#2563eb" icon={<span style={{ fontSize: 20 }}>⚡</span>} />
-        <StatCard label="Hoàn thành" value={completedCount} color="#16a34a" icon={<span style={{ fontSize: 20 }}>✅</span>} />
+        <KPICard label="Tổng WO" value={pagination.total} accentColor="var(--ink)" icon={<span style={{ fontSize: 20 }}>🏭</span>} />
+        <KPICard label="Chờ bắt đầu" value={openCount} accentColor="var(--warning, #C97A0E)" icon={<span style={{ fontSize: 20 }}>⏳</span>} />
+        <KPICard label="Đang chạy" value={inProgressCount} accentColor="var(--info, #2D6CB5)" icon={<span style={{ fontSize: 20 }}>⚡</span>} />
+        <KPICard label="Hoàn thành" value={completedCount} accentColor="var(--success, #1E8E5A)" icon={<span style={{ fontSize: 20 }}>✅</span>} />
       </div>
 
-      {showCreate && <CreateWOForm projects={projects} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); loadData() }} />}
+      <CreateWOModal
+        open={showCreate}
+        projects={projects}
+        onClose={() => setShowCreate(false)}
+        onCreated={() => { setShowCreate(false); loadData() }}
+      />
 
-      <div className="flex gap-3 items-center">
-        <div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã WO, mô tả..." /></div>
-        <div className="flex gap-2">
-          {[{ value: '', label: 'Tất cả' }, ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ value: k, label: v.label }))].map((f) => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)}
-              className={`filter-pill ${statusFilter === f.value ? 'active' : ''}`}>{f.label}</button>
-          ))}
-        </div>
-      </div>
+      <FilterBar
+        filters={STATUS_FILTERS}
+        value={statusFilter}
+        onChange={setStatusFilter}
+        actions={
+          <div className="w-96">
+            <SearchBar value={search} onChange={setSearch} placeholder="Tìm mã WO, mô tả..." />
+          </div>
+        }
+      />
 
       {/* WO Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {workOrders.map((wo) => {
-          const cfg = STATUS_CONFIG[wo.status] || STATUS_CONFIG.OPEN
           const project = projects.find(p => p.id === wo.projectId)
           return (
-            <div key={wo.id} className="card p-5 cursor-pointer hover:shadow-md transition-shadow" style={{ borderTop: `3px solid ${cfg.border}` }} onClick={() => router.push(`/dashboard/production/${wo.id}`)}>
+            <div
+              key={wo.id}
+              className="card p-5 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => router.push(`/dashboard/production/${wo.id}`)}
+            >
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <span className="font-mono text-xs font-bold" style={{ color: 'var(--primary)' }}>{wo.woCode}</span>
                   <p className="text-sm font-medium mt-1" style={{ color: 'var(--text-primary)' }}>{wo.description}</p>
                 </div>
-                <span className="badge" style={{ background: cfg.bg, color: cfg.color, borderColor: cfg.border, borderWidth: '1px' }}>{cfg.label}</span>
+                <StatusBadge category="production" status={wo.status} />
               </div>
               <div className="space-y-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
                 {project && <div>Dự án: <span style={{ color: 'var(--text-secondary)' }}>{project.projectCode}</span></div>}
@@ -125,7 +139,7 @@ export default function ProductionPage() {
                   <Clock size={10} />
                   {formatDate(wo.plannedStart)} → {wo.plannedEnd ? formatDate(wo.plannedEnd) : '?'}
                 </div>}
-                <div>Vật tư: <span className="font-semibold" style={{ color: 'var(--primary)' }}>{wo.materialIssueCount}</span> lượt</div>
+                <div>Vật tư: <span className="font-mono font-semibold" style={{ color: 'var(--primary)' }}>{wo.materialIssueCount}</span> lượt</div>
               </div>
               <div className="flex gap-2 mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
                 {wo.status === 'OPEN' && <Button variant="outline" size="sm" onClick={(e) => handleAction(e, wo.id, 'start')}>Bắt đầu</Button>}
@@ -136,18 +150,19 @@ export default function ProductionPage() {
           )
         })}
         {workOrders.length === 0 && (
-          <div className="col-span-3 card p-12 text-center">
-            <svg className="mx-auto mb-3" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /></svg>
-            <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Chưa có lệnh sản xuất</p>
+          <div className="col-span-3">
+            <EmptyState icon="🏭" title="Chưa có lệnh sản xuất" description="Tạo lệnh sản xuất mới để bắt đầu" />
           </div>
         )}
       </div>
-      <Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} onPageChange={setPage} />
+      <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={setPage} />
     </div>
   )
 }
 
-function CreateWOForm({ projects, onClose, onCreated }: { projects: ProjectOption[]; onClose: () => void; onCreated: () => void }) {
+function CreateWOModal({ open, projects, onClose, onCreated }: {
+  open: boolean; projects: ProjectOption[]; onClose: () => void; onCreated: () => void
+}) {
   const [form, setForm] = useState({ woCode: '', projectId: '', description: '', teamCode: 'TO-01', plannedStart: '', plannedEnd: '' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -162,30 +177,61 @@ function CreateWOForm({ projects, onClose, onCreated }: { projects: ProjectOptio
   }
 
   return (
-    <div className="card p-6 animate-fade-in">
-      <h3 className="text-base font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Tạo lệnh sản xuất</h3>
-      {error && <div className="mb-3 p-2 rounded text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>{error}</div>}
-      <form onSubmit={handleSubmit} className="grid grid-cols-3 gap-4">
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Mã WO *</label>
-          <input className="input" value={form.woCode} onChange={(e) => setForm({ ...form, woCode: e.target.value })} placeholder="WO-2026-001" required /></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Dự án *</label>
-          <select className="input" value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} required>
-            <option value="">Chọn dự án</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
-          </select></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Tổ SX *</label>
-          <input className="input" value={form.teamCode} onChange={(e) => setForm({ ...form, teamCode: e.target.value })} required /></div>
-        <div className="col-span-3"><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Mô tả *</label>
-          <textarea className="input" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Ngày bắt đầu</label>
-          <input className="input" type="date" value={form.plannedStart} onChange={(e) => setForm({ ...form, plannedStart: e.target.value })} /></div>
-        <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Ngày kết thúc</label>
-          <input className="input" type="date" value={form.plannedEnd} onChange={(e) => setForm({ ...form, plannedEnd: e.target.value })} /></div>
-        <div className="flex items-end gap-3 justify-end">
+    <Modal open={open} onClose={onClose} title="Tạo lệnh sản xuất" size="lg"
+      actions={
+        <form onSubmit={handleSubmit} className="flex gap-3 w-full justify-end">
           <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
           <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo WO'}</Button>
+        </form>
+      }
+    >
+      {error && <div className="mb-3 p-2 rounded text-sm" style={{ background: 'var(--danger-bg, #fef2f2)', color: 'var(--danger, #dc2626)', border: '1px solid var(--danger-border, #fecaca)' }}>{error}</div>}
+      <form onSubmit={handleSubmit} className="grid grid-cols-3 gap-4">
+        <InputField
+          label="Mã WO *"
+          value={form.woCode}
+          onChange={(e) => setForm({ ...form, woCode: e.target.value })}
+          placeholder="WO-2026-001"
+          required
+        />
+        <SelectField
+          label="Dự án *"
+          value={form.projectId}
+          onChange={(e) => setForm({ ...form, projectId: e.target.value })}
+          options={[
+            { value: '', label: 'Chọn dự án' },
+            ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))
+          ]}
+          required
+        />
+        <InputField
+          label="Tổ SX *"
+          value={form.teamCode}
+          onChange={(e) => setForm({ ...form, teamCode: e.target.value })}
+          required
+        />
+        <div className="col-span-3">
+          <TextareaField
+            label="Mô tả *"
+            rows={2}
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            required
+          />
         </div>
+        <InputField
+          label="Ngày bắt đầu"
+          type="date"
+          value={form.plannedStart}
+          onChange={(e) => setForm({ ...form, plannedStart: e.target.value })}
+        />
+        <InputField
+          label="Ngày kết thúc"
+          type="date"
+          value={form.plannedEnd}
+          onChange={(e) => setForm({ ...form, plannedEnd: e.target.value })}
+        />
       </form>
-    </div>
+    </Modal>
   )
 }

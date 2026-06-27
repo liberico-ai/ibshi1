@@ -34,10 +34,11 @@ export type UpdateWorkOrderInput = z.infer<typeof updateWorkOrderSchema>
 
 export const createJobCardSchema = z.object({
   workOrderId: z.string().min(1, 'Lệnh sản xuất là bắt buộc'),
-  teamCode: z.string().min(1, 'Mã tổ là bắt buộc'),
+  teamCode: z.string().optional(),
   workType: z.string().min(1, 'Loại công việc là bắt buộc'),
   description: z.string().optional(),
   plannedQty: z.number().positive().optional(),
+  actualQty: z.number().min(0).optional(),
   unit: z.string().default('kg'),
   workDate: z.string().min(1, 'Ngày làm việc là bắt buộc'),
   startTime: z.string().optional(),

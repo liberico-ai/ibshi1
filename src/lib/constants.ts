@@ -262,12 +262,15 @@ export const MENU_ITEMS = [
   { key: 'admin', label: 'Quản trị hệ thống', labelEn: 'Admin Dashboard', icon: 'Shield', href: '/dashboard/admin', roles: ['R01', 'R10'], group: 'system' },
   { key: 'work-templates', label: 'Quy trình & Template', labelEn: 'Templates', icon: 'Settings', href: '/dashboard/work/templates', roles: ['R01', 'R02', 'R10'], group: 'system' },
   { key: 'settings', label: 'Cài đặt', labelEn: 'Settings', icon: 'Settings', href: '/dashboard/settings', roles: 'all', group: 'system' },
+  { key: 'style-guide', label: 'Design System', labelEn: 'Style Guide', icon: 'Ruler', href: '/dashboard/style-guide', roles: ['R10'], group: 'system' },
 ] as const
 
-// [ẨN tạm các menu gắn luồng 36 bước cũ để test hệ động — xóa Set này để bật lại]
+// [ẨN tạm các module chưa ổn — P1 đã hé lộ 14 trang hoạt động tốt]
 export const HIDDEN_MENU_KEYS = new Set<string>([
-  'design', 'bom', 'drawings', 'eco',
-  'procurement', 'purchase-requests', 'purchase-orders', 'grn', 'material-issue', 'movements',
-  'production', 'jobcards', 'workshops', 'delivery',
-  'qc', 'inspections', 'itp', 'ncr', 'certificates', 'mill-certs', 'fat-sat', 'mrb',
+  'design', 'purchase-requests',
+  'material-issue', 'movements', 'workshops', 'delivery', 'fat-sat',
 ])
+
+export const PAGE_ACCESS: Record<string, readonly string[] | 'all'> = Object.fromEntries(
+  MENU_ITEMS.map(item => [item.href, item.roles])
+)

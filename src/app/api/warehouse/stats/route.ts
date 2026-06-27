@@ -1,13 +1,16 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { withCache } from '@/lib/cache'
+
+const ALLOWED_ROLES = ['R01', 'R03', 'R03a', 'R05', 'R05a']
 
 // GET /api/warehouse/stats — Warehouse KPI dashboard
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
+    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
     const data = await withCache('warehouse:stats', 60, async () => {
       const [totalMaterials, materials, prPending, poActive, recentMovements, stockValueAgg] = await Promise.all([
