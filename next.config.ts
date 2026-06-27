@@ -22,6 +22,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  env: {
+    GIT_SHA: process.env.GIT_SHA || '',
+    BUILD_TIME: process.env.BUILD_TIME || '',
+  },
   // Allow large file uploads (50MB) — default 1MB blocks ZIP/RAR files
   experimental: {
     serverActions: {
