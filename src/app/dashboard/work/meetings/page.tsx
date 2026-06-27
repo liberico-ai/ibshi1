@@ -82,7 +82,7 @@ function MeetingsInner() {
     setBusy(true)
     const res = await apiFetch('/api/work/meetings', {
       method: 'POST',
-      body: JSON.stringify({ title: title.trim(), projectId: projectId || undefined, taskId, agenda: agenda.trim() || undefined, location: location.trim() || undefined, startsAt, endsAt: endsAt || undefined, inviteUserIds: invites.map((x) => x.id), draftId }),
+      body: JSON.stringify({ title: title.trim(), projectId: projectId || undefined, taskId, agenda: agenda.trim() || undefined, location: location.trim() || undefined, startsAt: new Date(startsAt).toISOString(), endsAt: endsAt ? new Date(endsAt).toISOString() : undefined, inviteUserIds: invites.map((x) => x.id), draftId }),
     })
     setBusy(false)
     if (res.ok) {

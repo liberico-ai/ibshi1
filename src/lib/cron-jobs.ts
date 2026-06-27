@@ -1,7 +1,7 @@
 import prisma from '@/lib/db'
 import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
-import { formatDateTime, isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
+import { formatDateTime, formatTimeVN, isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
 
 const TEST_PROJECT_RE = /test/i
 
@@ -114,6 +114,20 @@ export async function runDailyDigest() {
   const totalBlocked = blockedTasks.length
   const totalExec = execTasks.length
 
+  // ── Meetings today (VN time) ──
+  const todayEndVN = new Date(`${todayVN}T23:59:59.999+07:00`)
+  const todayMeetings = await prisma.meeting.findMany({
+    where: { status: 'SCHEDULED', startsAt: { gte: todayStart, lte: todayEndVN } },
+    include: { invites: { select: { userId: true } } },
+    orderBy: { startsAt: 'asc' },
+  })
+  const meetingUserIds = new Set<string>()
+  for (const m of todayMeetings) for (const inv of m.invites) meetingUserIds.add(inv.userId)
+  const meetingUsers = meetingUserIds.size
+    ? await prisma.user.findMany({ where: { id: { in: [...meetingUserIds] } }, select: { id: true, fullName: true } })
+    : []
+  const meetingNameById = new Map(meetingUsers.map(u => [u.id, u.fullName]))
+
   // ── Build message ──
   const dateFmt = new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' })
   const dateStr = dateFmt.format(now)
@@ -134,6 +148,18 @@ export async function runDailyDigest() {
     if (hotProject) parts.push(`DA nhiều QH nhất: ${escapeHtml(hotProject[0])} (${hotProject[1]})`)
     if (hotAssignee) parts.push(`người: ${escapeHtml(hotAssignee[0])} (${hotAssignee[1]})`)
     lines.push(`🔥 <b>Điểm nóng:</b> ${parts.join('; ')}`)
+  }
+
+  // 📅 Lịch họp hôm nay
+  if (todayMeetings.length > 0) {
+    lines.push('')
+    lines.push(`📅 <b>LỊCH HỌP HÔM NAY (${todayMeetings.length})</b>`)
+    for (const m of todayMeetings) {
+      const time = formatTimeVN(m.startsAt)
+      const loc = m.location ? escapeHtml(m.location) : '—'
+      const attendees = m.invites.map(inv => meetingNameById.get(inv.userId) || 'NV').join(', ')
+      lines.push(`• ${time} ${escapeHtml(m.title)} · 📍 ${loc} · 👥 ${escapeHtml(attendees)}`)
+    }
   }
 
   // 🔺 Cần BLĐ quyết
@@ -204,5 +230,5 @@ export async function runDailyDigest() {
     await sendGroupMessage(message)
   }
 
-  return { overdue: totalOverdue, dueSoon: totalDueSoon, exec: totalExec, blocked: totalBlocked, projects: projectIds.size, sentAt: now.toISOString() }
+  return { overdue: totalOverdue, dueSoon: totalDueSoon, exec: totalExec, blocked: totalBlocked, meetings: todayMeetings.length, projects: projectIds.size, sentAt: now.toISOString() }
 }
