@@ -2,8 +2,8 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
-import { ROLES } from '@/lib/constants'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { ROLES, canEditForm, type FormKey } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import { TEMPLATES, type TemplateType } from '@/components/TemplateSelector'
@@ -50,6 +50,8 @@ function CreateInner() {
   const [projFiles, setProjFiles] = useState<ProjFile[]>([])
   const [userQuery, setUserQuery] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>(null)
+  const roleCode = useAuthStore(s => s.user?.roleCode || '')
+  const allowedTemplates = TEMPLATES.filter(t => canEditForm(t.value as FormKey, roleCode))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -240,39 +242,46 @@ function CreateInner() {
         </div>
       </div>
 
-      <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <h3 className="font-semibold" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>④ Biểu mẫu (tuỳ chọn)</h3>
-          {selectedTemplate && (
-            <button onClick={() => setSelectedTemplate(null)} className="text-xs px-2.5 py-1 rounded-lg" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer', background: 'none' }}>
-              ✕ Bỏ chọn
-            </button>
-          )}
+      {allowedTemplates.length === 0 ? (
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <h3 className="font-semibold mb-1" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>④ Biểu mẫu (tuỳ chọn)</h3>
+          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>(Vai trò của bạn không có biểu mẫu để đính kèm — tạo việc thường, người xử lý sẽ chọn biểu mẫu phù hợp)</div>
         </div>
-        <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Chọn loại biểu mẫu để mở sẵn khi vào chi tiết việc — upload dữ liệu sau khi tạo.</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-          {TEMPLATES.map((t) => {
-            const active = selectedTemplate === t.value
-            return (
-              <button key={t.value} onClick={() => setSelectedTemplate(active ? null : t.value)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '10px 14px', borderRadius: 10,
-                  border: active ? '2px solid #2563eb' : '1px solid var(--border)',
-                  background: active ? '#eff6ff' : 'var(--bg-secondary)',
-                  cursor: 'pointer', transition: 'all 0.15s',
-                }}>
-                <span style={{ fontSize: '1.2rem' }}>{t.icon}</span>
-                <div style={{ textAlign: 'left', minWidth: 0 }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: active ? '#1d4ed8' : 'var(--text-primary)' }}>{t.label}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.desc}</div>
-                </div>
-                {active && <span style={{ fontSize: '0.9rem', color: '#2563eb', marginLeft: 'auto', flexShrink: 0 }}>✓</span>}
+      ) : (
+        <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <h3 className="font-semibold" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>④ Biểu mẫu (tuỳ chọn)</h3>
+            {selectedTemplate && (
+              <button onClick={() => setSelectedTemplate(null)} className="text-xs px-2.5 py-1 rounded-lg" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer', background: 'none' }}>
+                ✕ Bỏ chọn
               </button>
-            )
-          })}
+            )}
+          </div>
+          <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Chỉ hiện biểu mẫu bạn được phép điền. Chọn để mở sẵn và upload sau khi tạo việc.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(allowedTemplates.length, 3)}, 1fr)`, gap: 8 }}>
+            {allowedTemplates.map((t) => {
+              const active = selectedTemplate === t.value
+              return (
+                <button key={t.value} onClick={() => setSelectedTemplate(active ? null : t.value)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '10px 14px', borderRadius: 10,
+                    border: active ? '2px solid #2563eb' : '1px solid var(--border)',
+                    background: active ? '#eff6ff' : 'var(--bg-secondary)',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}>
+                  <span style={{ fontSize: '1.2rem' }}>{t.icon}</span>
+                  <div style={{ textAlign: 'left', minWidth: 0 }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: active ? '#1d4ed8' : 'var(--text-primary)' }}>{t.label}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.desc}</div>
+                  </div>
+                  {active && <span style={{ fontSize: '0.9rem', color: '#2563eb', marginLeft: 'auto', flexShrink: 0 }}>✓</span>}
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {error && <div className="text-sm" style={{ color: '#e63946' }}>{error}</div>}
       <div className="flex gap-2">
