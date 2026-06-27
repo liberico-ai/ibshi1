@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { ROLES, canEditForm, type FormKey } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import { TEMPLATES, type TemplateType } from '@/components/TemplateSelector'
+import TemplateSelector from '@/components/TemplateSelector'
 
 interface Proj { id: string; projectCode: string; projectName: string }
 interface Usr { id: string; fullName?: string; username?: string; roleCode: string; isActive?: boolean; department?: { code: string; name: string } | null }
@@ -26,14 +27,44 @@ const TASK_TYPES = [
   { v: 'P4.3', l: 'Nghiệm thu chất lượng' },
 ]
 const inp: React.CSSProperties = { width: '100%', border: '1px solid var(--border)', borderRadius: 9, padding: '10px 12px', fontSize: '.88rem', background: '#f8fafc', color: 'var(--text-primary)' }
+const sectionStyle: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)' }
+
+// ── Stepper bar ──
+function Stepper({ step, hasTemplate }: { step: number; hasTemplate: boolean }) {
+  if (!hasTemplate) return null
+  const steps = [
+    { n: 1, label: 'Nội dung' },
+    { n: 2, label: 'Nhập biểu mẫu' },
+    { n: 3, label: 'Giao việc' },
+  ]
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 8 }}>
+      {steps.map((s, i) => (
+        <div key={s.n} style={{ display: 'flex', alignItems: 'center', flex: i < steps.length - 1 ? 1 : undefined }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20,
+            background: step === s.n ? '#1d4ed8' : step > s.n ? '#059669' : 'var(--bg-secondary)',
+            color: step >= s.n ? '#fff' : 'var(--text-muted)',
+            fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap',
+          }}>
+            {step > s.n ? '✓' : s.n}
+            <span>{s.label}</span>
+          </div>
+          {i < steps.length - 1 && (
+            <div style={{ flex: 1, height: 2, background: step > s.n ? '#059669' : 'var(--border)', margin: '0 4px' }} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function CreateInner() {
   const router = useRouter()
   const sp = useSearchParams()
   const parentId = sp.get('parent') || undefined
-  const fromId = sp.get('from') || undefined           // "Tạo việc tiếp theo" từ task nguồn (người giao)
+  const fromId = sp.get('from') || undefined
   const fromProject = sp.get('project') || ''
-  // id nháp ổn định để gom tệp đính kèm trước khi task có id thật
   const [draftId] = useState(() => `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
 
   const [projects, setProjects] = useState<Proj[]>([])
@@ -51,21 +82,29 @@ function CreateInner() {
   const [userQuery, setUserQuery] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>(null)
   const roleCode = useAuthStore(s => s.user?.roleCode || '')
+  const userId = useAuthStore(s => s.user?.id || '')
   const allowedTemplates = TEMPLATES.filter(t => canEditForm(t.value as FormKey, roleCode))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  // ── Stepper state (when template selected) ──
+  // phase 1 = form fill, phase 2 = upload template, phase 3 = reassign
+  const [phase, setPhase] = useState(1)
+  const [createdTaskId, setCreatedTaskId] = useState<string | null>(null)
+  const [savedPicks, setSavedPicks] = useState<Pick[]>([])
+  const [assigning, setAssigning] = useState(false)
 
   useEffect(() => {
     apiFetch('/api/projects?limit=100').then((r) => { if (r.ok) setProjects(r.projects || []) })
     apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) })
   }, [])
-  // Tải danh sách tài liệu của dự án (cả thư viện dự án + tệp trong các task) để cho chọn
+
   useEffect(() => {
     if (!projectId) { setProjFiles([]); return }
     apiFetch(`/api/work/project-files?projectId=${encodeURIComponent(projectId)}`)
       .then((r) => { if (r.ok) setProjFiles(r.files || []) })
   }, [projectId])
-  // Gợi ý phòng tự tính theo Loại việc + Tiêu đề + Mô tả (debounce)
+
   useEffect(() => {
     const text = `${title} ${description}`.trim()
     if (taskType === 'FREE' && !text) { setSugg([]); return }
@@ -76,45 +115,90 @@ function CreateInner() {
     return () => clearTimeout(h)
   }, [taskType, title, description])
 
-  // Giao cấp phòng: chỉ thêm chip "phòng". Khi tạo việc, hệ thống tự gắn TRƯỞNG PHÒNG
-  // — TRỪ KHI phòng đó đã có nhân sự cụ thể được chọn (thì bỏ qua trưởng phòng).
-  const addRole = (r: string) => {
-    if (picks.some((p) => p.role === r)) return
-    setPicks((prev) => [...prev, { role: r, label: `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || (ROLES as Record<string, { name: string }>)[r]?.name || r}` }])
-  }
-  const addUser = (u: Usr) => { if (!picks.some((p) => p.userId === u.id)) setPicks([...picks, { userId: u.id, label: `👤 ${u.fullName || u.username || u.id} (${u.username}) · ${deptNameOfUser(u)}` }]); setUserQuery('') }
+  // Warn if leaving during phase 2 (uploaded data but not yet assigned)
+  useEffect(() => {
+    if (phase !== 2) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [phase])
+
+  const addRole = useCallback((r: string) => {
+    setPicks((prev) => prev.some((p) => p.role === r) ? prev : [...prev, { role: r, label: `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || (ROLES as Record<string, { name: string }>)[r]?.name || r}` }])
+  }, [])
+  const addUser = useCallback((u: Usr) => {
+    setPicks((prev) => prev.some((p) => p.userId === u.id) ? prev : [...prev, { userId: u.id, label: `👤 ${u.fullName || u.username || u.id} (${u.username}) · ${deptNameOfUser(u)}` }])
+    setUserQuery('')
+  }, [])
   const addDoc = (kind: DocReq['kind']) => setDocs([...docs, { key: newKey(), kind, label: '' }])
 
+  // ── Submit: no template = 1-step; with template = create assigned to self, then phase 2 ──
   const submit = async () => {
     setError('')
     if (!title.trim()) { setError('Cần nhập tiêu đề'); return }
     if (picks.length === 0) { setError('Cần chọn ít nhất 1 nơi nhận'); return }
     setSubmitting(true)
+
+    const docsPayload = docs.filter((d) => d.label.trim()).map((d) => ({ kind: d.kind, label: d.label.trim(), fileAttachmentId: d.fileAttachmentId, key: d.key }))
+
+    if (!selectedTemplate) {
+      // ── 1-step: create and assign directly ──
+      const body = {
+        title: title.trim(), description: description.trim() || undefined,
+        projectId: projectId || undefined, parentId, taskType, priority,
+        deadline: deadline ? new Date(deadline).toISOString() : undefined,
+        assignees: picks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
+        docs: docsPayload, draftId, forwardedFromId: fromId,
+      }
+      const url = parentId ? `/api/work/tasks/${parentId}/subtasks` : '/api/work/tasks'
+      const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) })
+      setSubmitting(false)
+      if (res.ok) {
+        if (fromId) await apiFetch(`/api/work/tasks/${fromId}/finalize`, { method: 'POST', body: '{}' }).catch(() => {})
+        router.push(parentId ? `/dashboard/work/${parentId}` : fromId ? `/dashboard/work/${fromId}` : '/dashboard/work')
+      } else { setError(res.error || 'Lỗi tạo việc') }
+      return
+    }
+
+    // ── With template: create assigned to SELF, enter phase 2 ──
+    setSavedPicks([...picks])
     const body = {
       title: title.trim(), description: description.trim() || undefined,
       projectId: projectId || undefined, parentId, taskType, priority,
       deadline: deadline ? new Date(deadline).toISOString() : undefined,
-      assignees: picks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
-      docs: docs.filter((d) => d.label.trim()).map((d) => ({ kind: d.kind, label: d.label.trim(), fileAttachmentId: d.fileAttachmentId, key: d.key })),
-      draftId,
-      forwardedFromId: fromId,
-      template: selectedTemplate || undefined,
+      assignees: [{ userId, isPrimary: true }],
+      docs: docsPayload, draftId, forwardedFromId: fromId,
+      template: selectedTemplate,
     }
     const url = parentId ? `/api/work/tasks/${parentId}/subtasks` : '/api/work/tasks'
     const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) })
+    setSubmitting(false)
     if (res.ok) {
       if (fromId) await apiFetch(`/api/work/tasks/${fromId}/finalize`, { method: 'POST', body: '{}' }).catch(() => {})
-      setSubmitting(false)
-      const newId = res.task?.id
-      if (selectedTemplate && newId) {
-        router.push(`/dashboard/work/${newId}`)
-      } else {
-        router.push(parentId ? `/dashboard/work/${parentId}` : fromId ? `/dashboard/work/${fromId}` : '/dashboard/work')
-      }
-    } else { setSubmitting(false); setError(res.error || 'Lỗi tạo việc') }
+      setCreatedTaskId(res.task.id)
+      setPhase(2)
+    } else { setError(res.error || 'Lỗi tạo việc') }
   }
 
-  // Khoanh vùng tìm nhân sự theo phòng đã chọn (nếu có)
+  // ── Phase 3: reassign to intended recipients ──
+  const doReassign = async () => {
+    if (!createdTaskId || savedPicks.length === 0) return
+    setAssigning(true)
+    const res = await apiFetch(`/api/work/tasks/${createdTaskId}/reassign`, {
+      method: 'POST',
+      body: JSON.stringify({
+        assignees: savedPicks.map((p, i) => ({ role: p.role, userId: p.userId, isPrimary: i === 0 })),
+        note: 'Giao việc sau khi nhập biểu mẫu',
+      }),
+    })
+    setAssigning(false)
+    if (res.ok) {
+      setPhase(3)
+      setTimeout(() => router.push(`/dashboard/work/${createdTaskId}`), 600)
+    } else { setError(res.error || 'Lỗi giao việc') }
+  }
+
+  // ── Derived ──
   const selectedDeptCodes = picks.filter((p) => p.role).map((p) => ROLE_TO_DEPT[p.role!]).filter(Boolean)
   const filteredUsers = userQuery.trim()
     ? users
@@ -124,169 +208,294 @@ function CreateInner() {
         .filter((u) => !picks.some((p) => p.userId === u.id))
         .slice(0, 8)
     : []
+  const selectedProj = projects.find(p => p.id === projectId)
 
-  return (
-    <div className="space-y-4 animate-fade-in max-w-2xl">
-      <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{parentId ? '+ Tạo việc con' : fromId ? '+ Tạo việc tiếp theo' : '+ Tạo việc mới'}</h1>
+  // ════════════════════════════════════════════════════════
+  // PHASE 2: Upload biểu mẫu
+  // ════════════════════════════════════════════════════════
+  if (phase >= 2 && createdTaskId) {
+    const tplInfo = TEMPLATES.find(t => t.value === selectedTemplate)
+    return (
+      <div className="animate-fade-in" style={{ maxWidth: 920, margin: '0 auto' }}>
+        <Stepper step={phase} hasTemplate />
 
-      <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>① Dự án & nội dung</h3>
-        <div className="space-y-3">
-          <div><label className="text-sm font-semibold">Dự án</label>
-            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} style={inp}>
-              <option value="">(Không thuộc dự án)</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
-            </select></div>
-          <div><label className="text-sm font-semibold">Loại việc</label>
-            <select value={taskType} onChange={(e) => setTaskType(e.target.value)} style={inp}>
-              {TASK_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
-            </select></div>
-          <div><label className="text-sm font-semibold">Tiêu đề *</label><input value={title} onChange={(e) => setTitle(e.target.value)} style={inp} placeholder="VD: Đề xuất vật tư hàn cho dầm I" /></div>
-          <div><label className="text-sm font-semibold">Mô tả</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...inp, minHeight: 70 }} /></div>
-        </div>
-      </div>
+        {phase === 2 && (
+          <>
+            <div className="rounded-xl p-4 mb-4" style={{ background: '#eff6ff', border: '1px solid #93c5fd' }}>
+              <div className="text-sm font-semibold" style={{ color: '#1d4ed8' }}>
+                {tplInfo?.icon} Nhập biểu mẫu: {tplInfo?.label}
+              </div>
+              <div className="text-xs mt-1" style={{ color: '#1e40af' }}>
+                Upload và nhập dữ liệu bên dưới. Khi xong, bấm &quot;Giao việc&quot; để chuyển cho người xử lý.
+              </div>
+            </div>
 
-      <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>② Chuyển việc đến ai?</h3>
-        {sugg.length > 0 && (
-          <div className="rounded-lg p-3 mb-3" style={{ background: 'linear-gradient(135deg,#eff6ff,#f5f3ff)', border: '1px dashed #93c5fd' }}>
-            <div className="text-xs font-bold mb-2" style={{ color: '#1d4ed8' }}>✨ Gợi ý phòng ban (từ quy trình cũ)</div>
-            {sugg.map((s, i) => s.roleCode && (
-              <button key={i} onClick={() => addRole(s.roleCode!)} className="text-xs mr-2 mb-2 px-3 py-1.5 rounded-full font-semibold"
-                style={{ background: '#fff', border: '1px solid #bfdbfe', color: '#1d4ed8' }}>
-                + {s.departmentName || (ROLES as Record<string, { name: string }>)[s.roleCode]?.name} <span style={{ opacity: .7, fontWeight: 400 }}>({s.reason})</span>
+            <TemplateSelector
+              taskId={createdTaskId}
+              isEditable
+              projectCode={selectedProj?.projectCode}
+              project={selectedProj}
+              projectId={projectId || undefined}
+              taskTitle={title}
+              initialTemplate={selectedTemplate}
+            />
+
+            {error && <div className="text-sm mt-3" style={{ color: '#e63946' }}>{error}</div>}
+
+            <div className="flex gap-3 mt-4" style={{ position: 'sticky', bottom: 0, padding: '12px 0', background: 'var(--bg-primary)', zIndex: 10 }}>
+              <button
+                onClick={() => router.push(`/dashboard/work/${createdTaskId}`)}
+                className="text-sm px-4 py-2.5 rounded-lg"
+                style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+              >
+                Để sau
               </button>
+              <button
+                onClick={doReassign}
+                disabled={assigning}
+                className="btn-primary text-sm px-6 py-2.5 rounded-lg flex-1 font-semibold"
+                style={{ opacity: assigning ? 0.6 : 1 }}
+              >
+                {assigning ? '...Đang giao' : `② Giao việc cho ${savedPicks.map(p => p.label.replace(/^[🏢👤]\s*/, '')).join(', ')}`}
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === 3 && (
+          <div className="rounded-xl p-6 text-center" style={{ ...sectionStyle }}>
+            <div style={{ fontSize: '2rem', marginBottom: 8 }}>✅</div>
+            <div className="font-semibold" style={{ color: '#059669' }}>Đã tạo việc và giao thành công!</div>
+            <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Đang chuyển đến chi tiết công việc…</div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ════════════════════════════════════════════════════════
+  // PHASE 1: Form tạo việc
+  // ════════════════════════════════════════════════════════
+  return (
+    <div className="animate-fade-in" style={{ maxWidth: 920, margin: '0 auto' }}>
+      <h1 className="text-xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+        {parentId ? '+ Tạo việc con' : fromId ? '+ Tạo việc tiếp theo' : '+ Tạo việc mới'}
+      </h1>
+
+      <Stepper step={1} hasTemplate={!!selectedTemplate} />
+
+      <div className="space-y-4">
+        {/* ── ① Nội dung công việc ── */}
+        <div className="rounded-xl p-5" style={sectionStyle}>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>① Nội dung công việc</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-semibold">Dự án</label>
+              <select value={projectId} onChange={(e) => setProjectId(e.target.value)} style={inp}>
+                <option value="">(Không thuộc dự án)</option>
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-semibold">Loại việc</label>
+              <select value={taskType} onChange={(e) => setTaskType(e.target.value)} style={inp}>
+                {TASK_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-semibold">Tiêu đề *</label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} style={inp} placeholder="VD: Đề xuất vật tư hàn cho dầm I" />
+            </div>
+            <div>
+              <label className="text-sm font-semibold">Mô tả</label>
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...inp, minHeight: 70 }} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── ② Biểu mẫu (tuỳ chọn) ── */}
+        {allowedTemplates.length === 0 ? (
+          <div className="rounded-xl p-4" style={sectionStyle}>
+            <h3 className="font-semibold mb-1" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>② Biểu mẫu (tuỳ chọn)</h3>
+            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              (Vai trò của bạn không có biểu mẫu để đính kèm — tạo việc thường, người xử lý sẽ chọn biểu mẫu phù hợp)
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl p-5" style={sectionStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h3 className="font-semibold" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>② Biểu mẫu (tuỳ chọn)</h3>
+              {selectedTemplate && (
+                <button onClick={() => setSelectedTemplate(null)} className="text-xs px-2.5 py-1 rounded-lg"
+                  style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer', background: 'none' }}>
+                  ✕ Bỏ chọn
+                </button>
+              )}
+            </div>
+            <div className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+              Chỉ hiện biểu mẫu bạn được phép điền. Chọn để mở sẵn và upload sau khi tạo việc.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+              {allowedTemplates.map((t) => {
+                const active = selectedTemplate === t.value
+                return (
+                  <button key={t.value} onClick={() => setSelectedTemplate(active ? null : t.value)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '12px 14px', borderRadius: 10,
+                      border: active ? '2px solid #2563eb' : '1px solid var(--border)',
+                      background: active ? '#eff6ff' : 'var(--bg-secondary)',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                      minHeight: 56,
+                    }}>
+                    <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>{t.icon}</span>
+                    <div style={{ textAlign: 'left', minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: active ? '#1d4ed8' : 'var(--text-primary)' }}>{t.label}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{t.desc}</div>
+                    </div>
+                    {active && <span style={{ fontSize: '1rem', color: '#2563eb', flexShrink: 0 }}>✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── ③ Thời hạn & tài liệu ── */}
+        <div className="rounded-xl p-5" style={sectionStyle}>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>③ Thời hạn & tài liệu</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-sm font-semibold">Deadline</label>
+              <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={inp} />
+            </div>
+            <div>
+              <label className="text-sm font-semibold">Ưu tiên</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value)} style={inp}>
+                <option value="NORMAL">Bình thường</option>
+                <option value="HIGH">Cao</option>
+                <option value="URGENT">Khẩn</option>
+              </select>
+            </div>
+          </div>
+
+          {projectId && projFiles.length > 0 && (
+            <div className="mb-3 rounded-lg p-2" style={{ background: '#f8fafc', border: '1px dashed var(--border)' }}>
+              <label className="text-xs font-semibold" style={{ color: '#1d4ed8' }}>📎 Thêm tài liệu phải đọc từ dự án (chọn được nhiều)</label>
+              <select value="" onChange={(e) => {
+                const f = projFiles.find((x) => x.id === e.target.value)
+                if (f) setDocs((prev) => prev.some((d) => d.fileAttachmentId === f.id) ? prev : [...prev, { key: newKey(), kind: 'MUST_READ', label: f.fileName, fileAttachmentId: f.id, fileName: f.fileName }])
+                e.target.value = ''
+              }} style={{ ...inp, marginTop: 4 }}>
+                <option value="">— Chọn tài liệu để thêm —</option>
+                {projFiles.map((f) => <option key={f.id} value={f.id} disabled={docs.some((d) => d.fileAttachmentId === f.id)}>{f.source === 'project' ? '📁' : '📄'} {f.fileName}{docs.some((d) => d.fileAttachmentId === f.id) ? ' (đã thêm)' : ''}</option>)}
+              </select>
+            </div>
+          )}
+
+          {docs.map((d) => (
+            <div key={d.key} className="mb-3 rounded-lg p-2" style={{ border: '1px solid var(--border)' }}>
+              <div className="flex gap-2 items-center">
+                <span className="text-xs px-2 py-1 rounded" style={{ background: d.kind === 'MUST_READ' ? '#eff6ff' : '#ecfdf5', color: d.kind === 'MUST_READ' ? '#1d4ed8' : '#059669' }}>
+                  {d.kind === 'MUST_READ' ? '📖 Phải đọc' : '📤 Phải trả'}
+                </span>
+                <input value={d.label} onChange={(e) => setDocs((prev) => prev.map((x) => x.key === d.key ? { ...x, label: e.target.value } : x))} style={inp} placeholder="Tên tài liệu/thông tin" />
+                <span className="cursor-pointer" style={{ color: '#e63946' }} onClick={() => setDocs(docs.filter((x) => x.key !== d.key))}>✕</span>
+              </div>
+              {d.kind === 'MUST_READ' && (
+                <div className="mt-2">
+                  {d.fileName && <div className="text-xs mb-1" style={{ color: '#059669' }}>✓ Đã gắn: {d.fileName}</div>}
+                  <MultiFileUpload label="" entityType="TaskDoc" entityId={`${draftId}__${d.key}`} compact
+                    onUploaded={(f: UploadedFile) => setDocs((prev) => {
+                      const idx = prev.findIndex((x) => x.key === d.key)
+                      if (idx >= 0 && !prev[idx].fileAttachmentId) {
+                        const n = [...prev]; n[idx] = { ...n[idx], fileAttachmentId: f.id, fileName: f.fileName, label: n[idx].label.trim() || f.fileName }; return n
+                      }
+                      return [...prev, { key: newKey(), kind: 'MUST_READ', label: f.fileName, fileAttachmentId: f.id, fileName: f.fileName }]
+                    })} />
+                  <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Tải 1 hoặc nhiều tệp — mỗi tệp thành 1 mục phải đọc.</div>
+                </div>
+              )}
+            </div>
+          ))}
+          <div className="flex gap-2 mt-1">
+            <button onClick={() => addDoc('MUST_READ')} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>+ Tài liệu phải đọc</button>
+            <button onClick={() => addDoc('MUST_RETURN')} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>+ Tài liệu phải trả lại</button>
+          </div>
+        </div>
+
+        {/* ── ④ Giao cho ai ── */}
+        <div className="rounded-xl p-5" style={sectionStyle}>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>④ Giao cho ai?</h3>
+          {sugg.length > 0 && (
+            <div className="rounded-lg p-3 mb-3" style={{ background: 'linear-gradient(135deg,#eff6ff,#f5f3ff)', border: '1px dashed #93c5fd' }}>
+              <div className="text-xs font-bold mb-2" style={{ color: '#1d4ed8' }}>✨ Gợi ý phòng ban</div>
+              {sugg.map((s, i) => s.roleCode && (
+                <button key={i} onClick={() => addRole(s.roleCode!)} className="text-xs mr-2 mb-2 px-3 py-1.5 rounded-full font-semibold"
+                  style={{ background: '#fff', border: '1px solid #bfdbfe', color: '#1d4ed8' }}>
+                  + {s.departmentName || (ROLES as Record<string, { name: string }>)[s.roleCode]?.name}
+                  <span style={{ opacity: .7, fontWeight: 400 }}> ({s.reason})</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mb-2">
+            {picks.map((p, i) => (
+              <span key={i} className="inline-flex items-center gap-2 text-sm mr-2 mb-2 px-3 py-1.5 rounded-full" style={{ background: '#eef2ff', color: '#3730a3', border: '1px solid #c7d2fe' }}>
+                {p.label} <span className="cursor-pointer opacity-60" onClick={() => setPicks(picks.filter((_, idx) => idx !== i))}>✕</span>
+              </span>
             ))}
           </div>
-        )}
-        <div className="mb-2">{picks.map((p, i) => (
-          <span key={i} className="inline-flex items-center gap-2 text-sm mr-2 mb-2 px-3 py-1.5 rounded-full" style={{ background: '#eef2ff', color: '#3730a3', border: '1px solid #c7d2fe' }}>
-            {p.label} <span className="cursor-pointer opacity-60" onClick={() => setPicks(picks.filter((_, idx) => idx !== i))}>✕</span>
-          </span>
-        ))}</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div><label className="text-xs" style={{ color: 'var(--text-muted)' }}>Thêm theo phòng/role</label>
-            <select onChange={(e) => { if (e.target.value) addRole(e.target.value); e.target.value = '' }} style={inp}>
-              <option value="">— Chọn phòng/role —</option>
-              {Object.entries(ROLES).map(([code, r]) => <option key={code} value={code}>{(r as { name: string }).name} ({code})</option>)}
-            </select></div>
-          <div><label className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Thêm theo nhân sự{selectedDeptCodes.length > 0 && <span style={{ color: 'var(--accent,#e63946)' }}> · trong {selectedDeptCodes.map((d) => DEPT_NAME[d] || d).join(', ')}</span>}
-            </label>
-            <input value={userQuery} onChange={(e) => setUserQuery(e.target.value)} style={inp}
-              placeholder={selectedDeptCodes.length > 0 ? 'Gõ tên (trong phòng đã chọn)…' : 'Gõ tên nhân sự…'} />
-            {userQuery.trim() && filteredUsers.length === 0 && (
-              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Không thấy nhân sự{selectedDeptCodes.length > 0 ? ' trong phòng đã chọn' : ''}.</div>
-            )}
-            {filteredUsers.length > 0 && (
-              <div className="rounded-lg mt-1" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
-                {filteredUsers.map((u) => (
-                  <div key={u.id} onClick={() => addUser(u)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">
-                    {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>({u.username}) · {deptNameOfUser(u)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>③ Thời hạn & tài liệu</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-          <div><label className="text-sm font-semibold">Deadline</label><input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={inp} /></div>
-          <div><label className="text-sm font-semibold">Ưu tiên</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)} style={inp}><option value="NORMAL">Bình thường</option><option value="HIGH">Cao</option><option value="URGENT">Khẩn</option></select></div>
-        </div>
-        {/* Thêm nhanh NHIỀU tài liệu phải đọc từ kho tài liệu dự án (chọn lần lượt, mỗi cái thành 1 mục) */}
-        {projectId && projFiles.length > 0 && (
-          <div className="mb-3 rounded-lg p-2" style={{ background: '#f8fafc', border: '1px dashed var(--border)' }}>
-            <label className="text-xs font-semibold" style={{ color: '#1d4ed8' }}>📎 Thêm tài liệu phải đọc từ dự án (chọn được nhiều)</label>
-            <select value="" onChange={(e) => {
-              const f = projFiles.find((x) => x.id === e.target.value)
-              if (f) setDocs((prev) => prev.some((d) => d.fileAttachmentId === f.id) ? prev : [...prev, { key: newKey(), kind: 'MUST_READ', label: f.fileName, fileAttachmentId: f.id, fileName: f.fileName }])
-              e.target.value = ''
-            }} style={{ ...inp, marginTop: 4 }}>
-              <option value="">— Chọn tài liệu để thêm —</option>
-              {projFiles.map((f) => <option key={f.id} value={f.id} disabled={docs.some((d) => d.fileAttachmentId === f.id)}>{f.source === 'project' ? '📁' : '📄'} {f.fileName}{docs.some((d) => d.fileAttachmentId === f.id) ? ' (đã thêm)' : ''}</option>)}
-            </select>
-          </div>
-        )}
-        {docs.map((d, i) => (
-          <div key={d.key} className="mb-3 rounded-lg p-2" style={{ border: '1px solid var(--border)' }}>
-            <div className="flex gap-2 items-center">
-              <span className="text-xs px-2 py-1 rounded" style={{ background: d.kind === 'MUST_READ' ? '#eff6ff' : '#ecfdf5', color: d.kind === 'MUST_READ' ? '#1d4ed8' : '#059669' }}>{d.kind === 'MUST_READ' ? '📖 Phải đọc' : '📤 Phải trả'}</span>
-              <input value={d.label} onChange={(e) => setDocs((prev) => prev.map((x) => x.key === d.key ? { ...x, label: e.target.value } : x))} style={inp} placeholder="Tên tài liệu/thông tin" />
-              <span className="cursor-pointer" style={{ color: '#e63946' }} onClick={() => setDocs(docs.filter((x) => x.key !== d.key))}>✕</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Thêm theo phòng/role</label>
+              <select onChange={(e) => { if (e.target.value) addRole(e.target.value); e.target.value = '' }} style={inp}>
+                <option value="">— Chọn phòng/role —</option>
+                {Object.entries(ROLES).map(([code, r]) => <option key={code} value={code}>{(r as { name: string }).name} ({code})</option>)}
+              </select>
             </div>
-            {d.kind === 'MUST_READ' && (
-              <div className="mt-2">
-                {d.fileName && <div className="text-xs mb-1" style={{ color: '#059669' }}>✓ Đã gắn: {d.fileName}</div>}
-                <MultiFileUpload label="" entityType="TaskDoc" entityId={`${draftId}__${d.key}`} compact
-                  onUploaded={(f: UploadedFile) => setDocs((prev) => {
-                    const idx = prev.findIndex((x) => x.key === d.key)
-                    // Dòng chưa có tệp → gắn vào dòng này; đã có tệp → tách thành mục mới (cho phép nhiều tệp)
-                    if (idx >= 0 && !prev[idx].fileAttachmentId) {
-                      const n = [...prev]; n[idx] = { ...n[idx], fileAttachmentId: f.id, fileName: f.fileName, label: n[idx].label.trim() || f.fileName }; return n
-                    }
-                    return [...prev, { key: newKey(), kind: 'MUST_READ', label: f.fileName, fileAttachmentId: f.id, fileName: f.fileName }]
-                  })} />
-                <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Tải 1 hoặc nhiều tệp — mỗi tệp thành 1 mục phải đọc.</div>
-              </div>
-            )}
+            <div>
+              <label className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Thêm theo nhân sự{selectedDeptCodes.length > 0 && <span style={{ color: 'var(--accent,#e63946)' }}> · trong {selectedDeptCodes.map((d) => DEPT_NAME[d] || d).join(', ')}</span>}
+              </label>
+              <input value={userQuery} onChange={(e) => setUserQuery(e.target.value)} style={inp}
+                placeholder={selectedDeptCodes.length > 0 ? 'Gõ tên (trong phòng đã chọn)…' : 'Gõ tên nhân sự…'} />
+              {userQuery.trim() && filteredUsers.length === 0 && (
+                <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Không thấy nhân sự{selectedDeptCodes.length > 0 ? ' trong phòng đã chọn' : ''}.</div>
+              )}
+              {filteredUsers.length > 0 && (
+                <div className="rounded-lg mt-1" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                  {filteredUsers.map((u) => (
+                    <div key={u.id} onClick={() => addUser(u)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">
+                      {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>({u.username}) · {deptNameOfUser(u)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        ))}
-        <div className="flex gap-2 mt-1">
-          <button onClick={() => addDoc('MUST_READ')} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>+ Tài liệu phải đọc</button>
-          <button onClick={() => addDoc('MUST_RETURN')} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>+ Tài liệu phải trả lại</button>
         </div>
       </div>
 
-      {allowedTemplates.length === 0 ? (
-        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <h3 className="font-semibold mb-1" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>④ Biểu mẫu (tuỳ chọn)</h3>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>(Vai trò của bạn không có biểu mẫu để đính kèm — tạo việc thường, người xử lý sẽ chọn biểu mẫu phù hợp)</div>
-        </div>
-      ) : (
-        <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <h3 className="font-semibold" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>④ Biểu mẫu (tuỳ chọn)</h3>
-            {selectedTemplate && (
-              <button onClick={() => setSelectedTemplate(null)} className="text-xs px-2.5 py-1 rounded-lg" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer', background: 'none' }}>
-                ✕ Bỏ chọn
-              </button>
-            )}
-          </div>
-          <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Chỉ hiện biểu mẫu bạn được phép điền. Chọn để mở sẵn và upload sau khi tạo việc.</div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(allowedTemplates.length, 3)}, 1fr)`, gap: 8 }}>
-            {allowedTemplates.map((t) => {
-              const active = selectedTemplate === t.value
-              return (
-                <button key={t.value} onClick={() => setSelectedTemplate(active ? null : t.value)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '10px 14px', borderRadius: 10,
-                    border: active ? '2px solid #2563eb' : '1px solid var(--border)',
-                    background: active ? '#eff6ff' : 'var(--bg-secondary)',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                  }}>
-                  <span style={{ fontSize: '1.2rem' }}>{t.icon}</span>
-                  <div style={{ textAlign: 'left', minWidth: 0 }}>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: active ? '#1d4ed8' : 'var(--text-primary)' }}>{t.label}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.desc}</div>
-                  </div>
-                  {active && <span style={{ fontSize: '0.9rem', color: '#2563eb', marginLeft: 'auto', flexShrink: 0 }}>✓</span>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {error && <div className="text-sm" style={{ color: '#e63946' }}>{error}</div>}
-      <div className="flex gap-2">
-        <button onClick={() => router.push(parentId ? `/dashboard/work/${parentId}` : fromId ? `/dashboard/work/${fromId}` : '/dashboard/work')} className="text-sm px-4 py-2.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
-        <button onClick={submit} disabled={submitting} className="btn-primary text-sm px-5 py-2.5 rounded-lg flex-1" style={{ opacity: submitting ? .6 : 1 }}>{submitting ? '...Đang tạo' : '✓ Tạo & Giao việc'}</button>
+      {/* ── Action bar ── */}
+      {error && <div className="text-sm mt-3" style={{ color: '#e63946' }}>{error}</div>}
+      <div className="flex gap-3 mt-4" style={{ position: 'sticky', bottom: 0, padding: '12px 0', background: 'var(--bg-primary)', zIndex: 10 }}>
+        <button
+          onClick={() => router.push(parentId ? `/dashboard/work/${parentId}` : fromId ? `/dashboard/work/${fromId}` : '/dashboard/work')}
+          className="text-sm px-4 py-2.5 rounded-lg" style={{ border: '1px solid var(--border)' }}
+        >
+          Hủy
+        </button>
+        <button
+          onClick={submit} disabled={submitting}
+          className="btn-primary text-sm px-6 py-2.5 rounded-lg flex-1 font-semibold"
+          style={{ opacity: submitting ? 0.6 : 1 }}
+        >
+          {submitting ? '...Đang tạo'
+            : selectedTemplate
+              ? `① Tạo việc & nhập biểu mẫu`
+              : '✓ Tạo & Giao việc'}
+        </button>
       </div>
     </div>
   )
