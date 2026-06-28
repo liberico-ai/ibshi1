@@ -39,9 +39,12 @@ model Department {
   parentId  String?      @map("parent_id")
   parent    Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
   children   Department[] @relation("DeptHierarchy")
-  employees  Employee[]
-  users      User[]
-  workOrders WorkOrder[]
+  employees            Employee[]
+  users                User[]
+  workOrders           WorkOrder[]
+  equipment            Equipment[]
+  equipmentAssignments EquipmentAssignment[]
+  toolboxTalks         ToolboxTalk[]
 
   @@index([parentId])
   @@map("departments")
@@ -91,6 +94,7 @@ model Project {
   purchaseOrders     PurchaseOrder[]
   purchaseReqs       PurchaseRequest[]
   safetyIncidents    SafetyIncident[]
+  workPermits        WorkPermit[]
   subcontracts       SubcontractorContract[]
   timesheets         Timesheet[]
   wbsNodes           WbsNode[]
@@ -530,12 +534,14 @@ model WorkOrder {
   bomVersionId   String?          @map("bom_version_id")
   plannedWeight  Decimal?         @map("planned_weight")
   departmentId   String?          @map("department_id")
-  deliveries       DeliveryRecord[]
-  jobCards         JobCard[]
-  materialIssues   MaterialIssue[]
-  weldJoints       WeldJoint[]
-  packingListItems PackingListItem[]
-  project          Project          @relation(fields: [projectId], references: [id])
+  deliveries            DeliveryRecord[]
+  jobCards              JobCard[]
+  materialIssues        MaterialIssue[]
+  weldJoints            WeldJoint[]
+  packingListItems      PackingListItem[]
+  equipmentAssignments  EquipmentAssignment[]
+  workPermits           WorkPermit[]
+  project               Project          @relation(fields: [projectId], references: [id])
   workshop       Workshop?        @relation(fields: [workshopId], references: [id])
   bomVersion     BomVersion?      @relation(fields: [bomVersionId], references: [id])
   department     Department?      @relation(fields: [departmentId], references: [id])
@@ -1124,26 +1130,155 @@ model CashflowEntry {
 }
 
 model SafetyIncident {
-  id               String    @id @default(cuid())
-  incidentCode     String    @unique @map("incident_code")
-  projectId        String    @map("project_id")
-  incidentDate     DateTime  @map("incident_date")
-  severity         String
-  category         String
-  location         String?
-  description      String
-  rootCause        String?   @map("root_cause")
-  correctiveAction String?   @map("corrective_action")
-  reportedBy       String    @map("reported_by")
-  status           String    @default("OPEN")
-  resolvedAt       DateTime? @map("resolved_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  project          Project   @relation(fields: [projectId], references: [id])
+  id                String    @id @default(cuid())
+  incidentCode      String    @unique @map("incident_code")
+  projectId         String    @map("project_id")
+  incidentDate      DateTime  @map("incident_date")
+  severity          String
+  category          String
+  location          String?
+  description       String
+  rootCause         String?   @map("root_cause")
+  correctiveAction  String?   @map("corrective_action")
+  reportedBy        String    @map("reported_by")
+  status            String    @default("OPEN")
+  resolvedAt        DateTime? @map("resolved_at")
+  investigatedBy    String?   @map("investigated_by")
+  investigationDate DateTime? @map("investigation_date")
+  closedBy          String?   @map("closed_by")
+  closedAt          DateTime? @map("closed_at")
+  lostTimeDays      Int?      @default(0) @map("lost_time_days")
+  taskId            String?   @map("task_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  project           Project   @relation(fields: [projectId], references: [id])
 
   @@index([projectId])
   @@index([severity])
   @@map("safety_incidents")
+}
+
+model Equipment {
+  id            String                @id @default(cuid())
+  equipmentCode String                @unique @map("equipment_code")
+  name          String
+  category      String                @default("OTHER")
+  model         String?
+  serialNo      String?               @map("serial_no")
+  manufacturer  String?
+  location      String?
+  departmentId  String?               @map("department_id")
+  status        String                @default("AVAILABLE")
+  condition     String                @default("GOOD")
+  purchaseDate  DateTime?             @map("purchase_date")
+  inspectionDue DateTime?             @map("inspection_due")
+  lastInspection DateTime?            @map("last_inspection")
+  notes         String?
+  createdBy     String                @map("created_by")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+  department    Department?           @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  maintenanceRecords MaintenanceRecord[]
+  assignments   EquipmentAssignment[]
+
+  @@index([departmentId])
+  @@index([status])
+  @@index([inspectionDue])
+  @@map("equipment")
+}
+
+model MaintenanceRecord {
+  id            String     @id @default(cuid())
+  maintCode     String     @unique @map("maint_code")
+  equipmentId   String     @map("equipment_id")
+  type          String     @default("PREVENTIVE")
+  description   String
+  scheduledDate DateTime?  @map("scheduled_date")
+  completedDate DateTime?  @map("completed_date")
+  cost          Decimal?
+  performedBy   String?    @map("performed_by")
+  status        String     @default("SCHEDULED")
+  taskId        String?    @map("task_id")
+  notes         String?
+  createdBy     String     @map("created_by")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  equipment     Equipment  @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([equipmentId])
+  @@index([status])
+  @@index([type])
+  @@map("maintenance_records")
+}
+
+model EquipmentAssignment {
+  id           String     @id @default(cuid())
+  equipmentId  String     @map("equipment_id")
+  workOrderId  String?    @map("work_order_id")
+  departmentId String?    @map("department_id")
+  assignedFrom DateTime   @default(now()) @map("assigned_from")
+  assignedTo   DateTime?  @map("assigned_to")
+  status       String     @default("ACTIVE")
+  notes        String?
+  createdBy    String     @map("created_by")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  equipment    Equipment  @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  workOrder    WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([equipmentId])
+  @@index([workOrderId])
+  @@index([departmentId])
+  @@map("equipment_assignments")
+}
+
+model WorkPermit {
+  id          String    @id @default(cuid())
+  permitCode  String    @unique @map("permit_code")
+  permitType  String    @default("HOT_WORK") @map("permit_type")
+  projectId   String?   @map("project_id")
+  workOrderId String?   @map("work_order_id")
+  location    String?
+  description String
+  hazards     String?
+  precautions String?
+  validFrom   DateTime  @map("valid_from")
+  validTo     DateTime  @map("valid_to")
+  status      String    @default("DRAFT")
+  requestedBy String    @map("requested_by")
+  approvedBy  String?   @map("approved_by")
+  approvedAt  DateTime? @map("approved_at")
+  closedBy    String?   @map("closed_by")
+  closedAt    DateTime? @map("closed_at")
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([status])
+  @@index([permitType])
+  @@map("work_permits")
+}
+
+model ToolboxTalk {
+  id           String     @id @default(cuid())
+  talkCode     String     @unique @map("talk_code")
+  departmentId String?    @map("department_id")
+  talkDate     DateTime   @map("talk_date")
+  topic        String
+  content      String?
+  attendees    Int        @default(0)
+  conductedBy  String     @map("conducted_by")
+  notes        String?
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([departmentId])
+  @@index([talkDate])
+  @@map("toolbox_talks")
 }
 
 model Timesheet {

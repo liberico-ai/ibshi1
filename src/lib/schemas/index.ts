@@ -224,3 +224,25 @@ export {
   type CommentInput,
   type InboxQueryInput,
 } from './work.schema'
+
+// ── TBCG + HSE ──
+export {
+  createEquipmentSchema,
+  updateEquipmentSchema,
+  createMaintenanceSchema,
+  updateMaintenanceSchema,
+  createAssignmentSchema,
+  createWorkPermitSchema,
+  updateWorkPermitSchema,
+  updateIncidentSchema,
+  createToolboxTalkSchema,
+  type CreateEquipmentInput,
+  type UpdateEquipmentInput,
+  type CreateMaintenanceInput,
+  type UpdateMaintenanceInput,
+  type CreateAssignmentInput,
+  type CreateWorkPermitInput,
+  type UpdateWorkPermitInput,
+  type UpdateIncidentInput,
+  type CreateToolboxTalkInput,
+} from './tbcg-hse.schema'

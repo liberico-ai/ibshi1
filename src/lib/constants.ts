@@ -102,10 +102,13 @@ export const MENU_GROUPS = [
   { key: 'warehouse', label: 'Kho & Mua hàng', labelEn: 'Warehouse', icon: '📦', priority: 4 },
   { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: '🏭', priority: 5 },
   { key: 'qc', label: 'Chất lượng', labelEn: 'Quality', icon: '✅', priority: 6 },
-  { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: '👤', priority: 7 },
-  { key: 'finance', label: 'Tài chính', labelEn: 'Finance', icon: '💰', priority: 8 },
-  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: '📊', priority: 9 },
-  { key: 'system', label: 'Hệ thống', labelEn: 'System', icon: '⚙️', priority: 10 },
+  { key: 'logistics', label: 'Giao hàng', labelEn: 'Logistics', icon: '🚛', priority: 7 },
+  { key: 'tbcg', label: 'Thiết bị & CG', labelEn: 'Equipment', icon: '🔧', priority: 8 },
+  { key: 'hse', label: 'An toàn (HSE)', labelEn: 'HSE', icon: '🦺', priority: 9 },
+  { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: '👤', priority: 10 },
+  { key: 'finance', label: 'Tài chính', labelEn: 'Finance', icon: '💰', priority: 11 },
+  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: '📊', priority: 12 },
+  { key: 'system', label: 'Hệ thống', labelEn: 'System', icon: '⚙️', priority: 13 },
 ] as const
 
 // Roles allowed to create/edit PR (đề xuất vật tư)
@@ -153,7 +156,7 @@ export function canEditForm(form: FormKey, roleCode: string): boolean {
 
 // Role-specific group priority: first group = expanded by default
 export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
-  R01:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
+  R01:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'logistics', 'tbcg', 'hse', 'hr', 'finance', 'reports', 'system'],
   R02:  ['overview', 'management', 'project', 'design', 'warehouse', 'hr', 'finance', 'reports'],
   R02a: ['overview', 'management', 'project', 'design', 'warehouse', 'hr', 'finance', 'reports'],
   R03:  ['overview', 'management', 'project', 'finance', 'warehouse', 'production', 'qc', 'reports'],
@@ -162,8 +165,8 @@ export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R04a: ['overview', 'design', 'project'],
   R05:  ['overview', 'warehouse'],
   R05a: ['overview', 'warehouse'],
-  R06:  ['overview', 'production', 'warehouse', 'hr', 'qc', 'reports'],
-  R06a: ['overview', 'production', 'warehouse', 'hr', 'reports'],
+  R06:  ['overview', 'production', 'warehouse', 'hr', 'qc', 'tbcg', 'hse', 'reports'],
+  R06a: ['overview', 'production', 'warehouse', 'hr', 'hse', 'reports'],
   R06b: ['overview', 'production', 'hr'],
   R07:  ['overview', 'warehouse', 'finance', 'production'],
   R07a: ['overview', 'warehouse', 'finance', 'production'],
@@ -171,8 +174,8 @@ export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R08a: ['overview', 'finance', 'reports'],
   R09:  ['overview', 'qc', 'reports'],
   R09a: ['overview', 'qc', 'reports'],
-  R10:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports', 'system'],
-  R13:  ['overview', 'production', 'reports'],
+  R10:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'logistics', 'tbcg', 'hse', 'hr', 'finance', 'reports', 'system'],
+  R13:  ['overview', 'production', 'tbcg', 'reports'],
 }
 
 // ── Menu Items with Group ──
@@ -197,7 +200,7 @@ export const MENU_ITEMS = [
   { key: 'milestones', label: 'Cột mốc', labelEn: 'Milestones', icon: 'Target', href: '/dashboard/milestones', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'project' },
   { key: 'subcontracts', label: 'Thầu phụ', labelEn: 'Subcontracts', icon: 'Handshake', href: '/dashboard/subcontracts', roles: ['R01', 'R02', 'R02a', 'R07', 'R07a'], group: 'project' },
   { key: 'lessons', label: 'Bài học kinh nghiệm', labelEn: 'Lessons', icon: 'BookOpen', href: '/dashboard/lessons', roles: ['R01', 'R02', 'R02a'], group: 'project' },
-  { key: 'safety', label: 'An toàn', labelEn: 'Safety', icon: 'HardHat', href: '/dashboard/safety', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R09', 'R09a'], group: 'project' },
+  { key: 'safety', label: 'An toàn (cũ)', labelEn: 'Safety (legacy)', icon: 'HardHat', href: '/dashboard/safety', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R09', 'R09a'], group: 'project' },
 
   // ── Design ──
   { key: 'design', label: 'Thiết kế', labelEn: 'Design', icon: 'Pencil', href: '/dashboard/design', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a'], group: 'design' },
@@ -225,6 +228,16 @@ export const MENU_ITEMS = [
   { key: 'packing-lists', label: 'Packing List', labelEn: 'Packing Lists', icon: 'Package', href: '/dashboard/logistics/packing-lists', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'], group: 'logistics' },
   { key: 'shipments', label: 'Chuyến hàng', labelEn: 'Shipments', icon: 'Truck', href: '/dashboard/logistics/shipments', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'], group: 'logistics' },
   { key: 'mdr', label: 'MDR', labelEn: 'MDR', icon: 'FileCheck2', href: '/dashboard/logistics/mdr', roles: ['R01', 'R02', 'R07', 'R07a', 'R09', 'R09a'], group: 'logistics' },
+
+  // ── TBCG ──
+  { key: 'equipment', label: 'Thiết bị', labelEn: 'Equipment', icon: 'Wrench', href: '/dashboard/tbcg/equipment', roles: ['R01', 'R10', 'R13', 'R06'], group: 'tbcg' },
+  { key: 'maintenance', label: 'Bảo trì', labelEn: 'Maintenance', icon: 'Settings', href: '/dashboard/tbcg/maintenance', roles: ['R01', 'R10', 'R13', 'R06'], group: 'tbcg' },
+
+  // ── HSE ──
+  { key: 'hse-dashboard', label: 'Tổng quan HSE', labelEn: 'HSE Dashboard', icon: 'HardHat', href: '/dashboard/hse', roles: ['R01', 'R10', 'R06'], group: 'hse' },
+  { key: 'incidents', label: 'Sự cố', labelEn: 'Incidents', icon: 'AlertTriangle', href: '/dashboard/hse/incidents', roles: ['R01', 'R10', 'R06', 'R06a'], group: 'hse' },
+  { key: 'work-permits', label: 'Giấy phép', labelEn: 'Work Permits', icon: 'ClipboardCheck', href: '/dashboard/hse/work-permits', roles: ['R01', 'R10', 'R06', 'R06a'], group: 'hse' },
+  { key: 'toolbox-talks', label: 'Họp an toàn', labelEn: 'Toolbox Talks', icon: 'MessageCircle', href: '/dashboard/hse/toolbox-talks', roles: ['R01', 'R10', 'R06', 'R06a', 'R06b'], group: 'hse' },
 
   // ── QC ──
   { key: 'qc', label: 'Chất lượng', labelEn: 'QC', icon: 'ShieldCheck', href: '/dashboard/qc', roles: ['R01', 'R03', 'R03a', 'R09', 'R09a'], group: 'qc' },
@@ -273,6 +286,7 @@ export const MENU_ITEMS = [
 export const HIDDEN_MENU_KEYS = new Set<string>([
   'design', 'purchase-requests',
   'material-issue', 'movements', 'workshops', 'fat-sat',
+  'safety',
 ])
 
 export const PAGE_ACCESS: Record<string, readonly string[] | 'all'> = Object.fromEntries(

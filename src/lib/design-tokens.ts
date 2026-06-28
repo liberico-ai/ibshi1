@@ -73,6 +73,32 @@ export const STATUS_COLORS = {
     ARRIVED:          { bg: '#FFF7ED', text: '#C2410C', label: 'Đã tới' },
     RECEIVED:         { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã nhận' },
   },
+  equipment: {
+    AVAILABLE:        { bg: '#E6F4EC', text: '#1E8E5A', label: 'Sẵn sàng' },
+    IN_USE:           { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đang dùng' },
+    MAINTENANCE:      { bg: '#FBF1DF', text: '#C97A0E', label: 'Bảo trì' },
+    RETIRED:          { bg: '#F1F3F5', text: '#9AA0A8', label: 'Thanh lý' },
+  },
+  maintenance: {
+    SCHEDULED:        { bg: '#F1F3F5', text: '#64748B', label: 'Lên lịch' },
+    IN_PROGRESS:      { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đang làm' },
+    COMPLETED:        { bg: '#E6F4EC', text: '#1E8E5A', label: 'Xong' },
+    CANCELLED:        { bg: '#FDECEA', text: '#C8372B', label: 'Hủy' },
+  },
+  permit: {
+    DRAFT:            { bg: '#F1F3F5', text: '#64748B', label: 'Nháp' },
+    PENDING:          { bg: '#FBF1DF', text: '#C97A0E', label: 'Chờ duyệt' },
+    APPROVED:         { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã duyệt' },
+    ACTIVE:           { bg: '#E8F0FA', text: '#2D6CB5', label: 'Hiệu lực' },
+    CLOSED:           { bg: '#F1F3F5', text: '#9AA0A8', label: 'Đóng' },
+    REJECTED:         { bg: '#FDECEA', text: '#C8372B', label: 'Từ chối' },
+  },
+  incident: {
+    OPEN:             { bg: '#FDECEA', text: '#C8372B', label: 'Mở' },
+    INVESTIGATING:    { bg: '#FBF1DF', text: '#C97A0E', label: 'Đang ĐT' },
+    ACTION_TAKEN:     { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đã XL' },
+    CLOSED:           { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đóng' },
+  },
   bom: {
     DRAFT:            { bg: '#F1F3F5', text: '#64748B', label: 'Nháp' },
     APPROVED:         { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã duyệt' },
