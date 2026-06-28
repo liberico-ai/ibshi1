@@ -12,7 +12,7 @@ import {
 interface Certificate {
   id: string; certType: string; certNumber: string; holderName: string;
   issuedBy: string; issueDate: string; expiryDate: string; standard: string | null;
-  scope: string | null; isActive: boolean;
+  scope: string | null; isActive: boolean; renewedFromId: string | null;
   daysToExpiry: number; isExpired: boolean; isExpiringSoon: boolean;
 }
 
@@ -27,6 +27,7 @@ export default function CertificatePage() {
   const [certs, setCerts] = useState<Certificate[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [renewTarget, setRenewTarget] = useState<Certificate | null>(null)
   const [filterType, setFilterType] = useState('')
   const user = useAuthStore(s => s.user)
 
@@ -149,10 +150,14 @@ export default function CertificatePage() {
                   </div>
                 </div>
                 <div className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>
-                  <p>Cap: {formatDate(cert.issueDate)}</p>
+                  <p>Cấp: {formatDate(cert.issueDate)}</p>
                   <p className="font-semibold" style={{ color: borderColor }}>
                     HH: {formatDate(cert.expiryDate)}
                   </p>
+                  {canCreate && (cert.isExpired || cert.isExpiringSoon) && cert.isActive && (
+                    <Button variant="outline" size="sm" className="mt-1"
+                      onClick={() => setRenewTarget(cert)}>Gia hạn</Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -161,6 +166,14 @@ export default function CertificatePage() {
       </div>
 
       {showForm && <CreateCertModal onClose={() => setShowForm(false)} onCreated={() => { setShowForm(false); loadData() }} />}
+
+      {renewTarget && (
+        <RenewCertModal
+          cert={renewTarget}
+          onClose={() => setRenewTarget(null)}
+          onCreated={() => { setRenewTarget(null); loadData() }}
+        />
+      )}
     </div>
   )
 }
@@ -254,6 +267,42 @@ function CreateCertModal({ onClose, onCreated }: { onClose: () => void; onCreate
             placeholder="SMAW, GTAW..."
           />
         </div>
+      </div>
+    </Modal>
+  )
+}
+
+function RenewCertModal({ cert, onClose, onCreated }: { cert: Certificate; onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({ certNumber: '', issueDate: '', expiryDate: '' })
+  const [submitting, setSubmitting] = useState(false)
+  const update = (f: string, v: string) => setForm({ ...form, [f]: v })
+
+  const submit = async () => {
+    if (!form.certNumber || !form.issueDate || !form.expiryDate) return alert('Điền đầy đủ')
+    setSubmitting(true)
+    const res = await apiFetch(`/api/qc/certificates/${cert.id}/renew`, {
+      method: 'POST', body: JSON.stringify(form),
+    })
+    setSubmitting(false)
+    if (res.ok) onCreated()
+    else alert(res.error || 'Lỗi gia hạn')
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} title={`Gia hạn: ${cert.holderName}`} size="md">
+      <div className="card p-3 mb-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+        <p>CC cũ: <span className="font-mono">{cert.certNumber}</span> — HH: {formatDate(cert.expiryDate)}</p>
+      </div>
+      <div className="space-y-3">
+        <InputField label="Số CC mới *" value={form.certNumber} onChange={e => update('certNumber', e.target.value)} placeholder={`${cert.certNumber}-R1`} />
+        <div className="grid grid-cols-2 gap-3">
+          <InputField label="Ngày cấp *" type="date" value={form.issueDate} onChange={e => update('issueDate', e.target.value)} />
+          <InputField label="Ngày hết hạn *" type="date" value={form.expiryDate} onChange={e => update('expiryDate', e.target.value)} />
+        </div>
+      </div>
+      <div className="flex gap-3 mt-5">
+        <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
+        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Gia hạn</Button>
       </div>
     </Modal>
   )

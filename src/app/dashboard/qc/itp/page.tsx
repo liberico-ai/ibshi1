@@ -5,12 +5,17 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, StatusBadge, Button, EmptyState, Modal, InputField, SelectField, KPICard } from '@/components/ui'
 import { STATUS_COLORS, SEMANTIC_COLORS } from '@/lib/design-tokens'
 
+interface Checkpoint {
+  id: string; checkpointNo: number; activity: string; description: string;
+  inspectionType: string; status: string; remarks: string | null; ncrId: string | null;
+}
+
 interface ITP {
   id: string; itpCode: string; projectId: string; name: string; revision: string;
   status: string; createdAt: string; totalCheckpoints: number;
   passedCheckpoints: number; failedCheckpoints: number;
   project: { projectCode: string; projectName: string };
-  checkpoints: Array<{ id: string; checkpointNo: number; activity: string; description: string; inspectionType: string; status: string }>;
+  checkpoints: Checkpoint[];
 }
 
 interface Project { id: string; projectCode: string; projectName: string }
@@ -61,12 +66,30 @@ export default function ITPPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const canCreate = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
+  const canInspect = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
+  const canCreate = canInspect
+
+  const updateCheckpoint = async (itpId: string, cpId: string, status: 'PASSED' | 'FAILED', createNcr?: boolean) => {
+    const remarks = status === 'FAILED' ? prompt('Ghi chú lỗi:') : null
+    if (status === 'FAILED' && remarks === null) return
+
+    const res = await apiFetch(`/api/qc/itp/${itpId}/checkpoints/${cpId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, remarks: remarks || undefined, createNcr }),
+    })
+    if (res.ok) {
+      loadData()
+      if (res.ncrId) alert(`Đã tạo NCR tự động (${res.ncrId.slice(0, 8)}…)`)
+    } else {
+      alert(res.error || 'Lỗi cập nhật')
+    }
+  }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1,2,3].map(i => <div key={i} className="h-24 skeleton rounded-xl" />)}</div>
 
   const totalCheckpoints = itps.reduce((s, i) => s + i.totalCheckpoints, 0)
   const totalPassed = itps.reduce((s, i) => s + i.passedCheckpoints, 0)
+  const totalFailed = itps.reduce((s, i) => s + i.failedCheckpoints, 0)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -76,19 +99,17 @@ export default function ITPPage() {
         actions={canCreate ? <Button variant="accent" onClick={openForm}>+ Tạo ITP</Button> : undefined}
       />
 
-      {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
         <KPICard label="Tổng ITP" value={itps.length} accentColor={SEMANTIC_COLORS.info.solid} />
         <KPICard label="Tổng điểm kiểm" value={totalCheckpoints} accentColor={SEMANTIC_COLORS.neutral.solid} />
         <KPICard label="Đạt" value={totalPassed} accentColor={SEMANTIC_COLORS.success.solid} />
         <KPICard
-          label="Tỷ lệ đạt"
-          value={totalCheckpoints > 0 ? `${Math.round((totalPassed / totalCheckpoints) * 100)}%` : '—'}
-          accentColor={SEMANTIC_COLORS.success.solid}
+          label="Lỗi"
+          value={totalFailed}
+          accentColor={totalFailed > 0 ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid}
         />
       </div>
 
-      {/* ITP list */}
       <div className="space-y-3">
         {itps.length === 0 && (
           <EmptyState icon="📋" title="Chưa có ITP nào" description="Tạo ITP đầu tiên để bắt đầu quản lý kiểm tra" />
@@ -130,16 +151,37 @@ export default function ITPPage() {
                   <div className="p-3 space-y-1">
                     {itp.checkpoints.map(cp => {
                       const ins = INSP_TYPE[cp.inspectionType] || INSP_TYPE.MONITOR
-                      const cpColors = STATUS_COLORS.itp[cp.status as keyof typeof STATUS_COLORS.itp]
+                      const isPending = cp.status === 'PENDING'
                       return (
-                        <div key={cp.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
+                        <div key={cp.id} className="flex items-center gap-3 py-2 px-3 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
                           <span className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white" style={{ background: ins.color }}>{ins.label}</span>
-                          <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>#{cp.checkpointNo}</span>
-                          <span className="text-xs flex-1" style={{ color: 'var(--text-primary)' }}>{cp.description}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold"
-                            style={{ background: cpColors?.bg || SEMANTIC_COLORS.neutral.bg, color: cpColors?.text || SEMANTIC_COLORS.neutral.solid }}>
-                            {cpColors?.label || cp.status}
+                          <span className="font-mono text-xs w-6" style={{ color: 'var(--text-muted)' }}>#{cp.checkpointNo}</span>
+                          <span className="text-xs flex-1" style={{ color: 'var(--text-primary)' }}>
+                            {cp.description}
+                            {cp.remarks && <span className="ml-2 italic" style={{ color: 'var(--text-muted)' }}>— {cp.remarks}</span>}
                           </span>
+                          {cp.ncrId && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: SEMANTIC_COLORS.danger.bg, color: SEMANTIC_COLORS.danger.solid }}>NCR</span>}
+                          <StatusBadge category="qc" status={cp.status === 'PENDING' ? 'PENDING' : cp.status === 'PASSED' ? 'PASSED' : 'FAILED'} />
+                          {isPending && canInspect && (
+                            <div className="flex gap-1">
+                              <button
+                                className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                                style={{ background: SEMANTIC_COLORS.success.solid }}
+                                onClick={(e) => { e.stopPropagation(); updateCheckpoint(itp.id, cp.id, 'PASSED') }}
+                              >Đạt</button>
+                              <button
+                                className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                                style={{ background: SEMANTIC_COLORS.danger.solid }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  const wantNcr = (cp.inspectionType === 'HOLD' || cp.inspectionType === 'WITNESS')
+                                    ? confirm('Tạo NCR tự động cho lỗi này?')
+                                    : false
+                                  updateCheckpoint(itp.id, cp.id, 'FAILED', wantNcr)
+                                }}
+                              >Lỗi</button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

@@ -648,9 +648,12 @@ model ITPCheckpoint {
   inspectedAt    DateTime?          @map("inspected_at")
   remarks        String?
   sortOrder      Int                @default(0) @map("sort_order")
+  ncrId          String?            @map("ncr_id")
   itp            InspectionTestPlan @relation(fields: [itpId], references: [id], onDelete: Cascade)
+  ncr            NonConformanceReport? @relation(fields: [ncrId], references: [id], onDelete: SetNull)
 
   @@index([itpId])
+  @@index([ncrId])
   @@map("itp_checkpoints")
 }
 
@@ -671,6 +674,7 @@ model NonConformanceReport {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
   actions     NcrAction[]
+  checkpoints ITPCheckpoint[]
   project     Project     @relation(fields: [projectId], references: [id])
 
   @@index([projectId])
@@ -708,9 +712,12 @@ model CertificateRegistry {
   expiryDate DateTime @map("expiry_date")
   standard   String?
   scope      String?
-  fileUrl    String?  @map("file_url")
-  isActive   Boolean  @default(true) @map("is_active")
-  createdAt  DateTime @default(now()) @map("created_at")
+  fileUrl       String?              @map("file_url")
+  isActive      Boolean              @default(true) @map("is_active")
+  renewedFromId String?              @map("renewed_from_id")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  renewedFrom   CertificateRegistry? @relation("CertRenewal", fields: [renewedFromId], references: [id], onDelete: SetNull)
+  renewals      CertificateRegistry[] @relation("CertRenewal")
 
   @@unique([certType, certNumber])
   @@index([holderId])

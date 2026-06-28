@@ -5,7 +5,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import {
-  PageHeader, Button, FilterBar, KPICard, EmptyState,
+  PageHeader, Button, FilterBar, KPICard, EmptyState, Modal,
   InputField,
 } from '@/components/ui'
 
@@ -16,11 +16,21 @@ interface MillCert {
   vendor: { vendorCode: string; companyName: string }
 }
 
+interface TraceData {
+  certificate: MillCert & { material: { id: string; materialCode: string; name: string; unit: string; currentStock: number }; vendor: { vendorCode: string; name: string } }
+  traceability: {
+    stockMovements: Array<{ id: string; type: string; quantity: number; reason: string; referenceNo: string | null; heatNumber: string | null; lotNumber: string | null; createdAt: string }>
+    materialIssues: Array<{ id: string; quantity: number; heatNumber: string | null; issuedAt: string; workOrder: { woCode: string } }>
+    relatedCerts: Array<{ id: string; certNumber: string; grade: string | null }>
+  }
+}
+
 export default function MillCertificatesPage() {
   const [certs, setCerts] = useState<MillCert[]>([])
   const [stats, setStats] = useState({ verified: 0, unverified: 0 })
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [traceTarget, setTraceTarget] = useState<TraceData | null>(null)
   const [filter, setFilter] = useState<'' | 'true' | 'false'>('')
   const [materialList, setMaterialList] = useState<{ id: string; materialCode: string; name: string }[]>([])
   const [vendorList, setVendorList] = useState<{ id: string; vendorCode: string; companyName: string }[]>([])
@@ -50,6 +60,12 @@ export default function MillCertificatesPage() {
       }),
     })
     if (res.ok) { setShowForm(false); load() } else alert(res.error || 'Loi')
+  }
+
+  const openTrace = async (certId: string) => {
+    const res = await apiFetch(`/api/mill-certificates/${certId}/trace`)
+    if (res.ok) setTraceTarget(res as TraceData)
+    else alert(res.error || 'Lỗi')
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
@@ -135,14 +151,15 @@ export default function MillCertificatesPage() {
               <th>NCC</th>
               <th>Grade</th>
               <th>Day</th>
-              <th>Xac minh</th>
-              <th>Ngay</th>
+              <th>Xác minh</th>
+              <th>Ngày</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {certs.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <EmptyState icon="📜" title="Chua co MTR" />
                 </td>
               </tr>
@@ -166,11 +183,83 @@ export default function MillCertificatesPage() {
                   </span>
                 </td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(c.createdAt)}</td>
+                <td><Button variant="ghost" size="sm" onClick={() => openTrace(c.id)}>Truy vết</Button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {traceTarget && (
+        <Modal open={true} onClose={() => setTraceTarget(null)} title={`Truy vết: Heat ${traceTarget.certificate.heatNumber}`} size="lg">
+          <div className="space-y-4">
+            {/* Certificate info */}
+            <div className="card p-3">
+              <div className="text-xs space-y-1" style={{ color: 'var(--text-muted)' }}>
+                <p><strong>MTR:</strong> <span className="font-mono">{traceTarget.certificate.certNumber}</span></p>
+                <p><strong>Vật tư:</strong> {traceTarget.certificate.material.materialCode} — {traceTarget.certificate.material.name}</p>
+                <p><strong>NCC:</strong> {traceTarget.certificate.vendor.name}</p>
+                <p><strong>Heat:</strong> <span className="font-mono" style={{ color: SEMANTIC_COLORS.info.solid }}>{traceTarget.certificate.heatNumber}</span></p>
+                {traceTarget.certificate.grade && <p><strong>Grade:</strong> {traceTarget.certificate.grade}</p>}
+              </div>
+            </div>
+
+            {/* Stock movements */}
+            <div>
+              <label className="input-label">Nhập/Xuất kho ({traceTarget.traceability.stockMovements.length})</label>
+              {traceTarget.traceability.stockMovements.length === 0 ? (
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chưa có giao dịch kho</p>
+              ) : (
+                <div className="space-y-1 mt-1">
+                  {traceTarget.traceability.stockMovements.map(sm => (
+                    <div key={sm.id} className="flex items-center gap-3 p-2 rounded-lg text-xs" style={{ background: 'var(--bg-primary)' }}>
+                      <span className="px-1.5 py-0.5 rounded font-bold text-[10px]" style={{
+                        background: sm.type === 'RECEIVE' ? SEMANTIC_COLORS.success.bg : SEMANTIC_COLORS.warning.bg,
+                        color: sm.type === 'RECEIVE' ? SEMANTIC_COLORS.success.solid : SEMANTIC_COLORS.warning.solid,
+                      }}>{sm.type}</span>
+                      <span className="font-mono">{sm.quantity}</span>
+                      <span className="flex-1" style={{ color: 'var(--text-muted)' }}>{sm.reason}</span>
+                      {sm.referenceNo && <span className="font-mono" style={{ color: 'var(--accent)' }}>{sm.referenceNo}</span>}
+                      <span style={{ color: 'var(--text-muted)' }}>{formatDate(sm.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Material issues */}
+            <div>
+              <label className="input-label">Cấp phát vật tư ({traceTarget.traceability.materialIssues.length})</label>
+              {traceTarget.traceability.materialIssues.length === 0 ? (
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chưa cấp phát</p>
+              ) : (
+                <div className="space-y-1 mt-1">
+                  {traceTarget.traceability.materialIssues.map(mi => (
+                    <div key={mi.id} className="flex items-center gap-3 p-2 rounded-lg text-xs" style={{ background: 'var(--bg-primary)' }}>
+                      <span className="font-mono font-bold" style={{ color: 'var(--accent)' }}>{mi.workOrder.woCode}</span>
+                      <span className="font-mono">{mi.quantity}</span>
+                      <span className="flex-1" />
+                      <span style={{ color: 'var(--text-muted)' }}>{formatDate(mi.issuedAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Related certs */}
+            {traceTarget.traceability.relatedCerts.length > 0 && (
+              <div>
+                <label className="input-label">MTR cùng Heat</label>
+                <div className="flex gap-2 flex-wrap mt-1">
+                  {traceTarget.traceability.relatedCerts.map(rc => (
+                    <span key={rc.id} className="badge text-xs font-mono">{rc.certNumber}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

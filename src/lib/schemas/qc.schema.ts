@@ -37,7 +37,7 @@ export type UpdateInspectionInput = z.infer<typeof updateInspectionSchema>
 // ── ITP (Inspection Test Plan) ──
 
 const itpCheckpointSchema = z.object({
-  checkpointNo: z.number().int().positive(),
+  checkpointNo: z.number().int().positive().optional(),
   activity: z.string().min(1, 'Hoạt động là bắt buộc'),
   description: z.string().min(1, 'Mô tả là bắt buộc'),
   standard: z.string().optional(),
@@ -118,3 +118,33 @@ export const createMillCertSchema = z.object({
 })
 
 export type CreateMillCertInput = z.infer<typeof createMillCertSchema>
+
+// ── ITP Checkpoint update ──
+
+export const updateCheckpointSchema = z.object({
+  status: z.enum(['PENDING', 'PASSED', 'FAILED']),
+  remarks: z.string().optional(),
+  createNcr: z.boolean().optional(),
+})
+
+export type UpdateCheckpointInput = z.infer<typeof updateCheckpointSchema>
+
+// ── NCR Action update ──
+
+export const updateNcrActionSchema = z.object({
+  status: z.enum(['OPEN', 'COMPLETED']),
+  evidence: z.string().optional(),
+})
+
+export type UpdateNcrActionInput = z.infer<typeof updateNcrActionSchema>
+
+// ── Certificate Renew ──
+
+export const renewCertificateSchema = z.object({
+  certNumber: z.string().min(1, 'Số chứng chỉ mới là bắt buộc'),
+  issueDate: z.string().min(1, 'Ngày cấp là bắt buộc'),
+  expiryDate: z.string().min(1, 'Ngày hết hạn là bắt buộc'),
+  fileUrl: z.string().optional(),
+})
+
+export type RenewCertificateInput = z.infer<typeof renewCertificateSchema>

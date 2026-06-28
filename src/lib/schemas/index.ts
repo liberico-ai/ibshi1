@@ -123,6 +123,12 @@ export {
   type CreateNcrActionInput,
   type CreateCertificateInput,
   type CreateMillCertInput,
+  updateCheckpointSchema,
+  type UpdateCheckpointInput,
+  updateNcrActionSchema,
+  type UpdateNcrActionInput,
+  renewCertificateSchema,
+  type RenewCertificateInput,
 } from './qc.schema'
 
 // ── Design ──
