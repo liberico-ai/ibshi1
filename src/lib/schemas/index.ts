@@ -101,6 +101,10 @@ export {
   type CreateWorkshopInput,
   type CreateDeliveryInput,
   type UpdateDeliveryInput,
+  createWeldJointSchema,
+  updateWeldJointSchema,
+  type CreateWeldJointInput,
+  type UpdateWeldJointInput,
 } from './production.schema'
 
 // ── QC ──

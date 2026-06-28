@@ -72,6 +72,34 @@ export const createMaterialIssueSchema = z.object({
 
 export type CreateMaterialIssueInput = z.infer<typeof createMaterialIssueSchema>
 
+// ── Weld Joint ──
+
+export const createWeldJointSchema = z.object({
+  workOrderId: z.string().min(1),
+  jointNo: z.string().min(1),
+  jointType: z.enum(['BUTT', 'FILLET', 'LAP', 'TEE', 'CORNER']).default('BUTT'),
+  wpsNo: z.string().optional(),
+  welderId: z.string().optional(),
+  welderCertId: z.string().optional(),
+  diameter: z.number().positive().optional(),
+  thickness: z.number().positive().optional(),
+  length: z.number().positive().optional(),
+  remarks: z.string().optional(),
+})
+export type CreateWeldJointInput = z.infer<typeof createWeldJointSchema>
+
+export const updateWeldJointSchema = z.object({
+  status: z.enum(['PENDING', 'WELDED', 'REPAIRED']).optional(),
+  wpsNo: z.string().optional(),
+  welderId: z.string().optional(),
+  welderCertId: z.string().optional(),
+  ndtStatus: z.enum(['PENDING', 'PASSED', 'FAILED']).optional(),
+  ndtMethod: z.string().optional(),
+  ncrId: z.string().optional(),
+  remarks: z.string().optional(),
+})
+export type UpdateWeldJointInput = z.infer<typeof updateWeldJointSchema>
+
 // ── Workshop ──
 
 export const createWorkshopSchema = z.object({

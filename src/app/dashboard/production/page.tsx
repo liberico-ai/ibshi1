@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { SearchBar } from '@/components/SearchPagination'
 import {
@@ -10,17 +10,34 @@ import {
   EmptyState, KPICard, Modal, InputField, SelectField, TextareaField,
   Pagination,
 } from '@/components/ui'
-import { Clock } from 'lucide-react'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
-  teamCode: string; status: string; plannedStart: string | null;
-  plannedEnd: string | null; actualStart: string | null;
-  actualEnd: string | null; materialIssueCount: number; createdAt: string;
+  teamCode: string; status: string; pieceMark: string | null;
+  plannedWeight: number | null; completedQty: number | null;
+  departmentId: string | null;
+  department: { code: string; name: string } | null;
+  project: { projectCode: string; projectName: string } | null;
+  plannedStart: string | null; plannedEnd: string | null;
+  actualStart: string | null; actualEnd: string | null;
+  materialIssueCount: number; createdAt: string;
+}
+
+interface TeamLoad {
+  id: string; code: string; name: string;
+  totalWO: number; activeWO: number;
+  plannedTons: number; completedTons: number; progressPct: number;
 }
 
 interface ProjectOption { id: string; projectCode: string; projectName: string }
 interface PaginationData { page: number; limit: number; total: number; totalPages: number }
+
+interface ProgressData {
+  summary: { totalTons: number; completedTons: number; tonsPct: number; totalPieceMarks: number; completedPieceMarks: number; pieceMarkPct: number }
+  stages: Array<{ stage: string; totalCards: number; completedCards: number; totalQty: number; pct: number }>
+  workOrderCount: number
+}
 
 const STATUS_FILTERS = [
   { value: '', label: 'Tất cả' },
@@ -30,9 +47,17 @@ const STATUS_FILTERS = [
   { value: 'CANCELLED', label: 'Đã hủy' },
 ]
 
+const STAGE_LABELS: Record<string, string> = {
+  cutting: 'Cắt', assembly: 'Tổ hợp', welding: 'Hàn', painting: 'Sơn', inspection: 'Nghiệm thu',
+}
+const STAGE_COLORS = ['#6366f1', '#3b82f6', '#f59e0b', '#10b981', '#ef4444']
+
 export default function ProductionPage() {
   const router = useRouter()
+  const user = useAuthStore(s => s.user)
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([])
+  const [teams, setTeams] = useState<TeamLoad[]>([])
+  const [progress, setProgress] = useState<ProgressData | null>(null)
   const [projects, setProjects] = useState<ProjectOption[]>([])
   const [pagination, setPagination] = useState<PaginationData>({ page: 1, limit: 20, total: 0, totalPages: 0 })
   const [loading, setLoading] = useState(true)
@@ -41,197 +66,206 @@ export default function ProductionPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
-  const loadProjects = async () => {
-    const res = await apiFetch('/api/projects')
-    if (res.ok) setProjects(res.projects)
-  }
+  const canCreate = ['R01', 'R06', 'R06b'].includes(user?.roleCode || '')
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     if (search) params.set('search', search)
     params.set('page', String(page))
-    const res = await apiFetch(`/api/production?${params}`)
-    if (res.ok) { setWorkOrders(res.workOrders); setPagination(res.pagination) }
+    const [woRes, teamRes, progRes] = await Promise.all([
+      apiFetch(`/api/production?${params}`),
+      apiFetch('/api/production/teams'),
+      apiFetch('/api/production/progress'),
+    ])
+    if (woRes.ok) { setWorkOrders(woRes.workOrders); setPagination(woRes.pagination) }
+    if (teamRes.ok) setTeams(teamRes.teams)
+    if (progRes.ok) setProgress(progRes)
     setLoading(false)
+  }, [statusFilter, search, page])
+
+  const openCreate = async () => {
+    const res = await apiFetch('/api/projects')
+    if (res.ok) setProjects(res.projects)
+    setShowCreate(true)
   }
 
-  const handleAction = async (e: React.MouseEvent, id: string, action: string) => {
-    e.stopPropagation()
-    const res = await apiFetch(`/api/production/${id}`, {
-      method: 'PUT', body: JSON.stringify({ action }),
-    })
-    if (res.ok) loadData()
-  }
-
-  useEffect(() => { loadProjects() }, [])
   useEffect(() => { setPage(1) }, [search, statusFilter])
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadData() }, [search, statusFilter, page])
+  useEffect(() => { loadData() }, [loadData])
 
-  if (loading) return (
-    <div className="space-y-4 animate-fade-in">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="h-24 rounded-xl skeleton" />
-      ))}
-    </div>
-  )
-
-  const openCount = workOrders.filter(w => w.status === 'OPEN').length
-  const inProgressCount = workOrders.filter(w => w.status === 'IN_PROGRESS').length
-  const completedCount = workOrders.filter(w => w.status === 'COMPLETED').length
+  if (loading) return <div className="space-y-4 animate-fade-in">{[1,2,3].map(i => <div key={i} className="h-24 skeleton rounded-xl" />)}</div>
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Quản lý Sản xuất"
         subtitle={`${pagination.total} lệnh sản xuất`}
-        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Tạo WO</Button>}
+        actions={canCreate ? <Button variant="accent" onClick={openCreate}>+ Tạo WO</Button> : undefined}
       />
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-4 gap-4 stagger-children">
-        <KPICard label="Tổng WO" value={pagination.total} accentColor="var(--ink)" icon={<span style={{ fontSize: 20 }}>🏭</span>} />
-        <KPICard label="Chờ bắt đầu" value={openCount} accentColor="var(--warning, #C97A0E)" icon={<span style={{ fontSize: 20 }}>⏳</span>} />
-        <KPICard label="Đang chạy" value={inProgressCount} accentColor="var(--info, #2D6CB5)" icon={<span style={{ fontSize: 20 }}>⚡</span>} />
-        <KPICard label="Hoàn thành" value={completedCount} accentColor="var(--success, #1E8E5A)" icon={<span style={{ fontSize: 20 }}>✅</span>} />
-      </div>
+      {/* Progress summary */}
+      {progress && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
+          <KPICard label="Tổng tấn" value={`${progress.summary.totalTons}t`} accentColor={SEMANTIC_COLORS.info.solid} />
+          <KPICard label="Hoàn thành" value={`${progress.summary.completedTons}t (${progress.summary.tonsPct}%)`} accentColor={SEMANTIC_COLORS.success.solid} />
+          <KPICard label="Piece-mark" value={`${progress.summary.completedPieceMarks}/${progress.summary.totalPieceMarks}`} accentColor="var(--accent)" />
+          <KPICard label="WO" value={progress.workOrderCount} accentColor={SEMANTIC_COLORS.neutral.solid} />
+        </div>
+      )}
 
-      <CreateWOModal
-        open={showCreate}
-        projects={projects}
-        onClose={() => setShowCreate(false)}
-        onCreated={() => { setShowCreate(false); loadData() }}
-      />
+      {/* 5-stage progress bar */}
+      {progress && progress.stages.some(s => s.totalCards > 0) && (
+        <div className="card p-4">
+          <label className="input-label mb-3">Tiến độ 5 công đoạn</label>
+          <div className="flex gap-1 items-end h-16">
+            {progress.stages.map((s, i) => (
+              <div key={s.stage} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-[10px] font-bold" style={{ color: STAGE_COLORS[i] }}>{s.pct}%</span>
+                <div className="w-full rounded-t" style={{ height: `${Math.max(s.pct * 0.5, 4)}px`, background: STAGE_COLORS[i], transition: 'height 0.3s' }} />
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{STAGE_LABELS[s.stage]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Team load cards */}
+      {teams.length > 0 && (
+        <div>
+          <label className="input-label mb-2">Tải theo tổ</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {teams.map(t => (
+              <div key={t.id} className="card p-3 text-center" style={{ borderTop: `3px solid ${t.activeWO > 0 ? SEMANTIC_COLORS.info.solid : 'var(--border-light)'}` }}>
+                <p className="text-xs font-bold font-mono" style={{ color: 'var(--accent)' }}>{t.code}</p>
+                <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{t.name}</p>
+                <p className="text-lg font-bold mt-1" style={{ color: 'var(--text-primary)' }}>{t.activeWO}<span className="text-[10px] font-normal" style={{ color: 'var(--text-muted)' }}>/{t.totalWO} WO</span></p>
+                <div className="w-full h-1.5 rounded-full mt-1" style={{ background: 'var(--border-light)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${t.progressPct}%`, background: SEMANTIC_COLORS.success.solid, transition: 'width 0.3s' }} />
+                </div>
+                <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.completedTons}/{t.plannedTons}t</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <FilterBar
         filters={STATUS_FILTERS}
         value={statusFilter}
         onChange={setStatusFilter}
-        actions={
-          <div className="w-96">
-            <SearchBar value={search} onChange={setSearch} placeholder="Tìm mã WO, mô tả..." />
-          </div>
-        }
+        actions={<div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã WO, piece-mark..." /></div>}
       />
 
-      {/* WO Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {workOrders.map((wo) => {
-          const project = projects.find(p => p.id === wo.projectId)
-          return (
-            <div
-              key={wo.id}
-              className="card p-5 cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => router.push(`/dashboard/production/${wo.id}`)}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <span className="font-mono text-xs font-bold" style={{ color: 'var(--primary)' }}>{wo.woCode}</span>
-                  <p className="text-sm font-medium mt-1" style={{ color: 'var(--text-primary)' }}>{wo.description}</p>
-                </div>
-                <StatusBadge category="production" status={wo.status} />
-              </div>
-              <div className="space-y-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-                {project && <div>Dự án: <span style={{ color: 'var(--text-secondary)' }}>{project.projectCode}</span></div>}
-                <div>Tổ SX: <span style={{ color: 'var(--text-secondary)' }}>{wo.teamCode}</span></div>
-                {wo.plannedStart && <div className="flex items-center gap-1">
-                  <Clock size={10} />
-                  {formatDate(wo.plannedStart)} → {wo.plannedEnd ? formatDate(wo.plannedEnd) : '?'}
-                </div>}
-                <div>Vật tư: <span className="font-mono font-semibold" style={{ color: 'var(--primary)' }}>{wo.materialIssueCount}</span> lượt</div>
-              </div>
-              <div className="flex gap-2 mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-                {wo.status === 'OPEN' && <Button variant="outline" size="sm" onClick={(e) => handleAction(e, wo.id, 'start')}>Bắt đầu</Button>}
-                {wo.status === 'IN_PROGRESS' && <Button variant="accent" size="sm" onClick={(e) => handleAction(e, wo.id, 'complete')}>Hoàn thành</Button>}
-                {wo.status !== 'COMPLETED' && wo.status !== 'CANCELLED' && <Button variant="danger" size="sm" onClick={(e) => handleAction(e, wo.id, 'cancel')}>Hủy</Button>}
-              </div>
-            </div>
-          )
-        })}
-        {workOrders.length === 0 && (
-          <div className="col-span-3">
-            <EmptyState icon="🏭" title="Chưa có lệnh sản xuất" description="Tạo lệnh sản xuất mới để bắt đầu" />
-          </div>
-        )}
+      {/* WO table */}
+      <div className="dt-wrapper">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Mã WO</th>
+              <th>Piece-mark</th>
+              <th>Mô tả</th>
+              <th>Tổ SX</th>
+              <th>Dự án</th>
+              <th>Trọng lượng</th>
+              <th>Trạng thái</th>
+              <th>Ngày</th>
+            </tr>
+          </thead>
+          <tbody>
+            {workOrders.length === 0 ? (
+              <tr><td colSpan={8}><EmptyState icon="🏭" title="Chưa có WO" /></td></tr>
+            ) : workOrders.map(wo => {
+              const weightPct = wo.plannedWeight && wo.completedQty ? Math.round((wo.completedQty / wo.plannedWeight) * 100) : 0
+              return (
+                <tr key={wo.id} className="cursor-pointer hover:bg-[var(--bg-hover)]" onClick={() => router.push(`/dashboard/production/${wo.id}`)}>
+                  <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{wo.woCode}</span></td>
+                  <td>{wo.pieceMark ? <span className="font-mono text-xs">{wo.pieceMark}</span> : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                  <td className="text-xs max-w-[200px] truncate">{wo.description}</td>
+                  <td>
+                    <span className="text-xs font-mono">{wo.department?.code || wo.teamCode}</span>
+                    {wo.department && <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>{wo.department.name}</span>}
+                  </td>
+                  <td className="text-xs font-mono">{wo.project?.projectCode || '—'}</td>
+                  <td>
+                    {wo.plannedWeight ? (
+                      <div className="text-xs">
+                        <span className="font-mono">{wo.completedQty || 0}/{wo.plannedWeight} kg</span>
+                        <div className="w-16 h-1.5 rounded-full mt-0.5" style={{ background: 'var(--border-light)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${weightPct}%`, background: SEMANTIC_COLORS.success.solid }} />
+                        </div>
+                      </div>
+                    ) : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
+                  <td><StatusBadge category="production" status={wo.status} /></td>
+                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(wo.createdAt)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
       <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={setPage} />
+
+      <CreateWOModal
+        open={showCreate}
+        projects={projects}
+        teams={teams}
+        onClose={() => setShowCreate(false)}
+        onCreated={() => { setShowCreate(false); loadData() }}
+      />
     </div>
   )
 }
 
-function CreateWOModal({ open, projects, onClose, onCreated }: {
-  open: boolean; projects: ProjectOption[]; onClose: () => void; onCreated: () => void
+function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
+  open: boolean; projects: ProjectOption[]; teams: TeamLoad[]; onClose: () => void; onCreated: () => void
 }) {
-  const [form, setForm] = useState({ woCode: '', projectId: '', description: '', teamCode: 'TO-01', plannedStart: '', plannedEnd: '' })
-  const [error, setError] = useState('')
+  const [form, setForm] = useState({
+    woCode: '', projectId: '', description: '', teamCode: '',
+    plannedStart: '', plannedEnd: '', pieceMark: '', plannedWeight: '',
+    departmentId: '',
+  })
   const [submitting, setSubmitting] = useState(false)
+  const update = (f: string, v: string) => setForm({ ...form, [f]: v })
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(''); setSubmitting(true)
-    const res = await apiFetch('/api/production', { method: 'POST', body: JSON.stringify(form) })
+  const submit = async () => {
+    if (!form.woCode || !form.projectId || !form.description || !form.teamCode) return alert('Nhập đầy đủ')
+    setSubmitting(true)
+    const res = await apiFetch('/api/production', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...form,
+        plannedWeight: form.plannedWeight ? Number(form.plannedWeight) : undefined,
+        departmentId: form.departmentId || undefined,
+      }),
+    })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else setError(res.error)
+    else alert(res.error || 'Lỗi')
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Tạo lệnh sản xuất" size="lg"
-      actions={
-        <form onSubmit={handleSubmit} className="flex gap-3 w-full justify-end">
-          <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
-          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo WO'}</Button>
-        </form>
-      }
-    >
-      {error && <div className="mb-3 p-2 rounded text-sm" style={{ background: 'var(--danger-bg, #fef2f2)', color: 'var(--danger, #dc2626)', border: '1px solid var(--danger-border, #fecaca)' }}>{error}</div>}
-      <form onSubmit={handleSubmit} className="grid grid-cols-3 gap-4">
-        <InputField
-          label="Mã WO *"
-          value={form.woCode}
-          onChange={(e) => setForm({ ...form, woCode: e.target.value })}
-          placeholder="WO-2026-001"
-          required
-        />
-        <SelectField
-          label="Dự án *"
-          value={form.projectId}
-          onChange={(e) => setForm({ ...form, projectId: e.target.value })}
-          options={[
-            { value: '', label: 'Chọn dự án' },
-            ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))
-          ]}
-          required
-        />
-        <InputField
-          label="Tổ SX *"
-          value={form.teamCode}
-          onChange={(e) => setForm({ ...form, teamCode: e.target.value })}
-          required
-        />
-        <div className="col-span-3">
-          <TextareaField
-            label="Mô tả *"
-            rows={2}
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            required
-          />
+    <Modal open={open} onClose={onClose} title="Tạo lệnh sản xuất" size="lg">
+      <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
+          <InputField label="Mã WO *" value={form.woCode} onChange={e => update('woCode', e.target.value)} placeholder="WO-2026-001" />
+          <SelectField label="Dự án *" value={form.projectId} onChange={e => update('projectId', e.target.value)}
+            options={[{ value: '', label: 'Chọn...' }, ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))]} />
+          <InputField label="Tổ SX *" value={form.teamCode} onChange={e => update('teamCode', e.target.value)} placeholder="TO-HAN1" />
         </div>
-        <InputField
-          label="Ngày bắt đầu"
-          type="date"
-          value={form.plannedStart}
-          onChange={(e) => setForm({ ...form, plannedStart: e.target.value })}
-        />
-        <InputField
-          label="Ngày kết thúc"
-          type="date"
-          value={form.plannedEnd}
-          onChange={(e) => setForm({ ...form, plannedEnd: e.target.value })}
-        />
-      </form>
+        <TextareaField label="Mô tả *" rows={2} value={form.description} onChange={e => update('description', e.target.value)} />
+        <div className="grid grid-cols-4 gap-3">
+          <InputField label="Piece-mark" value={form.pieceMark} onChange={e => update('pieceMark', e.target.value)} placeholder="C1, B2..." />
+          <InputField label="Trọng lượng (kg)" type="number" value={form.plannedWeight} onChange={e => update('plannedWeight', e.target.value)} />
+          <SelectField label="Phân về tổ" value={form.departmentId} onChange={e => update('departmentId', e.target.value)}
+            options={[{ value: '', label: 'Không chọn' }, ...teams.map(t => ({ value: t.id, label: `${t.code} — ${t.name}` }))]} />
+          <InputField label="Ngày BĐ" type="date" value={form.plannedStart} onChange={e => update('plannedStart', e.target.value)} />
+        </div>
+      </div>
+      <div className="flex gap-3 mt-5">
+        <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
+        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Tạo WO</Button>
+      </div>
     </Modal>
   )
 }

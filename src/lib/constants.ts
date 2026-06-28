@@ -220,6 +220,7 @@ export const MENU_ITEMS = [
   { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: 'Factory', href: '/dashboard/production', roles: ['R01', 'R03', 'R03a', 'R06', 'R06a', 'R06b'], group: 'production' },
   { key: 'jobcards', label: 'Phiếu công việc', labelEn: 'Job Cards', icon: 'Clipboard', href: '/dashboard/production/job-cards', roles: ['R01', 'R06', 'R06a', 'R06b'], group: 'production' },
   { key: 'workshops', label: 'Phân xưởng', labelEn: 'Workshops', icon: 'Wrench', href: '/dashboard/production/workshops', roles: ['R01', 'R06', 'R06a'], group: 'production' },
+  { key: 'weldmap', label: 'Weld Map', labelEn: 'Weld Map', icon: 'Flame', href: '/dashboard/production/weld-map', roles: ['R01', 'R06', 'R06a', 'R06b', 'R09', 'R09a'], group: 'production' },
   { key: 'delivery', label: 'Giao hàng', labelEn: 'Delivery', icon: 'Truck', href: '/dashboard/delivery', roles: ['R01', 'R06', 'R06a', 'R07', 'R07a'], group: 'production' },
 
   // ── QC ──

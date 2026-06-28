@@ -17,13 +17,16 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   const { page, limit, search, status } = qResult.data
   const projectId = new URL(req.url).searchParams.get('projectId')
 
+  const departmentId = new URL(req.url).searchParams.get('departmentId')
   const where: Record<string, unknown> = {}
   if (status) where.status = status
   if (projectId) where.projectId = projectId
+  if (departmentId) where.departmentId = departmentId
   if (search) {
     where.OR = [
       { woCode: { contains: search, mode: 'insensitive' } },
       { description: { contains: search, mode: 'insensitive' } },
+      { pieceMark: { contains: search, mode: 'insensitive' } },
     ]
   }
 
@@ -35,6 +38,8 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
         materialIssues: {
           select: { id: true, materialId: true, quantity: true },
         },
+        department: { select: { code: true, name: true } },
+        project: { select: { projectCode: true, projectName: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
@@ -42,13 +47,19 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     }),
   ])
 
-  const result = workOrders.map((wo: Record<string, unknown> & { materialIssues: Array<Record<string, unknown>> }) => ({
+  const result = workOrders.map((wo) => ({
     id: wo.id,
     woCode: wo.woCode,
     projectId: wo.projectId,
     description: wo.description,
     teamCode: wo.teamCode,
     status: wo.status,
+    pieceMark: wo.pieceMark,
+    plannedWeight: wo.plannedWeight ? Number(wo.plannedWeight) : null,
+    completedQty: wo.completedQty ? Number(wo.completedQty) : null,
+    departmentId: wo.departmentId,
+    department: wo.department,
+    project: wo.project,
     plannedStart: wo.plannedStart,
     plannedEnd: wo.plannedEnd,
     actualStart: wo.actualStart,
@@ -73,7 +84,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   }
 
   const body = await req.json()
-  const { woCode, projectId, description, teamCode, plannedStart, plannedEnd } = body
+  const { woCode, projectId, description, teamCode, plannedStart, plannedEnd, pieceMark, bomVersionId, plannedWeight, departmentId } = body
 
   if (!woCode || !projectId || !description || !teamCode) {
     return errorResponse('Thiếu: mã WO, dự án, mô tả, tổ SX')
@@ -90,6 +101,10 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
       teamCode,
       plannedStart: plannedStart ? new Date(plannedStart) : null,
       plannedEnd: plannedEnd ? new Date(plannedEnd) : null,
+      pieceMark: pieceMark || null,
+      bomVersionId: bomVersionId || null,
+      plannedWeight: plannedWeight || null,
+      departmentId: departmentId || null,
       createdBy: payload.userId,
     },
   })

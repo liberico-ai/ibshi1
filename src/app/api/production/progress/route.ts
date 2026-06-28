@@ -1,0 +1,74 @@
+import { NextRequest } from 'next/server'
+import prisma from '@/lib/db'
+import { authenticateRequest, successResponse, unauthorizedResponse } from '@/lib/auth'
+
+const STAGES = ['cutting', 'assembly', 'welding', 'painting', 'inspection'] as const
+
+// GET /api/production/progress — Fabrication progress by tons + piece-marks + 5-stage bar
+export async function GET(req: NextRequest) {
+  const user = await authenticateRequest(req)
+  if (!user) return unauthorizedResponse()
+
+  const url = new URL(req.url)
+  const projectId = url.searchParams.get('projectId') || undefined
+  const departmentId = url.searchParams.get('departmentId') || undefined
+
+  const woWhere: Record<string, unknown> = {}
+  if (projectId) woWhere.projectId = projectId
+  if (departmentId) woWhere.departmentId = departmentId
+
+  const workOrders = await prisma.workOrder.findMany({
+    where: woWhere,
+    select: {
+      id: true, woCode: true, pieceMark: true, status: true,
+      plannedWeight: true, completedQty: true, teamCode: true,
+      departmentId: true,
+      project: { select: { projectCode: true } },
+    },
+  })
+
+  const totalPieceMarks = workOrders.filter(w => w.pieceMark).length
+  const completedPieceMarks = workOrders.filter(w => w.pieceMark && w.status === 'COMPLETED').length
+  const totalTons = workOrders.reduce((s, w) => s + (w.plannedWeight ? Number(w.plannedWeight) / 1000 : 0), 0)
+  const completedTons = workOrders.reduce((s, w) => s + (w.completedQty ? Number(w.completedQty) / 1000 : 0), 0)
+
+  const woIds = workOrders.map(w => w.id)
+
+  const jobCards = await prisma.jobCard.findMany({
+    where: { workOrderId: { in: woIds }, status: { not: 'CANCELLED' } },
+    select: { workType: true, actualQty: true, status: true, workDate: true },
+  })
+
+  const stageProgress = STAGES.map(stage => {
+    const cards = jobCards.filter(jc => jc.workType === stage)
+    const completed = cards.filter(jc => jc.status === 'COMPLETED')
+    const totalQty = cards.reduce((s, jc) => s + (jc.actualQty ? Number(jc.actualQty) : 0), 0)
+    return {
+      stage,
+      totalCards: cards.length,
+      completedCards: completed.length,
+      totalQty: Math.round(totalQty * 100) / 100,
+      pct: cards.length > 0 ? Math.round((completed.length / cards.length) * 100) : 0,
+    }
+  })
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const dailyOutput = jobCards
+    .filter(jc => jc.status === 'COMPLETED' && jc.actualQty)
+    .reduce((s, jc) => s + Number(jc.actualQty), 0)
+
+  return successResponse({
+    summary: {
+      totalTons: Math.round(totalTons * 100) / 100,
+      completedTons: Math.round(completedTons * 100) / 100,
+      tonsPct: totalTons > 0 ? Math.round((completedTons / totalTons) * 100) : 0,
+      totalPieceMarks,
+      completedPieceMarks,
+      pieceMarkPct: totalPieceMarks > 0 ? Math.round((completedPieceMarks / totalPieceMarks) * 100) : 0,
+    },
+    stages: stageProgress,
+    dailyOutputKg: Math.round(dailyOutput * 100) / 100,
+    workOrderCount: workOrders.length,
+  })
+}
