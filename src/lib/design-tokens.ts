@@ -65,6 +65,14 @@ export const STATUS_COLORS = {
     IN_PROGRESS:      { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đang kiểm' },
     COMPLETED:        { bg: '#E6F4EC', text: '#157347', label: 'Hoàn thành' },
   },
+  logistics: {
+    DRAFT:            { bg: '#F1F3F5', text: '#64748B', label: 'Nháp' },
+    SHIPPED:          { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đã xuất' },
+    PENDING:          { bg: '#FBF1DF', text: '#C97A0E', label: 'Chờ xuất' },
+    IN_TRANSIT:       { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đang VC' },
+    ARRIVED:          { bg: '#FFF7ED', text: '#C2410C', label: 'Đã tới' },
+    RECEIVED:         { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã nhận' },
+  },
   bom: {
     DRAFT:            { bg: '#F1F3F5', text: '#64748B', label: 'Nháp' },
     APPROVED:         { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã duyệt' },

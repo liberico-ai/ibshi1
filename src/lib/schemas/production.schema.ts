@@ -133,3 +133,43 @@ export const updateDeliverySchema = z.object({
 })
 
 export type UpdateDeliveryInput = z.infer<typeof updateDeliverySchema>
+
+// ── Packing List ──
+
+export const createPackingListSchema = z.object({
+  projectId: z.string().min(1),
+  dimensions: z.string().optional(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    workOrderId: z.string().min(1),
+    pieceMark: z.string().min(1),
+    description: z.string().optional(),
+    weight: z.number().positive().optional(),
+    quantity: z.number().int().positive().default(1),
+  })).min(1, 'Cần ít nhất 1 piece-mark'),
+})
+export type CreatePackingListInput = z.infer<typeof createPackingListSchema>
+
+// ── Shipment ──
+
+export const createShipmentSchema = z.object({
+  projectId: z.string().min(1),
+  vehicleNo: z.string().optional(),
+  driverName: z.string().optional(),
+  driverPhone: z.string().optional(),
+  destination: z.string().optional(),
+  notes: z.string().optional(),
+  packingListIds: z.array(z.string().min(1)).min(1, 'Cần ít nhất 1 kiện'),
+})
+export type CreateShipmentInput = z.infer<typeof createShipmentSchema>
+
+export const updateShipmentSchema = z.object({
+  status: z.enum(['PENDING', 'IN_TRANSIT', 'ARRIVED', 'RECEIVED']).optional(),
+  vehicleNo: z.string().optional(),
+  driverName: z.string().optional(),
+  driverPhone: z.string().optional(),
+  destination: z.string().optional(),
+  receivedBy: z.string().optional(),
+  notes: z.string().optional(),
+})
+export type UpdateShipmentInput = z.infer<typeof updateShipmentSchema>

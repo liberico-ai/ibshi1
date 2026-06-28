@@ -105,6 +105,12 @@ export {
   updateWeldJointSchema,
   type CreateWeldJointInput,
   type UpdateWeldJointInput,
+  createPackingListSchema,
+  type CreatePackingListInput,
+  createShipmentSchema,
+  updateShipmentSchema,
+  type CreateShipmentInput,
+  type UpdateShipmentInput,
 } from './production.schema'
 
 // ── QC ──

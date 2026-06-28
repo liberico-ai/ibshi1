@@ -1,8 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { apiFetch } from '@/hooks/useAuth'
+import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import {
+  PageHeader, Button, FilterBar, StatusBadge, KPICard, EmptyState,
+  Pagination,
+} from '@/components/ui'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 
 interface Delivery {
   id: string; deliveryCode: string; status: string; shippingMethod: string | null;
@@ -12,97 +18,118 @@ interface Delivery {
   workOrder: { woCode: string; description: string } | null
 }
 
-const statusCfg: Record<string, { label: string; color: string }> = {
-  PACKING: { label: '📦 Đóng gói', color: '#f59e0b' },
-  SHIPPED: { label: '🚚 Đang vận chuyển', color: '#0ea5e9' },
-  DELIVERED: { label: '📬 Đã giao', color: '#8b5cf6' },
-  RECEIVED: { label: '✅ Đã nhận', color: '#16a34a' },
+interface ProgressData {
+  totalPlannedTons: number; totalPieceMarks: number;
+  packed: { weight: number; pieces: number };
+  shipped: { weight: number; pieces: number };
+  arrived: { weight: number };
+  packingListCount: number; shipmentCount: number;
+  shipmentsByStatus: { pending: number; inTransit: number; arrived: number; received: number };
 }
 
+const STATUS_FILTERS = [
+  { value: '', label: 'Tất cả' },
+  { value: 'PACKING', label: 'Đóng gói' },
+  { value: 'SHIPPED', label: 'Đã ship' },
+  { value: 'DELIVERED', label: 'Đã giao' },
+  { value: 'RECEIVED', label: 'Đã nhận' },
+]
+
 export default function DeliveryPage() {
+  const router = useRouter()
+  const user = useAuthStore(s => s.user)
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [progress, setProgress] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
-  const fetchData = () => {
-    setLoading(true)
-    apiFetch('/api/delivery').then(res => {
-      if (res.ok) setDeliveries(res.deliveries || [])
-      setLoading(false)
-    })
-  }
+  const canCreate = ['R01', 'R05', 'R05a', 'R06', 'R07'].includes(user?.roleCode || '')
 
-  useEffect(() => { fetchData() }, [])
+  const loadData = useCallback(async () => {
+    const params = new URLSearchParams()
+    if (statusFilter) params.set('status', statusFilter)
+    const [dlRes, progRes] = await Promise.all([
+      apiFetch(`/api/delivery?${params}`),
+      apiFetch('/api/logistics/progress'),
+    ])
+    if (dlRes.ok) setDeliveries(dlRes.deliveries || [])
+    if (progRes.ok) setProgress(progRes)
+    setLoading(false)
+  }, [statusFilter])
+
+  useEffect(() => { loadData() }, [loadData])
 
   const handleTransition = async (id: string, nextStatus: string) => {
     setActionLoading(id)
     const res = await apiFetch('/api/delivery', {
       method: 'PATCH', body: JSON.stringify({ id, status: nextStatus }),
     })
-    if (res.ok) fetchData()
+    if (res.ok) loadData()
     else alert(res.error || 'Lỗi')
     setActionLoading(null)
   }
 
   const nextAction: Record<string, { next: string; label: string }> = {
-    PACKING: { next: 'SHIPPED', label: '🚚 Xuất kho' },
-    SHIPPED: { next: 'DELIVERED', label: '📬 Đã giao' },
-    DELIVERED: { next: 'RECEIVED', label: '✅ KH xác nhận' },
+    PACKING: { next: 'SHIPPED', label: 'Xuất kho' },
+    SHIPPED: { next: 'DELIVERED', label: 'Đã giao' },
+    DELIVERED: { next: 'RECEIVED', label: 'KH xác nhận' },
   }
 
-  if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
-
-  const packingCount = deliveries.filter(d => d.status === 'PACKING').length
-  const shippedCount = deliveries.filter(d => d.status === 'SHIPPED').length
-  const deliveredCount = deliveries.filter(d => d.status === 'DELIVERED' || d.status === 'RECEIVED').length
+  if (loading) return <div className="space-y-4 animate-fade-in">{[1,2,3].map(i => <div key={i} className="h-24 skeleton rounded-xl" />)}</div>
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Giao hàng</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{deliveries.length} phiếu giao hàng</p>
-        </div>
-      </div>
-
-      {/* Stats Overview — Dashboard style */}
-      <div className="grid grid-cols-4 gap-4 stagger-children">
-        {[
-          { label: 'Tổng phiếu', value: deliveries.length, color: '#0a2540', icon: '📋' },
-          { label: 'Đang đóng gói', value: packingCount, color: '#f59e0b', icon: '📦' },
-          { label: 'Đang vận chuyển', value: shippedCount, color: '#0ea5e9', icon: '🚚' },
-          { label: 'Đã giao', value: deliveredCount, color: '#16a34a', icon: '✅' },
-        ].map(s => (
-          <div key={s.label} className="card p-6 relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: s.color, borderRadius: '16px 16px 0 0' }} />
-            <div className="flex items-center justify-between mb-4 pt-1">
-              <div style={{ width: '44px', height: '44px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${s.color}10`, fontSize: '20px' }}>
-                {s.icon}
-              </div>
-            </div>
-            <p style={{ fontSize: '32px', fontWeight: 800, color: s.color, letterSpacing: '-0.03em', lineHeight: 1 }}>{s.value}</p>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginTop: '8px' }}>{s.label}</p>
+      <PageHeader
+        title="Logistics & Giao hàng"
+        subtitle={`${deliveries.length} phiếu giao hàng`}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push('/dashboard/logistics/packing-lists')}>Packing List</Button>
+            <Button variant="outline" onClick={() => router.push('/dashboard/logistics/shipments')}>Shipments</Button>
+            <Button variant="outline" onClick={() => router.push('/dashboard/logistics/mdr')}>MDR</Button>
           </div>
-        ))}
-      </div>
+        }
+      />
 
-      <div className="card overflow-hidden">
+      {progress && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 stagger-children">
+          <KPICard label="Kế hoạch" value={`${progress.totalPlannedTons}t`} accentColor={SEMANTIC_COLORS.info.solid} />
+          <KPICard label="Đã đóng kiện" value={`${progress.packed.weight}kg / ${progress.packed.pieces}pc`} accentColor={SEMANTIC_COLORS.warning.solid} />
+          <KPICard label="Đã xuất" value={`${progress.shipped.weight}kg`} accentColor={SEMANTIC_COLORS.info.solid} />
+          <KPICard label="Đã tới site" value={`${progress.arrived.weight}kg`} accentColor={SEMANTIC_COLORS.success.solid} />
+          <KPICard label="Chuyến hàng" value={progress.shipmentCount} accentColor="var(--accent)" />
+        </div>
+      )}
+
+      <FilterBar
+        filters={STATUS_FILTERS}
+        value={statusFilter}
+        onChange={setStatusFilter}
+        actions={canCreate ? <Button variant="accent" onClick={() => router.push('/dashboard/logistics/packing-lists')}>+ Tạo kiện</Button> : undefined}
+      />
+
+      <div className="dt-wrapper">
         <table className="data-table">
-          <thead><tr><th>Mã</th><th>Dự án</th><th>WO</th><th>Trạng thái</th><th>Vận chuyển</th><th>Tracking</th><th>Ngày ship</th><th>Thao tác</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Mã</th><th>Dự án</th><th>WO</th><th>Trạng thái</th>
+              <th>Vận chuyển</th><th>Tracking</th><th>Ngày ship</th><th>Thao tác</th>
+            </tr>
+          </thead>
           <tbody>
             {deliveries.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có phiếu giao hàng</td></tr>
+              <tr><td colSpan={8}><EmptyState icon="📦" title="Chưa có phiếu giao hàng" /></td></tr>
             ) : deliveries.map(d => {
-              const cfg = statusCfg[d.status] || { label: d.status, color: '#888' }
               const action = nextAction[d.status]
               return (
                 <tr key={d.id}>
                   <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{d.deliveryCode}</span></td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.project?.projectCode || '—'}</td>
-                  <td className="text-xs" style={{ color: 'var(--primary)' }}>{d.workOrder?.woCode || '—'}</td>
-                  <td><span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: `${cfg.color}20`, color: cfg.color }}>{cfg.label}</span></td>
+                  <td className="text-xs">{d.project?.projectCode || '—'}</td>
+                  <td className="text-xs font-mono" style={{ color: 'var(--primary)' }}>{d.workOrder?.woCode || '—'}</td>
+                  <td><StatusBadge category="logistics" status={d.status} /></td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.shippingMethod || '—'}</td>
-                  <td className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{d.trackingNo || '—'}</td>
+                  <td className="text-xs font-mono">{d.trackingNo || '—'}</td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{d.shippedAt ? formatDate(d.shippedAt) : '—'}</td>
                   <td>
                     {action && (
@@ -110,12 +137,11 @@ export default function DeliveryPage() {
                         onClick={() => handleTransition(d.id, action.next)}
                         disabled={actionLoading === d.id}
                         className="text-xs px-2 py-1 rounded font-bold"
-                        style={{ background: `${statusCfg[action.next]?.color || '#888'}20`, color: statusCfg[action.next]?.color || '#888' }}
+                        style={{ background: SEMANTIC_COLORS.info.bg, color: SEMANTIC_COLORS.info.solid }}
                       >
-                        {action.label}
+                        {actionLoading === d.id ? '...' : action.label}
                       </button>
                     )}
-                    {actionLoading === d.id && <span className="text-xs ml-1">⏳</span>}
                   </td>
                 </tr>
               )

@@ -221,7 +221,10 @@ export const MENU_ITEMS = [
   { key: 'jobcards', label: 'Phiếu công việc', labelEn: 'Job Cards', icon: 'Clipboard', href: '/dashboard/production/job-cards', roles: ['R01', 'R06', 'R06a', 'R06b'], group: 'production' },
   { key: 'workshops', label: 'Phân xưởng', labelEn: 'Workshops', icon: 'Wrench', href: '/dashboard/production/workshops', roles: ['R01', 'R06', 'R06a'], group: 'production' },
   { key: 'weldmap', label: 'Weld Map', labelEn: 'Weld Map', icon: 'Flame', href: '/dashboard/production/weld-map', roles: ['R01', 'R06', 'R06a', 'R06b', 'R09', 'R09a'], group: 'production' },
-  { key: 'delivery', label: 'Giao hàng', labelEn: 'Delivery', icon: 'Truck', href: '/dashboard/delivery', roles: ['R01', 'R06', 'R06a', 'R07', 'R07a'], group: 'production' },
+  { key: 'delivery', label: 'Giao hàng', labelEn: 'Delivery', icon: 'Truck', href: '/dashboard/delivery', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'], group: 'logistics' },
+  { key: 'packing-lists', label: 'Packing List', labelEn: 'Packing Lists', icon: 'Package', href: '/dashboard/logistics/packing-lists', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'], group: 'logistics' },
+  { key: 'shipments', label: 'Chuyến hàng', labelEn: 'Shipments', icon: 'Truck', href: '/dashboard/logistics/shipments', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'], group: 'logistics' },
+  { key: 'mdr', label: 'MDR', labelEn: 'MDR', icon: 'FileCheck2', href: '/dashboard/logistics/mdr', roles: ['R01', 'R02', 'R07', 'R07a', 'R09', 'R09a'], group: 'logistics' },
 
   // ── QC ──
   { key: 'qc', label: 'Chất lượng', labelEn: 'QC', icon: 'ShieldCheck', href: '/dashboard/qc', roles: ['R01', 'R03', 'R03a', 'R09', 'R09a'], group: 'qc' },
@@ -269,7 +272,7 @@ export const MENU_ITEMS = [
 // [ẨN tạm các module chưa ổn — P1 đã hé lộ 14 trang hoạt động tốt]
 export const HIDDEN_MENU_KEYS = new Set<string>([
   'design', 'purchase-requests',
-  'material-issue', 'movements', 'workshops', 'delivery', 'fat-sat',
+  'material-issue', 'movements', 'workshops', 'fat-sat',
 ])
 
 export const PAGE_ACCESS: Record<string, readonly string[] | 'all'> = Object.fromEntries(

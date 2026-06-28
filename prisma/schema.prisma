@@ -77,6 +77,8 @@ model Project {
   cashflows          CashflowEntry[]
   changeEvents       ChangeEvent[]
   deliveries         DeliveryRecord[]
+  packingLists       PackingList[]
+  shipments          Shipment[]
   drawings           Drawing[]
   ecos               EngineeringChangeOrder[]
   itps               InspectionTestPlan[]
@@ -528,11 +530,12 @@ model WorkOrder {
   bomVersionId   String?          @map("bom_version_id")
   plannedWeight  Decimal?         @map("planned_weight")
   departmentId   String?          @map("department_id")
-  deliveries     DeliveryRecord[]
-  jobCards       JobCard[]
-  materialIssues MaterialIssue[]
-  weldJoints     WeldJoint[]
-  project        Project          @relation(fields: [projectId], references: [id])
+  deliveries       DeliveryRecord[]
+  jobCards         JobCard[]
+  materialIssues   MaterialIssue[]
+  weldJoints       WeldJoint[]
+  packingListItems PackingListItem[]
+  project          Project          @relation(fields: [projectId], references: [id])
   workshop       Workshop?        @relation(fields: [workshopId], references: [id])
   bomVersion     BomVersion?      @relation(fields: [bomVersionId], references: [id])
   department     Department?      @relation(fields: [departmentId], references: [id])
@@ -1187,6 +1190,87 @@ model DeliveryRecord {
   @@index([projectId])
   @@index([status])
   @@map("delivery_records")
+}
+
+model PackingList {
+  id          String            @id @default(cuid())
+  plCode      String            @unique @map("pl_code")
+  projectId   String            @map("project_id")
+  status      String            @default("DRAFT")
+  totalWeight Decimal?          @map("total_weight")
+  totalPieces Int               @default(0) @map("total_pieces")
+  dimensions  String?
+  notes       String?
+  createdBy   String            @map("created_by")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  items       PackingListItem[]
+  shipmentItems ShipmentItem[]
+  project     Project           @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+  @@map("packing_lists")
+}
+
+model PackingListItem {
+  id            String      @id @default(cuid())
+  packingListId String      @map("packing_list_id")
+  workOrderId   String      @map("work_order_id")
+  pieceMark     String      @map("piece_mark")
+  description   String?
+  weight        Decimal?
+  quantity      Int         @default(1)
+  qcStatus      String      @default("PENDING") @map("qc_status")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  packingList   PackingList @relation(fields: [packingListId], references: [id], onDelete: Cascade)
+  workOrder     WorkOrder   @relation(fields: [workOrderId], references: [id])
+
+  @@index([packingListId])
+  @@index([workOrderId])
+  @@map("packing_list_items")
+}
+
+model Shipment {
+  id           String         @id @default(cuid())
+  shipmentCode String         @unique @map("shipment_code")
+  projectId    String         @map("project_id")
+  status       String         @default("PENDING")
+  vehicleNo    String?        @map("vehicle_no")
+  driverName   String?        @map("driver_name")
+  driverPhone  String?        @map("driver_phone")
+  destination  String?
+  shippedAt    DateTime?      @map("shipped_at")
+  arrivedAt    DateTime?      @map("arrived_at")
+  receivedBy   String?        @map("received_by")
+  receivedAt   DateTime?      @map("received_at")
+  totalWeight  Decimal?       @map("total_weight")
+  totalPieces  Int            @default(0) @map("total_pieces")
+  notes        String?
+  createdBy    String         @map("created_by")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  items        ShipmentItem[]
+  project      Project        @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id            String      @id @default(cuid())
+  shipmentId    String      @map("shipment_id")
+  packingListId String      @map("packing_list_id")
+  loadedAt      DateTime?   @map("loaded_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  shipment      Shipment    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  packingList   PackingList @relation(fields: [packingListId], references: [id])
+
+  @@unique([shipmentId, packingListId])
+  @@index([shipmentId])
+  @@index([packingListId])
+  @@map("shipment_items")
 }
 
 model FileAttachment {
