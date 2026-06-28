@@ -63,7 +63,7 @@ export default function CashflowEntriesPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>💰 Dòng tiền chi tiết</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Dòng tiền chi tiết</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{entries.length} bút toán</p>
         </div>
         <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Ghi nhận</button>

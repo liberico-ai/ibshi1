@@ -11,8 +11,8 @@ interface Inspection {
 }
 
 const tabCfg = {
-  fat: { label: 'FAT (Factory)', emoji: '🏭', types: ['fat', 'FAT'] },
-  sat: { label: 'SAT (Site)', emoji: '🏗️', types: ['sat', 'SAT'] },
+  fat: { label: 'FAT (Factory)', emoji: 'FA', types: ['fat', 'FAT'] },
+  sat: { label: 'SAT (Site)', emoji: 'SA', types: ['sat', 'SAT'] },
 }
 
 export default function FATSATPage() {
@@ -34,7 +34,7 @@ export default function FATSATPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🔬 FAT / SAT — Nghiệm thu</h1>
+        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>FAT / SAT — Nghiệm thu</h1>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Factory Acceptance Test & Site Acceptance Test</p>
       </div>
 

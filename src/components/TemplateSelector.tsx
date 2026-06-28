@@ -15,13 +15,13 @@ import { useAuthStore } from '@/hooks/useAuth'
 export type TemplateType = 'ESTIMATE' | 'PR' | 'BBH' | 'WBS' | 'WELD_PAINT' | 'BOM' | 'SUPPLIER_QUOTE' | null
 
 export const TEMPLATES: { value: NonNullable<TemplateType>; label: string; icon: string; desc: string }[] = [
-  { value: 'ESTIMATE', label: 'Dự toán thi công', icon: '📊', desc: 'Upload Excel dự toán (DT01-DT07), parse tổng hợp chi phí' },
-  { value: 'PR', label: 'Đề xuất vật tư (PR)', icon: '📦', desc: 'Upload file PR, parse danh sách vật tư chính, đối chiếu kho' },
-  { value: 'BBH', label: 'Biên bản họp (BBH)', icon: '📋', desc: 'Upload BB họp Excel, parse nội dung & phân công' },
-  { value: 'WBS', label: 'WBS + Milestones', icon: '📐', desc: 'Upload WBS cơ cấu phân chia công việc + cột mốc dự án' },
-  { value: 'WELD_PAINT', label: 'Vật tư hàn / sơn', icon: '🔧', desc: 'Upload danh sách vật tư hàn, sơn' },
-  { value: 'BOM', label: 'BOM vật tư phụ', icon: '🧱', desc: 'Upload danh mục vật tư phụ (BOM)' },
-  { value: 'SUPPLIER_QUOTE', label: 'Báo giá nhà cung cấp', icon: '💰', desc: 'Tìm NCC, đính kèm báo giá/hợp đồng, so sánh & chọn' },
+  { value: 'ESTIMATE', label: 'Dự toán thi công', icon: 'DT', desc: 'Upload Excel dự toán (DT01-DT07), parse tổng hợp chi phí' },
+  { value: 'PR', label: 'Đề xuất vật tư (PR)', icon: 'PR', desc: 'Upload file PR, parse danh sách vật tư chính, đối chiếu kho' },
+  { value: 'BBH', label: 'Biên bản họp (BBH)', icon: 'BB', desc: 'Upload BB họp Excel, parse nội dung & phân công' },
+  { value: 'WBS', label: 'WBS + Milestones', icon: 'WB', desc: 'Upload WBS cơ cấu phân chia công việc + cột mốc dự án' },
+  { value: 'WELD_PAINT', label: 'Vật tư hàn / sơn', icon: 'HS', desc: 'Upload danh sách vật tư hàn, sơn' },
+  { value: 'BOM', label: 'BOM vật tư phụ', icon: 'BM', desc: 'Upload danh mục vật tư phụ (BOM)' },
+  { value: 'SUPPLIER_QUOTE', label: 'Báo giá nhà cung cấp', icon: 'BG', desc: 'Tìm NCC, đính kèm báo giá/hợp đồng, so sánh & chọn' },
 ]
 
 interface Props {
@@ -115,7 +115,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            📎 Chọn biểu mẫu sử dụng
+            Chọn biểu mẫu sử dụng
           </div>
           {selected && isEditable && (
             <button
@@ -189,7 +189,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
               onClick={() => handleSelectTemplate('SUPPLIER_QUOTE')}
               style={{ marginTop: 10, padding: '8px 16px', borderRadius: 10, border: '2px dashed #93c5fd', background: '#f0f9ff', color: '#1d4ed8', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', width: '100%' }}
             >
-              ➕ Bắt đầu báo giá NCC
+              + Bắt đầu báo giá NCC
             </button>
           )}
         </div>

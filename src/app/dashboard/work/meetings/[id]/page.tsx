@@ -161,9 +161,9 @@ export default function MeetingDetailPage() {
         </div>
         {m.endsAt && <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Kết thúc dự kiến: {formatShortDateTime(m.endsAt)}</div>}
         <div className="flex flex-wrap gap-3 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-          {m.project && <span className="px-2 py-0.5 rounded font-semibold" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {m.project.projectCode} — {m.project.projectName}</span>}
-          <span>🕒 {formatShortDateTime(m.startsAt)}</span>
-          {m.location && <span>📍 {m.location}</span>}
+          {m.project && <span className="px-2 py-0.5 rounded font-semibold" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{m.project.projectCode} — {m.project.projectName}</span>}
+          <span>{formatShortDateTime(m.startsAt)}</span>
+          {m.location && <span>{m.location}</span>}
           <span>Người tổ chức: <b>{m.createdByName}</b></span>
         </div>
         {m.agenda && <div className="mt-3 text-sm" style={{ color: 'var(--text-secondary)' }}><b>Nội dung:</b> {m.agenda}</div>}
@@ -174,10 +174,10 @@ export default function MeetingDetailPage() {
       <div className="lg:col-span-2 space-y-4">
         {/* Tài liệu họp */}
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="text-sm font-semibold mb-2">📎 Tài liệu họp</div>
+          <div className="text-sm font-semibold mb-2">Tài liệu họp</div>
           {m.files.length === 0 && <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Chưa có tài liệu.</div>}
           {m.files.map((f) => (
-            <a key={f.id} href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(f.id, f.fileName) }} className="block text-sm py-1" style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>📄 {f.fileName} ↗</a>
+            <a key={f.id} href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(f.id, f.fileName) }} className="block text-sm py-1" style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{f.fileName} ↗</a>
           ))}
           {isOrganizer && !isClosed && <div className="mt-2"><MultiFileUpload label="" entityType="Meeting" entityId={id} compact onUploaded={() => load()} /></div>}
         </div>
@@ -188,7 +188,7 @@ export default function MeetingDetailPage() {
         ) : isDone ? (
           (m.momNumber || m.minutesNote || m.minutesData) && (
             <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <div className="text-sm font-semibold mb-2">📝 Biên bản họp (MOM){m.momNumber ? ` · Số: ${m.momNumber}` : ''}</div>
+              <div className="text-sm font-semibold mb-2">Biên bản họp (MOM){m.momNumber ? ` · Số: ${m.momNumber}` : ''}</div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
                 {m.minutesData?.preparedBy && <span>Người lập: <b>{m.minutesData.preparedBy}</b></span>}
                 {m.minutesData?.place && <span>Địa điểm: <b>{m.minutesData.place}</b></span>}
@@ -218,9 +218,9 @@ export default function MeetingDetailPage() {
           )
         ) : isOrganizer && (
           <div className="rounded-xl p-4 space-y-2" style={{ background: '#fffbeb', border: '1px solid #fcd34d' }}>
-            <div className="text-sm font-semibold" style={{ color: '#b45309' }}>📝 Biên bản họp (MOM) & kết thúc</div>
+            <div className="text-sm font-semibold" style={{ color: '#b45309' }}>Biên bản họp (MOM) & kết thúc</div>
             <label className="block text-xs rounded-lg p-2 cursor-pointer text-center" style={{ border: '1px dashed #d97706', color: '#b45309', background: '#fffdf5' }}>
-              📥 Đọc tự động từ file biên bản (.xls/.xlsx) — điền sẵn theo mẫu
+              Đọc tự động từ file biên bản (.xls/.xlsx) — điền sẵn theo mẫu
               <input type="file" accept=".xls,.xlsx" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) parseFile(f); e.target.value = '' }} />
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -268,7 +268,7 @@ export default function MeetingDetailPage() {
                   ) : (
                     <div className="rounded-lg p-2.5" style={{ background: '#f8fafc', border: '1px dashed var(--border)' }}>
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs font-bold" style={{ color: '#1d4ed8' }}>🎯 Giao việc</span>
+                        <span className="text-xs font-bold" style={{ color: '#1d4ed8' }}>Giao việc</span>
                         {it.deptName && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>Gợi ý: {it.deptName}</span>}
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
@@ -307,7 +307,7 @@ export default function MeetingDetailPage() {
       {/* ══ CỘT PHỤ: người dự ══ */}
       <div className="space-y-4">
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="text-sm font-semibold mb-2">👥 Người dự ({m.invites.filter((i) => i.status === 'ACCEPTED').length}/{m.invites.length} đã nhận)</div>
+          <div className="text-sm font-semibold mb-2">Người dự ({m.invites.filter((i) => i.status === 'ACCEPTED').length}/{m.invites.length} đã nhận)</div>
           <div className="space-y-1.5">
             {m.invites.map((i) => {
               const r = RSVP[i.status] || RSVP.INVITED

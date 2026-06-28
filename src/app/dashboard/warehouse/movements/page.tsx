@@ -14,10 +14,10 @@ interface Movement {
 interface Material { id: string; materialCode: string; name: string; unit: string; currentStock: number }
 
 const TYPE_MAP: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  IN: { label: 'Nhập kho', color: '#16a34a', bg: '#dcfce7', icon: '📦' },
-  OUT: { label: 'Xuất kho', color: '#dc2626', bg: '#fef2f2', icon: '📤' },
-  RETURN: { label: 'Trả lại', color: '#2563eb', bg: '#dbeafe', icon: '↩️' },
-  ADJUST: { label: 'Điều chỉnh', color: '#f59e0b', bg: '#fef9c3', icon: '⚖️' },
+  IN: { label: 'Nhập kho', color: '#16a34a', bg: '#dcfce7', icon: 'IN' },
+  OUT: { label: 'Xuất kho', color: '#dc2626', bg: '#fef2f2', icon: 'OUT' },
+  RETURN: { label: 'Trả lại', color: '#2563eb', bg: '#dbeafe', icon: 'RT' },
+  ADJUST: { label: 'Điều chỉnh', color: '#f59e0b', bg: '#fef9c3', icon: 'ADJ' },
 }
 
 const REASON_MAP: Record<string, string> = {
@@ -99,7 +99,7 @@ export default function StockMovementsPage() {
       <div className="space-y-2">
         {movements.length === 0 && (
           <div className="card p-12 text-center">
-            <p className="text-4xl mb-3">📋</p>
+            <p className="text-4xl mb-3">--</p>
             <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Chưa có biến động kho</p>
           </div>
         )}

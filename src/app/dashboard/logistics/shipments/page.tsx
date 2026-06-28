@@ -8,6 +8,7 @@ import {
   InputField, SelectField, TextareaField,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { Truck } from 'lucide-react'
 
 interface ShipmentPLItem { pieceMark: string; weight: number | null; quantity: number }
 interface ShipmentItem {
@@ -102,7 +103,7 @@ export default function ShipmentsPage() {
           </thead>
           <tbody>
             {shipments.length === 0 ? (
-              <tr><td colSpan={9}><EmptyState icon="🚚" title="Chưa có chuyến hàng" /></td></tr>
+              <tr><td colSpan={9}><EmptyState icon={<Truck />} title="Chưa có chuyến hàng" /></td></tr>
             ) : shipments.map(sh => {
               const action = transitionMap[sh.status]
               return (

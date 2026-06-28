@@ -314,7 +314,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       return (
         <div className="rounded-xl p-4" style={{ background: '#f0fdf4', border: '2px solid #22c55e' }}>
           <div className="text-sm font-bold" style={{ color: '#15803d' }}>
-            🛒 Đã tạo PO: <span className="font-mono">{poState.poCode}</span>
+            Đã tạo PO: <span className="font-mono">{poState.poCode}</span>
           </div>
           <a href={`/dashboard/warehouse/purchase-orders`} className="text-xs underline" style={{ color: '#0369a1' }}>Xem đơn đặt hàng →</a>
         </div>
@@ -328,7 +328,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
           className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
           style={{ background: poState.loading ? '#94a3b8' : '#0284c7' }}
         >
-          {poState.loading ? 'Đang tạo PO...' : '🛒 Tạo đơn đặt hàng (PO)'}
+          {poState.loading ? 'Đang tạo PO...' : 'Tạo đơn đặt hàng (PO)'}
         </button>
         {poState.error && <span className="text-xs" style={{ color: '#dc2626' }}>{poState.error}</span>}
       </div>
@@ -341,7 +341,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-          📦 Vật tư cần mua ({compactPrItems.length}{!showAllPr && parsedPrItems.length !== compactPrItems.length ? `/${parsedPrItems.length}` : ''})
+          Vật tư cần mua ({compactPrItems.length}{!showAllPr && parsedPrItems.length !== compactPrItems.length ? `/${parsedPrItems.length}` : ''})
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -362,7 +362,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             className="px-2 py-1 rounded text-xs font-semibold"
             style={{ background: enriching ? '#94a3b8' : '#0284c7', color: '#fff' }}
           >
-            {enriching ? '...' : '🔄 Tính lại từ kho'}
+            {enriching ? '...' : 'Tính lại từ kho'}
           </button>
           {isEditable && (
             <button
@@ -370,7 +370,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
               className="px-2 py-1 rounded text-xs font-semibold"
               style={{ background: '#059669', color: '#fff' }}
             >
-              📤 Xuất mẫu BG cho NCC
+              Xuất mẫu BG cho NCC
             </button>
           )}
         </div>
@@ -450,7 +450,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             {chosen ? (
               <div className="rounded-xl p-4" style={{ background: '#f0fdf4', border: '2px solid #22c55e' }}>
                 <div className="text-sm font-bold" style={{ color: '#15803d' }}>
-                  ✅ NCC được chọn: {chosen.vendorName}{chosen.vendorCode ? ` (${chosen.vendorCode})` : ''} — {fmt(chosenAmount, chosen.currency)}
+                  NCC được chọn: {chosen.vendorName}{chosen.vendorCode ? ` (${chosen.vendorCode})` : ''} — {fmt(chosenAmount, chosen.currency)}
                   {hasNeedToBuy && needToBuyTotals[chosen.id] && <span className="ml-1 font-normal text-xs" style={{ color: '#166534' }}>(sau VAT, phần cần mua)</span>}
                 </div>
                 {chosen.selectReason && <div className="text-xs mt-1" style={{ color: '#166534' }}>Lý do: {chosen.selectReason}</div>}
@@ -467,16 +467,16 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
               </div>
             ) : (
               <div className="rounded-xl p-4" style={{ background: '#fef3c7', border: '2px solid #fbbf24' }}>
-                <div className="text-sm font-bold" style={{ color: '#92400e' }}>⚠️ Chưa chọn NCC</div>
+                <div className="text-sm font-bold" style={{ color: '#92400e' }}>Chưa chọn NCC</div>
               </div>
             )}
 
             {/* Comparison table */}
             <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>📊 So sánh báo giá ({sorted.length} NCC)</div>
+              <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>So sánh báo giá ({sorted.length} NCC)</div>
               {sorted.length < 3 && (
                 <div className="text-xs mb-2 px-2 py-1.5 rounded-lg" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-                  ⚠️ Chỉ có {sorted.length} báo giá (nên có ít nhất 3)
+                  Chỉ có {sorted.length} báo giá (nên có ít nhất 3)
                 </div>
               )}
               <div className="overflow-x-auto">
@@ -527,7 +527,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             {/* NCC detail panels (review mode) */}
             {quotes.some(q => q.lines && q.lines.length > 0) && (
               <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>📄 Chi tiết báo giá từng NCC</div>
+                <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Chi tiết báo giá từng NCC</div>
                 {quotes.filter(q => q.lines && q.lines.length > 0).map(q => (
                   <div key={q.id} className="mb-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>
                     <button type="button" onClick={() => toggleDetail(q.id)} className="w-full text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -580,7 +580,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
               )}
               {((q.lines?.length ?? 0) > 0 || q.files.length > 0 || q.totalAmount > 0) && (
                 <button onClick={() => resetQuoteData(q.id)} className="text-xs px-2 py-1 rounded-lg" style={{ color: '#b45309', border: '1px solid #fde68a', background: '#fffbeb' }}>
-                  🗑 Xóa báo giá
+                  Xóa báo giá
                 </button>
               )}
               <button onClick={() => removeRow(q.id)} className="text-xs px-2 py-1 rounded-lg" style={{ color: '#dc2626', border: '1px solid #fecaca', background: '#fef2f2' }}>Xóa</button>
@@ -695,7 +695,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
             <div className="mt-2 flex items-center gap-2">
               <label className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
                 style={{ background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd' }}>
-                📄 Upload file báo giá Excel
+                Upload file báo giá Excel
                 <input type="file" accept=".xlsx,.xls" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleParseQuoteFile(q.id, f); e.target.value = '' }} />
               </label>
@@ -776,15 +776,15 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       {/* C: Comparison */}
       {quotes.length > 0 && (
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>📊 So sánh báo giá</div>
+          <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>So sánh báo giá</div>
           {sorted.length < 2 && (
             <div className="text-xs mb-2 px-2 py-1.5 rounded-lg" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-              ⚠️ Thiếu giá để so sánh (cần ít nhất 2 báo giá có giá)
+              Thiếu giá để so sánh (cần ít nhất 2 báo giá có giá)
             </div>
           )}
           {sorted.length >= 2 && sorted.length < 3 && (
             <div className="text-xs mb-2 px-2 py-1.5 rounded-lg" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-              ⚠️ Nên có ít nhất 3 báo giá để so sánh
+              Nên có ít nhất 3 báo giá để so sánh
             </div>
           )}
           <div className="overflow-x-auto">
@@ -847,7 +847,6 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
 
       {canEditQuote && quotes.length === 0 && (
         <div className="text-center py-6 rounded-xl" style={{ background: '#f0f9ff', border: '2px dashed #93c5fd' }}>
-          <div className="text-3xl mb-2">💰</div>
           <div className="text-sm font-semibold" style={{ color: '#1d4ed8' }}>Bắt đầu tìm nhà cung cấp</div>
           <div className="text-xs mt-1" style={{ color: '#64748b' }}>Nhấn &quot;+ Thêm nhà cung cấp&quot; để thêm báo giá</div>
         </div>
@@ -933,14 +932,14 @@ function QuoteCoveragePanel({ quotes, prItems }: { quotes: SupplierQuote[]; prIt
     <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: `1px solid ${isFull ? '#86efac' : '#fde68a'}` }}>
       <div className="flex items-center gap-3 mb-2">
         <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-          📊 Độ phủ báo giá: {coverage.coveredCount}/{coverage.totalNeedToBuy} món ({coverage.coveragePercent}%)
+          Độ phủ báo giá: {coverage.coveredCount}/{coverage.totalNeedToBuy} món ({coverage.coveragePercent}%)
         </span>
       </div>
       <div style={{ height: 6, borderRadius: 3, background: '#e2e8f0', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${coverage.coveragePercent}%`, borderRadius: 3, background: isFull ? '#22c55e' : '#f59e0b', transition: 'width 0.3s' }} />
       </div>
       {isFull ? (
-        <div className="mt-2 text-xs" style={{ color: '#166534' }}>✅ Đã đủ báo giá 100% vật tư cần mua</div>
+        <div className="mt-2 text-xs" style={{ color: '#166534' }}>Đã đủ báo giá 100% vật tư cần mua</div>
       ) : (
         <div className="mt-2">
           <div className="text-xs" style={{ color: '#92400e' }}>
@@ -974,7 +973,7 @@ function QuoteCoveragePanel({ quotes, prItems }: { quotes: SupplierQuote[]; prIt
       )}
       {fewVendors > 0 && (
         <div className="mt-1 text-xs" style={{ color: '#64748b' }}>
-          💡 {fewVendors} món chỉ có 1 NCC báo giá — nên có ≥2-3 NCC để so sánh
+          {fewVendors} món chỉ có 1 NCC báo giá — nên có ≥2-3 NCC để so sánh
         </div>
       )}
     </div>
@@ -1092,7 +1091,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
   return (
     <div className="rounded-xl p-4 mt-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
       <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-        📋 So sánh theo vật tư ({rows.length} dòng cần mua × {quotesWithLines.length} NCC)
+        So sánh theo vật tư ({rows.length} dòng cần mua × {quotesWithLines.length} NCC)
         {hasBreakdown && <span className="ml-1 font-normal" style={{ color: '#64748b' }}>(giá sau VAT)</span>}
       </div>
 
@@ -1237,7 +1236,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
       {/* Khuyến nghị */}
       {rows.length > 0 && quotesWithLines.length >= 2 && (
         <div className="mt-3 p-3 rounded-lg" style={{ background: '#f0f9ff', border: '1px solid #93c5fd' }}>
-          <div className="text-xs font-semibold mb-2" style={{ color: '#1d4ed8' }}>💡 Khuyến nghị</div>
+          <div className="text-xs font-semibold mb-2" style={{ color: '#1d4ed8' }}>Khuyến nghị</div>
           {cheapestFullId ? (
             <>
               <div className="text-xs mb-1">

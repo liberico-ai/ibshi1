@@ -14,7 +14,7 @@ import {
   CalendarCheck, Building2, Bell, ScrollText, FileInput, FileOutput, PackageCheck,
   Wrench, FileSpreadsheet, PackageMinus, SearchCheck, FileSignature, Contact,
   Settings, Hammer, BarChart, FileText, TestTube, FolderCheck, Calculator, Truck,
-  LogOut, ChevronDown, ChevronLeft, AlertCircle, Barcode, Inbox,
+  LogOut, ChevronDown, ChevronLeft, AlertCircle, Barcode, Inbox, Lock,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -376,7 +376,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main style={{ flex: 1, padding: '28px 32px' }}>
           {pageBlocked ? (
             <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
-              <div className="text-5xl mb-4">🔒</div>
+              <div className="mb-4"><Lock size={48} style={{ color: 'var(--text-muted)' }} /></div>
               <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Không có quyền truy cập</h2>
               <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>Bạn không có quyền xem trang này ({roleName})</p>
               <Link href="/dashboard" className="px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: '#0284c7' }}>

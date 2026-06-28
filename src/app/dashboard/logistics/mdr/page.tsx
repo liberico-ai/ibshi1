@@ -6,6 +6,7 @@ import {
   PageHeader, KPICard, EmptyState, SelectField,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { ClipboardList, CheckCircle2, XCircle } from 'lucide-react'
 
 interface MDRData {
   project: { projectCode: string; projectName: string };
@@ -67,7 +68,7 @@ export default function MDRPage() {
           <div className="card p-6 text-center" style={{
             borderTop: `4px solid ${canRelease ? SEMANTIC_COLORS.success.solid : SEMANTIC_COLORS.danger.solid}`,
           }}>
-            <div className="text-4xl mb-2">{canRelease ? '✅' : '🚫'}</div>
+            <div className="mb-2">{canRelease ? <CheckCircle2 size={44} style={{ color: '#16a34a' }} /> : <XCircle size={44} style={{ color: '#dc2626' }} />}</div>
             <h2 className="text-lg font-bold" style={{ color: canRelease ? SEMANTIC_COLORS.success.solid : SEMANTIC_COLORS.danger.solid }}>
               {canRelease ? 'SẴN SÀNG PHÁT HÀNH' : 'CHƯA ĐỦ ĐIỀU KIỆN'}
             </h2>
@@ -146,7 +147,7 @@ export default function MDRPage() {
       )}
 
       {!projectId && !loading && (
-        <EmptyState icon="📋" title="Chọn dự án để kiểm tra điều kiện phát hành MDR" />
+        <EmptyState icon={<ClipboardList />} title="Chọn dự án để kiểm tra điều kiện phát hành MDR" />
       )}
     </div>
   )

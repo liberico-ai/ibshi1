@@ -9,6 +9,7 @@ import {
   Pagination,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { Package } from 'lucide-react'
 
 interface Delivery {
   id: string; deliveryCode: string; status: string; shippingMethod: string | null;
@@ -114,7 +115,7 @@ export default function DeliveryPage() {
           </thead>
           <tbody>
             {deliveries.length === 0 ? (
-              <tr><td colSpan={8}><EmptyState icon="📦" title="Chưa có phiếu giao hàng" /></td></tr>
+              <tr><td colSpan={8}><EmptyState icon={<Package />} title="Chưa có phiếu giao hàng" /></td></tr>
             ) : deliveries.map(d => {
               const action = nextAction[d.status]
               return (

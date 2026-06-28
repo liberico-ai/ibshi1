@@ -8,6 +8,7 @@ import {
   PageHeader, Button, FilterBar, KPICard, EmptyState, Modal,
   InputField, SelectField,
 } from '@/components/ui'
+import { ClipboardList } from 'lucide-react'
 
 interface Certificate {
   id: string; certType: string; certNumber: string; holderName: string;
@@ -17,10 +18,10 @@ interface Certificate {
 }
 
 const TYPE_MAP: Record<string, { label: string; icon: string }> = {
-  welder_cert: { label: 'Thợ hàn', icon: '🔥' },
-  ndt_cert: { label: 'NDT', icon: '🔬' },
-  workshop_cert: { label: 'Xưởng', icon: '🏭' },
-  calibration: { label: 'Hiệu chuẩn', icon: '📏' },
+  welder_cert: { label: 'Thợ hàn', icon: 'WD' },
+  ndt_cert: { label: 'NDT', icon: 'NT' },
+  workshop_cert: { label: 'Xưởng', icon: 'WS' },
+  calibration: { label: 'Hiệu chuẩn', icon: 'CA' },
 }
 
 export default function CertificatePage() {
@@ -78,19 +79,16 @@ export default function CertificatePage() {
         <KPICard
           label="Con han"
           value={certs.length - expiredCount}
-          icon={<span>&#x2705;</span>}
           accentColor={SEMANTIC_COLORS.success.solid}
         />
         <KPICard
           label="Sap het han"
           value={expiringSoonCount}
-          icon={<span>&#x26A0;&#xFE0F;</span>}
           accentColor={SEMANTIC_COLORS.warning.solid}
         />
         <KPICard
           label="Het han"
           value={expiredCount}
-          icon={<span>&#x1F534;</span>}
           accentColor={SEMANTIC_COLORS.danger.solid}
         />
       </div>
@@ -106,13 +104,13 @@ export default function CertificatePage() {
       <div className="space-y-2">
         {certs.length === 0 && (
           <EmptyState
-            icon="🎓"
+            icon={<ClipboardList />}
             title="Chua co chung chi nao"
             description="Them chung chi moi de bat dau theo doi"
           />
         )}
         {certs.map(cert => {
-          const tp = TYPE_MAP[cert.certType] || { label: cert.certType, icon: '📄' }
+          const tp = TYPE_MAP[cert.certType] || { label: cert.certType, icon: '--' }
           const borderColor = cert.isExpired
             ? SEMANTIC_COLORS.danger.solid
             : cert.isExpiringSoon

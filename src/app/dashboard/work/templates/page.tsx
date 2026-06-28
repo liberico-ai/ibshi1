@@ -25,12 +25,12 @@ export default function TemplatesPage() {
     if (!sel || !applyProj) return
     setMsg('')
     const res = await apiFetch('/api/work/templates/apply', { method: 'POST', body: JSON.stringify({ projectId: applyProj, templateCode: sel.code }) })
-    setMsg(res.ok ? `✓ ${res.message}` : `❌ ${res.error}`)
+    setMsg(res.ok ? `✓ ${res.message}` : res.error)
   }
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>⚙️ Quy trình & Template</h1>
+      <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quy trình & Template</h1>
       <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Template theo loại dự án. Áp vào dự án để tự sinh các công việc chuẩn (động).</p>
 
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>

@@ -7,6 +7,7 @@ import {
   InputField, SelectField, TextareaField,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { Wrench } from 'lucide-react'
 
 interface Equip {
   id: string; equipmentCode: string; name: string; category: string;
@@ -87,7 +88,7 @@ export default function EquipmentPage() {
           </thead>
           <tbody>
             {equipment.length === 0 ? (
-              <tr><td colSpan={8}><EmptyState icon="🔧" title="Chưa có thiết bị" /></td></tr>
+              <tr><td colSpan={8}><EmptyState icon={<Wrench />} title="Chưa có thiết bị" /></td></tr>
             ) : equipment.map(eq => (
               <tr key={eq.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{eq.equipmentCode}</span></td>

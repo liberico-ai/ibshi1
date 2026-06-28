@@ -30,7 +30,7 @@ export default function PieceRateOutputPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📊 Khối lượng Khoán tháng</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Khối lượng Khoán tháng</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Monthly Piece-Rate Output</p>
         </div>
         <div className="flex gap-2">

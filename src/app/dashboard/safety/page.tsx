@@ -24,14 +24,14 @@ export default function SafetyPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const TRANSITIONS: Record<string, { next: string; label: string; color: string }[]> = {
-    OPEN: [{ next: 'INVESTIGATING', label: '🔍 Điều tra', color: '#0ea5e9' }],
+    OPEN: [{ next: 'INVESTIGATING', label: 'Điều tra', color: '#0ea5e9' }],
     INVESTIGATING: [
-      { next: 'RESOLVED', label: '✓ Xử lý xong', color: '#16a34a' },
-      { next: 'OPEN', label: '← Mở lại', color: '#f59e0b' },
+      { next: 'RESOLVED', label: 'Xử lý xong', color: '#16a34a' },
+      { next: 'OPEN', label: 'Mở lại', color: '#f59e0b' },
     ],
     RESOLVED: [
-      { next: 'CLOSED', label: '✅ Đóng', color: '#16a34a' },
-      { next: 'INVESTIGATING', label: '← Điều tra lại', color: '#f59e0b' },
+      { next: 'CLOSED', label: 'Đóng', color: '#16a34a' },
+      { next: 'INVESTIGATING', label: 'Điều tra lại', color: '#f59e0b' },
     ],
   }
 
@@ -92,10 +92,10 @@ export default function SafetyPage() {
       {/* Stats Overview — Dashboard style */}
       <div className="grid grid-cols-4 gap-4 stagger-children">
         {[
-          { label: 'Tổng sự cố', value: totalCount, color: '#0a2540', icon: '🦺' },
-          { label: 'Đang mở', value: openCount, color: '#f59e0b', icon: '⚠️' },
-          { label: 'Nghiêm trọng', value: criticalCount, color: '#dc2626', icon: '🔴' },
-          { label: 'Đã xử lý', value: resolvedCount, color: '#16a34a', icon: '✅' },
+          { label: 'Tổng sự cố', value: totalCount, color: '#0a2540', icon: '' },
+          { label: 'Đang mở', value: openCount, color: '#f59e0b', icon: '' },
+          { label: 'Nghiêm trọng', value: criticalCount, color: '#dc2626', icon: '' },
+          { label: 'Đã xử lý', value: resolvedCount, color: '#16a34a', icon: '' },
         ].map(s => (
           <div key={s.label} className="card p-6 relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: s.color, borderRadius: '16px 16px 0 0' }} />
@@ -171,7 +171,7 @@ export default function SafetyPage() {
                         {t.label}
                       </button>
                     ))}
-                    {actionLoading === i.id && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>⏳</span>}
+                    {actionLoading === i.id && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>...</span>}
                   </div>
                 </td>
               </tr>

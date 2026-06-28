@@ -34,14 +34,14 @@ function formatBytes(bytes: number): string {
 
 function getFileIcon(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() || ''
-  if (['pdf'].includes(ext)) return '📄'
-  if (['doc', 'docx'].includes(ext)) return '📝'
-  if (['xls', 'xlsx', 'csv'].includes(ext)) return '📊'
-  if (['ppt', 'pptx'].includes(ext)) return '📑'
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return '🖼️'
-  if (['dwg', 'dxf'].includes(ext)) return '📐'
-  if (['zip', 'rar', '7z'].includes(ext)) return '🗂️'
-  return '📎'
+  if (['pdf'].includes(ext)) return 'PDF'
+  if (['doc', 'docx'].includes(ext)) return 'DOC'
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return 'XLS'
+  if (['ppt', 'pptx'].includes(ext)) return 'PPT'
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'IMG'
+  if (['dwg', 'dxf'].includes(ext)) return 'DWG'
+  if (['zip', 'rar', '7z'].includes(ext)) return 'ZIP'
+  return 'FILE'
 }
 
 /** Extract dot-extensions from an accept string (ignoring MIME types) */
@@ -277,10 +277,10 @@ export default function MultiFileUpload({
             disabled={disabled || uploading}
           />
           {uploading ? (
-            <span style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>⏳ Đang upload...</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>Đang upload...</span>
           ) : (
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {dragOver ? '📂 Thả file vào đây' : `📎 Chọn hoặc kéo thả file${compact ? '' : ' (nhiều file)'}`}
+              {dragOver ? 'Thả file vào đây' : `Chọn hoặc kéo thả file${compact ? '' : ' (nhiều file)'}`}
             </span>
           )}
         </div>
@@ -293,7 +293,7 @@ export default function MultiFileUpload({
       )}
 
       {error && (
-        <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: 4, fontWeight: 500 }}>⚠️ {error}</div>
+        <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</div>
       )}
     </div>
   )

@@ -6,6 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { PageHeader, Button, Badge, KPICard, EmptyState } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { FolderOpen, ClipboardList } from 'lucide-react'
 
 interface ProjectSummary {
   id: string; projectCode: string; projectName: string; clientName: string
@@ -84,7 +85,7 @@ export default function WorkOverviewPage() {
   if (loading) return <div className="space-y-4 animate-fade-in"><div className="h-24 skeleton rounded-xl" /><div className="h-48 skeleton rounded-xl" /></div>
 
   if (error) return (
-    <EmptyState icon="!" title={error} action={<Button variant="outline" onClick={loadOverview}>Thử lại</Button>} />
+    <EmptyState title={error} action={<Button variant="outline" onClick={loadOverview}>Thử lại</Button>} />
   )
 
   if (selectedId) {
@@ -160,7 +161,7 @@ export default function WorkOverviewPage() {
         })}
         {projects.length === 0 && (
           <div className="col-span-full">
-            <EmptyState icon="📁" title="Chưa có dự án nào" />
+            <EmptyState icon={<FolderOpen />} title="Chưa có dự án nào" />
           </div>
         )}
       </div>
@@ -254,7 +255,7 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
                   <td className="cursor-pointer hover:underline" style={{ color: d.overdue > 0 ? SEMANTIC_COLORS.danger.solid : 'var(--text-muted)', fontWeight: d.overdue > 0 ? 700 : 400 }} onClick={() => applyFilter({ label: `dept-overdue-${d.deptCode}`, fn: (t) => t.deptName === d.deptName && t.overdue })}>{d.overdue}</td>
                 </tr>
               ))}
-              {ov.byDept.length === 0 && <tr><td colSpan={5}><EmptyState icon="📁" title="Chưa có công việc" /></td></tr>}
+              {ov.byDept.length === 0 && <tr><td colSpan={5}><EmptyState icon={<FolderOpen />} title="Chưa có công việc" /></td></tr>}
             </tbody>
           </table>
         </div>
@@ -282,7 +283,7 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
                   <td className="text-xs" style={{ color: t.overdue ? SEMANTIC_COLORS.danger.solid : 'var(--text-muted)', fontWeight: t.overdue ? 700 : 400 }}>{t.deadline ? formatDate(t.deadline) : '—'}{t.overdue ? ' (quá hạn)' : ''}</td>
                 </tr>
               ))}
-              {shown.length === 0 && <tr><td colSpan={5}><EmptyState icon="📋" title="Không có công việc" /></td></tr>}
+              {shown.length === 0 && <tr><td colSpan={5}><EmptyState icon={<ClipboardList />} title="Không có công việc" /></td></tr>}
             </tbody>
           </table>
         </div>

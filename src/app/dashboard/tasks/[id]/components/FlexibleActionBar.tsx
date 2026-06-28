@@ -106,7 +106,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
   const addFwdUser = (u: Usr) => {
     if (fwdPicks.some((p) => p.userId === u.id)) { setFwdQuery(''); return }
     const userDept = ROLE_TO_DEPT[u.roleCode]
-    setFwdPicks((prev) => [...prev.filter((p) => !(p.role && ROLE_TO_DEPT[p.role] === userDept)), { userId: u.id, label: `👤 ${u.fullName || u.username}` }])
+    setFwdPicks((prev) => [...prev.filter((p) => !(p.role && ROLE_TO_DEPT[p.role] === userDept)), { userId: u.id, label: `${u.fullName || u.username}` }])
     setFwdQuery('')
   }
   const fwdUsers = fwdQuery.trim()
@@ -238,14 +238,14 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
 
           {/* ── Tài liệu bắt buộc chuyển tiếp ── */}
           <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a' }}>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 6, color: '#92400e' }}>📖 Tài liệu bắt buộc (chuyển kèm)</div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 6, color: '#92400e' }}>Tài liệu bắt buộc (chuyển kèm)</div>
             {fwdDocs.length === 0 && (
               <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6 }}>Không có tài liệu từ task gốc.</div>
             )}
             {fwdDocs.map((d, i) => (
               <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', padding: '3px 0', cursor: 'pointer' }}>
                 <input type="checkbox" checked={!!d.selected} onChange={(e) => setFwdDocs((prev) => prev.map((dd, idx) => idx === i ? { ...dd, selected: e.target.checked } : dd))} />
-                <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? '📄 Phải đọc' : '📤 Phải trả lại'}</span>
+                <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? 'Phải đọc' : 'Phải trả lại'}</span>
                 <span style={{ flex: 1 }}>{d.label}</span>
                 {d.fileName && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({d.fileName})</span>}
               </label>

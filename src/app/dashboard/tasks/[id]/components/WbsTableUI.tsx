@@ -259,13 +259,13 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
       <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '1rem', color: '#0ea5e9' }}>📋 Bảng kế hoạch tổng thể triển khai (WBS)</h3>
+            <h3 style={{ margin: 0, fontSize: '1rem', color: '#0ea5e9' }}>Bảng kế hoạch tổng thể triển khai (WBS)</h3>
             <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Biểu mẫu BCTH-IBSHI-QLDA-095</p>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            {mode === 'lsx' && onSave && <button type="button" onClick={onSave} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>💾 Lưu</button>}
-            <button type="button" onClick={exportExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📤 Export</button>
-            {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📥 Import</button>}
+            {mode === 'lsx' && onSave && <button type="button" onClick={onSave} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Lưu</button>}
+            <button type="button" onClick={exportExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Export</button>
+            {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Import</button>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 24, marginTop: 16, flexWrap: 'wrap' }}>
@@ -304,7 +304,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
           </div>
         )}
         <button type="button" onClick={() => setWbsModalOpen(true)} style={{ marginTop: 16, padding: '10px 20px', width: '100%', fontSize: '0.9rem', fontWeight: 700, background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', letterSpacing: '0.3px' }}>
-          {isWbsEditable ? '📋 Xem & Sửa chi tiết' : '📋 XEM'}
+          {isWbsEditable ? 'Xem & Sửa chi tiết' : 'XEM'}
         </button>
       </div>
 
@@ -312,11 +312,11 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setWbsModalOpen(false); }}>
           <div style={{ flex: 1, background: '#fff', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: '12px 20px', borderBottom: '2px solid #0ea5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: '#f0f9ff' }}>
-              <div><h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0c4a6e' }}>📋 WBS</h2><span style={{ fontSize: '0.72rem', color: '#64748b' }}>{rows.length} hạng mục</span></div>
+              <div><h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0c4a6e' }}>WBS</h2><span style={{ fontSize: '0.72rem', color: '#64748b' }}>{rows.length} hạng mục</span></div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {isWbsEditable && <button type="button" onClick={addRow} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>+ Thêm</button>}
-                <button type="button" onClick={exportExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📤 Export</button>
-                {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📥 Import</button>}
+                <button type="button" onClick={exportExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Export</button>
+                {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Import</button>}
                 <button type="button" onClick={() => setWbsModalOpen(false)} style={{ padding: '5px 14px', fontSize: '0.85rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>✕ Đóng</button>
               </div>
             </div>
@@ -372,18 +372,18 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           const borderColor = isFailed ? '#dc2626' : isFull ? '#16a34a' : isPartial ? '#2563eb' : '#fde68a';
                           const bgColor = isFailed ? '#fef2f2' : isFull ? '#d1fae5' : isPartial ? '#dbeafe' : '#fef3c7';
                           const badgeColor = isFailed ? '#dc2626' : isFull ? '#16a34a' : '#2563eb';
-                          const tooltipText = isFailed ? '❌ Bị QC TỪ CHỐI — Click để Xử lý' :
+                          const tooltipText = isFailed ? 'Bị QC TỪ CHỐI — Click để Xử lý' :
                             isFull
-                            ? `✅ Đã phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • ${assignCount} tổ)`
+                            ? `Đã phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • ${assignCount} tổ)`
                             : isPartial
-                            ? `⏳ Chưa phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • còn ${formatNumber(totalKL - assignedKL)})`
-                            : '📋 Chưa phân giao — Click để phân giao tổ';
+                            ? `Chưa phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • còn ${formatNumber(totalKL - assignedKL)})`
+                            : 'Chưa phân giao — Click để phân giao tổ';
                           return (
                             <td key={c.key} style={tdS}>
                               <button type="button" onClick={() => openAssignPanel(ri, c.key)}
                                 title={tooltipText}
                                 style={{ ...inputS, cursor: 'pointer', border: `2px solid ${borderColor}`, background: bgColor, fontWeight: 600, textAlign: 'center', borderRadius: 5, position: 'relative' }}>
-                                {isFailed ? '❌ LỖI' : cellVal}
+                                {isFailed ? 'LỖI' : cellVal}
                                 {assignCount > 0 && !isFailed && <span style={{ position: 'absolute', top: -6, right: -6, background: badgeColor, color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{assignCount}</span>}
                               </button>
                             </td>
@@ -400,7 +400,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                             <button type="button" onClick={() => setLsxConfirmRow({ idx: ri, row, type: 'lsx' })}
                               disabled={lsxStatus?.[ri]?.lsx}
                               style={{ padding: '3px 8px', fontSize: '0.68rem', fontWeight: 700, borderRadius: 5, border: 'none', cursor: lsxStatus?.[ri]?.lsx ? 'default' : 'pointer', background: lsxStatus?.[ri]?.lsx ? '#d1fae5' : '#f59e0b', color: lsxStatus?.[ri]?.lsx ? '#16a34a' : '#fff', opacity: lsxStatus?.[ri]?.lsx ? 0.8 : 1 }}>
-                              {lsxStatus?.[ri]?.lsx ? '✅ Đã LSX' : '📋 LSX'}
+                              {lsxStatus?.[ri]?.lsx ? 'Đã LSX' : 'LSX'}
                             </button>
                             {(() => {
                               const allMats = getAllMaterialsForRow(ri);
@@ -408,7 +408,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                               return (
                                 <button type="button" onClick={() => setLsxConfirmRow({ idx: ri, row, type: 'vt' })}
                                   style={{ padding: '3px 8px', fontSize: '0.68rem', fontWeight: 700, borderRadius: 5, border: 'none', cursor: 'pointer', background: hasMats ? '#d1fae5' : '#8b5cf6', color: hasMats ? '#16a34a' : '#fff', opacity: 1, position: 'relative' }}>
-                                  {hasMats ? '✅ Vật tư' : '📦 Vật tư'}
+                                  {hasMats ? 'Vật tư' : 'Vật tư'}
                                   {hasMats && <span style={{ position: 'absolute', top: -6, right: -6, background: '#16a34a', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{allMats.length}</span>}
                                 </button>
                               );
@@ -441,7 +441,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 {/* Header */}
                 <div style={{ padding: '16px 24px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>📋 LỆNH SẢN XUẤT</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>LỆNH SẢN XUẤT</div>
                     <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem' }}>{row.stt}. {row.hangMuc || 'Hạng mục'}</h3>
                     <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.9 }}>
                       KL: <strong>{formatNumber(totalKL)} {row.dvt || 'kg'}</strong>
@@ -458,7 +458,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div style={{ padding: '16px 24px', maxHeight: '60vh', overflowY: 'auto' }}>
                   {activeStages.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                      <div style={{ fontSize: '2rem', marginBottom: 8 }}>💭</div>
+                      <div style={{ fontSize: '2rem', marginBottom: 8 }}></div>
                       <div style={{ fontSize: '0.95rem' }}>Chưa có phân giao nào cho hạng mục này.</div>
                       <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Hãy click vào các ô IBS/TP trong cột Chi tiết để phân giao tổ trước.</div>
                     </div>
@@ -467,7 +467,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     return (
                       <div key={stage.key} style={{ marginBottom: 16 }}>
                         <div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: '8px 8px 0 0', borderBottom: '2px solid #f59e0b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#92400e' }}>🔧 {stage.label}</span>
+                          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#92400e' }}>{stage.label}</span>
                           <span style={{ fontSize: '0.75rem', color: '#b45309' }}>{teams.length} tổ</span>
                         </div>
                         {/* Table header */}
@@ -504,14 +504,14 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                                     title={!hasMats ? 'Cần lập DNC Vật tư' : issued ? 'Đã phát hành' : 'Phát hành LSX'}
                                     onClick={() => onIssueSingleTeam?.(idx, stage.key, ti)}
                                     style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: (canIssue && !isCloned) ? 'pointer' : 'default', background: issued ? '#d1fae5' : canIssue ? '#f59e0b' : '#e2e8f0', color: issued ? '#16a34a' : canIssue ? '#fff' : '#94a3b8', transition: 'all 0.2s' }}>
-                                    {issued ? '✅ Đã PH' : !hasMats ? '🔒 Phát hành' : '📤 Phát hành'}
+                                    {issued ? 'Đã PH' : !hasMats ? 'Phát hành' : 'Phát hành'}
                                   </button>
                                 ) : (
                                   <>
-                                    <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 800 }}>❌ FAIL</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 800 }}>FAIL</div>
                                     <button type="button" onClick={() => { if(confirm('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
                                       style={{ padding: '4px 8px', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
-                                      🔄 Tạo Rework
+                                      Tạo Rework
                                     </button>
                                   </>
                                 )}
@@ -525,7 +525,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                                     setDncRow({ idx, row, stageKey: stage.key, teamIdx: ti, teamVolume: teamVol });
                                   }}
                                   style={{ padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: atLimit ? 'default' : 'pointer', background: atLimit ? '#d1fae5' : hasMats ? '#0ea5e9' : '#64748b', color: atLimit ? '#16a34a' : '#fff', opacity: atLimit ? 0.9 : 1, transition: 'all 0.2s', position: 'relative' }}>
-                                  {atLimit ? '✅ Đủ VT' : '📝 DNC VT'}
+                                  {atLimit ? 'Đủ VT' : 'DNC VT'}
                                   {hasMats && !atLimit && <span style={{ position: 'absolute', top: -6, right: -6, background: '#0ea5e9', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{teamMatCount}</span>}
                                 </button>
                               </div>
@@ -552,7 +552,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 850, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
               {/* Header */}
               <div style={{ padding: '16px 24px', background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)', color: '#fff' }}>
-                <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>📦 VẬT TƯ HẠNG MỤC</div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>VẬT TƯ HẠNG MỤC</div>
                 <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem' }}>{row.stt}. {row.hangMuc || 'Hạng mục'}</h3>
                 <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.9 }}>
                   KL: <strong>{formatNumber(totalKL)} {row.dvt || 'kg'}</strong>
@@ -565,12 +565,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 return (
                   <div style={{ padding: '16px 24px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#6d28d9' }}>📋 Tổng hợp vật tư đã yêu cầu</h4>
+                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#6d28d9' }}>Tổng hợp vật tư đã yêu cầu</h4>
                       <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{allMats.length} mục</span>
                     </div>
                     {allMats.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>📭</div>
+                        <div style={{ fontSize: '1.5rem', marginBottom: 6 }}></div>
                         <div style={{ fontSize: '0.9rem' }}>Chưa có DNC vật tư nào. Hãy lập DNC VT trong modal LSX trước.</div>
                       </div>
                     ) : (
@@ -622,7 +622,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               {/* Header */}
               <div style={{ padding: '16px 24px', borderBottom: '3px solid #0ea5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem' }}>📝 DNC Vật tư — {stageLabel}</h3>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem' }}>DNC Vật tư — {stageLabel}</h3>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                     {row.hangMuc || `Hạng mục #${idx + 1}`} • KL tổ: {formatNumber(teamVolume)} {row.dvt || 'kg'} • Giới hạn: {formatNumber(maxAllowed)} (110%)
                   </span>
@@ -640,7 +640,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               {/* Limit warning */}
               {overLimit && (
                 <div style={{ padding: '10px 24px', background: '#fef2f2', borderBottom: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: '#dc2626', fontWeight: 600 }}>
-                  ⚠️ Tổng vật tư vượt 110% khối lượng tổ. Vui lòng giảm số lượng.
+                  Tổng vật tư vượt 110% khối lượng tổ. Vui lòng giảm số lượng.
                 </div>
               )}
               {/* Table */}
@@ -683,7 +683,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                             await onRequestIssue?.(idx, stageKey, teamIdx, mi, m);
                           }}
                           style={{ padding: '4px 8px', fontSize: '0.72rem', fontWeight: 700, borderRadius: 5, border: 'none', cursor: m.requested ? 'default' : 'pointer', background: m.requested ? '#d1fae5' : '#f59e0b', color: m.requested ? '#16a34a' : '#fff', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
-                          {m.requested ? '✅ Đã ĐNC' : '📋 Đề nghị cấp'}
+                          {m.requested ? 'Đã ĐNC' : 'Đề nghị cấp'}
                         </button>
                       ) : (
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>—</span>
@@ -708,7 +708,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     setDncRow(null);
                   }}
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: overLimit || filledCount === 0 ? '#e2e8f0' : '#16a34a', color: overLimit || filledCount === 0 ? '#94a3b8' : '#fff', border: 'none', borderRadius: 8, cursor: overLimit || filledCount === 0 ? 'default' : 'pointer', fontWeight: 700 }}>
-                  💾 Lưu ({filledCount} mục)
+                  Lưu ({filledCount} mục)
                 </button>
               </div>
             </div>
@@ -729,7 +729,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               {/* Header */}
               <div style={{ padding: '16px 24px', background: 'linear-gradient(135deg, #0ea5e9, #2563eb)', color: '#fff' }}>
                 <div style={{ fontSize: '0.75rem', opacity: 0.8, marginBottom: 2 }}>PHÂN GIAO CÔNG ĐOẠN</div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>🔧 {stageCol?.label || assignCell.col}</h3>
+                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{stageCol?.label || assignCell.col}</h3>
               </div>
               {/* Row info reference */}
               <div style={{ padding: '16px 24px', background: '#f0f9ff', borderBottom: '1px solid #bae6fd' }}>
@@ -744,11 +744,11 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               {/* Assignment form */}
               <div style={{ padding: '20px 24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h4 style={{ margin: 0, fontSize: '1rem', color: '#0c4a6e' }}>📋 Thực hiện phân giao</h4>
+                  <h4 style={{ margin: 0, fontSize: '1rem', color: '#0c4a6e' }}>Thực hiện phân giao</h4>
                   <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
                     Đã giao: <span style={{ color: assignedKL >= totalKL ? '#16a34a' : '#f59e0b', fontWeight: 800 }}>{formatNumber(assignedKL)}</span> / {formatNumber(totalKL)} {row.dvt || 'kg'}
                     {remaining > 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>Còn lại: {formatNumber(remaining)}</span>}
-                    {remaining < 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>⚠️ Vượt {formatNumber(Math.abs(remaining))}</span>}
+                    {remaining < 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>Vượt {formatNumber(Math.abs(remaining))}</span>}
                   </div>
                 </div>
                 {/* Header */}
@@ -784,12 +784,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 {remaining > 0 && (
                   <button type="button" onClick={() => setTempAssigns(prev => [...prev, { teamName: '', volume: String(remaining), startDate: '', endDate: '' }])}
                     style={{ marginTop: 4, padding: '8px 16px', fontSize: '0.85rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                    ➕ Thêm tổ ({formatNumber(remaining)} {row.dvt || 'kg'} chưa giao)
+                    Thêm tổ ({formatNumber(remaining)} {row.dvt || 'kg'} chưa giao)
                   </button>
                 )}
                 {remaining <= 0 && tempAssigns.length > 0 && (
                   <div style={{ marginTop: 8, padding: '8px 12px', background: '#d1fae5', borderRadius: 8, fontSize: '0.85rem', color: '#16a34a', fontWeight: 600 }}>
-                    ✅ Đã phân giao đủ khối lượng
+                    Đã phân giao đủ khối lượng
                   </div>
                 )}
               </div>
@@ -799,7 +799,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#f1f5f9', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Hủy</button>
                 <button type="button" onClick={saveAssign}
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                  💾 Lưu phân giao
+                  Lưu phân giao
                 </button>
               </div>
             </div>

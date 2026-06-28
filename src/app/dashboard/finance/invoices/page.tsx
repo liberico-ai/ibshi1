@@ -36,7 +36,7 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🧾 Hóa đơn</h1>
+        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Hóa đơn</h1>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{invoices.length} hóa đơn</p>
       </div>
 
@@ -48,7 +48,7 @@ export default function InvoicesPage() {
       </div>
 
       <div className="flex gap-2">
-        {([['', 'Tất cả'], ['RECEIVABLE', '📥 Phải thu'], ['PAYABLE', '📤 Phải trả']] as const).map(([v, label]) => (
+        {([['', 'Tất cả'], ['RECEIVABLE', 'Phải thu'], ['PAYABLE', 'Phải trả']] as const).map(([v, label]) => (
           <button key={v} onClick={() => setFilter(v)} className="text-xs px-3 py-1 rounded-full font-medium"
             style={{ background: filter === v ? 'var(--accent)' : 'var(--surface-hover)', color: filter === v ? '#fff' : 'var(--text-muted)' }}>
             {label}

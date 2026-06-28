@@ -94,7 +94,7 @@ function ExpandedDncRow({ taskId, onComplete }: { taskId: string, onComplete: ()
           className="w-full flex items-center justify-between p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
         >
           <span className="font-bold text-green-600 dark:text-green-500 flex items-center gap-2">
-            ▶ 📦 Tồn kho hiện tại ({inventory.length} vật tư)
+            Tồn kho hiện tại ({inventory.length} vật tư)
           </span>
           <span className="text-xs text-slate-500">{showInventory ? 'Thu gọn' : 'Nhấn để xem'}</span>
         </button>
@@ -131,7 +131,7 @@ function ExpandedDncRow({ taskId, onComplete }: { taskId: string, onComplete: ()
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-sky-200 dark:border-sky-900 overflow-hidden shadow-sm">
         <div className="p-3 bg-sky-50 dark:bg-sky-900/20 border-b border-sky-100 dark:border-sky-900/50 flex justify-between items-center">
           <h3 className="font-bold text-sky-700 dark:text-sky-400">
-            🧾 Đề nghị cấp ({reqs.length})
+            Đề nghị cấp ({reqs.length})
             {allFulfilled && <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Đã cấp đủ 100%</span>}
           </h3>
         </div>
@@ -199,8 +199,8 @@ function ExpandedDncRow({ taskId, onComplete }: { taskId: string, onComplete: ()
                           onChange={e => setFormData({ ...formData, [txKey]: e.target.value })}
                           className={`w-24 text-center px-2 py-1 text-sm border rounded ${hasError ? 'border-red-500 bg-red-50' : 'border-slate-300 dark:border-slate-600'}`}
                         />
-                        {overStock && <div className="text-[10px] text-red-500 font-bold mt-1">⚠️ Vượt kho</div>}
-                        {!overStock && overRemaining && <div className="text-[10px] text-red-500 font-bold mt-1">⚠️ Vượt thiếu ({remaining})</div>}
+                        {overStock && <div className="text-[10px] text-red-500 font-bold mt-1">Vượt kho</div>}
+                        {!overStock && overRemaining && <div className="text-[10px] text-red-500 font-bold mt-1">Vượt thiếu ({remaining})</div>}
                       </div>
                     )}
                   </td>
@@ -260,7 +260,7 @@ export default function MaterialIssuePage() {
       {/* SECTION 1: YÊU CẦU CẤP PHÁT (PENDING TASKS) */}
       <section className="space-y-4">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📤 Yêu cầu cấp phát vật tư</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Yêu cầu cấp phát vật tư</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{tasks.length} yêu cầu cần xử lý</p>
         </div>
 

@@ -100,7 +100,7 @@ function MeetingsInner() {
       {taskId && <a onClick={backToTask} className="text-sm cursor-pointer" style={{ color: 'var(--text-muted)' }}>← Quay lại công việc</a>}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📅 {taskId ? 'Tạo lịch họp cho công việc' : 'Lịch họp'}</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{taskId ? 'Tạo lịch họp cho công việc' : 'Lịch họp'}</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Tạo họp, mời người dự, xác nhận tham gia, lưu biên bản</p>
         </div>
         <button onClick={() => { if (showForm && taskId) backToTask(); else setShowForm((s) => !s) }} className="btn-primary text-sm px-4 py-2.5 rounded-lg">{showForm ? (taskId ? '← Công việc' : 'Đóng') : '+ Tạo cuộc họp'}</button>
@@ -112,7 +112,7 @@ function MeetingsInner() {
             <div><label className="text-sm font-semibold">Dự án</label>
               {taskId ? (
                 // Mở từ công việc → dự án tự khớp, không cho đổi
-                <div style={{ ...inp, display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>📁 {taskProjectLabel || '(theo công việc)'}</div>
+                <div style={{ ...inp, display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>{taskProjectLabel || '(theo công việc)'}</div>
               ) : (
                 <select value={projectId} onChange={(e) => setProjectId(e.target.value)} style={inp}>
                   <option value="">(Không thuộc dự án)</option>
@@ -129,7 +129,7 @@ function MeetingsInner() {
             <label className="text-sm font-semibold">Mời tham gia *</label>
             <div className="mb-2">{invites.map((x, i) => (
               <span key={x.id} className="inline-flex items-center gap-2 text-sm mr-2 mb-2 px-3 py-1.5 rounded-full" style={{ background: '#eef2ff', color: '#3730a3', border: '1px solid #c7d2fe' }}>
-                👤 {x.label} <span className="cursor-pointer opacity-60" onClick={() => setInvites(invites.filter((_, idx) => idx !== i))}>✕</span>
+                {x.label} <span className="cursor-pointer opacity-60" onClick={() => setInvites(invites.filter((_, idx) => idx !== i))}>✕</span>
               </span>
             ))}</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -164,9 +164,9 @@ function MeetingsInner() {
                 <div className="flex-1">
                   <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{m.title}{tag && <span className="text-xs ml-2" style={{ color: m.status === 'CANCELLED' ? '#e63946' : '#059669' }}>{tag}</span>}</div>
                   <div className="flex flex-wrap gap-2 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {m.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {m.project.projectCode}</span>}
-                    <span>🕒 {formatShortDateTime(m.startsAt)}</span>
-                    {m.location && <span>📍 {m.location}</span>}
+                    {m.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{m.project.projectCode}</span>}
+                    <span>{formatShortDateTime(m.startsAt)}</span>
+                    {m.location && <span>{m.location}</span>}
                     <span>✓ {m.counts.accepted}/{m.counts.total} nhận</span>
                   </div>
                 </div>
@@ -181,12 +181,12 @@ function MeetingsInner() {
         return (
           <div className="space-y-4">
             <div>
-              <div className="text-sm font-semibold mb-2" style={{ color: '#1d4ed8' }}>🔜 Sắp diễn ra ({upcoming.length})</div>
+              <div className="text-sm font-semibold mb-2" style={{ color: '#1d4ed8' }}>Sắp diễn ra ({upcoming.length})</div>
               <div className="space-y-2">{upcoming.length ? upcoming.map(row) : <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Không có cuộc họp sắp tới.</div>}</div>
             </div>
             {past.length > 0 && (
               <div>
-                <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>📁 Đã qua / đã kết thúc ({past.length})</div>
+                <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>Đã qua / đã kết thúc ({past.length})</div>
                 <div className="space-y-2">{past.map(row)}</div>
               </div>
             )}

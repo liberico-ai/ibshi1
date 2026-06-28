@@ -27,7 +27,7 @@ interface FlexData {
   status: string
 }
 
-const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành', SUBMITTED_TO_CREATOR: '↩ Đã trả', COMPLETED: '✓ Hoàn thành (tất cả)', CLOSED: '🏁 Kết thúc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: 'Giao lại', SUBTASK_CREATED: 'Tạo việc con', COMMENT: '💬 Trao đổi' }
+const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành', SUBMITTED_TO_CREATOR: '↩ Đã trả', COMPLETED: '✓ Hoàn thành (tất cả)', CLOSED: 'Kết thúc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: 'Giao lại', SUBTASK_CREATED: 'Tạo việc con', COMMENT: 'Trao đổi' }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
 
 export default function FlexibleFeatures({ taskId }: { taskId: string }) {
@@ -97,12 +97,12 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
       {mustRead.length > 0 && (
         <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem', border: '1px solid #fbbf24', background: '#fffbeb' }}>
           <h3 style={{ margin: 0, fontSize: '1rem', marginBottom: 10, color: '#92400e' }}>
-            📖 Tài liệu bắt buộc đọc ({mustRead.length})
+            Tài liệu bắt buộc đọc ({mustRead.length})
           </h3>
           {mustRead.map((d) => (
             <div key={d.id} style={{ padding: '8px 0', borderBottom: '1px solid #fde68a' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                <span>📄</span>
+                <span></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{d.label}</div>
                   {d.file ? (
@@ -138,16 +138,16 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
       {mustReturn.length > 0 && (
         <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem', border: '1px solid #93c5fd', background: '#eff6ff' }}>
           <h3 style={{ margin: 0, fontSize: '1rem', marginBottom: 10, color: '#1e40af' }}>
-            📤 Tài liệu phải trả lại ({mustReturn.length})
+            Tài liệu phải trả lại ({mustReturn.length})
           </h3>
           {mustReturn.map((d) => (
             <div key={d.id} style={{ padding: '8px 0', borderBottom: '1px solid #bfdbfe' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
-                📌 {d.label} {d.fulfilled && <span style={{ color: '#059669' }}>✓</span>}
+                {d.label} {d.fulfilled && <span style={{ color: '#059669' }}>✓</span>}
               </div>
               {d.fulfilled ? (
                 <div style={{ fontSize: '0.78rem', marginTop: 4, color: 'var(--text-secondary)' }}>
-                  {d.note && <div>📝 {d.note}</div>}
+                  {d.note && <div>{d.note}</div>}
                   {d.file && <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }} style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{d.file.fileName} ↗</a>}
                 </div>
               ) : isAssignee && isActive && !myDone ? (
@@ -205,7 +205,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
       {/* Meetings */}
       <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <h3 style={{ margin: 0, fontSize: '1rem' }}>📅 Lịch họp ({data.meetings?.length || 0})</h3>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Lịch họp ({data.meetings?.length || 0})</h3>
           <button onClick={goCreateMeeting} style={{ fontSize: '0.75rem', padding: '4px 12px', borderRadius: 8, fontWeight: 600, background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer' }}>+ Tạo</button>
         </div>
         {data.meetings?.map((mt) => (
@@ -240,7 +240,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
 
       {/* Comments/History */}
       <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', marginBottom: 8 }}>💬 Trao đổi & lịch sử</h3>
+        <h3 style={{ margin: 0, fontSize: '1rem', marginBottom: 8 }}>Trao đổi & lịch sử</h3>
         <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 10 }}>
           {data.history.length === 0 && (
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '8px 0' }}>Chưa có lịch sử.</div>

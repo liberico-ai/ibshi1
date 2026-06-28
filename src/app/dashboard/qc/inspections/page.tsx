@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/ui'
+import { Search } from 'lucide-react'
 
 interface Inspection {
   id: string; inspectionCode: string; type: string; stepCode: string;
@@ -46,7 +47,7 @@ export default function InspectionsPage() {
           </thead>
           <tbody>
             {inspections.length === 0 ? (
-              <tr><td colSpan={6}><EmptyState icon="🔍" title="Chưa có biên bản kiểm tra" /></td></tr>
+              <tr><td colSpan={6}><EmptyState icon={<Search />} title="Chưa có biên bản kiểm tra" /></td></tr>
             ) : inspections.map(i => (
               <tr key={i.id}>
                 <td><span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent)' }}>{i.inspectionCode}</span></td>

@@ -8,6 +8,7 @@ import {
   InputField, SelectField, TextareaField,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { HardHat } from 'lucide-react'
 
 interface Incident {
   id: string; incidentCode: string; severity: string; category: string;
@@ -82,7 +83,7 @@ export default function IncidentsPage() {
           </thead>
           <tbody>
             {incidents.length === 0 ? (
-              <tr><td colSpan={7}><EmptyState icon="🦺" title="Chưa có sự cố" /></td></tr>
+              <tr><td colSpan={7}><EmptyState icon={<HardHat />} title="Chưa có sự cố" /></td></tr>
             ) : incidents.map(i => (
               <tr key={i.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{i.incidentCode}</span></td>

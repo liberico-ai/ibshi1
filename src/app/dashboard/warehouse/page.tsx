@@ -7,7 +7,7 @@ import { formatCompactVND, formatCurrency, formatNumber } from '@/lib/utils'
 import { RBAC } from '@/lib/rbac-rules'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Button } from '@/components/ui'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Package, AlertCircle, Banknote, ClipboardList, ShoppingCart } from 'lucide-react'
 
 interface Material {
   id: string; materialCode: string; name: string; nameEn: string; unit: string;
@@ -85,18 +85,18 @@ export default function WarehousePage() {
       {/* ═══ KPI Dashboard v2 ═══ */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 stagger-children">
-          <StatCard label="Tổng vật tư" value={stats.totalMaterials} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>📦</span>} />
-          <StatCard label="Thiếu hàng" value={stats.lowStockCount} color={stats.lowStockCount > 0 ? '#dc2626' : '#16a34a'} icon={<span style={{ fontSize: 20 }}>⚠️</span>} accent={stats.lowStockCount > 0} />
-          <StatCard label="Giá trị tồn" value={formatCompactVND(stats.totalValue)} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>💰</span>} />
-          <StatCard label="PR chờ duyệt" value={stats.prPending} color="#8b5cf6" icon={<span style={{ fontSize: 20 }}>📋</span>} />
-          <StatCard label="PO đang xử lý" value={stats.poActive} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>🚚</span>} />
+          <StatCard label="Tổng vật tư" value={stats.totalMaterials} color="#0ea5e9" icon={<Package size={20} stroke="#0ea5e9" />} />
+          <StatCard label="Thiếu hàng" value={stats.lowStockCount} color={stats.lowStockCount > 0 ? '#dc2626' : '#16a34a'} icon={<AlertCircle size={20} stroke={stats.lowStockCount > 0 ? '#dc2626' : '#16a34a'} />} accent={stats.lowStockCount > 0} />
+          <StatCard label="Giá trị tồn" value={formatCompactVND(stats.totalValue)} color="#f59e0b" icon={<Banknote size={20} stroke="#f59e0b" />} />
+          <StatCard label="PR chờ duyệt" value={stats.prPending} color="#8b5cf6" icon={<ClipboardList size={20} stroke="#8b5cf6" />} />
+          <StatCard label="PO đang xử lý" value={stats.poActive} color="#0ea5e9" icon={<ShoppingCart size={20} stroke="#0ea5e9" />} />
         </div>
       )}
 
       {/* Recent Movements */}
       {stats && stats.recentMovements.length > 0 && (
         <Card padding="compact">
-          <h3 className="section-title" style={{ fontSize: 'var(--text-sm)', marginBottom: 'var(--space-sm)' }}>📊 Biến động gần đây</h3>
+          <h3 className="section-title" style={{ fontSize: 'var(--text-sm)', marginBottom: 'var(--space-sm)' }}>Biến động gần đây</h3>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {stats.recentMovements.slice(0, 6).map(m => (
               <div key={m.id} className="flex-shrink-0 p-3 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-light)', minWidth: '180px' }}>
@@ -192,7 +192,7 @@ export default function WarehousePage() {
                 <td style={{ padding: '8px 4px', textAlign: 'center' }}>
                   {m.minStock >= 0 ? (
                     <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: 99, fontWeight: 600, background: m.lowStock ? '#fef2f2' : '#ecfdf5', color: m.lowStock ? '#dc2626' : '#059669', whiteSpace: 'nowrap' }}>
-                      {m.lowStock ? 'Thiếu' : '✓ Đủ'}
+                      {m.lowStock ? 'Thiếu' : 'Đủ'}
                     </span>
                   ) : null}
                 </td>

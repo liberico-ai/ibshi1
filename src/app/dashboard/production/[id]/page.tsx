@@ -30,16 +30,16 @@ const STATUS_CFG: Record<string, { label: string; bg: string; color: string; bor
 const TRANSITIONS: Record<string, { next: string; label: string; color: string; bg: string }[]> = {
   OPEN: [{ next: 'IN_PROGRESS', label: '▶ Bắt đầu SX', color: '#2563eb', bg: '#eff6ff' }],
   IN_PROGRESS: [
-    { next: 'QC_PENDING', label: '🔍 Gửi QC', color: '#d97706', bg: '#fffbeb' },
-    { next: 'ON_HOLD', label: '⏸ Tạm dừng', color: '#7c3aed', bg: '#f5f3ff' },
+    { next: 'QC_PENDING', label: 'Gửi QC', color: '#d97706', bg: '#fffbeb' },
+    { next: 'ON_HOLD', label: 'Tạm dừng', color: '#7c3aed', bg: '#f5f3ff' },
   ],
   ON_HOLD: [{ next: 'IN_PROGRESS', label: '▶ Tiếp tục', color: '#2563eb', bg: '#eff6ff' }],
   QC_PENDING: [
     { next: 'QC_PASSED', label: '✓ QC Đạt', color: '#16a34a', bg: '#f0fdf4' },
     { next: 'QC_FAILED', label: '✗ Không đạt', color: '#dc2626', bg: '#fef2f2' },
   ],
-  QC_FAILED: [{ next: 'IN_PROGRESS', label: '🔄 Sửa lại', color: '#2563eb', bg: '#eff6ff' }],
-  QC_PASSED: [{ next: 'COMPLETED', label: '✅ Hoàn thành', color: '#16a34a', bg: '#f0fdf4' }],
+  QC_FAILED: [{ next: 'IN_PROGRESS', label: 'Sửa lại', color: '#2563eb', bg: '#eff6ff' }],
+  QC_PASSED: [{ next: 'COMPLETED', label: 'Hoàn thành', color: '#16a34a', bg: '#f0fdf4' }],
 }
 
 export default function ProductionDetailPage() {
@@ -99,7 +99,7 @@ export default function ProductionDetailPage() {
           <div className="flex gap-2">
             {!showActionButtons && transitions.length > 0 && (
               <span className="text-sm px-4 py-2 flex items-center gap-1 rounded-lg" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
-                🔒 Chỉ quyền SX/QC
+                Chỉ quyền SX/QC
               </span>
             )}
             {showActionButtons && transitions.map(t => (

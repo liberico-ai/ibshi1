@@ -25,7 +25,7 @@ function DataTable<T>({ columns, data, rowKey, onRowClick, emptyText = 'Không c
   if (data.length === 0) {
     return (
       <div className="empty-state" style={{ padding: '48px 24px' }}>
-        <div className="empty-state-icon">📋</div>
+        <div className="empty-state-icon">--</div>
         <p className="empty-state-text">{emptyText}</p>
       </div>
     )

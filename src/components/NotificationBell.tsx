@@ -10,11 +10,11 @@ interface Notification {
 }
 
 const TYPE_ICONS: Record<string, { emoji: string; bg: string }> = {
-  task_assigned: { emoji: '📋', bg: '#eff6ff' },
-  task_completed: { emoji: '✅', bg: '#f0fdf4' },
-  qc_result: { emoji: '🔬', bg: '#fef3c7' },
-  stock_alert: { emoji: '📦', bg: '#fef2f2' },
-  system: { emoji: '⚙️', bg: '#f1f5f9' },
+  task_assigned: { emoji: 'T', bg: '#eff6ff' },
+  task_completed: { emoji: '✓', bg: '#f0fdf4' },
+  qc_result: { emoji: 'QC', bg: '#fef3c7' },
+  stock_alert: { emoji: 'K', bg: '#fef2f2' },
+  system: { emoji: 'S', bg: '#f1f5f9' },
 }
 
 export default function NotificationBell() {

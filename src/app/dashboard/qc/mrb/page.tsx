@@ -7,6 +7,7 @@ import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import {
   PageHeader, FilterBar, KPICard, EmptyState, StatusBadge,
 } from '@/components/ui'
+import { Search, ClipboardList, CheckCircle2, Clock } from 'lucide-react'
 
 interface MRBData {
   project: { projectCode: string; projectName: string; clientName: string } | null
@@ -115,7 +116,7 @@ export default function MRBPage() {
 
           {/* Overall Status */}
           <div className="card p-4 flex items-center gap-3">
-            <span className="text-2xl">{data.summary.overallStatus === 'READY' ? '✅' : '⏳'}</span>
+            <span>{data.summary.overallStatus === 'READY' ? <CheckCircle2 size={28} style={{ color: '#16a34a' }} /> : <Clock size={28} style={{ color: '#d97706' }} />}</span>
             <div>
               <p className="font-heading font-bold" style={{
                 color: data.summary.overallStatus === 'READY' ? SEMANTIC_COLORS.success.solid : SEMANTIC_COLORS.warning.solid,
@@ -148,7 +149,7 @@ export default function MRBPage() {
                   {data.inspections.length === 0 ? (
                     <tr>
                       <td colSpan={4}>
-                        <EmptyState icon="🔍" title="Chua co inspection nao" />
+                        <EmptyState icon={<Search />} title="Chua co inspection nao" />
                       </td>
                     </tr>
                   ) : data.inspections.map(i => (
@@ -189,7 +190,7 @@ export default function MRBPage() {
                   {data.ncrs.length === 0 ? (
                     <tr>
                       <td colSpan={4}>
-                        <EmptyState icon="📋" title="Chua co NCR nao" />
+                        <EmptyState icon={<ClipboardList />} title="Chua co NCR nao" />
                       </td>
                     </tr>
                   ) : data.ncrs.map(n => (

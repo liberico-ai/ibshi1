@@ -6,6 +6,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, StatusBadge, Button, EmptyState, Modal, KPICard, FilterBar } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { formatDate } from '@/lib/utils'
+import { Package, ClipboardList, Search, BarChart3, CheckCircle } from 'lucide-react'
 
 /* ── Types ── */
 
@@ -348,7 +349,7 @@ export default function BomRevisionDetailPage() {
     return (
       <div className="space-y-6 animate-fade-in" style={{ padding: '1.5rem' }}>
         <EmptyState
-          icon="📦"
+          icon={<Package />}
           title="Khong tim thay BOM"
           description="BOM nay khong ton tai hoac ban khong co quyen xem"
           action={
@@ -463,7 +464,7 @@ export default function BomRevisionDetailPage() {
             </div>
           ) : !versionDetail ? (
             <EmptyState
-              icon="📋"
+              icon={<ClipboardList />}
               title="Chon mot phien ban"
               description="Chon phien ban o danh sach ben trai de xem chi tiet"
             />
@@ -516,7 +517,7 @@ export default function BomRevisionDetailPage() {
                 <div className="space-y-4">
                   {groupedItems.length === 0 ? (
                     <EmptyState
-                      icon="📦"
+                      icon={<Package />}
                       title="Chua co vat tu"
                       description="Phien ban nay chua co dong vat tu nao"
                     />
@@ -582,13 +583,13 @@ export default function BomRevisionDetailPage() {
                     </div>
                   ) : !diff ? (
                     <EmptyState
-                      icon="🔍"
+                      icon={<Search />}
                       title="Khong co du lieu so sanh"
                       description="Khong tim thay phien ban hieu luc de so sanh"
                     />
                   ) : diff.lines.length === 0 ? (
                     <EmptyState
-                      icon="✓"
+                      icon={<CheckCircle />}
                       title="Khong co thay doi"
                       description="Phien ban nay giong voi phien ban hieu luc hien tai"
                     />
@@ -723,13 +724,13 @@ export default function BomRevisionDetailPage() {
                     </div>
                   ) : !impact ? (
                     <EmptyState
-                      icon="📊"
+                      icon={<BarChart3 />}
                       title="Khong co du lieu tac dong"
                       description="Khong the phan tich tac dong cho phien ban nay"
                     />
                   ) : impact.lines.length === 0 ? (
                     <EmptyState
-                      icon="✓"
+                      icon={<CheckCircle />}
                       title="Khong co tac dong"
                       description="Phien ban nay khong tao ra thay doi nao anh huong den mua sam"
                     />

@@ -156,7 +156,7 @@ export default function SettingsPage() {
       {toast && (
         <div className="fixed top-4 right-4 z-50 px-4 py-2 rounded-lg animate-fade-in-scale"
           style={{ fontSize: 'var(--text-sm)', fontWeight: 600, background: '#16a34a', color: '#fff', boxShadow: 'var(--shadow-lg)' }}>
-          ✓ {toast}
+          {toast}
         </div>
       )}
 
@@ -191,7 +191,7 @@ export default function SettingsPage() {
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Chuyển đổi Việt ↔ English</p>
             </div>
             <Button variant="ghost" onClick={toggleLocale}>
-              {locale === 'vi' ? '🇻🇳 Tiếng Việt' : '🇬🇧 English'}
+              {locale === 'vi' ? 'Tiếng Việt' : 'English'}
             </Button>
           </div>
           <div className="flex justify-between items-center">
@@ -200,7 +200,7 @@ export default function SettingsPage() {
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Dark / Light mode</p>
             </div>
             <Button variant="ghost" onClick={toggleTheme}>
-              {theme === 'dark' ? '🌙 Dark' : '☀️ Light'}
+              {theme === 'dark' ? 'Dark' : 'Light'}
             </Button>
           </div>
         </div>
@@ -241,7 +241,7 @@ export default function SettingsPage() {
                 </div>
                 <Button variant="ghost"
                   onClick={() => setConfig({ ...config, email_notifications_enabled: config.email_notifications_enabled === 'true' ? 'false' : 'true' })}>
-                  {config.email_notifications_enabled === 'true' ? '✅ Bật' : '❌ Tắt'}
+                  {config.email_notifications_enabled === 'true' ? 'Bật' : 'Tắt'}
                 </Button>
               </div>
               <div className="flex justify-between items-center">
@@ -252,7 +252,7 @@ export default function SettingsPage() {
                 <Button
                   variant={config.system_maintenance_mode === 'true' ? 'danger' : 'ghost'}
                   onClick={() => setConfig({ ...config, system_maintenance_mode: config.system_maintenance_mode === 'true' ? 'false' : 'true' })}>
-                  {config.system_maintenance_mode === 'true' ? '⚠️ Đang bảo trì' : '✅ Hoạt động bình thường'}
+                  {config.system_maintenance_mode === 'true' ? 'Đang bảo trì' : 'Hoạt động bình thường'}
                 </Button>
               </div>
             </div>
@@ -260,7 +260,7 @@ export default function SettingsPage() {
 
           <div className="flex justify-end">
             <Button variant="accent" onClick={saveConfig} loading={configSaving}>
-              💾 Lưu cấu hình hệ thống
+              Lưu cấu hình hệ thống
             </Button>
           </div>
         </>

@@ -190,10 +190,10 @@ export default function ProjectDetailPage() {
       {/* Stats Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }} className="stagger-children">
         {[
-          { label: 'Giá trị HĐ', value: formatCurrency(project.contractValue, project.currency), color: '#0a2540', icon: '💰' },
-          { label: 'Bắt đầu', value: formatDate(project.startDate) || '—', color: '#0ea5e9', icon: '📅' },
-          { label: 'Kết thúc', value: formatDate(project.endDate) || '—', color: '#f59e0b', icon: '🏁' },
-          { label: 'Giai đoạn', value: `Phase ${project.progress.currentPhase}`, color: '#8b5cf6', icon: '📍' },
+          { label: 'Giá trị HĐ', value: formatCurrency(project.contractValue, project.currency), color: '#0a2540', icon: '$' },
+          { label: 'Bắt đầu', value: formatDate(project.startDate) || '—', color: '#0ea5e9', icon: 'S' },
+          { label: 'Kết thúc', value: formatDate(project.endDate) || '—', color: '#f59e0b', icon: 'E' },
+          { label: 'Giai đoạn', value: `Phase ${project.progress.currentPhase}`, color: '#8b5cf6', icon: 'P' },
         ].map(s => (
           <div key={s.label} className="card p-5 relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: s.color }} />
@@ -323,7 +323,7 @@ function TaskCard({ task, onCompleteClick, onRejectClick, onAssignClick, current
               style={{ padding: '2px 4px', fontSize: '11px' }}
               title="Phân công"
             >
-              👤
+              Phân công
             </button>
           )}
         </div>

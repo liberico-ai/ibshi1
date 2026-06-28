@@ -8,6 +8,7 @@ import {
   PageHeader, StatusBadge, Button, FilterBar,
   EmptyState, Modal, InputField, SelectField,
 } from '@/components/ui'
+import { Ruler } from 'lucide-react'
 
 interface Drawing {
   id: string; drawingCode: string; title: string; discipline: string; currentRev: string;
@@ -193,7 +194,7 @@ export default function DrawingRegisterPage() {
               <tr>
                 <td colSpan={8}>
                   <EmptyState
-                    icon="📐"
+                    icon={<Ruler />}
                     title="Chưa có bản vẽ"
                     description="Bấm nút 'Thêm bản vẽ' để bắt đầu"
                   />

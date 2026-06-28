@@ -7,7 +7,7 @@ import { formatDate } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, KPICard, StatusBadge, Button, EmptyState, Modal, InputField, SelectField } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ClipboardList } from 'lucide-react'
 
 interface Inspection {
   id: string; projectId: string; inspectionCode: string;
@@ -183,7 +183,7 @@ export default function QCPage() {
               )
             })}
             {inspections.length === 0 && (
-              <tr><td colSpan={8}><EmptyState icon="📋" title="Chưa có biên bản QC" /></td></tr>
+              <tr><td colSpan={8}><EmptyState icon={<ClipboardList />} title="Chưa có biên bản QC" /></td></tr>
             )}
           </tbody>
         </table>

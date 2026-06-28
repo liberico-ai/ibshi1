@@ -766,7 +766,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
   if (items.length === 0) {
     return (
       <div className="card" style={{ padding: '2rem', marginTop: '1rem', textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem', marginBottom: 12 }}>📐</div>
+        <div style={{ fontSize: '3rem', marginBottom: 12 }}></div>
         <h3 style={{ margin: '0 0 8px', fontSize: '1.1rem', color: 'var(--text-heading)' }}>
           Đề nghị mua vật tư (PR) — Thiết kế
         </h3>
@@ -776,7 +776,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
         {isEditable ? (
           <button type="button" onClick={handleImport} disabled={uploading}
             style={{ padding: '12px 32px', fontSize: '1rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, opacity: uploading ? 0.6 : 1 }}>
-            {uploading ? '...Đang xử lý' : '📤 Upload file PR Excel'}
+            {uploading ? '...Đang xử lý' : 'Upload file PR Excel'}
           </button>
         ) : (
           <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Chưa có dữ liệu PR.</div>
@@ -791,7 +791,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
       {/* ── Header ────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-heading)' }}>
-          📐 Đề nghị mua vật tư (PR) — Thiết kế
+          Đề nghị mua vật tư (PR) — Thiết kế
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
             {totalTypes} loại VT
           </span>
@@ -799,13 +799,13 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
         <div style={{ display: 'flex', gap: 6 }}>
           <button type="button" onClick={handleExport}
             style={{ padding: '6px 14px', fontSize: '0.8rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-            📥 Export
+            Export
           </button>
           {isEditable && (
             <>
               <button type="button" onClick={handleImport} disabled={uploading}
                 style={{ padding: '6px 14px', fontSize: '0.8rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                📤 Upload lại
+                Upload lại
               </button>
               <button type="button" onClick={handleClear}
                 style={{ padding: '6px 14px', fontSize: '0.8rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
@@ -820,7 +820,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
       {duplicateGroups.length > 0 && (
         <div style={{ marginBottom: 16, padding: '14px 18px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+            <span style={{ fontSize: '1.1rem' }}></span>
             <span style={{ fontWeight: 700, color: '#991b1b', fontSize: '0.85rem' }}>
               Phát hiện {duplicateGroups.length} nhóm vật tư trùng lặp ({duplicateGroups.reduce((s, g) => s + g.count, 0)} dòng)
             </span>
@@ -886,7 +886,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
         <input type="text" className="input" placeholder="Tìm kiếm mã VT, tên, profile, mác VL..."
           value={search} onChange={e => setSearch(e.target.value)}
           style={{ width: '100%', maxWidth: 400, fontSize: '0.85rem', padding: '8px 12px 8px 32px', borderRadius: 8, border: '1px solid var(--border)' }} />
-        <span style={{ position: 'absolute', left: 10, top: 9, fontSize: '0.85rem', color: 'var(--text-muted)' }}>🔍</span>
+        <span style={{ position: 'absolute', left: 10, top: 9, fontSize: '0.85rem', color: 'var(--text-muted)' }}></span>
       </div>
 
       {/* ── Detail Table (grouped by category) ────────────── */}

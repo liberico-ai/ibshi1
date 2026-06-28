@@ -74,9 +74,9 @@ export default function ProjectsPage() {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
-        <StatCard label="Tổng dự án" value={pagination.total} color="#0a2540" icon={<span style={{ fontSize: 20 }}>📋</span>} />
+        <StatCard label="Tổng dự án" value={pagination.total} color="#0a2540" />
         <StatCard label="Đang hoạt động" value={activeCount} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>⚡</span>} />
-        <StatCard label="Hoàn thành" value={completedCountP} color="#16a34a" icon={<span style={{ fontSize: 20 }}>✅</span>} />
+        <StatCard label="Hoàn thành" value={completedCountP} color="#16a34a" />
         <StatCard label="Tạm ngưng" value={onHoldCount} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>⏸️</span>} />
       </div>
 
@@ -120,7 +120,7 @@ export default function ProjectsPage() {
               <span>{PRODUCT_TYPES.find((t) => t.value === p.productType)?.label || p.productType}</span>
               {p.contractValue && (
                 <span className="flex items-center gap-1" suppressHydrationWarning>
-                  💰 {formatCurrency(p.contractValue, p.currency)}
+                  {formatCurrency(p.contractValue, p.currency)}
                 </span>
               )}
             </div>
@@ -213,7 +213,7 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
         {/* ── Đính kèm tài liệu (upload ngay vào temp, link khi tạo DA) ── */}
         <div className="md:col-span-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)', marginTop: 4 }}>
           <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
-            📎 Tài liệu ban đầu <span style={{ fontWeight: 400, color: isProduction ? 'var(--danger)' : 'var(--text-muted)' }}>{isProduction ? '(nên có với dự án sản xuất)' : '(tuỳ chọn)'}</span>
+            Tài liệu ban đầu <span style={{ fontWeight: 400, color: isProduction ? 'var(--danger)' : 'var(--text-muted)' }}>{isProduction ? '(nên có với dự án sản xuất)' : '(tuỳ chọn)'}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <MultiFileUpload label="RFQ / Inquiry" entityType="ProjectDraft" entityId={`${draftId}_rfq`} compact />

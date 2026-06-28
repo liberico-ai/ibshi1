@@ -85,8 +85,8 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
                                  <div className="flex gap-2 items-center">
                                      {!isPending ? (
                                          group.status === 'APPROVED' 
-                                            ? <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full font-semibold border border-green-200 shadow-sm flex items-center gap-1">✅ Đã Duyệt</span>
-                                            : <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full font-semibold border border-red-200 shadow-sm flex items-center gap-1">❌ Đã Từ Chối</span>
+                                            ? <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full font-semibold border border-green-200 shadow-sm flex items-center gap-1">Đã Duyệt</span>
+                                            : <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full font-semibold border border-red-200 shadow-sm flex items-center gap-1">Đã Từ Chối</span>
                                      ) : (
                                          <>
                                             <button 
@@ -94,7 +94,7 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
                                                disabled={!isActive || isSubmitting}
                                                className={`px-4 py-1.5 rounded-md font-semibold text-sm transition-all border bg-white hover:bg-green-50 text-green-600 border-green-200 shadow-sm hover:shadow`}
                                             >
-                                               {isSubmitting ? '⏳...' : '✅ Phê duyệt'}
+                                               {isSubmitting ? '...' : 'Phê duyệt'}
                                             </button>
                                             <button 
                                                onClick={() => setEvaluations(p => ({ ...p, [group.id]: { action: 'REJECT', reason: p[group.id]?.reason || '' } }))}
@@ -105,7 +105,7 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
                                                   : 'bg-white hover:bg-red-50 text-red-600 border-red-200 shadow-sm hover:shadow'
                                                }`}
                                             >
-                                               ❌ Từ Chối
+                                               Từ Chối
                                             </button>
                                          </>
                                      )}
@@ -187,7 +187,7 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
                                          {isPending ? (
                                              <div className="flex flex-col gap-2">
                                                  <label className="text-red-800 font-bold text-sm flex items-center gap-1">
-                                                     ⚠️ Vui lòng ghi lại phản hồi từ chối cho nhóm này để bộ phận Thương mại có thể cập nhật lại:
+                                                     Vui lòng ghi lại phản hồi từ chối cho nhóm này để bộ phận Thương mại có thể cập nhật lại:
                                                  </label>
                                                  <textarea 
                                                      autoFocus
@@ -214,13 +214,13 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
                                                           : 'bg-red-200 text-white cursor-not-allowed'
                                                        }`}
                                                     >
-                                                       {isSubmitting ? '⏳...' : 'Xác nhận & Gửi phản hồi'}
+                                                       {isSubmitting ? '...' : 'Xác nhận & Gửi phản hồi'}
                                                     </button>
                                                  </div>
                                              </div>
                                          ) : (
                                              <div className="flex items-start gap-2">
-                                                 <span>❌</span>
+                                                 <span></span>
                                                  <div>
                                                      <span className="block text-xs uppercase tracking-wider font-bold mb-1 opacity-70">Lý do từ chối</span>
                                                      {group.rejectedReason || 'Không có phản hồi chi tiết'}

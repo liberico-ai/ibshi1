@@ -8,6 +8,7 @@ import {
   InputField, SelectField, TextareaField,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { MessageCircle } from 'lucide-react'
 
 interface Talk {
   id: string; talkCode: string; topic: string; content: string | null;
@@ -58,7 +59,7 @@ export default function ToolboxTalksPage() {
           </thead>
           <tbody>
             {talks.length === 0 ? (
-              <tr><td colSpan={5}><EmptyState icon="🗣️" title="Chưa có buổi họp" /></td></tr>
+              <tr><td colSpan={5}><EmptyState icon={<MessageCircle />} title="Chưa có buổi họp" /></td></tr>
             ) : talks.map(t => (
               <tr key={t.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{t.talkCode}</span></td>

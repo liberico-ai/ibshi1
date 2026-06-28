@@ -8,6 +8,7 @@ import {
   InputField, SelectField, TextareaField,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { Package } from 'lucide-react'
 
 interface PLItem {
   id: string; pieceMark: string; weight: number | null; quantity: number; qcStatus: string;
@@ -84,7 +85,7 @@ export default function PackingListsPage() {
           </thead>
           <tbody>
             {packingLists.length === 0 ? (
-              <tr><td colSpan={8}><EmptyState icon="📦" title="Chưa có kiện" /></td></tr>
+              <tr><td colSpan={8}><EmptyState icon={<Package />} title="Chưa có kiện" /></td></tr>
             ) : packingLists.map(pl => (
               <tr key={pl.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{pl.plCode}</span></td>

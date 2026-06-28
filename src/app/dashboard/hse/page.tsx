@@ -5,6 +5,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { PageHeader, KPICard } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import Link from 'next/link'
+import { HardHat, ClipboardList, MessageCircle } from 'lucide-react'
 
 interface DashData {
   incidents: {
@@ -30,9 +31,9 @@ export default function HSEDashboardPage() {
   if (!data) return <div className="text-center py-10" style={{ color: 'var(--text-muted)' }}>Không tải được dữ liệu</div>
 
   const cards = [
-    { href: '/dashboard/hse/incidents', label: 'Sự cố', icon: '🦺' },
-    { href: '/dashboard/hse/work-permits', label: 'Giấy phép', icon: '📋' },
-    { href: '/dashboard/hse/toolbox-talks', label: 'Họp an toàn', icon: '🗣️' },
+    { href: '/dashboard/hse/incidents', label: 'Sự cố', icon: <HardHat size={28} /> },
+    { href: '/dashboard/hse/work-permits', label: 'Giấy phép', icon: <ClipboardList size={28} /> },
+    { href: '/dashboard/hse/toolbox-talks', label: 'Họp an toàn', icon: <MessageCircle size={28} /> },
   ]
 
   return (
@@ -72,7 +73,7 @@ export default function HSEDashboardPage() {
       <div className="grid grid-cols-3 gap-4">
         {cards.map(c => (
           <Link key={c.href} href={c.href} className="glass-card p-5 text-center hover:scale-[1.02] transition-transform">
-            <div className="text-2xl mb-2">{c.icon}</div>
+            <div className="mb-2" style={{ color: 'var(--text-muted)' }}>{c.icon}</div>
             <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{c.label}</div>
           </Link>
         ))}

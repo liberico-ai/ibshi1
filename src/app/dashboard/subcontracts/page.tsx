@@ -64,7 +64,7 @@ export default function SubcontractsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📋 Hợp đồng thầu phụ</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Hợp đồng thầu phụ</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{contracts.length} hợp đồng • Tổng giá trị: {fmt(totalValue)} VNĐ</p>
         </div>
         <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm HĐ thầu phụ</button>

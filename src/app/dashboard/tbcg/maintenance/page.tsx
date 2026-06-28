@@ -8,6 +8,7 @@ import {
   InputField, SelectField, TextareaField,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { Wrench } from 'lucide-react'
 
 interface MaintRecord {
   id: string; maintCode: string; type: string; description: string;
@@ -72,7 +73,7 @@ export default function MaintenancePage() {
           </thead>
           <tbody>
             {records.length === 0 ? (
-              <tr><td colSpan={7}><EmptyState icon="🔧" title="Chưa có phiếu bảo trì" /></td></tr>
+              <tr><td colSpan={7}><EmptyState icon={<Wrench />} title="Chưa có phiếu bảo trì" /></td></tr>
             ) : records.map(r => (
               <tr key={r.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{r.maintCode}</span></td>

@@ -12,12 +12,12 @@ interface Vendor {
 }
 
 const CATEGORY_MAP: Record<string, { label: string; icon: string; color: string }> = {
-  steel_supplier: { label: 'Thép', icon: '🏗️', color: '#6366f1' },
-  equipment: { label: 'Thiết bị', icon: '⚙️', color: '#0891b2' },
-  subcontractor: { label: 'Thầu phụ', icon: '👷', color: '#ea580c' },
-  service: { label: 'Dịch vụ', icon: '🔧', color: '#16a34a' },
-  welding: { label: 'Hàn', icon: '🔥', color: '#dc2626' },
-  paint: { label: 'Sơn', icon: '🎨', color: '#8b5cf6' },
+  steel_supplier: { label: 'Thép', icon: 'ST', color: '#6366f1' },
+  equipment: { label: 'Thiết bị', icon: 'EQ', color: '#0891b2' },
+  subcontractor: { label: 'Thầu phụ', icon: 'SC', color: '#ea580c' },
+  service: { label: 'Dịch vụ', icon: 'SV', color: '#16a34a' },
+  welding: { label: 'Hàn', icon: 'WD', color: '#dc2626' },
+  paint: { label: 'Sơn', icon: 'PT', color: '#8b5cf6' },
 }
 
 const COUNTRY_FLAG: Record<string, string> = {
@@ -90,12 +90,12 @@ export default function VendorsPage() {
       <div className="grid gap-4 md:grid-cols-2">
         {vendors.length === 0 && (
           <div className="card p-12 text-center col-span-2">
-            <p className="text-4xl mb-3">🏭</p>
+            <p className="text-4xl mb-3">--</p>
             <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Chưa có nhà cung cấp</p>
           </div>
         )}
         {vendors.map(v => {
-          const cat = CATEGORY_MAP[v.category] || { label: v.category, icon: '📦', color: '#64748b' }
+          const cat = CATEGORY_MAP[v.category] || { label: v.category, icon: '--', color: '#64748b' }
           const rating = Number(v.rating || 0)
           return (
             <div key={v.id} className="card p-5 transition-all hover:shadow-md">
@@ -121,9 +121,9 @@ export default function VendorsPage() {
 
                   {/* Contact Info */}
                   <div className="space-y-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {v.contactName && <p>👤 {v.contactName}</p>}
-                    {v.email && <p>✉️ {v.email}</p>}
-                    {v.phone && <p>📞 {v.phone}</p>}
+                    {v.contactName && <p>{v.contactName}</p>}
+                    {v.email && <p>{v.email}</p>}
+                    {v.phone && <p>{v.phone}</p>}
                   </div>
                 </div>
                 <div className="text-right">

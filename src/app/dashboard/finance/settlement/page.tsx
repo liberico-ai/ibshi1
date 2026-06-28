@@ -34,7 +34,7 @@ export default function SettlementPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>💰 Quyết toán Tài chính Dự án</h1>
+        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quyết toán Tài chính Dự án</h1>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Phase 6.2 — Financial Settlement</p>
       </div>
 
@@ -73,7 +73,7 @@ export default function SettlementPage() {
 
           <div className="card p-4">
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-2xl">{data.status === 'UNDER_BUDGET' ? '✅' : '⚠️'}</span>
+              <span className="text-2xl">{data.status === 'UNDER_BUDGET' ? 'OK' : '!'}</span>
               <div>
                 <p className="font-bold" style={{ color: data.status === 'UNDER_BUDGET' ? '#16a34a' : '#dc2626' }}>
                   {data.status === 'UNDER_BUDGET' ? 'Trong ngân sách' : 'Vượt ngân sách'}

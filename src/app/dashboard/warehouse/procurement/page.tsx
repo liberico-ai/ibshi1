@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { PageHeader, StatusBadge, Button, FilterBar, KPICard, EmptyState, InputField } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { ClipboardList } from 'lucide-react'
 
 interface TrackingGroup {
   taskId: string
@@ -122,7 +123,7 @@ export default function ProcurementPage() {
         <div className="space-y-6">
           {groupedByProject.length === 0 && (
             <EmptyState
-              icon="📋"
+              icon={<ClipboardList />}
               title="Chưa có Đề nghị mua hàng nào được duyệt"
             />
           )}

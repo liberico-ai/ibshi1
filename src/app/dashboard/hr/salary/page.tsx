@@ -61,7 +61,7 @@ export default function SalaryPage() {
             {[2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           <button onClick={handleCalculate} disabled={calculating} className="btn-accent disabled:opacity-50">
-            {calculating ? '⏳ Đang tính...' : '🧮 Tính lương'}
+            {calculating ? 'Đang tính...' : 'Tính lương'}
           </button>
         </div>
       </div>

@@ -109,10 +109,10 @@ export default function TasksPage() {
         actions={
           <div className="flex gap-2 stagger-children">
             {allTasks.filter(t => t.urgency === 'overdue').length > 0 && (
-              <Badge variant="danger">⚠️ {allTasks.filter(t => t.urgency === 'overdue').length} quá hạn</Badge>
+              <Badge variant="danger">{allTasks.filter(t => t.urgency === 'overdue').length} quá hạn</Badge>
             )}
             {allTasks.filter(t => t.urgency === 'today').length > 0 && (
-              <Badge variant="warning">📅 {allTasks.filter(t => t.urgency === 'today').length} hôm nay</Badge>
+              <Badge variant="warning">{allTasks.filter(t => t.urgency === 'today').length} hôm nay</Badge>
             )}
           </div>
         }

@@ -100,7 +100,7 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
     })
 
     if (filledItems.length === 0) {
-      setError('⚠️ Vui lòng nhập ít nhất 1 giá trị "Khối lượng thực nghiệm" trước khi gửi.')
+      setError('Vui lòng nhập ít nhất 1 giá trị "Khối lượng thực nghiệm" trước khi gửi.')
       return
     }
 
@@ -125,7 +125,7 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
       })
 
       if (res.success) {
-        setSuccess(`✅ ${res.message}`)
+        setSuccess(res.message)
       } else {
         setError(res.error || 'Lỗi khi gửi nghiệm thu')
       }
@@ -148,7 +148,7 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
-          📋 {role === 'PM' ? 'PHÊ DUYỆT KHỐI LƯỢNG TUẦN' : 'NGHIỆM THU KHỐI LƯỢNG TUẦN'}
+          {role === 'PM' ? 'PHÊ DUYỆT KHỐI LƯỢNG TUẦN' : 'NGHIỆM THU KHỐI LƯỢNG TUẦN'}
           <span style={{
             fontSize: '0.75rem', padding: '3px 10px', borderRadius: 12, fontWeight: 700,
             background: role === 'QC' ? '#dbeafe' : '#fef3c7',
@@ -172,7 +172,7 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
         }
         <br />
         <span style={{ color: '#dc2626', fontWeight: 600 }}>
-          ⚠️ Sau khi bấm GỬI, dữ liệu sẽ được lưu vĩnh viễn và KHÔNG THỂ chỉnh sửa.
+          Sau khi bấm GỬI, dữ liệu sẽ được lưu vĩnh viễn và KHÔNG THỂ chỉnh sửa.
         </span>
       </p>
 
@@ -182,7 +182,7 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
           padding: '12px 16px', background: '#dcfce7', borderRadius: 8, border: '1px solid #86efac',
           color: '#166534', marginBottom: 16, fontWeight: 600, fontSize: '0.9rem',
         }}>
-          ✅ Phiếu nghiệm thu tuần này đã được gửi thành công. Dữ liệu đã được bảo vệ vĩnh viễn.
+          Phiếu nghiệm thu tuần này đã được gửi thành công. Dữ liệu đã được bảo vệ vĩnh viễn.
         </div>
       )}
 
@@ -248,7 +248,7 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
                     color: isOverReport ? '#dc2626' : '#92400e',
                   }}>
                     {fmtNum(item.weekTotal)}
-                    {isOverReport && <div style={{ fontSize: '0.65rem', color: '#dc2626' }}>⚠️ vượt</div>}
+                    {isOverReport && <div style={{ fontSize: '0.65rem', color: '#dc2626' }}>vượt</div>}
                   </td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#7c3aed', fontWeight: 600 }}>
                     {fmtNum(item.cumulativeAccepted)}
@@ -316,7 +316,7 @@ export default function WeeklyAcceptanceUI({ task, isActive }: WeeklyAcceptanceU
               opacity: submitting ? 0.6 : 1,
             }}
           >
-            {submitting ? '⏳ Đang xử lý...' : (role === 'PM' ? '✅ DUYỆT KHỐI LƯỢNG (Chốt dữ liệu)' : '📤 GỬI NGHIỆM THU (Không thể sửa sau khi gửi)')}
+            {submitting ? 'Đang xử lý...' : (role === 'PM' ? 'DUYỆT KHỐI LƯỢNG (Chốt dữ liệu)' : 'GỬI NGHIỆM THU (Không thể sửa sau khi gửi)')}
           </button>
         </div>
       )}

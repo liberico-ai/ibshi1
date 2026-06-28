@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, StatusBadge, Button, EmptyState, Modal, InputField, SelectField } from '@/components/ui'
 import { STATUS_COLORS } from '@/lib/design-tokens'
+import { Package } from 'lucide-react'
 
 interface BOM {
   id: string; bomCode: string; name: string; revision: string; status: string; createdAt: string;
@@ -103,7 +104,7 @@ export default function BOMPage() {
 
       {boms.length === 0 ? (
         <EmptyState
-          icon="📦"
+          icon={<Package />}
           title="Chưa có BOM nào"
           description="Tạo BOM đầu tiên để quản lý danh mục vật tư cho dự án"
           action={

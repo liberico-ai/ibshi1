@@ -55,8 +55,8 @@ export default function MaterialCodesPage() {
   const doResolve = async () => {
     if (!resolveCode.trim()) return
     const res = await apiFetch(`/api/materials/resolve?code=${encodeURIComponent(resolveCode.trim())}`)
-    if (res.ok) setResolveResult(`✅ ${resolveCode.trim()} → ${res.material.materialCode} — ${res.material.name} (nguồn: ${res.resolvedFrom === 'canonical' ? 'mã chuẩn' : 'bí danh'})`)
-    else setResolveResult(`❌ ${res.error || 'Không tìm thấy'}`)
+    if (res.ok) setResolveResult(`${resolveCode.trim()} → ${res.material.materialCode} — ${res.material.name} (nguồn: ${res.resolvedFrom === 'canonical' ? 'mã chuẩn' : 'bí danh'})`)
+    else setResolveResult(`${res.error || 'Không tìm thấy'}`)
   }
 
   const openDetail = async (id: string) => {
@@ -92,14 +92,14 @@ export default function MaterialCodesPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🏷️ Quản lý mã vật tư</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quản lý mã vật tư</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{pagination.total} mã · mã chuẩn duy nhất + bí danh các phòng</p>
         </div>
       </div>
 
       {/* Resolve box */}
       <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>🔍 Tra mã (chuẩn hoặc cũ → mã chuẩn)</div>
+        <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Tra mã (chuẩn hoặc cũ → mã chuẩn)</div>
         <div className="flex gap-2 flex-wrap">
           <input value={resolveCode} onChange={(e) => setResolveCode(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && doResolve()}
             placeholder="Nhập mã bất kỳ, vd BAH.AOBH.001 hoặc BAH-AOBH-001"
@@ -200,7 +200,7 @@ export default function MaterialCodesPage() {
             </div>
 
             {detail.isProvisional && canEdit && (
-              <button onClick={() => approve(detail.id)} className="btn-primary text-sm px-4 py-2 rounded-lg mb-3 w-full">✓ Duyệt mã (chuẩn hóa → ACTIVE)</button>
+              <button onClick={() => approve(detail.id)} className="btn-primary text-sm px-4 py-2 rounded-lg mb-3 w-full">Duyệt mã (chuẩn hóa → ACTIVE)</button>
             )}
 
             {/* Thông số kỹ thuật + tồn */}

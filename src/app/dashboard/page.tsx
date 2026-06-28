@@ -8,6 +8,7 @@ import {
   BarChart, Zap, CheckCircle, AlertCircle,
   Package, Factory, ShieldCheck,
   PieChart, FileBarChart, BarChart3,
+  ClipboardList, Ruler, Handshake, Wrench,
 } from 'lucide-react'
 
 interface DashboardData {
@@ -71,7 +72,7 @@ export default function DashboardPage() {
       <div className="welcome-banner">
         <div>
           <h1 className="welcome-title">
-            Xin chào, {user?.fullName?.replace(/\s*\(.*\)\s*$/, '').split(' ').pop()} 👋
+            Xin chào, {user?.fullName?.replace(/\s*\(.*\)\s*$/, '').split(' ').pop()}
           </h1>
           <p className="welcome-subtitle">
             {ROLES[user?.roleCode as keyof typeof ROLES]?.name || user?.roleCode} — Tổng quan hệ thống hôm nay
@@ -187,16 +188,20 @@ function ModuleCard({ title, subtitle, href, icon, iconBg, metrics }: {
 /* ═══ Role-Specific Insights Panel ═══ */
 function RoleInsights({ data, role }: { data: RoleData; role: string }) {
   const myTasks = data.myTasks || { total: 0, byStatus: {} }
+  const roleIcon: Record<string, React.ReactNode> = {
+    R01: <BarChart3 size={16} />, R02: <ClipboardList size={16} />, R04: <Ruler size={16} />, R05: <Package size={16} />,
+    R06: <Factory size={16} />, R07: <Handshake size={16} />, R09: <ShieldCheck size={16} />,
+  }
   const roleLabel: Record<string, string> = {
-    R01: '📊 BGĐ', R02: '📋 PM', R04: '📐 Thiết kế', R05: '📦 Kho',
-    R06: '🏭 Sản xuất', R07: '🤝 Thương mại', R09: '✅ QC',
+    R01: 'BGĐ', R02: 'PM', R04: 'Thiết kế', R05: 'Kho',
+    R06: 'Sản xuất', R07: 'Thương mại', R09: 'QC',
   }
 
   return (
     <Card padding="default" className="role-insights-card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
         <h3 className="section-title" style={{ fontSize: 'var(--text-md)' }}>
-          {roleLabel[role] || '🔧'} Insights — Task của bạn
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{roleIcon[role] || <Wrench size={16} />} {roleLabel[role] || role}</span> Insights — Task của bạn
         </h3>
         <span className="role-badge">{myTasks.total} tasks</span>
       </div>

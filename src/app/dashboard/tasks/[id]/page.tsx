@@ -413,12 +413,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
       <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '1rem', color: '#0ea5e9' }}>📋 Bảng kế hoạch tổng thể triển khai (WBS)</h3>
+            <h3 style={{ margin: 0, fontSize: '1rem', color: '#0ea5e9' }}>Bảng kế hoạch tổng thể triển khai (WBS)</h3>
             <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Biểu mẫu BCTH-IBSHI-QLDA-095</p>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button type="button" onClick={exportExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📤 Export</button>
-            {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📥 Import</button>}
+            <button type="button" onClick={exportExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Export</button>
+            {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 12px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Import</button>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 24, marginTop: 16, flexWrap: 'wrap' }}>
@@ -457,7 +457,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
           </div>
         )}
         <button type="button" onClick={() => setWbsModalOpen(true)} style={{ marginTop: 16, padding: '10px 20px', width: '100%', fontSize: '0.9rem', fontWeight: 700, background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', letterSpacing: '0.3px' }}>
-          {isWbsEditable ? '📋 Xem & Sửa chi tiết' : '📋 XEM'}
+          {isWbsEditable ? 'Xem & Sửa chi tiết' : 'XEM'}
         </button>
       </div>
 
@@ -465,12 +465,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setWbsModalOpen(false); }}>
           <div style={{ flex: 1, background: '#fff', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: '12px 20px', borderBottom: '2px solid #0ea5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: '#f0f9ff' }}>
-              <div><h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0c4a6e' }}>📋 WBS</h2><span style={{ fontSize: '0.72rem', color: '#64748b' }}>{rows.length} hạng mục</span></div>
+              <div><h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0c4a6e' }}>WBS</h2><span style={{ fontSize: '0.72rem', color: '#64748b' }}>{rows.length} hạng mục</span></div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {isWbsEditable && <button type="button" onClick={addRow} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>+ Thêm</button>}
 
-                <button type="button" onClick={exportExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📤 Export</button>
-                {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>📥 Import</button>}
+                <button type="button" onClick={exportExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Export</button>
+                {isWbsEditable && <button type="button" onClick={importExcel} style={{ padding: '5px 14px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Import</button>}
                 <button type="button" onClick={() => setWbsModalOpen(false)} style={{ padding: '5px 14px', fontSize: '0.85rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>✕ Đóng</button>
               </div>
             </div>
@@ -535,18 +535,18 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                           const borderColor = isFailed ? '#dc2626' : isFull ? '#16a34a' : isPartial ? '#2563eb' : '#fde68a';
                           const bgColor = isFailed ? '#fef2f2' : isFull ? '#d1fae5' : isPartial ? '#dbeafe' : '#fef3c7';
                           const badgeColor = isFailed ? '#dc2626' : isFull ? '#16a34a' : '#2563eb';
-                          const tooltipText = isFailed ? '❌ Bị QC TỪ CHỐI — Click để Xử lý' :
+                          const tooltipText = isFailed ? 'Bị QC TỪ CHỐI — Click để Xử lý' :
                             isFull
-                            ? `✅ Đã phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • ${assignCount} tổ)`
+                            ? `Đã phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • ${assignCount} tổ)`
                             : isPartial
-                            ? `⏳ Chưa phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • còn ${formatNumber(totalKL - assignedKL)})`
-                            : '📋 Chưa phân giao — Click để phân giao tổ';
+                            ? `Chưa phân giao đủ (${formatNumber(assignedKL)}/${formatNumber(totalKL)} ${row.dvt || 'kg'} • còn ${formatNumber(totalKL - assignedKL)})`
+                            : 'Chưa phân giao — Click để phân giao tổ';
                           return (
                             <td key={c.key} style={tdS}>
                               <button type="button" onClick={() => openAssignPanel(ri, c.key)}
                                 title={tooltipText}
                                 style={{ ...inputS, cursor: 'pointer', border: `2px solid ${borderColor}`, background: bgColor, fontWeight: 600, textAlign: 'center', borderRadius: 5, position: 'relative' }}>
-                                {isFailed ? '❌ LỖI' : cellVal}
+                                {isFailed ? 'LỖI' : cellVal}
                                 {assignCount > 0 && !isFailed && <span style={{ position: 'absolute', top: -6, right: -6, background: badgeColor, color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{assignCount}</span>}
                               </button>
                             </td>
@@ -563,7 +563,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                             <button type="button" onClick={() => setLsxConfirmRow({ idx: ri, row, type: 'lsx' })}
                               disabled={lsxStatus?.[ri]?.lsx}
                               style={{ padding: '3px 8px', fontSize: '0.68rem', fontWeight: 700, borderRadius: 5, border: 'none', cursor: lsxStatus?.[ri]?.lsx ? 'default' : 'pointer', background: lsxStatus?.[ri]?.lsx ? '#d1fae5' : '#f59e0b', color: lsxStatus?.[ri]?.lsx ? '#16a34a' : '#fff', opacity: lsxStatus?.[ri]?.lsx ? 0.8 : 1 }}>
-                              {lsxStatus?.[ri]?.lsx ? '✅ Đã LSX' : '📋 LSX'}
+                              {lsxStatus?.[ri]?.lsx ? 'Đã LSX' : 'LSX'}
                             </button>
                             {(() => {
                               const allMats = getAllMaterialsForRow(ri);
@@ -571,7 +571,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                               return (
                                 <button type="button" onClick={() => setLsxConfirmRow({ idx: ri, row, type: 'vt' })}
                                   style={{ padding: '3px 8px', fontSize: '0.68rem', fontWeight: 700, borderRadius: 5, border: 'none', cursor: 'pointer', background: hasMats ? '#d1fae5' : '#8b5cf6', color: hasMats ? '#16a34a' : '#fff', opacity: 1, position: 'relative' }}>
-                                  {hasMats ? '✅ Vật tư' : '📦 Vật tư'}
+                                  {hasMats ? 'Vật tư' : 'Vật tư'}
                                   {hasMats && <span style={{ position: 'absolute', top: -6, right: -6, background: '#16a34a', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{allMats.length}</span>}
                                 </button>
                               );
@@ -604,7 +604,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 {/* Header */}
                 <div style={{ padding: '16px 24px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>📋 LỆNH SẢN XUẤT</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>LỆNH SẢN XUẤT</div>
                     <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem' }}>{row.stt}. {row.hangMuc || 'Hạng mục'}</h3>
                     <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.9 }}>
                       KL: <strong>{formatNumber(totalKL)} {row.dvt || 'kg'}</strong>
@@ -621,7 +621,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <div style={{ padding: '16px 24px', maxHeight: '60vh', overflowY: 'auto' }}>
                   {activeStages.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                      <div style={{ fontSize: '2rem', marginBottom: 8 }}>💭</div>
+                      <div style={{ fontSize: '2rem', marginBottom: 8 }}></div>
                       <div style={{ fontSize: '0.95rem' }}>Chưa có phân giao nào cho hạng mục này.</div>
                       <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Hãy click vào các ô IBS/TP trong cột Chi tiết để phân giao tổ trước.</div>
                     </div>
@@ -630,7 +630,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     return (
                       <div key={stage.key} style={{ marginBottom: 16 }}>
                         <div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: '8px 8px 0 0', borderBottom: '2px solid #f59e0b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#92400e' }}>🔧 {stage.label}</span>
+                          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#92400e' }}>{stage.label}</span>
                           <span style={{ fontSize: '0.75rem', color: '#b45309' }}>{teams.length} tổ</span>
                         </div>
                         {/* Table header */}
@@ -670,18 +670,18 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                                     title={issued ? 'Đã phát hành' : 'Phát hành LSX'}
                                     onClick={() => onIssueSingleTeam?.(idx, stage.key, ti)}
                                     style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: (canIssue && !isCloned) ? 'pointer' : 'default', background: issued ? '#d1fae5' : canIssue ? '#f59e0b' : '#e2e8f0', color: issued ? '#16a34a' : canIssue ? '#fff' : '#94a3b8', transition: 'all 0.2s' }}>
-                                    {issued ? '✅ Đã PH' : '📤 Phát hành'}
+                                    {issued ? 'Đã PH' : 'Phát hành'}
                                   </button>
                                 ) : (
                                   <>
-                                    <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 800 }}>❌ FAIL</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 800 }}>FAIL</div>
                                     {!isCloned ? (
                                       <button type="button" onClick={() => { if(confirm('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
                                         style={{ padding: '4px 8px', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
-                                        🔄 Tạo Rework
+                                        Tạo Rework
                                       </button>
                                     ) : (
-                                      <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>✅ Đã tạo Rework bù</div>
+                                      <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Đã tạo Rework bù</div>
                                     )}
                                   </>
                                 )}
@@ -695,7 +695,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                                     setDncRow({ idx, row, stageKey: stage.key, teamIdx: ti, teamVolume: teamVol });
                                   }}
                                   style={{ padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: atLimit ? 'default' : 'pointer', background: atLimit ? '#d1fae5' : hasMats ? '#0ea5e9' : '#64748b', color: atLimit ? '#16a34a' : '#fff', opacity: atLimit ? 0.9 : 1, transition: 'all 0.2s', position: 'relative' }}>
-                                  {atLimit ? '✅ Đủ VT' : '📝 DNC VT'}
+                                  {atLimit ? 'Đủ VT' : 'DNC VT'}
                                   {hasMats && !atLimit && <span style={{ position: 'absolute', top: -6, right: -6, background: '#0ea5e9', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{teamMatCount}</span>}
                                 </button>
                               </div>
@@ -722,7 +722,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
             <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 850, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
               {/* Header */}
               <div style={{ padding: '16px 24px', background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)', color: '#fff' }}>
-                <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>📦 VẬT TƯ HẠNG MỤC</div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>VẬT TƯ HẠNG MỤC</div>
                 <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem' }}>{row.stt}. {row.hangMuc || 'Hạng mục'}</h3>
                 <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.9 }}>
                   KL: <strong>{formatNumber(totalKL)} {row.dvt || 'kg'}</strong>
@@ -735,12 +735,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 return (
                   <div style={{ padding: '16px 24px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#6d28d9' }}>📋 Tổng hợp vật tư đã yêu cầu</h4>
+                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#6d28d9' }}>Tổng hợp vật tư đã yêu cầu</h4>
                       <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{allMats.length} mục</span>
                     </div>
                     {allMats.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>📭</div>
+                        <div style={{ fontSize: '1.5rem', marginBottom: 6 }}></div>
                         <div style={{ fontSize: '0.9rem' }}>Chưa có DNC vật tư nào. Hãy lập DNC VT trong modal LSX trước.</div>
                       </div>
                     ) : (
@@ -792,7 +792,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               {/* Header */}
               <div style={{ padding: '16px 24px', borderBottom: '3px solid #0ea5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem' }}>📝 DNC Vật tư — {stageLabel}</h3>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem' }}>DNC Vật tư — {stageLabel}</h3>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                     {row.hangMuc || `Hạng mục #${idx + 1}`} • KL tổ: {formatNumber(teamVolume)} {row.dvt || 'kg'} • Giới hạn: {formatNumber(maxAllowed)} (110%)
                   </span>
@@ -810,7 +810,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               {/* Limit warning */}
               {overLimit && (
                 <div style={{ padding: '10px 24px', background: '#fef2f2', borderBottom: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: '#dc2626', fontWeight: 600 }}>
-                  ⚠️ Tổng vật tư vượt 110% khối lượng tổ. Vui lòng giảm số lượng.
+                  Tổng vật tư vượt 110% khối lượng tổ. Vui lòng giảm số lượng.
                 </div>
               )}
               {/* Table */}
@@ -854,7 +854,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                             await onRequestIssue?.(idx, stageKey, teamIdx, mi, trimmedItem);
                           }}
                           style={{ padding: '4px 8px', fontSize: '0.72rem', fontWeight: 700, borderRadius: 5, border: 'none', cursor: m.requested ? 'default' : 'pointer', background: m.requested ? '#d1fae5' : '#f59e0b', color: m.requested ? '#16a34a' : '#fff', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
-                          {m.requested ? '✅ Đã ĐNC' : '📋 Đề nghị cấp'}
+                          {m.requested ? 'Đã ĐNC' : 'Đề nghị cấp'}
                         </button>
                       ) : (
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>—</span>
@@ -879,7 +879,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                     setDncRow(null);
                   }}
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: overLimit || filledCount === 0 ? '#e2e8f0' : '#16a34a', color: overLimit || filledCount === 0 ? '#94a3b8' : '#fff', border: 'none', borderRadius: 8, cursor: overLimit || filledCount === 0 ? 'default' : 'pointer', fontWeight: 700 }}>
-                  💾 Lưu ({filledCount} mục)
+                  Lưu ({filledCount} mục)
                 </button>
               </div>
             </div>
@@ -900,7 +900,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               {/* Header */}
               <div style={{ padding: '16px 24px', background: 'linear-gradient(135deg, #0ea5e9, #2563eb)', color: '#fff' }}>
                 <div style={{ fontSize: '0.75rem', opacity: 0.8, marginBottom: 2 }}>PHÂN GIAO CÔNG ĐOẠN</div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>🔧 {stageCol?.label || assignCell.col}</h3>
+                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{stageCol?.label || assignCell.col}</h3>
               </div>
               {/* Row info reference */}
               <div style={{ padding: '16px 24px', background: '#f0f9ff', borderBottom: '1px solid #bae6fd' }}>
@@ -915,11 +915,11 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
               {/* Assignment form */}
               <div style={{ padding: '20px 24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h4 style={{ margin: 0, fontSize: '1rem', color: '#0c4a6e' }}>📋 Thực hiện phân giao</h4>
+                  <h4 style={{ margin: 0, fontSize: '1rem', color: '#0c4a6e' }}>Thực hiện phân giao</h4>
                   <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
                     Đã giao: <span style={{ color: assignedKL >= totalKL ? '#16a34a' : '#f59e0b', fontWeight: 800 }}>{formatNumber(assignedKL)}</span> / {formatNumber(totalKL)} {row.dvt || 'kg'}
                     {remaining > 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>Còn lại: {formatNumber(remaining)}</span>}
-                    {remaining < 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>⚠️ Vượt {formatNumber(Math.abs(remaining))}</span>}
+                    {remaining < 0 && <span style={{ color: '#dc2626', marginLeft: 8, fontSize: '0.8rem' }}>Vượt {formatNumber(Math.abs(remaining))}</span>}
                   </div>
                 </div>
                 {/* Header */}
@@ -955,12 +955,12 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 {remaining > 0 && (
                   <button type="button" onClick={() => setTempAssigns(prev => [...prev, { teamName: '', volume: String(remaining), startDate: '', endDate: '' }])}
                     style={{ marginTop: 4, padding: '8px 16px', fontSize: '0.85rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                    ➕ Thêm tổ ({formatNumber(remaining)} {row.dvt || 'kg'} chưa giao)
+                    Thêm tổ ({formatNumber(remaining)} {row.dvt || 'kg'} chưa giao)
                   </button>
                 )}
                 {remaining <= 0 && tempAssigns.length > 0 && (
                   <div style={{ marginTop: 8, padding: '8px 12px', background: '#d1fae5', borderRadius: 8, fontSize: '0.85rem', color: '#16a34a', fontWeight: 600 }}>
-                    ✅ Đã phân giao đủ khối lượng
+                    Đã phân giao đủ khối lượng
                   </div>
                 )}
               </div>
@@ -971,7 +971,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                 <button type="button" onClick={saveAssign} disabled={assignCell.savedFull}
                   title={assignCell.savedFull ? 'Hạng mục đã phân giao đủ khối lượng — đã khóa' : 'Lưu phân giao'}
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: assignCell.savedFull ? '#e2e8f0' : '#0ea5e9', color: assignCell.savedFull ? '#94a3b8' : '#fff', border: 'none', borderRadius: 8, cursor: assignCell.savedFull ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
-                  {assignCell.savedFull ? '🔒 Đã phân giao đủ' : '💾 Lưu phân giao'}
+                  {assignCell.savedFull ? 'Đã phân giao đủ' : 'Lưu phân giao'}
                 </button>
               </div>
             </div>
@@ -1073,7 +1073,7 @@ export default function TaskDetailPage() {
         body: JSON.stringify({ action: 'assign', assignToUserId: userId }),
       })
       if (res.ok || res.success) {
-        setSuccessMsg('✅ Đã phân công thành công')
+        setSuccessMsg('Đã phân công thành công')
         setShowAssignModal(false)
         loadTask()
         setTimeout(() => setSuccessMsg(''), 3000)
@@ -1243,10 +1243,10 @@ export default function TaskDetailPage() {
         const margin = pd.p63Margin ? ` — Biên LN: ${pd.p63Margin}%` : ''
         setFormData(prev => ({
           ...prev,
-          qcDossierStatus: pd.p61Status as string || '⏳ Chưa bắt đầu',
-          costSettlement: pd.p62Status ? `${pd.p62Status}${totalCost ? ` — ${totalCost}${variance}` : ''}` : '⏳ Chưa bắt đầu',
-          plSummary: pd.p63Status ? `${pd.p63Status}${profit ? ` — ${profit}${margin}` : ''}` : '⏳ Chưa bắt đầu',
-          lessonLearnStatus: pd.p64Status as string || '⏳ Chưa bắt đầu',
+          qcDossierStatus: pd.p61Status as string || 'Chưa bắt đầu',
+          costSettlement: pd.p62Status ? `${pd.p62Status}${totalCost ? ` — ${totalCost}${variance}` : ''}` : 'Chưa bắt đầu',
+          plSummary: pd.p63Status ? `${pd.p63Status}${profit ? ` — ${profit}${margin}` : ''}` : 'Chưa bắt đầu',
+          lessonLearnStatus: pd.p64Status as string || 'Chưa bắt đầu',
         }))
       }    }
     setLoading(false)
@@ -1380,7 +1380,7 @@ export default function TaskDetailPage() {
               const cleanPrev = prev.filter(r => r.name.trim() || r.startDate || r.endDate)
               return [...cleanPrev, ...imported]
             })
-            setSuccessMsg(`✅ Đã import ${imported.length} milestones`)
+            setSuccessMsg(`Đã import ${imported.length} milestones`)
             setTimeout(() => setSuccessMsg(''), 3000)
           } else {
             setError('Không có dòng dữ liệu hợp lệ trong file.')
@@ -1464,7 +1464,7 @@ export default function TaskDetailPage() {
               const cleanPrev = prev.filter(r => r.name.trim() || r.code.trim())
               return [...cleanPrev, ...imported]
             })
-            setSuccessMsg(`✅ Đã import ${imported.length} vật tư`)
+            setSuccessMsg(`Đã import ${imported.length} vật tư`)
             setTimeout(() => setSuccessMsg(''), 3000)
           } else {
             setError('Không có dòng dữ liệu hợp lệ trong file.')
@@ -1601,7 +1601,7 @@ export default function TaskDetailPage() {
         body: JSON.stringify({ reason }),
       })
       if (res.success) {
-        setSuccessMsg(`✅ Đã từ chối. Quay về bước ${res.returnedTo}: ${res.returnedToName || ''}`)
+        setSuccessMsg(`Đã từ chối. Quay về bước ${res.returnedTo}: ${res.returnedToName || ''}`)
         setTimeout(() => router.push('/dashboard/tasks'), 2000)
       } else {
         setError(res.error || 'Lỗi khi từ chối')
@@ -1657,10 +1657,10 @@ export default function TaskDetailPage() {
 
     if (res.ok) {
       if (res.isPartial) {
-        setSuccessMsg('✅ Đã xuất kho một phần! Trang sẽ tải lại để xuất tiếp...')
+        setSuccessMsg('Đã xuất kho một phần! Trang sẽ tải lại để xuất tiếp...')
         setTimeout(() => window.location.reload(), 1500)
       } else {
-        setSuccessMsg(`✅ Hoàn thành! Bước tiếp: ${res.nextSteps?.join(', ') || 'Không có'}`)
+        setSuccessMsg(`Hoàn thành! Bước tiếp: ${res.nextSteps?.join(', ') || 'Không có'}`)
         setTimeout(() => router.push('/dashboard/tasks'), 2000)
       }
     } else {
@@ -1681,13 +1681,13 @@ export default function TaskDetailPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
-      <div style={{ fontSize: '1.1rem', color: 'var(--text-secondary)' }}>⏳ Đang tải...</div>
+      <div style={{ fontSize: '1.1rem', color: 'var(--text-secondary)' }}>Đang tải...</div>
     </div>
   )
 
   if (!task) return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
-      <h2>❌ Task không tồn tại</h2>
+      <h2>Task không tồn tại</h2>
       <button onClick={() => router.push('/dashboard/tasks')} className="btn-accent" style={{ marginTop: '1rem' }}>
         ← Quay lại danh sách
       </button>
@@ -1778,15 +1778,15 @@ export default function TaskDetailPage() {
           : fromStep === 'P4.3' ? 'QC đã từ chối nghiệm thu nhập kho'
           : 'BGĐ đã từ chối phê duyệt dự án này'
         const hint = isQC
-          ? '📝 Vui lòng kiểm tra lại và hoàn thành lại bước này.'
-          : '📝 Vui lòng chỉnh sửa thông tin dự án theo yêu cầu và hoàn thành lại bước này.'
+          ? 'Vui lòng kiểm tra lại và hoàn thành lại bước này.'
+          : 'Vui lòng chỉnh sửa thông tin dự án theo yêu cầu và hoàn thành lại bước này.'
         return (
         <div style={{
           background: '#fef2f2', border: '2px solid #fecaca', borderRadius: 10, padding: '1.25rem',
           marginBottom: '1rem', color: '#991b1b',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+            <span style={{ fontSize: '1.2rem' }}></span>
             <strong style={{ fontSize: '1rem' }}>{title}</strong>
           </div>
           <div style={{ fontSize: '0.9rem', marginBottom: 6 }}>
@@ -1808,7 +1808,7 @@ export default function TaskDetailPage() {
             return (
               <div style={{ marginTop: 10, background: '#fff', borderRadius: 8, border: '1px solid #fecaca', overflow: 'hidden' }}>
                 <div style={{ background: '#fef2f2', padding: '6px 10px', fontSize: '0.75rem', fontWeight: 700, color: '#991b1b' }}>
-                  📋 Kết quả nghiệm thu QC ({qcItems.length} hạng mục)
+                  Kết quả nghiệm thu QC ({qcItems.length} hạng mục)
                 </div>
                 {qcItems.map((item, idx) => {
                   const rs = resultStyle[item.result] || { bg: '#f3f4f6', color: '#6b7280' }
@@ -1834,7 +1834,7 @@ export default function TaskDetailPage() {
 
       {error && (
         <div style={{ background: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: 8, padding: '1rem', marginBottom: '1rem', color: '#721c24' }}>
-          ⚠️ {error}
+          {error}
         </div>
       )}
 
@@ -1845,7 +1845,7 @@ export default function TaskDetailPage() {
             {/* Description */}
             <div className="card" style={{ marginBottom: '1rem', padding: '1rem 1.25rem' }}>
               <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                ℹ️ {config.description}
+                {config.description}
               </p>
             </div>
 
@@ -1868,11 +1868,11 @@ export default function TaskDetailPage() {
                 <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', border: planDecision === 'approved' ? '2px solid #16a34a' : planDecision === 'rejected' ? '2px solid #dc2626' : undefined }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8 }}>
-                      📋 Kế hoạch Kickoff / WBS / Milestones <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>(PM - P1.2A)</span>
+                      Kế hoạch Kickoff / WBS / Milestones <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>(PM - P1.2A)</span>
                     </h3>
                     {planDecision !== 'pending' && (
                       <span style={{ fontSize: '0.85rem', fontWeight: 700, color: planDecision === 'approved' ? '#16a34a' : '#dc2626' }}>
-                        {planDecision === 'approved' ? '✅ Đã duyệt' : '❌ Đã từ chối'}
+                        {planDecision === 'approved' ? 'Đã duyệt' : 'Đã từ chối'}
                       </span>
                     )}
                   </div>
@@ -1927,7 +1927,7 @@ export default function TaskDetailPage() {
                   {/* Plan approve/reject buttons */}
                   {isActive && planDecision === 'pending' && (
                     <div style={{ marginTop: 16, padding: '12px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🚀 Hành động — Kế hoạch</div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>Hành động — Kế hoạch</div>
                       <div style={{ display: 'flex', gap: 10 }}>
                         <button onClick={async () => {
                           setPlanDecision('approved')
@@ -1935,15 +1935,15 @@ export default function TaskDetailPage() {
                             method: 'PUT',
                             body: JSON.stringify({ action: 'save', resultData: { ...formData, planApproved: true, checklist: checklistState } }),
                           })
-                          setSuccessMsg('✅ Đã duyệt kế hoạch. Vui lòng duyệt dự toán bên dưới.')
+                          setSuccessMsg('Đã duyệt kế hoạch. Vui lòng duyệt dự toán bên dưới.')
                           setTimeout(() => setSuccessMsg(''), 4000)
                         }} disabled={submitting}
                           style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          ✅ Duyệt kế hoạch
+                          Duyệt kế hoạch
                         </button>
                         <button onClick={() => setShowPlanReject(!showPlanReject)} disabled={submitting}
                           style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          ❌ Từ chối → Trả PM (P1.2A)
+                          Từ chối → Trả PM (P1.2A)
                         </button>
                       </div>
                       {showPlanReject && (
@@ -1960,14 +1960,14 @@ export default function TaskDetailPage() {
                                 body: JSON.stringify({ reason: `[Kế hoạch] ${planRejectReason}`, overrideRejectTo: 'P1.2A' }),
                               })
                               if (res.success) {
-                                setSuccessMsg('✅ Đã từ chối kế hoạch → Đẩy lại PM (P1.2A)')
+                                setSuccessMsg('Đã từ chối kế hoạch → Đẩy lại PM (P1.2A)')
                                 setTimeout(() => router.push('/dashboard/tasks'), 2000)
                               } else { setError(res.error || 'Lỗi khi từ chối') }
                             } catch { setError('Lỗi khi từ chối') }
                             setSubmitting(false)
                           }} disabled={submitting}
                             style={{ marginTop: 6, padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                            ⚠️ Xác nhận từ chối kế hoạch → Gửi lại PM (P1.2A)
+                            Xác nhận từ chối kế hoạch → Gửi lại PM (P1.2A)
                           </button>
                         </div>
                       )}
@@ -1976,7 +1976,7 @@ export default function TaskDetailPage() {
                   {/* Plan pre-approved from previous round */}
                   {planDecision === 'approved' && task?.resultData && Boolean((task.resultData as Record<string, unknown>).planApproved) && (
                     <div style={{ marginTop: 12, padding: '8px 16px', background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600 }}>
-                      ✅ Đã được phê duyệt từ lần xét duyệt trước
+                      Đã được phê duyệt từ lần xét duyệt trước
                     </div>
                   )}
                 </div>
@@ -1984,10 +1984,10 @@ export default function TaskDetailPage() {
                 {/* ══ P1.3: ESTIMATE APPROVAL (from P1.2) ══ */}
                 <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>📊 Dự toán thi công (từ P1.2)</h2>
+                    <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>Dự toán thi công (từ P1.2)</h2>
                     {estimateDecision !== 'pending' && (
                       <span style={{ fontSize: '0.85rem', fontWeight: 700, color: estimateDecision === 'approved' ? '#16a34a' : '#dc2626' }}>
-                        {estimateDecision === 'approved' ? '✅ Đã duyệt' : '❌ Đã từ chối'}
+                        {estimateDecision === 'approved' ? 'Đã duyệt' : 'Đã từ chối'}
                       </span>
                     )}
                   </div>
@@ -2106,15 +2106,15 @@ export default function TaskDetailPage() {
                             method: 'PUT',
                             body: JSON.stringify({ action: 'save', resultData: { ...formData, estimateApproved: true, planApproved: planDecision === 'approved', checklist: checklistState } }),
                           })
-                          setSuccessMsg('✅ Đã duyệt dự toán.')
+                          setSuccessMsg('Đã duyệt dự toán.')
                           setTimeout(() => setSuccessMsg(''), 3000)
                         }} disabled={submitting}
                           style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          ✅ Duyệt dự toán
+                          Duyệt dự toán
                         </button>
                         <button onClick={() => setShowEstimateReject(!showEstimateReject)} disabled={submitting}
                           style={{ padding: '8px 20px', background: 'transparent', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                          ❌ Từ chối dự toán
+                          Từ chối dự toán
                         </button>
                       </div>
                       {showEstimateReject && (
@@ -2130,13 +2130,13 @@ export default function TaskDetailPage() {
                                 method: 'POST',
                                 body: JSON.stringify({ reason: estimateRejectReason, overrideRejectTo: 'P1.2' }),
                               })
-                              setSuccessMsg('✅ Đã từ chối dự toán và đẩy lại về KTKH (P1.2)')
+                              setSuccessMsg('Đã từ chối dự toán và đẩy lại về KTKH (P1.2)')
                               setTimeout(() => router.push('/dashboard/tasks'), 2000)
                             } catch { setError('Lỗi khi từ chối') }
                             setSubmitting(false)
                           }} disabled={submitting}
                             style={{ marginTop: 6, padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                            ⚠️ Xác nhận từ chối dự toán → Gửi lại KTKH (P1.2)
+                            Xác nhận từ chối dự toán → Gửi lại KTKH (P1.2)
                           </button>
                         </div>
                       )}
@@ -2144,7 +2144,7 @@ export default function TaskDetailPage() {
                   )}
                   {estimateDecision === 'approved' && task?.resultData && Boolean((task.resultData as Record<string, unknown>).estimateApproved) && (
                     <div style={{ marginTop: 12, padding: '8px 16px', background: '#dcfce7', color: '#166534', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600 }}>
-                      ✅ Dự toán đã được phê duyệt
+                      Dự toán đã được phê duyệt
                     </div>
                   )}
                 </div>
@@ -2154,7 +2154,7 @@ export default function TaskDetailPage() {
                   <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', textAlign: 'center' }}>
                     <button onClick={() => handleSubmit('complete')} disabled={submitting}
                       style={{ padding: '12px 32px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: '1rem' }}>
-                      {submitting ? '⏳ Đang xử lý...' : '✅ Hoàn thành phê duyệt (Kế hoạch + Dự toán)'}
+                      {submitting ? 'Đang xử lý...' : 'Hoàn thành phê duyệt (Kế hoạch + Dự toán)'}
                     </button>
                   </div>
                 )}
@@ -2178,7 +2178,7 @@ export default function TaskDetailPage() {
               return (
                 <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderTop: '4px solid #0ea5e9' }}>
                   <h3 style={{ marginTop: 0, fontSize: '1.2rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    📋 YÊU CẦU NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC
+                    YÊU CẦU NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC
                   </h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>
                     Hạng mục này đã hoàn thành 100% khối lượng nghiệm thu. Gửi yêu cầu nghiệm thu chất lượng để QAQC tiến hành kiểm tra.
@@ -2210,7 +2210,7 @@ export default function TaskDetailPage() {
                               method: 'POST',
                               body: JSON.stringify({ userId: currentUser?.id, resultData: { ...rd, requestedAt: new Date().toISOString() } })
                             })
-                            alert('✅ Đã gửi yêu cầu nghiệm thu chất lượng. Task QAQC sẽ được tạo tự động.')
+                            alert('Đã gửi yêu cầu nghiệm thu chất lượng. Task QAQC sẽ được tạo tự động.')
                             window.location.reload()
                           } catch (err) {
                             alert('Lỗi gửi yêu cầu: ' + (err as Error).message)
@@ -2218,7 +2218,7 @@ export default function TaskDetailPage() {
                         }}
                         style={{ padding: '10px 24px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: '1rem' }}
                       >
-                        📤 Gửi yêu cầu nghiệm thu
+                        Gửi yêu cầu nghiệm thu
                       </button>
                     </div>
                   )}
@@ -2254,7 +2254,7 @@ export default function TaskDetailPage() {
               return (
                 <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
                   <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid #0ea5e9', paddingBottom: 8, marginBottom: 8, color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    📋 Thông tin Lệnh sản xuất
+                    Thông tin Lệnh sản xuất
                   </h3>
                   <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 20, fontWeight: 500 }}>
                     Dự án: <strong style={{ color: 'var(--text-primary)' }}>{projectName}</strong>
@@ -2317,7 +2317,7 @@ export default function TaskDetailPage() {
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Tổng dự toán từ P1.2 (DT03-DT07)</div>
                     <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#3b82f6', marginTop: 4 }}>{budget > 0 ? formatCurrency(budget) : 'Chưa có dữ liệu dự toán'}</div>
                   </div>
-                  <div style={{ fontSize: '2rem' }}>💰</div>
+                  <div style={{ fontSize: '2rem' }}></div>
                 </div>
               )
             })()}
@@ -2326,7 +2326,7 @@ export default function TaskDetailPage() {
             {!['P5.1', 'P5.3', 'P5.4', 'P1.2', 'P2.1A', 'P2.1B', 'P2.1C', 'P2.4', 'P3.3', 'P3.4'].includes(task.stepCode) && (
             <div className="card" style={{ padding: '1.5rem', marginTop: task.stepCode === 'P5.1' ? '1rem' : undefined }}>
               <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
-                📝 Thông tin nhập liệu
+                Thông tin nhập liệu
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                 {config.fields.map(field => {
@@ -2446,7 +2446,7 @@ export default function TaskDetailPage() {
                 <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 16 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Job Card từ P5.1</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: 2 }}>📋 {jobCode}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: 2 }}>{jobCode}</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '1.5rem', fontWeight: 800, color: totalProgress >= 100 ? '#16a34a' : '#f59e0b' }}>{totalProgress}%</div>
@@ -2555,7 +2555,7 @@ export default function TaskDetailPage() {
                         dt02Detail: JSON.stringify(detailRows),
                         estimateFileName: file.name,
                       }))
-                      setSuccessMsg(`✅ Đã import dự toán: ${fmt(grandTotal)} từ ${sheetNames.length} sheets`)
+                      setSuccessMsg(`Đã import dự toán: ${fmt(grandTotal)} từ ${sheetNames.length} sheets`)
                       setTimeout(() => setSuccessMsg(''), 4000)
                     } else {
                       setError('Không đọc được dữ liệu DT02. Kiểm tra file Excel có đúng định dạng.')
@@ -2811,7 +2811,7 @@ export default function TaskDetailPage() {
                   <div className="card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #dc2626' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                       <div>
-                        <h3 style={{ margin: 0, fontSize: '1rem', color: '#dc2626' }}>🔴 Danh sách vật tư Long-Lead cần ưu tiên</h3>
+                        <h3 style={{ margin: 0, fontSize: '1rem', color: '#dc2626' }}>Danh sách vật tư Long-Lead cần ưu tiên</h3>
                         <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Xác định vật tư cần đặt gấp, ngày cần có, mức ưu tiên</p>
                       </div>
                       {isActive && (
@@ -2841,9 +2841,9 @@ export default function TaskDetailPage() {
                           <select className="input" value={item.priority} disabled={!isActive}
                             onChange={e => updateLl(i, 'priority', e.target.value)}
                             style={{ fontSize: '0.72rem', padding: '3px 4px', width: '100%', color: priorityColors[item.priority] || '#333', fontWeight: 600 }}>
-                            <option value="Cao">🔴 Cao</option>
-                            <option value="Trung bình">🟡 TB</option>
-                            <option value="Thấp">🟢 Thấp</option>
+                            <option value="Cao">Cao</option>
+                            <option value="Trung bình">TB</option>
+                            <option value="Thấp">Thấp</option>
                           </select>
                           <input className="input" value={item.note} disabled={!isActive}
                             onChange={e => updateLl(i, 'note', e.target.value)} placeholder="Ghi chú..."
@@ -3013,7 +3013,7 @@ export default function TaskDetailPage() {
 
                         if (imported.length > 0) {
                           save(imported)
-                          setSuccessMsg(`✅ Đã import ${imported.length} dòng cho ${code} (sheet "${bestSheet}")`)
+                          setSuccessMsg(`Đã import ${imported.length} dòng cho ${code} (sheet "${bestSheet}")`)
                           setTimeout(() => setSuccessMsg(''), 3000)
                         } else {
                           setError(`Sheet "${bestSheet}" không có dòng dữ liệu hợp lệ.`)
@@ -3035,12 +3035,12 @@ export default function TaskDetailPage() {
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button type="button" onClick={exportEstExcel}
                           style={{ padding: '4px 12px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                          📥 Export
+                          Export
                         </button>
                         {isActive && (
                           <button type="button" onClick={importEstExcel}
                             style={{ padding: '4px 12px', fontSize: '0.75rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                            📤 Import Excel
+                            Import Excel
                           </button>
                         )}
                         {isActive && (
@@ -3165,16 +3165,16 @@ export default function TaskDetailPage() {
                   {siblingFiles?.['file_contract'] && (
                     <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderLeft: '4px solid #f59e0b' }}>
                       <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#d97706', marginBottom: 12 }}>
-                        📄 Hợp đồng dự án (Từ bước P1.1B)
+                        Hợp đồng dự án (Từ bước P1.1B)
                       </h3>
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                         <a href={siblingFiles['file_contract'] as string} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
-                          ⬇️ {decodeURIComponent((siblingFiles['file_contract'] as string).split('/').pop() || 'Hợp đồng').replace(/^file_contract_?/, '')}
+                          {decodeURIComponent((siblingFiles['file_contract'] as string).split('/').pop() || 'Hợp đồng').replace(/^file_contract_?/, '')}
                         </a>
                       </div>
                     </div>
                   )}
-                  {renderEstTable('📊 DT02 — Tổng hợp dự toán thi công', 'QT30-DT02', 'dt02Items',
+                  {renderEstTable('DT02 — Tổng hợp dự toán thi công', 'QT30-DT02', 'dt02Items',
                     [
                       { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
                       { key: 'noiDung', label: 'Nội dung chi phí', width: '1.5fr' },
@@ -3191,7 +3191,7 @@ export default function TaskDetailPage() {
                       { maCP: 'VII', noiDung: 'Chi phí dự phòng', giaTri: '', tyLe: '' },
                     ]
                   )}
-                  {renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items', colsCPChung,
+                  {renderEstTable('DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items', colsCPChung,
                     [
                       { maCP: 'CPC', danhMuc: 'I. Chi phí chung phục vụ sản xuất', dvt: '', kl: '', donGia: '', thanhTien: '' },
                       { maCP: 'CPC-01', danhMuc: 'Nhân công (ngoài khoán)', dvt: 'Người', kl: '', donGia: '', thanhTien: '' },
@@ -3224,7 +3224,7 @@ export default function TaskDetailPage() {
               // ── P2.1B: TM (DT03 + DT04 + DT05) ──
               if (task.stepCode === 'P2.1B') return (
                 <>
-                  {renderEstTable('📦 DT03 — Dự toán chi phí VT tổng hợp', 'QT30-DT03', 'dt03Items', colsVTTH,
+                  {renderEstTable('DT03 — Dự toán chi phí VT tổng hợp', 'QT30-DT03', 'dt03Items', colsVTTH,
                     [
                       { nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' },
                       { nhomVT: 'VTC-01', danhMuc: 'Thép đen các loại', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
@@ -3248,7 +3248,7 @@ export default function TaskDetailPage() {
                       { nhomVT: 'VTDP', danhMuc: 'Vật tư dự phòng', dvt: '', kl: '', donGia: '', thanhTien: '' },
                     ]
                   )}
-                  {renderEstTable('📋 DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items', colsVTCT,
+                  {renderEstTable('DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items', colsVTCT,
                     [
                       { maVT: 'A', tenVT: 'VTC — Vật tư chính', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
                       { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
@@ -3265,7 +3265,7 @@ export default function TaskDetailPage() {
                       { maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' },
                     ]
                   )}
-                  {renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items', colsDV,
+                  {renderEstTable('DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items', colsDV,
                     [
                       { maCP: 'A', noiDung: 'VẬN TẢI', dvt: '', kl: '', donGia: '', thanhTien: '' },
                       { maCP: 'A-01', noiDung: 'Vận chuyển nội bộ', dvt: 'Chuyến', kl: '', donGia: '', thanhTien: '' },
@@ -3287,7 +3287,7 @@ export default function TaskDetailPage() {
               // ── P2.1C: SX (DT06) ──
               if (task.stepCode === 'P2.1C') return (
                 <>
-                  {renderEstTable('👷 DT06 — Dự toán chi phí nhân công trực tiếp', 'QT30-DT06', 'dt06Items', colsNC,
+                  {renderEstTable('DT06 — Dự toán chi phí nhân công trực tiếp', 'QT30-DT06', 'dt06Items', colsNC,
                     [
                       { maCP: 'A', noiDung: 'PC — PHA CẮT', dvt: '', kl: '', donGia: '', thanhTien: '' },
                       { maCP: 'A-01', noiDung: 'Pha cắt thép tấm', dvt: 'Kg', kl: '', donGia: '', thanhTien: '' },
@@ -3438,13 +3438,13 @@ export default function TaskDetailPage() {
               return (
                 <>
                   <div className="card" style={{ padding: '1rem', marginTop: '1rem', background: 'var(--bg-secondary)', borderLeft: '4px solid #f59e0b' }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#f59e0b' }}>📋 Cụm bảng dự toán chi tiết</h3>
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#f59e0b' }}>Cụm bảng dự toán chi tiết</h3>
                     <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       'Dữ liệu dự toán được đối soát từ P1.2 và điều chỉnh tại P2.4.'
                     </p>
                   </div>
 
-                  {(task.stepCode === 'P2.4') && renderEstTable('📦 DT03 — Dự toán chi phí VT tổng hợp', 'QT30-DT03', 'dt03Items',
+                  {(task.stepCode === 'P2.4') && renderEstTable('DT03 — Dự toán chi phí VT tổng hợp', 'QT30-DT03', 'dt03Items',
                     [
                       { key: 'nhomVT', label: 'Nhóm VT', width: '0.8fr' },
                       { key: 'danhMuc', label: 'Danh mục VT', width: '1.5fr' },
@@ -3455,7 +3455,7 @@ export default function TaskDetailPage() {
                     ],
                     getInheritedEstRows('dt03Items', [{ nhomVT: 'VTC', danhMuc: 'Vật tư chính', dvt: '', kl: '', donGia: '', thanhTien: '' }])
                   )}
-                  {(task.stepCode === 'P2.4') && renderEstTable('📋 DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items',
+                  {(task.stepCode === 'P2.4') && renderEstTable('DT04 — Dự toán chi tiết VT', 'QT30-DT04', 'dt04Items',
                     [
                       { key: 'maVT', label: 'Mã VT', width: '0.7fr' },
                       { key: 'tenVT', label: 'Tên VT', width: '1.2fr' },
@@ -3468,7 +3468,7 @@ export default function TaskDetailPage() {
                     ],
                     getInheritedEstRows('dt04Items', [{ maVT: '', tenVT: '', macVL: '', quyCach: '', dvt: '', kl: '', donGia: '', thanhTien: '' }])
                   )}
-                  {(task.stepCode === 'P2.4') && renderEstTable('🔧 DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items',
+                  {(task.stepCode === 'P2.4') && renderEstTable('DT05 — Dự toán chi phí dịch vụ', 'QT30-DT05', 'dt05Items',
                     [
                       { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
                       { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
@@ -3479,7 +3479,7 @@ export default function TaskDetailPage() {
                     ],
                     getInheritedEstRows('dt05Items', [{ maCP: '', noiDung: '', dvt: '', kl: '', donGia: '', thanhTien: '' }])
                   )}
-                  {(task.stepCode === 'P2.4') && renderEstTable('👷 DT06 — Dự toán chi phí nhân công trực tiếp', 'QT30-DT06', 'dt06Items',
+                  {(task.stepCode === 'P2.4') && renderEstTable('DT06 — Dự toán chi phí nhân công trực tiếp', 'QT30-DT06', 'dt06Items',
                     [
                       { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
                       { key: 'noiDung', label: 'Nội dung công việc', width: '1.5fr' },
@@ -3491,7 +3491,7 @@ export default function TaskDetailPage() {
                     getInheritedEstRows('dt06Items', [{ maCP: '', noiDung: '', dvt: '', kl: '', donGia: '', thanhTien: '' }])
                   )}
 
-                  {(task.stepCode === 'P2.4') && renderEstTable('📊 DT02 — Tổng hợp chi phí dự toán thi công', 'QT30-DT02', 'dt02Items',
+                  {(task.stepCode === 'P2.4') && renderEstTable('DT02 — Tổng hợp chi phí dự toán thi công', 'QT30-DT02', 'dt02Items',
                     [
                       { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
                       { key: 'noiDung', label: 'Nội dung chi phí', width: '1.5fr' },
@@ -3500,7 +3500,7 @@ export default function TaskDetailPage() {
                     ],
                     getInheritedEstRows('dt02Items', [{ maCP: 'I', noiDung: 'Chi phí vật tư', giaTri: '', tyLe: '' }])
                   )}
-                  {(task.stepCode === 'P2.4') && renderEstTable('🏢 DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items',
+                  {(task.stepCode === 'P2.4') && renderEstTable('DT07 — Chi phí chung, chi phí tài chính', 'QT30-DT07', 'dt07Items',
                     [
                       { key: 'maCP', label: 'Mã CP', width: '0.6fr' },
                       { key: 'danhMuc', label: 'Danh mục chi phí', width: '1.5fr' },
@@ -3520,7 +3520,7 @@ export default function TaskDetailPage() {
                 {/* Estimate from P1.2 */}
                 {previousStepData.estimate && (
                   <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
-                    <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem' }}>💰 Dự toán thi công (từ P1.2)</h3>
+                    <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem' }}>Dự toán thi công (từ P1.2)</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: '0.9rem' }}>
                       {previousStepData.estimate.estimatedBudget && (
                         <div><span style={{ color: 'var(--text-secondary)' }}>Ngân sách dự kiến:</span> <strong style={{ color: '#16a34a' }}>{Number(previousStepData.estimate.estimatedBudget).toLocaleString()} {previousStepData.estimate.currency || 'VND'}</strong></div>
@@ -3537,16 +3537,16 @@ export default function TaskDetailPage() {
                     </div>
                     {previousStepData.estimate.estimateNotes && (
                       <div style={{ marginTop: 8, padding: 8, background: 'var(--bg-secondary)', borderRadius: 6, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        📝 {previousStepData.estimate.estimateNotes}
+                        {previousStepData.estimate.estimateNotes}
                       </div>
                     )}
                   </div>
                 )}
 
                 {/* BOM sections from P2.1, P2.2, P2.3 */}
-                {[{ key: 'bomMain', label: '📦 VT chính — Thiết kế (P2.1)', color: '#3b82f6' },
-                  { key: 'bomWeldPaint', label: '🔥 VT hàn & sơn — PM (P2.2)', color: '#ef4444' },
-                  { key: 'bomSupply', label: '📋 VT phụ — Kho (P2.3)', color: '#10b981' },
+                {[{ key: 'bomMain', label: 'VT chính — Thiết kế (P2.1)', color: '#3b82f6' },
+                  { key: 'bomWeldPaint', label: 'VT hàn & sơn — PM (P2.2)', color: '#ef4444' },
+                  { key: 'bomSupply', label: 'VT phụ — Kho (P2.3)', color: '#10b981' },
                 ].map(section => {
                   const data = previousStepData[section.key as keyof typeof previousStepData] as Record<string, unknown> | null
                   // P2.1 stores PR data as bomPrItems (new format), fallback to old bomItems
@@ -3582,7 +3582,7 @@ export default function TaskDetailPage() {
                   if (section.key === 'bomSupply' && filledItems.length === 0) {
                     return (
                       <div key={section.key} className="card" style={{ padding: '0.75rem 1rem', marginTop: '1rem', borderLeft: `4px solid ${section.color}`, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                        📋 Kho xác nhận chưa cần mua vật tư tiêu hao
+                        Kho xác nhận chưa cần mua vật tư tiêu hao
                       </div>
                     )
                   }
@@ -3630,7 +3630,7 @@ export default function TaskDetailPage() {
                 {/* KH SX + Dự toán điều chỉnh from P2.4 */}
                 {previousStepData.plan && (
                   <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #8b5cf6' }}>
-                    <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', color: '#8b5cf6' }}>📋 Kế hoạch SX & Dự toán điều chỉnh (từ KTKH — P2.4)</h3>
+                    <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', color: '#8b5cf6' }}>Kế hoạch SX & Dự toán điều chỉnh (từ KTKH — P2.4)</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: '0.9rem' }}>
                       {previousStepData.plan.adjustedBudget && (
                         <div style={{ gridColumn: '1 / -1' }}>
@@ -3694,7 +3694,7 @@ export default function TaskDetailPage() {
                   return (
                     <div style={{ marginTop: '1rem' }}>
                       <div className="card" style={{ padding: '0.75rem 1rem', background: 'var(--bg-secondary)', borderLeft: '4px solid #059669' }}>
-                        <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#059669' }}>📊 Dự toán chi tiết từ các phòng ban</h3>
+                        <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#059669' }}>Dự toán chi tiết từ các phòng ban</h3>
                       </div>
                       {renderReadonlyTable('DT02 — Tổng hợp chi phí', 'QT30-DT02', de.dt02Items || (previousStepData.estimate as Record<string, string>)?.dt02Items, [
                         { key: 'maCP', label: 'Mã CP', width: '0.6fr' }, { key: 'noiDung', label: 'Nội dung chi phí', width: '1.5fr' },
@@ -3733,9 +3733,9 @@ export default function TaskDetailPage() {
 
 
                 {/* BOM summary from P2.1/P2.2/P2.3 */}
-                {[{ key: 'bomMain', label: '📦 VT chính — Thiết kế (P2.1)', color: '#3b82f6' },
-                  { key: 'bomWeldPaint', label: '🔥 VT hàn & sơn — PM (P2.2)', color: '#ef4444' },
-                  { key: 'bomSupply', label: '📋 VT phụ — Kho (P2.3)', color: '#10b981' },
+                {[{ key: 'bomMain', label: 'VT chính — Thiết kế (P2.1)', color: '#3b82f6' },
+                  { key: 'bomWeldPaint', label: 'VT hàn & sơn — PM (P2.2)', color: '#ef4444' },
+                  { key: 'bomSupply', label: 'VT phụ — Kho (P2.3)', color: '#10b981' },
                 ].map(section => {
                   const data = previousStepData[section.key as keyof typeof previousStepData] as Record<string, unknown> | null
                   // P2.1 stores PR data as bomPrItems (new format), fallback to old bomItems
@@ -3771,7 +3771,7 @@ export default function TaskDetailPage() {
                   if (section.key === 'bomSupply' && filledItems.length === 0) {
                     return (
                       <div key={section.key} className="card" style={{ padding: '0.75rem 1rem', marginTop: '0.75rem', borderLeft: `4px solid ${section.color}`, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        📋 Kho xác nhận chưa cần mua vật tư tiêu hao
+                        Kho xác nhận chưa cần mua vật tư tiêu hao
                       </div>
                     )
                   }
@@ -3832,7 +3832,7 @@ export default function TaskDetailPage() {
                   const grandTotal = bestItems.reduce((sum, item) => sum + item.bestPrice, 0)
                   return (
                     <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #16a34a' }}>
-                      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#16a34a' }}>🏆 Tổng hợp giá tốt nhất</h3>
+                      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#16a34a' }}>Tổng hợp giá tốt nhất</h3>
                       <p style={{ margin: '0 0 10px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Giá tốt nhất cho từng vật tư đã so sánh từ {nccList.length} NCC</p>
                       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
@@ -3882,12 +3882,12 @@ export default function TaskDetailPage() {
 
                 {/* Payment Terms Dropdown */}
                 <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #f59e0b' }}>
-                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#f59e0b' }}>💰 Điều kiện thanh toán</h3>
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#f59e0b' }}>Điều kiện thanh toán</h3>
                   <select className="input" value={paymentType} disabled={!isActive}
                     onChange={e => setPaymentType(e.target.value as 'full' | 'partial')}
                     style={{ fontSize: '0.9rem', fontWeight: 600, padding: '8px 12px', width: '100%', maxWidth: 350, cursor: 'pointer' }}>
-                    <option value="full">💵 Thanh toán hết (100%)</option>
-                    <option value="partial">📊 Thanh toán 1 phần (theo đợt)</option>
+                    <option value="full">Thanh toán hết (100%)</option>
+                    <option value="partial">Thanh toán 1 phần (theo đợt)</option>
                   </select>
 
                   {paymentType === 'partial' && (
@@ -3926,7 +3926,7 @@ export default function TaskDetailPage() {
                       {paymentMilestones.filter(p => Number(p.percent) > 0).length > 0 && (
                         <div style={{ marginTop: 6, fontSize: '0.75rem', color: paymentMilestones.reduce((s, p) => s + (Number(p.percent) || 0), 0) === 100 ? '#16a34a' : '#dc2626' }}>
                           Tổng: <strong>{paymentMilestones.reduce((s, p) => s + (Number(p.percent) || 0), 0)}%</strong>
-                          {paymentMilestones.reduce((s, p) => s + (Number(p.percent) || 0), 0) !== 100 && ' ⚠️ Cần đúng 100%'}
+                          {paymentMilestones.reduce((s, p) => s + (Number(p.percent) || 0), 0) !== 100 && ' Cần đúng 100%'}
                         </div>
                       )}
                     </div>
@@ -3935,12 +3935,12 @@ export default function TaskDetailPage() {
 
                 {/* Delivery Plan Dropdown */}
                 <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #0ea5e9' }}>
-                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>🚚 Kế hoạch giao hàng</h3>
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#0ea5e9' }}>Kế hoạch giao hàng</h3>
                   <select className="input" value={deliveryType} disabled={!isActive}
                     onChange={e => setDeliveryType(e.target.value as 'full' | 'batch')}
                     style={{ fontSize: '0.9rem', fontWeight: 600, padding: '8px 12px', width: '100%', maxWidth: 350, cursor: 'pointer' }}>
-                    <option value="full">📦 Giao hàng toàn bộ (1 lần)</option>
-                    <option value="batch">📋 Giao từng lần (nhiều đợt)</option>
+                    <option value="full">Giao hàng toàn bộ (1 lần)</option>
+                    <option value="batch">Giao từng lần (nhiều đợt)</option>
                   </select>
 
                   {deliveryType === 'batch' && (
@@ -4072,18 +4072,18 @@ export default function TaskDetailPage() {
               if (!po) {
                 return (
                   <div className="card" style={{ padding: '1rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    ⚠️ Không tìm thấy thông tin PO {poCode ? `(${poCode})` : ''} — PO có thể đã bị xóa.
+                    Không tìm thấy thông tin PO {poCode ? `(${poCode})` : ''} — PO có thể đã bị xóa.
                   </div>
                 )
               }
               return (
                 <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #0ea5e9' }}>
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#0ea5e9' }}>📦 Nghiệm thu chất lượng hàng về — PO {po.poCode}</h3>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#0ea5e9' }}>Nghiệm thu chất lượng hàng về — PO {po.poCode}</h3>
                   <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <div>🏢 NCC: <strong>{po.vendor?.name || '—'}</strong></div>
-                    <div>💰 Tổng PO: <strong>{po.totalValue ? formatCurrency(Number(po.totalValue)) : '—'}</strong></div>
-                    <div>📌 Trạng thái: <strong>{po.status}</strong></div>
-                    <div>📦 Số lần nhận hàng: <strong>{grns.length}</strong></div>
+                    <div>NCC: <strong>{po.vendor?.name || '—'}</strong></div>
+                    <div>Tổng PO: <strong>{po.totalValue ? formatCurrency(Number(po.totalValue)) : '—'}</strong></div>
+                    <div>Trạng thái: <strong>{po.status}</strong></div>
+                    <div>Số lần nhận hàng: <strong>{grns.length}</strong></div>
                   </div>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
@@ -4120,7 +4120,7 @@ export default function TaskDetailPage() {
                   {grns.length > 0 && (
                     <details style={{ marginTop: 12 }}>
                       <summary style={{ cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        📋 Lịch sử {grns.length} phiếu nhận hàng (GRN)
+                        Lịch sử {grns.length} phiếu nhận hàng (GRN)
                       </summary>
                       <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
@@ -4163,7 +4163,7 @@ export default function TaskDetailPage() {
               if (!po) {
                 return (
                   <div className="card" style={{ padding: '1rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    ⚠️ Không tìm thấy thông tin PO {poCode ? `(${poCode})` : ''} — PO có thể đã bị xóa.
+                    Không tìm thấy thông tin PO {poCode ? `(${poCode})` : ''} — PO có thể đã bị xóa.
                   </div>
                 )
               }
@@ -4178,11 +4178,11 @@ export default function TaskDetailPage() {
               }
               return (
                 <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #16a34a' }}>
-                  <h3 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: '#16a34a' }}>📦 Nhập kho — PO {po.poCode}</h3>
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: '#16a34a' }}>Nhập kho — PO {po.poCode}</h3>
                   <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem' }}>
-                    🏢 NCC: <strong>{po.vendor?.name || '—'}</strong>
-                    {' · '}📌 Trạng thái: <strong>{po.status}</strong>
-                    {' · '}📦 GRN: <strong>{grns.length}</strong> phiếu
+                    NCC: <strong>{po.vendor?.name || '—'}</strong>
+                    {' · '}Trạng thái: <strong>{po.status}</strong>
+                    {' · '}GRN: <strong>{grns.length}</strong> phiếu
                   </div>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '30px 1.4fr 0.8fr 0.6fr 0.6fr 0.5fr 1.2fr', gap: 6, padding: '8px 10px', background: 'var(--bg-secondary)' }}>
@@ -4212,7 +4212,7 @@ export default function TaskDetailPage() {
                   {grns.length > 0 && (
                     <details style={{ marginTop: 12 }}>
                       <summary style={{ cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        📋 Lịch sử {grns.length} phiếu GRN
+                        Lịch sử {grns.length} phiếu GRN
                       </summary>
                       <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
@@ -4263,7 +4263,7 @@ export default function TaskDetailPage() {
                   {/* Inventory overview — collapsible */}
                   <details className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #16a34a' }}>
                     <summary style={{ cursor: 'pointer', fontSize: '1rem', fontWeight: 700, color: '#16a34a', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ transition: 'transform 0.2s' }}>▶</span> 📦 Tồn kho hiện tại ({inv.length} vật tư)
+                      <span style={{ transition: 'transform 0.2s' }}>▶</span> Tồn kho hiện tại ({inv.length} vật tư)
                       <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 'auto' }}>Nhấn để xem</span>
                     </summary>
                     <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', marginTop: 10 }}>
@@ -4288,9 +4288,9 @@ export default function TaskDetailPage() {
                   {/* P3.3 LSX thầu phụ */}
                   {ld && (ld.subconTeam || ld.jobName) && (
                     <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #8b5cf6' }}>
-                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>📑 Lệnh Sản Xuất — Thầu phụ (P3.3)</h3>
+                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#8b5cf6' }}>Lệnh Sản Xuất — Thầu phụ (P3.3)</h3>
                       <div className="card" style={{ padding: '0.75rem', borderLeft: '3px solid #8b5cf6' }}>
-                        {ld.subconTeam && <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 6 }}>🏗️ Tổ thầu phụ: {ld.subconTeam}</div>}
+                        {ld.subconTeam && <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 6 }}>Tổ thầu phụ: {ld.subconTeam}</div>}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                           {ld.jobName && <span>Công việc: <strong style={{ color: 'var(--text-primary)' }}>{ld.jobName}</strong></span>}
                           {ld.jobCode && <span>Mã CV: <strong style={{ color: 'var(--text-primary)' }}>{ld.jobCode}</strong></span>}
@@ -4305,7 +4305,7 @@ export default function TaskDetailPage() {
                   {/* P3.4 LSX nội bộ */}
                   {woItems.length > 0 && (
                     <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: '4px solid #f59e0b' }}>
-                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>📋 Lệnh Sản Xuất (P3.4)</h3>
+                      <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#f59e0b' }}>Lệnh Sản Xuất (P3.4)</h3>
                       {woItems.map((wo: { costCode: string; content: string; jobCode: string; typeCode: string; unit: string; totalQty: string }, wIdx: number) => (
                         <div key={wIdx} className="card" style={{ padding: '0.75rem', marginBottom: 8, borderLeft: `3px solid hsl(${wIdx * 40 + 30}, 70%, 50%)` }}>
                           <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 6 }}>Công việc {wIdx + 1}: {wo.content}</div>
@@ -4334,7 +4334,7 @@ export default function TaskDetailPage() {
                     return (
                       <div className="card" style={{ padding: '1.5rem', marginTop: '0.75rem', borderLeft: `4px solid ${allFulfilled ? '#16a34a' : '#0ea5e9'}` }}>
                         <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: allFulfilled ? '#16a34a' : '#0ea5e9' }}>
-                          {allFulfilled ? '✅' : '🧾'} Đề nghị cấp ({reqs.length}) {allFulfilled && <span style={{ fontSize: '0.8rem', background: '#dcfce7', color: '#16a34a', padding: '2px 10px', borderRadius: 12, marginLeft: 8 }}>Đã cấp đủ 100%</span>}
+                          {allFulfilled ? '' : ''} Đề nghị cấp ({reqs.length}) {allFulfilled && <span style={{ fontSize: '0.8rem', background: '#dcfce7', color: '#16a34a', padding: '2px 10px', borderRadius: 12, marginLeft: 8 }}>Đã cấp đủ 100%</span>}
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.6fr 0.6fr 0.6fr 0.8fr', gap: 10, padding: '8px 12px', background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
                           <span>Mã & Tên VT</span>
@@ -4387,8 +4387,8 @@ export default function TaskDetailPage() {
                                     return (
                                       <>
                                         <input className="input" type="number" min="0" max={Math.min(remaining, currentStock)} placeholder="0" value={actualQtyStr || ''} onChange={e => updateTx(e.target.value)} style={{ fontSize:'0.8rem', padding: '6px 8px', textAlign: 'center', width: '100%', maxWidth: '110px', border: `1px solid ${hasError ? '#dc2626' : 'var(--border)'}`, background: hasError ? '#fef2f2' : '#fff' }} />
-                                        {overStock && <div style={{ fontSize: '0.6rem', color: '#dc2626', marginTop: 2, fontWeight: 700 }}>⚠️ Vượt kho</div>}
-                                        {!overStock && overRemaining && <div style={{ fontSize: '0.6rem', color: '#dc2626', marginTop: 2, fontWeight: 700 }}>⚠️ Vượt còn thiếu ({remaining})</div>}
+                                        {overStock && <div style={{ fontSize: '0.6rem', color: '#dc2626', marginTop: 2, fontWeight: 700 }}>Vượt kho</div>}
+                                        {!overStock && overRemaining && <div style={{ fontSize: '0.6rem', color: '#dc2626', marginTop: 2, fontWeight: 700 }}>Vượt còn thiếu ({remaining})</div>}
                                       </>
                                     )
                                   })()
@@ -4449,7 +4449,7 @@ export default function TaskDetailPage() {
               return (
                 <div className="card" style={{ padding: '1.5rem', marginTop: '1rem', borderLeft: '4px solid #3b82f6' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#3b82f6' }}>📋 Danh sách Job Card ({jobCards.length})</h3>
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#3b82f6' }}>Danh sách Job Card ({jobCards.length})</h3>
                     {isActive && (
                       <button type="button" onClick={addCard}
                         style={{ fontSize: '0.75rem', color: '#3b82f6', background: 'none', border: '1px dashed #3b82f6', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontWeight: 600 }}>
@@ -4543,7 +4543,7 @@ export default function TaskDetailPage() {
                     try { existing = rd.cellAssignments ? (typeof rd.cellAssignments === 'string' ? JSON.parse(rd.cellAssignments as string) : rd.cellAssignments) as CellAssignMap : {} } catch { /* */ }
                     const updated = { ...existing, [ri]: { ...(existing[ri] || {}), [colKey]: assigns } }
                     handleFieldChange('cellAssignments', JSON.stringify(updated))
-                    setSuccessMsg(`✅ Đã lưu phân giao ${assigns.length} tổ cho cột ${colKey}`)
+                    setSuccessMsg(`Đã lưu phân giao ${assigns.length} tổ cho cột ${colKey}`)
                     setTimeout(() => setSuccessMsg(''), 3000)
                     // Auto-persist to DB so P5.1 can read cellAssignments
                     try {
@@ -4578,7 +4578,7 @@ export default function TaskDetailPage() {
 
                     handleFieldChange('lsxStatus', JSON.stringify(newStatus))
                     handleFieldChange('lsxIssuedDetails', JSON.stringify(issuedDetails))
-                    setSuccessMsg(`✅ Đã phát hành LSX cho toàn bộ Hạng mục: ${row.hangMuc || '#' + (ri + 1)}`)
+                    setSuccessMsg(`Đã phát hành LSX cho toàn bộ Hạng mục: ${row.hangMuc || '#' + (ri + 1)}`)
                     setTimeout(() => setSuccessMsg(''), 3000)
 
                     // Auto-persist to DB
@@ -4602,7 +4602,7 @@ export default function TaskDetailPage() {
                       })
                       const checkData = await checkRes.json()
                       if (checkData.data?.created) {
-                        setSuccessMsg(`🎉 ${checkData.data.reason}`)
+                        setSuccessMsg(`${checkData.data.reason}`)
                         setTimeout(() => setSuccessMsg(''), 6000)
                       }
                     } catch { /* silent */ }
@@ -4611,7 +4611,7 @@ export default function TaskDetailPage() {
                     const existing = (formData as Record<string, unknown>).lsxStatus as Record<number, { lsx?: boolean; vt?: boolean }> || {}
                     const newStatus = { ...existing, [ri]: { ...existing[ri], vt: true } }
                     handleFieldChange('lsxStatus', JSON.stringify(newStatus))
-                    setSuccessMsg(`✅ Đã đề nghị cấp VT cho: ${row.hangMuc || 'Hạng mục #' + (ri + 1)}`)
+                    setSuccessMsg(`Đã đề nghị cấp VT cho: ${row.hangMuc || 'Hạng mục #' + (ri + 1)}`)
                     setTimeout(() => setSuccessMsg(''), 3000)
                   }}
                   lsxIssuedDetails={(() => {
@@ -4649,7 +4649,7 @@ export default function TaskDetailPage() {
                       handleFieldChange('materialRequests', JSON.stringify(mats))
                     }
 
-                    setSuccessMsg('✅ Đã tạo Rework bù (Tổ và Vật tư).')
+                    setSuccessMsg('Đã tạo Rework bù (Tổ và Vật tư).')
                     setTimeout(() => setSuccessMsg(''), 3000)
 
                     // Auto-persist to DB
@@ -4666,7 +4666,7 @@ export default function TaskDetailPage() {
                     try { existing = rd.lsxIssuedDetails ? (typeof rd.lsxIssuedDetails === 'string' ? JSON.parse(rd.lsxIssuedDetails as string) : rd.lsxIssuedDetails) as LsxIssuedMap : {} } catch { /* */ }
                     const updated = { ...existing, [ri]: { ...(existing[ri] || {}), [colKey]: { ...(existing[ri]?.[colKey] || {}), [teamIdx]: true } } }
                     handleFieldChange('lsxIssuedDetails', JSON.stringify(updated))
-                    setSuccessMsg(`✅ Đã phát hành LSX cho tổ #${teamIdx + 1} - ${colKey}`)
+                    setSuccessMsg(`Đã phát hành LSX cho tổ #${teamIdx + 1} - ${colKey}`)
                     setTimeout(() => setSuccessMsg(''), 3000)
                     // Auto-persist to DB
                     try {
@@ -4698,7 +4698,7 @@ export default function TaskDetailPage() {
                       })
                       const checkData = await checkRes.json()
                       if (checkData.data?.created) {
-                        setSuccessMsg(`🎉 ${checkData.data.reason}`)
+                        setSuccessMsg(`${checkData.data.reason}`)
                         setTimeout(() => setSuccessMsg(''), 6000)
                       }
                     } catch { /* silent */ }
@@ -4722,7 +4722,7 @@ export default function TaskDetailPage() {
                       }
                     }
                     handleFieldChange('materialRequests', JSON.stringify(updated))
-                    setSuccessMsg(`✅ Đã lưu ${items.length} vật tư cho đợt DNC`)
+                    setSuccessMsg(`Đã lưu ${items.length} vật tư cho đợt DNC`)
                     setTimeout(() => setSuccessMsg(''), 3000)
                   }}
                   onRequestIssue={async (ri, stageKey, teamIdx, matIdx, material) => {
@@ -4782,12 +4782,12 @@ export default function TaskDetailPage() {
                         })
                       })
                       if (res.ok) {
-                        setSuccessMsg(`✅ Đã tạo đề nghị cấp P4.5 cho: ${material.name} (${material.quantity} ${material.unit})`)
+                        setSuccessMsg(`Đã tạo đề nghị cấp P4.5 cho: ${material.name} (${material.quantity} ${material.unit})`)
                       } else {
-                        setSuccessMsg(`✅ Đã đánh dấu đề nghị cấp: ${material.name} (${material.quantity} ${material.unit})`)
+                        setSuccessMsg(`Đã đánh dấu đề nghị cấp: ${material.name} (${material.quantity} ${material.unit})`)
                       }
                     } catch {
-                      setSuccessMsg(`✅ Đã đánh dấu đề nghị cấp: ${material.name}`)
+                      setSuccessMsg(`Đã đánh dấu đề nghị cấp: ${material.name}`)
                     }
                     setTimeout(() => setSuccessMsg(''), 4000)
                   }}
@@ -4825,17 +4825,17 @@ export default function TaskDetailPage() {
               <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h3 style={{ margin: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, flex: 1 }}>
-                    📦 Đề xuất vật tư <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>
+                    Đề xuất vật tư <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>(không bắt buộc)</span>
                   </h3>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" onClick={exportBomExcel}
                       style={{ padding: '8px 12px', fontSize: '0.85rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                      📥 Export Excel
+                      Export Excel
                     </button>
                     {isActive && (
                       <button type="button" onClick={importBomExcel}
                         style={{ padding: '8px 12px', fontSize: '0.85rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                        📤 Import Excel
+                        Import Excel
                       </button>
                     )}
                     {isActive && (
@@ -4845,7 +4845,7 @@ export default function TaskDetailPage() {
                           padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
                           display: 'flex', alignItems: 'center', gap: 6,
                         }}>
-                        ➕ Thêm VT
+                        Thêm VT
                       </button>
                     )}
                   </div>
@@ -4870,7 +4870,7 @@ export default function TaskDetailPage() {
                       {isActive && (
                         <button type="button" onClick={() => setP23CodeDialogIdx(idx)}
                           style={{ marginTop: 3, padding: '1px 6px', fontSize: '0.62rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
-                          title="Tra mã trùng / tạo mã mới chuẩn">🔍 Chọn/Tạo mã</button>
+                          title="Tra mã trùng / tạo mã mới chuẩn">Chọn/Tạo mã</button>
                       )}
                     </div>
                     <input className="input" placeholder="Quy chuẩn" value={item.spec} disabled={!isActive}
@@ -4923,7 +4923,7 @@ export default function TaskDetailPage() {
 
             {/* Notes */}
             <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
-              <h3 style={{ marginTop: 0, fontSize: '1rem' }}>💬 Ghi chú bổ sung</h3>
+              <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Ghi chú bổ sung</h3>
               <textarea
                 value={submitNotes}
                 onChange={e => setSubmitNotes(e.target.value)}
@@ -4950,7 +4950,7 @@ export default function TaskDetailPage() {
             {/* Checklist */}
             <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
               <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                ☑️ Checklist
+                Checklist
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 400 }}>
                   ({Object.values(checklistState).filter(Boolean).length}/{config.checklist.length})
                 </span>
@@ -4980,7 +4980,7 @@ export default function TaskDetailPage() {
             {/* Previous Step Documents */}
             {previousStepFiles.length > 0 && (
               <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>📂 Tài liệu từ các bước trước</h3>
+                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Tài liệu từ các bước trước</h3>
                 {previousStepFiles.map(step => (
                   <div key={step.stepCode} style={{ marginBottom: 12 }}>
                     <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
@@ -5001,7 +5001,7 @@ export default function TaskDetailPage() {
                           }}
                         >
                           <span style={{ fontSize: '1rem' }}>
-                            {f.mimeType?.includes('pdf') ? '📄' : f.mimeType?.includes('image') ? '🖼️' : f.mimeType?.includes('sheet') || f.fileName.match(/\.xlsx?$/) ? '📊' : '📎'}
+                            {f.mimeType?.includes('pdf') ? '' : f.mimeType?.includes('image') ? '' : f.mimeType?.includes('sheet') || f.fileName.match(/\.xlsx?$/) ? '' : ''}
                           </span>
                           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {f.fileName}
@@ -5011,7 +5011,7 @@ export default function TaskDetailPage() {
                               {f.fileSize > 1048576 ? `${(f.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(f.fileSize / 1024)} KB`}
                             </span>
                           )}
-                          <span style={{ color: '#3b82f6', fontSize: '0.8rem', fontWeight: 600, flexShrink: 0 }}>⬇ Tải</span>
+                          <span style={{ color: '#3b82f6', fontSize: '0.8rem', fontWeight: 600, flexShrink: 0 }}>Tải</span>
                         </a>
                       ))}
                     </div>
@@ -5026,7 +5026,7 @@ export default function TaskDetailPage() {
             {/* Attachments */}
             {config.attachments.length > 0 && (
               <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>📎 Tài liệu đính kèm</h3>
+                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Tài liệu đính kèm</h3>
                 {config.attachments.map(att => (
                   <div key={att.key} style={{ paddingBottom: '10px', borderBottom: '1px solid var(--border)', marginBottom: '10px' }}>
                     <MultiFileUpload
@@ -5045,7 +5045,7 @@ export default function TaskDetailPage() {
             {/* Import/Export */}
             {config.excelTemplate && (
               <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>📥 Excel Import/Export</h3>
+                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Excel Import/Export</h3>
                 <button className="btn-accent" style={{ width: '100%', marginBottom: 8, fontSize: '0.85rem', padding: '8px 12px' }}
                   onClick={() => {
                     const fields = config.fields.filter(f => f.type !== 'section' && f.type !== 'readonly')
@@ -5059,7 +5059,7 @@ export default function TaskDetailPage() {
                     XLSX.utils.book_append_sheet(wb, ws, 'DuToan')
                     XLSX.writeFile(wb, `${config.excelTemplate}_template.xlsx`)
                   }}>
-                  ⬇️ Tải template: {config.excelTemplate}
+                  Tải template: {config.excelTemplate}
                 </button>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
                   Tải template → Nhập dữ liệu → Upload lại
@@ -5109,7 +5109,7 @@ export default function TaskDetailPage() {
                         }
                         return next
                       })
-                      setSuccessMsg(`✅ Đã import ${Object.keys(newData).length} trường từ Excel`)
+                      setSuccessMsg(`Đã import ${Object.keys(newData).length} trường từ Excel`)
                       setTimeout(() => setSuccessMsg(''), 3000)
                     } catch (err) {
                       setError('Lỗi khi đọc file. Vui lòng kiểm tra định dạng.')
@@ -5192,7 +5192,7 @@ function TaskAssignModal({ task, userList, onClose, onSubmit }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
       <div className="card w-full max-w-md rounded-2xl p-6 shadow-2xl relative" style={{ background: 'var(--bg-card, #fff)' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>👤 Phân công công việc</h2>
+          <h2 className="text-lg font-bold" style={{ color: 'var(--text-heading)' }}>Phân công công việc</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--bg-secondary)]" style={{ color: 'var(--text-muted)', fontSize: 20, lineHeight: 1 }}>&times;</button>
         </div>
         <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>

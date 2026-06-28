@@ -15,7 +15,7 @@ export default function GlobalError({
           background: '#0f172a', color: '#e2e8f0', fontFamily: 'system-ui, -apple-system, sans-serif',
         }}>
           <div style={{ textAlign: 'center', maxWidth: 480, padding: '2rem' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+            <div style={{ fontSize: '1.5rem', marginBottom: '1rem', fontWeight: 700, color: '#f59e0b' }}>Loi he thong</div>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
               Đã xảy ra lỗi hệ thống
             </h1>
@@ -30,7 +30,7 @@ export default function GlobalError({
                 fontWeight: 600, fontSize: '0.9rem',
               }}
             >
-              🔄 Thử lại
+              Thử lại
             </button>
           </div>
         </div>

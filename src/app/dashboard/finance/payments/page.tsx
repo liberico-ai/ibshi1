@@ -132,7 +132,7 @@ export default function PaymentsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>💳 Quản lý thanh toán & Giải ngân</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quản lý thanh toán & Giải ngân</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Phê duyệt hồ sơ thanh toán nhà cung cấp và kết nối ngân hàng</p>
         </div>
       </div>
@@ -262,7 +262,7 @@ export default function PaymentsPage() {
                     <span className="badge mt-1 inline-block" style={{
                       backgroundColor: dd.status === 'APPROVED' ? '#dcfce7' : dd.status === 'EXECUTED' ? '#dbeafe' : '#fef9c3',
                       color: dd.status === 'APPROVED' ? '#166534' : dd.status === 'EXECUTED' ? '#1e40af' : '#854d0e',
-                    }}>{dd.status === 'PENDING_APPROVAL' ? '⚠️ Đang chờ KTT duyệt' : dd.status === 'EXECUTED' ? '✅ Đã Giải Ngân' : '✅ Đã Phê duyệt'}</span>
+                    }}>{dd.status === 'PENDING_APPROVAL' ? 'Đang chờ KTT duyệt' : dd.status === 'EXECUTED' ? 'Đã Giải Ngân' : 'Đã Phê duyệt'}</span>
                   </div>
                 </div>
 
@@ -306,7 +306,7 @@ export default function PaymentsPage() {
                           onClick={() => handleMisaSync(dd.id, dd.drawdownNo)} 
                           className="px-4 py-2 bg-[#1d4ed8] hover:bg-[#1e40af] text-white rounded text-sm font-bold flex items-center gap-2 shadow transition-colors"
                         >
-                          ☁️ Đồng bộ Misa SME
+                          Đồng bộ Misa SME
                         </button>
                       )}
 
@@ -314,14 +314,14 @@ export default function PaymentsPage() {
                         onClick={() => handleExecuteDrawdown(dd.id)} 
                         className="px-4 py-2 bg-[#8b5cf6] hover:bg-[#7e22ce] text-white rounded text-sm font-bold flex items-center gap-2 shadow"
                       >
-                        ✅ Chốt Giải Ngân
+                        Chốt Giải Ngân
                       </button>
 
                       <button 
                         onClick={() => handleExportVPBank(dd.id, dd.drawdownNo)} 
                         className="px-4 py-2 bg-[#00a859] hover:bg-[#008f4c] text-white rounded text-sm font-bold flex items-center gap-2 shadow"
                       >
-                        📊 Export form VPBank 
+                        Export form VPBank
                         {dd.exportStatus && <span className="text-xs font-normal opacity-80">(Đã xuất)</span>}
                       </button>
                     </>

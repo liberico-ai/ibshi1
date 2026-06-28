@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { PageHeader, StatusBadge, Button, EmptyState, KPICard } from '@/components/ui'
+import { ShoppingCart, ClipboardList, Banknote, Clock, CheckCircle2 } from 'lucide-react'
 
 interface PO {
   id: string; poCode: string; status: string; totalAmount: number | null; orderDate: string | null; deliveryDate: string | null;
@@ -54,24 +55,24 @@ export default function PurchaseOrdersPage() {
         <KPICard
           label="Tổng đơn"
           value={pos.length}
-          icon={<span>📋</span>}
+          icon={<ClipboardList size={20} />}
         />
         <KPICard
           label="Tổng giá trị"
           value={formatCurrency(totalValue)}
-          icon={<span>💰</span>}
+          icon={<Banknote size={20} />}
           accentColor="var(--success)"
         />
         <KPICard
           label="Chờ duyệt"
           value={pendingCount}
-          icon={<span>⏳</span>}
+          icon={<Clock size={20} />}
           accentColor="var(--warning)"
         />
         <KPICard
           label="Đã duyệt"
           value={approvedCount}
-          icon={<span>✓</span>}
+          icon={<CheckCircle2 size={20} />}
           accentColor="var(--success)"
         />
       </div>
@@ -94,7 +95,7 @@ export default function PurchaseOrdersPage() {
             {pos.length === 0 ? (
               <tr>
                 <td colSpan={7}>
-                  <EmptyState icon="🛒" title="Chưa có PO" description="Chưa có đơn đặt hàng nào được tạo" />
+                  <EmptyState icon={<ShoppingCart />} title="Chưa có PO" description="Chưa có đơn đặt hàng nào được tạo" />
                 </td>
               </tr>
             ) : pos.map(po => (

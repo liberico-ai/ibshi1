@@ -38,7 +38,7 @@ interface Task {
   evidenceFiles?: EvidenceFile[]
 }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
-const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao việc', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành phần việc', SUBMITTED_TO_CREATOR: '↩ Trả kết quả', COMPLETED: '✓ Hoàn thành tất cả', CLOSED: '🏁 Kết thúc công việc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: '🔄 Giao lại', SUBTASK_CREATED: '+ Tạo việc con', COMMENT: '💬 Trao đổi', EDITED: '✏️ Chỉnh sửa' }
+const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao việc', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành phần việc', SUBMITTED_TO_CREATOR: '↩ Trả kết quả', COMPLETED: '✓ Hoàn thành tất cả', CLOSED: 'Kết thúc công việc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: 'Giao lại', SUBTASK_CREATED: '+ Tạo việc con', COMMENT: 'Trao đổi', EDITED: 'Chỉnh sửa' }
 const STATUS_LABEL: Record<string, string> = { OPEN: 'Mới', IN_PROGRESS: 'Đang xử lý', AWAITING_REVIEW: 'Chờ người giao kết thúc', DONE: 'Hoàn thành', RETURNED: 'Bị trả lại', CANCELLED: 'Đã hủy' }
 const TASK_TYPES = [
   { v: 'FREE', l: 'Việc khác' },
@@ -185,12 +185,12 @@ export default function WorkDetailPage() {
     if (fwdPicks.some((p) => p.role === r)) return
     const res = await apiFetch(`/api/work/dept-head?role=${r}`)
     const headName = res.ok && res.head ? res.head.fullName : null
-    setFwdPicks((prev) => [...prev, { role: r, label: headName ? `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)} → ${headName}` : `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)}` }])
+    setFwdPicks((prev) => [...prev, { role: r, label: headName ? `${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)} → ${headName}` : `${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)}` }])
   }
   const addFwdUser = (u: Usr) => {
     if (fwdPicks.some((p) => p.userId === u.id)) { setFwdQuery(''); return }
     const userDept = ROLE_TO_DEPT[u.roleCode]
-    setFwdPicks((prev) => [...prev.filter((p) => !(p.role && ROLE_TO_DEPT[p.role] === userDept)), { userId: u.id, label: `👤 ${u.fullName || u.username}` }])
+    setFwdPicks((prev) => [...prev.filter((p) => !(p.role && ROLE_TO_DEPT[p.role] === userDept)), { userId: u.id, label: `${u.fullName || u.username}` }])
     setFwdQuery('')
   }
   const fwdUsers = fwdQuery.trim()
@@ -261,11 +261,11 @@ export default function WorkDetailPage() {
         )}
         {mustRead.length > 0 && (
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div className="text-sm font-semibold mb-2">📖 Phải đọc</div>
+            <div className="text-sm font-semibold mb-2">Phải đọc</div>
             {mustRead.map((d) => (
               <div key={d.id} className="text-sm py-1.5 border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
                 <div className="flex items-start gap-2">
-                  <span>📄</span>
+                  <span></span>
                   <div className="flex-1">
                     <div>{d.label}</div>
                     {d.file ? (
@@ -294,13 +294,13 @@ export default function WorkDetailPage() {
         )}
         {mustReturn.length > 0 && (
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div className="text-sm font-semibold mb-2">📤 Phải trả lại</div>
+            <div className="text-sm font-semibold mb-2">Phải trả lại</div>
             {mustReturn.map((d) => (
               <div key={d.id} className="text-sm py-1.5 border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
-                <div className="flex items-center gap-1.5">📌 {d.label} {d.fulfilled && <span style={{ color: '#059669' }}>✓</span>}</div>
+                <div className="flex items-center gap-1.5">{d.label} {d.fulfilled && <span style={{ color: '#059669' }}>✓</span>}</div>
                 {d.fulfilled ? (
                   <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    {d.note && <div>📝 {d.note}</div>}
+                    {d.note && <div>{d.note}</div>}
                     {d.file && <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }} style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{d.file.fileName} ↗</a>}
                   </div>
                 ) : isAssignee && !myDone && task.status !== 'DONE' ? (
@@ -317,9 +317,9 @@ export default function WorkDetailPage() {
           </div>
         )}
 
-        {/* 📎 Bằng chứng thực hiện */}
+        {/* Bằng chứng thực hiện */}
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="text-sm font-semibold mb-2">📎 Bằng chứng thực hiện</div>
+          <div className="text-sm font-semibold mb-2">Bằng chứng thực hiện</div>
           {isAssignee && !myDone && task.status !== 'DONE' ? (
             <MultiFileUpload
               label=""
@@ -347,7 +347,7 @@ export default function WorkDetailPage() {
 
         {/* Trao đổi & lịch sử (cột chính) */}
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="text-sm font-semibold mb-2">💬 Trao đổi & lịch sử</div>
+          <div className="text-sm font-semibold mb-2">Trao đổi & lịch sử</div>
           <div className="space-y-1 mb-3">
             {task.history.map((h) => {
               const target = h.toName || h.toRoleName
@@ -400,7 +400,7 @@ export default function WorkDetailPage() {
         {/* Người nhận */}
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="text-sm font-semibold mb-2">
-            👥 Người nhận {task.progress && <span style={{ color: task.progress.done === task.progress.total ? '#059669' : '#d97706' }}>· {task.progress.done}/{task.progress.total} đã xong</span>}
+            Người nhận {task.progress && <span style={{ color: task.progress.done === task.progress.total ? '#059669' : '#d97706' }}>· {task.progress.done}/{task.progress.total} đã xong</span>}
           </div>
           <div className="flex flex-wrap gap-2">
             {task.assignees.map((a) => (
@@ -416,7 +416,7 @@ export default function WorkDetailPage() {
         {/* Liên kết công việc (cha / chuyển tiếp) */}
         {(task.parent || task.forwardedFrom || (task.forwards && task.forwards.length > 0)) && (
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div className="text-sm font-semibold mb-2">🔗 Liên kết công việc</div>
+            <div className="text-sm font-semibold mb-2">Liên kết công việc</div>
             {task.parent && linkRow(task.parent, 'Việc cha')}
             {task.forwardedFrom && linkRow(task.forwardedFrom, 'Chuyển tiếp từ')}
             {task.forwards?.map((t) => linkRow(t, '↗ Chuyển tiếp tới'))}
@@ -426,7 +426,7 @@ export default function WorkDetailPage() {
         {/* Lịch họp */}
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="flex justify-between items-center mb-2">
-            <div className="text-sm font-semibold">📅 Lịch họp ({task.meetings?.length || 0})</div>
+            <div className="text-sm font-semibold">Lịch họp ({task.meetings?.length || 0})</div>
             <button onClick={goCreateMeeting} className="text-xs px-3 py-1.5 rounded-lg font-semibold" style={{ background: '#1d4ed8', color: '#fff' }}>+ Tạo</button>
           </div>
           {task.meetings?.map((mt) => (
@@ -490,11 +490,11 @@ export default function WorkDetailPage() {
           {/* Tài liệu bắt buộc chuyển kèm */}
           {(task.docs.length > 0 || extraFwdDocs.length > 0) && (
             <div className="rounded-lg p-3 mt-2" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-              <div className="text-xs font-bold mb-1.5" style={{ color: '#92400e' }}>📖 Tài liệu bắt buộc (chuyển kèm)</div>
+              <div className="text-xs font-bold mb-1.5" style={{ color: '#92400e' }}>Tài liệu bắt buộc (chuyển kèm)</div>
               {task.docs.map((d) => (
                 <label key={d.id} className="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer">
                   <input type="checkbox" checked={fwdDocSel[d.id] !== false} onChange={(e) => setFwdDocSel((s) => ({ ...s, [d.id]: e.target.checked }))} />
-                  <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? '📄 Phải đọc' : '📤 Phải trả'}</span>
+                  <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? 'Phải đọc' : 'Phải trả'}</span>
                   <span className="flex-1">{d.label}</span>
                   {d.file && <span style={{ color: 'var(--text-muted)' }}>({d.file.fileName})</span>}
                 </label>
@@ -502,7 +502,7 @@ export default function WorkDetailPage() {
               {extraFwdDocs.map((d, i) => (
                 <div key={`extra-${i}`} className="flex items-center gap-1.5 text-xs py-0.5">
                   <span>✓</span>
-                  <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? '📄 Phải đọc' : '📤 Phải trả'}</span>
+                  <span style={{ color: d.kind === 'MUST_READ' ? '#92400e' : '#1e40af' }}>{d.kind === 'MUST_READ' ? 'Phải đọc' : 'Phải trả'}</span>
                   <span className="flex-1">{d.label}</span>
                   <span className="cursor-pointer opacity-60" onClick={() => setExtraFwdDocs((prev) => prev.filter((_, idx) => idx !== i))}>✕</span>
                 </div>

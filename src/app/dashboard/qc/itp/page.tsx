@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, StatusBadge, Button, EmptyState, Modal, InputField, SelectField, KPICard } from '@/components/ui'
 import { STATUS_COLORS, SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { ClipboardList } from 'lucide-react'
 
 interface Checkpoint {
   id: string; checkpointNo: number; activity: string; description: string;
@@ -112,7 +113,7 @@ export default function ITPPage() {
 
       <div className="space-y-3">
         {itps.length === 0 && (
-          <EmptyState icon="📋" title="Chưa có ITP nào" description="Tạo ITP đầu tiên để bắt đầu quản lý kiểm tra" />
+          <EmptyState icon={<ClipboardList />} title="Chưa có ITP nào" description="Tạo ITP đầu tiên để bắt đầu quản lý kiểm tra" />
         )}
         {itps.map(itp => {
           const progress = itp.totalCheckpoints ? Math.round((itp.passedCheckpoints / itp.totalCheckpoints) * 100) : 0

@@ -8,6 +8,7 @@ import {
   InputField, SelectField, TextareaField,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { ClipboardList } from 'lucide-react'
 
 interface Permit {
   id: string; permitCode: string; permitType: string; description: string;
@@ -93,7 +94,7 @@ export default function WorkPermitsPage() {
           </thead>
           <tbody>
             {permits.length === 0 ? (
-              <tr><td colSpan={canApprove ? 8 : 7}><EmptyState icon="📋" title="Chưa có giấy phép" /></td></tr>
+              <tr><td colSpan={canApprove ? 8 : 7}><EmptyState icon={<ClipboardList />} title="Chưa có giấy phép" /></td></tr>
             ) : permits.map(p => (
               <tr key={p.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{p.permitCode}</span></td>

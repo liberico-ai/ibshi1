@@ -25,7 +25,7 @@ export default function InheritedDataUI({ resultData, project }: Props) {
       {/* MOM readonly */}
       {hasMom && (
         <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #7c3aed' }}>
-          <h3 style={{ margin: '0 0 8px', fontSize: '0.95rem', color: '#7c3aed' }}>📋 Biên bản họp (từ bước trước)</h3>
+          <h3 style={{ margin: '0 0 8px', fontSize: '0.95rem', color: '#7c3aed' }}>Biên bản họp (từ bước trước)</h3>
           <MomSectionsUI
             isEditable={false}
             attendantsData={resultData.momAttendants}
@@ -39,7 +39,7 @@ export default function InheritedDataUI({ resultData, project }: Props) {
       {/* PR data indicator */}
       {hasBomPr && !hasEstimate && (
         <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #2563eb' }}>
-          <h3 style={{ margin: '0 0 4px', fontSize: '0.95rem', color: '#2563eb' }}>📦 Dữ liệu đề xuất vật tư (PR) từ bước trước</h3>
+          <h3 style={{ margin: '0 0 4px', fontSize: '0.95rem', color: '#2563eb' }}>Dữ liệu đề xuất vật tư (PR) từ bước trước</h3>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Đã có dữ liệu PR kế thừa. Xem chi tiết tại tab PR bên dưới.</div>
         </div>
       )}
@@ -66,7 +66,7 @@ function EstimateReadonly({ data, project }: { data: Record<string, unknown>; pr
 
   return (
     <div className="card" style={{ padding: '1.5rem', borderLeft: '4px solid #f59e0b' }}>
-      <h3 style={{ margin: '0 0 12px', fontSize: '1rem', color: '#b45309' }}>📊 Dữ liệu dự toán thi công (từ bước trước)</h3>
+      <h3 style={{ margin: '0 0 12px', fontSize: '1rem', color: '#b45309' }}>Dữ liệu dự toán thi công (từ bước trước)</h3>
 
       {project && (
         <div style={{ borderRadius: 8, border: '1px solid var(--border)', padding: '0.75rem', marginBottom: 12 }}>

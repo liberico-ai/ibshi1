@@ -185,7 +185,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
           }
         })
       })
-      alert("✅ Đã trình duyệt thành công!")
+      alert("Đã trình duyệt thành công!")
       
       const updatedLocal = [...localGroups]
       for (const g of groups) {
@@ -219,7 +219,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
           {fromStock.length > 0 && (
             <div className="pb-5">
               <h4 className="font-bold text-[13px] uppercase tracking-wider text-emerald-600 mb-3 flex items-center gap-2">
-                📦 Xuất thẳng từ kho ({fromStock.length})
+                Xuất thẳng từ kho ({fromStock.length})
               </h4>
               <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col">
                 <div className="max-h-48 overflow-y-auto">
@@ -252,7 +252,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
 
           <div className={fromStock.length > 0 ? "pt-5" : ""}>
             <h4 className="font-bold text-[13px] uppercase tracking-wider text-rose-600 mb-3 flex items-center gap-2">
-              🛒 Cần mua sắm ({toPurchase.length})
+              Cần mua sắm ({toPurchase.length})
             </h4>
             <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col">
               <div className="max-h-56 overflow-y-auto">
@@ -309,7 +309,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
         <div className="p-5 bg-slate-50/50">
           {localGroups.length === 0 ? (
             <div className="text-center p-10 bg-white rounded-xl border border-dashed border-slate-300 text-slate-400">
-               <span className="text-4xl block mb-3 opacity-60">📋</span>
+               <span className="text-4xl block mb-3 opacity-60"></span>
                Chưa có nhóm báo giá nào được tạo.
             </div>
           ) : (
@@ -422,7 +422,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                       }}>
                     {availableItems.length === 0 ? (
                        <div className="flex flex-col items-center justify-center h-full text-slate-400 p-6 space-y-3 opacity-60">
-                         <span className="text-4xl">📭</span>
+                         <span className="text-4xl text-slate-300">—</span>
                          <p className="italic text-sm">Không còn vật tư nào chờ xử lý.</p>
                        </div>
                     ) : availableItems.map((item: any, i: number) => {
@@ -478,7 +478,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                     {selectedItems.length === 0 ? (
                        <div className="h-full flex items-center justify-center">
                          <div className="text-center p-10 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 opacity-80 flex flex-col w-full max-w-sm">
-                           <span className="text-5xl mb-4">🛒</span>
+                           <span className="text-5xl mb-4 text-slate-300">—</span>
                            <h4 className="text-slate-600 font-bold mb-2">Giỏ hàng trống</h4>
                            <p className="text-slate-400 text-sm">Bấm chọn hoặc kéo thả các vật tư từ danh sách bên trái vào khu vực này để bắt đầu tạo nhóm báo giá.</p>
                          </div>
@@ -566,7 +566,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                                            </div>
                                         </td>
                                         <td className="px-4 py-2.5 text-center">
-                                           {isSelected && <span className="text-blue-500">✅</span>}
+                                           {isSelected && <span className="text-blue-500"></span>}
                                         </td>
                                      </tr>
                                      )

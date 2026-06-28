@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { STATUS_COLORS } from '@/lib/design-tokens'
+import { RefreshCw } from 'lucide-react'
 import {
   PageHeader,
   Button,
@@ -193,7 +194,7 @@ export default function ECOPage() {
       <div className="space-y-2">
         {ecos.length === 0 && (
           <EmptyState
-            icon="🔄"
+            icon={<RefreshCw />}
             title="Chưa có ECO nào"
             description="Tạo ECO mới để theo dõi thay đổi thiết kế"
             action={

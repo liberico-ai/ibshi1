@@ -37,7 +37,7 @@ export default function QualityAcceptanceUI({ task, isActive, project, currentUs
           }
         })
       })
-      alert(`✅ Nghiệm thu chất lượng: ${ntResult === 'PASS' ? 'ĐẠT' : 'KHÔNG ĐẠT'}`)
+      alert(`Nghiệm thu chất lượng: ${ntResult === 'PASS' ? 'ĐẠT' : 'KHÔNG ĐẠT'}`)
       window.location.reload()
     } catch (err) {
       alert('Lỗi: ' + (err as Error).message)
@@ -49,7 +49,7 @@ export default function QualityAcceptanceUI({ task, isActive, project, currentUs
   return (
     <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderTop: '4px solid #f59e0b' }}>
       <h3 style={{ marginTop: 0, fontSize: '1.2rem', color: '#b45309', display: 'flex', alignItems: 'center', gap: 8 }}>
-        🔍 NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC (QAQC)
+        NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC (QAQC)
       </h3>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
         <tbody>
@@ -79,8 +79,8 @@ export default function QualityAcceptanceUI({ task, isActive, project, currentUs
               <label style={{ fontWeight: 600, marginBottom: 4, display: 'block' }}>Kết quả *</label>
               <select className="input" value={ntResult} onChange={e => setNtResult(e.target.value)} style={{ width: '100%', padding: '8px 12px' }}>
                 <option value="">-- Chọn --</option>
-                <option value="PASS">✅ Đạt (PASS)</option>
-                <option value="FAIL">❌ Không đạt (FAIL)</option>
+                <option value="PASS">Đạt (PASS)</option>
+                <option value="FAIL">Không đạt (FAIL)</option>
               </select>
             </div>
           </div>
@@ -100,7 +100,7 @@ export default function QualityAcceptanceUI({ task, isActive, project, currentUs
                 cursor: (!ntDate || !ntResult || submitting) ? 'not-allowed' : 'pointer', fontSize: '1rem'
               }}
             >
-              {submitting ? '⏳ Đang lưu...' : ntResult === 'PASS' ? '✅ Xác nhận ĐẠT' : ntResult === 'FAIL' ? '❌ Xác nhận KHÔNG ĐẠT' : '📝 Lưu kết quả nghiệm thu'}
+              {submitting ? 'Đang lưu...' : ntResult === 'PASS' ? 'Xác nhận ĐẠT' : ntResult === 'FAIL' ? 'Xác nhận KHÔNG ĐẠT' : 'Lưu kết quả nghiệm thu'}
             </button>
           </div>
         </div>

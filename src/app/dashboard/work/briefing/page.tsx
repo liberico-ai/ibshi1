@@ -7,6 +7,7 @@ import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { DEPARTMENTS_V2, DEPT_NAME, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
 import { PageHeader, Button, Badge, KPICard, EmptyState } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { ClipboardList, CheckCircle2 } from 'lucide-react'
 
 // ── Types ──
 
@@ -1044,20 +1045,20 @@ export default function BriefingPage() {
             {toolsMenuOpen && (
               <div className="absolute right-0 mt-1 z-30 rounded-lg shadow-lg py-1 min-w-[180px]" style={{ background: 'var(--surface, #fff)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
                 {canEdit && <button onClick={() => { setToolsMenuOpen(false); handleSnapshot() }} disabled={snapshotSaving || kpi.total === 0} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
-                  📌 {snapshotSaving ? 'Đang chốt...' : 'Chốt kỳ'}
+                  {snapshotSaving ? 'Đang chốt...' : 'Chốt kỳ'}
                 </button>}
                 {canEdit && <button onClick={() => { setToolsMenuOpen(false); handlePublish() }} disabled={publishing} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
-                  📣 {publishing ? 'Đang gửi...' : 'Phát hành'}
+                  {publishing ? 'Đang gửi...' : 'Phát hành'}
                 </button>}
                 <button onClick={() => { setToolsMenuOpen(false); handleExport() }} disabled={exporting || kpi.total === 0} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50 disabled:opacity-40">
-                  📥 {exporting ? 'Đang xuất...' : 'Xuất biên bản'}
+                  {exporting ? 'Đang xuất...' : 'Xuất biên bản'}
                 </button>
                 {canEdit && <label className="block text-xs px-4 py-2.5 hover:bg-blue-50 cursor-pointer">
-                  📂 Import biên bản
+                  Import biên bản
                   <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { setToolsMenuOpen(false); handleFileSelect(e) }} />
                 </label>}
                 <button onClick={() => { setToolsMenuOpen(false); loadHistory() }} className="w-full text-left text-xs px-4 py-2.5 hover:bg-blue-50">
-                  🕘 Lịch sử kỳ
+                  Lịch sử kỳ
                 </button>
               </div>
             )}
@@ -1153,11 +1154,11 @@ export default function BriefingPage() {
 
                 {/* Actions — chỉ hiện khi canEdit */}
                 {canEdit && <div className="flex gap-3 pt-3 border-t flex-wrap" style={{ borderColor: 'var(--border)' }}>
-                  <button onClick={() => openAction(presentCurrent.id, 'reassign')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>👤 Đổi người</button>
-                  <button onClick={() => openAction(presentCurrent.id, 'deadline')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>📅 Đổi hạn</button>
+                  <button onClick={() => openAction(presentCurrent.id, 'reassign')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Đổi người</button>
+                  <button onClick={() => openAction(presentCurrent.id, 'deadline')} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Đổi hạn</button>
                   {presentCurrent.blocked
-                    ? <button onClick={() => handleUnblock(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>🟢 Gỡ tắc</button>
-                    : <button onClick={() => openBlockModal(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>🔴 Tắc</button>}
+                    ? <button onClick={() => handleUnblock(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Gỡ tắc</button>
+                    : <button onClick={() => openBlockModal(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }} /> Tắc</button>}
                   {!presentCurrent.escalated && <button onClick={() => openEscalateModal(presentCurrent.id)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid #7c3aed33', color: '#7c3aed' }}>▲ Đẩy BGĐ</button>}
                   <button onClick={() => setCellEditing(`${presentCurrent.id}:decision`)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Ghi quyết định</button>
                   {!discussedThisWeek(presentCurrent) ? (
@@ -1173,9 +1174,9 @@ export default function BriefingPage() {
             </div>
           ) : (
             <div className="rounded-2xl p-12 text-center shadow-lg" style={{ background: 'var(--surface)', border: '2px solid #22c55e' }}>
-              <div className="text-4xl mb-3">✅</div>
+              <div className="mb-3"><CheckCircle2 size={44} style={{ color: '#16a34a' }} /></div>
               <div className="text-xl font-bold" style={{ color: '#059669' }}>Đã bàn hết{canEdit ? ', chốt kỳ?' : '!'}</div>
-              {canEdit && <button onClick={handleSnapshot} disabled={snapshotSaving} className="mt-4 text-sm px-6 py-2.5 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>{snapshotSaving ? 'Đang chốt...' : '📌 Chốt kỳ'}</button>}
+              {canEdit && <button onClick={handleSnapshot} disabled={snapshotSaving} className="mt-4 text-sm px-6 py-2.5 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>{snapshotSaving ? 'Đang chốt...' : 'Chốt kỳ'}</button>}
             </div>
           )}
 
@@ -1267,7 +1268,7 @@ export default function BriefingPage() {
             </div>
           )}
 
-          {/* ✅ Đã hoàn thành kể từ kỳ trước */}
+          {/* Đã hoàn thành kể từ kỳ trước */}
           {review?.doneSincePrev && review.doneSincePrev.length > 0 && (
             <div className="glass-card overflow-hidden">
               <button
@@ -1276,7 +1277,7 @@ export default function BriefingPage() {
                 style={{ background: '#ecfdf5' }}
               >
                 <span className="font-bold text-sm" style={{ color: '#059669' }}>
-                  {doneSincePrevOpen ? '▾' : '▸'} ✅ Đã hoàn thành kể từ kỳ trước ({review.doneSincePrev.length})
+                  {doneSincePrevOpen ? '▾' : '▸'} Đã hoàn thành kể từ kỳ trước ({review.doneSincePrev.length})
                 </span>
                 {review.lastSnapshot && <span className="text-xs" style={{ color: '#64748b' }}>từ {new Date(review.lastSnapshot.weekOf).toLocaleDateString('vi-VN')}</span>}
               </button>
@@ -1438,7 +1439,7 @@ export default function BriefingPage() {
           {execTasks.length > 0 && (
             <div className="glass-card overflow-hidden" style={{ background: SEMANTIC_COLORS.danger.bg, border: `2px solid ${SEMANTIC_COLORS.danger.solid}33` }}>
               <div className="px-5 py-3 flex items-center gap-2" style={{ background: '#b91c1c11', borderBottom: '1px solid #b91c1c22' }}>
-                <span className="text-base">🔺</span>
+                <span className="text-base">▲</span>
                 <span className="font-bold text-sm" style={{ color: '#b91c1c' }}>Cần BGĐ quyết ({execTasks.length})</span>
               </div>
               <div className="overflow-x-auto">
@@ -1537,7 +1538,7 @@ export default function BriefingPage() {
           {/* Tồn đọng cần xử lý */}
           <h2 className="text-base font-bold mt-2" style={{ color: 'var(--text-primary)' }}>Tồn đọng cần xử lý</h2>
           {filteredGroups.length === 0 ? (
-            <EmptyState icon="📋" title="Không có việc tồn đọng" />
+            <EmptyState icon={<ClipboardList />} title="Không có việc tồn đọng" />
           ) : (
             filteredGroups.map((g) => {
               const groupKey = g.project?.id || '__general__'
@@ -1566,8 +1567,8 @@ export default function BriefingPage() {
                       onClick={() => setExpandedTaskId(isExpanded ? null : t.id)}
                     >
                       <td className="px-4 py-2.5">
-                        {t.needsExecDecision && <span className="mr-1" title="Cần BGĐ quyết">🔺</span>}
-                        {t.blocked && <span className="mr-1" title={t.blockReason || 'Tắc'}>🔴</span>}
+                        {t.needsExecDecision && <span className="mr-1" title="Cần BGĐ quyết">▲</span>}
+                        {t.blocked && <span className="mr-1" title={t.blockReason || 'Tắc'}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }} /></span>}
                         <a href={`/dashboard/work/${t.id}`} className="hover:underline font-medium" style={{ color: 'var(--text-primary)' }} onClick={e => e.stopPropagation()}>{t.title}</a>
                         {t.blocked && t.blockReason && (
                           <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#c2410c' }} title={`${t.blockReason}${t.blockResolverName ? ` · chờ ${t.blockResolverName}` : ''}${blockedDays > 0 ? ` · ${blockedDays}d` : ''}`}>
@@ -1711,22 +1712,22 @@ export default function BriefingPage() {
                           {isActive && canEdit && (
                             <div className="flex gap-2 mt-3 pt-2 border-t flex-wrap" style={{ borderColor: '#e2e8f0' }}>
                               <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'reassign') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                                👤 Đổi người
+                                Đổi người
                               </button>
                               <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'deadline') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                                📅 Đổi hạn
+                                Đổi hạn
                               </button>
                               {t.blocked ? (
                                 <button onClick={(e) => { e.stopPropagation(); handleUnblock(t.id) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors" style={{ border: '1px solid #05966933', color: '#059669' }}>
-                                  🟢 Gỡ tắc
+                                  Gỡ tắc
                                 </button>
                               ) : (
                                 <button onClick={(e) => { e.stopPropagation(); openBlockModal(t.id) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors" style={{ border: '1px solid #dc262633', color: '#dc2626' }}>
-                                  🔴 Đánh dấu tắc
+                                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }} /> Đánh dấu tắc
                                 </button>
                               )}
                               <button onClick={(e) => { e.stopPropagation(); openAction(t.id, 'action-item') }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                                ➕ Tạo việc
+                                + Tạo việc
                               </button>
                               {!t.needsExecDecision && !t.escalated && (
                                 <button onClick={(e) => { e.stopPropagation(); openEscalateModal(t.id) }} className="text-[11px] px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors" style={{ border: '1px solid #7c3aed33', color: '#7c3aed' }}>
@@ -1847,7 +1848,7 @@ export default function BriefingPage() {
           {blockModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setBlockModal(null)}>
               <div className="rounded-xl shadow-xl w-full max-w-md mx-4 p-5 space-y-4" style={{ background: 'var(--surface, #fff)' }} onClick={e => e.stopPropagation()}>
-                <h3 className="font-bold text-sm" style={{ color: '#c2410c' }}>🔴 Đánh dấu tắc</h3>
+                <h3 className="font-bold text-sm" style={{ color: '#c2410c' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }} /> Đánh dấu tắc</h3>
                 <div className="space-y-3">
                   <div>
                     <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Lý do tắc *</label>
@@ -1885,7 +1886,7 @@ export default function BriefingPage() {
                 <div className="flex justify-end gap-2">
                   <button onClick={() => setBlockModal(null)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
                   <button onClick={handleBlockSubmit} disabled={blockSaving || !blockReason.trim() || (blockResolverType === 'user' ? !blockResolverUserId : !blockResolverRole)} className="text-sm px-4 py-2 rounded-lg font-semibold disabled:opacity-50" style={{ background: '#c2410c', color: '#fff' }}>
-                    {blockSaving ? 'Đang lưu...' : '🔴 Đánh dấu tắc'}
+                    {blockSaving ? 'Đang lưu...' : 'Đánh dấu tắc'}
                   </button>
                 </div>
               </div>
@@ -2241,7 +2242,7 @@ export default function BriefingPage() {
 
       {/* Empty state */}
       {kpi.overdue === 0 && !editRows && !importResult && (
-        <EmptyState icon="📋" title="Không có việc quá hạn" />
+        <EmptyState icon={<ClipboardList />} title="Không có việc quá hạn" />
       )}
 
       {/* ════ Overdue Project Accordions ════ */}
@@ -2334,7 +2335,7 @@ function GroupSection({ grp, dbUsers, updateRow }: {
           borderColor: grp.isNew ? '#c4b5fd' : '#93c5fd',
           color: grp.isNew ? '#6d28d9' : '#1e40af',
         }}>
-          {grp.isNew ? '🆕 ' : '📁 '}{grp.label}
+          {grp.label}
           {grp.isNew && <span className="ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded-full" style={{ background: '#ede9fe', color: '#7c3aed' }}>DA mới</span>}
           <span className="ml-2 font-normal" style={{ color: 'var(--text-muted)' }}>({grp.rows.length} dòng)</span>
         </td>

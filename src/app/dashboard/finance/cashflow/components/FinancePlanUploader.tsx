@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import * as XLSX from 'xlsx'
 import { apiFetch } from '@/hooks/useAuth'
+import { BarChart3 } from 'lucide-react'
 
 interface Project {
   id: string
@@ -179,7 +180,7 @@ export default function FinancePlanUploader({ onUploaded }: { onUploaded?: (proj
 
       <div {...getRootProps()} className="p-8 text-center cursor-pointer rounded-lg bg-[var(--bg-primary)] mb-4 hover:bg-[var(--bg-secondary)] transition-colors">
         <input {...getInputProps()} />
-        <div className="text-4xl mb-2">📊</div>
+        <div className="mb-2 flex justify-center"><BarChart3 className="h-12 w-12 text-muted-foreground" /></div>
         {file ? (
           <p className="font-medium text-green-600 dark:text-green-400">Đã chọn: {file.name}</p>
         ) : (

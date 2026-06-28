@@ -134,7 +134,7 @@ export default function CashflowPage() {
           {/* Category breakdown */}
           {Object.keys(byCategory).length > 0 && (
             <div className="card p-4">
-              <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>📊 Cơ cấu theo danh mục</h3>
+              <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Cơ cấu theo danh mục</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {Object.entries(byCategory).map(([cat, data]) => (
                   <div key={cat} className="p-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-light)]">
@@ -168,7 +168,7 @@ export default function CashflowPage() {
                   <tr key={e.id}>
                     <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{e.entryCode}</span></td>
                     <td><span className="badge" style={{ background: e.type === 'INFLOW' ? '#f0fdf4' : '#fef2f2', color: e.type === 'INFLOW' ? '#16a34a' : '#dc2626' }}>
-                      {e.type === 'INFLOW' ? '📥 Thu' : '📤 Chi'}
+                      {e.type === 'INFLOW' ? 'Thu' : 'Chi'}
                     </span></td>
                     <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{CATEGORY_LABELS[e.category] || e.category}</td>
                     <td className="text-xs" style={{ color: 'var(--accent)' }}>{e.project?.projectName || e.project?.projectCode || '-'}</td>

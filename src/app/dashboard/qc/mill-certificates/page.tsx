@@ -8,6 +8,7 @@ import {
   PageHeader, Button, FilterBar, KPICard, EmptyState, Modal,
   InputField,
 } from '@/components/ui'
+import { FileText } from 'lucide-react'
 
 interface MillCert {
   id: string; certNumber: string; heatNumber: string; grade: string | null; thickness: string | null;
@@ -160,7 +161,7 @@ export default function MillCertificatesPage() {
             {certs.length === 0 ? (
               <tr>
                 <td colSpan={9}>
-                  <EmptyState icon="📜" title="Chua co MTR" />
+                  <EmptyState icon={<FileText />} title="Chua co MTR" />
                 </td>
               </tr>
             ) : certs.map(c => (

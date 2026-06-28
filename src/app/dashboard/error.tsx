@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { AlertCircle } from 'lucide-react'
 
 export default function DashboardError({
   error,
@@ -17,7 +18,7 @@ export default function DashboardError({
       minHeight: '60vh', padding: '2rem',
     }}>
       <div style={{ textAlign: 'center', maxWidth: 480 }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>❌</div>
+        <div style={{ marginBottom: '1rem' }}><AlertCircle size={44} style={{ color: '#dc2626' }} /></div>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
           Trang này gặp lỗi
         </h2>
@@ -33,7 +34,7 @@ export default function DashboardError({
               fontWeight: 600, fontSize: '0.85rem',
             }}
           >
-            🔄 Thử lại
+            Thử lại
           </button>
           <button
             onClick={() => router.push('/dashboard')}

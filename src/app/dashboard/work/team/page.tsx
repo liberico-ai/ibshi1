@@ -7,6 +7,7 @@ import { ROLES } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
 import { PageHeader, Badge, KPICard, EmptyState } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { Users } from 'lucide-react'
 
 interface MTask { id: string; title: string; status: string; projectCode: string | null; deadline: string | null; overdue: boolean }
 interface Member { userId: string; fullName: string; roleCode: string; counts: { active: number; done: number; overdue: number }; tasks: MTask[] }
@@ -76,7 +77,7 @@ export default function TeamPage() {
             )}
           </div>
         ))}
-        {team.members.length === 0 && <EmptyState icon="👥" title="Phòng chưa có nhân sự" />}
+        {team.members.length === 0 && <EmptyState icon={<Users />} title="Phòng chưa có nhân sự" />}
       </div>
     </div>
   )

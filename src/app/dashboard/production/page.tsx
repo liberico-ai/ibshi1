@@ -11,6 +11,7 @@ import {
   Pagination,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { Factory } from 'lucide-react'
 
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
@@ -173,7 +174,7 @@ export default function ProductionPage() {
           </thead>
           <tbody>
             {workOrders.length === 0 ? (
-              <tr><td colSpan={8}><EmptyState icon="🏭" title="Chưa có WO" /></td></tr>
+              <tr><td colSpan={8}><EmptyState icon={<Factory />} title="Chưa có WO" /></td></tr>
             ) : workOrders.map(wo => {
               const weightPct = wo.plannedWeight && wo.completedQty ? Math.round((wo.completedQty / wo.plannedWeight) * 100) : 0
               return (

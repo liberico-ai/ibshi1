@@ -66,7 +66,7 @@ export default function BudgetsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📊 Ngân sách dự án</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Ngân sách dự án</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{projects.length} dự án • Dự toán: {fmt(totals.planned)} • Thực tế: {fmt(totals.actual)}</p>
         </div>
         <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm ngân sách</button>

@@ -7,6 +7,7 @@ import {
   InputField, SelectField, StatusBadge,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { AlertTriangle } from 'lucide-react'
 
 interface WeldJoint {
   id: string; jointNo: string; jointType: string; wpsNo: string | null;
@@ -118,7 +119,7 @@ export default function WeldMapPage() {
           </thead>
           <tbody>
             {joints.length === 0 ? (
-              <tr><td colSpan={canEdit ? 10 : 9}><EmptyState icon="🔥" title="Chưa có mối hàn" /></td></tr>
+              <tr><td colSpan={canEdit ? 10 : 9}><EmptyState icon={<AlertTriangle />} title="Chưa có mối hàn" /></td></tr>
             ) : joints.map(j => {
               const ndt = NDT_COLORS[j.ndtStatus || 'PENDING']
               return (

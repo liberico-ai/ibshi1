@@ -107,7 +107,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
         })
       })
       if (res.success) {
-        alert('✅ Gửi báo cáo thành công! Báo cáo hôm nay đã được khóa.')
+        alert('Gửi báo cáo thành công! Báo cáo hôm nay đã được khóa.')
         // Reload data để cập nhật todayLogId → khóa input
         fetchData()
       } else {
@@ -130,7 +130,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
   return (
     <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderTop: '4px solid #10b981' }}>
       <h3 style={{ marginTop: 0, fontSize: '1.2rem', paddingBottom: 8, marginBottom: 16, color: '#047857', display: 'flex', alignItems: 'center', gap: 8 }}>
-        📝 SỔ BÁO CÁO KHỐI LƯỢNG HẰNG NGÀY (TỔ THI CÔNG)
+        SỔ BÁO CÁO KHỐI LƯỢNG HẰNG NGÀY (TỔ THI CÔNG)
       </h3>
       <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>
         Giao diện nhập liệu hằng ngày. Vui lòng nhập số liệu khối lượng hoàn thành trong ca làm việc cho từng Tổ.
@@ -144,7 +144,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
       {/* Locked state banner */}
       {isLocked && (
         <div style={{ padding: '12px 16px', background: '#fff7ed', borderRadius: 8, color: '#c2410c', marginBottom: 16, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #fed7aa' }}>
-          🔒 {isViewingToday
+          {isViewingToday
             ? 'Báo cáo hôm nay đã được gửi và khóa. Ngày mai mới được nhập báo cáo mới.'
             : `Dữ liệu ngày ${selectedDate} chỉ hiển thị để xem lại, không chỉnh sửa được.`
           }
@@ -153,7 +153,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
 
       {error && (
         <div style={{ padding: '12px 16px', background: '#fef2f2', borderRadius: 8, color: '#dc2626', marginBottom: 16, fontSize: '0.9rem' }}>
-          ⚠️ {error}
+          {error}
         </div>
       )}
 
@@ -178,7 +178,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
               <React.Fragment key={groupIdx}>
                 <tr>
                   <td colSpan={6} style={{ padding: '12px 16px', background: '#e2e8f0', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}>
-                    📦 Hạng mục: {wbsItem}
+                    Hạng mục: {wbsItem}
                   </td>
                 </tr>
                 {rows.map((row) => {
@@ -239,7 +239,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
                       }}>
                         {isOverReport ? (
                           <div style={{ color: '#dc2626', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span>⚠️ Vượt quá</span>
+                            <span>Vượt quá</span>
                             <span>{formatNumber(Math.abs(rawRemaining))}</span>
                           </div>
                         ) : (
@@ -263,7 +263,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
             className="btn-primary"
             style={{ padding: '10px 24px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: (!isActive || submitting) ? 'not-allowed' : 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            {submitting ? '⏳ Đang lưu...' : '📤 Gửi báo cáo hôm nay'}
+            {submitting ? 'Đang lưu...' : 'Gửi báo cáo hôm nay'}
           </button>
         </div>
       )}
@@ -271,7 +271,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
       {isLocked && isViewingToday && (
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
           <span style={{ padding: '10px 24px', background: '#f1f5f9', color: '#64748b', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem' }}>
-            ✅ Đã gửi báo cáo hôm nay
+            Đã gửi báo cáo hôm nay
           </span>
         </div>
       )}

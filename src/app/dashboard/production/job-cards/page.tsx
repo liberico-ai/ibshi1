@@ -7,6 +7,7 @@ import {
   PageHeader, Button, FilterBar, StatusBadge, EmptyState,
   KPICard, Modal, InputField, SelectField, TextareaField,
 } from '@/components/ui'
+import { ClipboardList, Scissors, Flame, Wrench, Paintbrush, Wind, Cog, Search, Calendar, BarChart3, CheckCircle2 } from 'lucide-react'
 
 interface JobCard {
   id: string; jobCode: string; workOrderId: string; teamCode: string; workType: string;
@@ -17,21 +18,30 @@ interface JobCard {
 
 interface WO { id: string; woCode: string; description: string; status: string; teamCode: string }
 
-const WORK_TYPES: Record<string, { label: string; icon: string; color: string }> = {
-  cutting: { label: 'Cắt', icon: '✂️', color: '#dc2626' },
-  welding: { label: 'Hàn', icon: '🔥', color: '#ea580c' },
-  assembly: { label: 'Lắp ráp', icon: '🔩', color: '#2563eb' },
-  painting: { label: 'Sơn', icon: '🎨', color: '#7c3aed' },
-  blasting: { label: 'Phun bi', icon: '💨', color: '#64748b' },
-  machining: { label: 'Gia công', icon: '⚙️', color: '#0891b2' },
-  inspection: { label: 'Kiểm tra', icon: '🔍', color: '#16a34a' },
+const WORK_TYPE_ICONS: Record<string, React.ReactNode> = {
+  cutting: <Scissors size={16} />,
+  welding: <Flame size={16} />,
+  assembly: <Wrench size={16} />,
+  painting: <Paintbrush size={16} />,
+  blasting: <Wind size={16} />,
+  machining: <Cog size={16} />,
+  inspection: <Search size={16} />,
+}
+const WORK_TYPES: Record<string, { label: string; color: string }> = {
+  cutting: { label: 'Cắt', color: '#dc2626' },
+  welding: { label: 'Hàn', color: '#ea580c' },
+  assembly: { label: 'Lắp ráp', color: '#2563eb' },
+  painting: { label: 'Sơn', color: '#7c3aed' },
+  blasting: { label: 'Phun bi', color: '#64748b' },
+  machining: { label: 'Gia công', color: '#0891b2' },
+  inspection: { label: 'Kiểm tra', color: '#16a34a' },
 }
 
 const WORK_TYPE_FILTERS = [
   { value: '', label: 'Tất cả' },
   ...Object.entries(WORK_TYPES).map(([key, val]) => ({
     value: key,
-    label: `${val.icon} ${val.label}`,
+    label: val.label,
   })),
 ]
 
@@ -91,9 +101,9 @@ export default function JobCardsPage() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-4 stagger-children">
-        <KPICard label="Hôm nay" value={todayCount} accentColor="var(--info, #2D6CB5)" icon={<span style={{ fontSize: 20 }}>📅</span>} />
-        <KPICard label="Tổng KL" value={totalQty.toLocaleString()} accentColor="var(--success, #1E8E5A)" icon={<span style={{ fontSize: 20 }}>📊</span>} />
-        <KPICard label="Hoàn thành" value={completedCount} accentColor="#059669" icon={<span style={{ fontSize: 20 }}>✅</span>} />
+        <KPICard label="Hôm nay" value={todayCount} accentColor="var(--info, #2D6CB5)" icon={<Calendar size={20} />} />
+        <KPICard label="Tổng KL" value={totalQty.toLocaleString()} accentColor="var(--success, #1E8E5A)" icon={<BarChart3 size={20} />} />
+        <KPICard label="Hoàn thành" value={completedCount} accentColor="#059669" icon={<CheckCircle2 size={20} />} />
       </div>
 
       {/* Work type filters */}
@@ -106,16 +116,16 @@ export default function JobCardsPage() {
       {/* Job Card list */}
       <div className="space-y-2">
         {jobCards.length === 0 && (
-          <EmptyState icon="📋" title="Chưa có phiếu công việc" description="Nhập khối lượng hàng ngày để tạo phiếu mới" />
+          <EmptyState icon={<ClipboardList />} title="Chưa có phiếu công việc" description="Nhập khối lượng hàng ngày để tạo phiếu mới" />
         )}
         {jobCards.map(jc => {
-          const wt = WORK_TYPES[jc.workType] || { label: jc.workType, icon: '📋', color: '#64748b' }
+          const wt = WORK_TYPES[jc.workType] || { label: jc.workType, color: '#64748b' }
           const progress = jc.plannedQty && jc.actualQty ? Math.min(100, Math.round((jc.actualQty / jc.plannedQty) * 100)) : null
           return (
             <div key={jc.id} className="card p-4 transition-all hover:shadow-md">
               <div className="flex items-center gap-4">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center text-lg"
-                  style={{ background: 'var(--bg-secondary, #f1f5f9)' }}>{wt.icon}</div>
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center"
+                  style={{ background: 'var(--bg-secondary, #f1f5f9)', color: wt.color }}>{WORK_TYPE_ICONS[jc.workType] || <ClipboardList size={16} />}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{jc.jobCode}</span>
@@ -125,7 +135,7 @@ export default function JobCardsPage() {
                   <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
                     <span>WO: <span className="font-mono">{jc.workOrder.woCode}</span></span>
                     <span>Tổ: {jc.teamCode}</span>
-                    {jc.manpower && <span>👷 {jc.manpower}</span>}
+                    {jc.manpower && <span>{jc.manpower} CN</span>}
                   </div>
                 </div>
                 <div className="text-right min-w-[100px]">
@@ -227,7 +237,7 @@ function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
                   color: form.workType === key ? val.color : 'var(--text-muted)',
                   border: form.workType === key ? `1px solid ${val.color}` : '1px solid transparent',
                 }}>
-                {val.icon} {val.label}
+                {val.label}
               </button>
             ))}
           </div>

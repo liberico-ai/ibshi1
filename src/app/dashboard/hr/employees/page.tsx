@@ -37,10 +37,10 @@ export default function EmployeesPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>👥 Danh sách nhân viên</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Danh sách nhân viên</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{employees.length} nhân viên • {activeCount} đang làm việc</p>
         </div>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Tìm kiếm..." className="input-field text-sm w-60" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." className="input-field text-sm w-60" />
       </div>
 
       <div className="card overflow-hidden">

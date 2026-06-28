@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { PageHeader, StatusBadge, KPICard, Button, EmptyState, Modal, SelectField, TextareaField, InputField, FilterBar } from '@/components/ui'
 import { STATUS_COLORS, SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { ClipboardList } from 'lucide-react'
 
 interface NcrAction {
   id: string; actionType: string; description: string; assignedTo: string;
@@ -121,7 +122,7 @@ export default function NCRPage() {
 
       <div className="space-y-2">
         {ncrs.length === 0 && (
-          <EmptyState icon="📋" title="Không có NCR nào" description="Tất cả sản phẩm đạt yêu cầu chất lượng" />
+          <EmptyState icon={<ClipboardList />} title="Không có NCR nào" description="Tất cả sản phẩm đạt yêu cầu chất lượng" />
         )}
         {ncrs.map(ncr => {
           const sev = SEVERITY_MAP[ncr.severity] || SEVERITY_MAP.MINOR

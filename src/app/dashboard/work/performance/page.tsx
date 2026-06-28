@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { PageHeader, Button, KPICard, EmptyState } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { BarChart3 } from 'lucide-react'
 
 interface Dept { deptCode: string; deptName: string; done: number; ahead: number; onTime: number; late: number; onTimePct: number; avgCycle: number; returned: number; misRoute: number; score: number }
 interface Kpi { onTimePct: number; late: number; done: number; avgCycle: number; returnRate: number }
@@ -33,7 +34,7 @@ export default function PerformancePage() {
       <PageHeader title="Hiệu suất & KPI" subtitle="Đánh giá theo phòng ban — kỳ hiện tại" />
 
       {loading ? <div className="h-24 skeleton rounded-xl" /> : error ? (
-        <EmptyState icon="!" title={error} action={<Button variant="outline" onClick={loadPerformance}>Thử lại</Button>} />
+        <EmptyState title={error} action={<Button variant="outline" onClick={loadPerformance}>Thử lại</Button>} />
       ) : (
         <>
           {kpi && (
@@ -71,7 +72,7 @@ export default function PerformancePage() {
                       </tr>
                     )
                   })}
-                  {depts.length === 0 && <tr><td colSpan={10}><EmptyState icon="📊" title="Chưa có dữ liệu trong kỳ" /></td></tr>}
+                  {depts.length === 0 && <tr><td colSpan={10}><EmptyState icon={<BarChart3 />} title="Chưa có dữ liệu trong kỳ" /></td></tr>}
                 </tbody>
               </table>
             </div>

@@ -31,7 +31,7 @@ export default function WorkshopsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🏭 Phân xưởng</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Phân xưởng</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{workshops.length} xưởng</p>
         </div>
         <button onClick={() => setShowForm(true)} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm xưởng</button>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { PageHeader, Button, EmptyState, Modal, KPICard, SelectField } from '@/components/ui'
+import { Package, BarChart3, Wrench, CheckCircle2 } from 'lucide-react'
 
 interface GRN {
   id: string; type: string; reason: string; quantity: number; referenceNo: string | null;
@@ -131,18 +132,18 @@ export default function GRNPage() {
         <KPICard
           label="Phiếu nhận"
           value={receipts.length}
-          icon={<span>📦</span>}
+          icon={<Package size={20} />}
         />
         <KPICard
           label="Tổng SL nhận"
           value={formatNumber(totalQty)}
-          icon={<span>📊</span>}
+          icon={<BarChart3 size={20} />}
           accentColor="var(--success)"
         />
         <KPICard
           label="Vật tư đã nhận"
           value={new Set(receipts.map(r => r.material?.materialCode).filter(Boolean)).size}
-          icon={<span>🔩</span>}
+          icon={<Wrench size={20} />}
           accentColor="var(--info)"
         />
       </div>
@@ -254,7 +255,7 @@ export default function GRNPage() {
 
           {selectedPO && receiveItems.length === 0 && (
             <EmptyState
-              icon="✅"
+              icon={<CheckCircle2 />}
               title="PO đã nhận đủ"
               description="PO này đã nhận đủ tất cả vật tư."
             />
@@ -281,7 +282,7 @@ export default function GRNPage() {
             {receipts.length === 0 ? (
               <tr>
                 <td colSpan={8}>
-                  <EmptyState icon="📦" title="Chưa có phiếu nhận" description="Chưa có phiếu nhận hàng nào" />
+                  <EmptyState icon={<Package />} title="Chưa có phiếu nhận" description="Chưa có phiếu nhận hàng nào" />
                 </td>
               </tr>
             ) : receipts.map(r => (

@@ -6,6 +6,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { ROLES, canEditForm, type FormKey } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
+import { CheckCircle2 } from 'lucide-react'
 import { TEMPLATES, type TemplateType } from '@/components/TemplateSelector'
 import TemplateSelector from '@/components/TemplateSelector'
 
@@ -124,10 +125,10 @@ function CreateInner() {
   }, [phase])
 
   const addRole = useCallback((r: string) => {
-    setPicks((prev) => prev.some((p) => p.role === r) ? prev : [...prev, { role: r, label: `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || (ROLES as Record<string, { name: string }>)[r]?.name || r}` }])
+    setPicks((prev) => prev.some((p) => p.role === r) ? prev : [...prev, { role: r, label: `${DEPT_NAME[ROLE_TO_DEPT[r]] || (ROLES as Record<string, { name: string }>)[r]?.name || r}` }])
   }, [])
   const addUser = useCallback((u: Usr) => {
-    setPicks((prev) => prev.some((p) => p.userId === u.id) ? prev : [...prev, { userId: u.id, label: `👤 ${u.fullName || u.username || u.id} (${u.username}) · ${deptNameOfUser(u)}` }])
+    setPicks((prev) => prev.some((p) => p.userId === u.id) ? prev : [...prev, { userId: u.id, label: `${u.fullName || u.username || u.id} (${u.username}) · ${deptNameOfUser(u)}` }])
     setUserQuery('')
   }, [])
   const addDoc = (kind: DocReq['kind']) => setDocs([...docs, { key: newKey(), kind, label: '' }])
@@ -256,7 +257,7 @@ function CreateInner() {
                 className="btn-primary text-sm px-6 py-2.5 rounded-lg flex-1 font-semibold"
                 style={{ opacity: assigning ? 0.6 : 1 }}
               >
-                {assigning ? '...Đang giao' : `② Giao việc cho ${savedPicks.map(p => p.label.replace(/^[🏢👤]\s*/, '')).join(', ')}`}
+                {assigning ? '...Đang giao' : `② Giao việc cho ${savedPicks.map(p => p.label).join(', ')}`}
               </button>
             </div>
           </>
@@ -264,7 +265,7 @@ function CreateInner() {
 
         {phase === 3 && (
           <div className="rounded-xl p-6 text-center" style={{ ...sectionStyle }}>
-            <div style={{ fontSize: '2rem', marginBottom: 8 }}>✅</div>
+            <div style={{ marginBottom: 8 }}><CheckCircle2 size={36} style={{ color: '#16a34a' }} /></div>
             <div className="font-semibold" style={{ color: '#059669' }}>Đã tạo việc và giao thành công!</div>
             <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Đang chuyển đến chi tiết công việc…</div>
           </div>
@@ -381,14 +382,14 @@ function CreateInner() {
 
           {projectId && projFiles.length > 0 && (
             <div className="mb-3 rounded-lg p-2" style={{ background: '#f8fafc', border: '1px dashed var(--border)' }}>
-              <label className="text-xs font-semibold" style={{ color: '#1d4ed8' }}>📎 Thêm tài liệu phải đọc từ dự án (chọn được nhiều)</label>
+              <label className="text-xs font-semibold" style={{ color: '#1d4ed8' }}>Thêm tài liệu phải đọc từ dự án (chọn được nhiều)</label>
               <select value="" onChange={(e) => {
                 const f = projFiles.find((x) => x.id === e.target.value)
                 if (f) setDocs((prev) => prev.some((d) => d.fileAttachmentId === f.id) ? prev : [...prev, { key: newKey(), kind: 'MUST_READ', label: f.fileName, fileAttachmentId: f.id, fileName: f.fileName }])
                 e.target.value = ''
               }} style={{ ...inp, marginTop: 4 }}>
                 <option value="">— Chọn tài liệu để thêm —</option>
-                {projFiles.map((f) => <option key={f.id} value={f.id} disabled={docs.some((d) => d.fileAttachmentId === f.id)}>{f.source === 'project' ? '📁' : '📄'} {f.fileName}{docs.some((d) => d.fileAttachmentId === f.id) ? ' (đã thêm)' : ''}</option>)}
+                {projFiles.map((f) => <option key={f.id} value={f.id} disabled={docs.some((d) => d.fileAttachmentId === f.id)}>{f.fileName}{docs.some((d) => d.fileAttachmentId === f.id) ? ' (đã thêm)' : ''}</option>)}
               </select>
             </div>
           )}
@@ -397,7 +398,7 @@ function CreateInner() {
             <div key={d.key} className="mb-3 rounded-lg p-2" style={{ border: '1px solid var(--border)' }}>
               <div className="flex gap-2 items-center">
                 <span className="text-xs px-2 py-1 rounded" style={{ background: d.kind === 'MUST_READ' ? '#eff6ff' : '#ecfdf5', color: d.kind === 'MUST_READ' ? '#1d4ed8' : '#059669' }}>
-                  {d.kind === 'MUST_READ' ? '📖 Phải đọc' : '📤 Phải trả'}
+                  {d.kind === 'MUST_READ' ? 'Phải đọc' : 'Phải trả'}
                 </span>
                 <input value={d.label} onChange={(e) => setDocs((prev) => prev.map((x) => x.key === d.key ? { ...x, label: e.target.value } : x))} style={inp} placeholder="Tên tài liệu/thông tin" />
                 <span className="cursor-pointer" style={{ color: '#e63946' }} onClick={() => setDocs(docs.filter((x) => x.key !== d.key))}>✕</span>

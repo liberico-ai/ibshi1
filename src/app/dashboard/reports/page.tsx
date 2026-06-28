@@ -6,16 +6,16 @@ import { formatCompactVND, formatCurrency, formatNumber } from '@/lib/utils'
 
 type Tab = 'overview' | 'projects' | 'financial' | 'production' | 'qc' | 'warehouse' | 'hr' | 'safety' | 'procurement'
 
-const TABS: { key: Tab; label: string; emoji: string }[] = [
-  { key: 'overview', label: 'Tổng quan', emoji: '📊' },
-  { key: 'projects', label: 'Dự án', emoji: '📁' },
-  { key: 'financial', label: 'Tài chính', emoji: '💰' },
-  { key: 'production', label: 'Sản xuất', emoji: '🏭' },
-  { key: 'qc', label: 'Chất lượng', emoji: '🔍' },
-  { key: 'warehouse', label: 'Tài chính KT & Kho', emoji: '📦' },
-  { key: 'hr', label: 'Nhân sự & KPI', emoji: '👥' },
-  { key: 'safety', label: 'An toàn', emoji: '🦺' },
-  { key: 'procurement', label: 'Mua hàng', emoji: '🛒' },
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'overview', label: 'Tổng quan' },
+  { key: 'projects', label: 'Dự án' },
+  { key: 'financial', label: 'Tài chính' },
+  { key: 'production', label: 'Sản xuất' },
+  { key: 'qc', label: 'Chất lượng' },
+  { key: 'warehouse', label: 'Tài chính KT & Kho' },
+  { key: 'hr', label: 'Nhân sự & KPI' },
+  { key: 'safety', label: 'An toàn' },
+  { key: 'procurement', label: 'Mua hàng' },
 ]
 
 export default function ReportsPage() {
@@ -44,7 +44,7 @@ export default function ReportsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📊 Báo cáo tổng hợp</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Báo cáo tổng hợp</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>11 loại báo cáo • 9 module</p>
         </div>
       </div>
@@ -55,7 +55,7 @@ export default function ReportsPage() {
           <button key={t.key} onClick={() => setTab(t.key)}
             className="text-xs px-3 py-1.5 rounded-md transition-all font-medium whitespace-nowrap"
             style={{ background: tab === t.key ? 'var(--accent)' : 'transparent', color: tab === t.key ? 'white' : 'var(--text-muted)' }}>
-            {t.emoji} {t.label}
+            {t.label}
           </button>
         ))}
       </div>
@@ -78,10 +78,9 @@ export default function ReportsPage() {
 }
 
 // ─── KPI Card ───
-function KPI({ emoji, label, value, sub, color }: { emoji: string; label: string; value: string | number; sub: string; color: string }) {
+function KPI({ label, value, sub, color }: { label: string; value: string | number; sub: string; color: string }) {
   return (
     <div className="card p-4">
-      <div className="text-2xl mb-1">{emoji}</div>
       <p className="text-2xl font-bold" style={{ color }}>{value}</p>
       <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{label}</p>
       <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>
@@ -96,10 +95,10 @@ function OverviewReport({ data }: { data: Record<string, unknown> }) {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI emoji="📁" label="Tổng dự án" value={o.projectCount} sub={`${o.activeProjects} đang chạy`} color="var(--primary)" />
-        <KPI emoji="✅" label="Tasks hoàn thành" value={`${o.taskCompletionRate}%`} sub={`${o.completedTasks}/${o.totalTasks}`} color="#16a34a" />
-        <KPI emoji="⚠️" label="Quá hạn" value={o.overdueTasks} sub="tasks overdue" color="#dc2626" />
-        <KPI emoji="🔧" label="WO đang chạy" value={o.activeWO} sub={`${o.openNCR} NCR mở`} color="#f59e0b" />
+        <KPI label="Tổng dự án" value={o.projectCount} sub={`${o.activeProjects} đang chạy`} color="var(--primary)" />
+        <KPI label="Tasks hoàn thành" value={`${o.taskCompletionRate}%`} sub={`${o.completedTasks}/${o.totalTasks}`} color="#16a34a" />
+        <KPI label="Quá hạn" value={o.overdueTasks} sub="tasks overdue" color="#dc2626" />
+        <KPI label="WO đang chạy" value={o.activeWO} sub={`${o.openNCR} NCR mở`} color="#f59e0b" />
       </div>
       <div className="card p-5">
         <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Task Completion Rate</h3>
@@ -175,7 +174,7 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
       <div className="p-4 flex items-center justify-between flex-wrap gap-3" style={{ borderBottom: '1px solid var(--border)', background: '#f8fafc' }}>
         <div>
           <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <span style={{ color: '#f59e0b', fontSize: '1.2rem' }}>📊</span>
+            <span style={{ color: '#f59e0b', fontSize: '1.2rem' }}></span>
             Báo cáo Sản lượng Nghiệm thu (P5.4)
           </h3>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Chi tiết theo Dự án {'>'} Hạng mục {'>'} Công đoạn. Dữ liệu từ khối lượng PM xác nhận.</p>
@@ -249,7 +248,7 @@ function ProjectsReport({ data }: { data: Record<string, unknown> }) {
                     <td colSpan={1} style={{ padding: '10px 16px' }}>
                       <div className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--primary)' }}>
                         <span className="transition-transform inline-block" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: '0.65rem', color: '#94a3b8' }}>▶</span>
-                        <span>📁</span>
+                        <span></span>
                         {proj.projectCode} — <span style={{ color: 'var(--text-primary)' }}>{proj.projectName}</span>
                         <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full" style={{ background: '#e0f2fe', color: '#0369a1' }}>{proj.hangMucs.reduce((s, h) => s + h.stages.length, 0)} công đoạn</span>
                       </div>
@@ -400,10 +399,10 @@ function ProductionReport({ data }: { data: Record<string, unknown> }) {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI emoji="🏭" label="Tổng WO" value={p.total} sub="lệnh sản xuất" color="var(--primary)" />
-        <KPI emoji="▶️" label="Đang chạy" value={p.statusBreakdown.IN_PROGRESS || 0} sub="in progress" color="#2563eb" />
-        <KPI emoji="✅" label="Hoàn thành" value={p.statusBreakdown.COMPLETED || 0} sub="completed" color="#16a34a" />
-        <KPI emoji="🔍" label="Chờ QC" value={p.statusBreakdown.QC_PENDING || 0} sub="awaiting QC" color="#d97706" />
+        <KPI label="Tổng WO" value={p.total} sub="lệnh sản xuất" color="var(--primary)" />
+        <KPI label="Đang chạy" value={p.statusBreakdown.IN_PROGRESS || 0} sub="in progress" color="#2563eb" />
+        <KPI label="Hoàn thành" value={p.statusBreakdown.COMPLETED || 0} sub="completed" color="#16a34a" />
+        <KPI label="Chờ QC" value={p.statusBreakdown.QC_PENDING || 0} sub="awaiting QC" color="#d97706" />
       </div>
       <div className="card p-5">
         <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Phân bổ theo trạng thái</h3>
@@ -443,10 +442,10 @@ function QCReport({ data }: { data: Record<string, unknown> }) {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI emoji="🔍" label="Tổng kiểm tra" value={q.totalInspections} sub={`${q.passed} đạt, ${q.failed} không đạt`} color="var(--primary)" />
-        <KPI emoji="✅" label="Tỉ lệ đạt" value={`${q.passRate}%`} sub="pass rate" color="#16a34a" />
-        <KPI emoji="⚠️" label="NCR mở" value={q.openNCR} sub={`${q.closedNCR} đã đóng`} color="#dc2626" />
-        <KPI emoji="📜" label="Certificates" value={q.totalCertificates} sub="chứng chỉ đã cấp" color="#0ea5e9" />
+        <KPI label="Tổng kiểm tra" value={q.totalInspections} sub={`${q.passed} đạt, ${q.failed} không đạt`} color="var(--primary)" />
+        <KPI label="Tỉ lệ đạt" value={`${q.passRate}%`} sub="pass rate" color="#16a34a" />
+        <KPI label="NCR mở" value={q.openNCR} sub={`${q.closedNCR} đã đóng`} color="#dc2626" />
+        <KPI label="Certificates" value={q.totalCertificates} sub="chứng chỉ đã cấp" color="#0ea5e9" />
       </div>
       <div className="card p-5">
         <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Pass Rate</h3>
@@ -466,10 +465,10 @@ function WarehouseReport({ data }: { data: Record<string, unknown> }) {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI emoji="📦" label="Tổng vật tư" value={w.totalMaterials} sub="material codes" color="var(--primary)" />
-        <KPI emoji="🔴" label="Dưới tồn kho tối thiểu" value={w.lowStockCount} sub="cần đặt hàng" color="#dc2626" />
-        <KPI emoji="📥" label="Nhập kho" value={w.totalMovementsIN} sub="stock IN" color="#16a34a" />
-        <KPI emoji="📤" label="Xuất kho" value={w.totalMovementsOUT} sub="stock OUT" color="#f59e0b" />
+        <KPI label="Tổng vật tư" value={w.totalMaterials} sub="material codes" color="var(--primary)" />
+        <KPI label="Dưới tồn kho tối thiểu" value={w.lowStockCount} sub="cần đặt hàng" color="#dc2626" />
+        <KPI label="Nhập kho" value={w.totalMovementsIN} sub="stock IN" color="#16a34a" />
+        <KPI label="Xuất kho" value={w.totalMovementsOUT} sub="stock OUT" color="#f59e0b" />
       </div>
       {w.lowStockCount > 0 && (
         <div className="card overflow-hidden">
@@ -504,10 +503,10 @@ function HRReport({ data }: { data: Record<string, unknown> }) {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI emoji="👥" label="Nhân viên" value={hr.totalEmployees} sub={`${hr.activeEmployees} active`} color="var(--primary)" />
-        <KPI emoji="📋" label="Hợp đồng" value={hr.totalContracts} sub="contracts" color="#0ea5e9" />
-        <KPI emoji="🏢" label="Phòng ban" value={hr.departments.length} sub="departments" color="#16a34a" />
-        <KPI emoji="📊" label="Task Rate" value={kpi ? `${kpi.taskCompletionRate}%` : '—'} sub="completion rate" color="#f59e0b" />
+        <KPI label="Nhân viên" value={hr.totalEmployees} sub={`${hr.activeEmployees} active`} color="var(--primary)" />
+        <KPI label="Hợp đồng" value={hr.totalContracts} sub="contracts" color="#0ea5e9" />
+        <KPI label="Phòng ban" value={hr.departments.length} sub="departments" color="#16a34a" />
+        <KPI label="Task Rate" value={kpi ? `${kpi.taskCompletionRate}%` : '—'} sub="completion rate" color="#f59e0b" />
       </div>
       {kpi && (
         <div className="card p-5">
@@ -554,10 +553,10 @@ function SafetyReport({ data }: { data: Record<string, unknown> }) {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI emoji="🦺" label="Tổng sự cố" value={s.total} sub="all incidents" color="var(--primary)" />
-        <KPI emoji="🔴" label="Đang mở" value={s.open} sub="cần xử lý" color="#dc2626" />
-        <KPI emoji="🔍" label="Đang điều tra" value={s.investigating} sub="investigating" color="#f59e0b" />
-        <KPI emoji="✅" label="Đã đóng" value={s.closed} sub={`${s.resolved} resolved`} color="#16a34a" />
+        <KPI label="Tổng sự cố" value={s.total} sub="all incidents" color="var(--primary)" />
+        <KPI label="Đang mở" value={s.open} sub="cần xử lý" color="#dc2626" />
+        <KPI label="Đang điều tra" value={s.investigating} sub="investigating" color="#f59e0b" />
+        <KPI label="Đã đóng" value={s.closed} sub={`${s.resolved} resolved`} color="#16a34a" />
       </div>
       {Object.keys(s.bySeverity).length > 0 && (
         <div className="card p-5">
@@ -583,10 +582,10 @@ function ProcurementReport({ data }: { data: Record<string, unknown> }) {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI emoji="📝" label="Tổng PR" value={p.totalPR} sub={`${p.approvedPR} approved`} color="var(--primary)" />
-        <KPI emoji="⏳" label="PR chờ duyệt" value={p.pendingPR} sub="pending approval" color="#f59e0b" />
-        <KPI emoji="📦" label="Tổng PO" value={p.totalPO} sub={`${p.approvedPO} approved`} color="#16a34a" />
-        <KPI emoji="💰" label="Tổng giá trị PO" value={formatCompactVND(p.totalPOValue)} sub="VND" color="#dc2626" />
+        <KPI label="Tổng PR" value={p.totalPR} sub={`${p.approvedPR} approved`} color="var(--primary)" />
+        <KPI label="PR chờ duyệt" value={p.pendingPR} sub="pending approval" color="#f59e0b" />
+        <KPI label="Tổng PO" value={p.totalPO} sub={`${p.approvedPO} approved`} color="#16a34a" />
+        <KPI label="Tổng giá trị PO" value={formatCompactVND(p.totalPOValue)} sub="VND" color="#dc2626" />
       </div>
       {p.recentPOs?.length > 0 && (
         <div className="card overflow-hidden">

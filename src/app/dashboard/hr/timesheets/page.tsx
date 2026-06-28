@@ -53,7 +53,7 @@ export default function TimesheetPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>⏰ Chấm công</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Chấm công</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{timesheets.length} bản ghi</p>
         </div>
         <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Chấm công</button>

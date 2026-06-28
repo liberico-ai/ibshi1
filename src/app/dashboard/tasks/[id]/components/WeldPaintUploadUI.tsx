@@ -292,7 +292,7 @@ function MaterialSection({ label, icon, color, category, data, onChange, isEdita
         {isEditable ? (
           <button type="button" onClick={handleImport} disabled={uploading}
             style={{ padding: '8px 24px', fontSize: '0.85rem', background: color, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, opacity: uploading ? 0.6 : 1 }}>
-            {uploading ? '...Đang xử lý' : `📤 Upload ${label}`}
+            {uploading ? '...Đang xử lý' : `Upload ${label}`}
           </button>
         ) : (
           <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.8rem' }}>Chưa có dữ liệu.</div>
@@ -313,13 +313,13 @@ function MaterialSection({ label, icon, color, category, data, onChange, isEdita
         <div style={{ display: 'flex', gap: 6 }}>
           <button type="button" onClick={handleExport}
             style={{ padding: '4px 10px', fontSize: '0.75rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-            📥 Export
+            Export
           </button>
           {isEditable && (
             <>
               <button type="button" onClick={handleImport} disabled={uploading}
                 style={{ padding: '4px 10px', fontSize: '0.75rem', background: color, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                📤 Upload lại
+                Upload lại
               </button>
               <button type="button" onClick={() => { onChange(''); setStockMatches(new Map()) }}
                 style={{ padding: '4px 10px', fontSize: '0.75rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
@@ -380,7 +380,7 @@ function MaterialSection({ label, icon, color, category, data, onChange, isEdita
                   <td style={{ padding: '5px 8px', textAlign: 'center' }}>
                     {newCodes.has(idx) ? (
                       <span title="Mã tạm vừa tạo (chờ chuẩn hóa)" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, display: 'inline-block', background: '#e0e7ff', color: '#3730a3', fontFamily: 'monospace' }}>
-                        🏷️ {newCodes.get(idx)}
+                        {newCodes.get(idx)}
                       </span>
                     ) : (
                       <>
@@ -446,7 +446,7 @@ export default function WeldPaintUploadUI({ isEditable, weldData, paintData, onC
   return (
     <div className="card" style={{ padding: '1.5rem', marginTop: '1rem' }}>
       <h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: 'var(--text-heading)' }}>
-        🔥 Đề xuất vật tư hàn & sơn
+        Đề xuất vật tư hàn & sơn
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
           Upload file PR từ PM
         </span>
@@ -455,7 +455,7 @@ export default function WeldPaintUploadUI({ isEditable, weldData, paintData, onC
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <MaterialSection
           label="Vật tư hàn"
-          icon="🔩"
+          icon=""
           color="#e67e22"
           category="weld"
           data={weldData}
@@ -466,7 +466,7 @@ export default function WeldPaintUploadUI({ isEditable, weldData, paintData, onC
         />
         <MaterialSection
           label="Vật tư sơn"
-          icon="🎨"
+          icon=""
           color="#8e44ad"
           category="paint"
           data={paintData}

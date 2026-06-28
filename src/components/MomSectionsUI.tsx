@@ -294,12 +294,12 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
           <div style={{ display: 'flex', gap: 6 }}>
             <button type="button" onClick={exportMomExcel}
               style={{ padding: '6px 12px', fontSize: '0.8rem', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-              📥 Export
+              Export
             </button>
             {isEditable && (
               <button type="button" onClick={importMomExcel}
                 style={{ padding: '6px 12px', fontSize: '0.8rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                📤 Import Excel
+                Import Excel
               </button>
             )}
           </div>
@@ -489,7 +489,7 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
                             </div>
                             {item.dueDate && (
                               <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, paddingBottom: 4 }}>
-                                ⏰ Deadline: <b>{item.dueDate}</b>
+                                Deadline: <b>{item.dueDate}</b>
                               </div>
                             )}
                             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>

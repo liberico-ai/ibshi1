@@ -89,7 +89,7 @@ export default function FinancePage() {
       <div className="flex gap-3 items-center">
         <input className="input w-72" placeholder="Tìm mã HĐ, tên KH..." value={search} onChange={e => setSearch(e.target.value)} />
         <div className="flex gap-2">
-          {[{ v: '', l: 'Tất cả' }, { v: 'RECEIVABLE', l: '📥 Phải thu' }, { v: 'PAYABLE', l: '📤 Phải trả' }].map(f => (
+          {[{ v: '', l: 'Tất cả' }, { v: 'RECEIVABLE', l: 'Phải thu' }, { v: 'PAYABLE', l: 'Phải trả' }].map(f => (
             <button key={f.v} onClick={() => setTypeFilter(f.v)} className="px-4 py-2 text-sm rounded-full font-medium transition-colors" style={{
               background: typeFilter === f.v ? 'var(--primary)' : 'var(--bg-card)',
               color: typeFilter === f.v ? 'white' : 'var(--text-secondary)',
@@ -118,7 +118,7 @@ export default function FinancePage() {
                 <tr key={inv.id}>
                   <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{inv.invoiceCode}</span></td>
                   <td><span className="badge" style={{ background: inv.type === 'RECEIVABLE' ? '#f0fdf4' : '#fef2f2', color: inv.type === 'RECEIVABLE' ? '#16a34a' : '#dc2626' }}>
-                    {inv.type === 'RECEIVABLE' ? '📥 Thu' : '📤 Chi'}
+                    {inv.type === 'RECEIVABLE' ? 'Thu' : 'Chi'}
                   </span></td>
                   <td style={{ color: 'var(--text-primary)' }}>{inv.clientName || '-'}</td>
                   <td className="text-xs" style={{ color: 'var(--accent)' }}>{inv.project?.projectCode || '-'}</td>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { PageHeader, Button, Badge, EmptyState, Pagination } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { Inbox } from 'lucide-react'
 
 interface Task {
   id: string; title: string; status: string; priority: string; deadline: string | null; taskType: string
@@ -166,9 +167,9 @@ export default function WorkInboxPage() {
       {loading ? (
         <div className="space-y-2 stagger-children">{[1, 2, 3].map((i) => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
       ) : error ? (
-        <EmptyState icon="!" title={error} action={<Button variant="outline" onClick={load}>Thử lại</Button>} />
+        <EmptyState title={error} action={<Button variant="outline" onClick={load}>Thử lại</Button>} />
       ) : tasks.length === 0 ? (
-        <EmptyState icon="📭" title={`Không có việc nào${q || projectId ? ' khớp bộ lọc' : ''}`} />
+        <EmptyState icon={<Inbox />} title={`Không có việc nào${q || projectId ? ' khớp bộ lọc' : ''}`} />
       ) : (
         <>
           <div className="space-y-2 stagger-children">

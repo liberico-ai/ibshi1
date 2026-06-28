@@ -110,7 +110,7 @@ export default function QCDetailPage() {
           {isPending && !hasActionPermission && (
             <div className="flex gap-2">
               <span className="text-sm px-4 py-2 flex items-center gap-1 rounded-lg" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
-                🔒 Chỉ quyền QC/BGĐ
+                Chỉ quyền QC/BGĐ
               </span>
             </div>
           )}
