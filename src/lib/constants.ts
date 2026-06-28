@@ -157,8 +157,8 @@ export function canEditForm(form: FormKey, roleCode: string): boolean {
 // Role-specific group priority: first group = expanded by default
 export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R01:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'logistics', 'tbcg', 'hse', 'hr', 'finance', 'reports', 'system'],
-  R02:  ['overview', 'management', 'project', 'design', 'warehouse', 'hr', 'finance', 'reports'],
-  R02a: ['overview', 'management', 'project', 'design', 'warehouse', 'hr', 'finance', 'reports'],
+  R02:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports'],
+  R02a: ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'hr', 'finance', 'reports'],
   R03:  ['overview', 'management', 'project', 'finance', 'warehouse', 'production', 'qc', 'reports'],
   R03a: ['overview', 'management', 'project', 'finance', 'warehouse', 'production', 'qc', 'reports'],
   R04:  ['overview', 'design', 'project'],
@@ -220,10 +220,10 @@ export const MENU_ITEMS = [
   { key: 'vendors', label: 'Nhà cung cấp', labelEn: 'Vendors', icon: 'Building', href: '/dashboard/vendors', roles: ['R01', 'R02', 'R02a', 'R07', 'R07a'], group: 'warehouse' },
 
   // ── Production ──
-  { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: 'Factory', href: '/dashboard/production', roles: ['R01', 'R03', 'R03a', 'R06', 'R06a', 'R06b'], group: 'production' },
-  { key: 'jobcards', label: 'Phiếu công việc', labelEn: 'Job Cards', icon: 'Clipboard', href: '/dashboard/production/job-cards', roles: ['R01', 'R06', 'R06a', 'R06b'], group: 'production' },
-  { key: 'workshops', label: 'Phân xưởng', labelEn: 'Workshops', icon: 'Wrench', href: '/dashboard/production/workshops', roles: ['R01', 'R06', 'R06a'], group: 'production' },
-  { key: 'weldmap', label: 'Weld Map', labelEn: 'Weld Map', icon: 'Flame', href: '/dashboard/production/weld-map', roles: ['R01', 'R06', 'R06a', 'R06b', 'R09', 'R09a'], group: 'production' },
+  { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: 'Factory', href: '/dashboard/production', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R06b'], group: 'production' },
+  { key: 'jobcards', label: 'Phiếu công việc', labelEn: 'Job Cards', icon: 'Clipboard', href: '/dashboard/production/job-cards', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R06b'], group: 'production' },
+  { key: 'workshops', label: 'Phân xưởng', labelEn: 'Workshops', icon: 'Wrench', href: '/dashboard/production/workshops', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a'], group: 'production' },
+  { key: 'weldmap', label: 'Weld Map', labelEn: 'Weld Map', icon: 'Flame', href: '/dashboard/production/weld-map', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R06b', 'R09', 'R09a'], group: 'production' },
   { key: 'delivery', label: 'Giao hàng', labelEn: 'Delivery', icon: 'Truck', href: '/dashboard/delivery', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'], group: 'logistics' },
   { key: 'packing-lists', label: 'Packing List', labelEn: 'Packing Lists', icon: 'Package', href: '/dashboard/logistics/packing-lists', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'], group: 'logistics' },
   { key: 'shipments', label: 'Chuyến hàng', labelEn: 'Shipments', icon: 'Truck', href: '/dashboard/logistics/shipments', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'], group: 'logistics' },
@@ -240,14 +240,14 @@ export const MENU_ITEMS = [
   { key: 'toolbox-talks', label: 'Họp an toàn', labelEn: 'Toolbox Talks', icon: 'MessageCircle', href: '/dashboard/hse/toolbox-talks', roles: ['R01', 'R10', 'R06', 'R06a', 'R06b'], group: 'hse' },
 
   // ── QC ──
-  { key: 'qc', label: 'Chất lượng', labelEn: 'QC', icon: 'ShieldCheck', href: '/dashboard/qc', roles: ['R01', 'R03', 'R03a', 'R09', 'R09a'], group: 'qc' },
-  { key: 'inspections', label: 'Kiểm tra', labelEn: 'Inspections', icon: 'SearchCheck', href: '/dashboard/qc/inspections', roles: ['R01', 'R09', 'R09a'], group: 'qc' },
-  { key: 'itp', label: 'Kế hoạch KT', labelEn: 'ITP', icon: 'FileCheck', href: '/dashboard/qc/itp', roles: ['R01', 'R09', 'R09a'], group: 'qc' },
-  { key: 'ncr', label: 'Báo cáo KPH', labelEn: 'NCR', icon: 'AlertTriangle', href: '/dashboard/qc/ncr', roles: ['R01', 'R09', 'R09a', 'R06', 'R06a'], group: 'qc' },
-  { key: 'certificates', label: 'Chứng chỉ', labelEn: 'Certificates', icon: 'Award', href: '/dashboard/qc/certificates', roles: ['R01', 'R09', 'R09a'], group: 'qc' },
-  { key: 'mill-certs', label: 'Chứng chỉ VL', labelEn: 'Mill Certs', icon: 'FileText', href: '/dashboard/qc/mill-certificates', roles: ['R01', 'R09', 'R09a'], group: 'qc' },
-  { key: 'fat-sat', label: 'Nghiệm thu NM/HT', labelEn: 'FAT/SAT', icon: 'TestTube', href: '/dashboard/qc/fat-sat', roles: ['R01', 'R09', 'R09a'], group: 'qc' },
-  { key: 'mrb', label: 'Hồ sơ chất lượng', labelEn: 'MRB Dossier', icon: 'FolderCheck', href: '/dashboard/qc/mrb', roles: ['R01', 'R09', 'R09a'], group: 'qc' },
+  { key: 'qc', label: 'Chất lượng', labelEn: 'QC', icon: 'ShieldCheck', href: '/dashboard/qc', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R09', 'R09a'], group: 'qc' },
+  { key: 'inspections', label: 'Kiểm tra', labelEn: 'Inspections', icon: 'SearchCheck', href: '/dashboard/qc/inspections', roles: ['R01', 'R02', 'R02a', 'R09', 'R09a'], group: 'qc' },
+  { key: 'itp', label: 'Kế hoạch KT', labelEn: 'ITP', icon: 'FileCheck', href: '/dashboard/qc/itp', roles: ['R01', 'R02', 'R02a', 'R09', 'R09a'], group: 'qc' },
+  { key: 'ncr', label: 'Báo cáo KPH', labelEn: 'NCR', icon: 'AlertTriangle', href: '/dashboard/qc/ncr', roles: ['R01', 'R02', 'R02a', 'R09', 'R09a', 'R06', 'R06a'], group: 'qc' },
+  { key: 'certificates', label: 'Chứng chỉ', labelEn: 'Certificates', icon: 'Award', href: '/dashboard/qc/certificates', roles: ['R01', 'R02', 'R02a', 'R09', 'R09a'], group: 'qc' },
+  { key: 'mill-certs', label: 'Chứng chỉ VL', labelEn: 'Mill Certs', icon: 'FileText', href: '/dashboard/qc/mill-certificates', roles: ['R01', 'R02', 'R02a', 'R09', 'R09a'], group: 'qc' },
+  { key: 'fat-sat', label: 'Nghiệm thu NM/HT', labelEn: 'FAT/SAT', icon: 'TestTube', href: '/dashboard/qc/fat-sat', roles: ['R01', 'R02', 'R02a', 'R09', 'R09a'], group: 'qc' },
+  { key: 'mrb', label: 'Hồ sơ chất lượng', labelEn: 'MRB Dossier', icon: 'FolderCheck', href: '/dashboard/qc/mrb', roles: ['R01', 'R02', 'R02a', 'R09', 'R09a'], group: 'qc' },
 
   // ── HR ──
   { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: 'UserCheck', href: '/dashboard/hr', roles: ['R01', 'R02', 'R02a'], group: 'hr' },

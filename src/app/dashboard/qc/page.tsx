@@ -93,7 +93,7 @@ export default function QCPage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Quản lý Chất lượng (QC)"
-        subtitle="Enhanced Inspection Form v2"
+        subtitle="Biên bản kiểm tra chất lượng"
         actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Tạo biên bản</Button>}
       />
 

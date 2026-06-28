@@ -147,8 +147,8 @@ export default function ECOPage() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <PageHeader
-        title="ECO Tracker"
-        subtitle="Engineering Change Orders"
+        title="Quản lý thay đổi thiết kế (ECO)"
+        subtitle="Theo dõi yêu cầu thay đổi kỹ thuật"
         actions={
           canCreate ? (
             <Button variant="accent" onClick={openForm}>
@@ -342,7 +342,7 @@ function ECOCard({
               {canReview && (
                 <>
                   <Button
-                    variant="primary"
+                    variant="accent"
                     size="sm"
                     loading={transitioning}
                     onClick={() => onTransition(eco.id, 'APPROVED')}
@@ -361,7 +361,7 @@ function ECOCard({
               )}
               {canImplement && (
                 <Button
-                  variant="primary"
+                  variant="accent"
                   size="sm"
                   loading={transitioning}
                   onClick={() => onTransition(eco.id, 'IMPLEMENTED')}

@@ -122,7 +122,7 @@ export default function PurchaseOrdersPage() {
                     {(po.status === 'DRAFT' || po.status === 'PENDING') && (
                       <>
                         <Button
-                          variant="primary"
+                          variant="accent"
                           size="sm"
                           onClick={() => handleApprove(po.id, 'APPROVE')}
                           loading={actionLoading === po.id}

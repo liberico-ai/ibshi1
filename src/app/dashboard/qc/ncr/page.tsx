@@ -99,8 +99,8 @@ export default function NCRPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="NCR Tracker"
-        subtitle="Non-Conformance Report management"
+        title="Báo cáo không phù hợp (NCR)"
+        subtitle="Quản lý sự cố chất lượng sản phẩm"
         actions={canCreate ? <Button variant="accent" onClick={openForm}>+ Tạo NCR</Button> : undefined}
       />
 

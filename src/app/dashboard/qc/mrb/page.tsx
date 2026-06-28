@@ -53,13 +53,13 @@ export default function MRBPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Ho so QC -- MRB (Manufacturer Record Book)"
-        subtitle="Tong hop ho so chat luong theo du an"
+        title="Hồ sơ QC — MRB (Manufacturer Record Book)"
+        subtitle="Tổng hợp hồ sơ chất lượng theo dự án"
       />
 
       {/* Project Selector */}
       <div className="card p-4">
-        <label className="input-label">Chon du an</label>
+        <label className="input-label">Chọn dự án</label>
         <select
           value={projectId}
           onChange={e => setProjectId(e.target.value)}

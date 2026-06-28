@@ -90,7 +90,7 @@ export default function BOMPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Bill of Materials"
+        title="Định mức vật tư (BOM)"
         subtitle="Danh mục vật tư theo dự án"
         actions={
           canCreate ? (

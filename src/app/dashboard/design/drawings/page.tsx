@@ -104,7 +104,7 @@ export default function DrawingRegisterPage() {
         title="Sổ bản vẽ"
         subtitle={`${drawings.length} bản vẽ`}
         actions={
-          <Button variant="primary" size="sm" onClick={openForm}>
+          <Button variant="accent" size="sm" onClick={openForm}>
             + Thêm bản vẽ
           </Button>
         }
@@ -167,7 +167,7 @@ export default function DrawingRegisterPage() {
           <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
             Hủy
           </Button>
-          <Button variant="primary" size="sm" type="submit" form="drawing-create-form">
+          <Button variant="accent" size="sm" type="submit" form="drawing-create-form">
             Lưu
           </Button>
         </div>

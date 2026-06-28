@@ -95,7 +95,7 @@ export default function ITPPage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Kế hoạch Kiểm tra (ITP)"
-        subtitle="Inspection & Test Plan management"
+        subtitle="Lập và theo dõi kế hoạch kiểm tra"
         actions={canCreate ? <Button variant="accent" onClick={openForm}>+ Tạo ITP</Button> : undefined}
       />
 

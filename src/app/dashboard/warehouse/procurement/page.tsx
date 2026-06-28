@@ -356,7 +356,7 @@ function ExpandableRow({ group, onReload, userRole }: { group: TrackingGroup, on
                   />
                   <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Button
-                      variant="primary"
+                      variant="accent"
                       size="sm"
                       onClick={handleUpdateDelivery}
                       disabled={saving || deliveryDate === (group.deliveryDate ? group.deliveryDate.split('T')[0] : '')}

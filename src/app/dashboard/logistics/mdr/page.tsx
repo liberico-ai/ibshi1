@@ -51,7 +51,7 @@ export default function MDRPage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="MDR — Hồ sơ giao khách"
-        subtitle="Manufacturer Document Record"
+        subtitle="Tổng hợp hồ sơ nhà sản xuất giao khách hàng"
       />
 
       <div className="card p-4">

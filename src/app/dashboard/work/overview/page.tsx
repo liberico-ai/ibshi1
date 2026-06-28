@@ -113,7 +113,7 @@ export default function WorkOverviewPage() {
           <KPICard label="Tiến độ chung" value={`${agg.overallProgress}%`} accentColor={SEMANTIC_COLORS.info.solid} />
           <KPICard label="Đang chạy" value={agg.totalActive} accentColor={SEMANTIC_COLORS.warning.solid} />
           <KPICard label="Quá hạn" value={agg.totalOverdue} accentColor={agg.totalOverdue > 0 ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid} />
-          <KPICard label="Giá trị HĐ" value={`${billion(agg.totalContractValue)} tỷ`} accentColor={SEMANTIC_COLORS.success.solid} />
+          <KPICard label="Giá trị HĐ" value={agg.totalContractValue ? `${billion(agg.totalContractValue)} tỷ` : '—'} accentColor={SEMANTIC_COLORS.success.solid} />
         </div>
       )}
 

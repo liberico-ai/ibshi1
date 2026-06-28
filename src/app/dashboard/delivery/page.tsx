@@ -83,13 +83,8 @@ export default function DeliveryPage() {
       <PageHeader
         title="Logistics & Giao hàng"
         subtitle={`${deliveries.length} phiếu giao hàng`}
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => router.push('/dashboard/logistics/packing-lists')}>Packing List</Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/logistics/shipments')}>Shipments</Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/logistics/mdr')}>MDR</Button>
-          </div>
-        }
+
+
       />
 
       {progress && (
