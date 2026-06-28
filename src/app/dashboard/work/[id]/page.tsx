@@ -8,6 +8,8 @@ import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/li
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import TemplateSelector from '@/components/TemplateSelector'
 import { formatDate, formatDateTime, formatShortDateTime } from '@/lib/utils'
+import { Badge, Button } from '@/components/ui'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 
 
 interface DocFile { id: string; fileName: string; fileUrl: string }
@@ -208,13 +210,15 @@ export default function WorkDetailPage() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <a onClick={() => router.push('/dashboard/work')} className="text-sm cursor-pointer" style={{ color: 'var(--text-muted)' }}>← Hộp việc</a>
+      <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/work')}>← Hộp việc</Button>
 
-      <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `4px solid ${accent}` }}>
+      <div className="glass-card p-5" style={{ borderLeft: `4px solid ${accent}` }}>
         <div className="flex items-start gap-3">
           <h1 className="text-xl font-bold flex-1" style={{ color: 'var(--text-primary)' }}>{task.title}</h1>
-          {isCreator && task.status !== 'DONE' && <button onClick={openEdit} className="text-xs px-2 py-0.5 rounded-lg" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>✏️ Sửa</button>}
-          <span className="text-xs px-2.5 py-1 rounded-full font-bold" style={{ background: stColor, color: '#fff' }}>{STATUS_LABEL[task.status] || task.status}</span>
+          {isCreator && task.status !== 'DONE' && <Button variant="outline" size="sm" onClick={openEdit}>Sửa</Button>}
+          <Badge variant={task.status === 'DONE' ? 'success' : task.status === 'RETURNED' ? 'danger' : awaitingReview ? 'warning' : 'info'}>
+            {STATUS_LABEL[task.status] || task.status}
+          </Badge>
         </div>
         {editOpen && (
           <div className="mt-3 space-y-2 rounded-lg p-3" style={{ background: '#f8fafc', border: '1px solid var(--border)' }}>
@@ -231,11 +235,11 @@ export default function WorkDetailPage() {
           </div>
         )}
         {task.description && <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>{task.description}</p>}
-        <div className="flex flex-wrap gap-3 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-          {task.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {task.project.projectCode}</span>}
+        <div className="flex flex-wrap gap-3 mt-3 text-xs items-center" style={{ color: 'var(--text-muted)' }}>
+          {task.project && <Badge variant="info">{task.project.projectCode}</Badge>}
           <span>Người tạo: <b>{task.createdByName || '—'}</b></span>
-          {task.deadline && <span>⏰ {formatDate(task.deadline)}</span>}
-          {task.returnCount > 0 && <span style={{ color: '#e63946' }}>↩ đã bị trả {task.returnCount} lần</span>}
+          {task.deadline && <Badge variant="warning">{formatDate(task.deadline)}</Badge>}
+          {task.returnCount > 0 && <Badge variant="danger">↩ trả lại {task.returnCount} lần</Badge>}
         </div>
       </div>
 

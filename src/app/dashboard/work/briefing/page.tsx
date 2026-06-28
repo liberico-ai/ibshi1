@@ -5,6 +5,8 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { DEPARTMENTS_V2, DEPT_NAME, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
+import { PageHeader, Button, Badge, KPICard, EmptyState } from '@/components/ui'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 
 // ── Types ──
 
@@ -1004,33 +1006,33 @@ export default function BriefingPage() {
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="flex justify-between items-center flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Giao ban tuần</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{kpi.active} việc đang mở · {kpi.overdue} quá hạn · {groups.length} dự án</p>
-        </div>
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={() => { setMeetingMode(m => !m); setMeetingIdx(0) }}
-            className="text-sm px-4 py-2 rounded-lg font-semibold transition-all"
-            style={meetingMode
-              ? { background: '#dc2626', color: '#fff', border: '1px solid #dc2626' }
-              : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
-          >
-            {meetingMode ? '✕ Tắt họp' : '🎯 Chế độ họp'}
-          </button>
-          {meetingMode && (
-            <button
-              onClick={() => { setPresentMode(m => !m); setPresentIdx(0) }}
-              className="text-sm px-4 py-2 rounded-lg font-semibold transition-all"
-              style={presentMode
-                ? { background: '#1d4ed8', color: '#fff', border: '1px solid #1d4ed8' }
-                : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+      <PageHeader
+        title="Giao ban tuần"
+        subtitle={`${kpi.active} việc đang mở · ${kpi.overdue} quá hạn · ${groups.length} dự án`}
+        actions={
+          <div className="flex gap-2 items-center">
+            <Button
+              variant={meetingMode ? 'danger' : 'outline'}
+              size="sm"
+              onClick={() => { setMeetingMode(m => !m); setMeetingIdx(0) }}
             >
-              {presentMode ? '✕ Tắt trình chiếu' : '📺 Trình chiếu'}
-            </button>
-          )}
-          <button onClick={load} className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>↻</button>
+              {meetingMode ? '✕ Tắt họp' : 'Chế độ họp'}
+            </Button>
+            {meetingMode && (
+              <Button
+                variant={presentMode ? 'accent' : 'outline'}
+                size="sm"
+                onClick={() => { setPresentMode(m => !m); setPresentIdx(0) }}
+              >
+                {presentMode ? '✕ Tắt trình chiếu' : 'Trình chiếu'}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={load}>↻</Button>
+          </div>
+        }
+      />
+      <div className="flex justify-end">
+        <div className="flex gap-2 items-center">
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setToolsMenuOpen(v => !v) }}
@@ -1064,18 +1066,18 @@ export default function BriefingPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex gap-2">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className="text-sm px-4 py-2 font-semibold border-b-2 -mb-px transition-colors"
-          style={{ borderColor: activeTab === 'dashboard' ? '#1d4ed8' : 'transparent', color: activeTab === 'dashboard' ? '#1d4ed8' : 'var(--text-muted)' }}
+          className={`filter-chip ${activeTab === 'dashboard' ? 'active' : ''}`}
+          style={activeTab === 'dashboard' ? { background: 'var(--navy,#0a2540)', color: '#fff', borderColor: 'var(--navy,#0a2540)' } : undefined}
         >
           Dashboard giao ban
         </button>
         {canEdit && <button
           onClick={() => setActiveTab('import')}
-          className="text-sm px-4 py-2 font-semibold border-b-2 -mb-px transition-colors"
-          style={{ borderColor: activeTab === 'import' ? '#1d4ed8' : 'transparent', color: activeTab === 'import' ? '#1d4ed8' : 'var(--text-muted)' }}
+          className={`filter-chip ${activeTab === 'import' ? 'active' : ''}`}
+          style={activeTab === 'import' ? { background: 'var(--navy,#0a2540)', color: '#fff', borderColor: 'var(--navy,#0a2540)' } : undefined}
         >
           Import & Quá hạn
         </button>}
@@ -1196,27 +1198,30 @@ export default function BriefingPage() {
       {activeTab === 'dashboard' && !presentMode && (
         <>
           {/* KPI Row 1: Action (large) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 stagger-children">
             {[
-              { label: 'Cần BGĐ quyết', value: kpi.execDecision, color: '#b91c1c', bg: '#fef2f2', filter: 'exec' },
-              { label: 'Quá hạn', value: kpi.overdue, color: '#dc2626', bg: '#fef2f2', filter: 'yes' },
-              { label: 'Đến hạn tuần này', value: kpi.dueSoon, color: '#d97706', bg: '#fffbeb', filter: 'due_soon' },
-              { label: 'Tắc', value: kpi.blocked, color: '#c2410c', bg: '#fff7ed', filter: 'blocked' },
-            ].map((card) => (
-              <div
-                key={card.label}
-                className={`rounded-xl p-4 text-center cursor-pointer hover:ring-2 hover:ring-offset-1 transition-all ${(card.filter === 'exec' && filterExecOnly) || (card.filter === 'yes' && filterOverdue === 'yes') || (card.filter === 'due_soon' && filterOverdue === 'due_soon') || (card.filter === 'blocked' && filterBlocked === 'yes') ? 'ring-2 ring-offset-1' : ''}`}
-                style={{ background: card.bg, border: `1px solid ${card.color}33`, '--tw-ring-color': card.color } as React.CSSProperties}
-                onClick={() => {
-                  if (card.filter === 'exec') setFilterExecOnly(!filterExecOnly)
-                  else if (card.filter === 'blocked') setFilterBlocked(filterBlocked === 'yes' ? '' : 'yes')
-                  else if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter)
-                }}
-              >
-                <div className="text-3xl font-extrabold" style={{ color: card.color }}>{card.value}</div>
-                <div className="text-xs font-bold mt-1 uppercase tracking-wide" style={{ color: card.color }}>{card.label}</div>
-              </div>
-            ))}
+              { label: 'Cần BGĐ quyết', value: kpi.execDecision, color: SEMANTIC_COLORS.danger.solid, filter: 'exec' },
+              { label: 'Quá hạn', value: kpi.overdue, color: SEMANTIC_COLORS.danger.solid, filter: 'yes' },
+              { label: 'Đến hạn tuần này', value: kpi.dueSoon, color: SEMANTIC_COLORS.warning.solid, filter: 'due_soon' },
+              { label: 'Tắc', value: kpi.blocked, color: '#c2410c', filter: 'blocked' },
+            ].map((card) => {
+              const isActive = (card.filter === 'exec' && filterExecOnly) || (card.filter === 'yes' && filterOverdue === 'yes') || (card.filter === 'due_soon' && filterOverdue === 'due_soon') || (card.filter === 'blocked' && filterBlocked === 'yes')
+              return (
+                <div
+                  key={card.label}
+                  className="glass-card p-4 text-center cursor-pointer hover:shadow-md transition-all"
+                  style={{ borderColor: isActive ? card.color : undefined, borderWidth: isActive ? 2 : undefined, borderTop: `3px solid ${card.color}` }}
+                  onClick={() => {
+                    if (card.filter === 'exec') setFilterExecOnly(!filterExecOnly)
+                    else if (card.filter === 'blocked') setFilterBlocked(filterBlocked === 'yes' ? '' : 'yes')
+                    else if (card.filter) setFilterOverdue(card.filter === filterOverdue ? '' : card.filter)
+                  }}
+                >
+                  <div className="text-3xl font-extrabold" style={{ color: card.color }}>{card.value}</div>
+                  <div className="text-xs font-bold mt-1 uppercase tracking-wide" style={{ color: card.color }}>{card.label}</div>
+                </div>
+              )
+            })}
           </div>
           {/* KPI Row 2: Context (compact single line) */}
           <div className="flex items-center gap-4 px-1 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -1264,7 +1269,7 @@ export default function BriefingPage() {
 
           {/* ✅ Đã hoàn thành kể từ kỳ trước */}
           {review?.doneSincePrev && review.doneSincePrev.length > 0 && (
-            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="glass-card overflow-hidden">
               <button
                 onClick={() => setDoneSincePrevOpen(!doneSincePrevOpen)}
                 className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-opacity-80 transition-colors"
@@ -1307,7 +1312,7 @@ export default function BriefingPage() {
 
           {/* Đối chiếu kỳ trước */}
           {review && (review.followUp.length > 0 || review.diff.new.length > 0 || review.diff.closed.length > 0 || review.diff.slipped.length > 0) && (
-            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="glass-card overflow-hidden">
               <button
                 onClick={() => setReviewOpen(!reviewOpen)}
                 className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-opacity-80 transition-colors"
@@ -1399,10 +1404,10 @@ export default function BriefingPage() {
               value={filterSearch}
               onChange={(e) => setFilterSearch(e.target.value)}
               placeholder="Tìm theo tiêu đề / người..."
-              className="text-sm px-3 py-2 rounded-lg flex-1"
-              style={{ border: '1px solid var(--border)', background: '#f8fafc', minWidth: 200 }}
+              className="input-field text-sm flex-1"
+              style={{ minWidth: 200 }}
             />
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="text-sm px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field text-sm">
               <option value="">Tất cả trạng thái</option>
               <option value="OPEN">Mới</option>
               <option value="IN_PROGRESS">Đang xử lý</option>
@@ -1410,12 +1415,12 @@ export default function BriefingPage() {
               <option value="RETURNED">Bị trả lại</option>
               <option value="DONE">Hoàn thành</option>
             </select>
-            <select value={filterBlocked} onChange={(e) => setFilterBlocked(e.target.value)} className="text-sm px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
+            <select value={filterBlocked} onChange={(e) => setFilterBlocked(e.target.value)} className="input-field text-sm">
               <option value="">Tắc: tất cả</option>
               <option value="yes">Chỉ Tắc</option>
               <option value="no">Không tắc</option>
             </select>
-            <select value={filterOverdue} onChange={(e) => setFilterOverdue(e.target.value)} className="text-sm px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
+            <select value={filterOverdue} onChange={(e) => setFilterOverdue(e.target.value)} className="input-field text-sm">
               <option value="">Thời gian: tất cả</option>
               <option value="yes">Quá hạn</option>
               <option value="due_soon">Đến hạn tuần này</option>
@@ -1423,19 +1428,15 @@ export default function BriefingPage() {
               <option value="new_week">Mới tuần này</option>
             </select>
             {(filterStatus || filterBlocked || filterOverdue || filterSearch || filterExecOnly) && (
-              <button
-                onClick={() => { setFilterStatus(''); setFilterBlocked(''); setFilterOverdue(''); setFilterSearch(''); setFilterExecOnly(false) }}
-                className="text-xs px-3 py-2 rounded-lg"
-                style={{ color: '#dc2626', border: '1px solid #fecaca', background: '#fef2f2' }}
-              >
+              <Button variant="danger" size="sm" onClick={() => { setFilterStatus(''); setFilterBlocked(''); setFilterOverdue(''); setFilterSearch(''); setFilterExecOnly(false) }}>
                 Xoá bộ lọc
-              </button>
+              </Button>
             )}
           </div>
 
           {/* ═══ Executive Decision Section ═══ */}
           {execTasks.length > 0 && (
-            <div className="rounded-xl overflow-hidden" style={{ background: '#fef2f2', border: '2px solid #b91c1c33' }}>
+            <div className="glass-card overflow-hidden" style={{ background: SEMANTIC_COLORS.danger.bg, border: `2px solid ${SEMANTIC_COLORS.danger.solid}33` }}>
               <div className="px-5 py-3 flex items-center gap-2" style={{ background: '#b91c1c11', borderBottom: '1px solid #b91c1c22' }}>
                 <span className="text-base">🔺</span>
                 <span className="font-bold text-sm" style={{ color: '#b91c1c' }}>Cần BGĐ quyết ({execTasks.length})</span>
@@ -1536,9 +1537,7 @@ export default function BriefingPage() {
           {/* Tồn đọng cần xử lý */}
           <h2 className="text-base font-bold mt-2" style={{ color: 'var(--text-primary)' }}>Tồn đọng cần xử lý</h2>
           {filteredGroups.length === 0 ? (
-            <div className="rounded-xl p-8 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <p className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>Không có việc tồn đọng</p>
-            </div>
+            <EmptyState icon="📋" title="Không có việc tồn đọng" />
           ) : (
             filteredGroups.map((g) => {
               const groupKey = g.project?.id || '__general__'
@@ -1744,7 +1743,7 @@ export default function BriefingPage() {
               }
 
               return (
-                <div key={groupKey} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <div key={groupKey} className="glass-card overflow-hidden">
                   <button onClick={() => toggleProject(groupKey)} className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-opacity-80 transition-colors" style={{ background: 'var(--surface)' }}>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-mono" style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>
@@ -2169,7 +2168,7 @@ export default function BriefingPage() {
       )}
 
       {editRows && summary && (
-        <div className="rounded-xl p-5 space-y-4" style={{ background: 'var(--surface)', border: '2px solid var(--border)' }}>
+        <div className="glass-card p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Xem trước & sửa import</h2>
             <button onClick={resetImport} className="text-xs px-3 py-1 rounded" style={{ color: 'var(--text-muted)' }}>Hủy</button>
@@ -2242,10 +2241,7 @@ export default function BriefingPage() {
 
       {/* Empty state */}
       {kpi.overdue === 0 && !editRows && !importResult && (
-        <div className="rounded-xl p-8 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <p className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>Không có việc quá hạn</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Tất cả công việc đều đang đúng tiến độ.</p>
-        </div>
+        <EmptyState icon="📋" title="Không có việc quá hạn" />
       )}
 
       {/* ════ Overdue Project Accordions ════ */}
@@ -2254,7 +2250,7 @@ export default function BriefingPage() {
         const isOpen = expanded.has(groupKey)
         const sev = overdueSeverity(g.maxDaysOverdue)
         return (
-          <div key={groupKey} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div key={groupKey} className="glass-card overflow-hidden">
             <button onClick={() => toggleProject(groupKey)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-opacity-80 transition-colors" style={{ background: 'var(--surface)' }}>
               <div className="flex items-center gap-3">
                 <span className="text-lg font-mono" style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>

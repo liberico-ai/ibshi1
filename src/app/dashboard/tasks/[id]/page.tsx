@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useRouter, redirect } from 'next/navigation'
 import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
+import { Badge, Button } from '@/components/ui'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { getStepFormConfig, type FormField } from '@/lib/step-form-configs'
 import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
@@ -1738,49 +1740,32 @@ export default function TaskDetailPage() {
   return (
     <div style={{ maxWidth: 960, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{
-        background: 'var(--bg-card, #ffffff)',
-        border: '1px solid var(--border)',
-        borderRadius: 12, padding: '1.5rem 2rem', marginBottom: '1.5rem',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: '0.85rem', color: 'var(--text-muted, #64748b)' }}>
-          <span style={{ fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>{task.project.projectCode}</span>
-          <span>•</span>
+      <div className="glass-card" style={{ padding: '1.5rem 2rem', marginBottom: '1.5rem' }}>
+        <div className="flex items-center gap-2 mb-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+          <Badge variant="info">{task.project.projectCode}</Badge>
           <span>{task.project.projectName}</span>
         </div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)' }}>
+        <h1 className="text-2xl font-extrabold" style={{ margin: 0, color: 'var(--text-primary)' }}>
           {displayTitle}
         </h1>
-        <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary, #475569)' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: isDone ? '#059669' : isActive ? '#2563eb' : 'inherit' }}>
-            {isDone ? '✅ Hoàn thành' : isActive ? '🔄 Đang thực hiện' : task.status === 'AWAITING_REVIEW' ? '⏳ Chờ người tạo xác nhận' : task.status === 'RETURNED' ? '↩ Bị trả lại' : `📋 ${task.status}`}
-          </span>
+        <div className="flex gap-3 mt-3 flex-wrap text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+          <Badge variant={isDone ? 'success' : isActive ? 'info' : task.status === 'RETURNED' ? 'danger' : 'warning'}>
+            {isDone ? 'Hoàn thành' : isActive ? 'Đang thực hiện' : task.status === 'AWAITING_REVIEW' ? 'Chờ xác nhận' : task.status === 'RETURNED' ? 'Bị trả lại' : task.status}
+          </Badge>
           {task.deadline && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}>
-              ⏰ Deadline: {formatDate(task.deadline)}
-            </span>
+            <Badge variant="danger">Deadline: {formatDate(task.deadline)}</Badge>
           )}
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            👤 {task.assignee ? task.assignee.fullName : <span className="italic opacity-60">Chưa phân công</span>}
+          <span className="flex items-center gap-1.5">
+            {task.assignee ? task.assignee.fullName : <span className="italic opacity-60">Chưa phân công</span>}
             {canAssignTask && isActive && (
-              <button
-                onClick={() => setShowAssignModal(true)}
-                style={{
-                  marginLeft: 4, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600,
-                  background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6,
-                  cursor: 'pointer',
-                }}
-              >
-                Phân công
-              </button>
+              <Button variant="accent" size="sm" onClick={() => setShowAssignModal(true)}>Phân công</Button>
             )}
           </span>
         </div>
       </div>
 
       {successMsg && (
-        <div style={{ background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: 8, padding: '1rem', marginBottom: '1rem', color: '#155724', fontWeight: 600 }}>
+        <div className="glass-card" style={{ background: SEMANTIC_COLORS.success.bg, borderColor: SEMANTIC_COLORS.success.solid, padding: '1rem', marginBottom: '1rem', color: SEMANTIC_COLORS.success.solid, fontWeight: 600 }}>
           {successMsg}
         </div>
       )}

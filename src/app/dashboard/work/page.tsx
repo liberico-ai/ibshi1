@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
+import { PageHeader, Button, Badge, EmptyState, Pagination } from '@/components/ui'
+import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 
 interface Task {
   id: string; title: string; status: string; priority: string; deadline: string | null; taskType: string
@@ -20,12 +22,12 @@ const TABS = [
   { key: 'overdue', label: 'Quá hạn' },
   { key: 'done', label: 'Đã xong' },
 ]
-const ST: Record<string, { l: string; c: string; b: string }> = {
-  OPEN: { l: 'Mới', c: '#475569', b: '#f1f5f9' },
-  IN_PROGRESS: { l: 'Đang xử lý', c: '#1d4ed8', b: '#eff6ff' },
-  AWAITING_REVIEW: { l: 'Chờ kết thúc', c: '#b45309', b: '#fffbeb' },
-  RETURNED: { l: 'Bị trả lại', c: '#e63946', b: '#fef2f2' },
-  DONE: { l: 'Hoàn thành', c: '#059669', b: '#ecfdf5' },
+const ST: Record<string, { l: string; variant: 'info' | 'success' | 'warning' | 'danger' | 'default' }> = {
+  OPEN: { l: 'Mới', variant: 'default' },
+  IN_PROGRESS: { l: 'Đang xử lý', variant: 'info' },
+  AWAITING_REVIEW: { l: 'Chờ kết thúc', variant: 'warning' },
+  RETURNED: { l: 'Bị trả lại', variant: 'danger' },
+  DONE: { l: 'Hoàn thành', variant: 'success' },
 }
 
 const DAY_MS = 86400000
@@ -117,26 +119,29 @@ export default function WorkInboxPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <div className="flex justify-between items-center flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📥 Hộp việc của tôi</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{total} việc</p>
-        </div>
-        <button onClick={() => router.push('/dashboard/work/create')} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Tạo việc</button>
-      </div>
+      <PageHeader
+        title="Hộp việc của tôi"
+        subtitle={`${total} việc`}
+        actions={<Button variant="accent" onClick={() => router.push('/dashboard/work/create')}>+ Tạo việc</Button>}
+      />
 
+      {/* Tabs */}
       <div className="flex gap-2 flex-wrap">
         {TABS.map((t) => {
           const cnt = tabCounts[t.key]
+          const active = tab === t.key
           const isOverdueTab = t.key === 'overdue'
           const isReviewTab = t.key === 'review'
           return (
             <button key={t.key} onClick={() => setTab(t.key as TabKey)}
-              className="text-sm px-4 py-2 rounded-full font-semibold flex items-center gap-1.5"
-              style={{ background: tab === t.key ? 'var(--navy,#0a2540)' : 'var(--surface)', color: tab === t.key ? '#fff' : 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              className={`filter-chip ${active ? 'active' : ''}`}
+              style={active ? { background: 'var(--navy,#0a2540)', color: '#fff', borderColor: 'var(--navy,#0a2540)' } : undefined}>
               {t.label}
               {cnt != null && cnt > 0 && (
-                <span style={{ minWidth: 18, height: 18, borderRadius: 9, fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', background: tab === t.key ? 'rgba(255,255,255,0.25)' : (isOverdueTab ? '#fef2f2' : isReviewTab ? '#fffbeb' : '#f1f5f9'), color: tab === t.key ? '#fff' : (isOverdueTab ? '#dc2626' : isReviewTab ? '#b45309' : '#475569') }}>
+                <span className="filter-chip-count" style={{
+                  background: active ? 'rgba(255,255,255,0.25)' : (isOverdueTab ? SEMANTIC_COLORS.danger.bg : isReviewTab ? SEMANTIC_COLORS.warning.bg : '#f1f5f9'),
+                  color: active ? '#fff' : (isOverdueTab ? SEMANTIC_COLORS.danger.solid : isReviewTab ? SEMANTIC_COLORS.warning.solid : '#475569'),
+                }}>
                   {cnt > 99 ? '99+' : cnt}
                 </span>
               )}
@@ -145,70 +150,63 @@ export default function WorkInboxPage() {
         })}
       </div>
 
-      {/* Tìm kiếm + lọc dự án */}
+      {/* Search + project filter */}
       <div className="flex gap-2 flex-wrap">
         <form onSubmit={(e) => { e.preventDefault(); setQ(qInput) }} className="flex gap-2 flex-1" style={{ minWidth: 200 }}>
-          <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Tìm theo tiêu đề…" style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 9, padding: '8px 12px', fontSize: '.85rem', background: '#f8fafc' }} />
-          <button type="submit" className="text-sm px-3 rounded-lg" style={{ border: '1px solid var(--border)' }}>Tìm</button>
+          <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Tìm theo tiêu đề..."
+            className="input-field flex-1" />
+          <Button variant="outline" type="submit" size="sm">Tìm</Button>
         </form>
-        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="text-sm px-3 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
+        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="input-field text-sm" style={{ minWidth: 140 }}>
           <option value="">Tất cả dự án</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.projectCode}</option>)}
         </select>
       </div>
 
       {loading ? (
-        <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
+        <div className="space-y-2 stagger-children">{[1, 2, 3].map((i) => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
       ) : error ? (
-        <div className="text-center py-12 space-y-3">
-          <p className="text-sm" style={{ color: '#e63946' }}>{error}</p>
-          <button onClick={load} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Thử lại</button>
-        </div>
+        <EmptyState icon="!" title={error} action={<Button variant="outline" onClick={load}>Thử lại</Button>} />
       ) : tasks.length === 0 ? (
-        <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
-          Không có việc nào{q || projectId ? ' khớp bộ lọc' : ''}.
-        </div>
+        <EmptyState icon="📭" title={`Không có việc nào${q || projectId ? ' khớp bộ lọc' : ''}`} />
       ) : (
         <>
-          {tasks.map((t, idx) => {
-            const st = t.blocked ? { l: 'Tắc', c: '#c2410c', b: '#fff7ed' } : (ST[t.status] || ST.OPEN)
-            const due = dueInfo(t.deadline, t.status)
-            const doerOver = isDoerOverdue(t)
-            const revLate = isReviewLate(t)
-            const revDays = reviewDaysLate(t)
-            const pc = t.priority === 'URGENT' ? '#e63946' : t.priority === 'HIGH' ? '#d97706' : 'var(--border)'
-            const rowNum = (page - 1) * 20 + idx + 1
-            return (
-              <div key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)}
-                className="rounded-xl p-4 cursor-pointer hover:shadow-md transition-all"
-                style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `4px solid ${pc}` }}>
-                <div className="flex items-start gap-2 flex-wrap">
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: '#f1f5f9', color: '#64748b' }}>{rowNum}</span>
-                  <div className="font-bold flex-1" style={{ color: 'var(--text-primary)', minWidth: 180 }}>{t.title}</div>
-                  {tab === 'review' && !revLate && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef9c3', color: '#a16207' }}>Cần kết thúc</span>}
-                  {revLate && (tab === 'review' || tab === 'overdue') && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: '#fef2f2', color: '#e63946' }}>Trễ nghiệm thu ({revDays} ngày)</span>}
-                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: st.b, color: st.c }}>{st.l}</span>
+          <div className="space-y-2 stagger-children">
+            {tasks.map((t, idx) => {
+              const st = t.blocked ? { l: 'Tắc', variant: 'warning' as const } : (ST[t.status] || ST.OPEN)
+              const due = dueInfo(t.deadline, t.status)
+              const doerOver = isDoerOverdue(t)
+              const revLate = isReviewLate(t)
+              const revDays = reviewDaysLate(t)
+              const pc = t.priority === 'URGENT' ? SEMANTIC_COLORS.danger.solid : t.priority === 'HIGH' ? SEMANTIC_COLORS.warning.solid : 'var(--border)'
+              const rowNum = (page - 1) * 20 + idx + 1
+              return (
+                <div key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)}
+                  className="glass-card p-4 cursor-pointer hover:shadow-md transition-all"
+                  style={{ borderLeft: `4px solid ${pc}` }}>
+                  <div className="flex items-start gap-2 flex-wrap">
+                    <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                      style={{ background: 'var(--surface-alt, #f1f5f9)', color: 'var(--text-muted)' }}>{rowNum}</span>
+                    <div className="font-bold flex-1 text-sm" style={{ color: 'var(--text-primary)', minWidth: 180 }}>{t.title}</div>
+                    {tab === 'review' && !revLate && <Badge variant="warning">Cần kết thúc</Badge>}
+                    {revLate && (tab === 'review' || tab === 'overdue') && <Badge variant="danger">Trễ nghiệm thu ({revDays} ngày)</Badge>}
+                    <Badge variant={st.variant}>{st.l}</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {t.project && <Badge variant="info">{t.project.projectCode}</Badge>}
+                    {showCreator && <span>Người giao: <b>{t.createdByName}</b></span>}
+                    {showAssignees && t.assigneeNames.length > 0 && <span>Người thực hiện: <b>{t.assigneeNames.join(', ')}</b></span>}
+                    {due && (tab === 'assigned' || tab === 'dept' ? doerOver : tab === 'review' ? revLate : true) && (
+                      <Badge variant={due.over ? 'danger' : 'warning'}>{due.txt}</Badge>
+                    )}
+                    {t._count.children > 0 && <span className="font-mono">+{t._count.children} con</span>}
+                    {t._count.docs > 0 && <span className="font-mono">{t._count.docs} file</span>}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {t.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>📁 {t.project.projectCode}</span>}
-                  {showCreator && <span>Người giao: <b>{t.createdByName}</b></span>}
-                  {showAssignees && t.assigneeNames.length > 0 && <span>Người thực hiện: <b>{t.assigneeNames.join(', ')}</b></span>}
-                  {due && (tab === 'assigned' || tab === 'dept' ? doerOver : tab === 'review' ? revLate : true) && (
-                    <span className="px-2 py-0.5 rounded" style={{ background: due.over ? '#fef2f2' : '#fffbeb', color: due.over ? '#e63946' : '#d97706' }}>⏰ {due.txt}</span>
-                  )}
-                  {t._count.children > 0 && <span>↳ {t._count.children} việc con</span>}
-                  {t._count.docs > 0 && <span>📎 {t._count.docs} tài liệu</span>}
-                </div>
-              </div>
-            )
-          })}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="text-sm px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)', opacity: page <= 1 ? 0.4 : 1 }}>← Trước</button>
-              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Trang {page}/{totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="text-sm px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)', opacity: page >= totalPages ? 0.4 : 1 }}>Sau →</button>
-            </div>
-          )}
+              )
+            })}
+          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}
     </div>
