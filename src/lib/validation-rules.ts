@@ -114,7 +114,7 @@ async function validateBudgetOverrun(
   if (totalEstimate && poTotal && poTotal > totalEstimate) {
     const overrunPct = ((poTotal - totalEstimate) / totalEstimate * 100).toFixed(1)
     warnings.push(
-      `TC-03-05: ⚠️ VƯỢT NGÂN SÁCH! PO: ${poTotal.toLocaleString()}đ > Dự toán: ${totalEstimate.toLocaleString()}đ (+${overrunPct}%). Cần BGĐ phê duyệt.`
+      `TC-03-05: VƯỢT NGÂN SÁCH! PO: ${poTotal.toLocaleString()}đ > Dự toán: ${totalEstimate.toLocaleString()}đ (+${overrunPct}%). Cần BGĐ phê duyệt.`
     )
   }
 

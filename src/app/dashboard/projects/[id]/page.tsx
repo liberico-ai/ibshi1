@@ -190,7 +190,7 @@ export default function ProjectDetailPage() {
       {/* Stats Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }} className="stagger-children">
         {[
-          { label: 'Giá trị HĐ', value: formatCurrency(project.contractValue, project.currency), color: '#0a2540', icon: '$' },
+          { label: 'Giá trị HĐ', value: formatCurrency(project.contractValue, project.currency), color: 'var(--text-heading)', icon: '$' },
           { label: 'Bắt đầu', value: formatDate(project.startDate) || '—', color: '#0ea5e9', icon: 'S' },
           { label: 'Kết thúc', value: formatDate(project.endDate) || '—', color: '#f59e0b', icon: 'E' },
           { label: 'Giai đoạn', value: `Phase ${project.progress.currentPhase}`, color: '#8b5cf6', icon: 'P' },
@@ -471,7 +471,7 @@ function AssignTaskModal({ task, onClose, onSubmit }: { task: Task; onClose: () 
               <option value="">-- Click để chọn --</option>
               {users.map(u => (
                 <option key={u.id} value={u.id}>
-                  {u.fullName} ({u.username}) {u.userLevel === 1 ? '⭐' : ''}
+                  {u.fullName} ({u.username}) {u.userLevel === 1 ? '' : ''}
                 </option>
               ))}
             </select>

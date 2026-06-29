@@ -83,7 +83,7 @@ export default function MillCertificatesPage() {
         title="Mill Certificates (MTR)"
         subtitle={`${certs.length} chung chi`}
         actions={
-          <Button variant="accent" size="md" onClick={openForm}>
+          <Button variant="primary" size="md" onClick={openForm}>
             + Them MTR
           </Button>
         }
@@ -135,7 +135,7 @@ export default function MillCertificatesPage() {
             <InputField name="thickness" placeholder="Thickness" />
           </div>
           <div className="flex gap-2">
-            <Button type="submit" variant="accent" size="sm">Luu</Button>
+            <Button type="submit" variant="primary" size="sm">Luu</Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setShowForm(false)}>Huy</Button>
           </div>
         </form>

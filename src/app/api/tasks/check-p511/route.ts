@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
           await prisma.notification.createMany({
             data: users.map(u => ({
               userId: u.id,
-              title: `📋 Yêu cầu nghiệm thu mới: ${project?.projectCode}`,
+              title: `Yêu cầu nghiệm thu mới: ${project?.projectCode}`,
               message: `Đã tự động tạo Yêu cầu nghiệm thu cho hạng mục: ${hangMucName}.`,
               type: 'task_assigned',
               linkUrl: `/dashboard/work/${newTask.id}`,
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
         allIssued: true,
         created: true,
         taskId: newTask.id,
-        reason: `🎉 Đã tạo P5.1.1 Yêu cầu nghiệm thu cho "${hangMucName}" (${totalKL} ${dvt}).`,
+        reason: `Đã tạo P5.1.1 Yêu cầu nghiệm thu cho "${hangMucName}" (${totalKL} ${dvt}).`,
       })
     } catch (err) {
       // Unique constraint hoặc concurrent race → task đã tồn tại

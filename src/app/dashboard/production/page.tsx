@@ -101,7 +101,7 @@ export default function ProductionPage() {
       <PageHeader
         title="Quản lý Sản xuất"
         subtitle={`${pagination.total} lệnh sản xuất`}
-        actions={canCreate ? <Button variant="accent" onClick={openCreate}>+ Tạo WO</Button> : undefined}
+        actions={canCreate ? <Button variant="primary" onClick={openCreate}>+ Tạo WO</Button> : undefined}
       />
 
       {/* Progress summary */}
@@ -265,7 +265,7 @@ function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Tạo WO</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Tạo WO</Button>
       </div>
     </Modal>
   )

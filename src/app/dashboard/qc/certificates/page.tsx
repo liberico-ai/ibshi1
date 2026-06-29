@@ -63,7 +63,7 @@ export default function CertificatePage() {
         title="Certificate Registry"
         subtitle="So chung chi & hieu chuan"
         actions={canCreate ? (
-          <Button variant="accent" size="md" onClick={() => setShowForm(true)}>
+          <Button variant="primary" size="md" onClick={() => setShowForm(true)}>
             + Them chung chi
           </Button>
         ) : undefined}
@@ -204,7 +204,7 @@ function CreateCertModal({ onClose, onCreated }: { onClose: () => void; onCreate
       actions={
         <div className="flex gap-3 w-full">
           <Button variant="ghost" onClick={onClose} className="flex-1">Huy</Button>
-          <Button variant="accent" onClick={submit} loading={submitting} className="flex-1">
+          <Button variant="primary" onClick={submit} loading={submitting} className="flex-1">
             Them chung chi
           </Button>
         </div>
@@ -300,7 +300,7 @@ function RenewCertModal({ cert, onClose, onCreated }: { cert: Certificate; onClo
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Gia hạn</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Gia hạn</Button>
       </div>
     </Modal>
   )

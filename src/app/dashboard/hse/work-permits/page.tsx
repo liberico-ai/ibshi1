@@ -75,7 +75,7 @@ export default function WorkPermitsPage() {
       <PageHeader
         title="Giấy phép làm việc"
         subtitle={`${permits.length} giấy phép`}
-        actions={canEdit ? <Button variant="accent" onClick={() => setShowCreate(true)}>+ Tạo PTW</Button> : undefined}
+        actions={canEdit ? <Button variant="primary" onClick={() => setShowCreate(true)}>+ Tạo PTW</Button> : undefined}
       />
 
       <div className="grid grid-cols-4 gap-4 stagger-children">
@@ -170,7 +170,7 @@ function CreatePermitModal({ onClose, onCreated }: { onClose: () => void; onCrea
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Tạo</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Tạo</Button>
       </div>
     </Modal>
   )

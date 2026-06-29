@@ -51,7 +51,7 @@ export default function AdminDashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon="users" label="Tổng Users" value={stats.totalUsers} color="#0a2540" />
+        <StatCard icon="users" label="Tổng Users" value={stats.totalUsers} color="var(--ibs-red)" />
         <StatCard icon="check" label="Active" value={stats.activeUsers} color="#16a34a" />
         <StatCard icon="block" label="Inactive" value={stats.inactiveUsers} color="#dc2626" />
         <StatCard icon="folder" label="Dự án Active" value={stats.activeProjects} color="#0ea5e9" sub={`/${stats.totalProjects} tổng`} />

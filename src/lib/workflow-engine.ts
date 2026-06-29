@@ -37,7 +37,7 @@ export async function completeTask(
   // Append warnings to resultData (non-blocking)
   let finalNotes = notes || ''
   if (validation.warnings.length > 0) {
-    finalNotes = finalNotes + (finalNotes ? '\n' : '') + validation.warnings.map(w => `⚠️ ${w}`).join('\n')
+    finalNotes = finalNotes + (finalNotes ? '\n' : '') + validation.warnings.map(w => `${w}`).join('\n')
   }
 
   // Merge notes into resultData since Task model has no notes field
@@ -486,7 +486,7 @@ export async function rejectTask(
         await prisma.notification.createMany({
           data: users.map((u) => ({
             userId: u.id,
-            title: `⚠️ Từ chối: ${rule.name}`,
+            title: `Từ chối: ${rule.name}`,
             message: `Bước ${task.taskType} bị từ chối. Lý do: ${reason}. Quay về ${rejectTo} — ${targetRule.name}.`,
             type: 'REJECTED',
             linkUrl: `/dashboard/projects/${projectId}`,

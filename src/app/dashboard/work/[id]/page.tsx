@@ -205,8 +205,8 @@ export default function WorkDetailPage() {
     </div>
   )
 
-  const stColor = awaitingReview ? '#b45309' : task.status === 'DONE' ? '#059669' : task.status === 'RETURNED' ? '#e63946' : '#1d4ed8'
-  const accent = task.priority === 'URGENT' ? '#e63946' : task.priority === 'HIGH' ? '#d97706' : stColor
+  const stColor = awaitingReview ? '#b45309' : task.status === 'DONE' ? '#059669' : task.status === 'RETURNED' ? 'var(--danger)' : '#1d4ed8'
+  const accent = task.priority === 'URGENT' ? 'var(--danger)' : task.priority === 'HIGH' ? '#d97706' : stColor
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -352,7 +352,7 @@ export default function WorkDetailPage() {
             {task.history.map((h) => {
               const target = h.toName || h.toRoleName
               const isComment = h.action === 'COMMENT'
-              const actionColor = h.action === 'RETURNED' ? '#dc2626' : h.action === 'COMPLETED' || h.action === 'CLOSED' ? '#059669' : h.action === 'FORWARDED' ? '#7c3aed' : 'var(--navy,#0a2540)'
+              const actionColor = h.action === 'RETURNED' ? '#dc2626' : h.action === 'COMPLETED' || h.action === 'CLOSED' ? '#059669' : h.action === 'FORWARDED' ? '#7c3aed' : 'var(--text-heading)'
 
               let detail = ''
               if (h.action === 'CREATED') detail = h.byName ? `${h.byName} tạo công việc` : ''
@@ -390,7 +390,7 @@ export default function WorkDetailPage() {
           </div>
           <div className="flex gap-2">
             <input value={comment} onChange={(e) => setComment(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendComment()} placeholder="Nhập trao đổi..." style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 9, padding: '9px 12px', fontSize: '.86rem', background: '#f8fafc' }} />
-            <button onClick={sendComment} className="text-sm px-4 rounded-lg" style={{ background: 'var(--navy,#0a2540)', color: '#fff' }}>Gửi</button>
+            <button onClick={sendComment} className="text-sm px-4 rounded-lg" style={{ background: 'var(--text-heading)', color: '#fff' }}>Gửi</button>
           </div>
         </div>
       </div>
@@ -528,7 +528,7 @@ export default function WorkDetailPage() {
       {isAssignee && !myDone && task.status !== 'DONE' && !fwdOpen && (
         <div className="sticky bottom-0 py-3 space-y-1.5" style={{ background: 'var(--bg,#f1f5f9)' }}>
           {!canComplete && (
-            <div className="text-xs px-1" style={{ color: '#e63946' }}>
+            <div className="text-xs px-1" style={{ color: 'var(--danger)' }}>
               {!allRead && 'Cần tick "đã đọc" tất cả tài liệu phải đọc. '}
               {!allReturned && 'Cần nhập nội dung hoặc đính kèm cho tài liệu phải trả lại.'}
             </div>
@@ -537,8 +537,8 @@ export default function WorkDetailPage() {
             <button onClick={() => doComplete('RETURN_CREATOR')} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold flex-1" style={{ background: canComplete ? '#059669' : '#9ca3af', color: '#fff', minWidth: 150 }}>✓ Hoàn thành & trả người tạo</button>
             <button onClick={() => setFwdOpen(true)} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: canComplete ? '#d97706' : '#9ca3af', color: '#fff' }}>↗ Hoàn thành & chuyển tiếp</button>
             <button onClick={() => setDelOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>↪ Chuyển giao</button>
-            <button onClick={() => router.push(`/dashboard/work/create?parent=${id}${task.projectId ? `&project=${task.projectId}` : ''}`)} className="text-sm px-4 py-3 rounded-xl" style={{ background: 'var(--navy,#0a2540)', color: '#fff' }}>+ Việc con</button>
-            <button onClick={() => setRejOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#e63946', border: '1px solid #fecaca' }}>✕ Từ chối / trả lại</button>
+            <button onClick={() => router.push(`/dashboard/work/create?parent=${id}${task.projectId ? `&project=${task.projectId}` : ''}`)} className="text-sm px-4 py-3 rounded-xl" style={{ background: 'var(--text-heading)', color: '#fff' }}>+ Việc con</button>
+            <button onClick={() => setRejOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: 'var(--danger)', border: '1px solid #fecaca' }}>✕ Từ chối / trả lại</button>
           </div>
         </div>
       )}
@@ -577,10 +577,10 @@ export default function WorkDetailPage() {
       {/* Trả lại (inline) */}
       {rejOpen && isAssignee && !myDone && (
         <div className="rounded-xl p-4 space-y-2" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
-          <div className="text-sm font-semibold" style={{ color: '#e63946' }}>✕ Trả lại người giao (sai phạm vi)</div>
+          <div className="text-sm font-semibold" style={{ color: 'var(--danger)' }}>✕ Trả lại người giao (sai phạm vi)</div>
           <textarea value={rejReason} onChange={(e) => setRejReason(e.target.value)} rows={3} style={{ ...inp, background: '#fff' }} placeholder="Lý do trả lại…" />
           <div className="flex gap-2">
-            <button onClick={submitReject} disabled={busy} className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: '#e63946', color: '#fff' }}>Gửi trả lại</button>
+            <button onClick={submitReject} disabled={busy} className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: 'var(--danger)', color: '#fff' }}>Gửi trả lại</button>
             <button onClick={() => setRejOpen(false)} className="text-sm px-4 py-2.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
           </div>
         </div>
@@ -589,10 +589,10 @@ export default function WorkDetailPage() {
       {/* Người GIAO xử lý task BỊ TRẢ LẠI: giao lại hoặc tạo việc mới */}
       {isCreator && task.status === 'RETURNED' && !delOpen && (
         <div className="sticky bottom-0 py-3 space-y-1.5" style={{ background: 'var(--bg,#f1f5f9)' }}>
-          <div className="text-xs px-1" style={{ color: '#e63946' }}>Người nhận đã trả lại công việc này. Bạn có thể giao lại cho người khác hoặc tạo việc mới.</div>
+          <div className="text-xs px-1" style={{ color: 'var(--danger)' }}>Người nhận đã trả lại công việc này. Bạn có thể giao lại cho người khác hoặc tạo việc mới.</div>
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => setDelOpen(true)} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold flex-1" style={{ background: '#2563eb', color: '#fff', minWidth: 160 }}>↪ Giao lại cho người khác</button>
-            <button onClick={goCreateNext} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--navy,#0a2540)', color: '#fff' }}>+ Tạo việc mới</button>
+            <button onClick={goCreateNext} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--text-heading)', color: '#fff' }}>+ Tạo việc mới</button>
           </div>
         </div>
       )}
@@ -603,14 +603,14 @@ export default function WorkDetailPage() {
           <div className="text-xs px-1" style={{ color: '#b45309' }}>Người nhận đã hoàn thành và trả lại. Bạn có thể kết thúc, hoặc tạo việc tiếp theo.</div>
           <div className="flex gap-2 flex-wrap">
             <button onClick={doFinalize} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold flex-1" style={{ background: '#059669', color: '#fff', minWidth: 160 }}>✓ Hoàn thành &amp; kết thúc</button>
-            <button onClick={goCreateNext} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--navy,#0a2540)', color: '#fff' }}>+ Tạo việc tiếp theo</button>
+            <button onClick={goCreateNext} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--text-heading)', color: '#fff' }}>+ Tạo việc tiếp theo</button>
           </div>
         </div>
       )}
 
       {/* Toast */}
       {toast && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-50 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg" style={{ background: 'var(--navy,#0a2540)', color: '#fff' }}>{toast}</div>
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-50 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg" style={{ background: 'var(--text-heading)', color: '#fff' }}>{toast}</div>
       )}
     </div>
   )

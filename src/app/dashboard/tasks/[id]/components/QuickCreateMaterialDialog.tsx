@@ -95,7 +95,7 @@ export default function QuickCreateMaterialDialog({ open, initialName = '', init
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden" style={{ backgroundColor: 'var(--surface, #fff)' }}>
 
         {/* Header */}
-        <div className="px-6 py-4 flex items-center justify-between" style={{ backgroundColor: '#0a2540' }}>
+        <div className="px-6 py-4 flex items-center justify-between" style={{ backgroundColor: 'var(--ibs-navy)' }}>
           <div>
             <h3 className="text-white font-bold text-base m-0">
               {phase === 'search' ? 'Tra cứu vật tư trong kho' : 'Tạo mã vật tư mới'}
@@ -124,7 +124,7 @@ export default function QuickCreateMaterialDialog({ open, initialName = '', init
                 <button
                   onClick={() => runSearch(query)}
                   className="px-5 py-2.5 rounded-lg text-sm font-semibold border-none cursor-pointer transition-colors"
-                  style={{ backgroundColor: '#0a2540', color: '#fff' }}
+                  style={{ backgroundColor: 'var(--ibs-navy)', color: '#fff' }}
                 >
                   Tìm
                 </button>
@@ -147,7 +147,7 @@ export default function QuickCreateMaterialDialog({ open, initialName = '', init
                         {/* Material info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                            <span className="font-mono text-sm font-bold" style={{ color: '#0a2540' }}>{c.materialCode}</span>
+                            <span className="font-mono text-sm font-bold" style={{ color: 'var(--text-heading)' }}>{c.materialCode}</span>
                             {c.specification && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 font-mono">
                                 {c.specification}
@@ -191,7 +191,7 @@ export default function QuickCreateMaterialDialog({ open, initialName = '', init
               <button
                 onClick={() => setPhase('create')}
                 className="w-full py-3 rounded-xl text-sm font-bold border-2 border-dashed cursor-pointer transition-colors"
-                style={{ borderColor: '#e63946', color: '#e63946', backgroundColor: '#fff5f5' }}
+                style={{ borderColor: 'var(--danger)', color: 'var(--danger)', backgroundColor: '#fff5f5' }}
               >
                 Không tìm thấy → Tạo mã mới (mã tạm)
               </button>
@@ -241,7 +241,7 @@ export default function QuickCreateMaterialDialog({ open, initialName = '', init
 
               {/* Preview */}
               <div className="rounded-lg px-4 py-3 mb-4 text-xs" style={{ backgroundColor: '#f0f4f8', color: 'var(--text-secondary)' }}>
-                Mã sinh ra: <code className="font-mono font-bold text-sm" style={{ color: '#0a2540' }}>{prefix || 'NHÓM'}-{subgroup || 'PN'}-NNN</code>
+                Mã sinh ra: <code className="font-mono font-bold text-sm" style={{ color: 'var(--text-heading)' }}>{prefix || 'NHÓM'}-{subgroup || 'PN'}-NNN</code>
                 <span className="ml-2 opacity-60">• Trạng thái: chờ chuẩn hóa</span>
               </div>
 
@@ -255,7 +255,7 @@ export default function QuickCreateMaterialDialog({ open, initialName = '', init
                 </button>
                 <button onClick={submitCreate} disabled={submitting}
                   className="flex-1 py-2.5 rounded-lg text-sm font-bold border-none cursor-pointer transition-opacity"
-                  style={{ backgroundColor: '#0a2540', color: '#fff', opacity: submitting ? 0.6 : 1 }}>
+                  style={{ backgroundColor: 'var(--ibs-navy)', color: '#fff', opacity: submitting ? 0.6 : 1 }}>
                   {submitting ? 'Đang tạo...' : 'Tạo mã tạm'}
                 </button>
               </div>

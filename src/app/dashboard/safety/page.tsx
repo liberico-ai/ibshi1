@@ -92,7 +92,7 @@ export default function SafetyPage() {
       {/* Stats Overview — Dashboard style */}
       <div className="grid grid-cols-4 gap-4 stagger-children">
         {[
-          { label: 'Tổng sự cố', value: totalCount, color: '#0a2540', icon: '' },
+          { label: 'Tổng sự cố', value: totalCount, color: 'var(--text-heading)', icon: '' },
           { label: 'Đang mở', value: openCount, color: '#f59e0b', icon: '' },
           { label: 'Nghiêm trọng', value: criticalCount, color: '#dc2626', icon: '' },
           { label: 'Đã xử lý', value: resolvedCount, color: '#16a34a', icon: '' },

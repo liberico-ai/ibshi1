@@ -398,7 +398,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           if (users.length > 0) {
             await prisma.notification.createMany({
               data: users.map(u => ({
-                userId: u.id, title: `📋 Yêu cầu nghiệm thu mới: ${projCode}`,
+                userId: u.id, title: `Yêu cầu nghiệm thu mới: ${projCode}`,
                 message: `Đã tự động tạo Yêu cầu nghiệm thu cho hạng mục: ${wbsName}.`,
                 type: 'task_assigned', linkUrl: `/dashboard/work/${newP511.id}`,
               }))
@@ -483,7 +483,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
               await prisma.notification.createMany({
                 data: users.map(u => ({
                   userId: u.id,
-                  title: `🧮 P5.5 — Tính lương khoán: ${projCode}`,
+                  title: `P5.5 — Tính lương khoán: ${projCode}`,
                   message: `Dự án đã nghiệm thu đủ 100% khối lượng. Bạn có thể bắt đầu tổng hợp và tính lương khoán.`,
                   type: 'task_assigned',
                   linkUrl: `/dashboard/work/${p55.id}`,

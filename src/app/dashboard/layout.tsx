@@ -154,9 +154,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Logo */}
         <div className="flex items-center gap-3 px-5" style={{ height: '68px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-end gap-[2px] flex-shrink-0">
-            <div className="w-[5px] rounded-t-sm" style={{ height: '16px', background: '#e63946' }} />
-            <div className="w-[5px] rounded-t-sm" style={{ height: '22px', background: '#e63946' }} />
-            <div className="w-[5px] rounded-t-sm" style={{ height: '19px', background: '#e63946' }} />
+            <div className="w-[5px] rounded-t-sm" style={{ height: '16px', background: 'var(--ibs-red)' }} />
+            <div className="w-[5px] rounded-t-sm" style={{ height: '22px', background: 'var(--ibs-red)' }} />
+            <div className="w-[5px] rounded-t-sm" style={{ height: '19px', background: 'var(--ibs-red)' }} />
           </div>
           {!sidebarCollapsed && (
             <div className="animate-fade-in">
@@ -209,7 +209,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                               <span style={{
                                 position: 'absolute', top: -6, right: -8,
                                 minWidth: 16, height: 16, borderRadius: 8,
-                                background: '#e63946', color: 'white',
+                                background: 'var(--ibs-red)', color: 'white',
                                 fontSize: 10, fontWeight: 700,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 padding: '0 4px', lineHeight: 1,
@@ -229,7 +229,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                               <span style={{
                                 position: 'absolute', top: -6, right: -8,
                                 minWidth: 16, height: 16, borderRadius: 8,
-                                background: '#e63946', color: 'white',
+                                background: 'var(--ibs-red)', color: 'white',
                                 fontSize: 10, fontWeight: 700,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 padding: '0 4px', lineHeight: 1,
@@ -239,7 +239,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                               <span style={{
                                 position: 'absolute', top: -6, right: -8,
                                 minWidth: 16, height: 16, borderRadius: 8,
-                                background: '#e63946', color: 'white',
+                                background: 'var(--ibs-red)', color: 'white',
                                 fontSize: 10, fontWeight: 700,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 padding: '0 4px', lineHeight: 1,
@@ -253,7 +253,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <span style={{
                                   marginLeft: 'auto',
                                   minWidth: 20, height: 20, borderRadius: 10,
-                                  background: '#e63946', color: 'white',
+                                  background: 'var(--ibs-red)', color: 'white',
                                   fontSize: 11, fontWeight: 700,
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   padding: '0 6px', lineHeight: 1,
@@ -263,7 +263,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <span style={{
                                   marginLeft: 'auto',
                                   minWidth: 20, height: 20, borderRadius: 10,
-                                  background: '#e63946', color: 'white',
+                                  background: 'var(--ibs-red)', color: 'white',
                                   fontSize: 11, fontWeight: 700,
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   padding: '0 6px', lineHeight: 1,
@@ -273,7 +273,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <span style={{
                                   marginLeft: 'auto',
                                   minWidth: 20, height: 20, borderRadius: 10,
-                                  background: '#e63946', color: 'white',
+                                  background: 'var(--ibs-red)', color: 'white',
                                   fontSize: 11, fontWeight: 700,
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   padding: '0 6px', lineHeight: 1,
@@ -305,7 +305,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="p-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-3 p-2.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
             <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{
-              background: 'linear-gradient(135deg, #e63946, #c1262f)',
+              background: 'linear-gradient(135deg, var(--ibs-red), var(--ibs-red-dark))',
               color: 'white',
               boxShadow: '0 2px 8px rgba(228, 29, 42, 0.3)',
             }}>

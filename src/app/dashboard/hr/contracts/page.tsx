@@ -31,7 +31,7 @@ export default function ContractsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>📑 Hợp đồng lao động</h1>
+        <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Hợp đồng lao động</h1>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{contracts.length} hợp đồng</p>
       </div>
 

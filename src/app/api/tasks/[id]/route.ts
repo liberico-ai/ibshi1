@@ -218,7 +218,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       try {
         const items = typeof rd31.longLeadItems === 'string' ? JSON.parse(rd31.longLeadItems) : rd31.longLeadItems;
         if (Array.isArray(items) && items.length > 0) {
-          longLeadInfo += `\n🔴 DANH SÁCH VẬT TƯ LONG-LEAD TỪ PM (P3.1):\n`;
+          longLeadInfo += `\nDANH SÁCH VẬT TƯ LONG-LEAD TỪ PM (P3.1):\n`;
           items.forEach((it: any, idx: number) => {
              longLeadInfo += `${idx + 1}. [${it.priority || 'Cao'}] ${it.material || 'Không tên'} - Ngày cần: ${it.dateNeeded || 'Chưa rõ'} - Ghi chú: ${it.note || 'Không'}\n`;
           });
@@ -539,7 +539,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       prisma.task.findFirst({ where: { projectId: task.projectId, taskType: 'P6.3' }, select: { status: true, resultData: true } }),
       prisma.task.findFirst({ where: { projectId: task.projectId, taskType: 'P6.4' }, select: { status: true, resultData: true } }),
     ])
-    const statusLabel = (s: string | undefined) => s === 'DONE' ? '✅ Hoàn thành' : s === 'IN_PROGRESS' ? '🔄 Đang thực hiện' : '⏳ Chưa bắt đầu'
+    const statusLabel = (s: string | undefined) => s === 'DONE' ? 'Hoàn thành' : s === 'IN_PROGRESS' ? 'Đang thực hiện' : 'Chưa bắt đầu'
     const rd62 = p62?.resultData as Record<string, string> | null
     const rd63 = p63?.resultData as Record<string, string> | null
     previousStepData = {
@@ -925,7 +925,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
         prisma.user.findUnique({ where: { id: body.assignToUserId }, select: { fullName: true } }),
       ])
       if (fullTask?.project && assigner && assignee) {
-        console.log(`📌 Telegram assign: ${assigner.fullName} → ${assignee.fullName} [${fullTask.taskType}] ${fullTask.project.projectCode}`)
+        console.log(`Telegram assign: ${assigner.fullName} → ${assignee.fullName} [${fullTask.taskType}] ${fullTask.project.projectCode}`)
         await notifyTaskAssigned({
           assignedUser: { fullName: assignee.fullName, telegramChatId: null },
           assignedByName: assigner.fullName,
@@ -936,12 +936,12 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
           deadline: fullTask.deadline,
           taskId: fullTask.id,
         })
-        console.log('📌 Telegram assign: sent OK')
+        console.log('Telegram assign: sent OK')
       } else {
-        console.warn('📌 Telegram assign SKIPPED:', { task: !!fullTask, project: !!fullTask?.project, assigner: !!assigner, assignee: !!assignee })
+        console.warn('Telegram assign SKIPPED:', { task: !!fullTask, project: !!fullTask?.project, assigner: !!assigner, assignee: !!assignee })
       }
     } catch (err) {
-      console.error('📌 Telegram assign ERROR:', err)
+      console.error('Telegram assign ERROR:', err)
     }
 
     return successResponse({ task: updated }, 'Đã phân công task')

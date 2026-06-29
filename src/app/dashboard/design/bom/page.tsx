@@ -95,7 +95,7 @@ export default function BOMPage() {
         subtitle="Danh mục vật tư theo dự án"
         actions={
           canCreate ? (
-            <Button variant="accent" icon={<span>+</span>} onClick={openCreateModal}>
+            <Button variant="primary" icon={<span>+</span>} onClick={openCreateModal}>
               Tạo BOM
             </Button>
           ) : undefined
@@ -109,7 +109,7 @@ export default function BOMPage() {
           description="Tạo BOM đầu tiên để quản lý danh mục vật tư cho dự án"
           action={
             canCreate ? (
-              <Button variant="accent" onClick={openCreateModal}>+ Tạo BOM</Button>
+              <Button variant="primary" onClick={openCreateModal}>+ Tạo BOM</Button>
             ) : undefined
           }
         />
@@ -208,7 +208,7 @@ export default function BOMPage() {
         actions={
           <>
             <Button variant="ghost" onClick={() => setShowCreate(false)}>Hủy</Button>
-            <Button variant="accent" loading={creating} onClick={handleCreate}>Tạo BOM</Button>
+            <Button variant="primary" loading={creating} onClick={handleCreate}>Tạo BOM</Button>
           </>
         }
       >

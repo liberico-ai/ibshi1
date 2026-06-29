@@ -930,7 +930,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', minWidth: 1750 }}>
                   <thead>
                     {/* Group header row */}
-                    <tr style={{ background: '#0a2540' }}>
+                    <tr style={{ background: 'var(--ibs-navy)' }}>
                       <th rowSpan={2} style={thStyle}>#</th>
                       <th rowSpan={2} style={thStyle}>Mã Item</th>
                       <th rowSpan={2} style={thStyle}>Mã vật tư</th>
@@ -1016,7 +1016,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                                   {match.viaSectionType ? 'khớp tiết diện' : 'khớp spec'}
                                 </span>
                                 {match.gradeWarning && (
-                                  <span style={{ fontSize: '0.56rem', color: '#b45309' }}>⚠ {match.gradeWarning}</span>
+                                  <span style={{ fontSize: '0.56rem', color: '#b45309' }}>{match.gradeWarning}</span>
                                 )}
                                 {(match.sectionCandidates ?? 0) > 1 && (
                                   <span style={{ fontSize: '0.56rem', color: '#6b7280' }}>({match.sectionCandidates} ứng viên)</span>
@@ -1035,7 +1035,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                                 </span>
                                 {isEditable && (
                                   <button type="button" onClick={() => setDialogIdx(globalIdx)}
-                                    style={{ padding: '2px 8px', fontSize: '0.65rem', background: '#0a2540', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                    style={{ padding: '2px 8px', fontSize: '0.65rem', background: 'var(--ibs-navy)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                     + Tạo / gán mã
                                   </button>
                                 )}
@@ -1068,7 +1068,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                           <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', color: '#9ca3af', borderLeft: '1px solid var(--border)' }}>{item.prevQty > 0 ? fmtNum(item.prevQty, 2) : '—'}</td>
                           <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', color: '#9ca3af' }}>{item.prevWeight > 0 ? fmtNum(item.prevWeight, 1) : '—'}</td>
                           {/* Current Qty + Weight (highlighted) */}
-                          <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 700, color: '#0a2540', borderLeft: '1px solid var(--border)' }}>{fmtNum(item.quantity, 2)}</td>
+                          <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 700, color: 'var(--text-heading)', borderLeft: '1px solid var(--border)' }}>{fmtNum(item.quantity, 2)}</td>
                           <td style={{ padding: cellPad, textAlign: 'right', fontWeight: 700, color: '#1e40af' }}>{item.weight > 0 ? fmtNum(item.weight, 1) : '—'}</td>
                           {/* Total Qty + Weight */}
                           <td style={{ padding: cellPad, textAlign: 'right', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', borderLeft: '1px solid var(--border)' }}>{item.totalQty > 0 ? fmtNum(item.totalQty, 2) : fmtNum(item.quantity, 2)}</td>
@@ -1112,7 +1112,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                               if (unitMismatch) {
                                 return (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                    <span style={{ fontSize: '0.58rem', color: '#b45309', fontWeight: 600 }}>⚠ khác ĐVT ({item.unit}↔{match?.inventoryUnit})</span>
+                                    <span style={{ fontSize: '0.58rem', color: '#b45309', fontWeight: 600 }}>khác ĐVT ({item.unit}↔{match?.inventoryUnit})</span>
                                     <span style={{ fontSize: '0.56rem', color: '#92400e' }}>cần quy đổi</span>
                                     {statusSelect}
                                   </div>
@@ -1179,12 +1179,12 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                                   {statusLabel}
                                   {match.viaSectionType && <span style={{ fontSize: '0.58rem', opacity: 0.8 }}> (tiết diện)</span>}
                                 </span>
-                                <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 600, color: '#0a2540', whiteSpace: 'nowrap' }}
+                                <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-heading)', whiteSpace: 'nowrap' }}
                                   title={`${match.inventoryCode} — ${match.inventoryName}`}>
                                   {match.inventoryCode}
                                 </span>
                                 {unitMismatch && (
-                                  <span style={{ fontSize: '0.56rem', color: '#b45309', fontWeight: 600 }}>⚠ {item.unit}↔{match.inventoryUnit}</span>
+                                  <span style={{ fontSize: '0.56rem', color: '#b45309', fontWeight: 600 }}>{item.unit}↔{match.inventoryUnit}</span>
                                 )}
                                 {!unitMismatch && !stockSufficient && (
                                   <span style={{ fontSize: '0.58rem', color: '#4338ca', fontWeight: 600 }}>cần mua</span>
@@ -1194,7 +1194,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
                                 )}
                                 {match.gradeWarning && (
                                   <span style={{ fontSize: '0.58rem', color: '#b45309', fontStyle: 'italic' }} title={match.gradeWarning}>
-                                    ⚠ {match.gradeWarning}
+                                    {match.gradeWarning}
                                   </span>
                                 )}
                                 {(match.sectionCandidates ?? 0) > 1 && (

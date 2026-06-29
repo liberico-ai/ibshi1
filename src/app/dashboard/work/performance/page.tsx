@@ -47,7 +47,7 @@ export default function PerformancePage() {
           )}
 
           <div className="glass-card p-5">
-            <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>Hiệu suất theo phòng ban</h3>
+            <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>Hiệu suất theo phòng ban</h3>
             <div className="dt-wrapper">
               <table className="data-table">
                 <thead><tr>

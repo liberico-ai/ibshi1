@@ -121,7 +121,7 @@ export default function GRNPage() {
         title="Nhận hàng (GRN)"
         subtitle={`${receipts.length} phiếu nhận`}
         actions={
-          <Button variant="accent" onClick={openReceiveForm}>
+          <Button variant="primary" onClick={openReceiveForm}>
             + Nhận hàng từ PO
           </Button>
         }
@@ -156,7 +156,7 @@ export default function GRNPage() {
         size="lg"
         actions={
           selectedPO && receiveItems.length > 0 ? (
-            <Button variant="accent" onClick={submitReceive} loading={submitting}>
+            <Button variant="primary" onClick={submitReceive} loading={submitting}>
               Xác nhận nhận hàng
             </Button>
           ) : undefined

@@ -54,7 +54,7 @@ export default function MaintenancePage() {
       <PageHeader
         title="Bảo trì thiết bị"
         subtitle={`${records.length} phiếu`}
-        actions={canEdit ? <Button variant="accent" onClick={() => setShowCreate(true)}>+ Tạo phiếu</Button> : undefined}
+        actions={canEdit ? <Button variant="primary" onClick={() => setShowCreate(true)}>+ Tạo phiếu</Button> : undefined}
       />
 
       <div className="grid grid-cols-4 gap-4 stagger-children">
@@ -134,7 +134,7 @@ function CreateMaintModal({ onClose, onCreated }: { onClose: () => void; onCreat
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Tạo</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Tạo</Button>
       </div>
     </Modal>
   )

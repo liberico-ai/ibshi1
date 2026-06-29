@@ -131,7 +131,7 @@ export default function MaterialCodesPage() {
         <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           <table className="w-full text-sm" style={{ minWidth: 1100 }}>
             <thead>
-              <tr style={{ background: '#0a2540' }}>
+              <tr style={{ background: 'var(--ibs-navy)' }}>
                 <th className="text-left px-3 py-2.5 font-semibold text-white text-xs whitespace-nowrap" style={{ width: 140 }}>MÃ VT</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-white text-xs" style={{ width: '22%' }}>TÊN VẬT TƯ</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-white text-xs" style={{ width: 160 }}>PROFILE</th>
@@ -149,17 +149,17 @@ export default function MaterialCodesPage() {
                 const stockNum = Number(m.currentStock) || 0
                 return (
                 <tr key={m.id} className="group hover:bg-blue-50/50 transition-colors" style={{ borderTop: '1px solid var(--border)', background: idx % 2 === 1 ? 'rgba(0,0,0,0.015)' : 'transparent' }}>
-                  <td className="px-3 py-2.5 font-mono text-xs font-bold whitespace-nowrap" style={{ color: '#e63946' }}>
+                  <td className="px-3 py-2.5 font-mono text-xs font-bold whitespace-nowrap" style={{ color: 'var(--ibs-red)' }}>
                     {m.materialCode}
                     {m.isProvisional && <span className="ml-1 text-[10px] px-1 py-0.5 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>tạm</span>}
                   </td>
                   <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--text-primary)' }}>{m.name}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs font-semibold" style={{ color: m.specification ? '#0a2540' : '#d1d5db' }}>{m.specification || '—'}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs font-semibold" style={{ color: m.specification ? 'var(--ibs-navy)' : '#d1d5db' }}>{m.specification || '—'}</td>
                   <td className="px-3 py-2.5 text-xs" style={{ color: m.grade ? '#475569' : '#d1d5db' }}>
                     {m.grade ? <span className="px-1.5 py-0.5 rounded" style={{ background: '#f1f5f9', border: '1px solid #e2e8f0' }}>{m.grade}</span> : '—'}
                   </td>
                   <td className="px-2 py-2.5 text-center text-xs" style={{ color: '#64748b' }}>{m.unit}</td>
-                  <td className="px-3 py-2.5 text-right font-bold tabular-nums" style={{ color: stockNum > 0 ? '#0a2540' : '#9ca3af' }}>{fmt(m.currentStock)}</td>
+                  <td className="px-3 py-2.5 text-right font-bold tabular-nums" style={{ color: stockNum > 0 ? 'var(--ibs-navy)' : '#9ca3af' }}>{fmt(m.currentStock)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-xs" style={{ color: '#64748b' }}>{fmt(m.currentStock)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-xs" style={{ color: '#64748b' }}>{Number(m.unitPrice) > 0 ? `${fmt(m.unitPrice)} đ` : '—'}</td>
                   <td className="px-2 py-2.5 text-center">
@@ -232,7 +232,7 @@ export default function MaterialCodesPage() {
                           </td>
                           <td className="px-2 py-1.5">
                             {s.projectCode ? (
-                              <span className="text-[11px] px-1.5 py-0.5 rounded font-semibold" style={{ background: '#0a2540', color: '#fff' }}>{s.projectCode}</span>
+                              <span className="text-[11px] px-1.5 py-0.5 rounded font-semibold" style={{ background: 'var(--ibs-navy)', color: '#fff' }}>{s.projectCode}</span>
                             ) : (
                               <span className="text-[11px]" style={{ color: '#94a3b8' }}>{s.kind === 'CONSIGNED' ? 'KH cấp' : 'Kho chung'}</span>
                             )}

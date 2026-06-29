@@ -259,7 +259,7 @@ export default function SettingsPage() {
           </Card>
 
           <div className="flex justify-end">
-            <Button variant="accent" onClick={saveConfig} loading={configSaving}>
+            <Button variant="primary" onClick={saveConfig} loading={configSaving}>
               Lưu cấu hình hệ thống
             </Button>
           </div>
@@ -314,7 +314,7 @@ export default function SettingsPage() {
                 <Button variant="ghost" onClick={restartTelegramBot} loading={tgRestarting}>
                   Khởi động lại Bot
                 </Button>
-                <Button variant="accent" onClick={saveTelegramConfig} loading={tgSaving}>
+                <Button variant="primary" onClick={saveTelegramConfig} loading={tgSaving}>
                   Lưu cấu hình Telegram
                 </Button>
               </div>

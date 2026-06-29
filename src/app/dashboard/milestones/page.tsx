@@ -73,7 +73,7 @@ export default function MilestonePage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🎯 Cột mốc & Thanh toán theo tiến độ</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Cột mốc & Thanh toán theo tiến độ</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{completedMs}/{totalMs} cột mốc hoàn thành</p>
         </div>
         <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm cột mốc</button>

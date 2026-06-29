@@ -133,12 +133,12 @@ export async function runDailyDigest() {
   const dateStr = dateFmt.format(now)
 
   const lines: string[] = []
-  lines.push(`📋 <b>GIAO BAN NHANH — ${dateStr}</b>`)
+  lines.push(`<b>GIAO BAN NHANH — ${dateStr}</b>`)
   const summary = [
-    totalOverdue > 0 ? `🔴 ${totalOverdue} quá hạn` : null,
-    totalDueSoon > 0 ? `🟡 ${totalDueSoon} sắp hạn` : null,
-    totalExec > 0 ? `🔺 ${totalExec} cần BLĐ quyết` : null,
-    totalBlocked > 0 ? `🔒 ${totalBlocked} tắc` : null,
+    totalOverdue > 0 ? `${totalOverdue} quá hạn` : null,
+    totalDueSoon > 0 ? `${totalDueSoon} sắp hạn` : null,
+    totalExec > 0 ? `${totalExec} cần BLĐ quyết` : null,
+    totalBlocked > 0 ? `${totalBlocked} tắc` : null,
     `${projectIds.size} dự án`,
   ].filter(Boolean).join(' · ')
   lines.push(summary)
@@ -147,61 +147,61 @@ export async function runDailyDigest() {
     const parts: string[] = []
     if (hotProject) parts.push(`DA nhiều QH nhất: ${escapeHtml(hotProject[0])} (${hotProject[1]})`)
     if (hotAssignee) parts.push(`người: ${escapeHtml(hotAssignee[0])} (${hotAssignee[1]})`)
-    lines.push(`🔥 <b>Điểm nóng:</b> ${parts.join('; ')}`)
+    lines.push(`<b>Điểm nóng:</b> ${parts.join('; ')}`)
   }
 
-  // 📅 Lịch họp hôm nay
+  // Lịch họp hôm nay
   if (todayMeetings.length > 0) {
     lines.push('')
-    lines.push(`📅 <b>LỊCH HỌP HÔM NAY (${todayMeetings.length})</b>`)
+    lines.push(`<b>LỊCH HỌP HÔM NAY (${todayMeetings.length})</b>`)
     for (const m of todayMeetings) {
       const time = formatTimeVN(m.startsAt)
       const loc = m.location ? escapeHtml(m.location) : '—'
       const attendees = m.invites.map(inv => meetingNameById.get(inv.userId) || 'NV').join(', ')
-      lines.push(`• ${time} ${escapeHtml(m.title)} · 📍 ${loc} · 👥 ${escapeHtml(attendees)}`)
+      lines.push(`• ${time} ${escapeHtml(m.title)} · ${loc} · ${escapeHtml(attendees)}`)
     }
   }
 
-  // 🔺 Cần BLĐ quyết
+  // Cần BLĐ quyết
   if (totalExec > 0) {
     lines.push('')
-    lines.push(`🔺 <b>CẦN BLĐ QUYẾT (${totalExec})</b>`)
+    lines.push(`<b>CẦN BLĐ QUYẾT (${totalExec})</b>`)
     for (const t of execTasks) {
       const proj = t.projCode ? `${escapeHtml(t.projCode)} ` : ''
       const q = t.escalateQuestion ? ` — "${escapeHtml(t.escalateQuestion.slice(0, 60))}"` : ''
       const ty = t.escalateType ? ` [${escapeHtml(t.escalateType)}]` : ''
-      lines.push(`• ${proj}${escapeHtml(t.title.slice(0, 40))} · 👤 ${escapeHtml(t.assignee)}${ty}${q}`)
+      lines.push(`• ${proj}${escapeHtml(t.title.slice(0, 40))} · ${escapeHtml(t.assignee)}${ty}${q}`)
     }
   }
 
-  // 🔒 Tắc
+  // Tắc
   if (totalBlocked > 0) {
     lines.push('')
-    lines.push(`🔒 <b>TẮC (${totalBlocked})</b>`)
+    lines.push(`<b>TẮC (${totalBlocked})</b>`)
     for (const t of blockedTasks) {
       const proj = t.projCode ? `${escapeHtml(t.projCode)} ` : ''
       lines.push(`• ${proj}${escapeHtml(t.title.slice(0, 40))} — chờ ${escapeHtml(t.resolverName)} · tắc ${t.blockedDays}d`)
     }
   }
 
-  // 🔴 Quá hạn nặng (≥7d)
+  // Quá hạn nặng (>=7d)
   const heavyOverdue = overdueTasks.filter(t => t.daysOverdue >= 7)
   const lightOverdue = overdueTasks.filter(t => t.daysOverdue < 7)
   if (heavyOverdue.length > 0) {
     lines.push('')
-    lines.push(`🔴 <b>QUÁ HẠN NẶNG ≥7 ngày (${heavyOverdue.length})</b>`)
+    lines.push(`<b>QUÁ HẠN NẶNG >=7 ngày (${heavyOverdue.length})</b>`)
     const MAX_LINES = 8
     for (const t of heavyOverdue.slice(0, MAX_LINES)) {
       const proj = t.projCode ? `${escapeHtml(t.projCode)} ` : ''
-      lines.push(`• ${proj}${escapeHtml(t.title.slice(0, 40))} · 👤 ${escapeHtml(t.assignee)} (+${t.daysOverdue}d)`)
+      lines.push(`• ${proj}${escapeHtml(t.title.slice(0, 40))} · ${escapeHtml(t.assignee)} (+${t.daysOverdue}d)`)
     }
     if (heavyOverdue.length > MAX_LINES) lines.push(`  … và ${heavyOverdue.length - MAX_LINES} việc QH nặng khác`)
   }
 
   // Remaining overdue + due soon summary
   const remaining: string[] = []
-  if (lightOverdue.length > 0) remaining.push(`🔴 ${lightOverdue.length} quá hạn dưới 7d`)
-  if (totalDueSoon > 0) remaining.push(`🟡 ${totalDueSoon} sắp đến hạn`)
+  if (lightOverdue.length > 0) remaining.push(`${lightOverdue.length} quá hạn dưới 7d`)
+  if (totalDueSoon > 0) remaining.push(`${totalDueSoon} sắp đến hạn`)
   if (remaining.length > 0) {
     lines.push('')
     lines.push(remaining.join(' · '))
@@ -209,12 +209,12 @@ export async function runDailyDigest() {
 
   if (totalOverdue === 0 && totalDueSoon === 0 && totalExec === 0 && totalBlocked === 0) {
     lines.push('')
-    lines.push('✅ Không có việc quá hạn, sắp hạn, tắc hoặc cần quyết định.')
+    lines.push('Không có việc quá hạn, sắp hạn, tắc hoặc cần quyết định.')
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ibshi1.lab.liberico.com.vn'
   lines.push('')
-  lines.push(`📊 Xem chi tiết: <a href="${appUrl}/dashboard/work/briefing">Giao ban tuần</a>`)
+  lines.push(`Xem chi tiết: <a href="${appUrl}/dashboard/work/briefing">Giao ban tuần</a>`)
 
   const message = lines.join('\n')
   if (message.length > 4096) {

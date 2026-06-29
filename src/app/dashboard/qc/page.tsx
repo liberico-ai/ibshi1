@@ -94,7 +94,7 @@ export default function QCPage() {
       <PageHeader
         title="Quản lý Chất lượng (QC)"
         subtitle="Biên bản kiểm tra chất lượng"
-        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Tạo biên bản</Button>}
+        actions={<Button variant="primary" onClick={() => setShowCreate(!showCreate)}>+ Tạo biên bản</Button>}
       />
 
       {/* KPI Summary */}
@@ -280,7 +280,7 @@ function CreateInspectionModal({ open, projects, onClose, onCreated }: {
         </div>
         <div className="flex gap-3 justify-end">
           <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
-          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo'}</Button>
+          <Button variant="primary" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo'}</Button>
         </div>
       </form>
     </Modal>

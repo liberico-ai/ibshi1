@@ -217,7 +217,7 @@ function ExpandedDncRow({ taskId, onComplete }: { taskId: string, onComplete: ()
             {successMsg && <p className="text-sm text-green-600 font-medium">{successMsg}</p>}
           </div>
           <Button 
-            variant="accent" 
+            variant="primary" 
             onClick={handleSubmit} 
             disabled={submitting || allFulfilled}
             className={allFulfilled ? 'opacity-50' : ''}

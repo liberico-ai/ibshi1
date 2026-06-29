@@ -116,6 +116,14 @@ export const STATUS_COLORS = {
     REJECTED:         { bg: '#FDECEA', text: '#C8372B', label: 'Từ chối' },
     IMPLEMENTED:      { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đã áp dụng' },
   },
+  invoice: {
+    DRAFT:            { bg: '#F1F3F5', text: '#64748B', label: 'Nháp' },
+    SENT:             { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đã gửi' },
+    PARTIALLY_PAID:   { bg: '#FBF1DF', text: '#C97A0E', label: 'Thanh toán 1 phần' },
+    PAID:             { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã thanh toán' },
+    OVERDUE:          { bg: '#FDECEA', text: '#C8372B', label: 'Quá hạn' },
+    CANCELLED:        { bg: '#F1F3F5', text: '#9AA0A8', label: 'Đã hủy' },
+  },
   flag: {
     overdue:          { bg: '#FDECEA', text: '#C8372B', label: 'Quá hạn' },
     escalated:        { bg: '#FDECEA', text: '#E1251B', label: 'Leo thang' },

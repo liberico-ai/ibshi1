@@ -7,7 +7,7 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // Skip Telegram bot in local dev to avoid long-polling blocking the server
     if (process.env.SKIP_TELEGRAM === '1') {
-      console.log('🤖 Telegram bot skipped (SKIP_TELEGRAM=1)')
+      console.log('Telegram bot skipped (SKIP_TELEGRAM=1)')
       return
     }
     // Delay to let the server + DB fully initialize
@@ -17,13 +17,13 @@ export async function register() {
         const { startPolling } = await import('@/lib/telegram')
         await startPolling()
       } catch (err) {
-        console.error('🤖 Telegram instrumentation error:', err)
+        console.error('Telegram instrumentation error:', err)
       }
       try {
         const { startScheduler } = await import('@/lib/cron-scheduler')
         startScheduler()
       } catch (err) {
-        console.error('📅 Cron scheduler instrumentation error:', err)
+        console.error('Cron scheduler instrumentation error:', err)
       }
     }, 3_000)
   }

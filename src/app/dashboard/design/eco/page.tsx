@@ -152,7 +152,7 @@ export default function ECOPage() {
         subtitle="Theo dõi yêu cầu thay đổi kỹ thuật"
         actions={
           canCreate ? (
-            <Button variant="accent" onClick={openForm}>
+            <Button variant="primary" onClick={openForm}>
               + Tạo ECO
             </Button>
           ) : undefined
@@ -199,7 +199,7 @@ export default function ECOPage() {
             description="Tạo ECO mới để theo dõi thay đổi thiết kế"
             action={
               canCreate ? (
-                <Button variant="accent" onClick={openForm}>
+                <Button variant="primary" onClick={openForm}>
                   + Tạo ECO
                 </Button>
               ) : undefined
@@ -332,7 +332,7 @@ function ECOCard({
             <div className="flex items-center gap-2 mt-3">
               {canSubmit && (
                 <Button
-                  variant="accent"
+                  variant="primary"
                   size="sm"
                   loading={transitioning}
                   onClick={() => onTransition(eco.id, 'SUBMITTED')}
@@ -343,7 +343,7 @@ function ECOCard({
               {canReview && (
                 <>
                   <Button
-                    variant="accent"
+                    variant="primary"
                     size="sm"
                     loading={transitioning}
                     onClick={() => onTransition(eco.id, 'APPROVED')}
@@ -362,7 +362,7 @@ function ECOCard({
               )}
               {canImplement && (
                 <Button
-                  variant="accent"
+                  variant="primary"
                   size="sm"
                   loading={transitioning}
                   onClick={() => onTransition(eco.id, 'IMPLEMENTED')}
@@ -443,7 +443,7 @@ function CreateECOModal({
             Hủy
           </Button>
           <Button
-            variant="accent"
+            variant="primary"
             loading={submitting}
             onClick={submit}
           >

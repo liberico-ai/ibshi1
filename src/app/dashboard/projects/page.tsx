@@ -69,15 +69,15 @@ export default function ProjectsPage() {
       <PageHeader
         title="Quản lý Dự án"
         subtitle={`${pagination.total} dự án`}
-        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Tạo dự án</Button>}
+        actions={<Button variant="primary" onClick={() => setShowCreate(!showCreate)}>+ Tạo dự án</Button>}
       />
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
-        <StatCard label="Tổng dự án" value={pagination.total} color="#0a2540" />
-        <StatCard label="Đang hoạt động" value={activeCount} color="#0ea5e9" icon={<span style={{ fontSize: 20 }}>⚡</span>} />
-        <StatCard label="Hoàn thành" value={completedCountP} color="#16a34a" />
-        <StatCard label="Tạm ngưng" value={onHoldCount} color="#f59e0b" icon={<span style={{ fontSize: 20 }}>⏸️</span>} />
+        <StatCard label="Tổng dự án" value={pagination.total} color="var(--ibs-red)" />
+        <StatCard label="Đang hoạt động" value={activeCount} color="var(--info)" />
+        <StatCard label="Hoàn thành" value={completedCountP} color="var(--success)" />
+        <StatCard label="Tạm ngưng" value={onHoldCount} color="var(--warning)" />
       </div>
 
       {showCreate && <CreateProjectForm onClose={() => setShowCreate(false)} onCreated={(p: Project) => {
@@ -225,7 +225,7 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
 
         <div className="md:col-span-2 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--space-md)' }}>
           <Button variant="outline" onClick={onClose} type="button">Hủy</Button>
-          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo dự án →'}</Button>
+          <Button variant="primary" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo dự án →'}</Button>
         </div>
       </form>
     </Card>

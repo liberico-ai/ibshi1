@@ -92,7 +92,7 @@ export default function UsersPage() {
       <PageHeader
         title="Quản lý Người dùng"
         subtitle={`${filtered.length}/${allUsers.length} người dùng · ${allUsers.filter(u => u.isActive).length} active · ${allUsers.filter(u => !u.isActive).length} inactive`}
-        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Thêm người dùng</Button>}
+        actions={<Button variant="primary" onClick={() => setShowCreate(!showCreate)}>+ Thêm người dùng</Button>}
       />
 
       {showCreate && <CreateUserForm onClose={() => setShowCreate(false)} onCreated={(u) => {
@@ -173,10 +173,10 @@ export default function UsersPage() {
                   <div className="flex gap-1.5 justify-center">
                     <button onClick={() => setEditUser(u)} title="Sửa"
                       className="w-7 h-7 rounded-lg flex items-center justify-center text-xs cursor-pointer transition-all hover:scale-110"
-                      style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)' }}>✏️</button>
+                      style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)' }}></button>
                     <button onClick={() => setResetUser(u)} title="Reset mật khẩu"
                       className="w-7 h-7 rounded-lg flex items-center justify-center text-xs cursor-pointer transition-all hover:scale-110"
-                      style={{ background: '#fef3c7', color: '#d97706' }}>🔑</button>
+                      style={{ background: '#fef3c7', color: '#d97706' }}></button>
                     <button onClick={() => deleteUser(u)} disabled={u.isActive}
                       title={u.isActive ? 'Vô hiệu hoá user trước khi xoá' : 'Xoá vĩnh viễn'}
                       className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all ${u.isActive ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110'}`}
@@ -184,7 +184,7 @@ export default function UsersPage() {
                         background: u.isActive ? '#f3f4f6' : '#fee2e2',
                         color: u.isActive ? '#9ca3af' : '#dc2626',
                         opacity: u.isActive ? 0.4 : 1,
-                      }}>🗑️</button>
+                      }}></button>
                   </div>
                 </td>
               </tr>
@@ -229,7 +229,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: UserItem; onClose: ()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
       <div className="card p-6 w-full max-w-lg animate-fade-in-scale" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>✏️ Sửa thông tin: {user.username}</h3>
+        <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Sửa thông tin: {user.username}</h3>
         <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>ID: {user.id}</p>
         {error && <div className="mb-3 p-2 rounded-lg text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>{error}</div>}
         <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
@@ -260,7 +260,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: UserItem; onClose: ()
             </select></div>
           <div className="col-span-2 flex gap-3 justify-end">
             <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
-            <Button variant="accent" type="submit" loading={submitting}>
+            <Button variant="primary" type="submit" loading={submitting}>
               {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
             </Button>
           </div>
@@ -290,7 +290,7 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: UserItem; onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
       <div className="card p-6 w-full max-w-sm animate-fade-in-scale" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>🔑 Reset mật khẩu</h3>
+        <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Reset mật khẩu</h3>
         <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>User: <strong>{user.username}</strong> ({user.fullName})</p>
         {error && <div className="mb-3 p-2 rounded-lg text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -299,7 +299,7 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: UserItem; onClose
               onChange={e => setNewPassword(e.target.value)} required minLength={4} /></div>
           <div className="flex gap-3 justify-end">
             <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
-            <Button variant="accent" type="submit" loading={submitting}>
+            <Button variant="primary" type="submit" loading={submitting}>
               {submitting ? 'Đang xử lý...' : 'Reset mật khẩu'}
             </Button>
           </div>
@@ -360,7 +360,7 @@ function CreateUserForm({ onClose, onCreated }: { onClose: () => void; onCreated
           </select></div>
         <div className="col-span-2 flex gap-3 justify-end">
           <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
-          <Button variant="accent" type="submit" loading={submitting}>
+          <Button variant="primary" type="submit" loading={submitting}>
             {submitting ? 'Đang tạo...' : 'Thêm người dùng'}
           </Button>
         </div>

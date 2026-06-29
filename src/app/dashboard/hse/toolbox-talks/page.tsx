@@ -43,7 +43,7 @@ export default function ToolboxTalksPage() {
       <PageHeader
         title="Họp an toàn đầu ca"
         subtitle={`${talks.length} buổi`}
-        actions={canEdit ? <Button variant="accent" onClick={() => setShowCreate(true)}>+ Tạo buổi</Button> : undefined}
+        actions={canEdit ? <Button variant="primary" onClick={() => setShowCreate(true)}>+ Tạo buổi</Button> : undefined}
       />
 
       <div className="grid grid-cols-3 gap-4 stagger-children">
@@ -114,7 +114,7 @@ function CreateTalkModal({ onClose, onCreated }: { onClose: () => void; onCreate
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Tạo</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Tạo</Button>
       </div>
     </Modal>
   )

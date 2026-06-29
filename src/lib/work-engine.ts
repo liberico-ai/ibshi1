@@ -140,14 +140,14 @@ async function notifyAssignees(
     )
     const url = process.env.NEXT_PUBLIC_APP_URL || ''
     const msg = [
-      `📋 <b>GIAO VIỆC MỚI</b>`,
+      `<b>GIAO VIỆC MỚI</b>`,
       '━━━━━━━━━━━━━━━━',
-      opts?.projectCode ? `📁 Dự án: <b>${escapeHtml(opts.projectCode)}</b>${opts.projectName ? ` — ${escapeHtml(opts.projectName)}` : ''}` : null,
-      `📌 Việc: <b>${escapeHtml(title)}</b>`,
-      `👥 Giao cho: ${mentions.join(', ')}`,
-      opts?.createdByName ? `📝 Người giao: ${escapeHtml(opts.createdByName)}` : null,
-      opts?.deadline ? `⏰ Deadline: <b>${formatDeadline(opts.deadline)}</b>` : null,
-      url ? `🔗 <a href="${url}/dashboard/work/${taskId}">Xem chi tiết</a>` : null,
+      opts?.projectCode ? `Dự án: <b>${escapeHtml(opts.projectCode)}</b>${opts.projectName ? ` — ${escapeHtml(opts.projectName)}` : ''}` : null,
+      `Việc: <b>${escapeHtml(title)}</b>`,
+      `Giao cho: ${mentions.join(', ')}`,
+      opts?.createdByName ? `Người giao: ${escapeHtml(opts.createdByName)}` : null,
+      opts?.deadline ? `Deadline: <b>${formatDeadline(opts.deadline)}</b>` : null,
+      url ? `<a href="${url}/dashboard/work/${taskId}">Xem chi tiết</a>` : null,
     ].filter(Boolean).join('\n')
     await sendGroupMessage(msg)
   } catch (e) { console.error('notifyAssignees Telegram error:', e) }
@@ -563,7 +563,7 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
       prisma.task.update({ where: { id: taskId }, data: updateData }),
       prisma.taskHistory.create({ data: { taskId, action: 'STATUS_RETURNED', byUserId, reason: input.reason, meta: historyMeta } }),
       ...assigneeUserIds.map(uid =>
-        prisma.notification.create({ data: { userId: uid, title: `⚠️ Trả lại: ${task.title}`, message: input.reason || 'Công việc bị trả lại.', type: 'task_returned', linkUrl: `/dashboard/work/${taskId}` } })
+        prisma.notification.create({ data: { userId: uid, title: `Trả lại: ${task.title}`, message: input.reason || 'Công việc bị trả lại.', type: 'task_returned', linkUrl: `/dashboard/work/${taskId}` } })
       ),
     ])
   } else if (input.status === TASK_STATUS.CANCELLED) {
@@ -601,7 +601,7 @@ export async function returnTask(taskId: string, userId: string, roleCode: strin
     prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.RETURNED, returnCount: { increment: 1 } } }),
     prisma.taskHistory.create({ data: { taskId, action: 'RETURNED', byUserId: userId, fromUserId: task.createdBy, reason } }),
     prisma.notification.create({
-      data: { userId: task.createdBy, title: `⚠️ Trả lại (sai phạm vi): ${task.title}`, message: `Lý do: ${reason}`, type: 'task_returned', linkUrl: `/dashboard/work/${taskId}` },
+      data: { userId: task.createdBy, title: `Trả lại (sai phạm vi): ${task.title}`, message: `Lý do: ${reason}`, type: 'task_returned', linkUrl: `/dashboard/work/${taskId}` },
     }),
   ])
   emitTaskUpdated(taskId, prevStatus).catch(() => {})

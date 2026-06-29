@@ -110,7 +110,7 @@ export default function WorkOverviewPage() {
 
       {agg && (
         <div className="grid gap-3 stagger-children" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(155px,1fr))' }}>
-          <KPICard label="Dự án" value={agg.projectCount} accentColor="#0a2540" />
+          <KPICard label="Dự án" value={agg.projectCount} accentColor="var(--ibs-navy)" />
           <KPICard label="Tiến độ chung" value={`${agg.overallProgress}%`} accentColor={SEMANTIC_COLORS.info.solid} />
           <KPICard label="Đang chạy" value={agg.totalActive} accentColor={SEMANTIC_COLORS.warning.solid} />
           <KPICard label="Quá hạn" value={agg.totalOverdue} accentColor={agg.totalOverdue > 0 ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid} />
@@ -197,7 +197,7 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
       <div className="grid gap-3 stagger-children" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))' }}>
         <KPICard label="Tiến độ tổng thể" value={`${ov.progress}%`} accentColor={SEMANTIC_COLORS.info.solid} />
         <div className="glass-card p-4 cursor-pointer" onClick={() => applyFilter({ label: 'all', fn: () => true })}
-          style={{ borderColor: filter?.label === 'all' ? '#0a2540' : undefined, borderWidth: filter?.label === 'all' ? 2 : undefined }}>
+          style={{ borderColor: filter?.label === 'all' ? 'var(--ibs-navy)' : undefined, borderWidth: filter?.label === 'all' ? 2 : undefined }}>
           <div className="text-xs uppercase" style={{ color: 'var(--text-muted)' }}>Công việc</div>
           <div className="text-2xl font-extrabold mt-1">
             <span className="cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); applyFilter({ label: 'done', fn: (t) => t.status === 'DONE' }) }} style={{ color: SEMANTIC_COLORS.success.solid }}>{ov.completedTasks}</span>
@@ -215,7 +215,7 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
 
       {m.demand > 0 && (
         <div className="glass-card p-5">
-          <h3 className="font-semibold mb-1" style={{ color: 'var(--navy,#0a2540)' }}>Vật tư mua sắm (tỷ đồng)</h3>
+          <h3 className="font-semibold mb-1" style={{ color: 'var(--text-heading)' }}>Vật tư mua sắm (tỷ đồng)</h3>
           <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Từ Budget vật tư: nhu cầu (BOM) → đã đặt (PO) → đã nhận (GRN).</p>
           <div className="space-y-2">
             {fbar('Nhu cầu vật tư (BOM)', m.demand, '#cbd5e1')}
@@ -227,7 +227,7 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
       )}
 
       <div className="glass-card p-5">
-        <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>Tiến độ theo giai đoạn</h3>
+        <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>Tiến độ theo giai đoạn</h3>
         {ov.phases.map((p) => (
           <div key={p.phase} className="flex items-center gap-3 mb-2 text-sm">
             <span style={{ width: 160, flexShrink: 0 }}>{PHASE_NAME[p.phase] || p.phase}</span>
@@ -239,7 +239,7 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
       </div>
 
       <div className="glass-card p-5">
-        <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>Công việc theo phòng ban</h3>
+        <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>Công việc theo phòng ban</h3>
         <div className="dt-wrapper">
           <table className="data-table">
             <thead><tr>
@@ -263,7 +263,7 @@ function ProjectDetail({ data: ov, router }: { data: DetailData; router: ReturnT
 
       <div ref={tableRef} className="glass-card p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold" style={{ color: 'var(--navy,#0a2540)' }}>
+          <h3 className="font-semibold" style={{ color: 'var(--text-heading)' }}>
             {filter ? `Công việc lọc (${shown.length})` : `Tất cả công việc (${allTasks.length})`}
           </h3>
           {filter && <Button variant="outline" size="sm" onClick={() => setFilter(null)}>Bỏ lọc</Button>}

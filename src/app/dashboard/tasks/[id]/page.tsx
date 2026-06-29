@@ -1758,7 +1758,7 @@ export default function TaskDetailPage() {
           <span className="flex items-center gap-1.5">
             {task.assignee ? task.assignee.fullName : <span className="italic opacity-60">Chưa phân công</span>}
             {canAssignTask && isActive && (
-              <Button variant="accent" size="sm" onClick={() => setShowAssignModal(true)}>Phân công</Button>
+              <Button variant="primary" size="sm" onClick={() => setShowAssignModal(true)}>Phân công</Button>
             )}
           </span>
         </div>
@@ -2028,7 +2028,7 @@ export default function TaskDetailPage() {
                         {totalEst > 0 ? (
                           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontSize: '0.85rem' }}>
                             {[
-                              { label: 'I. Chi phí vật tư', value: totalMat, color: '#e63946' },
+                              { label: 'I. Chi phí vật tư', value: totalMat, color: '#E1251B' },
                               { label: 'II. Chi phí nhân công', value: totalLab, color: '#f59e0b' },
                               { label: 'III. Chi phí dịch vụ', value: totalSvc, color: '#3b82f6' },
                               { label: 'IV. Chi phí chung', value: totalOvh, color: '#8b5cf6' },
@@ -2702,7 +2702,7 @@ export default function TaskDetailPage() {
                     ) : (
                       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontSize: '0.85rem' }}>
                         {[
-                          { label: 'I. Chi phí vật tư', value: totalMat, color: '#e63946' },
+                          { label: 'I. Chi phí vật tư', value: totalMat, color: '#E1251B' },
                           { label: 'II. Chi phí nhân công', value: totalLab, color: '#f59e0b' },
                           { label: 'III. Chi phí dịch vụ', value: totalSvc, color: '#3b82f6' },
                           { label: 'IV. Chi phí chung', value: totalOvh, color: '#8b5cf6' },

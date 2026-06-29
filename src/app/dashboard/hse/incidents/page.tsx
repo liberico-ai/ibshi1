@@ -64,7 +64,7 @@ export default function IncidentsPage() {
       <PageHeader
         title="Sự cố An toàn"
         subtitle={`${incidents.length} sự cố`}
-        actions={canEdit ? <Button variant="accent" onClick={() => setShowCreate(true)}>+ Báo sự cố</Button> : undefined}
+        actions={canEdit ? <Button variant="primary" onClick={() => setShowCreate(true)}>+ Báo sự cố</Button> : undefined}
       />
 
       <div className="grid grid-cols-4 gap-4 stagger-children">
@@ -149,7 +149,7 @@ function CreateIncidentModal({ onClose, onCreated }: { onClose: () => void; onCr
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Báo</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Báo</Button>
       </div>
     </Modal>
   )

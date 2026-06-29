@@ -65,7 +65,7 @@ export default function EquipmentPage() {
       <PageHeader
         title="Thiết bị & Cơ giới"
         subtitle={`${equipment.length} thiết bị`}
-        actions={canEdit ? <Button variant="accent" onClick={() => setShowCreate(true)}>+ Thêm TB</Button> : undefined}
+        actions={canEdit ? <Button variant="primary" onClick={() => setShowCreate(true)}>+ Thêm TB</Button> : undefined}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 stagger-children">
@@ -167,7 +167,7 @@ function CreateEquipmentModal({ onClose, onCreated }: { onClose: () => void; onC
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Thêm</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Thêm</Button>
       </div>
     </Modal>
   )

@@ -118,7 +118,7 @@ export async function GET(request: Request) {
             await prisma.notification.createMany({
               data: users.map((u) => ({
                 userId: u.id,
-                title: `📋 Nghiệm thu tuần W${weekNumber}: ${project.projectCode}`,
+                title: `Nghiệm thu tuần W${weekNumber}: ${project.projectCode}`,
                 message: `Phiếu nghiệm thu khối lượng tuần ${weekNumber} — ${project.projectName} đã sẵn sàng.`,
                 type: 'task_assigned',
                 linkUrl: `/dashboard/work/${newTask.id}`,

@@ -87,10 +87,10 @@ export default function DashboardPage() {
 
       {/* ═══ Stats Grid ═══ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
-        <StatCard label="Tổng task" value={stats.totalTasks} color="#0a2540" icon={<BarChart size={24} stroke="#0a2540" />} />
-        <StatCard label="Đang xử lý" value={stats.inProgressTasks} color="#0ea5e9" icon={<Zap size={24} stroke="#0ea5e9" />} />
-        <StatCard label="Hoàn thành" value={stats.completedTasks} color="#059669" icon={<CheckCircle size={24} stroke="#059669" />} />
-        <StatCard label="Quá hạn" value={stats.overdueTasks} color="#dc2626" icon={<AlertCircle size={24} stroke="#dc2626" />} accent />
+        <StatCard label="Tổng task" value={stats.totalTasks} color="var(--ibs-red)" icon={<BarChart size={24} />} />
+        <StatCard label="Đang xử lý" value={stats.inProgressTasks} color="var(--info)" icon={<Zap size={24} />} />
+        <StatCard label="Hoàn thành" value={stats.completedTasks} color="var(--success)" icon={<CheckCircle size={24} />} />
+        <StatCard label="Quá hạn" value={stats.overdueTasks} color="var(--danger)" icon={<AlertCircle size={24} />} accent />
       </div>
 
       {/* ═══ Module Overview ═══ */}

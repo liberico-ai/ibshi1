@@ -97,7 +97,7 @@ export default function ITPPage() {
       <PageHeader
         title="Kế hoạch Kiểm tra (ITP)"
         subtitle="Lập và theo dõi kế hoạch kiểm tra"
-        actions={canCreate ? <Button variant="accent" onClick={openForm}>+ Tạo ITP</Button> : undefined}
+        actions={canCreate ? <Button variant="primary" onClick={openForm}>+ Tạo ITP</Button> : undefined}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
@@ -276,7 +276,7 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>
           {submitting ? 'Đang tạo...' : 'Tạo ITP'}
         </Button>
       </div>

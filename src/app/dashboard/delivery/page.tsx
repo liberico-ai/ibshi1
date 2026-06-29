@@ -102,7 +102,7 @@ export default function DeliveryPage() {
         filters={STATUS_FILTERS}
         value={statusFilter}
         onChange={setStatusFilter}
-        actions={canCreate ? <Button variant="accent" onClick={() => router.push('/dashboard/logistics/packing-lists')}>+ Tạo kiện</Button> : undefined}
+        actions={canCreate ? <Button variant="primary" onClick={() => router.push('/dashboard/logistics/packing-lists')}>+ Tạo kiện</Button> : undefined}
       />
 
       <div className="dt-wrapper">

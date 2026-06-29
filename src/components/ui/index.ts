@@ -34,7 +34,7 @@ export type { TimelineProps, TimelineItem } from './Timeline'
 export { DiffTable } from './DiffTable'
 export type { DiffTableProps, DiffRow } from './DiffTable'
 
-export { EmptyState } from './EmptyState'
+export { EmptyState, FilteredEmpty } from './EmptyState'
 export type { EmptyStateProps } from './EmptyState'
 
 export { Pagination } from './Pagination'

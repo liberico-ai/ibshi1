@@ -75,7 +75,7 @@ export default function LoginPage() {
 
         {/* Red accent edge */}
         <div className="absolute top-0 right-0 w-[2px] h-full" style={{
-          background: 'linear-gradient(to bottom, transparent, #e63946 20%, #e63946 80%, transparent)',
+          background: 'linear-gradient(to bottom, transparent, var(--ibs-red) 20%, var(--ibs-red) 80%, transparent)',
         }} />
 
         {/* ── Content layout: top logo, center headline, bottom features ── */}
@@ -113,7 +113,7 @@ export default function LoginPage() {
               color: 'white', marginBottom: '14px', letterSpacing: '-0.02em',
               whiteSpace: 'nowrap',
             }}>
-              Quản lý <span style={{ color: '#e63946' }}>Chuỗi sản xuất</span> thông minh
+              Quản lý <span style={{ color: 'var(--ibs-red)' }}>Chuỗi sản xuất</span> thông minh
             </h1>
             <p style={{
               fontSize: '14px', color: 'rgba(255,255,255,0.45)', lineHeight: 1.8,
@@ -192,7 +192,7 @@ export default function LoginPage() {
               <Image src="/ibs-logo.jpeg" alt="IBS Logo" width={72} height={72}
                 className="object-contain" style={{ padding: '8px' }} />
             </div>
-            <h1 className="text-xl font-extrabold" style={{ color: '#0a2540' }}>IBS-ERP</h1>
+            <h1 className="text-xl font-extrabold" style={{ color: 'var(--text-heading)' }}>IBS-ERP</h1>
             <p className="text-xs mt-1" style={{ color: '#64748b' }}>Heavy Industry Management</p>
           </div>
 
@@ -207,7 +207,7 @@ export default function LoginPage() {
 
             {/* Form header */}
             <div style={{ marginBottom: '28px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#0a2540' }}>Đăng nhập</h2>
+              <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-heading)' }}>Đăng nhập</h2>
               <p style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
                 Nhập thông tin tài khoản để truy cập hệ thống
               </p>
@@ -216,7 +216,7 @@ export default function LoginPage() {
             {/* Error */}
             {error && (
               <div className="mb-4 p-3 rounded-lg text-sm font-medium animate-fade-in flex items-center gap-2"
-                style={{ background: '#fef2f2', border: '1px solid #fee2e2', color: '#e63946' }}>
+                style={{ background: '#fef2f2', border: '1px solid #fee2e2', color: 'var(--danger)' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 {error}
               </div>
@@ -264,7 +264,7 @@ export default function LoginPage() {
                 style={{
                   width: '100%', padding: '13px', fontSize: '14px', fontWeight: 700,
                   cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
-                  background: loading ? '#94a3b8' : '#e63946',
+                  background: loading ? '#94a3b8' : 'var(--ibs-red)',
                   color: 'white', border: 'none', borderRadius: '10px',
                   boxShadow: loading ? 'none' : '0 4px 14px rgba(230, 57, 70, 0.35)', transition: 'all 0.2s ease',
                 }}>

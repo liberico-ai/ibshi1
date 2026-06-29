@@ -241,7 +241,7 @@ function CreateInner() {
               initialTemplate={selectedTemplate}
             />
 
-            {error && <div className="text-sm mt-3" style={{ color: '#e63946' }}>{error}</div>}
+            {error && <div className="text-sm mt-3" style={{ color: 'var(--danger)' }}>{error}</div>}
 
             <div className="flex gap-3 mt-4" style={{ position: 'sticky', bottom: 0, padding: '12px 0', background: 'var(--bg-primary)', zIndex: 10 }}>
               <button
@@ -288,7 +288,7 @@ function CreateInner() {
       <div className="space-y-4">
         {/* ── ① Nội dung công việc ── */}
         <div className="rounded-xl p-5" style={sectionStyle}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>① Nội dung công việc</h3>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>① Nội dung công việc</h3>
           <div className="space-y-3">
             <div>
               <label className="text-sm font-semibold">Dự án</label>
@@ -317,7 +317,7 @@ function CreateInner() {
         {/* ── ② Biểu mẫu (tuỳ chọn) ── */}
         {allowedTemplates.length === 0 ? (
           <div className="rounded-xl p-4" style={sectionStyle}>
-            <h3 className="font-semibold mb-1" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>② Biểu mẫu (tuỳ chọn)</h3>
+            <h3 className="font-semibold mb-1" style={{ color: 'var(--text-heading)', margin: 0 }}>② Biểu mẫu (tuỳ chọn)</h3>
             <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
               (Vai trò của bạn không có biểu mẫu để đính kèm — tạo việc thường, người xử lý sẽ chọn biểu mẫu phù hợp)
             </div>
@@ -325,7 +325,7 @@ function CreateInner() {
         ) : (
           <div className="rounded-xl p-5" style={sectionStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h3 className="font-semibold" style={{ color: 'var(--navy,#0a2540)', margin: 0 }}>② Biểu mẫu (tuỳ chọn)</h3>
+              <h3 className="font-semibold" style={{ color: 'var(--text-heading)', margin: 0 }}>② Biểu mẫu (tuỳ chọn)</h3>
               {selectedTemplate && (
                 <button onClick={() => setSelectedTemplate(null)} className="text-xs px-2.5 py-1 rounded-lg"
                   style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer', background: 'none' }}>
@@ -364,7 +364,7 @@ function CreateInner() {
 
         {/* ── ③ Thời hạn & tài liệu ── */}
         <div className="rounded-xl p-5" style={sectionStyle}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>③ Thời hạn & tài liệu</h3>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>③ Thời hạn & tài liệu</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
               <label className="text-sm font-semibold">Deadline</label>
@@ -401,7 +401,7 @@ function CreateInner() {
                   {d.kind === 'MUST_READ' ? 'Phải đọc' : 'Phải trả'}
                 </span>
                 <input value={d.label} onChange={(e) => setDocs((prev) => prev.map((x) => x.key === d.key ? { ...x, label: e.target.value } : x))} style={inp} placeholder="Tên tài liệu/thông tin" />
-                <span className="cursor-pointer" style={{ color: '#e63946' }} onClick={() => setDocs(docs.filter((x) => x.key !== d.key))}>✕</span>
+                <span className="cursor-pointer" style={{ color: 'var(--danger)' }} onClick={() => setDocs(docs.filter((x) => x.key !== d.key))}>✕</span>
               </div>
               {d.kind === 'MUST_READ' && (
                 <div className="mt-2">
@@ -427,10 +427,10 @@ function CreateInner() {
 
         {/* ── ④ Giao cho ai ── */}
         <div className="rounded-xl p-5" style={sectionStyle}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--navy,#0a2540)' }}>④ Giao cho ai?</h3>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>④ Giao cho ai?</h3>
           {sugg.length > 0 && (
             <div className="rounded-lg p-3 mb-3" style={{ background: 'linear-gradient(135deg,#eff6ff,#f5f3ff)', border: '1px dashed #93c5fd' }}>
-              <div className="text-xs font-bold mb-2" style={{ color: '#1d4ed8' }}>✨ Gợi ý phòng ban</div>
+              <div className="text-xs font-bold mb-2" style={{ color: '#1d4ed8' }}>Gợi ý phòng ban</div>
               {sugg.map((s, i) => s.roleCode && (
                 <button key={i} onClick={() => addRole(s.roleCode!)} className="text-xs mr-2 mb-2 px-3 py-1.5 rounded-full font-semibold"
                   style={{ background: '#fff', border: '1px solid #bfdbfe', color: '#1d4ed8' }}>
@@ -457,7 +457,7 @@ function CreateInner() {
             </div>
             <div>
               <label className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Thêm theo nhân sự{selectedDeptCodes.length > 0 && <span style={{ color: 'var(--accent,#e63946)' }}> · trong {selectedDeptCodes.map((d) => DEPT_NAME[d] || d).join(', ')}</span>}
+                Thêm theo nhân sự{selectedDeptCodes.length > 0 && <span style={{ color: 'var(--ibs-red)' }}> · trong {selectedDeptCodes.map((d) => DEPT_NAME[d] || d).join(', ')}</span>}
               </label>
               <input value={userQuery} onChange={(e) => setUserQuery(e.target.value)} style={inp}
                 placeholder={selectedDeptCodes.length > 0 ? 'Gõ tên (trong phòng đã chọn)…' : 'Gõ tên nhân sự…'} />
@@ -479,7 +479,7 @@ function CreateInner() {
       </div>
 
       {/* ── Action bar ── */}
-      {error && <div className="text-sm mt-3" style={{ color: '#e63946' }}>{error}</div>}
+      {error && <div className="text-sm mt-3" style={{ color: 'var(--danger)' }}>{error}</div>}
       <div className="flex gap-3 mt-4" style={{ position: 'sticky', bottom: 0, padding: '12px 0', background: 'var(--bg-primary)', zIndex: 10 }}>
         <button
           onClick={() => router.push(parentId ? `/dashboard/work/${parentId}` : fromId ? `/dashboard/work/${fromId}` : '/dashboard/work')}

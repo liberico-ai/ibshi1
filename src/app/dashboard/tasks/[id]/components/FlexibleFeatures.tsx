@@ -175,7 +175,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
       <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <h3 style={{ margin: 0, fontSize: '1rem' }}>
-            👥 Người nhận
+            Người nhận
             {data.progress && (
               <span style={{ marginLeft: 6, fontSize: '0.8rem', fontWeight: 600, color: data.progress.done === data.progress.total ? '#059669' : '#d97706' }}>
                 · {data.progress.done}/{data.progress.total} đã xong
@@ -249,7 +249,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
             const target = h.toName || h.toRoleName
             return (
               <div key={h.id} style={{ fontSize: '0.82rem', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--navy, #0a2540)' }}>{ACT[h.action] || h.action}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-heading)' }}>{ACT[h.action] || h.action}</span>
                 {h.byName && <span style={{ color: 'var(--text-secondary)' }}> · {h.byName}</span>}
                 {(h.action === 'ASSIGNED' || h.action === 'REASSIGNED' || h.action === 'FORWARDED') && target && <span style={{ color: 'var(--text-secondary)' }}> → {target}</span>}
                 {h.action === 'RETURNED' && h.fromName && <span style={{ color: 'var(--text-secondary)' }}> → {h.fromName}</span>}
@@ -267,7 +267,7 @@ export default function FlexibleFeatures({ taskId }: { taskId: string }) {
             placeholder="Nhập trao đổi..."
             style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 9, padding: '9px 12px', fontSize: '0.84rem', background: '#f8fafc' }}
           />
-          <button onClick={sendComment} style={{ fontSize: '0.84rem', padding: '0 16px', borderRadius: 8, background: 'var(--navy, #0a2540)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Gửi</button>
+          <button onClick={sendComment} style={{ fontSize: '0.84rem', padding: '0 16px', borderRadius: 8, background: 'var(--text-heading)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Gửi</button>
         </div>
       </div>
     </>

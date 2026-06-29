@@ -96,7 +96,7 @@ export default function JobCardsPage() {
       <PageHeader
         title="Phiếu Công Việc"
         subtitle="Tổ trưởng nhập khối lượng hàng ngày"
-        actions={canCreate ? <Button variant="accent" onClick={openForm}>+ Nhập KL</Button> : undefined}
+        actions={canCreate ? <Button variant="primary" onClick={openForm}>+ Nhập KL</Button> : undefined}
       />
 
       {/* Summary stats */}
@@ -209,7 +209,7 @@ function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
       actions={
         <div className="flex gap-3 w-full justify-end">
           <Button variant="outline" onClick={onClose}>Hủy</Button>
-          <Button variant="accent" onClick={submit} loading={submitting}>{submitting ? 'Đang lưu...' : 'Lưu phiếu'}</Button>
+          <Button variant="primary" onClick={submit} loading={submitting}>{submitting ? 'Đang lưu...' : 'Lưu phiếu'}</Button>
         </div>
       }
     >

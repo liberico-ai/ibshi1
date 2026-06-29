@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
 
     for (const [userId, msgs] of userMessages) {
       const parts: string[] = []
-      parts.push(`📋 <b>Giao ban tuần ${weekLabel}</b>`)
+      parts.push(`<b>Giao ban tuần ${weekLabel}</b>`)
       if (msgs.items.length > 0) {
         parts.push(`\n<b>Việc được giao (${msgs.items.length}):</b>`)
         parts.push(...msgs.items)
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     }
 
     const groupText = [
-      `📌 <b>Đã chốt giao ban tuần ${weekLabel}</b>`,
+      `<b>Đã chốt giao ban tuần ${weekLabel}</b>`,
       `• ${decisions.length} quyết định`,
       `• ${actionItems.length} việc giao`,
       `• ${kpi.execDecision || 0} việc cần BGĐ quyết`,

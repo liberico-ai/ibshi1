@@ -63,7 +63,7 @@ export default function PackingListsPage() {
       <PageHeader
         title="Packing List"
         subtitle={`${packingLists.length} kiện`}
-        actions={canCreate ? <Button variant="accent" onClick={() => setShowCreate(true)}>+ Tạo kiện</Button> : undefined}
+        actions={canCreate ? <Button variant="primary" onClick={() => setShowCreate(true)}>+ Tạo kiện</Button> : undefined}
       />
 
       <div className="grid grid-cols-4 gap-4 stagger-children">
@@ -231,7 +231,7 @@ function CreatePLModal({ onClose, onCreated }: { onClose: () => void; onCreated:
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Tạo kiện</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Tạo kiện</Button>
       </div>
     </Modal>
   )

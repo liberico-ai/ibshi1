@@ -123,7 +123,7 @@ export default function WorkInboxPage() {
       <PageHeader
         title="Hộp việc của tôi"
         subtitle={`${total} việc`}
-        actions={<Button variant="accent" onClick={() => router.push('/dashboard/work/create')}>+ Tạo việc</Button>}
+        actions={<Button variant="primary" onClick={() => router.push('/dashboard/work/create')}>+ Tạo việc</Button>}
       />
 
       {/* Tabs */}
@@ -136,7 +136,7 @@ export default function WorkInboxPage() {
           return (
             <button key={t.key} onClick={() => setTab(t.key as TabKey)}
               className={`filter-chip ${active ? 'active' : ''}`}
-              style={active ? { background: 'var(--navy,#0a2540)', color: '#fff', borderColor: 'var(--navy,#0a2540)' } : undefined}>
+>
               {t.label}
               {cnt != null && cnt > 0 && (
                 <span className="filter-chip-count" style={{

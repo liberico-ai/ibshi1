@@ -187,7 +187,7 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
 
     return successResponse(
       { project: { ...project, contractValue: project.contractValue?.toString() } },
-      `Dự án ${project.projectCode} đã đóng thành công ✅`
+      `Dự án ${project.projectCode} đã đóng thành công`
     )
   }
 
@@ -219,7 +219,7 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
       notes: body.notes,
     }, getClientIP(req))
 
-    return successResponse({ ok: true }, `Khách hàng đã xác nhận nghiệm thu ✅`)
+    return successResponse({ ok: true }, `Khách hàng đã xác nhận nghiệm thu`)
   }
 
   return errorResponse('Action không hợp lệ')

@@ -36,7 +36,7 @@ export default function TemplatesPage() {
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
         {templates.map((t) => (
           <div key={t.id} onClick={() => open(t)} className="rounded-xl p-4 cursor-pointer hover:shadow-md"
-            style={{ background: 'var(--surface)', border: `1px solid ${sel?.id === t.id ? 'var(--navy,#0a2540)' : 'var(--border)'}` }}>
+            style={{ background: 'var(--surface)', border: `1px solid ${sel?.id === t.id ? 'var(--text-heading)' : 'var(--border)'}` }}>
             <div className="font-bold" style={{ color: 'var(--text-primary)' }}>{t.name}</div>
             <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{t.code} · {t.projectType} · v{t.version} · {t._count.steps} bước</div>
           </div>
@@ -47,7 +47,7 @@ export default function TemplatesPage() {
       {sel && (
         <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="flex flex-wrap gap-2 items-center justify-between mb-3">
-            <h3 className="font-semibold" style={{ color: 'var(--navy,#0a2540)' }}>{sel.name} — {steps.length} bước</h3>
+            <h3 className="font-semibold" style={{ color: 'var(--text-heading)' }}>{sel.name} — {steps.length} bước</h3>
             <div className="flex gap-2 items-center">
               <select value={applyProj} onChange={(e) => setApplyProj(e.target.value)} className="text-sm px-2 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)', background: '#f8fafc' }}>
                 <option value="">— Chọn dự án —</option>
@@ -56,7 +56,7 @@ export default function TemplatesPage() {
               <button onClick={apply} disabled={!applyProj} className="btn-primary text-sm px-4 py-1.5 rounded-lg">Áp vào dự án</button>
             </div>
           </div>
-          {msg && <div className="text-sm mb-3" style={{ color: msg.startsWith('✓') ? '#059669' : '#e63946' }}>{msg}</div>}
+          {msg && <div className="text-sm mb-3" style={{ color: msg.startsWith('✓') ? '#059669' : 'var(--danger)' }}>{msg}</div>}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr style={{ background: 'var(--surface-hover,#f1f5f9)' }}>
@@ -66,7 +66,7 @@ export default function TemplatesPage() {
                 {steps.map((s, i) => (
                   <tr key={s.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td className="px-3 py-2" style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
-                    <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--accent,#e63946)' }}>{s.code}</td>
+                    <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ibs-red)' }}>{s.code}</td>
                     <td className="px-3 py-2" style={{ color: 'var(--text-primary)' }}>{s.title}</td>
                     <td className="px-3 py-2 text-xs">{s.deptCode || s.roleCode || '—'}</td>
                     <td className="px-3 py-2 text-xs">{s.deadlineDays ? `${s.deadlineDays} ngày` : '—'}</td>

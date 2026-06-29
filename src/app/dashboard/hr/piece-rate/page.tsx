@@ -45,7 +45,7 @@ export default function PieceRatePage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🔨 Hợp đồng Khoán</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Hợp đồng Khoán</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{contracts.length} hợp đồng</p>
         </div>
         <button onClick={() => setShowForm(!showForm)} className="btn-accent text-sm px-4 py-2">+ Tạo HĐ khoán</button>

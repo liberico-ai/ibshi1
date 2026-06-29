@@ -82,7 +82,7 @@ export default function WarehouseDetailPage() {
               {material.currentStock.toLocaleString()}
             </div>
             <div className="text-sm" style={{ color: 'var(--text-muted)' }}>{material.unit}</div>
-            {lowStock && <div className="text-xs mt-1" style={{ color: '#dc2626' }}>⚠ Dưới mức tối thiểu ({material.minStock})</div>}
+            {lowStock && <div className="text-xs mt-1" style={{ color: '#dc2626' }}>Dưới mức tối thiểu ({material.minStock})</div>}
           </div>
         </div>
         <div className="grid grid-cols-4 gap-4 mt-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>

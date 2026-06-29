@@ -82,7 +82,7 @@ function EstimateReadonly({ data, project }: { data: Record<string, unknown>; pr
       {totalEst > 0 ? (
         <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontSize: '0.85rem' }}>
           {[
-            { label: 'I. Chi phí vật tư', value: totalMat, color: '#e63946' },
+            { label: 'I. Chi phí vật tư', value: totalMat, color: '#E1251B' },
             { label: 'II. Chi phí nhân công', value: totalLab, color: '#f59e0b' },
             { label: 'III. Chi phí dịch vụ', value: totalSvc, color: '#3b82f6' },
             { label: 'IV. Chi phí chung', value: totalOvh, color: '#8b5cf6' },

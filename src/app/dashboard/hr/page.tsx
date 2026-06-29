@@ -62,7 +62,7 @@ export default function HRPage() {
       <PageHeader
         title="Quản lý Nhân sự"
         subtitle={`${pagination.total} nhân viên • ${activeCount} đang làm việc`}
-        actions={<Button variant="accent" onClick={() => setShowCreate(!showCreate)}>+ Thêm NV</Button>}
+        actions={<Button variant="primary" onClick={() => setShowCreate(!showCreate)}>+ Thêm NV</Button>}
       />
 
       {/* KPI Cards */}
@@ -160,7 +160,7 @@ function CreateEmployeeForm({ onClose, onCreated }: { onClose: () => void; onCre
           </select></div>
         <div className="col-span-3 flex gap-3 justify-end">
           <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
-          <Button variant="accent" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Thêm'}</Button>
+          <Button variant="primary" type="submit" loading={submitting}>{submitting ? 'Đang tạo...' : 'Thêm'}</Button>
         </div>
       </form>
     </div>

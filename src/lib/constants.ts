@@ -95,20 +95,20 @@ export const NOTIFICATION_TYPES = {
 // ── Sidebar Group Definitions ──
 
 export const MENU_GROUPS = [
-  { key: 'overview', label: 'Tổng quan', labelEn: 'Overview', icon: '📊', priority: 0 },
-  { key: 'management', label: 'Điều hành', labelEn: 'Management', icon: '📈', priority: 1 },
-  { key: 'project', label: 'Dự án', labelEn: 'Projects', icon: '📁', priority: 2 },
-  { key: 'design', label: 'Thiết kế', labelEn: 'Design', icon: '✏️', priority: 3 },
-  { key: 'warehouse', label: 'Kho & Mua hàng', labelEn: 'Warehouse', icon: '📦', priority: 4 },
-  { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: '🏭', priority: 5 },
-  { key: 'qc', label: 'Chất lượng', labelEn: 'Quality', icon: '✅', priority: 6 },
-  { key: 'logistics', label: 'Giao hàng', labelEn: 'Logistics', icon: '🚛', priority: 7 },
-  { key: 'tbcg', label: 'Thiết bị & CG', labelEn: 'Equipment', icon: '🔧', priority: 8 },
-  { key: 'hse', label: 'An toàn (HSE)', labelEn: 'HSE', icon: '🦺', priority: 9 },
-  { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: '👤', priority: 10 },
-  { key: 'finance', label: 'Tài chính', labelEn: 'Finance', icon: '💰', priority: 11 },
-  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: '📊', priority: 12 },
-  { key: 'system', label: 'Hệ thống', labelEn: 'System', icon: '⚙️', priority: 13 },
+  { key: 'overview', label: 'Tổng quan', labelEn: 'Overview', icon: '', priority: 0 },
+  { key: 'management', label: 'Điều hành', labelEn: 'Management', icon: '', priority: 1 },
+  { key: 'project', label: 'Dự án', labelEn: 'Projects', icon: '', priority: 2 },
+  { key: 'design', label: 'Thiết kế', labelEn: 'Design', icon: '', priority: 3 },
+  { key: 'warehouse', label: 'Kho & Mua hàng', labelEn: 'Warehouse', icon: '', priority: 4 },
+  { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: '', priority: 5 },
+  { key: 'qc', label: 'Chất lượng', labelEn: 'Quality', icon: '', priority: 6 },
+  { key: 'logistics', label: 'Giao hàng', labelEn: 'Logistics', icon: '', priority: 7 },
+  { key: 'tbcg', label: 'Thiết bị & CG', labelEn: 'Equipment', icon: '', priority: 8 },
+  { key: 'hse', label: 'An toàn (HSE)', labelEn: 'HSE', icon: '', priority: 9 },
+  { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: '', priority: 10 },
+  { key: 'finance', label: 'Tài chính', labelEn: 'Finance', icon: '', priority: 11 },
+  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: '', priority: 12 },
+  { key: 'system', label: 'Hệ thống', labelEn: 'System', icon: '', priority: 13 },
 ] as const
 
 // Roles allowed to create/edit PR (đề xuất vật tư)

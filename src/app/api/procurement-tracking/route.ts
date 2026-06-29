@@ -181,7 +181,7 @@ export async function PUT(request: NextRequest) {
         await prisma.notification.createMany({
           data: accountants.map(u => ({
             userId: u.id,
-            title: `💰 Yêu cầu thanh toán: ${g.prCode}`,
+            title: `Yêu cầu thanh toán: ${g.prCode}`,
             message: `Thương mại vừa gửi yêu cầu thanh toán PO ${g.prCode} (${actualSupplier}) — ${formatCurrency(Number(actualTotalValue))}. Vào tab Thanh toán để xử lý.`,
             type: 'payment_request',
             linkUrl: '/dashboard/finance/payments',

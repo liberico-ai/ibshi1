@@ -97,12 +97,12 @@
   --ibs-red-100: #ffe3e3;
 
   /* ── Semantic Colors ── */
-  --primary: var(--ibs-navy);
-  --primary-light: var(--ibs-navy-light);
-  --primary-dark: var(--ibs-navy-dark);
-  --accent: var(--ibs-red);
-  --accent-light: var(--ibs-red-light);
-  --accent-dark: var(--ibs-red-dark);
+  --primary: var(--ibs-red);
+  --primary-light: var(--ibs-red-light);
+  --primary-dark: var(--ibs-red-dark);
+  --accent: var(--ibs-navy);
+  --accent-light: var(--ibs-navy-light);
+  --accent-dark: var(--ibs-navy-dark);
 
   /* ── Status (Design System v3) ── */
   --success: #1E8E5A;
@@ -133,13 +133,13 @@
   --text-secondary: #4a5568;
   --text-muted: #718096;
   --text-on-dark: #e2e8f0;
-  --text-heading: #0a2540;
+  --text-heading: #17191D;
 
   /* ── Borders ── */
   --border: #e2e8f0;
   --border-light: #edf2f7;
   --border-strong: #cbd5e1;
-  --border-focus: #0a2540;
+  --border-focus: var(--ibs-red);
 
   /* ── Premium Tokens ── */
   --radius-xs: 4px;
@@ -174,7 +174,7 @@
   --shadow-md: 0 4px 16px rgba(10, 37, 64, 0.06), 0 1px 3px rgba(10, 37, 64, 0.04);
   --shadow-lg: 0 8px 28px rgba(10, 37, 64, 0.08), 0 2px 6px rgba(10, 37, 64, 0.03);
   --shadow-xl: 0 14px 44px rgba(10, 37, 64, 0.1);
-  --shadow-red: 0 4px 16px rgba(230, 57, 70, 0.2);
+  --shadow-red: 0 4px 16px rgba(225, 37, 27, 0.2);
   --shadow-float: 0 20px 60px rgba(10, 37, 64, 0.12);
   --shadow-inner: inset 0 1px 2px rgba(10, 37, 64, 0.06);
 
@@ -252,8 +252,8 @@ h1, h2, h3, h4 {
   50% { transform: translateY(-4px); }
 }
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.3); }
-  50% { box-shadow: 0 0 0 8px rgba(230, 57, 70, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(225, 37, 27, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(225, 37, 27, 0); }
 }
 @keyframes shimmer {
   from { background-position: -200% 0; }
@@ -327,6 +327,30 @@ h1, h2, h3, h4 {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  background: var(--ibs-red);
+  color: white;
+  border: none;
+  padding: 0.7rem 1.5rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out);
+  box-shadow: 0 2px 8px rgba(225, 37, 27, 0.2);
+  letter-spacing: 0;
+}
+.btn-primary:hover {
+  background: var(--ibs-red-dark);
+  box-shadow: var(--shadow-red);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0); box-shadow: var(--shadow-xs); }
+
+.btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   background: var(--ibs-navy);
   color: white;
   border: none;
@@ -337,34 +361,10 @@ h1, h2, h3, h4 {
   cursor: pointer;
   transition: all var(--duration-normal) var(--ease-out);
   box-shadow: var(--shadow-xs);
-  letter-spacing: 0;
-}
-.btn-primary:hover {
-  background: var(--ibs-navy-light);
-  box-shadow: 0 4px 14px rgba(10, 37, 64, 0.25);
-  transform: translateY(-1px);
-}
-.btn-primary:active { transform: translateY(0); box-shadow: var(--shadow-xs); }
-
-.btn-accent {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  background: var(--ibs-red);
-  color: white;
-  border: none;
-  padding: 0.7rem 1.5rem;
-  border-radius: var(--radius);
-  font-weight: 600;
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: all var(--duration-normal) var(--ease-out);
-  box-shadow: 0 2px 8px rgba(230, 57, 70, 0.2);
 }
 .btn-accent:hover {
-  background: var(--ibs-red-dark);
-  box-shadow: var(--shadow-red);
+  background: var(--ibs-navy-light);
+  box-shadow: 0 4px 14px rgba(10, 37, 64, 0.25);
   transform: translateY(-1px);
 }
 .btn-accent:active { transform: translateY(0); }
@@ -375,7 +375,7 @@ h1, h2, h3, h4 {
   justify-content: center;
   gap: 0.5rem;
   background: transparent;
-  color: var(--ibs-navy);
+  color: var(--text-primary);
   border: 1.5px solid var(--border-strong);
   padding: 0.7rem 1.5rem;
   border-radius: var(--radius);
@@ -385,8 +385,8 @@ h1, h2, h3, h4 {
   transition: all var(--duration-normal) var(--ease-out);
 }
 .btn-outline:hover {
-  background: var(--ibs-navy-50);
-  border-color: var(--ibs-navy);
+  background: var(--bg-card-hover);
+  border-color: var(--border-strong);
   box-shadow: var(--shadow-xs);
 }
 
@@ -503,7 +503,7 @@ h1, h2, h3, h4 {
   background: var(--bg-subtle);
 }
 .data-table tr:hover td {
-  background: var(--ibs-navy-50);
+  background: var(--bg-card-hover);
 }
 .data-table tr:last-child td {
   border-bottom: none;
@@ -554,7 +554,7 @@ h1, h2, h3, h4 {
 }
 .sidebar-link.active {
   color: #ffffff;
-  background: rgba(230, 57, 70, 0.18);
+  background: rgba(225, 37, 27, 0.18);
   border-left-color: var(--ibs-red);
   font-weight: 600;
 }
@@ -660,7 +660,7 @@ aside:hover .sidebar-toggle-btn {
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%) scale(0.95);
-  background: var(--ibs-navy);
+  background: #17191D;
   color: white;
   padding: 6px 14px;
   border-radius: var(--radius-sm);
@@ -871,7 +871,7 @@ aside:hover .sidebar-toggle-btn {
   left: 0;
   right: 0;
   height: 3px;
-  background: var(--card-accent, var(--ibs-navy));
+  background: var(--card-accent, var(--ibs-red));
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 .card:has(.card-accent-bar) {
@@ -1025,7 +1025,7 @@ aside:hover .sidebar-toggle-btn {
   justify-content: space-between;
   padding: var(--space-lg) var(--space-xl);
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, #0a2540 0%, #163a5f 100%);
+  background: linear-gradient(135deg, #17191D 0%, #2A2D34 100%);
   color: white;
 }
 .welcome-title {
@@ -1042,15 +1042,15 @@ aside:hover .sidebar-toggle-btn {
   padding: var(--space-lg);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  border: 1px solid var(--ibs-navy-light);
+  border: 1px solid var(--border);
   transition: all var(--duration-normal) var(--ease-out);
 }
 
 .mono-label {
   font-size: var(--text-xs);
-  font-family: monospace;
+  font-family: var(--font-geist-mono, 'Geist Mono'), ui-monospace, monospace;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--ibs-red);
 }
 
 .dept-tag {

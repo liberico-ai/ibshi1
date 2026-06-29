@@ -2,7 +2,7 @@
 // Centralized MIME/extension groups for all AttachmentSlot configs.
 // Add new formats HERE — step-form-configs.ts will inherit automatically.
 
-// ⚠️ ROOT CAUSE FIX:
+// ROOT CAUSE FIX:
 // macOS file picker (Safari/Chrome on Mac) grays out files when only
 // dot-extensions (.zip) are given. It needs MIME types to identify files.
 // Always include both: extension + MIME type for non-standard formats.

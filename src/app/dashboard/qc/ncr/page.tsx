@@ -102,7 +102,7 @@ export default function NCRPage() {
       <PageHeader
         title="Báo cáo không phù hợp (NCR)"
         subtitle="Quản lý sự cố chất lượng sản phẩm"
-        actions={canCreate ? <Button variant="accent" onClick={openForm}>+ Tạo NCR</Button> : undefined}
+        actions={canCreate ? <Button variant="primary" onClick={openForm}>+ Tạo NCR</Button> : undefined}
       />
 
       <div className="grid grid-cols-3 gap-4 stagger-children">
@@ -355,7 +355,7 @@ function NCRDetailModal({ ncr, onClose, onUpdated }: { ncr: NCR; onClose: () => 
             )}
             {data.status === 'ACTION_TAKEN' && (
               <Button
-                variant="accent" size="sm"
+                variant="primary" size="sm"
                 onClick={() => updateStatus('CLOSED')}
                 loading={updating}
                 disabled={openActions > 0}
@@ -425,7 +425,7 @@ function AddActionModal({ ncrId, onClose, onCreated }: { ncrId: string; onClose:
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Thêm</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Thêm</Button>
       </div>
     </Modal>
   )
@@ -465,7 +465,7 @@ function CreateNCRModal({ open, projects, onClose, onCreated }: {
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo NCR'}</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>{submitting ? 'Đang tạo...' : 'Tạo NCR'}</Button>
       </div>
     </Modal>
   )

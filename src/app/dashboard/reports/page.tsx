@@ -473,7 +473,7 @@ function WarehouseReport({ data }: { data: Record<string, unknown> }) {
       {w.lowStockCount > 0 && (
         <div className="card overflow-hidden">
           <div className="p-3" style={{ background: '#dc262610', borderBottom: '1px solid var(--border)' }}>
-            <h3 className="text-sm font-bold" style={{ color: '#dc2626' }}>⚠ Vật tư dưới tồn kho tối thiểu ({w.lowStockCount})</h3>
+            <h3 className="text-sm font-bold" style={{ color: '#dc2626' }}>Vật tư dưới tồn kho tối thiểu ({w.lowStockCount})</h3>
           </div>
           <table className="data-table">
             <thead><tr><th>Mã VT</th><th>Tên</th><th>ĐVT</th><th className="text-right">Tồn hiện tại</th><th className="text-right">Tồn tối thiểu</th></tr></thead>

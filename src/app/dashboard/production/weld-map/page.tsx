@@ -80,7 +80,7 @@ export default function WeldMapPage() {
       <PageHeader
         title="Weld Map"
         subtitle="Sơ đồ mối hàn & NDT"
-        actions={canEdit ? <Button variant="accent" onClick={() => setShowForm(true)}>+ Thêm mối hàn</Button> : undefined}
+        actions={canEdit ? <Button variant="primary" onClick={() => setShowForm(true)}>+ Thêm mối hàn</Button> : undefined}
       />
 
       <div className="grid grid-cols-5 gap-3 stagger-children">
@@ -227,7 +227,7 @@ function CreateJointModal({ workOrders, onClose, onCreated }: {
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Thêm</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Thêm</Button>
       </div>
     </Modal>
   )

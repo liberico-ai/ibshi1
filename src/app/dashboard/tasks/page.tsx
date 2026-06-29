@@ -18,7 +18,7 @@ interface Task {
 
 const STATUS_TABS = [
   { value: '', label: 'Tất cả', dot: '' },
-  { value: 'overdue', label: 'Quá hạn', dot: '#e63946' },
+  { value: 'overdue', label: 'Quá hạn', dot: 'var(--danger)' },
   { value: 'today', label: 'Hôm nay', dot: '#d97706' },
   { value: 'this_week', label: 'Tuần này', dot: '#2563eb' },
   { value: 'normal', label: 'Không deadline', dot: '#94a3b8' },
@@ -213,7 +213,7 @@ function TaskList({ tasks, onComplete, completing }: {
             </Badge>
             {task.status === 'IN_PROGRESS' && (
               <Button
-                variant="accent"
+                variant="primary"
                 size="sm"
                 onClick={(e) => { e.stopPropagation(); onComplete(task) }}
                 loading={completing === task.id}

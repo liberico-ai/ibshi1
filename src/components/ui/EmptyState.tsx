@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { SearchX } from 'lucide-react'
 
 interface EmptyStateProps {
   icon?: ReactNode
@@ -21,5 +22,21 @@ function EmptyState({ icon, title, description, action, className = '' }: EmptyS
   )
 }
 
-export { EmptyState }
+function FilteredEmpty({ onClear, className = '' }: { onClear: () => void; className?: string }) {
+  return (
+    <EmptyState
+      icon={<SearchX />}
+      title="Không tìm thấy kết quả"
+      description="Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm"
+      action={
+        <button onClick={onClear} className="btn-outline" style={{ fontSize: 'var(--text-sm)' }}>
+          Xóa lọc
+        </button>
+      }
+      className={className}
+    />
+  )
+}
+
+export { EmptyState, FilteredEmpty }
 export type { EmptyStateProps }

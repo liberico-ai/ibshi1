@@ -208,7 +208,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-5 border-b border-slate-100 bg-slate-50/50">
           <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <span>⚖️</span> Đối soát tồn kho (Tự động)
+            Đối soát tồn kho (Tự động)
           </h3>
           <p className="text-sm text-slate-500 mt-1">
             Tổng quát: <strong className="text-emerald-600">{fromStock.length}</strong> vật tư đủ kho, <strong className="text-rose-600">{toPurchase.length}</strong> vật tư cần mua sắm.
@@ -287,7 +287,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
         <div className="p-5 border-b border-blue-50 bg-blue-50/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h3 className="text-lg font-bold text-blue-800 flex items-center gap-2">
-              <span>📑</span> Quản lý Nhóm Báo Giá
+              Quản lý Nhóm Báo Giá
             </h3>
             <p className="text-sm text-slate-500 mt-1">Tiến độ gom nhóm: <strong className="text-blue-600">{submittedItemsCount}/{totalItemsCount}</strong> vật tư</p>
           </div>
@@ -299,7 +299,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                </button>
                {localGroups.some((g: any) => g.status === 'DRAFT' || g.status === 'REJECTED_DRAFT') && (
                  <button className="text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md shadow-blue-500/20 transition-colors flex items-center gap-1.5" onClick={() => handleSubmitGroups(localGroups.filter((g: any) => g.status === 'DRAFT' || g.status === 'REJECTED_DRAFT'))}>
-                    🚀 Trình duyệt tất cả
+                    Trình duyệt tất cả
                  </button>
                )}
             </div>
@@ -353,10 +353,10 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
                     {(group.status === 'DRAFT' || group.status === 'REJECTED' || group.status === 'REJECTED_DRAFT') && isActive && (
                        <>
                           <button className="text-[13px] font-semibold px-4 py-1.5 border border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-lg text-slate-600 transition-colors" onClick={() => handleOpenModal(group)}>
-                            ✏️ Chỉnh sửa
+                            Chỉnh sửa
                           </button>
                           <button className="text-[13px] font-bold px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-colors" onClick={() => handleSubmitGroups([group])}>
-                            🚀 Trình duyệt
+                            Trình duyệt
                           </button>
                        </>
                     )}
@@ -376,7 +376,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
 
       {isActive && is100Percent && (
          <div className="p-4 bg-green-50 text-green-700 border border-green-200 rounded-lg text-center font-medium">
-           🎉 Bạn đã gom nhóm và trình duyệt đủ 100% vật tư cần mua! Task sẽ tự hoàn thành khi các trạng thái được BGĐ phản hồi.
+           Bạn đã gom nhóm và trình duyệt đủ 100% vật tư cần mua! Task sẽ tự hoàn thành khi các trạng thái được BGĐ phản hồi.
          </div>
       )}
 
@@ -387,7 +387,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white z-10">
               <h2 className="text-xl font-bold text-slate-800">
-                {editingGroup ? '✏️ Chỉnh sửa Nhóm Báo Giá' : '✨ Tạo Nhóm Báo Giá Mới'}
+                {editingGroup ? 'Chỉnh sửa Nhóm Báo Giá' : 'Tạo Nhóm Báo Giá Mới'}
               </h2>
               <button onClick={handleCloseModal} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-rose-500 transition-colors">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

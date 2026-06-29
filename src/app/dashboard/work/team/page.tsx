@@ -40,7 +40,7 @@ export default function TeamPage() {
         <KPICard label="Đang làm" value={tot.active} accentColor={SEMANTIC_COLORS.info.solid} />
         <KPICard label="Quá hạn" value={tot.overdue} accentColor={tot.overdue > 0 ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid} />
         <KPICard label="Đã xong" value={tot.done} accentColor={SEMANTIC_COLORS.success.solid} />
-        <KPICard label="Nhân sự" value={team.members.length} accentColor="#0a2540" />
+        <KPICard label="Nhân sự" value={team.members.length} accentColor="var(--ibs-navy)" />
       </div>
 
       <div className="space-y-3 stagger-children">

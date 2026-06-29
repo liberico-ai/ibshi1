@@ -376,7 +376,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
         </div>
       </div>
       {enrichMsg && <div className="text-xs mb-2" style={{ color: enrichMsg.startsWith('Đã') ? '#16a34a' : '#dc2626' }}>{enrichMsg}</div>}
-      {missingEnrichment && <div className="text-xs mb-2" style={{ color: '#b45309' }}>⚠ Chưa tính tồn kho — nhấn &quot;Tính lại từ kho&quot;</div>}
+      {missingEnrichment && <div className="text-xs mb-2" style={{ color: '#b45309' }}>Chưa tính tồn kho — nhấn &quot;Tính lại từ kho&quot;</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
           <thead>
@@ -425,10 +425,10 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   const warningLegend = quotes.length > 0 ? (
     <div className="flex flex-wrap gap-3 text-xs px-3 py-2 rounded-lg mt-2" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
       <span className="font-semibold" style={{ color: '#92400e' }}>Chú thích:</span>
-      <span title="Dòng trong file báo giá NCC không khớp với dòng nào trong PR" style={{ color: '#f59e0b' }}>⚠ Dòng ngoài PR</span>
-      <span title="Số dòng PR mà NCC này không có báo giá" style={{ color: '#f59e0b' }}>⚠ thiếu N dòng</span>
-      <span title="NCC được chọn không phải là NCC có giá thấp nhất" style={{ color: '#dc2626' }}>⚠ không phải giá thấp nhất</span>
-      <span title="Cần ít nhất 2 báo giá có giá để so sánh" style={{ color: '#f59e0b' }}>⚠ thiếu giá để so sánh</span>
+      <span title="Dòng trong file báo giá NCC không khớp với dòng nào trong PR" style={{ color: '#f59e0b' }}>Dòng ngoài PR</span>
+      <span title="Số dòng PR mà NCC này không có báo giá" style={{ color: '#f59e0b' }}>thiếu N dòng</span>
+      <span title="NCC được chọn không phải là NCC có giá thấp nhất" style={{ color: '#dc2626' }}>không phải giá thấp nhất</span>
+      <span title="Cần ít nhất 2 báo giá có giá để so sánh" style={{ color: '#f59e0b' }}>thiếu giá để so sánh</span>
     </div>
   ) : null
 
@@ -456,12 +456,12 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                 {chosen.selectReason && <div className="text-xs mt-1" style={{ color: '#166534' }}>Lý do: {chosen.selectReason}</div>}
                 {chosenNotMin && (
                   <div className="text-xs mt-1 px-2 py-1 rounded inline-block" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-                    ⚠ Không phải giá thấp nhất (thấp nhất: {fmt(minAmount, sorted[0]?.currency)})
+                    Không phải giá thấp nhất (thấp nhất: {fmt(minAmount, sorted[0]?.currency)})
                   </div>
                 )}
                 {sorted.length < 2 && (
                   <div className="text-xs mt-1 px-2 py-1 rounded inline-block" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-                    ⚠ Thiếu giá để so sánh (cần ít nhất 2 báo giá có giá)
+                    Thiếu giá để so sánh (cần ít nhất 2 báo giá có giá)
                   </div>
                 )}
               </div>
@@ -502,7 +502,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                           <td className="px-3 py-2 font-bold" style={{ color: isMin ? '#1d4ed8' : 'var(--text-primary)' }}>
                             {fmt(qAmt, q.currency)}
                             {isMin && <span className="ml-1" style={{ color: '#1d4ed8' }}>(thấp nhất)</span>}
-                            {isSel && !isMin && <span className="ml-1" style={{ color: '#dc2626' }}>(⚠ không phải giá thấp nhất)</span>}
+                            {isSel && !isMin && <span className="ml-1" style={{ color: '#dc2626' }}>(không phải giá thấp nhất)</span>}
                             {hasNeedToBuy && needToBuyTotals[q.id] && q.totalAmount > 0 && q.totalAmount !== needToBuyTotals[q.id] && (
                               <div style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 400 }}>BG gốc: {fmt(q.totalAmount, q.currency)}</div>
                             )}
@@ -709,7 +709,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
                 <div className="text-xs" style={{ color: '#64748b' }}>
                   {q.lines.filter(l => l.matchedPrIndex !== null).length}/{q.lines.length} dòng khớp PR
                   {q.lines.some(l => l.matchedPrIndex === null) && (
-                    <span className="ml-2" style={{ color: '#f59e0b' }}>⚠ {q.lines.filter(l => l.matchedPrIndex === null).length} dòng ngoài PR</span>
+                    <span className="ml-2" style={{ color: '#f59e0b' }}>{q.lines.filter(l => l.matchedPrIndex === null).length} dòng ngoài PR</span>
                   )}
                   <button type="button" onClick={() => toggleDetail(q.id)} className="ml-2 underline" style={{ color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit' }}>
                     {expandedDetails.has(q.id) ? 'Ẩn chi tiết' : `Chi tiết (${q.lines.length} dòng)`}
@@ -943,7 +943,7 @@ function QuoteCoveragePanel({ quotes, prItems }: { quotes: SupplierQuote[]; prIt
       ) : (
         <div className="mt-2">
           <div className="text-xs" style={{ color: '#92400e' }}>
-            ⚠ Còn thiếu {missingCount} món chưa có báo giá
+            Còn thiếu {missingCount} món chưa có báo giá
             <button type="button" onClick={() => setShowMissing(!showMissing)} className="ml-2 underline" style={{ color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit' }}>
               {showMissing ? 'Ẩn' : 'Xem danh sách'}
             </button>
@@ -1097,7 +1097,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
 
       {vatMismatch && (
         <div className="text-xs mb-2 px-2 py-1.5 rounded-lg" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-          ⚠ Các NCC có %VAT khác nhau ({[...allVatRates].sort().join('%, ')}%) — kiểm tra lại
+          Các NCC có %VAT khác nhau ({[...allVatRates].sort().join('%, ')}%) — kiểm tra lại
         </div>
       )}
 
@@ -1206,7 +1206,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
       {/* Extra rows (not in PR) */}
       {extraRows.length > 0 && (
         <div className="mt-3">
-          <div className="text-xs font-semibold mb-1" style={{ color: '#f59e0b' }}>⚠ Dòng ngoài PR ({extraRows.length})</div>
+          <div className="text-xs font-semibold mb-1" style={{ color: '#f59e0b' }}>Dòng ngoài PR ({extraRows.length})</div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead><tr style={{ background: '#fef3c7' }}>
@@ -1269,7 +1269,7 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
       )}
       {quotesWithLines.length < 2 && (
         <div className="mt-3 text-xs px-2 py-1.5 rounded-lg" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-          ⚠ Thiếu giá để so sánh (cần ít nhất 2 NCC có báo giá)
+          Thiếu giá để so sánh (cần ít nhất 2 NCC có báo giá)
         </div>
       )}
     </div>

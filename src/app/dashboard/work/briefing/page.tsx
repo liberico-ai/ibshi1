@@ -128,7 +128,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   OPEN: { label: 'Mới', color: '#475569', bg: '#f1f5f9' },
   IN_PROGRESS: { label: 'Đang xử lý', color: '#1d4ed8', bg: '#eff6ff' },
   AWAITING_REVIEW: { label: 'Chờ kết thúc', color: '#b45309', bg: '#fffbeb' },
-  RETURNED: { label: 'Bị trả lại', color: '#e63946', bg: '#fef2f2' },
+  RETURNED: { label: 'Bị trả lại', color: 'var(--danger)', bg: '#fef2f2' },
   DONE: { label: 'Hoàn thành', color: '#059669', bg: '#ecfdf5' },
 }
 
@@ -1071,14 +1071,14 @@ export default function BriefingPage() {
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`filter-chip ${activeTab === 'dashboard' ? 'active' : ''}`}
-          style={activeTab === 'dashboard' ? { background: 'var(--navy,#0a2540)', color: '#fff', borderColor: 'var(--navy,#0a2540)' } : undefined}
+          style={activeTab === 'dashboard' ? { background: 'var(--text-heading)', color: '#fff', borderColor: 'var(--text-heading)' } : undefined}
         >
           Dashboard giao ban
         </button>
         {canEdit && <button
           onClick={() => setActiveTab('import')}
           className={`filter-chip ${activeTab === 'import' ? 'active' : ''}`}
-          style={activeTab === 'import' ? { background: 'var(--navy,#0a2540)', color: '#fff', borderColor: 'var(--navy,#0a2540)' } : undefined}
+          style={activeTab === 'import' ? { background: 'var(--text-heading)', color: '#fff', borderColor: 'var(--text-heading)' } : undefined}
         >
           Import & Quá hạn
         </button>}

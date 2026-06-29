@@ -25,7 +25,7 @@ function StatCard({ label, value, color, icon, accent, href, compact, className 
             </div>
           )}
           {accent && typeof value === 'number' && value > 0 && (
-            <span className="stat-card-warning">⚠ Cảnh báo</span>
+            <span className="stat-card-warning">Cảnh báo</span>
           )}
         </div>
       )}

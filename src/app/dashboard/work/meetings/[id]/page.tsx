@@ -22,7 +22,7 @@ interface Meeting {
 const RSVP: Record<string, { l: string; c: string }> = {
   INVITED: { l: '○ Chờ xác nhận', c: '#b45309' },
   ACCEPTED: { l: '✓ Đã nhận', c: '#059669' },
-  DECLINED: { l: '✗ Từ chối', c: '#e63946' },
+  DECLINED: { l: '✗ Từ chối', c: 'var(--danger)' },
 }
 const inp: React.CSSProperties = { width: '100%', border: '1px solid var(--border)', borderRadius: 9, padding: '9px 12px', fontSize: '.86rem', background: '#f8fafc' }
 
@@ -148,7 +148,7 @@ export default function MeetingDetailPage() {
     if (res.ok) load(); else alert(res.error || 'Lỗi')
   }
 
-  const stColor = isCancelled ? '#e63946' : isDone ? '#059669' : '#1d4ed8'
+  const stColor = isCancelled ? 'var(--danger)' : isDone ? '#059669' : '#1d4ed8'
 
   return (
     <div className="space-y-4 animate-fade-in max-w-5xl">
@@ -184,7 +184,7 @@ export default function MeetingDetailPage() {
 
         {/* Biên bản họp (MOM — theo mẫu hệ cũ) */}
         {isCancelled ? (
-          <div className="rounded-xl p-4 text-sm" style={{ background: '#fef2f2', color: '#e63946', border: '1px solid #fecaca' }}>Cuộc họp đã bị hủy.</div>
+          <div className="rounded-xl p-4 text-sm" style={{ background: '#fef2f2', color: 'var(--danger)', border: '1px solid #fecaca' }}>Cuộc họp đã bị hủy.</div>
         ) : isDone ? (
           (m.momNumber || m.minutesNote || m.minutesData) && (
             <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -242,7 +242,7 @@ export default function MeetingDetailPage() {
                   <div key={i} className="flex items-center gap-2 pt-1">
                     <input value={it.noiDung || ''} onChange={(e) => setItem(i, 'noiDung', e.target.value)} className="flex-1 font-semibold" style={{ ...fld, background: 'transparent', border: 'none', color: '#475569', padding: '2px 0' }} placeholder="Đề mục" />
                     <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#f1f5f9', color: '#94a3b8' }}>đề mục</span>
-                    <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} title="Xoá" className="text-sm" style={{ color: '#e63946' }}>✕</button>
+                    <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} title="Xoá" className="text-sm" style={{ color: 'var(--danger)' }}>✕</button>
                   </div>
                 )
               }
@@ -252,7 +252,7 @@ export default function MeetingDetailPage() {
                   <div className="flex gap-2 items-start">
                     <span className="flex-shrink-0 text-xs font-bold mt-2" style={{ color: '#b45309', minWidth: 20 }}>{i + 1}.</span>
                     <textarea value={it.noiDung || ''} onChange={(e) => setItem(i, 'noiDung', e.target.value)} rows={2} style={{ ...fld, flex: 1, minHeight: 44 }} placeholder="Nội dung công việc" />
-                    <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} title="Xoá mục" className="flex-shrink-0 text-sm mt-1" style={{ color: '#e63946' }}>✕</button>
+                    <button onClick={() => setItems(items.filter((_, idx) => idx !== i))} title="Xoá mục" className="flex-shrink-0 text-sm mt-1" style={{ color: 'var(--danger)' }}>✕</button>
                   </div>
                   {/* Người thực hiện · Hạn · Ghi chú — có nhãn */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -298,7 +298,7 @@ export default function MeetingDetailPage() {
             <button onClick={() => setItems([...items, { noiDung: '', actionBy: '', dueDate: '', remark: '' }])} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)' }}>+ Thêm mục hành động</button>
             <div className="flex gap-2 pt-1">
               <button onClick={saveMinutes} disabled={busy} className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>✓ Lưu biên bản & kết thúc</button>
-              <button onClick={doCancel} disabled={busy} className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: 'var(--surface)', color: '#e63946', border: '1px solid #fecaca' }}>✕ Hủy cuộc họp</button>
+              <button onClick={doCancel} disabled={busy} className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: 'var(--surface)', color: 'var(--danger)', border: '1px solid #fecaca' }}>✕ Hủy cuộc họp</button>
             </div>
           </div>
         )}
@@ -329,7 +329,7 @@ export default function MeetingDetailPage() {
           <div className="text-xs px-1 mb-1.5" style={{ color: 'var(--text-muted)' }}>Phản hồi của bạn: <b style={{ color: (RSVP[myInvite.status] || RSVP.INVITED).c }}>{(RSVP[myInvite.status] || RSVP.INVITED).l}</b></div>
           <div className="flex gap-2">
             <button onClick={() => respond('ACCEPTED')} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold flex-1" style={{ background: '#059669', color: '#fff' }}>✓ Nhận tham gia</button>
-            <button onClick={() => respond('DECLINED')} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#e63946', border: '1px solid #fecaca' }}>✗ Từ chối</button>
+            <button onClick={() => respond('DECLINED')} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: 'var(--danger)', border: '1px solid #fecaca' }}>✗ Từ chối</button>
           </div>
         </div>
       )}

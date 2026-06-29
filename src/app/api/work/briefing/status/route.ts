@@ -100,9 +100,9 @@ export async function PATCH(req: NextRequest) {
       const projCode = task?.project?.projectCode || ''
       const notifMsg = `Cần tháo gỡ: ${task?.title || taskId} — ${blockReason.trim().slice(0, 100)}${projCode ? ` (${projCode})` : ''}`
       prisma.notification.create({
-        data: { userId: resolverNotifyId, title: '🔴 ' + notifMsg, message: blockSuggestion ? `Đề xuất: ${blockSuggestion.trim()}` : notifMsg, type: 'task_blocked', linkUrl: `/dashboard/work/${taskId}` },
+        data: { userId: resolverNotifyId, title: notifMsg, message: blockSuggestion ? `Đề xuất: ${blockSuggestion.trim()}` : notifMsg, type: 'task_blocked', linkUrl: `/dashboard/work/${taskId}` },
       }).catch(() => {})
-      const teleMsg = `🔴 <b>Cần tháo gỡ</b>\n${projCode ? `📁 ${projCode}\n` : ''}📋 ${task?.title || taskId}\n❌ ${blockReason.trim()}\n👤 Báo bởi: ${payload.fullName || payload.username || 'PM'}${blockSuggestion ? `\n💡 Đề xuất: ${blockSuggestion.trim()}` : ''}`
+      const teleMsg = `<b>Cần tháo gỡ</b>\n${projCode ? `${projCode}\n` : ''}${task?.title || taskId}\n${blockReason.trim()}\nBáo bởi: ${payload.fullName || payload.username || 'PM'}${blockSuggestion ? `\nĐề xuất: ${blockSuggestion.trim()}` : ''}`
       sendDirectMessage(resolverNotifyId, teleMsg).catch(() => {})
     }
 

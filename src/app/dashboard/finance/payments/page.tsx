@@ -299,7 +299,7 @@ export default function PaymentsPage() {
                           disabled
                           className="px-4 py-2 bg-gray-300 text-gray-500 rounded text-sm font-bold flex items-center gap-2 shadow cursor-not-allowed"
                         >
-                          ✔ Khóa Misa
+                          Khóa Misa
                         </button>
                       ) : (
                         <button 

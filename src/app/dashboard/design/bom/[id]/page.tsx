@@ -374,7 +374,7 @@ export default function BomRevisionDetailPage() {
               Quay lai
             </Button>
             {canCreate && (
-              <Button variant="accent" icon={<span>+</span>} onClick={() => setShowCreate(true)}>
+              <Button variant="primary" icon={<span>+</span>} onClick={() => setShowCreate(true)}>
                 Tao Rev moi
               </Button>
             )}
@@ -493,7 +493,7 @@ export default function BomRevisionDetailPage() {
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {canApproveThisVersion && (
-                      <Button variant="accent" loading={approving} onClick={handleApprove}>
+                      <Button variant="primary" loading={approving} onClick={handleApprove}>
                         Phat hanh BomVersion
                       </Button>
                     )}
@@ -842,7 +842,7 @@ export default function BomRevisionDetailPage() {
         actions={
           <>
             <Button variant="ghost" onClick={() => setShowCreate(false)}>Huy</Button>
-            <Button variant="accent" loading={creating} onClick={handleCreateRevision}>Tao Rev</Button>
+            <Button variant="primary" loading={creating} onClick={handleCreateRevision}>Tao Rev</Button>
           </>
         }
       >

@@ -55,7 +55,7 @@ export default function VendorPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>🏢 Nhà cung cấp</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Nhà cung cấp</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{vendors.length} nhà cung cấp</p>
         </div>
         <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm NCC</button>

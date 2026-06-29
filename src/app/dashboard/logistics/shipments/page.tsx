@@ -81,7 +81,7 @@ export default function ShipmentsPage() {
       <PageHeader
         title="Chuyến hàng"
         subtitle={`${shipments.length} chuyến`}
-        actions={canCreate ? <Button variant="accent" onClick={() => setShowCreate(true)}>+ Tạo chuyến</Button> : undefined}
+        actions={canCreate ? <Button variant="primary" onClick={() => setShowCreate(true)}>+ Tạo chuyến</Button> : undefined}
       />
 
       <div className="grid grid-cols-4 gap-4 stagger-children">
@@ -242,7 +242,7 @@ function CreateShipmentModal({ onClose, onCreated }: { onClose: () => void; onCr
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
-        <Button variant="accent" className="flex-1" onClick={submit} loading={submitting}>Tạo chuyến</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Tạo chuyến</Button>
       </div>
     </Modal>
   )

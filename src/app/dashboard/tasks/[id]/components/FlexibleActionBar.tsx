@@ -101,7 +101,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
     if (fwdPicks.some((p) => p.role === r)) return
     const res = await apiFetch(`/api/work/dept-head?role=${r}`)
     const headName = res.ok && res.head ? res.head.fullName : null
-    setFwdPicks((prev) => [...prev, { role: r, label: headName ? `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)} → ${headName}` : `🏢 ${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)}` }])
+    setFwdPicks((prev) => [...prev, { role: r, label: headName ? `${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)} → ${headName}` : `${DEPT_NAME[ROLE_TO_DEPT[r]] || roleLabel(r)}` }])
   }
   const addFwdUser = (u: Usr) => {
     if (fwdPicks.some((p) => p.userId === u.id)) { setFwdQuery(''); return }
@@ -307,10 +307,10 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
       {/* Reject dialog */}
       {rejOpen && (
         <div style={{ borderRadius: 12, padding: '1.25rem', marginTop: '1rem', background: '#fef2f2', border: '1px solid #fecaca' }}>
-          <div style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 10, color: '#e63946' }}>✕ Từ chối / trả lại</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 10, color: 'var(--danger)' }}>✕ Từ chối / trả lại</div>
           <textarea value={rejReason} onChange={(e) => setRejReason(e.target.value)} rows={3} style={{ ...inp, background: '#fff' }} placeholder="Lý do trả lại…" />
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button onClick={submitReject} disabled={busy} style={{ padding: '10px 20px', fontSize: '0.88rem', borderRadius: 10, fontWeight: 700, background: '#e63946', color: '#fff', border: 'none', cursor: 'pointer' }}>Gửi trả lại</button>
+            <button onClick={submitReject} disabled={busy} style={{ padding: '10px 20px', fontSize: '0.88rem', borderRadius: 10, fontWeight: 700, background: 'var(--danger)', color: '#fff', border: 'none', cursor: 'pointer' }}>Gửi trả lại</button>
             <button onClick={() => setRejOpen(false)} style={{ padding: '10px 20px', fontSize: '0.88rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer' }}>Hủy</button>
           </div>
         </div>
@@ -326,7 +326,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
             <button onClick={() => { setDelOpen(true); setFwdOpen(false); setRejOpen(false) }} disabled={busy} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}>
               ↪ Giao lại cho người khác
             </button>
-            <button onClick={goCreateNext} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: 'var(--navy, #0a2540)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+            <button onClick={goCreateNext} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: 'var(--text-heading)', color: '#fff', border: 'none', cursor: 'pointer' }}>
               + Tạo việc mới
             </button>
           </div>
@@ -343,7 +343,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
             <button onClick={doFinalize} disabled={busy} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: '#059669', color: '#fff', border: 'none', cursor: 'pointer' }}>
               ✓ Hoàn thành & kết thúc
             </button>
-            <button onClick={goCreateNext} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: 'var(--navy, #0a2540)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+            <button onClick={goCreateNext} style={{ flex: 1, minWidth: 150, padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 700, background: 'var(--text-heading)', color: '#fff', border: 'none', cursor: 'pointer' }}>
               + Tạo việc tiếp theo
             </button>
           </div>
@@ -363,10 +363,10 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
             <button onClick={() => { setDelOpen(true); setFwdOpen(false); setRejOpen(false) }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--surface, #fff)', color: '#1d4ed8', border: '1px solid #bfdbfe', cursor: 'pointer' }}>
               ↪ Chuyển giao
             </button>
-            <button onClick={() => router.push(`/dashboard/work/create?parent=${taskId}${workTaskProjectId ? `&project=${workTaskProjectId}` : ''}`)} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--navy, #0a2540)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => router.push(`/dashboard/work/create?parent=${taskId}${workTaskProjectId ? `&project=${workTaskProjectId}` : ''}`)} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--text-heading)', color: '#fff', border: 'none', cursor: 'pointer' }}>
               + Việc con
             </button>
-            <button onClick={() => { setRejOpen(true); setFwdOpen(false); setDelOpen(false) }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--surface, #fff)', color: '#e63946', border: '1px solid #fecaca', cursor: 'pointer' }}>
+            <button onClick={() => { setRejOpen(true); setFwdOpen(false); setDelOpen(false) }} disabled={busy} style={{ padding: '12px 16px', fontSize: '0.88rem', borderRadius: 12, fontWeight: 600, background: 'var(--surface, #fff)', color: 'var(--danger)', border: '1px solid var(--danger-border)', cursor: 'pointer' }}>
               ✕ Từ chối / trả lại
             </button>
           </div>
@@ -375,7 +375,7 @@ export default function FlexibleActionBar({ taskId, isActive, onComplete, onReje
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 24, zIndex: 50, padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, boxShadow: '0 4px 12px rgba(0,0,0,.15)', background: 'var(--navy, #0a2540)', color: '#fff' }}>{toast}</div>
+        <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 24, zIndex: 50, padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, boxShadow: '0 4px 12px rgba(0,0,0,.15)', background: 'var(--text-heading)', color: '#fff' }}>{toast}</div>
       )}
     </>
   )

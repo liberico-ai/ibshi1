@@ -20,7 +20,7 @@ const RSVP: Record<string, { l: string; c: string; b: string }> = {
   ORGANIZER: { l: 'Bạn tổ chức', c: '#1d4ed8', b: '#eff6ff' },
   INVITED: { l: 'Chờ xác nhận', c: '#b45309', b: '#fffbeb' },
   ACCEPTED: { l: 'Đã nhận', c: '#059669', b: '#ecfdf5' },
-  DECLINED: { l: 'Từ chối', c: '#e63946', b: '#fef2f2' },
+  DECLINED: { l: 'Từ chối', c: 'var(--danger)', b: '#fef2f2' },
 }
 
 function MeetingsInner() {
@@ -148,7 +148,7 @@ function MeetingsInner() {
           <div><label className="text-sm font-semibold">Tài liệu họp (agenda, slide, BB họp…)</label>
             <MultiFileUpload label="" entityType="Meeting" entityId={draftId} />
           </div>
-          {error && <div className="text-sm" style={{ color: '#e63946' }}>{error}</div>}
+          {error && <div className="text-sm" style={{ color: 'var(--danger)' }}>{error}</div>}
           <button onClick={submit} disabled={busy} className="btn-primary text-sm px-5 py-2.5 rounded-lg w-full">{busy ? '...' : '✓ Tạo & gửi lời mời'}</button>
         </div>
       )}
@@ -162,7 +162,7 @@ function MeetingsInner() {
             <div key={m.id} onClick={() => router.push(`/dashboard/work/meetings/${m.id}`)} className="rounded-xl p-4 cursor-pointer hover:shadow-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', opacity: m.status === 'CANCELLED' ? 0.6 : 1 }}>
               <div className="flex items-start gap-3">
                 <div className="flex-1">
-                  <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{m.title}{tag && <span className="text-xs ml-2" style={{ color: m.status === 'CANCELLED' ? '#e63946' : '#059669' }}>{tag}</span>}</div>
+                  <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{m.title}{tag && <span className="text-xs ml-2" style={{ color: m.status === 'CANCELLED' ? 'var(--danger)' : '#059669' }}>{tag}</span>}</div>
                   <div className="flex flex-wrap gap-2 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                     {m.project && <span className="px-2 py-0.5 rounded" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{m.project.projectCode}</span>}
                     <span>{formatShortDateTime(m.startsAt)}</span>
