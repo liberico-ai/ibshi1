@@ -29,15 +29,19 @@ export async function GET(req: NextRequest) {
         where: { ...woWhere, departmentId: team.id },
         select: {
           id: true, status: true,
-          plannedWeight: true, completedQty: true,
+          plannedWeight: true, completedQty: true, earnedQty: true,
         },
       })
 
       const total = wos.length
       const active = wos.filter(w => !['COMPLETED', 'CANCELLED'].includes(w.status)).length
-      const plannedTons = wos.reduce((s, w) => s + (w.plannedWeight ? Number(w.plannedWeight) / 1000 : 0), 0)
-      const completedTons = wos.reduce((s, w) => s + (w.completedQty ? Number(w.completedQty) / 1000 : 0), 0)
-      const pct = plannedTons > 0 ? Math.round((completedTons / plannedTons) * 100) : 0
+      const plannedKg = wos.reduce((s, w) => s + (Number(w.plannedWeight) || 0), 0)
+      const completedKg = wos.reduce((s, w) => s + (Number(w.completedQty) || 0), 0)
+      const earnedKg = wos.reduce((s, w) => s + (Number(w.earnedQty) || 0), 0)
+
+      const plannedTons = plannedKg / 1000
+      const completedTons = completedKg / 1000
+      const earnedTons = earnedKg / 1000
 
       return {
         id: team.id,
@@ -47,7 +51,9 @@ export async function GET(req: NextRequest) {
         activeWO: active,
         plannedTons: Math.round(plannedTons * 100) / 100,
         completedTons: Math.round(completedTons * 100) / 100,
-        progressPct: pct,
+        earnedTons: Math.round(earnedTons * 100) / 100,
+        progressPct: plannedTons > 0 ? Math.round((completedTons / plannedTons) * 100) : 0,
+        earnedPct: plannedTons > 0 ? Math.round((earnedTons / plannedTons) * 100) : 0,
       }
     })
   )

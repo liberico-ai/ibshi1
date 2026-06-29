@@ -4,6 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { RBAC } from '@/lib/rbac-rules'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
+import { rollUpWorkOrder } from '@/lib/production-weights'
 
 // Valid WO transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -57,6 +58,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ...(nextStatus === 'COMPLETED' ? { actualEnd: new Date() } : {}),
       },
     })
+
+    if (['QC_PASSED', 'COMPLETED'].includes(nextStatus)) {
+      await rollUpWorkOrder(id)
+    }
 
     await logAudit(user.userId, 'TRANSITION', 'WorkOrder', id,
       { woCode: wo.woCode, from: currentStatus, to: nextStatus, comment }, getClientIP(req))

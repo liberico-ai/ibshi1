@@ -28,15 +28,20 @@ interface WorkOrder {
 interface TeamLoad {
   id: string; code: string; name: string;
   totalWO: number; activeWO: number;
-  plannedTons: number; completedTons: number; progressPct: number;
+  plannedTons: number; completedTons: number; earnedTons: number;
+  progressPct: number; earnedPct: number;
 }
 
 interface ProjectOption { id: string; projectCode: string; projectName: string }
 interface PaginationData { page: number; limit: number; total: number; totalPages: number }
 
 interface ProgressData {
-  summary: { totalTons: number; completedTons: number; tonsPct: number; totalPieceMarks: number; completedPieceMarks: number; pieceMarkPct: number }
-  stages: Array<{ stage: string; totalCards: number; completedCards: number; totalQty: number; pct: number }>
+  summary: {
+    totalTons: number; completedTons: number; earnedTons: number;
+    tonsPct: number; earnedPct: number;
+    totalPieceMarks: number; completedPieceMarks: number; earnedPieceMarks: number; pieceMarkPct: number;
+  }
+  stages: Array<{ stage: string; weight: number; totalCards: number; completedCards: number; totalQty: number; pct: number }>
   workOrderCount: number
 }
 
@@ -108,9 +113,9 @@ export default function ProductionPage() {
       {progress && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
           <KPICard label="Tổng tấn" value={`${progress.summary.totalTons}t`} accentColor={SEMANTIC_COLORS.info.solid} />
-          <KPICard label="Hoàn thành" value={`${progress.summary.completedTons}t (${progress.summary.tonsPct}%)`} accentColor={SEMANTIC_COLORS.success.solid} />
-          <KPICard label="Piece-mark" value={`${progress.summary.completedPieceMarks}/${progress.summary.totalPieceMarks}`} accentColor="var(--accent)" />
-          <KPICard label="WO" value={progress.workOrderCount} accentColor={SEMANTIC_COLORS.neutral.solid} />
+          <KPICard label="SX báo" value={`${progress.summary.completedTons}t (${progress.summary.tonsPct}%)`} accentColor={SEMANTIC_COLORS.warning.solid} />
+          <KPICard label="QC đạt (earned)" value={`${progress.summary.earnedTons}t (${progress.summary.earnedPct}%)`} accentColor={SEMANTIC_COLORS.success.solid} />
+          <KPICard label="Piece-mark" value={`${progress.summary.earnedPieceMarks}/${progress.summary.totalPieceMarks}`} accentColor="var(--accent)" />
         </div>
       )}
 
@@ -123,7 +128,7 @@ export default function ProductionPage() {
               <div key={s.stage} className="flex-1 flex flex-col items-center gap-1">
                 <span className="text-[10px] font-bold" style={{ color: STAGE_COLORS[i] }}>{s.pct}%</span>
                 <div className="w-full rounded-t" style={{ height: `${Math.max(s.pct * 0.5, 4)}px`, background: STAGE_COLORS[i], transition: 'height 0.3s' }} />
-                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{STAGE_LABELS[s.stage]}</span>
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{STAGE_LABELS[s.stage]} ({Math.round(s.weight * 100)}%)</span>
               </div>
             ))}
           </div>

@@ -1,8 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, unauthorizedResponse } from '@/lib/auth'
-
-const STAGES = ['cutting', 'assembly', 'welding', 'painting', 'inspection'] as const
+import { STAGE_WEIGHTS, STAGES_ORDERED } from '@/lib/production-weights'
 
 // GET /api/production/progress — Fabrication progress by tons + piece-marks + 5-stage bar
 export async function GET(req: NextRequest) {
@@ -21,7 +20,7 @@ export async function GET(req: NextRequest) {
     where: woWhere,
     select: {
       id: true, woCode: true, pieceMark: true, status: true,
-      plannedWeight: true, completedQty: true, teamCode: true,
+      plannedWeight: true, completedQty: true, earnedQty: true, teamCode: true,
       departmentId: true,
       project: { select: { projectCode: true } },
     },
@@ -29,8 +28,15 @@ export async function GET(req: NextRequest) {
 
   const totalPieceMarks = workOrders.filter(w => w.pieceMark).length
   const completedPieceMarks = workOrders.filter(w => w.pieceMark && w.status === 'COMPLETED').length
-  const totalTons = workOrders.reduce((s, w) => s + (w.plannedWeight ? Number(w.plannedWeight) / 1000 : 0), 0)
-  const completedTons = workOrders.reduce((s, w) => s + (w.completedQty ? Number(w.completedQty) / 1000 : 0), 0)
+  const earnedPieceMarks = workOrders.filter(w => w.pieceMark && (Number(w.earnedQty) || 0) > 0).length
+
+  const totalKg = workOrders.reduce((s, w) => s + (Number(w.plannedWeight) || 0), 0)
+  const completedKg = workOrders.reduce((s, w) => s + (Number(w.completedQty) || 0), 0)
+  const earnedKg = workOrders.reduce((s, w) => s + (Number(w.earnedQty) || 0), 0)
+
+  const totalTons = totalKg / 1000
+  const completedTons = completedKg / 1000
+  const earnedTons = earnedKg / 1000
 
   const woIds = workOrders.map(w => w.id)
 
@@ -39,12 +45,13 @@ export async function GET(req: NextRequest) {
     select: { workType: true, actualQty: true, status: true, workDate: true },
   })
 
-  const stageProgress = STAGES.map(stage => {
+  const stageProgress = STAGES_ORDERED.map(stage => {
     const cards = jobCards.filter(jc => jc.workType === stage)
     const completed = cards.filter(jc => jc.status === 'COMPLETED')
-    const totalQty = cards.reduce((s, jc) => s + (jc.actualQty ? Number(jc.actualQty) : 0), 0)
+    const totalQty = cards.reduce((s, jc) => s + (Number(jc.actualQty) || 0), 0)
     return {
       stage,
+      weight: STAGE_WEIGHTS[stage] || 0,
       totalCards: cards.length,
       completedCards: completed.length,
       totalQty: Math.round(totalQty * 100) / 100,
@@ -52,8 +59,6 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
   const dailyOutput = jobCards
     .filter(jc => jc.status === 'COMPLETED' && jc.actualQty)
     .reduce((s, jc) => s + Number(jc.actualQty), 0)
@@ -62,9 +67,12 @@ export async function GET(req: NextRequest) {
     summary: {
       totalTons: Math.round(totalTons * 100) / 100,
       completedTons: Math.round(completedTons * 100) / 100,
+      earnedTons: Math.round(earnedTons * 100) / 100,
       tonsPct: totalTons > 0 ? Math.round((completedTons / totalTons) * 100) : 0,
+      earnedPct: totalTons > 0 ? Math.round((earnedTons / totalTons) * 100) : 0,
       totalPieceMarks,
       completedPieceMarks,
+      earnedPieceMarks,
       pieceMarkPct: totalPieceMarks > 0 ? Math.round((completedPieceMarks / totalPieceMarks) * 100) : 0,
     },
     stages: stageProgress,
