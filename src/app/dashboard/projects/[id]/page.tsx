@@ -187,6 +187,19 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
+      {/* Control Dashboard link — R01/R02/R03 */}
+      {['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'].includes(currentUserRole) && (
+        <a
+          href={`/dashboard/projects/${params.id}/control`}
+          className="card p-3 flex items-center gap-3 transition-all hover:shadow-md"
+          style={{ borderLeft: '4px solid #8b5cf6', textDecoration: 'none' }}
+        >
+          <span style={{ fontSize: '18px' }}>📊</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--text-heading)' }}>Bảng điều khiển BLĐ</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>3 đường: Kế hoạch · Hiện hành · Thực hiện</span>
+        </a>
+      )}
+
       {/* Stats Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }} className="stagger-children">
         {[
