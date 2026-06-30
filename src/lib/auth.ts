@@ -114,8 +114,8 @@ export async function logAudit(
 // ── Row-Level Security ──
 
 export async function getUserProjectIds(user: TokenPayload): Promise<string[] | null> {
-  // R01 (BGĐ) sees everything — return null = no filter
-  if (user.roleCode === 'R01') return null
+  // R01 (BGĐ) + R10 (Admin/IT) sees everything — return null = no filter
+  if (user.roleCode === 'R01' || user.roleCode === 'R10') return null
 
   // R02 (PM) sees projects they manage
   const pmProjects = await prisma.project.findMany({

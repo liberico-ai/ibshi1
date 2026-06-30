@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, getUserProjectIds, projectFilter } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, getUserProjectIds } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createBudgetSchema } from '@/lib/schemas'
 import { FINANCE_WRITE_ROLES } from '@/lib/constants'
@@ -25,10 +25,10 @@ export async function GET(req: NextRequest) {
     const projectId = searchParams.get('projectId')
 
     const userProjectIds = await getUserProjectIds(user)
-    const pFilter = projectFilter(userProjectIds)
+    const idFilter = userProjectIds !== null ? { id: { in: userProjectIds } } : {}
     const pWhere = projectId
-      ? { id: projectId, ...pFilter }
-      : { status: 'ACTIVE' as const, ...pFilter }
+      ? { id: projectId, ...idFilter }
+      : { status: 'ACTIVE' as const, ...idFilter }
     
     // Fetch base active projects
     const dbProjects = await prisma.project.findMany({
