@@ -51,6 +51,13 @@ export async function PUT(req: NextRequest) {
     }
 
     if (notificationId) {
+      const noti = await prisma.notification.findUnique({
+        where: { id: notificationId },
+        select: { userId: true },
+      })
+      if (!noti || noti.userId !== payload.userId) {
+        return errorResponse('Không tìm thấy thông báo', 404)
+      }
       await prisma.notification.update({
         where: { id: notificationId },
         data: { isRead: true },

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, getUserProjectIds, projectFilter } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createBudgetSchema } from '@/lib/schemas'
 import { FINANCE_WRITE_ROLES } from '@/lib/constants'
@@ -24,7 +24,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
 
-    const pWhere = projectId ? { id: projectId } : { status: 'ACTIVE' }
+    const userProjectIds = await getUserProjectIds(user)
+    const pFilter = projectFilter(userProjectIds)
+    const pWhere = projectId
+      ? { id: projectId, ...pFilter }
+      : { status: 'ACTIVE' as const, ...pFilter }
     
     // Fetch base active projects
     const dbProjects = await prisma.project.findMany({
@@ -145,6 +149,11 @@ export async function POST(req: NextRequest) {
     const result = await validateBody(req, createBudgetSchema)
     if (!result.success) return result.response
     const { projectId, category, planned, actual, committed, forecast, month, year, notes } = result.data
+
+    const userProjectIds = await getUserProjectIds(user)
+    if (userProjectIds && !userProjectIds.includes(projectId)) {
+      return errorResponse('Không có quyền ghi ngân sách cho dự án này', 403)
+    }
 
     const budget = await prisma.budget.upsert({
       where: {

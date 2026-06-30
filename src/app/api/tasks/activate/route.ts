@@ -1,14 +1,19 @@
 import { NextRequest } from 'next/server'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import prisma from '@/lib/db'
 import { resolveRoleToUser } from '@/lib/work-engine'
+
+const ACTIVATE_ROLES = ['R01', 'R02', 'R02a', 'R10']
 
 // POST /api/tasks/activate — Create an independent multi-instance task (e.g., P4.5)
 export async function POST(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
+    if (!requireRoles(payload.roleCode, ACTIVATE_ROLES)) {
+      return errorResponse('Không có quyền kích hoạt task', 403)
+    }
 
     const body = await req.json()
     const { projectId, stepCode, materialInfo } = body

@@ -220,11 +220,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     const task = await prisma.task.findUnique({
       where: { id: params.id },
-      select: { projectId: true, taskType: true }
+      select: { projectId: true, taskType: true, createdBy: true, assignees: { select: { userId: true, role: true } } },
     })
 
     if (!task) return errorResponse('Task not found', 404)
     if (task.taskType !== 'P5.1' && task.taskType !== 'P5.1A') return errorResponse('Invalid task type')
+
+    const isAssignee = task.createdBy === payload.userId
+      || task.assignees.some(a => a.userId === payload.userId || a.role === payload.roleCode)
+      || payload.roleCode === 'R01'
+    if (!isAssignee) return errorResponse('Bạn không thuộc task này', 403)
 
     const body = await request.json()
     const { items, date } = body as {

@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return successResponse({ comments })
 }
 
-// POST /api/tasks/[id]/comments — Add comment to task
+// POST /api/tasks/[id]/comments — Add comment to task (assignee/creator only)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
@@ -47,8 +47,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!result.success) return result.response
   const { content } = result.data
 
-  const task = await prisma.task.findUnique({ where: { id }, select: { id: true } })
+  const task = await prisma.task.findUnique({
+    where: { id },
+    select: { id: true, createdBy: true, assignees: { select: { userId: true, role: true } } },
+  })
   if (!task) return errorResponse('Không tìm thấy task', 404)
+
+  const isAssignee = task.createdBy === user.userId
+    || task.assignees.some(a => a.userId === user.userId || a.role === user.roleCode)
+    || user.roleCode === 'R01'
+  if (!isAssignee) return errorResponse('Bạn không thuộc task này', 403)
 
   const entry = await addComment(id, user.userId, content.trim())
 

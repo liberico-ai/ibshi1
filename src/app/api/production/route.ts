@@ -18,6 +18,7 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   const projectId = new URL(req.url).searchParams.get('projectId')
 
   const departmentId = new URL(req.url).searchParams.get('departmentId')
+
   const where: Record<string, unknown> = {}
   if (status) where.status = status
   if (projectId) where.projectId = projectId

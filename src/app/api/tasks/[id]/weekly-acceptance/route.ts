@@ -1,8 +1,10 @@
 import prisma from '@/lib/db'
 import { notifyTaskActivated } from '@/lib/telegram-notifications'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import { resolveRoleToUser } from '@/lib/work-engine'
+
+const ACCEPTANCE_ROLES = ['R01', 'R02', 'R02a', 'R03']
 
 const MAX_VOLUME = 1_000_000
 
@@ -212,6 +214,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     const payload = await authenticateRequest(request as any)
     if (!payload) return unauthorizedResponse()
+    if (!requireRoles(payload.roleCode, ACCEPTANCE_ROLES)) {
+      return errorResponse('Không có quyền nghiệm thu', 403)
+    }
 
     const task = await prisma.task.findUnique({
       where: { id: params.id },

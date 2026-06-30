@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, getUserProjectIds, projectFilter } from '@/lib/auth'
 import { FINANCE_WRITE_ROLES } from '@/lib/constants'
 
 // GET /api/finance/cashflow-entries — list cashflow entries with summary
@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
     const month = searchParams.get('month')
     const year = searchParams.get('year')
 
-    const where: Record<string, unknown> = {}
+    const userProjectIds = await getUserProjectIds(user)
+    const pFilter = projectFilter(userProjectIds)
+
+    const where: Record<string, unknown> = { ...pFilter }
     if (projectId) where.projectId = projectId
     if (type) where.type = type
     if (month && year) {
@@ -56,6 +59,13 @@ export async function POST(req: NextRequest) {
 
     if (!entryCode || !type || !category || !amount || !entryDate) {
       return errorResponse('Thiếu: entryCode, type, category, amount, entryDate')
+    }
+
+    if (projectId) {
+      const userProjectIds = await getUserProjectIds(user)
+      if (userProjectIds && !userProjectIds.includes(projectId)) {
+        return errorResponse('Không có quyền ghi dòng tiền cho dự án này', 403)
+      }
     }
 
     const exists = await prisma.cashflowEntry.findUnique({ where: { entryCode } })
