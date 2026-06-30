@@ -192,6 +192,11 @@ export default function WorkInboxPage() {
                     {tab === 'review' && !revLate && <Badge variant="warning">Cần kết thúc</Badge>}
                     {revLate && (tab === 'review' || tab === 'overdue') && <Badge variant="danger">Trễ nghiệm thu ({revDays} ngày)</Badge>}
                     <Badge variant={st.variant}>{st.l}</Badge>
+                    {t.taskType === 'CASCADE' && (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{
+                        background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24',
+                      }}>⚡ Cascade</span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                     {t.project && <Badge variant="info">{t.project.projectCode}</Badge>}

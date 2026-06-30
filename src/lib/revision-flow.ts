@@ -1,5 +1,6 @@
 import prisma from './db'
 import { isEnabled } from './feature-flags'
+import { runCascade } from './cascade-tasks'
 
 // ── Types ──
 
@@ -161,8 +162,7 @@ export async function createRevisionWithEco(params: CreateRevisionWithEcoParams)
 // ── 2. Approve a BOM version (DRAFT → ACTIVE) ──
 
 export async function approveRevision(bomVersionId: string, userId: string) {
-  return prisma.$transaction(async (tx) => {
-    // 1. Find the BomVersion, verify it's DRAFT
+  const { updated, cascadeParams } = await prisma.$transaction(async (tx) => {
     const version = await tx.bomVersion.findUnique({
       where: { id: bomVersionId },
     })
@@ -173,7 +173,6 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       throw new Error(`BomVersion đang ở trạng thái "${version.status}", chỉ DRAFT mới duyệt được`)
     }
 
-    // 2. Find the linked ECO, verify it's APPROVED
     if (version.ecoId) {
       const eco = await tx.engineeringChangeOrder.findUnique({
         where: { id: version.ecoId },
@@ -188,14 +187,12 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       }
     }
 
-    // 3. Set old ACTIVE version → SUPERSEDED
     await tx.bomVersion.updateMany({
       where: { bomId: version.bomId, status: 'ACTIVE' },
       data: { status: 'SUPERSEDED' },
     })
 
-    // 4. Set this version → ACTIVE
-    const updated = await tx.bomVersion.update({
+    const result = await tx.bomVersion.update({
       where: { id: bomVersionId },
       data: {
         status: 'ACTIVE',
@@ -204,16 +201,51 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       },
     })
 
-    // ── Cascade: auto-create procurement tasks when BOM version is activated ──
+    let params: { oldVersionId: string; newVersionId: string; projectId: string; ecoCode: string; userId: string } | null = null
+
     if (isEnabled('BOM_REVISION_CASCADE')) {
-      // TODO: Wire up cascade task creation here.
-      // When enabled, this will call work-engine helpers to create
-      // procurement adjustment tasks based on BOM diff (added/changed items).
-      // For now this is a placeholder — the feature flag keeps it OFF by default.
+      const oldVersion = await tx.bomVersion.findFirst({
+        where: { bomId: version.bomId, status: 'SUPERSEDED' },
+        orderBy: { versionNo: 'desc' },
+        select: { id: true },
+      })
+
+      if (oldVersion) {
+        const eco = version.ecoId
+          ? await tx.engineeringChangeOrder.findUnique({
+              where: { id: version.ecoId },
+              select: { ecoCode: true, projectId: true },
+            })
+          : null
+
+        params = {
+          oldVersionId: oldVersion.id,
+          newVersionId: bomVersionId,
+          projectId: eco?.projectId || version.bomId,
+          ecoCode: eco?.ecoCode || `BOM-v${version.versionNo}`,
+          userId,
+        }
+      }
     }
 
-    return updated
+    return { updated: result, cascadeParams: params }
   })
+
+  if (cascadeParams) {
+    try {
+      await runCascade(
+        cascadeParams.oldVersionId,
+        cascadeParams.newVersionId,
+        cascadeParams.projectId,
+        cascadeParams.ecoCode,
+        cascadeParams.userId,
+      )
+    } catch (err) {
+      console.error('[approveRevision] Cascade failed (non-blocking):', err)
+    }
+  }
+
+  return updated
 }
 
 // ── 3. Get revision history for a BOM ──

@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { isEnabled } from '@/lib/feature-flags'
+import { runCascade } from '@/lib/cascade-tasks'
 
 // GET /api/design/bom/versions/:id — Get a single BomVersion
 export async function GET(
@@ -57,14 +59,17 @@ export async function PUT(
 
   // If activating this version, supersede the current ACTIVE version
   if (status === 'ACTIVE') {
+    const oldActiveVersion = await prisma.bomVersion.findFirst({
+      where: { bomId: existing.bomId, status: 'ACTIVE' },
+      select: { id: true },
+    })
+
     const updated = await prisma.$transaction(async (tx) => {
-      // Supersede any currently ACTIVE version for the same BOM
       await tx.bomVersion.updateMany({
         where: { bomId: existing.bomId, status: 'ACTIVE' },
         data: { status: 'SUPERSEDED' },
       })
 
-      // Activate this version
       return tx.bomVersion.update({
         where: { id },
         data: {
@@ -84,6 +89,16 @@ export async function PUT(
         },
       })
     })
+
+    // ── Cascade: fire-and-forget task creation after transaction commits ──
+    if (isEnabled('BOM_REVISION_CASCADE') && oldActiveVersion) {
+      const ecoCode = updated.eco?.ecoCode || `BOM-v${updated.versionNo}`
+      const projectId = updated.bom.projectId
+
+      runCascade(oldActiveVersion.id, id, projectId, ecoCode, user.userId)
+        .then(r => { if (r.taskIds.length) console.log(`[cascade] Created ${r.taskIds.length} tasks for ${ecoCode}`) })
+        .catch(err => console.error('[cascade] Failed (non-blocking):', err))
+    }
 
     return successResponse({ version: updated, message: 'Đã kích hoạt phiên bản BOM' })
   }
