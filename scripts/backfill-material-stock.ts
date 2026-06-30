@@ -20,8 +20,19 @@
  */
 
 import { PrismaClient, Prisma } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import pg from 'pg'
 
-const prisma = new PrismaClient()
+const connectionString = process.env.DATABASE_URL!
+const isRemote = !connectionString.includes('@localhost') && !connectionString.includes('@127.0.0.1')
+const pool = new pg.Pool({
+  connectionString,
+  max: 5,
+  ...(isRemote && { ssl: { rejectUnauthorized: false } }),
+})
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const adapter = new PrismaPg(pool as any)
+const prisma = new PrismaClient({ adapter })
 const DRY_RUN = process.argv.includes('--dry-run')
 
 interface MismatchRow {
