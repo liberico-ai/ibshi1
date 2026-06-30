@@ -36,7 +36,13 @@ export async function POST(req: NextRequest) {
 
   const result = await validateBody(req, createEcoSchema)
   if (!result.success) return result.response
-  const { projectId, title, description, changeType, impactCost, impactSchedule } = result.data
+  const { projectId, title, description, changeType, source, costBearer, ncrId, impactCost, impactSchedule } = result.data
+
+  if (ncrId) {
+    const ncr = await prisma.nonConformanceReport.findUnique({ where: { id: ncrId }, select: { id: true, projectId: true } })
+    if (!ncr) return errorResponse('NCR không tồn tại', 404)
+    if (ncr.projectId !== projectId) return errorResponse('NCR không thuộc dự án này', 400)
+  }
 
   const year = new Date().getFullYear().toString().slice(-2)
   const count = await prisma.engineeringChangeOrder.count()
@@ -45,6 +51,9 @@ export async function POST(req: NextRequest) {
   const eco = await prisma.engineeringChangeOrder.create({
     data: {
       ecoCode, projectId, title, description, changeType,
+      source: source || 'DESIGN',
+      costBearer: costBearer || 'INTERNAL',
+      ncrId: ncrId || null,
       impactCost: impactCost || null,
       impactSchedule: impactSchedule || null,
       requestedBy: user.userId,

@@ -66,11 +66,25 @@ export type UpdateBomInput = z.infer<typeof updateBomSchema>
 
 // ── ECO (Engineering Change Order) ──
 
+export const ECO_SOURCES = [
+  'DESIGN', 'CUSTOMER', 'ENGINEERING_SHOPDRAWING', 'PRODUCTION_NCR',
+  'SUBSTITUTION', 'CORRECTION', 'SITE',
+] as const
+export type EcoSource = typeof ECO_SOURCES[number]
+
+export const ECO_COST_BEARERS = [
+  'INTERNAL', 'CUSTOMER', 'SUPPLIER', 'PRODUCTION_TEAM', 'SITE_TBD',
+] as const
+export type EcoCostBearer = typeof ECO_COST_BEARERS[number]
+
 export const createEcoSchema = z.object({
   projectId: z.string().min(1, 'Dự án là bắt buộc'),
   title: z.string().min(1, 'Tiêu đề là bắt buộc'),
   description: z.string().min(1, 'Mô tả là bắt buộc'),
   changeType: z.string().min(1, 'Loại thay đổi là bắt buộc'),
+  source: z.enum(ECO_SOURCES).optional(),
+  costBearer: z.enum(ECO_COST_BEARERS).optional(),
+  ncrId: z.string().optional(),
   impactCost: z.number().optional(),
   impactSchedule: z.number().int().optional(),
 })
@@ -81,6 +95,8 @@ export const updateEcoSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().min(1).optional(),
   changeType: z.string().optional(),
+  source: z.enum(ECO_SOURCES).optional(),
+  costBearer: z.enum(ECO_COST_BEARERS).optional(),
   impactCost: z.number().optional(),
   impactSchedule: z.number().int().optional(),
   status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'IMPLEMENTED']).optional(),

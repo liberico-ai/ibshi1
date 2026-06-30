@@ -922,6 +922,9 @@ model EngineeringChangeOrder {
   title          String
   description    String
   changeType     String       @map("change_type")
+  source         String?      // DESIGN | CUSTOMER | ENGINEERING_SHOPDRAWING | PRODUCTION_NCR | SUBSTITUTION | CORRECTION | SITE
+  costBearer     String?      @map("cost_bearer") // INTERNAL | CUSTOMER | SUPPLIER | PRODUCTION_TEAM | SITE_TBD
+  ncrId          String?      @map("ncr_id")
   impactCost     Decimal?     @map("impact_cost")
   impactSchedule Int?         @map("impact_schedule")
   status         String       @default("DRAFT")
@@ -936,6 +939,8 @@ model EngineeringChangeOrder {
 
   @@index([projectId])
   @@index([status])
+  @@index([source])
+  @@index([ncrId])
   @@map("engineering_change_orders")
 }
 

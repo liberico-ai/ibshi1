@@ -2,15 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
-import { z } from 'zod'
-
-const updateEcoSchema = z.object({
-  status: z.string().optional(),
-  title: z.string().min(1).optional(),
-  description: z.string().min(1).optional(),
-  impactCost: z.number().optional().nullable(),
-  impactSchedule: z.number().int().optional().nullable(),
-})
+import { updateEcoSchema } from '@/lib/schemas'
 
 // GET /api/design/eco/[id] — Get single ECO by id
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -46,11 +38,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const result = await validateBody(req, updateEcoSchema)
   if (!result.success) return result.response
-  const { status, title, description, impactCost, impactSchedule } = result.data
+  const { status, title, description, source, costBearer, impactCost, impactSchedule } = result.data
 
   const data: Record<string, unknown> = {}
   if (title !== undefined) data.title = title
   if (description !== undefined) data.description = description
+  if (source !== undefined) data.source = source
+  if (costBearer !== undefined) data.costBearer = costBearer
   if (impactCost !== undefined) data.impactCost = impactCost
   if (impactSchedule !== undefined) data.impactSchedule = impactSchedule
 
