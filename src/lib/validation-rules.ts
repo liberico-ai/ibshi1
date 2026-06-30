@@ -102,8 +102,8 @@ async function validateBudgetOverrun(
   const warnings: string[] = []
 
   // Get budget estimate from P1.2 step
-  const budgetTask = await prisma.workflowTask.findFirst({
-    where: { projectId, stepCode: 'P1.2', status: 'DONE' },
+  const budgetTask = await prisma.task.findFirst({
+    where: { projectId, taskType: 'P1.2', status: 'DONE' },
     select: { resultData: true },
   })
 
@@ -248,8 +248,8 @@ async function validateSufficientStock(
 // Factory: returns a validator that blocks completion if a required FileAttachment slot is empty.
 function makeAttachmentValidator(stepCode: string, slots: { key: string; label: string }[]) {
   return async (projectId: string): Promise<ValidationResult> => {
-    const task = await prisma.workflowTask.findFirst({
-      where: { projectId, stepCode },
+    const task = await prisma.task.findFirst({
+      where: { projectId, taskType: stepCode },
       select: { id: true },
     })
     if (!task) return EMPTY_OK
