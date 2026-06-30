@@ -870,6 +870,7 @@ model BomItem {
   materialId    String         @map("material_id")
   parentId      String?        @map("parent_id")
   category      String         @default("MAIN") // MAIN | WELD | PAINT | AUX | CONSUMABLE
+  layer         String?        // HARD | NORM | STOCK
   pieceMark     String?        @map("piece_mark")
   quantity      Decimal
   unit          String

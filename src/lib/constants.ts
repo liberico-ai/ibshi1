@@ -207,6 +207,7 @@ export const MENU_ITEMS = [
   { key: 'bom', label: 'Định mức vật tư', labelEn: 'BOM', icon: 'Layers', href: '/dashboard/design/bom', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a'], group: 'design' },
   { key: 'drawings', label: 'Bản vẽ', labelEn: 'Drawings', icon: 'Ruler', href: '/dashboard/design/drawings', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a'], group: 'design' },
   { key: 'eco', label: 'Thay đổi TK', labelEn: 'ECO', icon: 'RefreshCw', href: '/dashboard/design/eco', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a', 'R06'], group: 'design' },
+  { key: 'norms', label: 'Định mức tiêu hao', labelEn: 'Norms', icon: 'Calculator', href: '/dashboard/design/norms', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a'], group: 'design' },
 
   // ── Warehouse ──
   { key: 'warehouse', label: 'Kho', labelEn: 'Warehouse', icon: 'Package', href: '/dashboard/warehouse', roles: ['R01', 'R03', 'R03a', 'R05', 'R05a'], group: 'warehouse' },

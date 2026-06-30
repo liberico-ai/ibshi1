@@ -19,4 +19,7 @@ export const RBAC = {
 
   // Gộp mã trùng — thao tác rủi ro cao, chỉ BGĐ + Admin
   MATERIAL_CODE_MERGE: ['R01', 'R10', 'R00'],
+
+  // Định mức tiêu hao: BGĐ, KTKH (trưởng + NV)
+  NORM_ACTION: ['R01', 'R03', 'R03a'],
 }

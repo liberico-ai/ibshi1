@@ -340,16 +340,18 @@ describe('computeImpact', () => {
 // ════════════════════════════════════════════════════════════════
 
 describe('computeNormLines', () => {
-  it('no norms → empty array', async () => {
+  it('no norms → empty results with warning', async () => {
     prismaMock.norm.findMany.mockResolvedValue([] as never)
 
     const mainLines = [makeMainLine({ quantity: 500 })]
-    const result = await computeNormLines(mainLines, 'proj-1')
+    const { results, warnings } = await computeNormLines(mainLines, 'proj-1')
 
-    expect(result).toEqual([])
+    expect(results).toEqual([])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0].message).toContain('Chưa có định mức')
   })
 
-  it('welding norm (kg/kg) → calculates from total main weight', async () => {
+  it('welding norm (kg basis) → calculates from total main weight', async () => {
     prismaMock.norm.findMany.mockResolvedValue([
       {
         id: 'norm-1',
@@ -358,7 +360,7 @@ describe('computeNormLines', () => {
         code: 'WE-E7018',
         name: 'Que hàn E7018',
         unit: 'kg',
-        rate: 0.03, // 0.03 kg weld rod per kg steel
+        rate: 0.03,
         basisUnit: 'kg',
         materialId: null,
         notes: null,
@@ -372,17 +374,46 @@ describe('computeNormLines', () => {
       makeMainLine({ id: 'line-2', pieceMark: 'C2', quantity: 500 }),
     ]
 
-    const result = await computeNormLines(mainLines, 'proj-1')
+    const { results } = await computeNormLines(mainLines, 'proj-1')
 
-    expect(result).toHaveLength(1)
-    expect(result[0].category).toBe('WELD')
-    expect(result[0].normCode).toBe('WE-E7018')
-    expect(result[0].basisValue).toBe(1500) // total main weight
-    expect(result[0].quantity).toBe(45) // 1500 * 0.03
-    expect(result[0].unit).toBe('kg')
+    expect(results).toHaveLength(1)
+    expect(results[0].category).toBe('WELD')
+    expect(results[0].normCode).toBe('WE-E7018')
+    expect(results[0].basisValue).toBe(1500)
+    expect(results[0].quantity).toBe(45)
+    expect(results[0].unit).toBe('kg')
+    expect(results[0].basisUnit).toBe('kg')
+    expect(results[0].rate).toBe(0.03)
   })
 
-  it('paint norm (L/m²) → calculates from estimated surface area', async () => {
+  it('norm with ton basis → calculates from total main weight / 1000', async () => {
+    prismaMock.norm.findMany.mockResolvedValue([
+      {
+        id: 'norm-3',
+        projectId: null,
+        category: 'WELD',
+        code: 'NORM-WELD-QUE',
+        name: 'Que hàn E7018',
+        unit: 'kg',
+        rate: 20,
+        basisUnit: 'ton',
+        materialId: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ] as never)
+
+    const mainLines = [makeMainLine({ quantity: 5000 })] // 5000 kg = 5 ton
+
+    const { results } = await computeNormLines(mainLines, 'proj-1')
+
+    expect(results).toHaveLength(1)
+    expect(results[0].basisValue).toBe(5) // 5 ton
+    expect(results[0].quantity).toBe(100) // 5 × 20 = 100 kg que hàn
+  })
+
+  it('unsupported basisUnit → warning, no result', async () => {
     prismaMock.norm.findMany.mockResolvedValue([
       {
         id: 'norm-2',
@@ -391,7 +422,7 @@ describe('computeNormLines', () => {
         code: 'PAINT-EP01',
         name: 'Sơn epoxy',
         unit: 'L',
-        rate: 0.2, // 0.2 L per m²
+        rate: 0.2,
         basisUnit: 'm²',
         materialId: null,
         notes: null,
@@ -400,16 +431,13 @@ describe('computeNormLines', () => {
       },
     ] as never)
 
-    const mainLines = [makeMainLine({ quantity: 2000 })] // 2000 kg steel
+    const mainLines = [makeMainLine({ quantity: 2000 })]
 
-    const result = await computeNormLines(mainLines, 'proj-1')
+    const { results, warnings } = await computeNormLines(mainLines, 'proj-1')
 
-    expect(result).toHaveLength(1)
-    expect(result[0].category).toBe('PAINT')
-    // basisValue = 2000 * 0.15 = 300 m²
-    expect(result[0].basisValue).toBe(300)
-    // quantity = 300 * 0.2 = 60 L
-    expect(result[0].quantity).toBe(60)
-    expect(result[0].unit).toBe('L')
+    expect(results).toHaveLength(0)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0].normCode).toBe('PAINT-EP01')
+    expect(warnings[0].message).toContain('m²')
   })
 })

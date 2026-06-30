@@ -3,6 +3,19 @@ import prisma from './db'
 // ── Types ──
 
 export type BomCategory = 'MAIN' | 'WELD' | 'PAINT' | 'AUX' | 'CONSUMABLE'
+export type BomLayer = 'HARD' | 'NORM' | 'STOCK'
+
+const CATEGORY_TO_LAYER: Record<BomCategory, BomLayer> = {
+  MAIN: 'HARD',
+  WELD: 'NORM',
+  PAINT: 'NORM',
+  AUX: 'STOCK',
+  CONSUMABLE: 'STOCK',
+}
+
+export function layerFromCategory(category: string): BomLayer {
+  return CATEGORY_TO_LAYER[category as BomCategory] || 'HARD'
+}
 
 export interface BomLineSnapshot {
   id: string
@@ -342,34 +355,77 @@ export async function computeImpact(versionId: string): Promise<ImpactResult> {
 
 // ── Norm-based Calculation ──
 
+export type NormResult = {
+  category: BomCategory
+  materialCode: string
+  materialName: string
+  quantity: number
+  unit: string
+  normCode: string
+  basisValue: number
+  basisUnit: string
+  rate: number
+}
+
+export type NormWarning = {
+  normCode: string
+  message: string
+}
+
 export async function computeNormLines(
   mainLines: BomLineSnapshot[],
   projectId?: string | null
-): Promise<Array<{ category: BomCategory; materialCode: string; materialName: string; quantity: number; unit: string; normCode: string; basisValue: number }>> {
+): Promise<{ results: NormResult[]; warnings: NormWarning[] }> {
   const norms = await prisma.norm.findMany({
     where: projectId ? { OR: [{ projectId }, { projectId: null }] } : { projectId: null },
     orderBy: [{ projectId: 'desc' }, { category: 'asc' }],
   })
 
-  if (norms.length === 0) return []
+  if (norms.length === 0) {
+    return { results: [], warnings: [{ normCode: '-', message: 'Chưa có định mức nào trong hệ thống. Vào Quản lý Định mức để tạo.' }] }
+  }
 
-  const totalWeight = mainLines
+  const totalWeightKg = mainLines
     .filter(l => l.category === 'MAIN')
     .reduce((s, l) => s + l.quantity, 0)
 
-  const results: Array<{ category: BomCategory; materialCode: string; materialName: string; quantity: number; unit: string; normCode: string; basisValue: number }> = []
+  const totalWeightTon = totalWeightKg / 1000
+
+  const results: NormResult[] = []
+  const warnings: NormWarning[] = []
   const seen = new Set<string>()
 
   for (const norm of norms) {
     if (seen.has(norm.category + '::' + norm.code)) continue
     seen.add(norm.category + '::' + norm.code)
 
+    const rate = Number(norm.rate)
     let basisValue = 0
-    if (norm.basisUnit === 'kg') basisValue = totalWeight
-    else if (norm.basisUnit === 'm²') basisValue = totalWeight * 0.15 // rough estimate: 0.15 m²/kg for structural steel
-    else if (norm.basisUnit === 'm') basisValue = totalWeight * 0.02 // rough estimate: 0.02 m weld/kg
 
-    const quantity = basisValue * Number(norm.rate)
+    switch (norm.basisUnit) {
+      case 'ton':
+        basisValue = totalWeightTon
+        break
+      case 'kg':
+        basisValue = totalWeightKg
+        break
+      default:
+        warnings.push({
+          normCode: norm.code,
+          message: `Đơn vị cơ sở "${norm.basisUnit}" chưa hỗ trợ tính tự động cho ${norm.name}. Chỉ hỗ trợ: ton, kg.`,
+        })
+        continue
+    }
+
+    if (basisValue <= 0) {
+      warnings.push({
+        normCode: norm.code,
+        message: `Không có KL vật tư chính (MAIN) để tính ${norm.name}`,
+      })
+      continue
+    }
+
+    const quantity = basisValue * rate
 
     if (quantity > 0) {
       results.push({
@@ -380,9 +436,11 @@ export async function computeNormLines(
         unit: norm.unit,
         normCode: norm.code,
         basisValue: Math.round(basisValue * 100) / 100,
+        basisUnit: norm.basisUnit,
+        rate,
       })
     }
   }
 
-  return results
+  return { results, warnings }
 }
