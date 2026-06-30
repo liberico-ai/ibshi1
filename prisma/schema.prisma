@@ -105,9 +105,30 @@ model Project {
   loanContracts      LoanContract[]
   financePlan        ProjectFinancePlan?
 
+  baselines          ProjectBaseline[]
+
   @@index([status])
   @@index([pmUserId])
   @@map("projects")
+}
+
+model ProjectBaseline {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  version   Int      @default(0)
+  label     String   @default("Rev.0")
+  frozenAt  DateTime @default(now()) @map("frozen_at")
+  frozenBy  String?  @map("frozen_by")
+  snapshot  Json     @default("{}")
+  isActive  Boolean  @default(true) @map("is_active")
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project   Project  @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@map("project_baselines")
 }
 
 model WbsNode {
@@ -419,6 +440,8 @@ model PurchaseRequestItem {
   id              String          @id @default(cuid())
   prId            String          @map("pr_id")
   materialId      String          @map("material_id")
+  bomItemId       String?         @map("bom_item_id")
+  bomVersionId    String?         @map("bom_version_id")
   quantity        Decimal
   requiredDate    DateTime?       @map("required_date")
   specification   String?
@@ -428,6 +451,8 @@ model PurchaseRequestItem {
 
   @@index([prId])
   @@index([materialId])
+  @@index([bomItemId])
+  @@index([bomVersionId])
   @@map("purchase_request_items")
 }
 
@@ -1091,19 +1116,20 @@ model Payment {
 }
 
 model Budget {
-  id        String   @id @default(cuid())
-  projectId String   @map("project_id")
-  category  String
-  planned   Decimal  @default(0)
-  actual    Decimal  @default(0)
-  committed Decimal  @default(0)
-  forecast  Decimal  @default(0)
-  month     Int?
-  year      Int?
-  notes     String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  project   Project  @relation(fields: [projectId], references: [id])
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  category     String
+  planned      Decimal  @default(0)
+  actual       Decimal  @default(0)
+  committed    Decimal  @default(0)
+  forecast     Decimal  @default(0)
+  month        Int?
+  year         Int?
+  bomVersionId String?  @map("bom_version_id")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  project      Project  @relation(fields: [projectId], references: [id])
 
   @@unique([projectId, category, month, year])
   @@index([projectId])
