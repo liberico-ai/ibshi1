@@ -5,6 +5,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
+import { applyStockMovement } from '@/lib/stock-ledger'
 
 // GET /api/warehouse/:id — Material detail + movement history
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -126,27 +127,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse(`Tồn kho không đủ. Hiện có: ${material.currentStock} ${material.unit}`)
     }
 
-    // Calculate new stock
-    const stockDelta = type === 'OUT' ? -qty : qty
-
-    const [movement] = await prisma.$transaction([
-      prisma.stockMovement.create({
-        data: {
-          materialId: id,
-          projectId: projectId || null,
-          type,
-          quantity: qty,
-          reason,
-          referenceNo: referenceNo || null,
-          performedBy: payload.userId,
-          notes: notes || null,
-        },
-      }),
-      prisma.material.update({
-        where: { id },
-        data: { currentStock: { increment: stockDelta } },
-      }),
-    ])
+    const movement = await prisma.$transaction(async (tx) => {
+      return applyStockMovement(tx, {
+        materialId: id,
+        projectId,
+        type: type as 'IN' | 'OUT' | 'RETURN',
+        quantity: qty,
+        reason,
+        referenceNo,
+        performedBy: payload.userId,
+        notes,
+      })
+    })
 
     return successResponse(
       { movement: { ...movement, quantity: Number(movement.quantity) } },

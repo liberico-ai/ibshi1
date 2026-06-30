@@ -5,6 +5,7 @@ import { logChangeEvent, runReverseHooks } from './sync-engine'
 import { runValidationRules } from './validation-rules'
 import { notifyTaskActivated, notifyTaskRejected } from './telegram-notifications'
 import { resolveRoleToUser } from './work-engine'
+import { applyStockMovement } from './stock-ledger'
 
 // Re-export client-safe items for backward compatibility
 export { WORKFLOW_RULES, PHASE_LABELS, getWorkflowProgress } from './workflow-constants'
@@ -459,8 +460,8 @@ export async function rejectTask(
     }
   }
 
-  // 4. Run reverse sync hooks
-  await runReverseHooks(projectId, task.taskType, userId, reason)
+  // 4. Run reverse sync hooks (pass taskId for stock reversal)
+  await runReverseHooks(projectId, task.taskType, userId, reason, taskId)
 
   // 5. Log ChangeEvent
   await logChangeEvent({
@@ -557,65 +558,57 @@ async function runWorkflowHooks(
       const materialId = resultData.materialId as string | undefined
       const quantity = resultData.quantity as number | undefined
       if (materialId && quantity && quantity > 0) {
-        await prisma.$transaction([
-          prisma.stockMovement.create({
-            data: {
-              materialId,
-              projectId,
-              type: 'IN',
-              quantity,
-              reason: 'po_receipt',
-              referenceNo: `${projCode}-${stepCode}`,
-              performedBy: userId,
-              notes: `Auto: workflow ${stepCode} completed`,
-            },
-          }),
-          prisma.material.update({
-            where: { id: materialId },
-            data: { currentStock: { increment: quantity } },
-          }),
-        ])
+        await prisma.$transaction(async (tx) => {
+          await applyStockMovement(tx, {
+            materialId,
+            projectId,
+            type: 'IN',
+            quantity,
+            reason: 'po_receipt',
+            referenceNo: `${projCode}-${stepCode}`,
+            performedBy: userId,
+            notes: `Auto: workflow ${stepCode} completed`,
+          })
+        })
       }
     }
 
     // P4.4: Kho nghiệm thu nhập kho → auto StockMovement (IN) for each warehouse item
     if (stepCode === 'P4.4' && resultData) {
-      const warehouseItems = resultData.warehouseItems as { material: string; receivedQty: string; storageLocation: string }[] | undefined
+      const warehouseItems = resultData.warehouseItems as { material: string; materialId?: string; receivedQty: string; storageLocation: string }[] | undefined
       if (warehouseItems && Array.isArray(warehouseItems)) {
-        const validItems = warehouseItems.filter(w => w.material?.trim() && Number(w.receivedQty) > 0)
+        const validItems = warehouseItems.filter(w => Number(w.receivedQty) > 0 && (w.materialId || w.material?.trim()))
         for (const item of validItems) {
           const qty = Number(item.receivedQty)
-          const matName = item.material.trim().toLowerCase()
-          // Find material by name (fuzzy: exact, then includes)
-          let material = await prisma.material.findFirst({
-            where: { name: { equals: item.material.trim(), mode: 'insensitive' } },
-            select: { id: true },
-          })
-          if (!material) {
-            material = await prisma.material.findFirst({
-              where: { name: { contains: item.material.trim(), mode: 'insensitive' } },
+          let matId = item.materialId
+          if (!matId) {
+            const found = await prisma.material.findFirst({
+              where: { name: { equals: item.material.trim(), mode: 'insensitive' } },
               select: { id: true },
             })
+            if (!found) {
+              const found2 = await prisma.material.findFirst({
+                where: { name: { contains: item.material.trim(), mode: 'insensitive' } },
+                select: { id: true },
+              })
+              matId = found2?.id
+            } else {
+              matId = found.id
+            }
           }
-          if (material) {
-            await prisma.$transaction([
-              prisma.stockMovement.create({
-                data: {
-                  materialId: material.id,
-                  projectId,
-                  type: 'IN',
-                  quantity: qty,
-                  reason: 'warehouse_receipt',
-                  referenceNo: `${projCode}-P4.4`,
-                  performedBy: userId,
-                  notes: `Nhập kho: ${item.material} x ${qty}, vị trí: ${item.storageLocation || '—'}`,
-                },
-              }),
-              prisma.material.update({
-                where: { id: material!.id },
-                data: { currentStock: { increment: qty } },
-              }),
-            ])
+          if (matId) {
+            await prisma.$transaction(async (tx) => {
+              await applyStockMovement(tx, {
+                materialId: matId!,
+                projectId,
+                type: 'IN',
+                quantity: qty,
+                reason: 'warehouse_receipt',
+                referenceNo: `${projCode}-P4.4`,
+                performedBy: userId,
+                notes: `Nhập kho: ${item.material} x ${qty}, vị trí: ${item.storageLocation || '—'}`,
+              })
+            })
           }
         }
       }
@@ -707,26 +700,19 @@ async function runWorkflowHooks(
         console.warn(`[P4.5] Insufficient stock warnings: ${insufficientItems.join('; ')}`)
       }
 
-      // Execute deductions in individual transactions (each item atomic)
       for (const op of materialOps) {
-        await prisma.$transaction([
-          prisma.stockMovement.create({
-            data: {
-              materialId: op.materialId,
-              projectId,
-              type: 'OUT',
-              quantity: op.qty,
-              reason: 'production_issue',
-              referenceNo: `${projCode}-P4.5`,
-              performedBy: userId,
-              notes: `Xuất VT: ${op.item.name} (${op.item.code}) x ${op.qty} ${op.item.unit}`,
-            },
-          }),
-          prisma.material.update({
-            where: { id: op.materialId },
-            data: { currentStock: { decrement: op.qty } },
-          }),
-        ])
+        await prisma.$transaction(async (tx) => {
+          await applyStockMovement(tx, {
+            materialId: op.materialId,
+            projectId,
+            type: 'OUT',
+            quantity: op.qty,
+            reason: 'production_issue',
+            referenceNo: `${projCode}-P4.5`,
+            performedBy: userId,
+            notes: `Xuất VT: ${op.item.name} (${op.item.code}) x ${op.qty} ${op.item.unit}`,
+          })
+        })
       }
     }
 
@@ -965,24 +951,18 @@ export async function processP45PartialIssue(
       select: { id: true, currentStock: true },
     })
     if (material) {
-      await prisma.$transaction([
-        prisma.stockMovement.create({
-          data: {
-            materialId: material.id,
-            projectId: task.projectId!,
-            type: 'OUT',
-            quantity: actualQty,
-            reason: 'production_issue',
-            referenceNo: `${projCode}-P4.5`,
-            performedBy: userId,
-            notes: `Xuất VT (partial): ${req.name} (${code}) x ${actualQty} ${req.unit}`,
-          },
-        }),
-        prisma.material.update({
-          where: { id: material.id },
-          data: { currentStock: { decrement: actualQty } },
-        }),
-      ])
+      await prisma.$transaction(async (tx) => {
+        await applyStockMovement(tx, {
+          materialId: material!.id,
+          projectId: task.projectId!,
+          type: 'OUT',
+          quantity: actualQty,
+          reason: 'production_issue',
+          referenceNo: `${projCode}-P4.5`,
+          performedBy: userId,
+          notes: `Xuất VT (partial): ${req.name} (${code}) x ${actualQty} ${req.unit}`,
+        })
+      })
     }
 
     const accKey = `${code}_${i}`

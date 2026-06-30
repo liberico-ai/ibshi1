@@ -346,7 +346,8 @@ model Warehouse {
   kind        String          @default("OTHER") // PROJECT | CONSIGNED | COMMON | OTHER
   isActive    Boolean         @default(true) @map("is_active")
   createdAt   DateTime        @default(now()) @map("created_at")
-  stocks      MaterialStock[]
+  stocks         MaterialStock[]
+  stockMovements StockMovement[]
 
   @@index([projectCode])
   @@map("warehouses")
@@ -406,13 +407,16 @@ model StockMovement {
   createdAt   DateTime @default(now()) @map("created_at")
   heatNumber  String?  @map("heat_number")
   lotNumber   String?  @map("lot_number")
-  poItemId    String?  @map("po_item_id")
-  material    Material @relation(fields: [materialId], references: [id])
+  poItemId    String?    @map("po_item_id")
+  warehouseId String?    @map("warehouse_id")
+  material    Material   @relation(fields: [materialId], references: [id])
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
 
   @@index([materialId, createdAt])
   @@index([projectId])
   @@index([type])
   @@index([heatNumber])
+  @@index([warehouseId])
   @@map("stock_movements")
 }
 

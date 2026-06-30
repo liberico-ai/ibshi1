@@ -7,6 +7,7 @@ import { RBAC } from '@/lib/rbac-rules'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { validateBody } from '@/lib/api-helpers'
 import { stockMovementSchema } from '@/lib/schemas'
+import { applyStockMovement } from '@/lib/stock-ledger'
 
 // GET /api/stock-movements — List stock movements
 export async function GET(req: NextRequest) {
@@ -69,28 +70,17 @@ export async function POST(req: NextRequest) {
       return errorResponse(`Không đủ tồn kho. Hiện có: ${material.currentStock}, yêu cầu: ${qty}`)
     }
 
-    // Create movement + update stock in transaction
     const result = await prisma.$transaction(async (tx) => {
-      const movement = await tx.stockMovement.create({
-        data: {
-          materialId,
-          type,
-          quantity: qty,
-          reason: reason || (type === 'IN' ? 'Nhập kho' : 'Xuất kho'),
-          referenceNo: referenceCode || null,
-          heatNumber: heatNumber || null,
-          lotNumber: lotNumber || null,
-          performedBy: payload.userId,
-        },
+      return applyStockMovement(tx, {
+        materialId,
+        type: type as 'IN' | 'OUT' | 'RETURN' | 'ADJUSTMENT',
+        quantity: qty,
+        reason: reason || (type === 'IN' ? 'Nhập kho' : 'Xuất kho'),
+        referenceNo: referenceCode,
+        heatNumber,
+        lotNumber,
+        performedBy: payload.userId,
       })
-
-      const stockChange = type === 'OUT' ? -qty : qty
-      await tx.material.update({
-        where: { id: materialId },
-        data: { currentStock: { increment: stockChange } },
-      })
-
-      return movement
     })
 
     // Invalidate warehouse cache after stock movement

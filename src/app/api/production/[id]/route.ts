@@ -6,6 +6,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
+import { applyStockMovement } from '@/lib/stock-ledger'
 
 // GET /api/production/:id — Work order detail + material issues
 export const GET = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -115,9 +116,8 @@ export const POST = withErrorHandler(async (req: NextRequest, { params }: { para
     return errorResponse(`Tồn kho không đủ. Hiện có: ${material.currentStock} ${material.unit}`)
   }
 
-  // Atomic: create issue + stock movement + update stock
-  const [issue] = await prisma.$transaction([
-    prisma.materialIssue.create({
+  const result = await prisma.$transaction(async (tx) => {
+    const issue = await tx.materialIssue.create({
       data: {
         workOrderId: id,
         materialId,
@@ -125,24 +125,20 @@ export const POST = withErrorHandler(async (req: NextRequest, { params }: { para
         issuedBy: payload.userId,
         notes: notes || null,
       },
-    }),
-    prisma.stockMovement.create({
-      data: {
-        materialId,
-        projectId: wo.projectId,
-        type: 'OUT',
-        quantity: qty,
-        reason: 'production_issue',
-        referenceNo: wo.woCode,
-        performedBy: payload.userId,
-        notes: `Cấp cho WO ${wo.woCode}`,
-      },
-    }),
-    prisma.material.update({
-      where: { id: materialId },
-      data: { currentStock: { decrement: qty } },
-    }),
-  ])
+    })
+    await applyStockMovement(tx, {
+      materialId,
+      projectId: wo.projectId,
+      type: 'OUT',
+      quantity: qty,
+      reason: 'production_issue',
+      referenceNo: wo.woCode,
+      performedBy: payload.userId,
+      notes: `Cấp cho WO ${wo.woCode}`,
+    })
+    return issue
+  })
+  const issue = result
 
   return successResponse(
     { materialIssue: { ...issue, quantity: Number(issue.quantity) } },

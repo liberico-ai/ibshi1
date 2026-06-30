@@ -4,6 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { RBAC } from '@/lib/rbac-rules'
 import { validateBody, validateParams } from '@/lib/api-helpers'
 import { createMaterialIssueSchema, idParamSchema } from '@/lib/schemas'
+import { applyStockMovement } from '@/lib/stock-ledger'
 
 // POST /api/production/[id]/issue-material — Issue material for a Work Order
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -36,26 +37,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse(`Tồn kho không đủ: có ${material.currentStock}, yêu cầu ${quantity}`)
     }
 
-    // Create stock movement (OUT) and decrease stock
-    const [movement] = await prisma.$transaction([
-      prisma.stockMovement.create({
-        data: {
-          materialId,
-          type: 'OUT',
-          quantity,
-          reason: 'wo_issue',
-          referenceNo: wo.woCode,
-          heatNumber: heatNumber || null,
-          lotNumber: null,
-          notes: notes || `Cấp phát cho ${wo.woCode}`,
-          performedBy: user.userId,
-        },
-      }),
-      prisma.material.update({
-        where: { id: materialId },
-        data: { currentStock: { decrement: quantity } },
-      }),
-    ])
+    const movement = await prisma.$transaction(async (tx) => {
+      return applyStockMovement(tx, {
+        materialId,
+        type: 'OUT',
+        quantity,
+        reason: 'wo_issue',
+        referenceNo: wo.woCode,
+        heatNumber: heatNumber || null,
+        notes: notes || `Cấp phát cho ${wo.woCode}`,
+        performedBy: user.userId,
+      })
+    })
 
     await logAudit(user.userId, 'ISSUE_MATERIAL', 'WorkOrder', id,
       { woCode: wo.woCode, materialCode: material.materialCode, quantity, heatNumber }, getClientIP(req))

@@ -1,4 +1,5 @@
 import prisma from './db'
+import { applyStockMovement } from './stock-ledger'
 
 // ── Change Event Logger ──
 
@@ -141,15 +142,93 @@ export async function recalcBudgetActual(projectId: string, _triggeredBy: string
 }
 
 const BUDGET_RELEVANT_STEPS = new Set(['P3.1', 'P3.3', 'P3.4', 'P3.5', 'P3.6', 'P4.3', 'P4.4', 'P4.5'])
+const STOCK_RELEVANT_STEPS = new Set(['P3.4', 'P3.4A', 'P3.4B', 'P4.4', 'P4.5'])
 
-/** Dispatch reverse hooks — only recalc budget for Phase 3-4 rejections */
+/** Create compensating movements for all unreversed movements of a task.
+ *  Idempotent: skips if _stockReversed flag already set on task. */
+export async function reverseStockMovements(
+  projectId: string,
+  stepCode: string,
+  taskId: string,
+  triggeredBy: string,
+): Promise<number> {
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { resultData: true } })
+  const rd = (task?.resultData as Record<string, unknown>) || {}
+  if (rd._stockReversed) return 0
+
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true } })
+  const projCode = project?.projectCode || 'UNKNOWN'
+  const refPattern = `${projCode}-${stepCode}`
+
+  const originals = await prisma.stockMovement.findMany({
+    where: {
+      projectId,
+      referenceNo: refPattern,
+      NOT: { referenceNo: { startsWith: 'REV-' } },
+    },
+  })
+
+  if (originals.length === 0) return 0
+
+  const existingRevs = await prisma.stockMovement.findMany({
+    where: { referenceNo: { startsWith: `REV-${refPattern}` }, projectId },
+    select: { notes: true },
+  })
+  const reversedOrigIds = new Set(
+    existingRevs.map(r => (r.notes || '').match(/orig:(\S+)/)?.[1]).filter(Boolean)
+  )
+
+  let count = 0
+  await prisma.$transaction(async (tx) => {
+    for (const mv of originals) {
+      if (reversedOrigIds.has(mv.id)) continue
+      const reverseType = mv.type === 'IN' ? 'OUT' : 'IN'
+      await applyStockMovement(tx, {
+        materialId: mv.materialId,
+        warehouseId: mv.warehouseId,
+        projectId,
+        type: reverseType as 'IN' | 'OUT',
+        quantity: Number(mv.quantity),
+        reason: `reverse_${mv.reason}`,
+        referenceNo: `REV-${refPattern}`,
+        performedBy: triggeredBy,
+        notes: `Đảo ngược reject ${stepCode}, orig:${mv.id}`,
+      })
+      count++
+    }
+
+    await tx.task.update({
+      where: { id: taskId },
+      data: { resultData: { ...rd, _stockReversed: true } },
+    })
+  })
+
+  if (count > 0) {
+    const negativeStocks = await prisma.materialStock.findMany({
+      where: { materialId: { in: originals.map(m => m.materialId) }, quantity: { lt: 0 } },
+      include: { material: { select: { materialCode: true } }, warehouse: { select: { code: true } } },
+    })
+    for (const ns of negativeStocks) {
+      console.warn(`[STOCK] Tồn âm sau reject: ${ns.material.materialCode} @ ${ns.warehouse.code}: ${Number(ns.quantity)}`)
+    }
+  }
+
+  return count
+}
+
+/** Dispatch reverse hooks — stock reversal + budget recalc for Phase 3-4 rejections */
 export async function runReverseHooks(
   projectId: string,
   stepCode: string,
   triggeredBy: string,
   _reason: string,
+  taskId?: string,
 ): Promise<void> {
   try {
+    if (STOCK_RELEVANT_STEPS.has(stepCode) && taskId) {
+      const reversed = await reverseStockMovements(projectId, stepCode, taskId, triggeredBy)
+      if (reversed > 0) console.log(`[SYNC] Reversed ${reversed} stock movements for ${stepCode} on project ${projectId}`)
+    }
     if (BUDGET_RELEVANT_STEPS.has(stepCode)) {
       await recalcBudgetActual(projectId, triggeredBy)
     }

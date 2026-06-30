@@ -348,7 +348,7 @@ describe('rejectTask', () => {
 
     await rejectTask(TASK_ID, USER_ID, 'Reason')
 
-    expect(runReverseHooks).toHaveBeenCalledWith(PROJECT_ID, 'P1.1B', USER_ID, 'Reason')
+    expect(runReverseHooks).toHaveBeenCalledWith(PROJECT_ID, 'P1.1B', USER_ID, 'Reason', TASK_ID)
   })
 
   it('logs a change event for the rejection', async () => {

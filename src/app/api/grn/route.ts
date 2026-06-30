@@ -3,6 +3,9 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createGrnSchema } from '@/lib/schemas'
+import { applyStockMovement } from '@/lib/stock-ledger'
+import { generateMaterialCode } from '@/lib/material-code'
+import { detectPrefixSubgroup } from '@/lib/bompr-enrich'
 
 // GET /api/grn — List goods received (stock movements with type=IN, reason=po_receipt)
 export async function GET(req: NextRequest) {
@@ -82,28 +85,48 @@ export async function POST(req: NextRequest) {
         data: { receivedQty: newReceivedQty },
       })
 
-      if (poItem.materialId) {
-        await tx.material.update({
-          where: { id: poItem.materialId },
-          data: { currentStock: { increment: item.receivedQty } },
-        })
+      let materialId = poItem.materialId
 
-        const movement = await tx.stockMovement.create({
+      if (!materialId) {
+        const snapshot = {
+          description: poItem.description || '',
+          profile: poItem.profile || '',
+        }
+        const { prefix, subgroup } = detectPrefixSubgroup(snapshot)
+        const code = await generateMaterialCode(tx, prefix, subgroup)
+        const mat = await tx.material.create({
           data: {
-            materialId: poItem.materialId,
-            type: 'IN',
-            reason: 'po_receipt',
-            quantity: item.receivedQty,
-            referenceNo: po.poCode,
-            poItemId: item.poItemId,
-            heatNumber: item.heatNumber || null,
-            lotNumber: item.lotNumber || null,
-            performedBy: user.userId,
-            notes: item.notes || `Nhận hàng từ ${po.poCode}`,
+            materialCode: code,
+            name: (snapshot.description || snapshot.profile || 'Vật tư tạm').trim(),
+            unit: poItem.unit || 'cái',
+            category: prefix,
+            specification: snapshot.profile || undefined,
+            grade: poItem.grade || undefined,
+            status: 'PENDING',
+            isProvisional: true,
+            createdByUnit: 'GRN',
           },
         })
-        movements.push(movement)
+        materialId = mat.id
+        await tx.purchaseOrderItem.update({
+          where: { id: item.poItemId },
+          data: { materialId: mat.id },
+        })
       }
+
+      const movement = await applyStockMovement(tx, {
+        materialId,
+        type: 'IN',
+        quantity: item.receivedQty,
+        reason: 'po_receipt',
+        referenceNo: po.poCode,
+        poItemId: item.poItemId,
+        heatNumber: item.heatNumber || null,
+        lotNumber: item.lotNumber || null,
+        performedBy: user.userId,
+        notes: item.notes || `Nhận hàng từ ${po.poCode}`,
+      })
+      movements.push(movement)
     }
 
     // Check if all PO items are fully received

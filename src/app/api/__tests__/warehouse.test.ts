@@ -172,6 +172,8 @@ describe('POST /api/stock-movements', () => {
     prismaMock.$transaction.mockImplementation(async (fn) => fn(prismaMock))
     prismaMock.stockMovement.create.mockResolvedValue(SAMPLE_MOVEMENT as any)
     prismaMock.material.update.mockResolvedValue({} as any)
+    prismaMock.warehouse.findUnique.mockResolvedValue({ id: 'wh-common', code: 'VCND' } as any)
+    prismaMock.materialStock.upsert.mockResolvedValue({} as any)
 
     const req = new Request('http://localhost/api/stock-movements', {
       method: 'POST',
@@ -191,6 +193,8 @@ describe('POST /api/stock-movements', () => {
     prismaMock.$transaction.mockImplementation(async (fn) => fn(prismaMock))
     prismaMock.stockMovement.create.mockResolvedValue({ ...SAMPLE_MOVEMENT, type: 'OUT' } as any)
     prismaMock.material.update.mockResolvedValue({} as any)
+    prismaMock.warehouse.findUnique.mockResolvedValue({ id: 'wh-common', code: 'VCND' } as any)
+    prismaMock.materialStock.upsert.mockResolvedValue({} as any)
 
     const req = new Request('http://localhost/api/stock-movements', {
       method: 'POST',
