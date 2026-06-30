@@ -105,8 +105,10 @@ Mọi thay đổi đều quy về **một ECO** (đánh số, duyệt, lưu vế
 | Lớp | Loại | Ai lập | Suy ra từ | Khi revise |
 |---|---|---|---|---|
 | **Cứng** | Vật tư chính | Kỹ thuật (bóc bản vẽ) | Bản vẽ | **GỐC** — kích hoạt cascade |
-| **Định mức** | Hàn / Sơn | PM (kinh nghiệm) | Định mức × KL chính | Máy tính lại → PM duyệt |
-| **Tồn kho** | Tiêu hao / Phụ | Kho | Mức tồn tối thiểu | Cảnh báo Kho nếu tổng KL đổi nhiều |
+| **Định mức** | Hàn / Sơn / **Tiêu hao** | PM duyệt (hàn/sơn) · định mức KTKH | Định mức × KL chính / diện tích | Máy tính lại → PM duyệt |
+| **Tồn kho** | Phụ kiện / Đóng kiện / Biện pháp | Kho | Mức tồn tối thiểu | Cảnh báo Kho nếu tổng KL đổi nhiều |
+
+> **Lưu ý tiêu hao:** que hàn/khí/đá mài có định mức rõ theo tấn nên thuộc **lớp Định mức** (tính lại khi vật tư chính đổi — đúng cascade). Việc Kho bổ theo tồn tối thiểu là cơ chế MUA/bổ kho riêng, không phải lớp. Chỉ **phụ kiện/đóng kiện/biện pháp** mới thuần lớp Tồn kho.
 
 ---
 
@@ -117,8 +119,8 @@ Khi **ECO APPROVED** → BomVersion mới ACTIVE → Diff → Impact → **sinh 
 ```
 ECO duyệt ─► BomVersion mới
    ├─ Vật tư chính đổi ........► Kỹ thuật (R04) bóc lại (nguồn)
-   ├─ (Định mức) Hàn/Sơn ......► PM (R02) duyệt đề xuất
-   ├─ (Ngưỡng KL) Tiêu hao/Phụ ► Kho (R05) rà mức min
+   ├─ (Định mức) Hàn/Sơn/Tiêu hao ► PM (R02) duyệt; Kho bổ kho theo tồn min
+   ├─ (Ngưỡng KL) Phụ kiện/Đóng kiện ► Kho (R05) rà mức min
    ├─ PR/PO theo trạng thái mua► Thương mại (R07)
    ├─ Tính lại chi phí .........► KTKH (R03) → đối chiếu Baseline
    └─ piece-mark đổi ...........► PM (R02) phân giao lại (WBS) + tiến độ
