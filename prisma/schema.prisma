@@ -2046,3 +2046,21 @@ model MrbRelease {
   @@index([projectId, revision])
   @@map("mrb_releases")
 }
+
+model SaleCustomer {
+  saleCustomerId String    @id @map("sale_customer_id")
+  name           String
+  code           String?
+  taxCode        String?   @map("tax_code")
+  country        String?
+  address        String?
+  paymentTerms   String?   @map("payment_terms")
+  nameNorm       String?   @map("name_norm")
+  saleUpdatedAt  DateTime? @map("sale_updated_at")
+  lastSyncedAt   DateTime  @default(now()) @map("last_synced_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([nameNorm, country])
+  @@index([saleUpdatedAt])
+  @@map("sale_customers")
+}

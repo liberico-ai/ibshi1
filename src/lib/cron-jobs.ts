@@ -2,6 +2,7 @@ import prisma from '@/lib/db'
 import { sendGroupMessage, escapeHtml, formatDeadline } from '@/lib/telegram'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import { formatDateTime, formatTimeVN, isTaskOverdue, taskDaysOverdue } from '@/lib/utils'
+import { saleClient, SaleClientError } from '@/lib/sale-client'
 
 const TEST_PROJECT_RE = /test/i
 
@@ -231,4 +232,87 @@ export async function runDailyDigest() {
   }
 
   return { overdue: totalOverdue, dueSoon: totalDueSoon, exec: totalExec, blocked: totalBlocked, meetings: todayMeetings.length, projects: projectIds.size, sentAt: now.toISOString() }
+}
+
+// ── Sale Customer Sync ──
+
+const LEGAL_SUFFIX = /\s*(co\.\s*ltd\.?|corp\.?|inc\.?|llc|ltd\.?|jsc|joint[\s-]stock|tnhh|cp)\s*$/i
+const LEGAL_PREFIX = /^(cong ty\s+(tnhh|cp|co phan|trach nhiem huu han)\s*)/i
+
+export function normName(raw: string): string {
+  let s = raw.trim().toLowerCase()
+  s = s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd')
+  s = s.replace(LEGAL_PREFIX, '')
+  s = s.replace(LEGAL_SUFFIX, '')
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+const CURSOR_KEY = 'sale_customer_sync_cursor'
+const LAST_RUN_KEY = 'sale_customer_sync_last_run'
+const MAX_PAGES_PER_RUN = 3
+const PAGE_SIZE = 100
+
+export async function runCustomerSync(): Promise<{ upserted: number; pages: number; cursor: string }> {
+  const cursorRow = await prisma.systemConfig.findUnique({ where: { key: CURSOR_KEY } })
+  let cursor = cursorRow?.value || '1970-01-01T00:00:00Z'
+
+  let totalUpserted = 0
+  let page = 1
+  let pagesProcessed = 0
+
+  for (; pagesProcessed < MAX_PAGES_PER_RUN;) {
+    const result = await saleClient.listCustomers({ modifiedSince: cursor, limit: PAGE_SIZE, page })
+    pagesProcessed++
+
+    for (const c of result.customers) {
+      await prisma.saleCustomer.upsert({
+        where: { saleCustomerId: c.id },
+        create: {
+          saleCustomerId: c.id,
+          name: c.name,
+          code: c.code || null,
+          taxCode: c.taxCode || null,
+          country: c.country || null,
+          address: c.address || null,
+          paymentTerms: c.paymentTerms || null,
+          nameNorm: normName(c.name),
+          saleUpdatedAt: c.updatedAt ? new Date(c.updatedAt) : null,
+          lastSyncedAt: new Date(),
+        },
+        update: {
+          name: c.name,
+          code: c.code || null,
+          taxCode: c.taxCode || null,
+          country: c.country || null,
+          address: c.address || null,
+          paymentTerms: c.paymentTerms || null,
+          nameNorm: normName(c.name),
+          saleUpdatedAt: c.updatedAt ? new Date(c.updatedAt) : null,
+          lastSyncedAt: new Date(),
+        },
+      })
+      totalUpserted++
+    }
+
+    if (result.nextCursor) {
+      cursor = result.nextCursor
+    }
+
+    if (!result.hasMore) break
+    page++
+  }
+
+  await prisma.systemConfig.upsert({
+    where: { key: CURSOR_KEY },
+    create: { key: CURSOR_KEY, value: cursor },
+    update: { value: cursor },
+  })
+  await prisma.systemConfig.upsert({
+    where: { key: LAST_RUN_KEY },
+    create: { key: LAST_RUN_KEY, value: new Date().toISOString() },
+    update: { value: new Date().toISOString() },
+  })
+
+  console.log(`[CustomerSync] Done: ${totalUpserted} upserted, ${pagesProcessed} pages, cursor=${cursor}`)
+  return { upserted: totalUpserted, pages: pagesProcessed, cursor }
 }
