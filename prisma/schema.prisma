@@ -1967,6 +1967,7 @@ model WorkflowTemplate {
   code        String         @unique
   name        String
   projectType String         @map("project_type") // EXTERNAL_PROD | INTERNAL_PROD | OTHER
+  productType String?        @map("product_type") // null = generic (khớp mọi loại SP)
   version     Int            @default(1)
   isActive    Boolean        @default(true) @map("is_active")
   createdAt   DateTime       @default(now()) @map("created_at")

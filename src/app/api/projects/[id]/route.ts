@@ -84,12 +84,14 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     if (rule) currentPhase = rule.phase
   }
 
+  const hasTemplateTasks = project.dynamicTasks.some(t => t.templateStepId !== null)
   const { dynamicTasks: _dt, ...projectData } = project
 
   return successResponse({
     project: {
       ...projectData,
       tasks,
+      hasTemplateTasks,
       contractValue: project.contractValue?.toString(),
       progress: {
         total,

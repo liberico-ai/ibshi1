@@ -19,6 +19,7 @@ interface ProjectDetail {
   id: string; projectCode: string; projectName: string; clientName: string;
   productType: string; status: string; contractValue: string; currency: string;
   startDate: string; endDate: string; description: string;
+  hasTemplateTasks: boolean;
   progress: { total: number; completed: number; inProgress: number; percentage: number; currentPhase: number };
   tasks: Task[];
 }
@@ -37,6 +38,7 @@ export default function ProjectDetailPage() {
   const [rejectingTask, setRejectingTask] = useState<Task | null>(null)
   const [assigningTask, setAssigningTask] = useState<Task | null>(null)
   const [closing, setClosing] = useState(false)
+  const [applyingTpl, setApplyingTpl] = useState(false)
   const { user: currentUser } = useAuthStore()
 
   async function reload() {
@@ -77,6 +79,26 @@ export default function ProjectDetailPage() {
       alert(res.error || 'Lỗi đóng dự án')
     }
     setClosing(false)
+  }
+
+  async function handleApplyTemplate() {
+    if (!project) return
+    setApplyingTpl(true)
+    const tplRes = await apiFetch('/api/work/templates')
+    if (!tplRes.ok) { alert(tplRes.error || 'Lỗi lấy danh sách template'); setApplyingTpl(false); return }
+    const templates = tplRes.templates as { code: string; productType: string | null }[]
+    const match = templates.find(t => t.productType === project.productType) || templates.find(t => !t.productType)
+    if (!match) { alert('Không tìm thấy template phù hợp'); setApplyingTpl(false); return }
+    const res = await apiFetch('/api/work/templates/apply', {
+      method: 'POST', body: JSON.stringify({ projectId: project.id, templateCode: match.code }),
+    })
+    if (res.ok) {
+      alert(res.message || `Đã áp dụng template, tạo ${res.created} bước`)
+      await reload()
+    } else {
+      alert(res.error || 'Lỗi áp dụng template')
+    }
+    setApplyingTpl(false)
   }
 
   function onCompleteClick(task: Task) {
@@ -198,6 +220,22 @@ export default function ProjectDetailPage() {
           <span className="text-sm font-bold" style={{ color: 'var(--text-heading)' }}>Bảng điều khiển BLĐ</span>
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>3 đường: Kế hoạch · Hiện hành · Thực hiện</span>
         </a>
+      )}
+
+      {/* Apply Template — show when project has no template tasks */}
+      {project.status !== 'CLOSED' && !project.hasTemplateTasks && ['R01', 'R02', 'R02a', 'R10'].includes(currentUserRole) && (
+        <button
+          onClick={handleApplyTemplate}
+          disabled={applyingTpl}
+          className="card p-4 w-full text-left flex items-center gap-3 transition-all hover:shadow-md"
+          style={{ borderLeft: '4px solid #059669', opacity: applyingTpl ? 0.5 : 1 }}
+        >
+          <span style={{ fontSize: '18px' }}>&#9776;</span>
+          <div>
+            <span className="text-sm font-bold" style={{ color: 'var(--text-heading)' }}>Khởi tạo quy trình theo mẫu</span>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Áp template phù hợp loại sản phẩm, sinh công việc chuẩn</p>
+          </div>
+        </button>
       )}
 
       {/* Stats Row */}

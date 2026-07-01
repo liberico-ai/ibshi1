@@ -864,7 +864,7 @@ export async function suggestRoute(fromContext?: string, text?: string) {
   return [...out.values()].sort((a, b) => b.score - a.score).slice(0, 6)
 }
 
-// Phase 3 (chained): chỉ sinh bước ĐẦU; xong bước nào → tự sinh bước kế (theo next/gate).
+// Phase 3 (chained): spawn ENTRY STEPS (không nằm trong nextCodes nào); xong bước → chain bước kế (next/gate).
 interface TStep { id: string; code: string; title: string; roleCode: string | null; taskType: string; hookKeys: string[]; nextCodes: string[]; gateCodes: string[]; deadlineDays: number | null; orderIndex: number }
 
 async function spawnTemplateStep(step: TStep, projectId: string, byUser: string) {
@@ -895,20 +895,23 @@ async function spawnTemplateStep(step: TStep, projectId: string, byUser: string)
   return true
 }
 
-// Tập "code đã xong" = BƯỚC ĐẦU (orderIndex nhỏ nhất, coi như xong khi tạo dự án) + task template đã DONE.
-// Resolve qua templateStepId → step.code (KHÔNG dùng taskType — có thể khác code khi step.taskType được set).
+// Tập "code đã xong": task template DONE + legacy grace cho root chưa spawn.
+// Root (orderIndex nhỏ nhất) auto-done CHỈ KHI chưa có task nào với templateStepId=root.id.
+// Nếu root đã spawn → done tính theo DONE thật.
 async function doneCodesForProject(steps: TStep[], projectId: string): Promise<Set<string>> {
   const first = steps.slice().sort((a, b) => a.orderIndex - b.orderIndex)[0]
-  const roots = first ? [first.code] : []
-  const doneTasks = await prisma.task.findMany({
-    where: { projectId, status: 'DONE', NOT: { templateStepId: null } },
-    select: { templateStepId: true },
+  const templateTasks = await prisma.task.findMany({
+    where: { projectId, NOT: { templateStepId: null } },
+    select: { templateStepId: true, status: true },
   })
   const stepById = new Map(steps.map((s) => [s.id, s]))
-  const doneCodes = doneTasks
+  const doneCodes = templateTasks
+    .filter((t) => t.status === 'DONE')
     .map((t) => stepById.get(t.templateStepId!)?.code)
     .filter((c): c is string => !!c)
-  return new Set([...roots, ...doneCodes])
+  const rootSpawned = first ? templateTasks.some((t) => t.templateStepId === first.id) : true
+  if (first && !rootSpawned) doneCodes.push(first.code)
+  return new Set(doneCodes)
 }
 
 export async function applyTemplate(projectId: string, templateCode: string, byUser: string) {
@@ -919,12 +922,23 @@ export async function applyTemplate(projectId: string, templateCode: string, byU
   if (!tpl) throw new Error(`Không tìm thấy template "${templateCode}"`)
   const steps = tpl.steps as unknown as TStep[]
   const byCode = new Map(steps.map((s) => [s.code, s]))
-  const done = await doneCodesForProject(steps, projectId) // = các bước gốc
+
+  // Entry steps = codes không nằm trong nextCodes của bất kỳ step nào
+  const reachable = new Set(steps.flatMap((s) => s.nextCodes || []))
+  const entrySteps = steps.filter((s) => !reachable.has(s.code))
+
   let created = 0
-  // sinh các bước kế tiếp của bước gốc, nếu gate đã thỏa
-  for (const rootCode of done) {
-    const root = byCode.get(rootCode); if (!root) continue
-    for (const nc of root.nextCodes || []) {
+  // Spawn entry steps có gate thỏa (hoặc gate rỗng)
+  const done = await doneCodesForProject(steps, projectId)
+  for (const es of entrySteps) {
+    if ((es.gateCodes || []).every((g) => done.has(g))) {
+      if (await spawnTemplateStep(es, projectId, byUser)) created++
+    }
+  }
+  // Chain: các bước đã done → sinh bước kế nếu gate thỏa
+  for (const doneCode of done) {
+    const ds = byCode.get(doneCode); if (!ds) continue
+    for (const nc of ds.nextCodes || []) {
       const ns = byCode.get(nc); if (!ns) continue
       if ((ns.gateCodes || []).every((g) => done.has(g))) {
         if (await spawnTemplateStep(ns, projectId, byUser)) created++
