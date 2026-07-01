@@ -204,19 +204,88 @@ export default function ITPPage() {
   )
 }
 
+interface WOOption { id: string; woCode: string; pieceMark: string | null; status: string }
+
+const WO_STATUS_LABEL: Record<string, string> = {
+  OPEN: 'Mở', IN_PROGRESS: 'Đang SX', QC_PENDING: 'Chờ QC', QC_PASSED: 'QC Đạt',
+  QC_FAILED: 'QC Lỗi', COMPLETED: 'Xong', ON_HOLD: 'Tạm dừng', PENDING_MATERIAL: 'Chờ VT',
+}
+
+interface CPForm {
+  activity: string; description: string; standard: string; inspectionType: string;
+  workOrderId: string; pieceMark: string;
+}
+
 function CreateITPModal({ open, projects, onClose, onCreated }: {
   open: boolean; projects: Project[]; onClose: () => void; onCreated: () => void
 }) {
   const [projectId, setProjectId] = useState('')
   const [name, setName] = useState('')
-  const [checkpoints, setCheckpoints] = useState([{ activity: 'welding', description: '', standard: '', inspectionType: 'MONITOR' }])
+  const [defaultWoId, setDefaultWoId] = useState('')
+  const [workOrders, setWorkOrders] = useState<WOOption[]>([])
+  const [loadingWO, setLoadingWO] = useState(false)
+  const [checkpoints, setCheckpoints] = useState<CPForm[]>([
+    { activity: 'welding', description: '', standard: '', inspectionType: 'MONITOR', workOrderId: '', pieceMark: '' },
+  ])
   const [submitting, setSubmitting] = useState(false)
 
-  const addCheckpoint = () => setCheckpoints([...checkpoints, { activity: 'welding', description: '', standard: '', inspectionType: 'MONITOR' }])
+  async function onProjectChange(pid: string) {
+    setProjectId(pid)
+    setDefaultWoId('')
+    setWorkOrders([])
+    setCheckpoints(cps => cps.map(cp => ({ ...cp, workOrderId: '', pieceMark: '' })))
+    if (!pid) return
+    setLoadingWO(true)
+    const res = await apiFetch(`/api/production?projectId=${pid}&limit=500`)
+    if (res.ok) setWorkOrders((res.workOrders || []).map((wo: { id: string; woCode: string; pieceMark: string | null; status: string }) => ({
+      id: wo.id, woCode: wo.woCode, pieceMark: wo.pieceMark, status: wo.status,
+    })))
+    setLoadingWO(false)
+  }
+
+  function onDefaultWoChange(woId: string) {
+    setDefaultWoId(woId)
+    const wo = workOrders.find(w => w.id === woId)
+    setCheckpoints(cps => cps.map(cp =>
+      !cp.workOrderId ? { ...cp, workOrderId: woId, pieceMark: wo?.pieceMark || '' } : cp
+    ))
+  }
+
+  function onCpWoChange(index: number, woId: string) {
+    const wo = workOrders.find(w => w.id === woId)
+    const n = [...checkpoints]
+    n[index] = { ...n[index], workOrderId: woId, pieceMark: wo?.pieceMark || '' }
+    setCheckpoints(n)
+  }
+
+  const addCheckpoint = () => {
+    const wo = workOrders.find(w => w.id === defaultWoId)
+    setCheckpoints([...checkpoints, {
+      activity: 'welding', description: '', standard: '', inspectionType: 'MONITOR',
+      workOrderId: defaultWoId, pieceMark: wo?.pieceMark || '',
+    }])
+  }
+
+  const woOptions = [
+    { value: '', label: projectId ? 'Không gắn WO' : 'Chọn dự án trước' },
+    ...workOrders.map(wo => ({
+      value: wo.id,
+      label: `${wo.woCode}${wo.pieceMark ? ` — ${wo.pieceMark}` : ''} [${WO_STATUS_LABEL[wo.status] || wo.status}]`,
+    })),
+  ]
 
   const submit = async () => {
     if (!projectId || !name) return alert('Chọn dự án và nhập tên ITP')
-    const validCPs = checkpoints.filter(c => c.description)
+    const validCPs = checkpoints
+      .filter(c => c.description)
+      .map(c => ({
+        activity: c.activity,
+        description: c.description,
+        standard: c.standard || undefined,
+        inspectionType: c.inspectionType,
+        workOrderId: c.workOrderId || undefined,
+        pieceMark: c.pieceMark || undefined,
+      }))
     setSubmitting(true)
     const res = await apiFetch('/api/qc/itp', {
       method: 'POST',
@@ -234,7 +303,7 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
           <SelectField
             label="Dự án *"
             value={projectId}
-            onChange={e => setProjectId(e.target.value)}
+            onChange={e => onProjectChange(e.target.value)}
             options={[{ value: '', label: 'Chọn...' }, ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))]}
           />
           <InputField
@@ -245,31 +314,60 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
           />
         </div>
 
+        <SelectField
+          label={`Work Order mặc định${loadingWO ? ' (đang tải...)' : ''}`}
+          value={defaultWoId}
+          onChange={e => onDefaultWoChange(e.target.value)}
+          options={woOptions}
+        />
+        {defaultWoId && (
+          <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: -8 }}>
+            Checkpoint mới sẽ kế thừa WO này. Có thể đổi riêng mỗi checkpoint.
+          </p>
+        )}
+
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="input-label">Điểm kiểm tra</label>
             <Button type="button" variant="ghost" size="sm" onClick={addCheckpoint}>+ Thêm</Button>
           </div>
           {checkpoints.map((cp, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2 mb-2">
-              <SelectField
-                value={cp.activity}
-                onChange={e => { const n = [...checkpoints]; n[i].activity = e.target.value; setCheckpoints(n) }}
-                options={ACTIVITY_OPTIONS}
-              />
-              <div className="col-span-2">
-                <input
-                  className="input w-full"
-                  value={cp.description}
-                  onChange={e => { const n = [...checkpoints]; n[i].description = e.target.value; setCheckpoints(n) }}
-                  placeholder="Mô tả..."
+            <div key={i} className="mb-2 p-2 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
+              <div className="grid grid-cols-4 gap-2">
+                <SelectField
+                  value={cp.activity}
+                  onChange={e => { const n = [...checkpoints]; n[i].activity = e.target.value; setCheckpoints(n) }}
+                  options={ACTIVITY_OPTIONS}
+                />
+                <div className="col-span-2">
+                  <input
+                    className="input w-full"
+                    value={cp.description}
+                    onChange={e => { const n = [...checkpoints]; n[i].description = e.target.value; setCheckpoints(n) }}
+                    placeholder="Mô tả..."
+                  />
+                </div>
+                <SelectField
+                  value={cp.inspectionType}
+                  onChange={e => { const n = [...checkpoints]; n[i].inspectionType = e.target.value; setCheckpoints(n) }}
+                  options={INSP_TYPE_OPTIONS}
                 />
               </div>
-              <SelectField
-                value={cp.inspectionType}
-                onChange={e => { const n = [...checkpoints]; n[i].inspectionType = e.target.value; setCheckpoints(n) }}
-                options={INSP_TYPE_OPTIONS}
-              />
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <SelectField
+                  value={cp.workOrderId}
+                  onChange={e => onCpWoChange(i, e.target.value)}
+                  options={woOptions}
+                />
+                <input
+                  className="input w-full"
+                  value={cp.pieceMark}
+                  readOnly={!!cp.workOrderId}
+                  placeholder="Piece Mark"
+                  onChange={e => { if (!cp.workOrderId) { const n = [...checkpoints]; n[i].pieceMark = e.target.value; setCheckpoints(n) } }}
+                  style={cp.workOrderId ? { background: 'var(--bg-primary)', cursor: 'not-allowed', opacity: 0.7 } : undefined}
+                />
+              </div>
             </div>
           ))}
         </div>

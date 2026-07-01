@@ -195,15 +195,42 @@ export default function QCPage() {
   )
 }
 
+interface WOOption { id: string; woCode: string; pieceMark: string | null; status: string }
+
+const WO_STATUS_LABEL: Record<string, string> = {
+  OPEN: 'Mở', IN_PROGRESS: 'Đang SX', QC_PENDING: 'Chờ QC', QC_PASSED: 'QC Đạt',
+  QC_FAILED: 'QC Lỗi', COMPLETED: 'Xong', ON_HOLD: 'Tạm dừng', PENDING_MATERIAL: 'Chờ VT',
+}
+
 function CreateInspectionModal({ open, projects, onClose, onCreated }: {
   open: boolean; projects: ProjectOption[]; onClose: () => void; onCreated: () => void
 }) {
   const [form, setForm] = useState({
     inspectionCode: '', projectId: '', type: 'material_incoming', stepCode: '',
+    workOrderId: '', pieceMark: '',
     checklistItems: [{ checkItem: '', standard: '' }],
   })
+  const [workOrders, setWorkOrders] = useState<WOOption[]>([])
+  const [loadingWO, setLoadingWO] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  async function onProjectChange(projectId: string) {
+    setForm(prev => ({ ...prev, projectId, workOrderId: '', pieceMark: '' }))
+    setWorkOrders([])
+    if (!projectId) return
+    setLoadingWO(true)
+    const res = await apiFetch(`/api/production?projectId=${projectId}&limit=500`)
+    if (res.ok) setWorkOrders((res.workOrders || []).map((wo: { id: string; woCode: string; pieceMark: string | null; status: string }) => ({
+      id: wo.id, woCode: wo.woCode, pieceMark: wo.pieceMark, status: wo.status,
+    })))
+    setLoadingWO(false)
+  }
+
+  function onWOChange(workOrderId: string) {
+    const wo = workOrders.find(w => w.id === workOrderId)
+    setForm(prev => ({ ...prev, workOrderId, pieceMark: wo?.pieceMark || '' }))
+  }
 
   function addCheckItem() {
     setForm({ ...form, checklistItems: [...form.checklistItems, { checkItem: '', standard: '' }] })
@@ -220,7 +247,12 @@ function CreateInspectionModal({ open, projects, onClose, onCreated }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSubmitting(true)
-    const payload = { ...form, checklistItems: form.checklistItems.filter(ci => ci.checkItem.trim()) }
+    const payload = {
+      ...form,
+      workOrderId: form.workOrderId || undefined,
+      pieceMark: form.pieceMark || undefined,
+      checklistItems: form.checklistItems.filter(ci => ci.checkItem.trim()),
+    }
     const res = await apiFetch('/api/qc', { method: 'POST', body: JSON.stringify(payload) })
     setSubmitting(false)
     if (res.ok) onCreated()
@@ -242,9 +274,29 @@ function CreateInspectionModal({ open, projects, onClose, onCreated }: {
           <SelectField
             label="Dự án *"
             value={form.projectId}
-            onChange={(e) => setForm({ ...form, projectId: e.target.value })}
+            onChange={(e) => onProjectChange(e.target.value)}
             options={[{ value: '', label: 'Chọn dự án' }, ...projects.map(p => ({ value: p.id, label: p.projectCode }))]}
             required
+          />
+          <SelectField
+            label={`Work Order${loadingWO ? ' (đang tải...)' : ''}`}
+            value={form.workOrderId}
+            onChange={(e) => onWOChange(e.target.value)}
+            options={[
+              { value: '', label: form.projectId ? 'Không gắn WO' : 'Chọn dự án trước' },
+              ...workOrders.map(wo => ({
+                value: wo.id,
+                label: `${wo.woCode}${wo.pieceMark ? ` — ${wo.pieceMark}` : ''} [${WO_STATUS_LABEL[wo.status] || wo.status}]`,
+              })),
+            ]}
+          />
+          <InputField
+            label="Piece Mark"
+            value={form.pieceMark}
+            onChange={(e) => setForm({ ...form, pieceMark: e.target.value })}
+            placeholder="Tự điền khi chọn WO"
+            readOnly={!!form.workOrderId}
+            style={form.workOrderId ? { background: 'var(--bg-secondary)', cursor: 'not-allowed' } : undefined}
           />
           <SelectField
             label="Loại kiểm tra *"
