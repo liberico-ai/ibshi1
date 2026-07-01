@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { getPieceMarkQcStatus } from '@/lib/qc-gate'
 import { validateBody } from '@/lib/api-helpers'
 import { createPackingListSchema } from '@/lib/schemas'
 
@@ -59,40 +60,14 @@ export async function POST(req: NextRequest) {
   if (!result.success) return result.response
   const data = result.data
 
-  // QC gate: check each WO has no open NCRs on its weld joints + no NDT FAILED unresolved
+  // QC gate: check each WO via qc-gate helper (C1/C2/C3 — covers weld + non-weld)
   const blocked: string[] = []
+  const itemStatuses: Map<string, string> = new Map()
   for (const item of data.items) {
-    const wo = await prisma.workOrder.findUnique({
-      where: { id: item.workOrderId },
-      select: { id: true, woCode: true, pieceMark: true, projectId: true },
-    })
-    if (!wo) {
-      blocked.push(`WO ${item.workOrderId} không tồn tại`)
-      continue
-    }
-
-    // Check open NCRs linked to weld joints of this WO
-    const openNcrs = await prisma.weldJoint.findMany({
-      where: {
-        workOrderId: wo.id,
-        ncrId: { not: null },
-        ncr: { status: { notIn: ['CLOSED', 'CANCELLED'] } },
-      },
-      select: { jointNo: true, ncr: { select: { ncrCode: true } } },
-    })
-
-    if (openNcrs.length > 0) {
-      const ncrCodes = openNcrs.map(j => j.ncr?.ncrCode).filter(Boolean).join(', ')
-      blocked.push(`${item.pieceMark} (${wo.woCode}) — NCR mở: ${ncrCodes}`)
-      continue
-    }
-
-    // Check NDT FAILED without NCR (shouldn't happen but safety net)
-    const failedNdt = await prisma.weldJoint.count({
-      where: { workOrderId: wo.id, ndtStatus: 'FAILED', ncrId: null },
-    })
-    if (failedNdt > 0) {
-      blocked.push(`${item.pieceMark} (${wo.woCode}) — ${failedNdt} mối hàn NDT lỗi chưa có NCR`)
+    const status = await getPieceMarkQcStatus(item.workOrderId)
+    itemStatuses.set(item.workOrderId, status)
+    if (status !== 'PASSED') {
+      blocked.push(`${item.pieceMark} (WO ${item.workOrderId}) — QC: ${status}`)
     }
   }
 
@@ -122,7 +97,7 @@ export async function POST(req: NextRequest) {
           description: it.description || null,
           weight: it.weight || null,
           quantity: it.quantity || 1,
-          qcStatus: 'PASSED',
+          qcStatus: itemStatuses.get(it.workOrderId) || 'PASSED',
         })),
       },
     },

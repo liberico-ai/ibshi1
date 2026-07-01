@@ -5,6 +5,7 @@ import { RBAC } from '@/lib/rbac-rules'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { rollUpWorkOrder } from '@/lib/production-weights'
+import { isWorkOrderQcPassed } from '@/lib/qc-gate'
 
 // Valid WO transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     if (['QC_PASSED', 'QC_FAILED'].includes(nextStatus) && !RBAC.QC_ACTION.includes(user.roleCode)) {
       return errorResponse('Chỉ máy trưởng QC hoặc GĐ được đánh giá kết quả kiểm tra', 403)
+    }
+
+    if (nextStatus === 'QC_PASSED') {
+      const qcResult = await isWorkOrderQcPassed(id)
+      if (!qcResult.passed) {
+        return errorResponse('QC chưa đạt: ' + qcResult.reasons.join('; '), 422)
+      }
     }
 
     const updated = await prisma.workOrder.update({
