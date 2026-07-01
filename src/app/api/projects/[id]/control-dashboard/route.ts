@@ -24,7 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   })
   if (!project) return errorResponse('Dự án không tồn tại', 404)
 
-  const [baseline, budgets, bomData, woData, ecos, poData] = await Promise.all([
+  const [baseline, budgets, bomData, woData, ecos, poData, cashData] = await Promise.all([
     // ① KẾ HOẠCH — baseline đông cứng
     prisma.projectBaseline.findFirst({
       where: { projectId, isActive: true },
@@ -59,6 +59,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { projectId, status: { in: ['APPROVED', 'SENT', 'PAID', 'PARTIAL_RECEIVED', 'RECEIVED'] } },
       select: { totalValue: true, status: true },
     }),
+
+    // Cash (Σ Payments via invoices linked to this project's POs)
+    loadCashData(projectId),
   ])
 
   // ── ① KẾ HOẠCH ──
@@ -89,6 +92,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const poCommitted = poData.reduce((s, p) => s + Number(p.totalValue || 0), 0)
   const poCount = poData.length
+  const contractValue = Number(project.contractValue || 0)
 
   // ── Thay đổi — ECO ──
   const ecoBySource: Record<string, { count: number; totalDeltaCost: number }> = {}
@@ -150,15 +154,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       baselinePlanned: baselineTotalPlanned || null,
       currentPlanned: budgetSummary.planned,
       committed: poCommitted,
-      actual: null,
+      actual: budgetSummary.actual,
+      cash: cashData.totalPaid,
       forecast: budgetSummary.forecast || null,
-      profitLoss: null,
+      profitLoss: contractValue > 0 ? round2(contractValue - poCommitted) : null,
       poCount,
       byCategory: budgetSummary.byCategory,
-      _notes: {
-        actual: 'Chờ nối tài chính — thực chi chính xác phụ thuộc GRN + kế toán',
-        profitLoss: 'Chờ nối tài chính — cần actual chính xác',
-      },
     },
 
     // KHỐI 3: Thay đổi (ECO)
@@ -271,4 +272,12 @@ async function loadProductionData(projectId: string) {
     earnedPieceMarks,
     stages,
   }
+}
+
+async function loadCashData(projectId: string) {
+  const result = await prisma.payment.aggregate({
+    where: { invoice: { projectId } },
+    _sum: { amount: true },
+  })
+  return { totalPaid: Number(result._sum?.amount || 0) }
 }

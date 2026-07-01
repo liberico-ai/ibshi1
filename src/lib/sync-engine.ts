@@ -36,6 +36,24 @@ export async function logChangeEvent(params: ChangeEventParams): Promise<void> {
 }
 
 // ══════════════════════════════════════════════════════
+//  PO Total Recalculation
+// ══════════════════════════════════════════════════════
+
+/** Recompute PurchaseOrder.totalValue = Σ(item.quantity × item.unitPrice). Returns new total. */
+export async function recalcPOTotal(poId: string): Promise<number> {
+  const items = await prisma.purchaseOrderItem.findMany({
+    where: { poId },
+    select: { quantity: true, unitPrice: true },
+  })
+  const total = items.reduce((s, it) => s + Number(it.quantity) * Number(it.unitPrice), 0)
+  await prisma.purchaseOrder.update({
+    where: { id: poId },
+    data: { totalValue: Math.round(total) },
+  })
+  return total
+}
+
+// ══════════════════════════════════════════════════════
 //  FORWARD SYNC HOOKS (Phase 2)
 // ══════════════════════════════════════════════════════
 
@@ -111,7 +129,8 @@ export async function syncPOtoBudget(projectId: string, _poId: string, triggered
 }
 
 
-/** Recalculate budget actual from all non-reversed IN movements (po_receipt + warehouse_receipt) */
+/** Recalculate budget actual from all non-reversed IN movements (po_receipt + warehouse_receipt).
+ *  Price priority: PurchaseOrderItem.unitPrice (via poItemId) → Material.unitPrice fallback. */
 export async function recalcBudgetActual(projectId: string, _triggeredBy: string): Promise<void> {
   const movements = await prisma.stockMovement.findMany({
     where: {
@@ -120,12 +139,38 @@ export async function recalcBudgetActual(projectId: string, _triggeredBy: string
       reason: { in: ['po_receipt', 'warehouse_receipt'] },
       referenceNo: { not: { startsWith: 'REV-' } },
     },
-    include: { material: true },
+    select: {
+      quantity: true,
+      poItemId: true,
+      materialId: true,
+    },
   })
+
+  const poItemIds = movements.map(m => m.poItemId).filter((id): id is string => !!id)
+  const poItemPrices = poItemIds.length > 0
+    ? await prisma.purchaseOrderItem.findMany({
+        where: { id: { in: poItemIds } },
+        select: { id: true, unitPrice: true },
+      })
+    : []
+  const poItemPriceMap = new Map(poItemPrices.map(p => [p.id, Number(p.unitPrice)]))
+
+  const materialIds = movements
+    .filter(m => !m.poItemId)
+    .map(m => m.materialId)
+  const materials = materialIds.length > 0
+    ? await prisma.material.findMany({
+        where: { id: { in: [...new Set(materialIds)] } },
+        select: { id: true, unitPrice: true },
+      })
+    : []
+  const materialPriceMap = new Map(materials.map(m => [m.id, Number(m.unitPrice || 0)]))
 
   let totalActual = 0
   for (const mv of movements) {
-    const unitPrice = mv.material.unitPrice ? Number(mv.material.unitPrice) : 0
+    const unitPrice = mv.poItemId
+      ? (poItemPriceMap.get(mv.poItemId) ?? 0)
+      : (materialPriceMap.get(mv.materialId) ?? 0)
     totalActual += Number(mv.quantity) * unitPrice
   }
 

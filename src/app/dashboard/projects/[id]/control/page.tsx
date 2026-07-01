@@ -17,9 +17,8 @@ interface DashboardData {
   }
   cost: {
     baselinePlanned: number | null; currentPlanned: number; committed: number
-    actual: number | null; forecast: number | null; profitLoss: number | null
+    actual: number; cash: number; forecast: number | null; profitLoss: number | null
     poCount: number; byCategory: { category: string; planned: number; actual: number; committed: number; forecast: number }[]
-    _notes: Record<string, string>
   }
   changes: {
     totalEcos: number
@@ -148,12 +147,13 @@ export default function ControlDashboardPage() {
       {/* ── KHỐI 2: Chi phí ── */}
       <div className="card p-5">
         <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Chi phí</h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
           <KpiBox label="Ngân sách gốc" value={cost.baselinePlanned != null ? formatCurrency(cost.baselinePlanned, project.currency) : '—'} />
           <KpiBox label="Dự toán hiện hành" value={formatCurrency(cost.currentPlanned, project.currency)} />
           <KpiBox label={`Cam kết PO (${cost.poCount})`} value={formatCurrency(cost.committed, project.currency)} color={SEMANTIC_COLORS.warning.solid} />
-          <KpiBox label="Thực chi" value="—" note={cost._notes.actual} />
-          <KpiBox label="Lãi/lỗ dự báo" value="—" note={cost._notes.profitLoss} />
+          <KpiBox label="Thực nhận (GRN)" value={formatCurrency(cost.actual, project.currency)} />
+          <KpiBox label="Thực chi (Payment)" value={formatCurrency(cost.cash, project.currency)} />
+          <KpiBox label="Lãi/lỗ dự báo" value={cost.profitLoss != null ? formatCurrency(cost.profitLoss, project.currency) : '—'} color={cost.profitLoss != null && cost.profitLoss < 0 ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid} />
         </div>
         {cost.byCategory.length > 0 && (
           <div className="dt-wrapper">

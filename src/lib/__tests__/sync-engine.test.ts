@@ -13,6 +13,7 @@ import {
   syncBOMtoBudget,
   syncPOtoBudget,
   recalcBudgetActual,
+  recalcPOTotal,
   runReverseHooks,
 } from '@/lib/sync-engine'
 
@@ -194,34 +195,83 @@ describe('syncPOtoBudget', () => {
 })
 
 
+// ── recalcPOTotal ──
+
+describe('recalcPOTotal', () => {
+  it('sums qty × unitPrice for all PO items and updates totalValue', async () => {
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([
+      { quantity: 10, unitPrice: 100 },
+      { quantity: 5, unitPrice: 200 },
+    ] as any)
+    prismaMock.purchaseOrder.update.mockResolvedValue({} as any)
+
+    const total = await recalcPOTotal('po-1')
+
+    expect(total).toBe(2000) // 10*100 + 5*200
+    expect(prismaMock.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: 'po-1' },
+      data: { totalValue: 2000 },
+    })
+  })
+
+  it('returns 0 for PO with no items', async () => {
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([] as any)
+    prismaMock.purchaseOrder.update.mockResolvedValue({} as any)
+
+    const total = await recalcPOTotal('po-empty')
+    expect(total).toBe(0)
+  })
+})
+
 // ── recalcBudgetActual ──
 
 describe('recalcBudgetActual', () => {
-  it('sums non-reversed IN movements (po_receipt + warehouse_receipt)', async () => {
+  it('uses PO item price when poItemId is set', async () => {
     prismaMock.stockMovement.findMany.mockResolvedValue([
-      { quantity: 10, material: { unitPrice: 100 } },
-      { quantity: 5, material: { unitPrice: 200 } },
+      { quantity: 10, poItemId: 'poi-1', materialId: 'mat-1' },
+      { quantity: 5, poItemId: 'poi-2', materialId: 'mat-2' },
     ] as any)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([
+      { id: 'poi-1', unitPrice: 100 },
+      { id: 'poi-2', unitPrice: 200 },
+    ] as any)
+    prismaMock.material.findMany.mockResolvedValue([] as any)
     prismaMock.budget.findFirst.mockResolvedValue({ id: 'budget-1' } as any)
     prismaMock.budget.update.mockResolvedValue({} as any)
 
     await recalcBudgetActual(PROJECT_ID, USER)
 
-    expect(prismaMock.stockMovement.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          reason: { in: ['po_receipt', 'warehouse_receipt'] },
-        }),
-      }),
-    )
+    // 10*100 + 5*200 = 2000
     expect(prismaMock.budget.update).toHaveBeenCalledWith({
       where: { id: 'budget-1' },
       data: { actual: 2000 },
     })
   })
 
+  it('falls back to material.unitPrice when no poItemId', async () => {
+    prismaMock.stockMovement.findMany.mockResolvedValue([
+      { quantity: 8, poItemId: null, materialId: 'mat-1' },
+    ] as any)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([] as any)
+    prismaMock.material.findMany.mockResolvedValue([
+      { id: 'mat-1', unitPrice: 50 },
+    ] as any)
+    prismaMock.budget.findFirst.mockResolvedValue({ id: 'budget-1' } as any)
+    prismaMock.budget.update.mockResolvedValue({} as any)
+
+    await recalcBudgetActual(PROJECT_ID, USER)
+
+    // 8*50 = 400
+    expect(prismaMock.budget.update).toHaveBeenCalledWith({
+      where: { id: 'budget-1' },
+      data: { actual: 400 },
+    })
+  })
+
   it('does nothing when no budget exists', async () => {
     prismaMock.stockMovement.findMany.mockResolvedValue([] as any)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([] as any)
+    prismaMock.material.findMany.mockResolvedValue([] as any)
     prismaMock.budget.findFirst.mockResolvedValue(null)
 
     await recalcBudgetActual(PROJECT_ID, USER)
@@ -235,12 +285,17 @@ describe('recalcBudgetActual', () => {
 describe('runReverseHooks', () => {
   beforeEach(() => {
     prismaMock.stockMovement.findMany.mockResolvedValue([] as any)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([] as any)
+    prismaMock.material.findMany.mockResolvedValue([] as any)
     prismaMock.budget.findFirst.mockResolvedValue(null)
   })
 
   it('recalcs budget for Phase 3-4 rejection (P4.3)', async () => {
     prismaMock.stockMovement.findMany.mockResolvedValue([
-      { quantity: 10, material: { unitPrice: 100 } },
+      { quantity: 10, poItemId: 'poi-1', materialId: 'mat-1' },
+    ] as any)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([
+      { id: 'poi-1', unitPrice: 100 },
     ] as any)
     prismaMock.budget.findFirst.mockResolvedValue({ id: 'budget-1' } as any)
     prismaMock.budget.update.mockResolvedValue({} as any)

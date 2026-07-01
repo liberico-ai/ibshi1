@@ -4,6 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { createGrnSchema } from '@/lib/schemas'
 import { applyStockMovement } from '@/lib/stock-ledger'
+import { recalcBudgetActual } from '@/lib/sync-engine'
 import { generateMaterialCode } from '@/lib/material-code'
 import { detectPrefixSubgroup } from '@/lib/bompr-enrich'
 
@@ -148,8 +149,10 @@ export async function POST(req: NextRequest) {
     return { movements, poStatus: newStatus }
   })
 
-  // DEPRECATED: legacy WorkflowTask, đã ngừng dùng
-  // P4.3 QC task auto-creation was here but wrote to dead workflowTask table — removed.
+  if (result.movements.length > 0 && po.projectId) {
+    try { await recalcBudgetActual(po.projectId, user.userId) }
+    catch (e) { console.error('[GRN] recalcBudgetActual error:', e) }
+  }
 
   return successResponse({
     message: `Đã nhận ${result.movements.length} mục`,

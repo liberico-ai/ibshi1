@@ -35,18 +35,20 @@ export async function GET(req: NextRequest) {
     })
 
     const totalBudget = budgets.reduce((sum: number, b) => sum + Number(b.planned || 0), 0)
-    const totalActualPO = Number(invoiceTotals._sum?.totalAmount || 0)
-    const totalPaid = Number(payments._sum?.amount || 0)
+    const totalCommitted = budgets.reduce((sum: number, b) => sum + Number(b.committed || 0), 0)
     const totalActual = budgets.reduce((sum: number, b) => sum + Number(b.actual || 0), 0)
+    const totalCash = Number(payments._sum?.amount || 0)
+    const totalInvoiced = Number(invoiceTotals._sum?.totalAmount || 0)
     const variance = totalBudget - totalActual
     const variancePercent = totalBudget > 0 ? Math.round((variance / totalBudget) * 100) : 0
 
     return successResponse({
       projectId,
       totalBudget,
-      totalActualPO,
+      totalCommitted,
       totalActual,
-      totalPaid,
+      totalCash,
+      totalInvoiced,
       variance,
       variancePercent,
       status: variance >= 0 ? 'UNDER_BUDGET' : 'OVER_BUDGET',

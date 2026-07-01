@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { convertPrToPoSchema } from '@/lib/schemas'
+import { recalcPOTotal } from '@/lib/sync-engine'
 
 // POST /api/purchase-orders/convert — Convert approved PR to PO
 export async function POST(req: NextRequest) {
@@ -37,14 +38,12 @@ export async function POST(req: NextRequest) {
       unitPrice: 0,
     }))
 
-    const totalValue = 0 // Will be updated when PO items get priced
-
     const po = await prisma.purchaseOrder.create({
       data: {
         poCode,
         vendorId,
         status: 'DRAFT',
-        totalValue,
+        totalValue: 0,
         deliveryDate: null,
         notes: `Converted from ${pr.prCode}`,
         createdBy: user.userId,
@@ -52,6 +51,8 @@ export async function POST(req: NextRequest) {
       },
       include: { items: true },
     })
+
+    await recalcPOTotal(po.id)
 
     await prisma.purchaseRequest.update({
       where: { id: purchaseRequestId },

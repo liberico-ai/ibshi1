@@ -5,6 +5,7 @@ import { z } from 'zod'
 export const createInvoiceSchema = z.object({
   projectId: z.string().optional(),
   vendorId: z.string().optional(),
+  poId: z.string().optional(),
   type: z.enum(['RECEIVABLE', 'PAYABLE']),
   clientName: z.string().optional(),
   description: z.string().optional(),

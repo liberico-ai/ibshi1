@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { invoiceCode, projectId, vendorId, type, clientName, description, amount, taxRate, dueDate } = body
+    const { invoiceCode, projectId, vendorId, poId, type, clientName, description, amount, taxRate, dueDate } = body
 
     if (!invoiceCode || !type || !amount) return errorResponse('Thiếu thông tin', 400)
 
@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
     const invoice = await prisma.invoice.create({
       data: {
         invoiceCode, projectId: projectId || null, vendorId: vendorId || null,
+        poId: poId || null,
         type, clientName: clientName || null, description: description || null,
         amount: numAmount, taxRate: numTaxRate, taxAmount, totalAmount,
         dueDate: dueDate ? new Date(dueDate) : null,

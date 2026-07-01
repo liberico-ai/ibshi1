@@ -477,6 +477,7 @@ model PurchaseOrder {
   createdAt    DateTime            @default(now()) @map("created_at")
   updatedAt    DateTime            @updatedAt @map("updated_at")
   items        PurchaseOrderItem[]
+  invoices     Invoice[]
   project      Project?            @relation(fields: [projectId], references: [id])
   vendor       Vendor              @relation(fields: [vendorId], references: [id])
 
@@ -1083,6 +1084,7 @@ model Invoice {
   invoiceCode   String                    @unique @map("invoice_code")
   projectId     String?                   @map("project_id")
   vendorId      String?                   @map("vendor_id")
+  poId          String?                   @map("po_id")
   type          String
   clientName    String?                   @map("client_name")
   description   String?
@@ -1100,10 +1102,12 @@ model Invoice {
   updatedAt     DateTime                  @updatedAt @map("updated_at")
   project       Project?                  @relation(fields: [projectId], references: [id])
   vendor        Vendor?                   @relation(fields: [vendorId], references: [id])
+  purchaseOrder PurchaseOrder?            @relation(fields: [poId], references: [id], onDelete: SetNull)
   payments      Payment[]
   drawdownLines DrawdownBeneficiaryLine[]
 
   @@index([projectId])
+  @@index([poId])
   @@index([type])
   @@index([status])
   @@map("invoices")

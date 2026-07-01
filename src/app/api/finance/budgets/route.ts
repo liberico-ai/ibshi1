@@ -5,14 +5,6 @@ import { validateBody } from '@/lib/api-helpers'
 import { createBudgetSchema } from '@/lib/schemas'
 import { FINANCE_WRITE_ROLES } from '@/lib/constants'
 
-// Map cashflow category to budget category
-const catMap: Record<string, string> = {
-  'MATERIAL_COST': 'MATERIAL',
-  'LABOR_COST': 'LABOR',
-  'EQUIPMENT_COST': 'EQUIPMENT',
-  'SUBCONTRACT_COST': 'SUBCONTRACT',
-  'OVERHEAD_COST': 'OVERHEAD',
-}
 const ALL_CATS = ['MATERIAL', 'LABOR', 'EQUIPMENT', 'SUBCONTRACT', 'OVERHEAD']
 
 // GET /api/finance/budgets — project budgets with variance analysis
@@ -36,24 +28,9 @@ export async function GET(req: NextRequest) {
       select: { id: true, projectCode: true, projectName: true, contractValue: true }
     })
 
-    // Fetch manual budget inputs (planned)
+    // Fetch budget records (planned, actual, committed written by sync hooks)
     const bWhere = projectId ? { projectId } : {}
     const manualBudgets = await prisma.budget.findMany({ where: bWhere })
-
-    // Fetch ACTUAL costs from CashflowEntry OUTFLOW
-    // Since prisma.groupBy cannot group by relations, we group by projectId directly
-    const cfRaw = await prisma.cashflowEntry.findMany({
-      where: { type: 'OUTFLOW', projectId: { in: dbProjects.map(p => p.id) } },
-      select: { projectId: true, category: true, amount: true }
-    })
-    const actualsMap: Record<string, Record<string, number>> = {}
-    for (const row of cfRaw) {
-       if (!row.projectId) continue;
-       const bCat = catMap[row.category] || row.category // fallback map
-       if (!actualsMap[row.projectId]) actualsMap[row.projectId] = {}
-       if (!actualsMap[row.projectId][bCat]) actualsMap[row.projectId][bCat] = 0
-       actualsMap[row.projectId][bCat] += Number(row.amount || 0)
-    }
 
     // Fetch COMMITTED LABOR (PieceRate)
     const laborCom = await prisma.pieceRateContract.groupBy({
@@ -79,23 +56,14 @@ export async function GET(req: NextRequest) {
       const pSubCom = Number(subCom.find(x => x.projectId === pid)?._sum?.contractValue || 0)
       
       const categoriesList = ALL_CATS.map(cat => {
-        // Find manual budget input if exists
         const mb = manualBudgets.find(b => b.projectId === pid && b.category === cat)
-        
-        let actual = actualsMap[pid]?.[cat] || 0
-        let committed = 0
-        
-        // Auto-assign committed
-        if (cat === 'LABOR') committed = pLaborCom
-        else if (cat === 'SUBCONTRACT') committed = pSubCom
 
-        // If manual budget provided actuals/committed, we might merge or prefer dynamic. We prefer dynamic.
-        // Planned is from manual budget (if > 0) OR fallback to P1.2 approved budget
         const planned = (mb && Number(mb.planned) > 0) ? Number(mb.planned) : (p12BudgetsMap[pid]?.[cat] || 0)
+        const actual = mb ? Number(mb.actual) : 0
 
-        // For demo/UI sake if manual was typed but dynamic is 0 we can fallback, but dynamic should override
-        if (actual === 0 && mb?.actual) actual = Number(mb.actual)
-        if (committed === 0 && mb?.committed) committed = Number(mb.committed)
+        let committed = mb ? Number(mb.committed) : 0
+        if (cat === 'LABOR') committed = pLaborCom || committed
+        else if (cat === 'SUBCONTRACT') committed = pSubCom || committed
 
         return {
           id: mb?.id || `${pid}-${cat}`,

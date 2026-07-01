@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
+import { recalcPOTotal, syncPOtoBudget } from '@/lib/sync-engine'
 
 // POST /api/purchase-orders/[id]/approve — Approve or reject a PO
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -38,6 +39,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         notes: comment ? `${po.notes || ''}\n[${action} by ${user.userId}] ${comment}`.trim() : po.notes,
       },
     })
+
+    if (action === 'APPROVE') {
+      try {
+        await recalcPOTotal(id)
+        if (po.projectId) await syncPOtoBudget(po.projectId, id, user.userId)
+      } catch (e) { console.error('[approve] sync error:', e) }
+    }
 
     await logAudit(user.userId, action, 'PurchaseOrder', id, { poCode: po.poCode, status: newStatus }, getClientIP(req))
 
