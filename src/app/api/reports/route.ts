@@ -283,16 +283,16 @@ export async function GET(req: NextRequest) {
 
     // ──── Safety Summary ────
     if (type === 'safety') {
-      const [total, open, investigating, resolved, closed] = await Promise.all([
+      const [total, open, investigating, actionTaken, closed] = await Promise.all([
         prisma.safetyIncident.count(),
         prisma.safetyIncident.count({ where: { status: 'OPEN' } }),
         prisma.safetyIncident.count({ where: { status: 'INVESTIGATING' } }),
-        prisma.safetyIncident.count({ where: { status: 'RESOLVED' } }),
+        prisma.safetyIncident.count({ where: { status: 'ACTION_TAKEN' } }),
         prisma.safetyIncident.count({ where: { status: 'CLOSED' } }),
       ])
       const bySeverity = await prisma.safetyIncident.groupBy({ by: ['severity'], _count: true })
       return successResponse({
-        safety: { total, open, investigating, resolved, closed,
+        safety: { total, open, investigating, actionTaken, closed,
           bySeverity: Object.fromEntries(bySeverity.map(s => [s.severity, s._count])) },
       })
     }

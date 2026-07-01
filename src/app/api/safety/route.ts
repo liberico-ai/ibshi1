@@ -4,7 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R09', 'R09a']
 
-// GET /api/safety — list safety incidents with summary
+// GET /api/safety — list safety incidents (giữ tạm cho backward compat)
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
@@ -40,38 +40,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/safety — report safety incident
-export async function POST(req: NextRequest) {
-  try {
-    const user = await authenticateRequest(req)
-    if (!user) return unauthorizedResponse()
-    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
-
-    const body = await req.json()
-    const { projectId, incidentDate, severity, category, location, description, rootCause, correctiveAction } = body
-
-    if (!projectId || !incidentDate || !severity || !category || !description) {
-      return errorResponse('Thiếu thông tin bắt buộc')
-    }
-
-    const year = new Date().getFullYear().toString().slice(-2)
-    const count = await prisma.safetyIncident.count()
-    const incidentCode = `HSE-${year}-${String(count + 1).padStart(3, '0')}`
-
-    const incident = await prisma.safetyIncident.create({
-      data: {
-        incidentCode, projectId, severity, category,
-        incidentDate: new Date(incidentDate),
-        location: location || null, description,
-        rootCause: rootCause || null,
-        correctiveAction: correctiveAction || null,
-        reportedBy: user.userId,
-      },
-    })
-
-    return successResponse({ incident }, 'Đã báo cáo sự cố an toàn')
-  } catch (err) {
-    console.error('POST /api/safety error:', err)
-    return errorResponse('Lỗi hệ thống', 500)
-  }
+// POST /api/safety — LOCKED: dùng POST /api/hse/incidents thay thế
+export async function POST() {
+  return errorResponse('API /api/safety đã ngừng nhận dữ liệu mới. Dùng POST /api/hse/incidents.', 410)
 }

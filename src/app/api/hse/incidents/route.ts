@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { createModuleTask } from '@/lib/module-tasks'
 
-const WRITE_ROLES = ['R01', 'R10', 'R06']
+const WRITE_ROLES = ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R09', 'R09a']
 
 export async function GET(req: NextRequest) {
   const user = await authenticateRequest(req)

@@ -1,10 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
-import { validateBody } from '@/lib/api-helpers'
-import { createDeliverySchema } from '@/lib/schemas'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 
-// GET /api/delivery — list deliveries
+// GET /api/delivery — list deliveries (giữ tạm cho backward compat)
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
@@ -34,83 +32,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/delivery — create delivery record
-export async function POST(req: NextRequest) {
-  try {
-    const user = await authenticateRequest(req)
-    if (!user) return unauthorizedResponse()
-
-    if (!['R01', 'R06', 'R07'].includes(user.roleCode)) {
-      return errorResponse('Bạn không có quyền tạo phiếu giao hàng', 403)
-    }
-
-    const result = await validateBody(req, createDeliverySchema)
-    if (!result.success) return result.response
-    const { projectId, workOrderId, packingList, shippingMethod, notes } = result.data
-
-    const count = await prisma.deliveryRecord.count()
-    const deliveryCode = `DL-${String(count + 1).padStart(5, '0')}`
-
-    const delivery = await prisma.deliveryRecord.create({
-      data: {
-        deliveryCode,
-        projectId,
-        workOrderId: workOrderId || null,
-        packingList: (packingList as object) || undefined,
-        shippingMethod: shippingMethod || null,
-        notes,
-        createdBy: user.userId,
-      },
-    })
-
-    await logAudit(user.userId, 'CREATE', 'DeliveryRecord', delivery.id, { deliveryCode, projectId }, getClientIP(req))
-
-    return successResponse({ delivery }, `Phiếu giao hàng ${deliveryCode} đã tạo`, 201)
-  } catch (err) {
-    console.error('POST /api/delivery error:', err)
-    return errorResponse('Lỗi hệ thống', 500)
-  }
+// POST /api/delivery — LOCKED: dùng logistics/shipments thay thế
+export async function POST() {
+  return errorResponse('API /api/delivery đã ngừng nhận dữ liệu mới. Dùng POST /api/logistics/shipments.', 410)
 }
 
-// PATCH /api/delivery — update delivery status
-export async function PATCH(req: NextRequest) {
-  try {
-    const user = await authenticateRequest(req)
-    if (!user) return unauthorizedResponse()
-
-    const body = await req.json()
-    const { id, status, trackingNo, receivedBy } = body
-
-    if (!id) return errorResponse('Thiếu ID')
-
-    const validTransitions: Record<string, string[]> = {
-      PACKING: ['SHIPPED'],
-      SHIPPED: ['DELIVERED'],
-      DELIVERED: ['RECEIVED'],
-    }
-
-    const delivery = await prisma.deliveryRecord.findUnique({ where: { id } })
-    if (!delivery) return errorResponse('Phiếu không tồn tại', 404)
-
-    if (status && validTransitions[delivery.status] && !validTransitions[delivery.status].includes(status)) {
-      return errorResponse(`Không thể chuyển từ ${delivery.status} → ${status}`)
-    }
-
-    const updated = await prisma.deliveryRecord.update({
-      where: { id },
-      data: {
-        ...(status ? { status } : {}),
-        ...(status === 'SHIPPED' ? { shippedAt: new Date(), trackingNo: trackingNo || delivery.trackingNo } : {}),
-        ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}),
-        ...(status === 'RECEIVED' ? { receivedBy: receivedBy || user.userId } : {}),
-      },
-    })
-
-    await logAudit(user.userId, 'TRANSITION', 'DeliveryRecord', id, { from: delivery.status, to: status }, getClientIP(req))
-
-    return successResponse({ delivery: updated })
-  } catch (err) {
-    console.error('PATCH /api/delivery error:', err)
-    return errorResponse('Lỗi hệ thống', 500)
-  }
+// PATCH /api/delivery — LOCKED
+export async function PATCH() {
+  return errorResponse('API /api/delivery đã ngừng. Dùng /api/logistics/shipments/[id].', 410)
 }

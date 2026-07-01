@@ -4,7 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { updateIncidentSchema } from '@/lib/schemas'
 
-const WRITE_ROLES = ['R01', 'R10', 'R06']
+const WRITE_ROLES = ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R09', 'R09a']
 
 export async function PUT(
   req: NextRequest,
@@ -27,7 +27,8 @@ export async function PUT(
     data: {
       ...(data.status ? { status: data.status } : {}),
       ...(data.status === 'INVESTIGATING' ? { investigatedBy: data.investigatedBy || user.userId, investigationDate: new Date() } : {}),
-      ...(data.status === 'CLOSED' ? { closedBy: user.userId, closedAt: new Date(), resolvedAt: new Date() } : {}),
+      ...(data.status === 'ACTION_TAKEN' ? { resolvedAt: new Date() } : {}),
+      ...(data.status === 'CLOSED' ? { closedBy: user.userId, closedAt: new Date(), ...(!incident.resolvedAt ? { resolvedAt: new Date() } : {}) } : {}),
       ...(data.rootCause !== undefined ? { rootCause: data.rootCause } : {}),
       ...(data.correctiveAction !== undefined ? { correctiveAction: data.correctiveAction } : {}),
       ...(data.lostTimeDays !== undefined ? { lostTimeDays: data.lostTimeDays } : {}),
