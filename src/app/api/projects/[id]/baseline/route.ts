@@ -54,17 +54,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     select: { category: true, planned: true, actual: true, committed: true, forecast: true },
   })
 
-  const wfTasks = await prisma.workflowTask.findMany({
-    where: { projectId },
-    select: { id: true, stepCode: true, resultData: true },
+  const tasks = await prisma.task.findMany({
+    where: { projectId, taskType: { startsWith: 'P' } },
+    select: { id: true, taskType: true, resultData: true },
   })
 
-  const estimateData = wfTasks
+  const estimateData = tasks
     .filter(t => t.resultData && typeof t.resultData === 'object')
     .map(t => {
       const rd = t.resultData as Record<string, unknown>
       if (rd.estimate || rd.dt02Items || rd.dt03Items) {
-        return { stepCode: t.stepCode, estimate: rd.estimate, dt02Items: rd.dt02Items, dt03Items: rd.dt03Items }
+        return { stepCode: t.taskType, estimate: rd.estimate, dt02Items: rd.dt02Items, dt03Items: rd.dt03Items }
       }
       return null
     })

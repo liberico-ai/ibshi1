@@ -42,7 +42,7 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
       prisma.project.findMany({
         where,
         include: {
-          tasks: { select: { stepCode: true, status: true } },
+          dynamicTasks: { select: { taskType: true, status: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -51,8 +51,8 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     ])
 
     const result = projects.map((p) => {
-      const totalTasks = p.tasks.length
-      const completed = p.tasks.filter((t) => t.status === 'DONE').length
+      const totalTasks = p.dynamicTasks.length
+      const completed = p.dynamicTasks.filter((t) => t.status === 'DONE').length
       return {
         id: p.id,
         projectCode: p.projectCode,

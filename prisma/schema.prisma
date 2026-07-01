@@ -23,7 +23,6 @@ model User {
   employee       Employee?
   notifications  Notification[]
   department     Department?    @relation(fields: [departmentId], references: [id])
-  assignedTasks  WorkflowTask[] @relation("TaskAssignee")
   welderJoints   WeldJoint[]    @relation("WelderJoints")
 
   @@index([roleCode])
@@ -100,7 +99,6 @@ model Project {
   timesheets         Timesheet[]
   wbsNodes           WbsNode[]
   workOrders         WorkOrder[]
-  tasks              WorkflowTask[]
   dynamicTasks       Task[]                   @relation("ProjectDynamicTasks")
   meetings           Meeting[]                @relation("ProjectMeetings")
   loanContracts      LoanContract[]
@@ -228,36 +226,6 @@ model LessonLearned {
   @@index([projectId])
   @@index([category])
   @@map("lesson_learned")
-}
-
-model WorkflowTask {
-  id           String    @id @default(cuid())
-  projectId    String    @map("project_id")
-  stepCode     String    @map("step_code")
-  stepName     String    @map("step_name")
-  stepNameEn   String    @default("") @map("step_name_en")
-  description  String?
-  assignedRole String    @map("assigned_role")
-  assignedTo   String?   @map("assigned_to")
-  status       String    @default("PENDING")
-  priority     Int       @default(0)
-  deadline     DateTime?
-  startedAt    DateTime? @map("started_at")
-  completedAt  DateTime? @map("completed_at")
-  completedBy  String?   @map("completed_by")
-  resultData   Json?     @map("result_data")
-  notes        String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  assignee     User?     @relation("TaskAssignee", fields: [assignedTo], references: [id])
-  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([assignedRole, status])
-  @@index([assignedTo, status])
-  @@index([projectId, status])
-  @@index([deadline])
-  @@index([status])
-  @@map("workflow_tasks")
 }
 
 model Notification {

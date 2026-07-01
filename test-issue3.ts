@@ -1,3 +1,4 @@
+// @ts-nocheck — one-off debug script, references removed WorkflowTask model
 import 'dotenv/config'
 import prisma from './src/lib/db'
 

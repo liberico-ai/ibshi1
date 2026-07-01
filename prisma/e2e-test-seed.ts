@@ -1,6 +1,10 @@
+// @ts-nocheck — DEPRECATED: legacy 36-step workflow E2E seed.
+// Table workflow_tasks still exists but Prisma model removed (Trụ 1 đóng).
+// File kept for reference; will not pass tsc.
 /**
  * ═══════════════════════════════════════════════════════════════
  * E2E Full Lifecycle Test — Forward + Reverse Workflow Tests
+ * (LEGACY — engine cứng 36 bước, đã thay bằng dynamic task engine)
  * ═══════════════════════════════════════════════════════════════
  *
  * Vòng 1: Chiều xuôi — tất cả approve P1.1 → P6.4 → CLOSED

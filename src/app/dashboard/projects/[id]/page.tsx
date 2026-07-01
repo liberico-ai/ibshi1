@@ -82,7 +82,7 @@ export default function ProjectDetailPage() {
   function onCompleteClick(task: Task) {
     const stepConfig = getStepFormConfig(task.stepCode)
     if (stepConfig && Object.keys(stepConfig).length > 0) {
-      window.location.href = `/dashboard/tasks/${task.id}`
+      window.location.href = `/dashboard/work/${task.id}`
     } else {
       handleComplete(task.id)
     }
@@ -312,7 +312,7 @@ function TaskCard({ task, onCompleteClick, onRejectClick, onAssignClick, current
 
       {/* Title — clickable to task detail */}
       <a
-        href={`/dashboard/tasks/${task.id}`}
+        href={`/dashboard/work/${task.id}`}
         style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, marginBottom: '8px', display: 'block', textDecoration: 'none' }}
         className="hover:underline"
       >

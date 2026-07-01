@@ -1,3 +1,4 @@
+// @ts-nocheck — one-off migration script, references removed WorkflowTask model
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
