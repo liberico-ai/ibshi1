@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { updateCheckpointSchema } from '@/lib/schemas'
+import { createModuleTask } from '@/lib/module-tasks'
 
 // PUT /api/qc/itp/[id]/checkpoints/[cpId] — Update checkpoint status
 export async function PUT(
@@ -45,6 +46,24 @@ export async function PUT(
         },
       })
       ncrId = ncr.id
+
+      const sev = checkpoint.inspectionType === 'HOLD' ? 'MAJOR' : 'MINOR'
+      const deadlineDays = sev === 'MAJOR' ? 3 : 7
+      const deadline = new Date(Date.now() + deadlineDays * 24 * 60 * 60 * 1000).toISOString()
+
+      const taskId = await createModuleTask('QC_NCR', ncrCode, {
+        projectId: checkpoint.itp.projectId,
+        taskType: 'QC_NCR',
+        title: `Xử lý NCR ${ncrCode} — process [${sev}]`,
+        description: ncr.description,
+        priority: sev === 'MAJOR' ? 'HIGH' : 'NORMAL',
+        deadline,
+        assigneeRoles: ['R09', 'R09a', 'R06'],
+      }, user.userId)
+
+      if (taskId) {
+        await prisma.nonConformanceReport.update({ where: { id: ncr.id }, data: { taskId } })
+      }
     }
 
     const updated = await prisma.iTPCheckpoint.update({

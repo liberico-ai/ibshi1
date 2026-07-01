@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createWorkPermitSchema } from '@/lib/schemas'
+import { createModuleTask } from '@/lib/module-tasks'
 
 const WRITE_ROLES = ['R01', 'R10', 'R06', 'R06a']
 
@@ -63,5 +64,27 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  return successResponse({ permit }, undefined, 201)
+  const taskId = await createModuleTask('HSE_PERMIT', permit.id, {
+    projectId: data.projectId || undefined,
+    taskType: 'HSE_PERMIT_APPROVAL',
+    title: `Duyệt giấy phép ${permitCode} — ${data.permitType || 'HOT_WORK'}`,
+    description: data.description,
+    priority: 'HIGH',
+    deadline: new Date(data.validFrom).toISOString(),
+    assigneeRoles: ['R09', 'R01'],
+  }, user.userId)
+
+  if (taskId) {
+    await prisma.workPermit.update({ where: { id: permit.id }, data: { taskId } })
+  }
+
+  const final = await prisma.workPermit.findUniqueOrThrow({
+    where: { id: permit.id },
+    include: {
+      project: { select: { projectCode: true, projectName: true } },
+      workOrder: { select: { woCode: true } },
+    },
+  })
+
+  return successResponse({ permit: final }, undefined, 201)
 }

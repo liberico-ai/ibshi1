@@ -117,4 +117,38 @@ describe('createModuleTask', () => {
 
     expect(result).toBeNull()
   })
+
+  it('NCR idempotent: ITP auto-NCR and manual NCR share same task via ncrCode', async () => {
+    // First call (ITP auto-NCR creates the task)
+    prismaMock.task.findUnique.mockResolvedValueOnce(null)
+    mockCreateTask.mockResolvedValueOnce({ id: 'ncr-task-1' } as never)
+
+    const r1 = await createModuleTask('QC_NCR', 'NCR-26-001', {
+      projectId: 'proj-1',
+      taskType: 'QC_NCR',
+      title: 'Xử lý NCR NCR-26-001',
+      assigneeRoles: ['R09', 'R09a', 'R06'],
+    }, 'u1')
+
+    expect(r1).toBe('ncr-task-1')
+    expect(mockCreateTask).toHaveBeenCalledTimes(1)
+    expect(mockCreateTask).toHaveBeenCalledWith(
+      expect.anything(),
+      'u1',
+      expect.objectContaining({ externalRef: 'MOD:QC_NCR:NCR-26-001' }),
+    )
+
+    // Second call (manual NCR POST with same ncrCode → idempotent)
+    prismaMock.task.findUnique.mockResolvedValueOnce({ id: 'ncr-task-1' } as never)
+
+    const r2 = await createModuleTask('QC_NCR', 'NCR-26-001', {
+      projectId: 'proj-1',
+      taskType: 'QC_NCR',
+      title: 'Xử lý NCR NCR-26-001',
+      assigneeRoles: ['R09', 'R09a', 'R06'],
+    }, 'u2')
+
+    expect(r2).toBe('ncr-task-1')
+    expect(mockCreateTask).toHaveBeenCalledTimes(1) // still 1 — no second createTask
+  })
 })

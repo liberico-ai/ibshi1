@@ -788,6 +788,7 @@ model NonConformanceReport {
   closedAt    DateTime?   @map("closed_at")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
+  taskId      String?     @map("task_id")
   actions     NcrAction[]
   checkpoints ITPCheckpoint[]
   weldJoints  WeldJoint[]    @relation("WeldJointNCR")
@@ -796,6 +797,7 @@ model NonConformanceReport {
   @@index([projectId])
   @@index([status])
   @@index([severity])
+  @@index([taskId])
   @@map("non_conformance_reports")
 }
 
@@ -1324,6 +1326,7 @@ model WorkPermit {
   closedBy    String?   @map("closed_by")
   closedAt    DateTime? @map("closed_at")
   notes       String?
+  taskId      String?   @map("task_id")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -1331,6 +1334,7 @@ model WorkPermit {
 
   @@index([projectId])
   @@index([status])
+  @@index([taskId])
   @@index([permitType])
   @@map("work_permits")
 }

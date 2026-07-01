@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createNcrSchema } from '@/lib/schemas'
+import { createModuleTask } from '@/lib/module-tasks'
 
 // GET /api/qc/ncr — List NCRs
 export async function GET(req: NextRequest) {
@@ -54,5 +55,25 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  return successResponse({ ncr, message: 'Đã tạo NCR' })
+  const sev = severity || 'MINOR'
+  const deadlineDays = sev === 'MAJOR' || sev === 'CRITICAL' ? 3 : 7
+  const deadline = new Date(Date.now() + deadlineDays * 24 * 60 * 60 * 1000).toISOString()
+
+  const taskId = await createModuleTask('QC_NCR', ncrCode, {
+    projectId,
+    taskType: 'QC_NCR',
+    title: `Xử lý NCR ${ncrCode} — ${category} [${sev}]`,
+    description,
+    priority: sev === 'CRITICAL' ? 'URGENT' : sev === 'MAJOR' ? 'HIGH' : 'NORMAL',
+    deadline,
+    assigneeRoles: ['R09', 'R09a', 'R06'],
+  }, user.userId)
+
+  if (taskId) {
+    await prisma.nonConformanceReport.update({ where: { id: ncr.id }, data: { taskId } })
+  }
+
+  const final = await prisma.nonConformanceReport.findUniqueOrThrow({ where: { id: ncr.id } })
+
+  return successResponse({ ncr: final, message: 'Đã tạo NCR' })
 }
