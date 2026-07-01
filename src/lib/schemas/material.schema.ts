@@ -83,6 +83,18 @@ export const mergeMaterialsSchema = z.object({
 
 export type MergeMaterialsInput = z.infer<typeof mergeMaterialsSchema>
 
+// POST /api/materials/promote — Promote provisional code to canonical
+export const promoteMaterialSchema = z.object({
+  provisionalId: z.string().min(1, 'Thiếu mã tạm'),
+  targetId: z.string().optional(),
+  newCode: z.string().optional(),
+}).refine(
+  (d) => d.targetId || d.newCode,
+  { message: 'Cần chọn mã đích (targetId) hoặc tạo mã mới (newCode)' },
+)
+
+export type PromoteMaterialInput = z.infer<typeof promoteMaterialSchema>
+
 // POST /api/stock-movements — Record stock movement
 export const stockMovementSchema = z.object({
   materialId: z.string().min(1, 'Vật tư là bắt buộc'),

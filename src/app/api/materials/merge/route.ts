@@ -45,10 +45,22 @@ export async function POST(req: NextRequest) {
       await tx.purchaseRequestItem.updateMany(reassign)
       await tx.materialIssue.updateMany(reassign)
       await tx.millCertificate.updateMany(reassign)
-      // move duplicates' existing aliases to survivor
       await tx.materialCodeAlias.updateMany(reassign)
 
-      // 2) fold stock into survivor + turn each duplicate code into an alias + archive
+      // 2) fold MaterialStock per-warehouse into survivor (upsert increment)
+      const dupStocks = await tx.materialStock.findMany({
+        where: { materialId: { in: duplicateIds } },
+      })
+      for (const ds of dupStocks) {
+        await tx.materialStock.upsert({
+          where: { materialId_warehouseId: { materialId: survivorId, warehouseId: ds.warehouseId } },
+          create: { materialId: survivorId, warehouseId: ds.warehouseId, quantity: ds.quantity, value: ds.value },
+          update: { quantity: { increment: ds.quantity }, value: { increment: ds.value } },
+        })
+      }
+      await tx.materialStock.deleteMany({ where: { materialId: { in: duplicateIds } } })
+
+      // 3) fold scalar totals + alias + archive
       let stockSum = 0
       let reservedSum = 0
       for (const d of dups) {

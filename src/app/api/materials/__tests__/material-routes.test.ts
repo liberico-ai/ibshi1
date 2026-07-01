@@ -88,6 +88,9 @@ describe('POST /api/materials/merge', () => {
       .mockResolvedValueOnce([{ id: 'S' }, { id: 'D1' }] as never)
       .mockResolvedValueOnce([{ id: 'D1', materialCode: 'OLD-1', currentStock: 3, reservedStock: 1 }] as never)
 
+    prismaMock.materialStock.findMany.mockResolvedValue([] as never)
+    prismaMock.materialStock.deleteMany.mockResolvedValue({ count: 0 } as never)
+
     const res = await mergePOST(mergeReq({ survivorId: 'S', duplicateIds: ['D1'] }))
     const body = await res.json()
 

@@ -5,6 +5,8 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { RBAC } from '@/lib/rbac-rules'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 
+interface PromoteTarget { id: string; materialCode: string; name: string }
+
 interface Alias { id: string; aliasCode: string; source: string; note: string | null }
 interface StockLoc { warehouseCode: string; warehouseName: string; projectCode: string | null; kind: string; quantity: number; value: number }
 interface Material {
@@ -86,6 +88,31 @@ export default function MaterialCodesPage() {
     const res = await apiFetch(`/api/materials/aliases/${aliasId}`, { method: 'DELETE' })
     if (res.ok) openDetail(detail.id)
     else alert(res.error || 'Lỗi')
+  }
+
+  const canPromote = !!user && RBAC.MATERIAL_CODE_PROMOTE.includes(user.roleCode)
+  const [promoteOpen, setPromoteOpen] = useState(false)
+  const [promoteSearch, setPromoteSearch] = useState('')
+  const [promoteCandidates, setPromoteCandidates] = useState<PromoteTarget[]>([])
+  const [promoting, setPromoting] = useState(false)
+
+  const searchPromoteTarget = async (q: string) => {
+    setPromoteSearch(q)
+    if (q.length < 2) { setPromoteCandidates([]); return }
+    const res = await apiFetch(`/api/materials?q=${encodeURIComponent(q)}&status=ACTIVE&provisional=false`)
+    if (res.ok) setPromoteCandidates(res.materials.filter((m: Material) => m.id !== detail?.id).slice(0, 8))
+  }
+
+  const doPromote = async (targetId: string) => {
+    if (!detail || !confirm(`Promote ${detail.materialCode} → mã chuẩn? Thao tác không thể hoàn tác.`)) return
+    setPromoting(true)
+    const res = await apiFetch('/api/materials/promote', {
+      method: 'POST',
+      body: JSON.stringify({ provisionalId: detail.id, targetId }),
+    })
+    setPromoting(false)
+    if (res.ok) { setDetail(null); setPromoteOpen(false); load() }
+    else alert(res.error || 'Lỗi promote')
   }
 
   return (
@@ -201,6 +228,33 @@ export default function MaterialCodesPage() {
 
             {detail.isProvisional && canEdit && (
               <button onClick={() => approve(detail.id)} className="btn-primary text-sm px-4 py-2 rounded-lg mb-3 w-full">Duyệt mã (chuẩn hóa → ACTIVE)</button>
+            )}
+
+            {detail.isProvisional && canPromote && (
+              <div className="mb-3">
+                <button onClick={() => setPromoteOpen(!promoteOpen)} className="text-sm px-4 py-2 rounded-lg w-full font-semibold" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                  Promote → mã chuẩn
+                </button>
+                {promoteOpen && (
+                  <div className="mt-2 p-3 rounded-lg" style={{ background: 'var(--surface-hover)', border: '1px solid var(--border)' }}>
+                    <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Tìm mã chuẩn đích để gộp vào:</div>
+                    <input
+                      value={promoteSearch} onChange={(e) => searchPromoteTarget(e.target.value)}
+                      placeholder="Tìm mã / tên vật tư…"
+                      className="text-sm px-2 py-1.5 rounded w-full mb-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                    />
+                    {promoteCandidates.map((c) => (
+                      <button key={c.id} onClick={() => doPromote(c.id)} disabled={promoting}
+                        className="block w-full text-left text-sm px-2 py-1.5 rounded hover:bg-blue-50 transition-colors" style={{ color: 'var(--text-primary)' }}>
+                        <span className="font-mono font-bold" style={{ color: 'var(--ibs-red)' }}>{c.materialCode}</span> — {c.name}
+                      </button>
+                    ))}
+                    {promoteSearch.length >= 2 && promoteCandidates.length === 0 && (
+                      <div className="text-xs py-1" style={{ color: 'var(--text-muted)' }}>Không tìm thấy mã chuẩn phù hợp</div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Thông số kỹ thuật + tồn */}

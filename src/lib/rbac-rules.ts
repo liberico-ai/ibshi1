@@ -17,6 +17,9 @@ export const RBAC = {
   // Quản lý danh mục mã vật tư (tạo/sửa/duyệt mã, alias): BGĐ, KTKH, Kho, Admin
   MATERIAL_CODE_ADMIN: ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R10', 'R00'],
 
+  // Promote mã tạm → mã chuẩn: BGĐ, KTKH, Kho, Admin
+  MATERIAL_CODE_PROMOTE: ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R10', 'R00'],
+
   // Gộp mã trùng — thao tác rủi ro cao, chỉ BGĐ + Admin
   MATERIAL_CODE_MERGE: ['R01', 'R10', 'R00'],
 

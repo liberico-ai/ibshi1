@@ -346,6 +346,7 @@ model Material {
   status         String                @default("ACTIVE") // ACTIVE | ARCHIVE | OBSOLETE
   isProvisional  Boolean               @default(false) @map("is_provisional") // mã tạm, chờ chuẩn hóa
   createdByUnit  String?               @map("created_by_unit") // phòng/đơn vị tạo mã tạm
+  promotedToId   String?               @map("promoted_to_id") // link mã tạm → mã chuẩn sau promote
   aliases        MaterialCodeAlias[]
   stocks         MaterialStock[]
   bomItems       BomItem[]

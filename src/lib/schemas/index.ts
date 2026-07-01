@@ -56,6 +56,7 @@ export {
   addAliasSchema,
   quickCreateMaterialSchema,
   mergeMaterialsSchema,
+  promoteMaterialSchema,
   resolveBatchSchema,
   type CreateMaterialInput,
   type UpdateMaterialInput,
@@ -64,6 +65,7 @@ export {
   type AddAliasInput,
   type QuickCreateMaterialInput,
   type MergeMaterialsInput,
+  type PromoteMaterialInput,
   type ResolveBatchInput,
 } from './material.schema'
 
