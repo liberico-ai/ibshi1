@@ -594,6 +594,8 @@ model WorkOrder {
   packingListItems      PackingListItem[]
   equipmentAssignments  EquipmentAssignment[]
   workPermits           WorkPermit[]
+  inspections           Inspection[]
+  itpCheckpoints        ITPCheckpoint[]
   project               Project          @relation(fields: [projectId], references: [id])
   workshop       Workshop?        @relation(fields: [workshopId], references: [id])
   bomVersion     BomVersion?      @relation(fields: [bomVersionId], references: [id])
@@ -697,13 +699,17 @@ model Inspection {
   inspectedAt    DateTime?        @map("inspected_at")
   resultData     Json?            @map("result_data")
   remarks        String?
+  workOrderId    String?          @map("work_order_id")
+  pieceMark      String?          @map("piece_mark")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
   checklistItems InspectionItem[]
   project        Project          @relation(fields: [projectId], references: [id])
+  workOrder      WorkOrder?       @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
 
   @@index([projectId, type])
   @@index([status])
+  @@index([workOrderId])
   @@map("inspections")
 }
 
@@ -754,11 +760,15 @@ model ITPCheckpoint {
   remarks        String?
   sortOrder      Int                @default(0) @map("sort_order")
   ncrId          String?            @map("ncr_id")
+  workOrderId    String?            @map("work_order_id")
+  pieceMark      String?            @map("piece_mark")
   itp            InspectionTestPlan @relation(fields: [itpId], references: [id], onDelete: Cascade)
   ncr            NonConformanceReport? @relation(fields: [ncrId], references: [id], onDelete: SetNull)
+  workOrder      WorkOrder?         @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
 
   @@index([itpId])
   @@index([ncrId])
+  @@index([workOrderId])
   @@map("itp_checkpoints")
 }
 

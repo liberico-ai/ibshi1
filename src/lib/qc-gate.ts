@@ -43,6 +43,48 @@ export async function isWorkOrderQcPassed(workOrderId: string): Promise<QcResult
     reasons.push(`NCR chưa đóng: ${[...new Set(ncrList)].join(', ')}`)
   }
 
+  // C4: ITP checkpoint HOLD/WITNESS đã FAILED (theo workOrderId)
+  const itpFailed = await prisma.iTPCheckpoint.count({
+    where: {
+      workOrderId,
+      inspectionType: { in: ['HOLD', 'WITNESS'] },
+      status: 'FAILED',
+    },
+  })
+  if (itpFailed > 0) {
+    reasons.push(`${itpFailed} điểm dừng ITP (HOLD/WITNESS) chưa đạt`)
+  }
+
+  // C5: ITP checkpoint HOLD/WITNESS còn PENDING (ITP cha không phải DRAFT)
+  const itpPending = await prisma.iTPCheckpoint.findMany({
+    where: {
+      workOrderId,
+      inspectionType: { in: ['HOLD', 'WITNESS'] },
+      status: 'PENDING',
+      itp: { status: { not: 'DRAFT' } },
+    },
+    select: { id: true },
+  })
+  if (itpPending.length > 0) {
+    reasons.push(`${itpPending.length} điểm dừng ITP (HOLD/WITNESS) chưa kiểm tra`)
+  }
+
+  // C6: Inspection gắn WO bị FAILED hoặc có checklistItem FAIL
+  const failedInspections = await prisma.inspection.findMany({
+    where: {
+      workOrderId,
+      OR: [
+        { status: 'FAILED' },
+        { checklistItems: { some: { result: 'FAIL' } } },
+      ],
+    },
+    select: { inspectionCode: true },
+  })
+  if (failedInspections.length > 0) {
+    const codes = failedInspections.map(i => i.inspectionCode).join(', ')
+    reasons.push(`Biên bản QC lỗi: ${codes}`)
+  }
+
   return { passed: reasons.length === 0, reasons }
 }
 

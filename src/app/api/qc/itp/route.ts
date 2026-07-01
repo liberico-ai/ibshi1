@@ -52,6 +52,13 @@ export async function POST(req: NextRequest) {
   const count = await prisma.inspectionTestPlan.count()
   const itpCode = `ITP-${year}-${String(count + 1).padStart(3, '0')}`
 
+  const woIds = [...new Set(checkpoints?.map(cp => cp.workOrderId).filter(Boolean) as string[] || [])]
+  const woMap = new Map<string, string | null>()
+  if (woIds.length > 0) {
+    const wos = await prisma.workOrder.findMany({ where: { id: { in: woIds } }, select: { id: true, pieceMark: true } })
+    wos.forEach(wo => woMap.set(wo.id, wo.pieceMark))
+  }
+
   const itp = await prisma.inspectionTestPlan.create({
     data: {
       itpCode, projectId, name,
@@ -64,6 +71,8 @@ export async function POST(req: NextRequest) {
           acceptCriteria: cp.acceptCriteria || null,
           inspectionType: cp.inspectionType || 'MONITOR',
           sortOrder: i + 1,
+          workOrderId: cp.workOrderId || null,
+          pieceMark: cp.pieceMark || (cp.workOrderId ? woMap.get(cp.workOrderId) ?? null : null),
         })),
       } : undefined,
     },

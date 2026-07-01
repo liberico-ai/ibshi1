@@ -20,6 +20,8 @@ export const createInspectionSchema = z.object({
   projectId: z.string().min(1, 'Dự án là bắt buộc'),
   type: z.string().min(1, 'Loại kiểm tra là bắt buộc'),
   stepCode: z.string().min(1, 'Bước workflow là bắt buộc'),
+  workOrderId: z.string().optional(),
+  pieceMark: z.string().optional(),
   checklistItems: z.array(checklistItemSchema).optional().default([]),
 })
 
@@ -43,6 +45,8 @@ const itpCheckpointSchema = z.object({
   standard: z.string().optional(),
   acceptCriteria: z.string().optional(),
   inspectionType: z.enum(['HOLD', 'WITNESS', 'MONITOR', 'REVIEW']).default('MONITOR'),
+  workOrderId: z.string().optional(),
+  pieceMark: z.string().optional(),
 })
 
 export const createItpSchema = z.object({

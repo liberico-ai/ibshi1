@@ -6,6 +6,9 @@ describe('isWorkOrderQcPassed', () => {
   beforeEach(() => {
     prismaMock.weldJoint.count.mockResolvedValue(0)
     prismaMock.weldJoint.findMany.mockResolvedValue([])
+    prismaMock.iTPCheckpoint.count.mockResolvedValue(0)
+    prismaMock.iTPCheckpoint.findMany.mockResolvedValue([])
+    prismaMock.inspection.findMany.mockResolvedValue([])
   })
 
   it('returns passed=true when WO is clean (no failures, no open NCRs)', async () => {
@@ -85,12 +88,81 @@ describe('isWorkOrderQcPassed', () => {
     expect(result.passed).toBe(false)
     expect(result.reasons).toContainEqual(expect.stringContaining('không tồn tại'))
   })
+
+  it('C4: fails when ITP checkpoint HOLD/WITNESS is FAILED', async () => {
+    prismaMock.workOrder.findUnique.mockResolvedValue({
+      id: 'wo-1', woCode: 'WO-001', status: 'QC_PENDING',
+    } as never)
+    prismaMock.iTPCheckpoint.count.mockResolvedValue(1)
+
+    const result = await isWorkOrderQcPassed('wo-1')
+    expect(result.passed).toBe(false)
+    expect(result.reasons).toContainEqual(expect.stringContaining('điểm dừng ITP'))
+    expect(result.reasons).toContainEqual(expect.stringContaining('chưa đạt'))
+  })
+
+  it('C5: fails when ITP checkpoint HOLD/WITNESS is PENDING and ITP not DRAFT', async () => {
+    prismaMock.workOrder.findUnique.mockResolvedValue({
+      id: 'wo-1', woCode: 'WO-001', status: 'QC_PENDING',
+    } as never)
+    prismaMock.iTPCheckpoint.findMany.mockResolvedValue([
+      { id: 'cp-1' },
+      { id: 'cp-2' },
+    ] as never)
+
+    const result = await isWorkOrderQcPassed('wo-1')
+    expect(result.passed).toBe(false)
+    expect(result.reasons).toContainEqual(expect.stringContaining('chưa kiểm tra'))
+    expect(result.reasons).toContainEqual(expect.stringContaining('2'))
+  })
+
+  it('C6: fails when Inspection linked to WO is FAILED', async () => {
+    prismaMock.workOrder.findUnique.mockResolvedValue({
+      id: 'wo-1', woCode: 'WO-001', status: 'QC_PENDING',
+    } as never)
+    prismaMock.inspection.findMany.mockResolvedValue([
+      { inspectionCode: 'INS-001' },
+    ] as never)
+
+    const result = await isWorkOrderQcPassed('wo-1')
+    expect(result.passed).toBe(false)
+    expect(result.reasons).toContainEqual(expect.stringContaining('Biên bản QC lỗi'))
+    expect(result.reasons).toContainEqual(expect.stringContaining('INS-001'))
+  })
+
+  it('C6: fails when Inspection has checklistItem with result=FAIL', async () => {
+    prismaMock.workOrder.findUnique.mockResolvedValue({
+      id: 'wo-1', woCode: 'WO-001', status: 'QC_PENDING',
+    } as never)
+    prismaMock.inspection.findMany.mockResolvedValue([
+      { inspectionCode: 'INS-002' },
+    ] as never)
+
+    const result = await isWorkOrderQcPassed('wo-1')
+    expect(result.passed).toBe(false)
+    expect(result.reasons).toContainEqual(expect.stringContaining('INS-002'))
+  })
+
+  it('null-skip: C4/C5/C6 do not block WO when records have no workOrderId', async () => {
+    prismaMock.workOrder.findUnique.mockResolvedValue({
+      id: 'wo-clean', woCode: 'WO-CLEAN', status: 'QC_PENDING',
+    } as never)
+    // All C4/C5/C6 queries filter by workOrderId — records with projectId-only won't match
+    // Default mocks return 0/[] which simulates this correctly
+
+    const result = await isWorkOrderQcPassed('wo-clean')
+    expect(result.passed).toBe(true)
+    expect(result.reasons).toEqual([])
+  })
 })
 
 describe('getPieceMarkQcStatus', () => {
   beforeEach(() => {
     prismaMock.weldJoint.count.mockResolvedValue(0)
     prismaMock.weldJoint.findMany.mockResolvedValue([])
+    prismaMock.iTPCheckpoint.count.mockResolvedValue(0)
+    prismaMock.iTPCheckpoint.findMany.mockResolvedValue([])
+    prismaMock.inspection.findMany.mockResolvedValue([])
   })
 
   it('returns FAILED when WO status is QC_FAILED', async () => {

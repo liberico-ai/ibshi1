@@ -79,10 +79,16 @@ export async function POST(req: NextRequest) {
 
     const result = await validateBody(req, createInspectionSchema)
     if (!result.success) return result.response
-    const { inspectionCode, projectId, type, stepCode, checklistItems } = result.data
+    const { inspectionCode, projectId, type, stepCode, checklistItems, workOrderId, pieceMark } = result.data
 
     const existing = await prisma.inspection.findUnique({ where: { inspectionCode } })
     if (existing) return errorResponse(`Mã biên bản ${inspectionCode} đã tồn tại`)
+
+    let resolvedPieceMark = pieceMark || null
+    if (workOrderId && !resolvedPieceMark) {
+      const wo = await prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { pieceMark: true } })
+      resolvedPieceMark = wo?.pieceMark || null
+    }
 
     const inspection = await prisma.inspection.create({
       data: {
@@ -91,6 +97,8 @@ export async function POST(req: NextRequest) {
         type,
         stepCode,
         inspectorId: payload.userId,
+        workOrderId: workOrderId || null,
+        pieceMark: resolvedPieceMark,
         checklistItems: {
           create: (checklistItems || []).map((item: { checkItem: string; standard?: string }) => ({
             checkItem: item.checkItem,
