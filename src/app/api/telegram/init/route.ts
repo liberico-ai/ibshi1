@@ -3,15 +3,12 @@ import { startPolling, isPolling } from '@/lib/telegram'
 import { startScheduler, isSchedulerRunning } from '@/lib/cron-scheduler'
 import { runDailyDigest } from '@/lib/cron-jobs'
 import { authenticateRequest } from '@/lib/auth'
+import { verifyCronSecret } from '@/lib/cron-auth'
 
 export async function GET(req: NextRequest) {
-  const cronSecret = req.headers.get('x-cron-secret')
-  const expectedSecret = process.env.CRON_SECRET
-  let authorized = false
+  let authorized = verifyCronSecret(req.headers.get('x-cron-secret'))
 
-  if (expectedSecret && cronSecret === expectedSecret) {
-    authorized = true
-  } else {
+  if (!authorized) {
     const user = await authenticateRequest(req)
     if (user && ['R01', 'R10'].includes(user.roleCode)) {
       authorized = true

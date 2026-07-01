@@ -4,6 +4,24 @@ import { checkRateLimit, RATE_PRESETS } from '@/lib/rate-limiter'
 // ── Public routes that don't require authentication ──
 const PUBLIC_ROUTES = ['/api/auth/login', '/api/health', '/api/version']
 
+// ── Edge-compatible constant-time string comparison via HMAC ──
+async function timingSafeEqualEdge(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode('cron-compare'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  )
+  const [sigA, sigB] = await Promise.all([
+    crypto.subtle.sign('HMAC', key, enc.encode(a)),
+    crypto.subtle.sign('HMAC', key, enc.encode(b)),
+  ])
+  if (sigA.byteLength !== sigB.byteLength) return false
+  const viewA = new Uint8Array(sigA)
+  const viewB = new Uint8Array(sigB)
+  let diff = 0
+  for (let i = 0; i < viewA.length; i++) diff |= viewA[i] ^ viewB[i]
+  return diff === 0
+}
+
 // ── Edge-compatible JWT verification using Web Crypto API ──
 async function verifyJWTEdge(token: string, secret: string): Promise<boolean> {
   try {
@@ -106,12 +124,12 @@ export async function middleware(req: NextRequest) {
     return addCorsHeaders(response, req)
   }
 
-  // Validate CRON routes with secret
+  // Validate CRON routes with timing-safe secret comparison
   if (pathname.startsWith('/api/cron')) {
     const cronSecret = req.headers.get('x-cron-secret')
     const expected = process.env.CRON_SECRET
-    if (!expected || cronSecret !== expected) {
-      return NextResponse.json({ ok: false, error: 'Invalid cron secret' }, { status: 401 })
+    if (!expected || !cronSecret || !(await timingSafeEqualEdge(expected, cronSecret))) {
+      return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
     }
     return NextResponse.next()
   }

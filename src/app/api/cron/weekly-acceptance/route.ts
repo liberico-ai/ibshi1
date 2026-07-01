@@ -11,12 +11,7 @@ function getISOWeekNumber(date: Date): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
 }
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization')
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return errorResponse('Unauthorized', 401)
-  }
-
+export async function GET() {
   try {
     const now = new Date()
     const dayOfWeek = now.getDay()
