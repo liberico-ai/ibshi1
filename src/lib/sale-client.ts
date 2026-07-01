@@ -1,4 +1,8 @@
+import prisma from './db'
+
 const TIMEOUT_MS = 15_000
+const CACHE_TTL_MS = 5 * 60_000
+let configCache: { baseUrl: string; apiKey: string; cachedAt: number } | null = null
 
 export class SaleClientError extends Error {
   constructor(
@@ -11,17 +15,34 @@ export class SaleClientError extends Error {
   }
 }
 
-function getConfig() {
-  const baseUrl = process.env.SALE_BASE_URL
-  const apiKey = process.env.SALE_INBOUND_API_KEY
+async function getConfig() {
+  if (configCache && Date.now() - configCache.cachedAt < CACHE_TTL_MS) {
+    return configCache
+  }
+
+  let baseUrl = process.env.SALE_BASE_URL || ''
+  let apiKey = process.env.SALE_INBOUND_API_KEY || ''
+
+  if (!baseUrl || !apiKey) {
+    const rows = await prisma.systemConfig.findMany({
+      where: { key: { in: ['SALE_BASE_URL', 'SALE_INBOUND_API_KEY'] } },
+    })
+    for (const r of rows) {
+      if (r.key === 'SALE_BASE_URL' && !baseUrl) baseUrl = r.value
+      if (r.key === 'SALE_INBOUND_API_KEY' && !apiKey) apiKey = r.value
+    }
+  }
+
   if (!baseUrl || !apiKey) {
     throw new SaleClientError('SALE_BASE_URL hoặc SALE_INBOUND_API_KEY chưa cấu hình', 503, 'ENV_MISSING')
   }
-  return { baseUrl: baseUrl.replace(/\/$/, ''), apiKey }
+
+  configCache = { baseUrl: baseUrl.replace(/\/$/, ''), apiKey, cachedAt: Date.now() }
+  return configCache
 }
 
 async function saleFetch<T>(path: string, params?: Record<string, string>): Promise<T> {
-  const { baseUrl, apiKey } = getConfig()
+  const { baseUrl, apiKey } = await getConfig()
   const url = new URL(path, baseUrl)
   if (params) {
     for (const [k, v] of Object.entries(params)) {
