@@ -168,16 +168,33 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
       return errorResponse(`Chưa hoàn thành: ${pending.join(', ')}. Cần hoàn tất P6.1 (MRB), P6.2 (Quyết toán), P6.3 (Bài học) trước khi đóng dự án.`)
     }
 
-    // Close project
-    const project = await prisma.project.update({
-      where: { id },
-      data: { status: 'CLOSED' },
-    })
+    // Gate: no open NCR / ECO
+    const [openNcrCount, openEcoCount] = await Promise.all([
+      prisma.nonConformanceReport.count({
+        where: { projectId: id, status: { notIn: ['CLOSED', 'CANCELLED'] } },
+      }),
+      prisma.engineeringChangeOrder.count({
+        where: { projectId: id, status: { notIn: ['REJECTED', 'IMPLEMENTED'] } },
+      }),
+    ])
+    if (openNcrCount > 0 || openEcoCount > 0) {
+      const parts: string[] = []
+      if (openNcrCount > 0) parts.push(`${openNcrCount} NCR`)
+      if (openEcoCount > 0) parts.push(`${openEcoCount} ECO`)
+      return errorResponse(`Không thể đóng: còn ${parts.join(' / ')} chưa đóng`, 422)
+    }
 
-    // Complete P6.4 task
-    await prisma.task.updateMany({
-      where: { projectId: id, taskType: 'P6.4' },
-      data: { status: 'DONE', completedAt: new Date(), completedBy: payload.userId },
+    // Close project + complete P6.4 in single transaction
+    const project = await prisma.$transaction(async (tx) => {
+      const p = await tx.project.update({
+        where: { id },
+        data: { status: 'CLOSED' },
+      })
+      await tx.task.updateMany({
+        where: { projectId: id, taskType: 'P6.4' },
+        data: { status: 'DONE', completedAt: new Date(), completedBy: payload.userId },
+      })
+      return p
     })
 
     // Audit log
