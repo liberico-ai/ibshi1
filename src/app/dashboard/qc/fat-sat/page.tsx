@@ -11,8 +11,8 @@ interface Inspection {
 }
 
 const tabCfg = {
-  fat: { label: 'FAT (Factory)', emoji: 'FA', types: ['fat', 'FAT'] },
-  sat: { label: 'SAT (Site)', emoji: 'SA', types: ['sat', 'SAT'] },
+  fat: { label: 'FAT (Factory)', emoji: 'FA', types: ['FAT'] },
+  sat: { label: 'SAT (Site)', emoji: 'SA', types: ['SAT'] },
 }
 
 export default function FATSATPage() {

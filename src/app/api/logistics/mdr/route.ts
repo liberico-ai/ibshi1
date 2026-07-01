@@ -42,12 +42,20 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
+  const mrbRelease = await prisma.mrbRelease.findFirst({
+    where: { projectId, status: 'RELEASED' },
+    orderBy: { revision: 'desc' },
+  })
+
   const openNcrs = ncrs.filter(n => n.status !== 'CLOSED' && n.status !== 'CANCELLED')
   const failedCheckpoints = checkpoints.filter(c => c.status === 'FAILED')
   const pendingCheckpoints = checkpoints.filter(c => c.status === 'PENDING')
   const failedInspections = inspections.filter(i => i.status === 'FAILED')
 
   const blockers: string[] = []
+  if (!mrbRelease) {
+    blockers.push('Chưa phát hành MRB (Quality Dossier) — cần phát hành MRB trước')
+  }
   if (openNcrs.length > 0) {
     blockers.push(`${openNcrs.length} NCR mở (${openNcrs.map(n => n.ncrCode).join(', ')})`)
   }
@@ -67,6 +75,7 @@ export async function GET(req: NextRequest) {
     project,
     canRelease,
     blockers,
+    mrbRelease: mrbRelease ? { id: mrbRelease.id, revision: mrbRelease.revision, releasedAt: mrbRelease.releasedAt } : null,
     summary: {
       ncr: { total: ncrs.length, open: openNcrs.length, closed: ncrs.length - openNcrs.length },
       itp: {

@@ -12,6 +12,7 @@ interface MDRData {
   project: { projectCode: string; projectName: string };
   canRelease: boolean;
   blockers: string[];
+  mrbRelease: { id: string; revision: number; releasedAt: string } | null;
   summary: {
     ncr: { total: number; open: number; closed: number };
     itp: { total: number; passed: number; failed: number; pending: number };
@@ -135,8 +136,13 @@ export default function MDRPage() {
           {canRelease && (
             <div className="card p-4 text-center">
               <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-                Tất cả NCR đã đóng, ITP checkpoint đạt. Hồ sơ sẵn sàng phát hành cho khách hàng.
+                Tất cả NCR đã đóng, ITP checkpoint đạt, MRB đã phát hành. Hồ sơ sẵn sàng phát hành cho khách hàng.
               </p>
+              {data.mrbRelease && (
+                <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+                  MRB Rev {data.mrbRelease.revision} — phát hành {new Date(data.mrbRelease.releasedAt).toLocaleDateString('vi-VN')}
+                </p>
+              )}
               <button className="px-6 py-2 rounded-lg font-bold text-white"
                 style={{ background: SEMANTIC_COLORS.success.solid }}>
                 Phát hành MDR

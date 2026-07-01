@@ -108,6 +108,7 @@ model Project {
   saleCustomerId     String?                  @map("sale_customer_id")
   baselines          ProjectBaseline[]
   submission         ProjectSubmission?
+  mrbReleases        MrbRelease[]
 
   @@index([status])
   @@index([pmUserId])
@@ -2029,4 +2030,19 @@ model BriefingSnapshot {
   @@unique([weekOf])
   @@index([weekOf])
   @@map("briefing_snapshots")
+}
+
+model MrbRelease {
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  revision     Int      @default(1)
+  status       String   @default("RELEASED")
+  snapshot     Json
+  releasedById String   @map("released_by_id")
+  releasedAt   DateTime @default(now()) @map("released_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  project      Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, revision])
+  @@map("mrb_releases")
 }
