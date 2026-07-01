@@ -53,7 +53,7 @@ const SAMPLE_PROJECT = {
   startDate: null,
   endDate: null,
   createdAt: new Date(),
-  tasks: [],
+  dynamicTasks: [],
 }
 
 describe('GET /api/projects', () => {
@@ -101,9 +101,9 @@ describe('GET /api/projects', () => {
   it('computes progress from tasks', async () => {
     const projectWithTasks = {
       ...SAMPLE_PROJECT,
-      tasks: [
-        { stepCode: 'P1.1', status: 'DONE' },
-        { stepCode: 'P1.2', status: 'IN_PROGRESS' },
+      dynamicTasks: [
+        { taskType: 'P1.1', status: 'DONE' },
+        { taskType: 'P1.2', status: 'IN_PROGRESS' },
       ],
     }
     prismaMock.project.count.mockResolvedValue(1)
@@ -183,7 +183,6 @@ describe('POST /api/projects', () => {
     prismaMock.project.findUnique.mockResolvedValue(null)
     prismaMock.project.create.mockResolvedValue(SAMPLE_PROJECT as any)
     prismaMock.fileAttachment.findMany.mockResolvedValue([])
-    prismaMock.workflowTask.findFirst.mockResolvedValue(null)
     prismaMock.auditLog.create.mockResolvedValue({} as any)
 
     const req = new NextRequest('http://localhost/api/projects', {

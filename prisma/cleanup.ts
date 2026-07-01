@@ -61,7 +61,7 @@ async function main() {
 
       // 7. Project Management & Core Workflow
       console.log('🗑️ Clearing Core Projects...')
-      await tx.workflowTask.deleteMany({})
+      await tx.$executeRaw`DELETE FROM workflow_tasks`
       await tx.lessonLearned.deleteMany({})
       await tx.subcontractorContract.deleteMany({})
       await tx.milestone.deleteMany({})

@@ -135,9 +135,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }, getClientIP(req))
 
     // Clean up dependents that don't cascade automatically
+    await prisma.$executeRaw`UPDATE workflow_tasks SET assigned_to = NULL WHERE assigned_to = ${id}`
     await prisma.$transaction([
       prisma.notification.deleteMany({ where: { userId: id } }),
-      prisma.workflowTask.updateMany({ where: { assignedTo: id }, data: { assignedTo: null } }),
       prisma.employee.updateMany({ where: { userId: id }, data: { userId: null } }),
       prisma.user.delete({ where: { id } }),
     ])
