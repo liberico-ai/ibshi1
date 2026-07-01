@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { createModuleTask } from '@/lib/module-tasks'
 
 const WRITE_ROLES = ['R01', 'R10', 'R06']
 
@@ -57,5 +58,34 @@ export async function POST(req: NextRequest) {
     include: { project: { select: { projectCode: true, projectName: true } } },
   })
 
-  return successResponse({ incident }, undefined, 201)
+  const assigneeRoles = ['R09']
+  if (projectId) {
+    const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { pmUserId: true } })
+    if (proj?.pmUserId) assigneeRoles.push('R02')
+  }
+  if (severity === 'MAJOR' || severity === 'CRITICAL') assigneeRoles.push('R01')
+
+  const hoursToDeadline = severity === 'MINOR' ? 48 : 24
+  const deadline = new Date(Date.now() + hoursToDeadline * 60 * 60 * 1000).toISOString()
+
+  const taskId = await createModuleTask('HSE', incident.id, {
+    projectId,
+    taskType: 'HSE_INVESTIGATION',
+    title: `Điều tra sự cố ${incidentCode} — ${category} [${severity}]`,
+    description,
+    priority: severity === 'CRITICAL' ? 'URGENT' : severity === 'MAJOR' ? 'HIGH' : 'NORMAL',
+    deadline,
+    assigneeRoles,
+  }, user.userId)
+
+  if (taskId) {
+    await prisma.safetyIncident.update({ where: { id: incident.id }, data: { taskId } })
+  }
+
+  const final = await prisma.safetyIncident.findUniqueOrThrow({
+    where: { id: incident.id },
+    include: { project: { select: { projectCode: true, projectName: true } } },
+  })
+
+  return successResponse({ incident: final }, undefined, 201)
 }

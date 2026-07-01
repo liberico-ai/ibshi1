@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createMaintenanceSchema } from '@/lib/schemas'
+import { createModuleTask } from '@/lib/module-tasks'
 
 const ALLOWED_ROLES = ['R01', 'R10', 'R13', 'R06']
 
@@ -70,7 +71,29 @@ export async function POST(req: NextRequest) {
       where: { id: data.equipmentId },
       data: { status: 'MAINTENANCE' },
     })
+
+    const deadline = data.scheduledDate
+      ? new Date(data.scheduledDate).toISOString()
+      : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
+    const taskId = await createModuleTask('TBCG', record.id, {
+      taskType: 'TBCG_REPAIR',
+      title: `Sửa chữa khẩn cấp ${eq.equipmentCode} — ${eq.name}`,
+      description: data.description,
+      priority: 'URGENT',
+      deadline,
+      assigneeRoles: ['R13', 'R06'],
+    }, user.userId)
+
+    if (taskId) {
+      await prisma.maintenanceRecord.update({ where: { id: record.id }, data: { taskId } })
+    }
   }
 
-  return successResponse({ maintenanceRecord: { ...record, cost: record.cost ? Number(record.cost) : null } }, undefined, 201)
+  const final = await prisma.maintenanceRecord.findUniqueOrThrow({
+    where: { id: record.id },
+    include: { equipment: { select: { equipmentCode: true, name: true } } },
+  })
+
+  return successResponse({ maintenanceRecord: { ...final, cost: final.cost ? Number(final.cost) : null } }, undefined, 201)
 }
