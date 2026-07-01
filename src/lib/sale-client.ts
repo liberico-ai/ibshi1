@@ -88,40 +88,57 @@ async function saleFetch<T>(path: string, params?: Record<string, string>): Prom
     throw new SaleClientError(body.error || 'Sale API trả lỗi', 422, 'SALE_ERROR')
   }
 
-  return body.data ?? body
+  return body
 }
 
 export interface SaleCustomerDTO {
-  id: string
+  customerId: string
   name: string
-  code?: string
-  taxCode?: string
-  country?: string
-  address?: string
-  paymentTerms?: string
+  taxCode?: string | null
+  country?: string | null
+  address?: string | null
+  paymentTerms?: string | null
   updatedAt?: string
 }
 
-interface ListCustomersResponse {
+export interface ListCustomersRawResponse {
+  ok: boolean
+  data: SaleCustomerDTO[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface ListCustomersResponse {
   customers: SaleCustomerDTO[]
-  nextCursor?: string
+  total: number
+  page: number
+  pageSize: number
   hasMore: boolean
 }
 
 export const saleClient = {
-  async listCustomers(opts: { modifiedSince?: string; limit?: number; page?: number }): Promise<ListCustomersResponse> {
+  async listCustomers(opts: { modifiedSince?: string; page?: number }): Promise<ListCustomersResponse> {
     const params: Record<string, string> = {}
     if (opts.modifiedSince) params.modifiedSince = opts.modifiedSince
-    if (opts.limit) params.limit = String(opts.limit)
     if (opts.page) params.page = String(opts.page)
-    return saleFetch<ListCustomersResponse>('/api/external/v1/customers', params)
+    const raw = await saleFetch<ListCustomersRawResponse>('/api/external/v1/customers', params)
+    return {
+      customers: raw.data,
+      total: raw.total,
+      page: raw.page,
+      pageSize: raw.pageSize,
+      hasMore: raw.page * raw.pageSize < raw.total,
+    }
   },
 
   async getCustomer(id: string): Promise<SaleCustomerDTO> {
-    return saleFetch<SaleCustomerDTO>(`/api/external/v1/customers/${encodeURIComponent(id)}`)
+    const raw = await saleFetch<{ ok: boolean; data: SaleCustomerDTO }>(`/api/external/v1/customers/${encodeURIComponent(id)}`)
+    return raw.data
   },
 
   async ping(): Promise<{ ok: boolean }> {
-    return saleFetch<{ ok: boolean }>('/api/external/v1/ping')
+    const raw = await saleFetch<ListCustomersRawResponse>('/api/external/v1/customers', { limit: '1' })
+    return { ok: raw.ok }
   },
 }

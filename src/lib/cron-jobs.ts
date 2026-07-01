@@ -250,7 +250,6 @@ export function normName(raw: string): string {
 const CURSOR_KEY = 'sale_customer_sync_cursor'
 const LAST_RUN_KEY = 'sale_customer_sync_last_run'
 const MAX_PAGES_PER_RUN = 3
-const PAGE_SIZE = 100
 
 export async function runCustomerSync(): Promise<{ upserted: number; pages: number; cursor: string }> {
   const cursorRow = await prisma.systemConfig.findUnique({ where: { key: CURSOR_KEY } })
@@ -259,18 +258,18 @@ export async function runCustomerSync(): Promise<{ upserted: number; pages: numb
   let totalUpserted = 0
   let page = 1
   let pagesProcessed = 0
+  let maxUpdatedAt = cursor
 
   for (; pagesProcessed < MAX_PAGES_PER_RUN;) {
-    const result = await saleClient.listCustomers({ modifiedSince: cursor, limit: PAGE_SIZE, page })
+    const result = await saleClient.listCustomers({ modifiedSince: cursor, page })
     pagesProcessed++
 
     for (const c of result.customers) {
       await prisma.saleCustomer.upsert({
-        where: { saleCustomerId: c.id },
+        where: { saleCustomerId: c.customerId },
         create: {
-          saleCustomerId: c.id,
+          saleCustomerId: c.customerId,
           name: c.name,
-          code: c.code || null,
           taxCode: c.taxCode || null,
           country: c.country || null,
           address: c.address || null,
@@ -281,7 +280,6 @@ export async function runCustomerSync(): Promise<{ upserted: number; pages: numb
         },
         update: {
           name: c.name,
-          code: c.code || null,
           taxCode: c.taxCode || null,
           country: c.country || null,
           address: c.address || null,
@@ -292,15 +290,14 @@ export async function runCustomerSync(): Promise<{ upserted: number; pages: numb
         },
       })
       totalUpserted++
-    }
-
-    if (result.nextCursor) {
-      cursor = result.nextCursor
+      if (c.updatedAt && c.updatedAt > maxUpdatedAt) maxUpdatedAt = c.updatedAt
     }
 
     if (!result.hasMore) break
     page++
   }
+
+  cursor = maxUpdatedAt
 
   await prisma.systemConfig.upsert({
     where: { key: CURSOR_KEY },

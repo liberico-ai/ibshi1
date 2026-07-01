@@ -27,12 +27,13 @@ describe('saleClient', () => {
 
   it('listCustomers 200 → trả data', async () => {
     fetchSpy.mockResolvedValue(new Response(
-      JSON.stringify({ ok: true, data: { customers: [{ id: 'c1', name: 'Cty A' }], hasMore: false } }),
+      JSON.stringify({ ok: true, data: [{ customerId: 'c1', name: 'Cty A' }], total: 1, page: 1, pageSize: 50 }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     ))
     const client = await getSaleClient()
-    const res = await client.listCustomers({ limit: 100 })
+    const res = await client.listCustomers({ page: 1 })
     expect(res.customers).toHaveLength(1)
+    expect(res.customers[0].customerId).toBe('c1')
     expect(res.hasMore).toBe(false)
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining('/api/external/v1/customers'),
@@ -43,13 +44,13 @@ describe('saleClient', () => {
   it('401 → SaleClientError UNAUTHORIZED', async () => {
     fetchSpy.mockResolvedValue(new Response('Unauthorized', { status: 401 }))
     const client = await getSaleClient()
-    await expect(client.ping()).rejects.toThrow(/key không hợp lệ/)
+    await expect(client.listCustomers({ page: 1 })).rejects.toThrow(/key không hợp lệ/)
   })
 
   it('503 → SaleClientError UNAVAILABLE', async () => {
     fetchSpy.mockResolvedValue(new Response('Service Unavailable', { status: 503 }))
     const client = await getSaleClient()
-    await expect(client.ping()).rejects.toThrow(/bảo trì/)
+    await expect(client.listCustomers({ page: 1 })).rejects.toThrow(/bảo trì/)
   })
 
   it('timeout → SaleClientError TIMEOUT', async () => {
@@ -58,7 +59,7 @@ describe('saleClient', () => {
       return Promise.reject(err)
     })
     const client = await getSaleClient()
-    await expect(client.ping()).rejects.toThrow(/timeout/)
+    await expect(client.listCustomers({ page: 1 })).rejects.toThrow(/timeout/)
   })
 
   it('env thiếu + DB trống → SaleClientError ENV_MISSING', async () => {

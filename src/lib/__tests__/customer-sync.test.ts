@@ -42,18 +42,16 @@ describe('runCustomerSync', () => {
     mockListCustomers
       .mockResolvedValueOnce({
         customers: [
-          { id: 'c1', name: 'Cty A', updatedAt: '2026-06-01T00:00:00Z' },
-          { id: 'c2', name: 'Cty B', updatedAt: '2026-06-02T00:00:00Z' },
+          { customerId: 'c1', name: 'Cty A', updatedAt: '2026-06-01T00:00:00Z' },
+          { customerId: 'c2', name: 'Cty B', updatedAt: '2026-06-02T00:00:00Z' },
         ],
-        hasMore: true,
-        nextCursor: '2026-06-02T00:00:00Z',
+        hasMore: true, total: 3, page: 1, pageSize: 2,
       })
       .mockResolvedValueOnce({
         customers: [
-          { id: 'c3', name: 'Cty C', updatedAt: '2026-06-03T00:00:00Z' },
+          { customerId: 'c3', name: 'Cty C', updatedAt: '2026-06-03T00:00:00Z' },
         ],
-        hasMore: false,
-        nextCursor: '2026-06-03T00:00:00Z',
+        hasMore: false, total: 3, page: 2, pageSize: 2,
       })
 
     prismaMock.systemConfig.findUnique.mockResolvedValue(null)
@@ -63,14 +61,14 @@ describe('runCustomerSync', () => {
     const result = await runCustomerSync()
     expect(result.upserted).toBe(3)
     expect(result.pages).toBe(2)
+    expect(result.cursor).toBe('2026-06-03T00:00:00Z')
     expect(prismaMock.saleCustomer.upsert).toHaveBeenCalledTimes(3)
-    expect(prismaMock.systemConfig.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { key: 'sale_customer_sync_cursor' }, update: { value: '2026-06-03T00:00:00Z' } }),
-    )
   })
 
   it('backfill 1970 khi chưa có cursor', async () => {
-    mockListCustomers.mockResolvedValueOnce({ customers: [], hasMore: false })
+    mockListCustomers.mockResolvedValueOnce({
+      customers: [], hasMore: false, total: 0, page: 1, pageSize: 50,
+    })
     prismaMock.systemConfig.findUnique.mockResolvedValue(null)
     prismaMock.systemConfig.upsert.mockResolvedValue({} as never)
 
@@ -80,10 +78,10 @@ describe('runCustomerSync', () => {
     )
   })
 
-  it('idempotent — upsert gọi đúng saleCustomerId', async () => {
+  it('idempotent — upsert gọi đúng customerId', async () => {
     mockListCustomers.mockResolvedValueOnce({
-      customers: [{ id: 'c1', name: 'Cty A' }],
-      hasMore: false,
+      customers: [{ customerId: 'c1', name: 'Cty A' }],
+      hasMore: false, total: 1, page: 1, pageSize: 50,
     })
     prismaMock.systemConfig.findUnique.mockResolvedValue({ key: 'x', value: '2026-01-01T00:00:00Z', updatedAt: new Date() })
     prismaMock.saleCustomer.upsert.mockResolvedValue({} as never)
@@ -101,9 +99,8 @@ describe('runCustomerSync', () => {
   it('tối đa 3 trang mỗi lần chạy', async () => {
     for (let i = 0; i < 4; i++) {
       mockListCustomers.mockResolvedValueOnce({
-        customers: [{ id: `c${i}`, name: `Cty ${i}` }],
-        hasMore: true,
-        nextCursor: `cursor-${i}`,
+        customers: [{ customerId: `c${i}`, name: `Cty ${i}` }],
+        hasMore: true, total: 100, page: i + 1, pageSize: 1,
       })
     }
     prismaMock.systemConfig.findUnique.mockResolvedValue(null)
