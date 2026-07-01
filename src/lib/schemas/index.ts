@@ -241,6 +241,7 @@ export {
   createWorkPermitSchema,
   updateWorkPermitSchema,
   updateIncidentSchema,
+  upsertManHoursSchema,
   createToolboxTalkSchema,
   type CreateEquipmentInput,
   type UpdateEquipmentInput,

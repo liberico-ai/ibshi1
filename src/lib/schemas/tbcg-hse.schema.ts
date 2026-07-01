@@ -88,9 +88,19 @@ export const updateIncidentSchema = z.object({
   correctiveAction: z.string().optional(),
   investigatedBy: z.string().optional(),
   lostTimeDays: z.number().int().min(0).optional(),
+  recordable: z.boolean().optional(),
   notes: z.string().optional(),
 })
 export type UpdateIncidentInput = z.infer<typeof updateIncidentSchema>
+
+export const upsertManHoursSchema = z.object({
+  periodYear: z.number().int().min(2020).max(2099),
+  periodMonth: z.number().int().min(1).max(12),
+  projectId: z.string().optional(),
+  manHours: z.number().min(0),
+  note: z.string().optional(),
+})
+export type UpsertManHoursInput = z.infer<typeof upsertManHoursSchema>
 
 // ── Toolbox Talk ──
 export const createToolboxTalkSchema = z.object({

@@ -32,6 +32,7 @@ export async function PUT(
       ...(data.rootCause !== undefined ? { rootCause: data.rootCause } : {}),
       ...(data.correctiveAction !== undefined ? { correctiveAction: data.correctiveAction } : {}),
       ...(data.lostTimeDays !== undefined ? { lostTimeDays: data.lostTimeDays } : {}),
+      ...(data.recordable !== undefined ? { recordable: data.recordable } : {}),
     },
     include: { project: { select: { projectCode: true, projectName: true } } },
   })

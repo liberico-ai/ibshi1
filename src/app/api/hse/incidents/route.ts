@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   if (!requireRoles(user.roleCode, WRITE_ROLES)) return errorResponse('Không có quyền', 403)
 
   const body = await req.json()
-  const { projectId, severity, category, location, description, incidentDate } = body
+  const { projectId, severity, category, location, description, incidentDate, recordable } = body
 
   if (!projectId || !severity || !category || !description) {
     return errorResponse('Thiếu trường bắt buộc')
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
       category,
       location: location || null,
       description,
+      recordable: recordable === true,
       reportedBy: user.userId,
     },
     include: { project: { select: { projectCode: true, projectName: true } } },

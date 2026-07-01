@@ -94,6 +94,7 @@ model Project {
   purchaseOrders     PurchaseOrder[]
   purchaseReqs       PurchaseRequest[]
   safetyIncidents    SafetyIncident[]
+  hseManHours        HseManHours[]
   workPermits        WorkPermit[]
   subcontracts       SubcontractorContract[]
   timesheets         Timesheet[]
@@ -1232,6 +1233,7 @@ model SafetyIncident {
   closedBy          String?   @map("closed_by")
   closedAt          DateTime? @map("closed_at")
   lostTimeDays      Int?      @default(0) @map("lost_time_days")
+  recordable        Boolean   @default(false)
   taskId            String?   @map("task_id")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
@@ -1240,6 +1242,24 @@ model SafetyIncident {
   @@index([projectId])
   @@index([severity])
   @@map("safety_incidents")
+}
+
+model HseManHours {
+  id          String   @id @default(cuid())
+  periodYear  Int      @map("period_year")
+  periodMonth Int      @map("period_month")
+  projectId   String?  @map("project_id")
+  manHours    Decimal  @map("man_hours")
+  source      String   @default("MANUAL")
+  note        String?
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@unique([periodYear, periodMonth, projectId])
+  @@index([projectId])
+  @@map("hse_man_hours")
 }
 
 model Equipment {
