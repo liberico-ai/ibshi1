@@ -114,14 +114,14 @@ export const saleClient = {
     if (opts.modifiedSince) params.modifiedSince = opts.modifiedSince
     if (opts.limit) params.limit = String(opts.limit)
     if (opts.page) params.page = String(opts.page)
-    return saleFetch<ListCustomersResponse>('/api/v1/customers', params)
+    return saleFetch<ListCustomersResponse>('/api/external/v1/customers', params)
   },
 
   async getCustomer(id: string): Promise<SaleCustomerDTO> {
-    return saleFetch<SaleCustomerDTO>(`/api/v1/customers/${encodeURIComponent(id)}`)
+    return saleFetch<SaleCustomerDTO>(`/api/external/v1/customers/${encodeURIComponent(id)}`)
   },
 
   async ping(): Promise<{ ok: boolean }> {
-    return saleFetch<{ ok: boolean }>('/api/v1/ping')
+    return saleFetch<{ ok: boolean }>('/api/external/v1/ping')
   },
 }

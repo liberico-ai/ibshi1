@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+vi.mock('@/lib/db')
+
+import { prismaMock } from '@/lib/__mocks__/db'
+
 describe('saleClient', () => {
   const origEnv = { ...process.env }
   const fetchSpy = vi.fn()
 
   beforeEach(() => {
+    vi.resetModules()
     process.env.SALE_BASE_URL = 'https://sale.test'
     process.env.SALE_INBOUND_API_KEY = 'test-key-123'
     vi.stubGlobal('fetch', fetchSpy)
@@ -30,7 +35,7 @@ describe('saleClient', () => {
     expect(res.customers).toHaveLength(1)
     expect(res.hasMore).toBe(false)
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/customers'),
+      expect.stringContaining('/api/external/v1/customers'),
       expect.objectContaining({ headers: expect.objectContaining({ 'X-API-Key': 'test-key-123' }) }),
     )
   })
@@ -56,8 +61,10 @@ describe('saleClient', () => {
     await expect(client.ping()).rejects.toThrow(/timeout/)
   })
 
-  it('env thiếu → SaleClientError ENV_MISSING', async () => {
+  it('env thiếu + DB trống → SaleClientError ENV_MISSING', async () => {
     delete process.env.SALE_BASE_URL
+    delete process.env.SALE_INBOUND_API_KEY
+    prismaMock.systemConfig.findMany.mockResolvedValue([])
     const client = await getSaleClient()
     await expect(client.ping()).rejects.toThrow(/chưa cấu hình/)
   })
