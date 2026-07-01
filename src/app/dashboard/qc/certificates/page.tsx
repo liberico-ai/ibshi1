@@ -19,6 +19,8 @@ interface Certificate {
 
 const TYPE_MAP: Record<string, { label: string; icon: string }> = {
   welder_cert: { label: 'Thợ hàn', icon: 'WD' },
+  wps: { label: 'WPS', icon: 'WP' },
+  pqr: { label: 'PQR', icon: 'PQ' },
   ndt_cert: { label: 'NDT', icon: 'NT' },
   workshop_cert: { label: 'Xưởng', icon: 'WS' },
   calibration: { label: 'Hiệu chuẩn', icon: 'CA' },

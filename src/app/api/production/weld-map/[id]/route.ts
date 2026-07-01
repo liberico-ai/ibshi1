@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { updateWeldJointSchema } from '@/lib/schemas'
+import { isCertValid } from '@/lib/weld-cert-gate'
 
 // PUT /api/production/weld-map/[id] — Update weld joint status/NDT
 export async function PUT(
@@ -22,6 +23,28 @@ export async function PUT(
 
   const joint = await prisma.weldJoint.findUnique({ where: { id } })
   if (!joint) return errorResponse('Mối hàn không tồn tại', 404)
+
+  if (data.welderCertId) {
+    const check = await isCertValid(data.welderCertId, 'welder_cert', data.welderId ?? joint.welderId)
+    if (!check.valid) return errorResponse(check.reason!, 400)
+  }
+  if (data.wpsCertId) {
+    const check = await isCertValid(data.wpsCertId, 'wps')
+    if (!check.valid) return errorResponse(check.reason!, 400)
+  }
+
+  if (data.status === 'WELDED') {
+    const certId = data.welderCertId ?? joint.welderCertId
+    if (certId) {
+      const check = await isCertValid(certId, 'welder_cert', data.welderId ?? joint.welderId)
+      if (!check.valid) return errorResponse(`Không thể đánh dấu WELDED: ${check.reason}`, 400)
+    }
+    const wpsId = data.wpsCertId ?? joint.wpsCertId
+    if (wpsId) {
+      const check = await isCertValid(wpsId, 'wps')
+      if (!check.valid) return errorResponse(`Không thể đánh dấu WELDED: ${check.reason}`, 400)
+    }
+  }
 
   let ncrId = data.ncrId ?? undefined
 
@@ -57,6 +80,7 @@ export async function PUT(
       ...(data.wpsNo !== undefined ? { wpsNo: data.wpsNo } : {}),
       ...(data.welderId !== undefined ? { welderId: data.welderId } : {}),
       ...(data.welderCertId !== undefined ? { welderCertId: data.welderCertId } : {}),
+      ...(data.wpsCertId !== undefined ? { wpsCertId: data.wpsCertId } : {}),
       ...(data.ndtStatus ? { ndtStatus: data.ndtStatus } : {}),
       ...(data.ndtMethod !== undefined ? { ndtMethod: data.ndtMethod } : {}),
       ...(ncrId ? { ncrId } : {}),

@@ -14,7 +14,7 @@ describe('computeMrbGate', () => {
     prismaMock.inspection.findMany.mockResolvedValue([
       { id: 'i1', inspectionCode: 'INS-001', type: 'FAT', status: 'PASSED' },
     ] as never)
-    prismaMock.certificateRegistry.count.mockResolvedValue(1)
+    prismaMock.weldJoint.findMany.mockResolvedValue([] as never)
 
     const result = await computeMrbGate(PID)
     expect(result.canRelease).toBe(true)
@@ -29,7 +29,7 @@ describe('computeMrbGate', () => {
     prismaMock.inspection.findMany.mockResolvedValue([
       { id: 'i1', inspectionCode: 'INS-001', type: 'FAT', status: 'PASSED' },
     ] as never)
-    prismaMock.certificateRegistry.count.mockResolvedValue(0)
+    prismaMock.weldJoint.findMany.mockResolvedValue([] as never)
 
     const result = await computeMrbGate(PID)
     expect(result.canRelease).toBe(false)
@@ -44,7 +44,7 @@ describe('computeMrbGate', () => {
     prismaMock.inspection.findMany.mockResolvedValue([
       { id: 'i1', inspectionCode: 'INS-001', type: 'FAT', status: 'PASSED' },
     ] as never)
-    prismaMock.certificateRegistry.count.mockResolvedValue(0)
+    prismaMock.weldJoint.findMany.mockResolvedValue([] as never)
 
     const result = await computeMrbGate(PID)
     expect(result.canRelease).toBe(false)
@@ -59,7 +59,7 @@ describe('computeMrbGate', () => {
     prismaMock.inspection.findMany.mockResolvedValue([
       { id: 'i1', inspectionCode: 'INS-001', type: 'FAT', status: 'PASSED' },
     ] as never)
-    prismaMock.certificateRegistry.count.mockResolvedValue(0)
+    prismaMock.weldJoint.findMany.mockResolvedValue([] as never)
 
     const result = await computeMrbGate(PID)
     expect(result.canRelease).toBe(false)
@@ -73,7 +73,7 @@ describe('computeMrbGate', () => {
       { id: 'i1', inspectionCode: 'INS-001', type: 'FAT', status: 'PASSED' },
       { id: 'i2', inspectionCode: 'INS-002', type: 'VISUAL', status: 'FAILED' },
     ] as never)
-    prismaMock.certificateRegistry.count.mockResolvedValue(0)
+    prismaMock.weldJoint.findMany.mockResolvedValue([] as never)
 
     const result = await computeMrbGate(PID)
     expect(result.canRelease).toBe(false)
@@ -87,7 +87,7 @@ describe('computeMrbGate', () => {
       { id: 'i1', inspectionCode: 'INS-001', type: 'FAT', status: 'PASSED' },
       { id: 'i2', inspectionCode: 'INS-002', type: 'VISUAL', status: 'PENDING' },
     ] as never)
-    prismaMock.certificateRegistry.count.mockResolvedValue(0)
+    prismaMock.weldJoint.findMany.mockResolvedValue([] as never)
 
     const result = await computeMrbGate(PID)
     expect(result.canRelease).toBe(false)
@@ -100,20 +100,22 @@ describe('computeMrbGate', () => {
     prismaMock.inspection.findMany.mockResolvedValue([
       { id: 'i1', inspectionCode: 'INS-001', type: 'VISUAL', status: 'PASSED' },
     ] as never)
-    prismaMock.certificateRegistry.count.mockResolvedValue(0)
+    prismaMock.weldJoint.findMany.mockResolvedValue([] as never)
 
     const result = await computeMrbGate(PID)
     expect(result.canRelease).toBe(false)
     expect(result.blockers.some(b => b.includes('FAT'))).toBe(true)
   })
 
-  it('warning mềm khi thiếu cert', async () => {
+  it('warning mềm khi mối hàn thiếu cert', async () => {
     prismaMock.nonConformanceReport.findMany.mockResolvedValue([])
     prismaMock.iTPCheckpoint.findMany.mockResolvedValue([])
     prismaMock.inspection.findMany.mockResolvedValue([
       { id: 'i1', inspectionCode: 'INS-001', type: 'FAT', status: 'PASSED' },
     ] as never)
-    prismaMock.certificateRegistry.count.mockResolvedValue(0)
+    prismaMock.weldJoint.findMany.mockResolvedValue([
+      { jointNo: 'J1', welderCertId: null, wpsCertId: null },
+    ] as never)
 
     const result = await computeMrbGate(PID)
     expect(result.canRelease).toBe(true)

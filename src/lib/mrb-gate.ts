@@ -60,10 +60,31 @@ export async function computeMrbGate(projectId: string): Promise<MrbGateResult> 
     blockers.push('Chưa có Inspection FAT đạt (PASSED)')
   }
 
-  // W1: Cert — cảnh báo mềm
-  const certCount = await prisma.certificateRegistry.count({ where: { holderId: projectId } })
-  if (certCount === 0) {
-    warnings.push('Chưa có chứng chỉ nào trong Certificate Registry')
+  // W1: Kiểm cert thợ hàn/WPS của mối hàn trong dự án
+  const projectJoints = await prisma.weldJoint.findMany({
+    where: { workOrder: { projectId }, status: { not: 'PENDING' } },
+    select: { jointNo: true, welderCertId: true, wpsCertId: true },
+  })
+  if (projectJoints.length > 0) {
+    const certIds = [
+      ...projectJoints.filter(j => j.welderCertId).map(j => j.welderCertId!),
+      ...projectJoints.filter(j => j.wpsCertId).map(j => j.wpsCertId!),
+    ]
+    if (certIds.length > 0) {
+      const now = new Date()
+      now.setHours(0, 0, 0, 0)
+      const expiredCerts = await prisma.certificateRegistry.findMany({
+        where: { id: { in: certIds }, OR: [{ expiryDate: { lt: now } }, { isActive: false }] },
+        select: { id: true, certNumber: true, certType: true },
+      })
+      if (expiredCerts.length > 0) {
+        warnings.push(`${expiredCerts.length} chứng chỉ hàn hết hạn/thu hồi: ${expiredCerts.map(c => c.certNumber).join(', ')}`)
+      }
+    }
+    const noCert = projectJoints.filter(j => !j.welderCertId && !j.wpsCertId)
+    if (noCert.length > 0) {
+      warnings.push(`${noCert.length} mối hàn chưa gắn chứng chỉ: ${noCert.map(j => j.jointNo).slice(0, 5).join(', ')}`)
+    }
   }
 
   return { canRelease: blockers.length === 0, blockers, warnings }

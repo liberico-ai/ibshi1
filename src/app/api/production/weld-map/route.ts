@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createWeldJointSchema } from '@/lib/schemas'
+import { isCertValid } from '@/lib/weld-cert-gate'
 
 // GET /api/production/weld-map — List weld joints
 export async function GET(req: NextRequest) {
@@ -62,6 +63,15 @@ export async function POST(req: NextRequest) {
   const wo = await prisma.workOrder.findUnique({ where: { id: data.workOrderId } })
   if (!wo) return errorResponse('WO không tồn tại', 404)
 
+  if (data.welderCertId) {
+    const check = await isCertValid(data.welderCertId, 'welder_cert', data.welderId)
+    if (!check.valid) return errorResponse(check.reason!, 400)
+  }
+  if (data.wpsCertId) {
+    const check = await isCertValid(data.wpsCertId, 'wps')
+    if (!check.valid) return errorResponse(check.reason!, 400)
+  }
+
   const joint = await prisma.weldJoint.create({
     data: {
       workOrderId: data.workOrderId,
@@ -70,6 +80,7 @@ export async function POST(req: NextRequest) {
       wpsNo: data.wpsNo || null,
       welderId: data.welderId || null,
       welderCertId: data.welderCertId || null,
+      wpsCertId: data.wpsCertId || null,
       diameter: data.diameter || null,
       thickness: data.thickness || null,
       length: data.length || null,

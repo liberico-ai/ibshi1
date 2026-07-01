@@ -11,7 +11,7 @@ import { AlertTriangle } from 'lucide-react'
 
 interface WeldJoint {
   id: string; jointNo: string; jointType: string; wpsNo: string | null;
-  welderId: string | null; welderCertId: string | null;
+  welderId: string | null; welderCertId: string | null; wpsCertId: string | null;
   diameter: number | null; thickness: number | null; length: number | null;
   status: string; weldedAt: string | null; ndtStatus: string | null; ndtMethod: string | null;
   ncrId: string | null; remarks: string | null; workOrderId: string;
@@ -178,15 +178,24 @@ export default function WeldMapPage() {
   )
 }
 
+interface CertOption { id: string; certNumber: string; holderName: string; isExpired: boolean; isExpiringSoon: boolean }
+
 function CreateJointModal({ workOrders, onClose, onCreated }: {
   workOrders: WO[]; onClose: () => void; onCreated: () => void
 }) {
   const [form, setForm] = useState({
-    workOrderId: '', jointNo: '', jointType: 'BUTT', wpsNo: '',
+    workOrderId: '', jointNo: '', jointType: 'BUTT', wpsNo: '', wpsCertId: '',
     diameter: '', thickness: '', length: '', remarks: '',
   })
   const [submitting, setSubmitting] = useState(false)
+  const [wpsCerts, setWpsCerts] = useState<CertOption[]>([])
   const update = (f: string, v: string) => setForm({ ...form, [f]: v })
+
+  useEffect(() => {
+    apiFetch('/api/qc/certificates?certType=wps').then(res => {
+      if (res.ok) setWpsCerts(res.certificates.filter((c: CertOption) => !c.isExpired))
+    })
+  }, [])
 
   const submit = async () => {
     if (!form.workOrderId || !form.jointNo) return alert('Chọn WO và nhập số mối')
@@ -195,6 +204,7 @@ function CreateJointModal({ workOrders, onClose, onCreated }: {
       method: 'POST',
       body: JSON.stringify({
         ...form,
+        wpsCertId: form.wpsCertId || undefined,
         diameter: form.diameter ? Number(form.diameter) : undefined,
         thickness: form.thickness ? Number(form.thickness) : undefined,
         length: form.length ? Number(form.length) : undefined,
@@ -216,7 +226,8 @@ function CreateJointModal({ workOrders, onClose, onCreated }: {
         <div className="grid grid-cols-2 gap-3">
           <SelectField label="Loại" value={form.jointType} onChange={e => update('jointType', e.target.value)}
             options={Object.entries(JOINT_TYPES).map(([k, v]) => ({ value: k, label: v }))} />
-          <InputField label="WPS No." value={form.wpsNo} onChange={e => update('wpsNo', e.target.value)} placeholder="WPS-001" />
+          <SelectField label="WPS (cert)" value={form.wpsCertId} onChange={e => update('wpsCertId', e.target.value)}
+            options={[{ value: '', label: 'Không chọn' }, ...wpsCerts.map(c => ({ value: c.id, label: `${c.certNumber} — ${c.holderName}${c.isExpiringSoon ? ' ⚠' : ''}` }))]} />
         </div>
         <div className="grid grid-cols-3 gap-3">
           <InputField label="D (mm)" type="number" value={form.diameter} onChange={e => update('diameter', e.target.value)} />

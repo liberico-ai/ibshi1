@@ -667,6 +667,7 @@ model WeldJoint {
   wpsNo         String?               @map("wps_no")
   welderId      String?               @map("welder_id")
   welderCertId  String?               @map("welder_cert_id")
+  wpsCertId     String?               @map("wps_cert_id")
   diameter      Decimal?
   thickness     Decimal?
   length        Decimal?
@@ -680,11 +681,15 @@ model WeldJoint {
   updatedAt     DateTime              @updatedAt @map("updated_at")
   workOrder     WorkOrder             @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   welder        User?                 @relation("WelderJoints", fields: [welderId], references: [id])
+  welderCert    CertificateRegistry?  @relation("WelderCertJoints", fields: [welderCertId], references: [id], onDelete: SetNull)
+  wpsCert       CertificateRegistry?  @relation("WpsCertJoints", fields: [wpsCertId], references: [id], onDelete: SetNull)
   ncr           NonConformanceReport? @relation("WeldJointNCR", fields: [ncrId], references: [id])
 
   @@unique([workOrderId, jointNo])
   @@index([workOrderId])
   @@index([welderId])
+  @@index([welderCertId])
+  @@index([wpsCertId])
   @@index([status])
   @@index([ndtStatus])
   @@map("weld_joints")
@@ -838,6 +843,8 @@ model CertificateRegistry {
   createdAt     DateTime             @default(now()) @map("created_at")
   renewedFrom   CertificateRegistry? @relation("CertRenewal", fields: [renewedFromId], references: [id], onDelete: SetNull)
   renewals      CertificateRegistry[] @relation("CertRenewal")
+  welderCertJoints WeldJoint[] @relation("WelderCertJoints")
+  wpsCertJoints    WeldJoint[] @relation("WpsCertJoints")
 
   @@unique([certType, certNumber])
   @@index([holderId])
