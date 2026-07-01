@@ -38,7 +38,7 @@ describe('webhook', () => {
 
       await sendWebhook(client, 'task.updated', payload)
 
-      expect(capturedUrl).toBe('https://example.com/webhooks/ibs/task.updated')
+      expect(capturedUrl).toBe('https://example.com/webhooks/ibs/task-updated')
 
       const expectedSig = createHmac('sha256', 'my-secret-key')
         .update(capturedBody)
@@ -110,7 +110,7 @@ describe('webhook', () => {
       const client = { id: 'c1', name: 'Test', callbackUrl: 'https://example.com/hook/', webhookSecret: 'sec' }
 
       await sendWebhook(client, 'task.created', { ibsTaskId: 't1' })
-      expect(capturedUrl).toBe('https://example.com/hook/task.created')
+      expect(capturedUrl).toBe('https://example.com/hook/task-created')
     })
   })
 
@@ -199,8 +199,8 @@ describe('webhook', () => {
       await broadcastWebhook('departments.changed', { summary: 'test' })
 
       await new Promise(r => setTimeout(r, 50))
-      expect(urls).toContain('https://sale.example.com/hook/departments.changed')
-      expect(urls).toContain('https://other.example.com/hook/departments.changed')
+      expect(urls).toContain('https://sale.example.com/hook/departments-changed')
+      expect(urls).toContain('https://other.example.com/hook/departments-changed')
     })
   })
 

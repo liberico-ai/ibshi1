@@ -23,7 +23,7 @@ export async function sendWebhook(
   const body = JSON.stringify(fullPayload)
   const signature = createHmac('sha256', client.webhookSecret).update(body).digest('hex')
   const deliveryId = randomUUID()
-  const url = `${client.callbackUrl.replace(/\/+$/, '')}/${event}`
+  const url = `${client.callbackUrl.replace(/\/+$/, '')}/${event.replace(/\./g, '-')}`
 
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
     try {
