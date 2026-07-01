@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { emitContractUpdated } from '@/lib/webhook'
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a']
 
@@ -91,6 +92,8 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    emitContractUpdated(projectId, `milestone_created:${milestone.id}`).catch(() => {})
+
     return successResponse({ milestone }, 'Tạo cột mốc thành công')
   } catch (err) {
     console.error('POST /api/milestones error:', err)
@@ -114,7 +117,13 @@ export async function PATCH(req: NextRequest) {
     if (status === 'COMPLETED' && !actualDate) data.actualDate = new Date()
     else if (actualDate) data.actualDate = new Date(actualDate)
 
-    const milestone = await prisma.milestone.update({ where: { id }, data })
+    const milestone = await prisma.milestone.update({
+      where: { id },
+      data,
+      include: { project: { select: { id: true } } },
+    })
+
+    emitContractUpdated(milestone.project.id, `milestone_status:${status}`).catch(() => {})
 
     return successResponse({ milestone }, 'Cập nhật cột mốc thành công')
   } catch (err) {

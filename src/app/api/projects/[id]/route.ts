@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, getUserProjectIds } from '@/lib/auth'
 import { WORKFLOW_RULES, getWorkflowProgress } from '@/lib/workflow-engine'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
+import { emitContractUpdated } from '@/lib/webhook'
 import { validateBody, validateParams } from '@/lib/api-helpers'
 import { updateProjectSchema, idParamSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
@@ -133,6 +134,10 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
 
   // Invalidate project caches after update
   await cacheInvalidate(CACHE_KEYS.projects)
+
+  if (contractValue !== undefined) {
+    emitContractUpdated(id, 'contract_value_updated').catch(() => {})
+  }
 
   return successResponse({ project: { ...project, contractValue: project.contractValue?.toString() } }, 'Cập nhật dự án thành công')
 })

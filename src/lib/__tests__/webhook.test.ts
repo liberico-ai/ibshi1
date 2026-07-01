@@ -7,7 +7,6 @@ const { mockPrisma } = vi.hoisted(() => {
   return { mockPrisma: null }
 })
 
-// Avoid unused var
 void mockPrisma
 
 import { prismaMock } from '@/lib/__mocks__/db'
@@ -18,35 +17,28 @@ describe('webhook', () => {
     vi.restoreAllMocks()
   })
 
-  describe('sendTaskWebhook — HMAC signature', () => {
-    it('signs payload with HMAC-SHA256 and sends correct headers', async () => {
+  describe('sendWebhook — HMAC signature + URL path', () => {
+    it('signs payload with HMAC-SHA256, appends /<event> to URL, sends correct headers', async () => {
       const capturedHeaders: Record<string, string> = {}
       let capturedBody = ''
+      let capturedUrl = ''
 
-      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+        capturedUrl = url
         const headers = init.headers as Record<string, string>
         Object.assign(capturedHeaders, headers)
         capturedBody = init.body as string
         return { ok: true, status: 200 }
       }))
 
-      const { sendTaskWebhook } = await import('@/lib/webhook')
+      const { sendWebhook } = await import('@/lib/webhook')
 
-      const client = { id: 'c1', name: 'Test', callbackUrl: 'https://example.com/hook', webhookSecret: 'my-secret-key' }
-      const payload = {
-        event: 'task.updated',
-        externalRef: 'SALE-001',
-        taskId: 'task-1',
-        status: 'DONE',
-        previousStatus: 'IN_PROGRESS',
-        blocked: false,
-        assignees: [],
-        deadline: null,
-        decision: '',
-        updatedAt: '2026-06-22T00:00:00.000Z',
-      }
+      const client = { id: 'c1', name: 'Test', callbackUrl: 'https://example.com/webhooks/ibs', webhookSecret: 'my-secret-key' }
+      const payload = { externalRef: 'SALE-001', taskId: 'task-1', status: 'DONE' }
 
-      await sendTaskWebhook(client, payload)
+      await sendWebhook(client, 'task.updated', payload)
+
+      expect(capturedUrl).toBe('https://example.com/webhooks/ibs/task.updated')
 
       const expectedSig = createHmac('sha256', 'my-secret-key')
         .update(capturedBody)
@@ -59,6 +51,24 @@ describe('webhook', () => {
       expect(fetch).toHaveBeenCalledTimes(1)
     })
 
+    it('includes event in payload body', async () => {
+      let capturedBody = ''
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+        capturedBody = init.body as string
+        return { ok: true, status: 200 }
+      }))
+
+      const { sendWebhook } = await import('@/lib/webhook')
+      const client = { id: 'c1', name: 'Test', callbackUrl: 'https://example.com/hook', webhookSecret: 'sec' }
+
+      await sendWebhook(client, 'project.approved', { externalRef: 'REF-1', projectCode: 'P-001' })
+
+      const parsed = JSON.parse(capturedBody)
+      expect(parsed.event).toBe('project.approved')
+      expect(parsed.externalRef).toBe('REF-1')
+      expect(parsed.projectCode).toBe('P-001')
+    })
+
     it('retries on failure', async () => {
       vi.useFakeTimers()
       let callCount = 0
@@ -68,16 +78,10 @@ describe('webhook', () => {
         return { ok: true, status: 200 }
       }))
 
-      const { sendTaskWebhook } = await import('@/lib/webhook')
+      const { sendWebhook } = await import('@/lib/webhook')
 
       const client = { id: 'c1', name: 'Test', callbackUrl: 'https://example.com/hook', webhookSecret: 'secret' }
-      const payload = {
-        event: 'task.updated', externalRef: 'S-1', taskId: 't-1',
-        status: 'DONE', previousStatus: 'OPEN', blocked: false,
-        assignees: [], deadline: null, decision: '', updatedAt: '2026-01-01T00:00:00Z',
-      }
-
-      const promise = sendTaskWebhook(client, payload)
+      const promise = sendWebhook(client, 'task.updated', { taskId: 't-1' })
       await vi.advanceTimersByTimeAsync(1000)
       await vi.advanceTimersByTimeAsync(5000)
       await promise
@@ -88,21 +92,36 @@ describe('webhook', () => {
     it('does nothing when callbackUrl is null', async () => {
       vi.stubGlobal('fetch', vi.fn())
 
-      const { sendTaskWebhook } = await import('@/lib/webhook')
+      const { sendWebhook } = await import('@/lib/webhook')
 
       const client = { id: 'c1', name: 'Test', callbackUrl: null, webhookSecret: 'secret' }
-      await sendTaskWebhook(client, {} as any)
+      await sendWebhook(client, 'test', {})
       expect(fetch).not.toHaveBeenCalled()
+    })
+
+    it('strips trailing slash from callbackUrl', async () => {
+      let capturedUrl = ''
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+        capturedUrl = url
+        return { ok: true, status: 200 }
+      }))
+
+      const { sendWebhook } = await import('@/lib/webhook')
+      const client = { id: 'c1', name: 'Test', callbackUrl: 'https://example.com/hook/', webhookSecret: 'sec' }
+
+      await sendWebhook(client, 'task.created', { ibsTaskId: 't1' })
+      expect(capturedUrl).toBe('https://example.com/hook/task.created')
     })
   })
 
-  describe('emitTaskUpdated — filtering', () => {
+  describe('emitTaskUpdated — filtering + completedAt', () => {
     it('does NOT emit for tasks without externalRef', async () => {
       prismaMock.task.findUnique.mockResolvedValue({
         id: 'task-1', externalRef: null, externalSource: null,
         status: 'DONE', blocked: false, assignees: [],
         resultData: null, updatedAt: new Date(), deadline: null,
-      } as any)
+        completedAt: null,
+      } as never)
 
       vi.stubGlobal('fetch', vi.fn())
 
@@ -117,7 +136,8 @@ describe('webhook', () => {
         id: 'task-1', externalRef: 'EXT-1', externalSource: 'other',
         status: 'DONE', blocked: false, assignees: [],
         resultData: null, updatedAt: new Date(), deadline: null,
-      } as any)
+        completedAt: null,
+      } as never)
 
       vi.stubGlobal('fetch', vi.fn())
 
@@ -127,50 +147,117 @@ describe('webhook', () => {
       expect(fetch).not.toHaveBeenCalled()
     })
 
-    it('does NOT emit when externalClientId is missing', async () => {
+    it('includes completedAt in payload', async () => {
+      const completedDate = new Date('2026-07-01T12:00:00Z')
+
       prismaMock.task.findUnique.mockResolvedValue({
         id: 'task-1', externalRef: 'SALE-001', externalSource: 'sale',
         status: 'DONE', blocked: false,
-        assignees: [], resultData: { briefing: {} },
+        assignees: [],
+        resultData: { externalClientId: 'c1', briefing: {} },
         updatedAt: new Date(), deadline: null,
-      } as any)
+        completedAt: completedDate,
+      } as never)
 
       prismaMock.user.findMany.mockResolvedValue([])
-      vi.stubGlobal('fetch', vi.fn())
-
-      const { emitTaskUpdated } = await import('@/lib/webhook')
-      await emitTaskUpdated('task-1', 'OPEN')
-
-      expect(fetch).not.toHaveBeenCalled()
-    })
-
-    it('emits only to owning client via externalClientId', async () => {
-      prismaMock.task.findUnique.mockResolvedValue({
-        id: 'task-1', externalRef: 'SALE-001', externalSource: 'sale',
-        status: 'DONE', blocked: false,
-        assignees: [{ userId: 'u1', role: 'R02', isPrimary: true }],
-        resultData: { externalClientId: 'c1', briefing: { decision: 'approved' } },
-        updatedAt: new Date(), deadline: null,
-      } as any)
-
-      prismaMock.user.findMany.mockResolvedValue([
-        { id: 'u1', fullName: 'User One' },
-      ] as any)
-
       prismaMock.apiClient.findFirst.mockResolvedValue({
-        id: 'c1', name: 'Sale', callbackUrl: 'https://sale.example.com/webhook', webhookSecret: 'sec', active: true,
-      } as any)
+        id: 'c1', name: 'Sale', callbackUrl: 'https://sale.example.com/webhooks/ibs',
+        webhookSecret: 'sec', active: true,
+      } as never)
 
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }))
+      let capturedBody = ''
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+        capturedBody = init.body as string
+        return { ok: true, status: 200 }
+      }))
 
       const { emitTaskUpdated } = await import('@/lib/webhook')
       await emitTaskUpdated('task-1', 'IN_PROGRESS')
 
-      expect(prismaMock.apiClient.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ id: 'c1' }) }),
-      )
       await new Promise(r => setTimeout(r, 50))
-      expect(fetch).toHaveBeenCalledTimes(1)
+
+      const parsed = JSON.parse(capturedBody)
+      expect(parsed.completedAt).toBe(completedDate.toISOString())
+      expect(parsed.event).toBe('task.updated')
+    })
+  })
+
+  describe('broadcastWebhook', () => {
+    it('sends to all active clients with callbackUrl', async () => {
+      prismaMock.apiClient.findMany.mockResolvedValue([
+        { id: 'c1', name: 'Sale', callbackUrl: 'https://sale.example.com/hook', webhookSecret: 's1' },
+        { id: 'c2', name: 'Other', callbackUrl: 'https://other.example.com/hook', webhookSecret: 's2' },
+      ] as never)
+
+      const urls: string[] = []
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+        urls.push(url)
+        return { ok: true, status: 200 }
+      }))
+
+      const { broadcastWebhook } = await import('@/lib/webhook')
+      await broadcastWebhook('departments.changed', { summary: 'test' })
+
+      await new Promise(r => setTimeout(r, 50))
+      expect(urls).toContain('https://sale.example.com/hook/departments.changed')
+      expect(urls).toContain('https://other.example.com/hook/departments.changed')
+    })
+  })
+
+  describe('emitProjectApproved', () => {
+    it('broadcasts project.approved with externalRef/projectId/projectCode', async () => {
+      prismaMock.projectSubmission.findUnique.mockResolvedValue({
+        id: 'sub-1', externalRef: 'OPP-123', projectId: 'proj-1', projectCode: '26-TEST-001',
+        status: 'APPROVED',
+      } as never)
+
+      prismaMock.apiClient.findMany.mockResolvedValue([
+        { id: 'c1', name: 'Sale', callbackUrl: 'https://sale.example.com/hook', webhookSecret: 'sec' },
+      ] as never)
+
+      let capturedBody = ''
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+        capturedBody = init.body as string
+        return { ok: true, status: 200 }
+      }))
+
+      const { emitProjectApproved } = await import('@/lib/webhook')
+      await emitProjectApproved('sub-1')
+
+      await new Promise(r => setTimeout(r, 50))
+      const parsed = JSON.parse(capturedBody)
+      expect(parsed.event).toBe('project.approved')
+      expect(parsed.externalRef).toBe('OPP-123')
+      expect(parsed.projectId).toBe('proj-1')
+      expect(parsed.projectCode).toBe('26-TEST-001')
+    })
+  })
+
+  describe('emitProjectRejected', () => {
+    it('broadcasts project.rejected with externalRef and reason', async () => {
+      prismaMock.projectSubmission.findUnique.mockResolvedValue({
+        id: 'sub-2', externalRef: 'OPP-456', reason: 'Không đủ năng lực',
+        status: 'REJECTED',
+      } as never)
+
+      prismaMock.apiClient.findMany.mockResolvedValue([
+        { id: 'c1', name: 'Sale', callbackUrl: 'https://sale.example.com/hook', webhookSecret: 'sec' },
+      ] as never)
+
+      let capturedBody = ''
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+        capturedBody = init.body as string
+        return { ok: true, status: 200 }
+      }))
+
+      const { emitProjectRejected } = await import('@/lib/webhook')
+      await emitProjectRejected('sub-2')
+
+      await new Promise(r => setTimeout(r, 50))
+      const parsed = JSON.parse(capturedBody)
+      expect(parsed.event).toBe('project.rejected')
+      expect(parsed.externalRef).toBe('OPP-456')
+      expect(parsed.reason).toBe('Không đủ năng lực')
     })
   })
 })

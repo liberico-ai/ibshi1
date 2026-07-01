@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { emitProjectApproved, emitProjectRejected } from '@/lib/webhook'
 
 const REVIEWER_ROLES = ['R01', 'R02', 'R10']
 
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // TODO: Phase 3 — emit webhook project.approved here
+    emitProjectApproved(submissionId).catch(() => {})
 
     return successResponse({
       submission: { id: sub.id, status: 'APPROVED', projectId: project.id, projectCode },
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // TODO: Phase 3 — emit webhook project.rejected here
+  emitProjectRejected(submissionId).catch(() => {})
 
   return successResponse({
     submission: { id: sub.id, status: 'REJECTED', reason },
