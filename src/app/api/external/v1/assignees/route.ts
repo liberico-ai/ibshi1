@@ -15,11 +15,11 @@ const querySchema = z.object({
 
 export async function GET(req: NextRequest) {
   const client = await authenticateApiClient(req)
-  if (!client) return errorResponse('Unauthorized', 401)
-  if (!requireScope(client, 'read:tasks')) return errorResponse('Insufficient scope', 403)
+  if (!client) return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')
+  if (!requireScope(client, 'read:assignees')) return errorResponse('Insufficient scope', 403, 'INSUFFICIENT_SCOPE')
 
   const params = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams))
-  if (!params.success) return errorResponse('Invalid query parameters', 400)
+  if (!params.success) return errorResponse('Invalid query parameters', 400, 'VALIDATION_FAILED')
 
   const { q } = params.data
 

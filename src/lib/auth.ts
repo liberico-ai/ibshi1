@@ -78,8 +78,8 @@ export function successResponse(data: Record<string, unknown> = {}, message?: st
   return NextResponse.json({ ok: true, ...data, ...(message ? { message } : {}) }, { status })
 }
 
-export function errorResponse(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status })
+export function errorResponse(message: string, status = 400, code?: string) {
+  return NextResponse.json({ ok: false, error: message, ...(code && { code }) }, { status })
 }
 
 // ── Role Check Helpers ──

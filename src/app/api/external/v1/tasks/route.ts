@@ -19,13 +19,13 @@ const pollQuerySchema = z.object({
 
 export async function GET(req: NextRequest) {
   const client = await authenticateApiClient(req)
-  if (!client) return errorResponse('Unauthorized', 401)
-  if (!requireScope(client, 'read:tasks')) return errorResponse('Insufficient scope', 403)
+  if (!client) return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')
+  if (!requireScope(client, 'read:tasks')) return errorResponse('Insufficient scope', 403, 'INSUFFICIENT_SCOPE')
 
   const params = pollQuerySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams))
   if (!params.success) {
     const msg = params.error.issues.map(i => i.message).join('; ')
-    return errorResponse(msg, 400)
+    return errorResponse(msg, 400, 'VALIDATION_FAILED')
   }
 
   const { updatedSince, page, pageSize } = params.data
@@ -169,16 +169,16 @@ function validateAttachments(attachments: z.infer<typeof attachmentSchema>[]): {
 
 export async function POST(req: NextRequest) {
   const client = await authenticateApiClient(req)
-  if (!client) return errorResponse('Unauthorized', 401)
-  if (!requireScope(client, 'write:tasks')) return errorResponse('Insufficient scope', 403)
+  if (!client) return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')
+  if (!requireScope(client, 'write:tasks')) return errorResponse('Insufficient scope', 403, 'INSUFFICIENT_SCOPE')
 
   let body: unknown
-  try { body = await req.json() } catch { return errorResponse('Invalid JSON body', 400) }
+  try { body = await req.json() } catch { return errorResponse('Invalid JSON body', 400, 'VALIDATION_FAILED') }
 
   const parsed = bodySchema.safeParse(body)
   if (!parsed.success) {
     const msg = parsed.error.issues.map(i => i.message).join('; ')
-    return errorResponse(msg, 400)
+    return errorResponse(msg, 400, 'VALIDATION_FAILED')
   }
 
   const { externalRef, projectCode, title, description, assignee, deadline, priority, attachments } = parsed.data
@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
   let attBuffers: Buffer[] | undefined
   if (attachments && attachments.length > 0) {
     const validation = validateAttachments(attachments)
-    if (validation.error) return errorResponse(validation.error, 400)
+    if (validation.error) return errorResponse(validation.error, 400, 'VALIDATION_FAILED')
     attBuffers = validation.buffers
   }
 
@@ -207,23 +207,23 @@ export async function POST(req: NextRequest) {
     where: { projectCode },
     select: { id: true, projectCode: true, projectName: true },
   })
-  if (!project) return errorResponse(`Dự án "${projectCode}" không tồn tại`, 404)
+  if (!project) return errorResponse(`Dự án "${projectCode}" không tồn tại`, 404, 'NOT_FOUND')
 
   // Resolve assignee
   const taskAssignees: { userId?: string; role?: string }[] = []
 
   if (assignee.email) {
     const user = await prisma.user.findFirst({ where: { email: assignee.email, isActive: true } })
-    if (!user) return errorResponse(`Không tìm thấy người dùng với email "${assignee.email}"`, 404)
+    if (!user) return errorResponse(`Không tìm thấy người dùng với email "${assignee.email}"`, 404, 'NOT_FOUND')
     taskAssignees.push({ userId: user.id })
   } else if (assignee.userId) {
     const user = await prisma.user.findUnique({ where: { id: assignee.userId }, select: { id: true, isActive: true } })
-    if (!user) return errorResponse('userId không tồn tại', 404)
-    if (!user.isActive) return errorResponse('Người dùng đã bị vô hiệu hóa', 400)
+    if (!user) return errorResponse('userId không tồn tại', 404, 'NOT_FOUND')
+    if (!user.isActive) return errorResponse('Người dùng đã bị vô hiệu hóa', 400, 'VALIDATION_FAILED')
     taskAssignees.push({ userId: user.id })
   } else if (assignee.role) {
     if (!(assignee.role in (ROLES as Record<string, unknown>))) {
-      return errorResponse(`Role "${assignee.role}" không hợp lệ`, 400)
+      return errorResponse(`Role "${assignee.role}" không hợp lệ`, 400, 'VALIDATION_FAILED')
     }
     taskAssignees.push({ role: assignee.role })
   }

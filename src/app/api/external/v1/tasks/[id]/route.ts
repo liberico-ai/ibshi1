@@ -10,8 +10,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const client = await authenticateApiClient(req)
-  if (!client) return errorResponse('Unauthorized', 401)
-  if (!requireScope(client, 'read:tasks')) return errorResponse('Insufficient scope', 403)
+  if (!client) return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')
+  if (!requireScope(client, 'read:tasks')) return errorResponse('Insufficient scope', 403, 'INSUFFICIENT_SCOPE')
 
   const { id } = await params
 
@@ -23,7 +23,7 @@ export async function GET(
     },
   })
 
-  if (!task) return errorResponse('Task not found', 404)
+  if (!task) return errorResponse('Task not found', 404, 'NOT_FOUND')
 
   const userIds = task.assignees.map(a => a.userId).filter((uid): uid is string => !!uid)
   const users = userIds.length

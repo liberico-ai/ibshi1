@@ -15,11 +15,11 @@ const querySchema = z.object({
 
 export async function GET(req: NextRequest) {
   const client = await authenticateApiClient(req)
-  if (!client) return errorResponse('Unauthorized', 401)
-  if (!requireScope(client, 'read:projects')) return errorResponse('Insufficient scope', 403)
+  if (!client) return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')
+  if (!requireScope(client, 'read:projects')) return errorResponse('Insufficient scope', 403, 'INSUFFICIENT_SCOPE')
 
   const params = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams))
-  if (!params.success) return errorResponse('Invalid query parameters', 400)
+  if (!params.success) return errorResponse('Invalid query parameters', 400, 'VALIDATION_FAILED')
 
   const { status, q, page, pageSize } = params.data
 
@@ -44,4 +44,72 @@ export async function GET(req: NextRequest) {
   ])
 
   return successResponse({ data: projects, page, pageSize, total })
+}
+
+// ── POST: Submit project from Sale for IBS review ──
+
+const submitSchema = z.object({
+  externalRef: z.string().min(1, 'externalRef là bắt buộc'),
+  projectName: z.string().min(1, 'projectName là bắt buộc'),
+  clientName: z.string().min(1, 'clientName là bắt buộc'),
+  productType: z.string().optional(),
+  projectType: z.string().optional(),
+  contractValue: z.number().optional(),
+  currency: z.string().default('VND'),
+  description: z.string().optional(),
+  saleCustomerId: z.string().optional(),
+})
+
+export async function POST(req: NextRequest) {
+  const client = await authenticateApiClient(req)
+  if (!client) return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')
+  if (!requireScope(client, 'write:projects')) return errorResponse('Insufficient scope', 403, 'INSUFFICIENT_SCOPE')
+
+  let body: unknown
+  try { body = await req.json() } catch { return errorResponse('Invalid JSON body', 400, 'VALIDATION_FAILED') }
+
+  const parsed = submitSchema.safeParse(body)
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map(i => i.message).join('; ')
+    return errorResponse(msg, 400, 'VALIDATION_FAILED')
+  }
+
+  const { externalRef, saleCustomerId, ...payload } = parsed.data
+
+  // Idempotency: if externalRef already exists, return existing submission
+  const existing = await prisma.projectSubmission.findUnique({
+    where: { externalRef },
+  })
+  if (existing) {
+    const data: Record<string, unknown> = {
+      externalRef: existing.externalRef,
+      submissionId: existing.id,
+      status: existing.status,
+      createdAt: existing.createdAt,
+    }
+    if (existing.status === 'APPROVED') {
+      data.projectId = existing.projectId
+      data.projectCode = existing.projectCode
+    }
+    return successResponse({ data })
+  }
+
+  const sub = await prisma.projectSubmission.create({
+    data: {
+      externalRef,
+      payload,
+      saleCustomerId: saleCustomerId || null,
+    },
+  })
+
+  console.log(`[ExternalAPI] ProjectSubmission created: ${sub.id} externalRef=${externalRef} by client=${client.name}`)
+
+  return successResponse({
+    data: {
+      externalRef: sub.externalRef,
+      submissionId: sub.id,
+      status: sub.status,
+      createdAt: sub.createdAt,
+    },
+  }, undefined, 201)
 }

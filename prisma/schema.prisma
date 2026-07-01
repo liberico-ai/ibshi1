@@ -105,11 +105,33 @@ model Project {
   loanContracts      LoanContract[]
   financePlan        ProjectFinancePlan?
 
+  saleCustomerId     String?                  @map("sale_customer_id")
   baselines          ProjectBaseline[]
+  submission         ProjectSubmission?
 
   @@index([status])
   @@index([pmUserId])
+  @@index([saleCustomerId])
   @@map("projects")
+}
+
+model ProjectSubmission {
+  id              String    @id @default(cuid())
+  externalRef     String    @unique @map("external_ref")
+  status          String    @default("UNDER_REVIEW") // UNDER_REVIEW | APPROVED | REJECTED
+  payload         Json
+  saleCustomerId  String?   @map("sale_customer_id")
+  projectId       String?   @unique @map("project_id")
+  projectCode     String?   @map("project_code")
+  reason          String?
+  reviewedBy      String?   @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("project_submissions")
 }
 
 model ProjectBaseline {

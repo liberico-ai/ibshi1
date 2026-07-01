@@ -23,10 +23,22 @@ const pool = new pg.Pool({
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool as any) })
 
 async function main() {
-  const [, , name, ...scopes] = process.argv
+  const args = process.argv.slice(2)
+  let callbackUrl: string | null = null
+  const positional: string[] = []
+
+  for (const arg of args) {
+    if (arg.startsWith('--callbackUrl=')) {
+      callbackUrl = arg.split('=').slice(1).join('=')
+    } else {
+      positional.push(arg)
+    }
+  }
+
+  const [name, ...scopes] = positional
   if (!name) {
-    console.error('Usage: npx tsx scripts/create-api-client.ts <name> [scopes...]')
-    console.error('Scopes: read:projects, read:tasks, write:tasks')
+    console.error('Usage: npx tsx scripts/create-api-client.ts <name> [scopes...] [--callbackUrl=<url>]')
+    console.error('Scopes: read:projects, read:assignees, read:departments, read:contracts, read:ar, read:tasks, write:tasks, write:projects')
     process.exit(1)
   }
 
@@ -62,6 +74,7 @@ async function main() {
       keyPrefix: prefix,
       keyHash: hash,
       webhookSecret,
+      callbackUrl,
       scopes,
     },
   })
@@ -72,6 +85,7 @@ async function main() {
   console.log(`  Name:           ${client.name}`)
   console.log(`  ID:             ${client.id}`)
   console.log(`  Scopes:         ${scopes.join(', ')}`)
+  console.log(`  Callback URL:   ${callbackUrl || '(none)'}`)
   console.log(`  Webhook Secret: ${webhookSecret}`)
   console.log('')
   console.log(`  API Key: ${key}`)
