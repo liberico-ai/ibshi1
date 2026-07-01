@@ -81,6 +81,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const po = await prisma.purchaseOrder.create({
         data: {
           poCode,
+          projectId: pr.projectId,
           vendorId: body.vendorId,
           status: 'DRAFT',
           totalValue,

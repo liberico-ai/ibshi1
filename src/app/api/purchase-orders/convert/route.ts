@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     const po = await prisma.purchaseOrder.create({
       data: {
         poCode,
+        projectId: pr.projectId,
         vendorId,
         status: 'DRAFT',
         totalValue: 0,
