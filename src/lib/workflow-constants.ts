@@ -106,7 +106,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   // — TM xác nhận GRN ở sidebar, không còn là bước workflow.
   'P4.3': {
     code: 'P4.3', name: 'QC nghiệm thu chất lượng nhập kho', nameEn: 'QC Incoming Quality Inspection',
-    role: 'R09', next: ['P4.4'], deadlineDays: 3, phase: 4,
+    role: 'R09', gate: ['P3.6'], next: ['P4.4'], deadlineDays: 3, phase: 4,
     rejectTo: 'P3.5', // QC fail → commercial sources a new supplier
     // Dynamic: 1 task per PO. Created by api/grn POST when TM confirms first GRN for that PO.
     // stepName: "Nghiệm thu hàng về theo PO {poCode}". resultData carries { poId, poCode }.
@@ -118,21 +118,21 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P4.5': {
     code: 'P4.5', name: 'Kho đề nghị cấp vật tư cho PM và QLSX', nameEn: 'Warehouse Issue Material to PM & Production',
-    role: 'R05', next: [], deadlineDays: 3, phase: 4,
+    role: 'R05', gate: ['P4.4'], next: [], deadlineDays: 3, phase: 4,
   },
 
   // ── Phase 5: Sản xuất (BRD#26-31) ──
   'P5.1': {
     code: 'P5.1', name: 'Báo cáo khối lượng nội bộ (tổ thi công) theo ngày', nameEn: 'Daily Internal Production Report',
-    role: 'R06b', next: ['P5.3', 'P5.4'], phase: 5,
+    role: 'R06b', gate: ['P4.5'], next: ['P5.3', 'P5.4'], phase: 5,
   },
   'P5.1A': {
     code: 'P5.1A', name: 'Báo cáo khối lượng của thầu phụ theo ngày', nameEn: 'Daily Subcontractor Production Report',
-    role: 'R02', next: ['P5.3', 'P5.4'], phase: 5,
+    role: 'R02', gate: ['P4.5'], next: ['P5.3', 'P5.4'], phase: 5,
   },
   'P5.1.1': {
     code: 'P5.1.1', name: 'Yêu cầu nghiệm thu chất lượng hạng mục', nameEn: 'Item Quality Acceptance Request',
-    role: 'R06b', next: ['P5.3A'], phase: 5,
+    role: 'R06b', gate: ['P4.5'], next: ['P5.3A'], phase: 5,
   },
   'P5.3A': {
     code: 'P5.3A', name: 'QAQC nghiệm thu chất lượng hạng mục', nameEn: 'QAQC Item Quality Acceptance',
@@ -140,7 +140,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P5.2': {
     code: 'P5.2', name: 'Tổ SX báo cáo khối lượng hoàn thành theo tuần', nameEn: 'Weekly Production Volume Report',
-    role: 'R06b', next: ['P5.3'], phase: 5,
+    role: 'R06b', gate: ['P4.5'], next: ['P5.3'], phase: 5,
   },
   'P5.3': {
     code: 'P5.3', name: 'Nghiệm thu khối lượng tuần (QC)', nameEn: 'Weekly Volume Acceptance (QC)',
@@ -154,7 +154,7 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
   'P5.5': {
     code: 'P5.5', name: 'Tổng hợp và tính lương khoán', nameEn: 'Piece-rate Salary Calculation',
-    role: 'R03', next: ['P6.1', 'P6.2', 'P6.3', 'P6.4'], phase: 5,
+    role: 'R03', gate: ['P5.4'], next: ['P6.1', 'P6.2', 'P6.3', 'P6.4'], phase: 5,
   },
 
   // ── Phase 6: Đóng Dự án (BRD P6.1-P6.5) ──

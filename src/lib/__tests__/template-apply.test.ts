@@ -49,20 +49,39 @@ function mockResolveRole() {
   prismaMock.notification.createMany.mockResolvedValue({ count: 0 } as never)
 }
 
+// Mock "DB thật": store task có trạng thái, task.create ghi vào store,
+// task.findMany/findFirst đọc từ store. Bắt buộc để test THỨ TỰ spawn trong
+// applyTemplate — mock tĩnh không thấy được task vừa spawn nên legacy grace
+// của doneCodesForProject không bao giờ tắt (che mất bug P1.1B sinh sớm).
+function statefulTaskStore(initial: { templateStepId: string; status: string }[] = []) {
+  const store = [...initial]
+  prismaMock.task.findMany.mockImplementation((() => Promise.resolve(store)) as never)
+  prismaMock.task.findFirst.mockImplementation(((args: { where: { templateStepId?: string } }) =>
+    Promise.resolve(store.find((t) => t.templateStepId === args.where.templateStepId) ?? null)) as never)
+  prismaMock.task.create.mockImplementation(((args: { data: { templateStepId: string } }) => {
+    store.push({ templateStepId: args.data.templateStepId, status: 'OPEN' })
+    return Promise.resolve({ id: `task-of-${args.data.templateStepId}`, deadline: null })
+  }) as never)
+  return store
+}
+
+function spawnedStepIds(): string[] {
+  return prismaMock.task.create.mock.calls.map((c) => (c[0] as { data: { templateStepId: string } }).data.templateStepId)
+}
+
 describe('applyTemplate', () => {
-  it('spawns all entry steps on empty project (linear)', async () => {
+  it('spawns ONLY entry step on empty project (linear) — no premature chain', async () => {
     prismaMock.workflowTemplate.findFirst.mockResolvedValue({ ...TPL, steps: STEPS_LINEAR } as never)
-    prismaMock.task.findMany.mockResolvedValue([]) // no template tasks yet
-    prismaMock.task.findFirst.mockResolvedValue(null) // spawnTemplateStep idempotent check
-    prismaMock.task.create.mockResolvedValue({ id: 'new-1', deadline: null } as never)
+    statefulTaskStore() // dự án trống, DB phản ánh task vừa spawn
     mockResolveRole()
 
     const result = await applyTemplate('p1', 'TPL-TEST', 'u1')
     expect(result.ok).toBe(true)
-    // S1 is entry (not in anyone's nextCodes) + ungated → spawned
-    // S2 has gate [S1] but S1 is auto-done (root not spawned) → S2 also spawned via chain
-    // S3 has gate [S2] but S2 is not DONE → not spawned
-    expect(result.created).toBeGreaterThanOrEqual(1)
+    // S1 là entry (không nằm trong nextCodes của ai) + không gate → spawn.
+    // Sau khi S1 spawn, legacy grace TẮT → done-set rỗng → S2 (gate [S1]) KHÔNG
+    // được sinh sớm (bug cũ: done-set tính trước spawn → grace coi S1 đã xong → sinh S2).
+    expect(result.created).toBe(1)
+    expect(spawnedStepIds()).toEqual(['step-S1'])
   })
 
   it('spawns parallel entry steps (A and B) on empty project', async () => {
@@ -141,6 +160,68 @@ describe('applyTemplate', () => {
     expect(result.ok).toBe(true)
     // A, B entries exist → 0. Chain: A→C spawned (1), B→C idempotent (0)
     expect(result.created).toBe(1)
+  })
+})
+
+// ── Regression bug prod: dự án MỚI áp template SX-PROD sinh cả P1.1B ngày 1 ──
+// Nguyên nhân: applyTemplate gọi doneCodesForProject TRƯỚC khi spawn entry P1.1
+// → root chưa có task → legacy grace coi P1.1 "đã xong" → pass chain sinh P1.1B ngay.
+// Fix: spawn entries TRƯỚC, tính done-set SAU (grace tắt vì root đã spawn).
+describe('applyTemplate — thứ tự spawn entry trước done-set (fix P1.1B ngày 1)', () => {
+  const STEPS_P1 = [
+    mkStep('P1.1', 0, ['P1.1B']),
+    mkStep('P1.1B', 1, ['P1.2A', 'P1.2'], ['P1.1']),
+    mkStep('P1.2A', 2, [], ['P1.1B']),
+    mkStep('P1.2', 3, [], ['P1.1B']),
+  ]
+
+  it('(i) dự án TRỐNG áp template → CHỈ P1.1 spawn, KHÔNG P1.1B', async () => {
+    prismaMock.workflowTemplate.findFirst.mockResolvedValue({ ...TPL, steps: STEPS_P1 } as never)
+    statefulTaskStore()
+    mockResolveRole()
+
+    const result = await applyTemplate('p1', 'TPL-TEST', 'u1')
+    expect(result.ok).toBe(true)
+    expect(result.created).toBe(1)
+    expect(spawnedStepIds()).toEqual(['step-P1.1']) // P1.1B/P1.2A/P1.2 KHÔNG sinh sớm
+  })
+
+  it('(ii) re-apply: dự án đã có P1.1 DONE → P1.1B được bổ sung đúng gate', async () => {
+    prismaMock.workflowTemplate.findFirst.mockResolvedValue({ ...TPL, steps: STEPS_P1 } as never)
+    // Dự án cũ: P1.1 đã spawn và DONE thật → grace tắt, done-set = {P1.1}
+    statefulTaskStore([{ templateStepId: 'step-P1.1', status: 'DONE' }])
+    mockResolveRole()
+
+    const result = await applyTemplate('p1', 'TPL-TEST', 'u1')
+    expect(result.ok).toBe(true)
+    // Entry P1.1 đã tồn tại → 0. Chain P1.1 done → P1.1B (gate [P1.1] thỏa) → 1.
+    // P1.2A/P1.2 gate [P1.1B] chưa DONE → không sinh.
+    expect(result.created).toBe(1)
+    expect(spawnedStepIds()).toEqual(['step-P1.1B'])
+  })
+
+  it('(iii) idempotent: áp 2 lần trên dự án trống → lần 2 tạo 0, tổng vẫn chỉ P1.1', async () => {
+    prismaMock.workflowTemplate.findFirst.mockResolvedValue({ ...TPL, steps: STEPS_P1 } as never)
+    statefulTaskStore()
+    mockResolveRole()
+
+    const r1 = await applyTemplate('p1', 'TPL-TEST', 'u1')
+    const r2 = await applyTemplate('p1', 'TPL-TEST', 'u1')
+    expect(r1.created).toBe(1)
+    expect(r2.created).toBe(0) // spawnTemplateStep idempotent + grace vẫn tắt
+    expect(spawnedStepIds()).toEqual(['step-P1.1'])
+  })
+
+  it('(iii) idempotent: re-apply 2 lần trên dự án có P1.1 DONE → P1.1B chỉ tạo 1 lần', async () => {
+    prismaMock.workflowTemplate.findFirst.mockResolvedValue({ ...TPL, steps: STEPS_P1 } as never)
+    statefulTaskStore([{ templateStepId: 'step-P1.1', status: 'DONE' }])
+    mockResolveRole()
+
+    const r1 = await applyTemplate('p1', 'TPL-TEST', 'u1')
+    const r2 = await applyTemplate('p1', 'TPL-TEST', 'u1')
+    expect(r1.created).toBe(1)
+    expect(r2.created).toBe(0)
+    expect(spawnedStepIds()).toEqual(['step-P1.1B'])
   })
 })
 

@@ -937,13 +937,24 @@ export async function applyTemplate(projectId: string, templateCode: string, byU
   const entrySteps = steps.filter((s) => !reachable.has(s.code))
 
   let created = 0
-  // Spawn entry steps có gate thỏa (hoặc gate rỗng)
-  const done = await doneCodesForProject(steps, projectId)
+  // ── THỨ TỰ QUAN TRỌNG (fix bug prod: dự án MỚI áp template sinh cả P1.1B ngày 1) ──
+  // Bước 1: spawn ENTRY STEPS TRƯỚC. Gate check giữ nguyên như cũ (done-set tại thời điểm này).
+  const doneAtEntry = await doneCodesForProject(steps, projectId)
   for (const es of entrySteps) {
-    if ((es.gateCodes || []).every((g) => done.has(g))) {
+    if ((es.gateCodes || []).every((g) => doneAtEntry.has(g))) {
       if (await spawnTemplateStep(es, projectId, byUser)) created++
     }
   }
+  // Bước 2: CHỈ SAU khi entries đã spawn mới tính lại done-set để chạy pass chain.
+  // Vì sao thứ tự quan trọng: doneCodesForProject có "legacy grace" — root (P1.1) được coi
+  // như ĐÃ XONG khi root CHƯA có task (phục vụ dự án cũ áp template giữa chừng, không có
+  // task P1.1 thật). Nếu tính done-set TRƯỚC khi spawn root (code cũ), dự án MỚI hoàn toàn
+  // trống cũng bị grace coi P1.1 "đã xong" → pass chain sinh luôn P1.1B ngay ngày 1 (bug prod).
+  // Sau khi entry P1.1 đã spawn ở Bước 1, grace tự tắt (rootSpawned=true) → done-set chỉ còn
+  // các task DONE thật → dự án mới chỉ có P1.1, P1.1B chờ P1.1 hoàn thành mới sinh.
+  // Re-apply giữa chừng KHÔNG đổi hành vi: dự án cũ đã có task DONE thật (vd P1.1 DONE)
+  // → done-set vẫn gồm các bước đó → pass chain vẫn bổ sung các bước thiếu đúng theo gate.
+  const done = await doneCodesForProject(steps, projectId)
   // Chain: các bước đã done → sinh bước kế nếu gate thỏa
   for (const doneCode of done) {
     const ds = byCode.get(doneCode); if (!ds) continue
