@@ -64,6 +64,29 @@ export const updateBomSchema = z.object({
 
 export type UpdateBomInput = z.infer<typeof updateBomSchema>
 
+// ── BOM Version lines (replace toàn bộ lines của 1 BomVersion DRAFT) ──
+// Lưu ý: BomItem.materialId là NOT NULL trong DB nên bắt buộc phải gửi
+// (khác PO items — không hỗ trợ materialId null). parentId không hỗ trợ (phẳng).
+
+export const bomVersionLineSchema = z.object({
+  materialId: z.string().min(1, 'materialId là bắt buộc (BomItem.materialId không nullable)'),
+  pieceMark: z.string().optional(),
+  category: z.string().optional(),
+  quantity: z.number().positive('Số lượng phải > 0'),
+  unit: z.string().optional(),
+  profile: z.string().optional(),
+  grade: z.string().optional(),
+  remarks: z.string().optional(),
+})
+
+export type BomVersionLineInput = z.infer<typeof bomVersionLineSchema>
+
+export const replaceBomVersionLinesSchema = z.object({
+  lines: z.array(bomVersionLineSchema).max(500, 'Tối đa 500 dòng mỗi lần thay'),
+})
+
+export type ReplaceBomVersionLinesInput = z.infer<typeof replaceBomVersionLinesSchema>
+
 // ── ECO (Engineering Change Order) ──
 
 export const ECO_SOURCES = [
