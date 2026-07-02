@@ -1,8 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
-import { isEnabled } from '@/lib/feature-flags'
-import { runCascade } from '@/lib/cascade-tasks'
+import { approveRevision } from '@/lib/revision-flow'
 
 // GET /api/design/bom/versions/:id — Get a single BomVersion
 export async function GET(
@@ -57,48 +56,39 @@ export async function PUT(
 
   const { status, reason, approvedBy } = body
 
-  // If activating this version, supersede the current ACTIVE version
+  // If activating this version, delegate to approveRevision (revision-flow) —
+  // single source of truth: guard DRAFT + ECO APPROVED, supersede, activate,
+  // flag needsReQc cho piece-mark bị ảnh hưởng, tạo task RE_QC (R09) + cascade (non-blocking)
   if (status === 'ACTIVE') {
-    const oldActiveVersion = await prisma.bomVersion.findFirst({
-      where: { bomId: existing.bomId, status: 'ACTIVE' },
-      select: { id: true },
-    })
-
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.bomVersion.updateMany({
-        where: { bomId: existing.bomId, status: 'ACTIVE' },
-        data: { status: 'SUPERSEDED' },
-      })
-
-      return tx.bomVersion.update({
-        where: { id },
-        data: {
-          status: 'ACTIVE',
-          reason: reason !== undefined ? reason : undefined,
-          approvedBy: approvedBy || user.userId,
-          approvedAt: new Date(),
-        },
-        include: {
-          lines: {
-            include: { material: { select: { materialCode: true, name: true, unit: true } } },
-            orderBy: { sortOrder: 'asc' },
-          },
-          bom: { select: { id: true, bomCode: true, name: true, projectId: true } },
-          sourceRevision: true,
-          eco: true,
-        },
-      })
-    })
-
-    // ── Cascade: fire-and-forget task creation after transaction commits ──
-    if (isEnabled('BOM_REVISION_CASCADE') && oldActiveVersion) {
-      const ecoCode = updated.eco?.ecoCode || `BOM-v${updated.versionNo}`
-      const projectId = updated.bom.projectId
-
-      runCascade(oldActiveVersion.id, id, projectId, ecoCode, user.userId)
-        .then(r => { if (r.taskIds.length) console.log(`[cascade] Created ${r.taskIds.length} tasks for ${ecoCode}`) })
-        .catch(err => console.error('[cascade] Failed (non-blocking):', err))
+    try {
+      await approveRevision(id, user.userId)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Lỗi khi duyệt phiên bản BOM'
+      if (message === 'BomVersion không tồn tại') return errorResponse(message, 404)
+      if (message.includes('chỉ DRAFT mới duyệt được') || message.includes('cần APPROVED')) {
+        return errorResponse(message, 422)
+      }
+      return errorResponse(message, 400)
     }
+
+    // Tương thích body cũ: FE có thể gửi kèm reason khi kích hoạt
+    if (reason !== undefined) {
+      await prisma.bomVersion.update({ where: { id }, data: { reason } })
+    }
+
+    // Fetch lại kèm include như cũ để giữ shape response cho FE
+    const updated = await prisma.bomVersion.findUnique({
+      where: { id },
+      include: {
+        lines: {
+          include: { material: { select: { materialCode: true, name: true, unit: true } } },
+          orderBy: { sortOrder: 'asc' },
+        },
+        bom: { select: { id: true, bomCode: true, name: true, projectId: true } },
+        sourceRevision: true,
+        eco: true,
+      },
+    })
 
     return successResponse({ version: updated, message: 'Đã kích hoạt phiên bản BOM' })
   }

@@ -157,6 +157,8 @@ export {
   updateBomSchema,
   createEcoSchema,
   updateEcoSchema,
+  bomVersionLineSchema,
+  replaceBomVersionLinesSchema,
   ECO_SOURCES,
   ECO_COST_BEARERS,
   type EcoSource,
@@ -169,6 +171,8 @@ export {
   type UpdateBomInput,
   type CreateEcoInput,
   type UpdateEcoInput,
+  type BomVersionLineInput,
+  type ReplaceBomVersionLinesInput,
 } from './design.schema'
 
 // ── HR ──
