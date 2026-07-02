@@ -201,7 +201,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       },
     })
 
-    let params: { oldVersionId: string; newVersionId: string; projectId: string; ecoCode: string; userId: string } | null = null
+    let params: { oldVersionId: string; newVersionId: string; projectId: string; ecoCode: string; userId: string; bomId: string } | null = null
     let reQcCount = 0
 
     const oldVersion = await tx.bomVersion.findFirst({
@@ -224,6 +224,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
         projectId: eco?.projectId || version.bomId,
         ecoCode: eco?.ecoCode || `BOM-v${version.versionNo}`,
         userId,
+        bomId: version.bomId,
       }
     }
 
@@ -273,6 +274,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
         cascadeParams.projectId,
         cascadeParams.ecoCode,
         cascadeParams.userId,
+        cascadeParams.bomId,
       )
     } catch (err) {
       console.error('[approveRevision] Cascade failed (non-blocking):', err)

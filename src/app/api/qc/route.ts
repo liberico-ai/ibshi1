@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
           checklistItems: {
             select: { id: true, checkItem: true, result: true },
           },
+          project: { select: { projectCode: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
     const result = inspections.map((i: Record<string, unknown> & { checklistItems: Array<Record<string, unknown>> }) => ({
       id: i.id,
       projectId: i.projectId,
+      project: i.project, // { projectCode } — trang FAT/SAT hiển thị cột Dự án
       inspectionCode: i.inspectionCode,
       type: i.type,
       stepCode: i.stepCode,

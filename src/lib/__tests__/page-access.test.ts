@@ -121,7 +121,7 @@ describe('API-level RBAC (requireRoles guard)', () => {
     '/api/warehouse/stats': ['R01', 'R03', 'R03a', 'R05', 'R05a'],
     '/api/purchase-orders': ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a'],
     '/api/materials/quick-create': ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R10'],
-    '/api/workshops': ['R01', 'R06', 'R06a'],
+    '/api/workshops': ['R01', 'R02', 'R02a', 'R06', 'R06a'], // GET (view) — POST vẫn chỉ R01/R06/R06a
     '/api/qc/mrb': ['R01', 'R09', 'R09a'],
     '/api/mill-certificates': ['R01', 'R09', 'R09a'],
     '/api/finance/budgets/variance': ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a'],

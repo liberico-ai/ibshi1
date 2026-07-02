@@ -117,6 +117,7 @@ function buildProcurementOriginBlock(
   newVersionId: string,
   projectId: string,
   ecoCode: string,
+  bomId?: string,
 ): string {
   const params = new URLSearchParams({
     originType: 'ECO',
@@ -128,6 +129,8 @@ function buildProcurementOriginBlock(
     '─── Nguồn phát sinh (truy vết) ───',
     `originType: ECO | originId: ${newVersionId} | originLabel: ${ecoCode}`,
     `👉 Tạo PR bổ sung (đã gắn nguồn ${ecoCode}): /dashboard/warehouse/purchase-requests/new?${params.toString()}`,
+    // Đợt2-A: ECO auto-apply — hệ thống tự đề xuất + tạo PR từ impact, khỏi gõ tay từng dòng
+    `⚡ Nhanh hơn: mở trang BOM version${bomId ? ` /dashboard/design/bom/${bomId}` : ''} → chọn Rev đang hiệu lực → bấm "Tạo PR tự động" để hệ thống tự lọc dòng cần mua từ impact và tạo PR.`,
     'Gợi ý vật tư cần mua lấy từ bảng "Chi tiết vật tư thay đổi" ở trên.',
   ].join('\n')
 }
@@ -138,6 +141,7 @@ export async function runCascade(
   projectId: string,
   ecoCode: string,
   userId: string,
+  bomId?: string, // Đợt2-A: để link thẳng tới trang BOM version (nút "Tạo PR tự động") trong task PROCUREMENT
 ): Promise<CascadeResult> {
   const diff = await diffBomVersions(oldVersionId, newVersionId)
 
@@ -179,7 +183,7 @@ export async function runCascade(
       '',
       // Nhóm PROCUREMENT: gắn context nguồn ECO để PR tạo ra truy vết được
       ...(group === 'PROCUREMENT'
-        ? [buildProcurementOriginBlock(newVersionId, projectId, ecoCode), '']
+        ? [buildProcurementOriginBlock(newVersionId, projectId, ecoCode, bomId), '']
         : []),
       `⚠️ Task này do hệ thống tự sinh khi BOM version được kích hoạt.`,
       `Chỉ xử lý điều chỉnh theo hướng dẫn — KHÔNG sửa PR/PO cũ trực tiếp.`,

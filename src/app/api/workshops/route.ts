@@ -4,14 +4,17 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { createWorkshopSchema } from '@/lib/schemas'
 
-const ALLOWED_ROLES = ['R01', 'R06', 'R06a']
+// [P2-đợt2 B2] Khớp với menu 'workshops' (constants.ts): R02/R02a được XEM,
+// chỉ SX (R01/R06/R06a) được tạo/sửa
+const VIEW_ROLES = ['R01', 'R02', 'R02a', 'R06', 'R06a']
+const MANAGE_ROLES = ['R01', 'R06', 'R06a']
 
 // GET /api/workshops — list workshops with WO counts
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
-    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
+    if (!requireRoles(user.roleCode, VIEW_ROLES)) return errorResponse('Forbidden', 403)
 
     const workshops = await prisma.workshop.findMany({
       include: { _count: { select: { workOrders: true } } },
@@ -30,7 +33,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
-    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
+    if (!requireRoles(user.roleCode, MANAGE_ROLES)) return errorResponse('Forbidden', 403)
 
     const result = await validateBody(req, createWorkshopSchema)
     if (!result.success) return result.response

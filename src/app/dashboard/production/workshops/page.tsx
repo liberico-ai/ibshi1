@@ -1,14 +1,19 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 
 interface Workshop { id: string; code: string; name: string; nameEn: string; capacity: number; _count: { workOrders: number } }
 
+// Khớp MANAGE_ROLES của /api/workshops — R02/R02a chỉ xem
+const CAN_MANAGE_ROLES = ['R01', 'R06', 'R06a']
+
 export default function WorkshopsPage() {
+  const user = useAuthStore(s => s.user)
   const [workshops, setWorkshops] = useState<Workshop[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const canManage = CAN_MANAGE_ROLES.includes(user?.roleCode || '')
 
   const load = () => {
     apiFetch('/api/workshops').then(res => { if (res.ok) setWorkshops(res.workshops || []); setLoading(false) })
@@ -34,7 +39,7 @@ export default function WorkshopsPage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Phân xưởng</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{workshops.length} xưởng</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm xưởng</button>
+        {canManage && <button onClick={() => setShowForm(true)} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm xưởng</button>}
       </div>
 
       {showForm && (
