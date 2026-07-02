@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { validateQuery, validateBody } from '@/lib/api-helpers'
-import { searchFilterSchema, createPurchaseRequestSchema } from '@/lib/schemas'
+import { prListQuerySchema, createPurchaseRequestSchema } from '@/lib/schemas'
 
 // GET /api/purchase-requests — List purchase requests
 export async function GET(req: NextRequest) {
@@ -12,13 +12,17 @@ export async function GET(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    const qResult = validateQuery(req.url, searchFilterSchema)
+    const qResult = validateQuery(req.url, prListQuerySchema)
     if (!qResult.success) return qResult.response
-    const { page, status } = qResult.data
+    const { page, status, originType, originId, projectId } = qResult.data
     const limit = 20
 
     const where: Record<string, unknown> = {}
     if (status) where.status = status
+    // Lọc theo nguồn phát sinh (ECO/NCR) — Đợt 2D truy vết
+    if (originType) where.originType = originType
+    if (originId) where.originId = originId
+    if (projectId) where.projectId = projectId
 
     const [total, prs] = await Promise.all([
       prisma.purchaseRequest.count({ where }),
@@ -63,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     const result = await validateBody(req, createPurchaseRequestSchema)
     if (!result.success) return result.response
-    const { projectId, urgency, notes, items } = result.data
+    const { projectId, urgency, notes, items, originType, originId, originLabel } = result.data
 
     // Generate PR code: PR-YY-NNN
     const year = new Date().getFullYear().toString().slice(-2)
@@ -82,6 +86,10 @@ export async function POST(req: NextRequest) {
         urgency: urgency || 'NORMAL',
         notes,
         status: 'SUBMITTED',
+        // Nguồn phát sinh (Đợt 2D): PR từ ECO (bomVersionId) / NCR (ncr.id)
+        originType: originType || null,
+        originId: originId || null,
+        originLabel: originLabel || null,
         items: {
           create: items.map((item: { materialId: string; quantity: number; requiredDate?: string; notes?: string }) => ({
             materialId: item.materialId,

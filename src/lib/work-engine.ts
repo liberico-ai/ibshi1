@@ -958,7 +958,8 @@ export async function applyTemplate(projectId: string, templateCode: string, byU
 }
 
 // Gọi khi 1 task template hoàn thành → sinh các bước kế (theo next/gate).
-async function chainNextTemplateTasks(taskId: string, projectId: string | null, templateStepId: string | null, byUser: string) {
+// Export để test trực tiếp (vitest) — nội bộ vẫn chỉ gọi từ completeTask/setTaskStatusAdmin.
+export async function chainNextTemplateTasks(taskId: string, projectId: string | null, templateStepId: string | null, byUser: string) {
   if (!templateStepId || !projectId) return
   const step = await prisma.templateStep.findUnique({ where: { id: templateStepId } })
   if (!step) return
@@ -968,6 +969,16 @@ async function chainNextTemplateTasks(taskId: string, projectId: string | null, 
   for (const nc of (step as unknown as TStep).nextCodes || []) {
     const ns = byCode.get(nc); if (!ns) continue
     if ((ns.gateCodes || []).every((g) => done.has(g))) await spawnTemplateStep(ns, projectId, byUser)
+  }
+  // ── Gate-driven spawn (chịu được data template thiếu cạnh next, vd SX-PROD) ──
+  // Quét MỌI step của template có gateCodes ≠ rỗng mà toàn bộ gate đã nằm trong done-set
+  // → spawn (spawnTemplateStep đã idempotent: 1 templateStep chỉ sinh 1 task/dự án).
+  // Không đổi semantics done-set: vẫn dùng doneCodesForProject (gồm legacy grace cho root).
+  for (const s of steps) {
+    const gates = s.gateCodes || []
+    if (gates.length === 0) continue          // không gate → chỉ sinh theo cạnh next như cũ
+    if (done.has(s.code)) continue            // bước đã xong → chắc chắn đã có task
+    if (gates.every((g) => done.has(g))) await spawnTemplateStep(s, projectId, byUser)
   }
 }
 

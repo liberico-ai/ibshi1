@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { PageHeader, StatusBadge, Button, EmptyState, KPICard } from '@/components/ui'
 import { ShoppingCart, ClipboardList, Banknote, Clock, CheckCircle2 } from 'lucide-react'
@@ -16,6 +16,9 @@ export default function PurchaseOrdersPage() {
   const [pos, setPos] = useState<PO[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const user = useAuthStore((s) => s.user)
+  // PO-Gate: chỉ R01/R07 được duyệt PO (khớp API /api/purchase-orders/[id]/approve)
+  const canApprove = ['R01', 'R07'].includes(user?.roleCode || '')
 
   const fetchData = () => {
     setLoading(true)
@@ -99,13 +102,17 @@ export default function PurchaseOrdersPage() {
                 </td>
               </tr>
             ) : pos.map(po => (
-              <tr key={po.id}>
+              // PO PENDING nổi bật — nền vàng nhạt + viền trái cam để R01/R07 thấy ngay cần duyệt
+              <tr
+                key={po.id}
+                style={po.status === 'PENDING' ? { background: '#FFFBEB', boxShadow: 'inset 3px 0 0 #C97A0E' } : undefined}
+              >
                 <td>
                   <span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{po.poCode}</span>
                 </td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.vendor?.name || '—'}</td>
                 <td>
-                  <StatusBadge category="po" status={po.status} />
+                  <StatusBadge category="po" status={po.status} className={po.status === 'PENDING' ? 'font-bold' : ''} />
                 </td>
                 <td className="text-right">
                   <span className="font-mono text-xs font-bold" style={{ color: 'var(--success)' }}>
@@ -120,7 +127,7 @@ export default function PurchaseOrdersPage() {
                 </td>
                 <td>
                   <div className="flex gap-1">
-                    {(po.status === 'DRAFT' || po.status === 'PENDING') && (
+                    {canApprove && (po.status === 'DRAFT' || po.status === 'PENDING') && (
                       <>
                         <Button
                           variant="primary"

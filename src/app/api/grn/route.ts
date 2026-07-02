@@ -65,8 +65,10 @@ export async function POST(req: NextRequest) {
   })
 
   if (!po) return errorResponse('Không tìm thấy PO')
-  if (['CANCELLED', 'DRAFT'].includes(po.status)) {
-    return errorResponse('PO chưa gửi hoặc đã hủy')
+  // PO-Gate: chỉ nhận hàng với PO đã được duyệt (APPROVED trở đi).
+  // PENDING/DRAFT/REJECTED/CANCELLED → 422, chờ R01/R07 duyệt qua /api/purchase-orders/[id]/approve.
+  if (['CANCELLED', 'DRAFT', 'PENDING', 'REJECTED'].includes(po.status)) {
+    return errorResponse(`PO ${po.poCode} chưa được duyệt hoặc đã hủy (trạng thái: ${po.status}) — không thể nhận hàng`, 422)
   }
 
   // Process each item in a transaction

@@ -69,6 +69,22 @@ export async function POST(req: NextRequest) {
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
     if (!invoice) return errorResponse('Hóa đơn không tồn tại', 404)
 
+    // Đợt 1C: thu tiền khách phải đi qua phiếu thu (CustomerReceipt) để traceable — chặn đường cũ
+    if (invoice.type === 'RECEIVABLE') {
+      return errorResponse('Dùng phiếu thu (receipts) cho hóa đơn phải thu', 422)
+    }
+
+    // PO-Gate: hóa đơn gắn PO chưa duyệt (PENDING/DRAFT/REJECTED/CANCELLED) → chặn thanh toán
+    if (invoice.poId) {
+      const linkedPo = await prisma.purchaseOrder.findUnique({
+        where: { id: invoice.poId },
+        select: { poCode: true, status: true },
+      })
+      if (linkedPo && ['PENDING', 'DRAFT', 'REJECTED', 'CANCELLED'].includes(linkedPo.status)) {
+        return errorResponse(`PO ${linkedPo.poCode} chưa được duyệt (trạng thái: ${linkedPo.status}) — cần R01/R07 duyệt PO trước khi thanh toán`, 422)
+      }
+    }
+
     const remaining = Number(invoice.totalAmount) - Number(invoice.paidAmount)
     if (Number(amount) > remaining) {
       return errorResponse(`Số tiền thanh toán vượt quá số còn lại (${formatNumber(remaining)} VNĐ)`)

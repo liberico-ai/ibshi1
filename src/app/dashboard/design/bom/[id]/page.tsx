@@ -7,6 +7,7 @@ import { PageHeader, StatusBadge, Button, EmptyState, Modal, KPICard, FilterBar 
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { formatDate } from '@/lib/utils'
 import { Package, ClipboardList, Search, BarChart3, CheckCircle } from 'lucide-react'
+import { OriginPrSection } from '@/components/OriginPrSection'
 
 /* ── Types ── */
 
@@ -492,12 +493,34 @@ export default function BomRevisionDetailPage() {
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
+                    {/* Đợt 2D: version từ ECO → cho phép tạo PR bổ sung có truy vết nguồn */}
+                    {versionDetail.eco && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const params = new URLSearchParams({
+                            originType: 'ECO',
+                            originId: versionDetail.id,
+                            originLabel: versionDetail.eco!.ecoCode,
+                            projectId: bom.projectId,
+                          })
+                          router.push(`/dashboard/warehouse/purchase-requests/new?${params.toString()}`)
+                        }}
+                      >
+                        Tao PR bo sung
+                      </Button>
+                    )}
                     {canApproveThisVersion && (
                       <Button variant="primary" loading={approving} onClick={handleApprove}>
                         Phat hanh BomVersion
                       </Button>
                     )}
                   </div>
+                </div>
+
+                {/* Truy vết ngược: PR phát sinh từ phiên bản này (ECO) */}
+                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
+                  <OriginPrSection originType="ECO" originId={versionDetail.id} />
                 </div>
               </div>
 

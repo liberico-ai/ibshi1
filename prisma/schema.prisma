@@ -427,6 +427,10 @@ model PurchaseRequest {
   notes       String?
   approvedBy  String?               @map("approved_by")
   approvedAt  DateTime?             @map("approved_at")
+  // Đợt 2D — truy vết nguồn phát sinh PR (revise bản vẽ / sản xuất sai)
+  originType  String?               @map("origin_type") // 'ECO' | 'NCR'
+  originId    String?               @map("origin_id") // ECO: bomVersionId | NCR: ncr.id
+  originLabel String?               @map("origin_label") // mã hiển thị: ECO code / NCR code
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
   items       PurchaseRequestItem[]
@@ -434,6 +438,7 @@ model PurchaseRequest {
 
   @@index([projectId])
   @@index([status])
+  @@index([originType, originId])
   @@map("purchase_requests")
 }
 
@@ -1123,6 +1128,7 @@ model Invoice {
   vendor        Vendor?                   @relation(fields: [vendorId], references: [id])
   purchaseOrder PurchaseOrder?            @relation(fields: [poId], references: [id], onDelete: SetNull)
   payments      Payment[]
+  receipts      CustomerReceipt[]
   drawdownLines DrawdownBeneficiaryLine[]
 
   @@index([projectId])
@@ -1145,6 +1151,27 @@ model Payment {
 
   @@index([invoiceId])
   @@map("payments")
+}
+
+// Phiếu thu tiền khách hàng — thu tiền traceable theo hóa đơn RECEIVABLE (Đợt 1C)
+// paidAmount của Invoice RECEIVABLE = Σ receipts (recompute, không +=)
+model CustomerReceipt {
+  id          String   @id @default(cuid())
+  invoiceId   String   @map("invoice_id")
+  projectId   String?  @map("project_id") // denormalize từ invoice.projectId để query theo dự án
+  amount      Decimal
+  method      String   @default("BANK") // BANK | CASH | OTHER
+  receivedAt  DateTime @default(now()) @map("received_at")
+  referenceNo String?  @map("reference_no") // số UNC/phiếu thu; backfill dùng 'PAY-<paymentId>'
+  notes       String?
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@index([projectId])
+  @@map("customer_receipts")
 }
 
 model Budget {

@@ -138,22 +138,26 @@ export async function PUT(request: NextRequest) {
       }
 
       // 4. Auto-generate physical PO (with items) so Finance can select it for Drawdown
+      // PO-Gate: PO tạo từ P3.6 phải ở trạng thái PENDING — chờ R01/R07 duyệt
+      // qua /api/purchase-orders/[id]/approve trước khi thanh toán/nhận hàng.
+      let createdPendingPo: { id: string; poCode: string } | null = null
       const existingPo = await prisma.purchaseOrder.findUnique({
         where: { poCode: g.prCode },
         include: { items: true },
       })
       if (!existingPo) {
-        await prisma.purchaseOrder.create({
+        createdPendingPo = await prisma.purchaseOrder.create({
           data: {
             poCode: g.prCode,
             projectId: task.projectId, // traceability: PO → workflow project
             vendorId: vendor.id,
             totalValue: actualTotalValue,
-            status: 'APPROVED',
+            status: 'PENDING',
             createdBy: payload.userId,
             deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
             items: poItemsData.length > 0 ? { create: poItemsData } : undefined,
-          }
+          },
+          select: { id: true, poCode: true },
         })
       } else {
         // PO exists — backfill projectId if missing (legacy data)
@@ -171,8 +175,31 @@ export async function PUT(request: NextRequest) {
         }
       }
 
-      // 5. Notify accountants (R08) — they process payment from the "Thanh toán" tab,
+      // 5a. PO mới tạo (PENDING) → notify R01/R07 vào duyệt PO trước
+      if (createdPendingPo) {
+        const approvers = await prisma.user.findMany({
+          where: { roleCode: { in: ['R01', 'R07'] }, isActive: true },
+          select: { id: true },
+        })
+        if (approvers.length > 0) {
+          await prisma.notification.createMany({
+            data: approvers.map(u => ({
+              userId: u.id,
+              title: `PO chờ duyệt: ${createdPendingPo!.poCode}`,
+              message: `PO ${createdPendingPo!.poCode} (${actualSupplier}) — ${formatCurrency(Number(actualTotalValue))} vừa được tạo từ theo dõi mua sắm (P3.6), đang chờ duyệt. Duyệt/Từ chối tại trang Đơn đặt hàng.`,
+              type: 'po_approval',
+              linkUrl: '/dashboard/warehouse/purchase-orders',
+            })),
+          })
+        }
+      }
+
+      // 5b. Notify accountants (R08) — they process payment from the "Thanh toán" tab,
       // so no workflow task is created; a notification + sidebar badge guides them in.
+      // Lưu ý PO-Gate: nếu PO còn PENDING, kế toán CHƯA thanh toán được (API thanh toán/
+      // giải ngân trả 422, danh sách PO tạm ứng chỉ hiện PO APPROVED) — yêu cầu thanh toán
+      // vẫn được ghi nhận (paymentStatus=PAYMENT_REQUESTED) và tự "mở khóa" khi PO được duyệt.
+      const poAwaitingApproval = Boolean(createdPendingPo)
       const accountants = await prisma.user.findMany({
         where: { roleCode: { in: ['R08', 'R08a'] }, isActive: true },
         select: { id: true },
@@ -182,7 +209,7 @@ export async function PUT(request: NextRequest) {
           data: accountants.map(u => ({
             userId: u.id,
             title: `Yêu cầu thanh toán: ${g.prCode}`,
-            message: `Thương mại vừa gửi yêu cầu thanh toán PO ${g.prCode} (${actualSupplier}) — ${formatCurrency(Number(actualTotalValue))}. Vào tab Thanh toán để xử lý.`,
+            message: `Thương mại vừa gửi yêu cầu thanh toán PO ${g.prCode} (${actualSupplier}) — ${formatCurrency(Number(actualTotalValue))}.${poAwaitingApproval ? ' PO đang chờ R01/R07 duyệt — có thể xử lý thanh toán sau khi PO được duyệt.' : ' Vào tab Thanh toán để xử lý.'}`,
             type: 'payment_request',
             linkUrl: '/dashboard/finance/payments',
           })),

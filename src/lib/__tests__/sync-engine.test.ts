@@ -194,6 +194,24 @@ describe('syncPOtoBudget', () => {
 
     expect(prismaMock.budget.update).not.toHaveBeenCalled()
   })
+
+  it('PO-Gate: committed chỉ tính PO APPROVED trở đi — loại PENDING/DRAFT/REJECTED/CANCELLED', async () => {
+    prismaMock.purchaseOrder.findMany.mockResolvedValue([] as any)
+    prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
+    prismaMock.budget.findFirst.mockResolvedValue(null)
+
+    await syncPOtoBudget(PROJECT_ID, 'po-1', USER)
+
+    const arg = prismaMock.purchaseOrder.findMany.mock.calls[0][0] as any
+    const statuses: string[] = arg?.where?.status?.in || []
+    expect(statuses).toContain('APPROVED')
+    // Trạng thái sau duyệt vẫn tính committed (không tụt khi PO đi tiếp chuỗi thanh toán/nhận hàng)
+    expect(statuses).toEqual(expect.arrayContaining(['PROCESSING_PAYMENT', 'PAID', 'PARTIAL_RECEIVED', 'RECEIVED']))
+    // Trước duyệt / bị loại — KHÔNG tính
+    for (const blocked of ['PENDING', 'DRAFT', 'REJECTED', 'CANCELLED']) {
+      expect(statuses).not.toContain(blocked)
+    }
+  })
 })
 
 

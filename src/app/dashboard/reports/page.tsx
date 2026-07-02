@@ -577,8 +577,9 @@ function SafetyReport({ data }: { data: Record<string, unknown> }) {
 
 // ─── Procurement ───
 function ProcurementReport({ data }: { data: Record<string, unknown> }) {
-  const p = data.procurement as { totalPR: number; approvedPR: number; pendingPR: number; totalPO: number; approvedPO: number; pendingPO: number; totalPOValue: number; recentPOs: { poNumber: string; vendorName: string; totalAmount: number; status: string }[] } | undefined
+  const p = data.procurement as { totalPR: number; approvedPR: number; pendingPR: number; totalPO: number; approvedPO: number; pendingPO: number; totalPOValue: number; recentPOs: { poNumber: string; vendorName: string; totalAmount: number; status: string }[]; originTrace?: { fromEco: number; fromNcr: number; fromEcoValue: number; fromNcrValue: number; byProject: { projectCode: string; projectName: string; fromEco: number; fromNcr: number; estimatedValue: number }[] } } | undefined
   if (!p) return <p style={{ color: 'var(--text-muted)' }}>Không có dữ liệu</p>
+  const ot = p.originTrace
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -587,6 +588,35 @@ function ProcurementReport({ data }: { data: Record<string, unknown> }) {
         <KPI label="Tổng PO" value={p.totalPO} sub={`${p.approvedPO} approved`} color="#16a34a" />
         <KPI label="Tổng giá trị PO" value={formatCompactVND(p.totalPOValue)} sub="VND" color="#dc2626" />
       </div>
+      {/* Đợt 2D — PR phát sinh từ revise bản vẽ (ECO) / sản xuất sai (NCR) */}
+      {ot && (ot.fromEco > 0 || ot.fromNcr > 0) && (
+        <div className="card p-5">
+          <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+            PR phát sinh từ thay đổi thiết kế / sản xuất sai
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KPI label="PR từ ECO" value={ot.fromEco} sub="revise bản vẽ" color="#2563eb" />
+            <KPI label="PR từ NCR" value={ot.fromNcr} sub="sản xuất sai" color="#dc2626" />
+            <KPI label="Giá trị ước tính (ECO)" value={formatCompactVND(ot.fromEcoValue)} sub="VND" color="#2563eb" />
+            <KPI label="Giá trị ước tính (NCR)" value={formatCompactVND(ot.fromNcrValue)} sub="VND" color="#dc2626" />
+          </div>
+          {ot.byProject.length > 0 && (
+            <table className="data-table" style={{ marginTop: 16 }}>
+              <thead><tr><th>Dự án</th><th className="text-right">PR từ ECO</th><th className="text-right">PR từ NCR</th><th className="text-right">Giá trị ước tính</th></tr></thead>
+              <tbody>
+                {ot.byProject.map(row => (
+                  <tr key={row.projectCode}>
+                    <td className="text-xs"><span className="font-mono font-bold" style={{ color: 'var(--accent)' }}>{row.projectCode}</span> {row.projectName}</td>
+                    <td className="text-right text-xs font-bold">{row.fromEco}</td>
+                    <td className="text-right text-xs font-bold">{row.fromNcr}</td>
+                    <td className="text-right text-xs font-bold">{formatNumber(row.estimatedValue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
       {p.recentPOs?.length > 0 && (
         <div className="card overflow-hidden">
           <div className="p-3" style={{ borderBottom: '1px solid var(--border)' }}>

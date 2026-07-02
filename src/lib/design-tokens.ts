@@ -12,6 +12,8 @@ export const STATUS_COLORS = {
     DRAFT:            { bg: '#F1F3F5', text: '#64748B', label: 'Nháp' },
     PENDING:          { bg: '#FBF1DF', text: '#C97A0E', label: 'Chờ duyệt' },
     APPROVED:         { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã duyệt' },
+    REJECTED:         { bg: '#FDECEA', text: '#C8372B', label: 'Từ chối' },
+    CANCELLED:        { bg: '#F1F3F5', text: '#9AA0A8', label: 'Đã hủy' },
     SENT:             { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đã gửi' },
     PROCESSING_PAYMENT: { bg: '#FBF1DF', text: '#C97A0E', label: 'Đang thanh toán' },
     PAID:             { bg: '#E6FFFE', text: '#0E8C8C', label: 'Đã thanh toán' },
@@ -23,6 +25,13 @@ export const STATUS_COLORS = {
     DRAFT:            { bg: '#F1F3F5', text: '#64748B', label: 'Nháp' },
     ISSUED:           { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã phát hành' },
     SUPERSEDED:       { bg: '#F1F3F5', text: '#9AA0A8', label: 'Thay thế' },
+  },
+  pr: {
+    DRAFT:            { bg: '#F1F3F5', text: '#64748B', label: 'Nháp' },
+    SUBMITTED:        { bg: '#E8F0FA', text: '#2D6CB5', label: 'Đã gửi' },
+    APPROVED:         { bg: '#E6F4EC', text: '#1E8E5A', label: 'Đã duyệt' },
+    REJECTED:         { bg: '#FDECEA', text: '#C8372B', label: 'Từ chối' },
+    CONVERTED:        { bg: '#E6FFFE', text: '#0E8C8C', label: 'Đã chuyển PO' },
   },
   ncr: {
     OPEN:             { bg: '#FDECEA', text: '#C8372B', label: 'Mở' },

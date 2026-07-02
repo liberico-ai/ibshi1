@@ -312,11 +312,50 @@ export async function GET(req: NextRequest) {
         take: 10, orderBy: { createdAt: 'desc' },
         include: { vendor: { select: { name: true } } },
       })
+
+      // ── Đợt 2D: PR theo nguồn phát sinh (truy vết revise bản vẽ ECO / sản xuất sai NCR) ──
+      const originPRs = await prisma.purchaseRequest.findMany({
+        where: { originType: { in: ['ECO', 'NCR'] } },
+        include: {
+          project: { select: { projectCode: true, projectName: true } },
+          items: { include: { material: { select: { unitPrice: true } } } },
+        },
+      })
+      const prValue = (pr: (typeof originPRs)[number]) =>
+        pr.items.reduce((sum, it) => sum + Number(it.material?.unitPrice || 0) * Number(it.quantity), 0)
+      const byProjectMap = new Map<string, { projectCode: string; projectName: string; fromEco: number; fromNcr: number; estimatedValue: number }>()
+      let fromEcoValue = 0
+      let fromNcrValue = 0
+      for (const pr of originPRs) {
+        const val = prValue(pr)
+        if (pr.originType === 'ECO') fromEcoValue += val
+        else fromNcrValue += val
+        const key = pr.projectId
+        if (!byProjectMap.has(key)) {
+          byProjectMap.set(key, {
+            projectCode: pr.project.projectCode, projectName: pr.project.projectName,
+            fromEco: 0, fromNcr: 0, estimatedValue: 0,
+          })
+        }
+        const node = byProjectMap.get(key)!
+        if (pr.originType === 'ECO') node.fromEco += 1
+        else node.fromNcr += 1
+        node.estimatedValue += val
+      }
+      const originTrace = {
+        fromEco: originPRs.filter(pr => pr.originType === 'ECO').length,
+        fromNcr: originPRs.filter(pr => pr.originType === 'NCR').length,
+        fromEcoValue, // giá trị ước tính (đơn giá vật tư × SL)
+        fromNcrValue,
+        byProject: Array.from(byProjectMap.values()),
+      }
+
       return successResponse({
         procurement: {
           totalPR, approvedPR, pendingPR, totalPO, approvedPO, pendingPO,
           totalPOValue: Number(poAgg._sum?.totalValue || 0),
           recentPOs: recentPOs.map(po => ({ poNumber: po.poCode, vendorName: po.vendor?.name || '—', totalAmount: Number(po.totalValue || 0), status: po.status })),
+          originTrace,
         },
       })
     }
