@@ -16,7 +16,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   ON_HOLD: ['IN_PROGRESS'],
   QC_PENDING: ['QC_PASSED', 'QC_FAILED'],
   QC_FAILED: ['IN_PROGRESS'], // rework
-  QC_PASSED: ['COMPLETED'],
+  QC_PASSED: ['COMPLETED', 'QC_PENDING'], // QC_PENDING = đưa về QC lại (needsReQc do ECO)
   COMPLETED: [], // terminal
 }
 
@@ -58,10 +58,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (nextStatus === 'QC_PASSED') {
-      const qcResult = await isWorkOrderQcPassed(id)
+      // Transition này CHÍNH LÀ re-QC: bỏ qua riêng flag needsReQc (tránh deadlock),
+      // vẫn kiểm đủ NDT/NCR/biên bản; thành công thì auto-clear flag ở dưới.
+      const qcResult = await isWorkOrderQcPassed(id, { ignoreReQcFlag: true })
       if (!qcResult.passed) {
         return errorResponse('QC chưa đạt: ' + qcResult.reasons.join('; '), 422)
       }
+    }
+    // WO bị flag re-QC (do ECO) không được đóng hoàn thành — phải QC lại trước
+    if (nextStatus === 'COMPLETED' && wo.needsReQc) {
+      return errorResponse(`WO cần QC lại trước khi hoàn thành: ${wo.reQcReason || 'needsReQc'}`, 422)
+    }
+    // Đưa WO đã QC_PASSED về QC lại: chỉ QC/GĐ
+    if (currentStatus === 'QC_PASSED' && nextStatus === 'QC_PENDING' && !RBAC.QC_ACTION.includes(user.roleCode)) {
+      return errorResponse('Chỉ QC hoặc GĐ được yêu cầu kiểm tra lại', 403)
     }
 
     const updated = await prisma.workOrder.update({
