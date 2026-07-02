@@ -5,6 +5,7 @@ import { validateBody } from '@/lib/api-helpers'
 import { createPaymentSchema } from '@/lib/schemas'
 import { formatNumber } from '@/lib/utils'
 import { FINANCE_WRITE_ROLES } from '@/lib/constants'
+import { recalcBudgetActual } from '@/lib/sync-engine'
 
 // GET /api/finance/payments — list payments with invoice info
 export async function GET(req: NextRequest) {
@@ -73,24 +74,51 @@ export async function POST(req: NextRequest) {
       return errorResponse(`Số tiền thanh toán vượt quá số còn lại (${formatNumber(remaining)} VNĐ)`)
     }
 
-    const payment = await prisma.payment.create({
-      data: {
-        invoiceId,
-        amount: Number(amount),
-        paymentDate: new Date(paymentDate),
-        method: method || 'BANK_TRANSFER',
-        reference,
-        notes,
-      },
-    })
-
-    // Update invoice paidAmount and status
+    // Hướng dòng tiền: hóa đơn RECEIVABLE = THU từ khách; còn lại (PAYABLE/ADVANCE_PAYMENT) = CHI
+    const isOutflow = invoice.type !== 'RECEIVABLE'
     const newPaid = Number(invoice.paidAmount) + Number(amount)
     const newStatus = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL'
-    await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { paidAmount: newPaid, status: newStatus },
+
+    // Payment + cập nhật invoice + CashflowEntry trong CÙNG transaction
+    const payment = await prisma.$transaction(async (tx) => {
+      const p = await tx.payment.create({
+        data: {
+          invoiceId,
+          amount: Number(amount),
+          paymentDate: new Date(paymentDate),
+          method: method || 'BANK_TRANSFER',
+          reference,
+          notes,
+        },
+      })
+
+      await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { paidAmount: newPaid, status: newStatus },
+      })
+
+      // Mỗi payment sinh đúng 1 CashflowEntry (entryCode theo payment.id — không nhân đôi)
+      await tx.cashflowEntry.create({
+        data: {
+          entryCode: `CF-PAY-${p.id}`,
+          type: isOutflow ? 'OUTFLOW' : 'INFLOW',
+          category: isOutflow ? 'VENDOR_PAYMENT' : 'CUSTOMER_RECEIPT',
+          amount: Number(amount),
+          description: `Thanh toán hóa đơn ${invoice.invoiceCode}`,
+          entryDate: new Date(paymentDate),
+          reference: p.id,
+          projectId: invoice.projectId,
+        },
+      })
+
+      return p
     })
+
+    // Thực chi cho dự án → recompute actual (nguồn duy nhất: recalcBudgetActual)
+    if (isOutflow && invoice.projectId) {
+      try { await recalcBudgetActual(invoice.projectId, user.userId) }
+      catch (e) { console.error('[Payments] recalcBudgetActual error:', e) }
+    }
 
     return successResponse({ payment, invoiceStatus: newStatus }, 'Thanh toán thành công')
   } catch (err) {

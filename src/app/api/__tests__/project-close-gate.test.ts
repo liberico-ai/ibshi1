@@ -118,6 +118,7 @@ describe('PATCH /api/projects/[id] action=CLOSE — NCR/ECO gate', () => {
     prismaMock.task.findMany.mockResolvedValue(GATE_TASKS as never)
     prismaMock.nonConformanceReport.count.mockResolvedValue(0)
     prismaMock.engineeringChangeOrder.count.mockResolvedValue(0)
+    prismaMock.projectSettlement.findFirst.mockResolvedValue({ id: 'stl-1', projectId: PROJECT_ID, status: 'APPROVED' } as never)
     prismaMock.$transaction.mockImplementation((fn: (tx: typeof prismaMock) => Promise<unknown>) => fn(prismaMock))
     prismaMock.project.update.mockResolvedValue(SAMPLE_PROJECT as never)
     prismaMock.task.updateMany.mockResolvedValue({ count: 1 } as never)
@@ -128,5 +129,42 @@ describe('PATCH /api/projects/[id] action=CLOSE — NCR/ECO gate', () => {
     const json = await res.json()
     expect(json.ok).toBe(true)
     expect(json.project.projectCode).toBe('P-CLOSE')
+  })
+})
+
+describe('PATCH /api/projects/[id] action=CLOSE — settlement gate (Track B)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    prismaMock.task.findMany.mockResolvedValue(GATE_TASKS as never)
+    prismaMock.nonConformanceReport.count.mockResolvedValue(0)
+    prismaMock.engineeringChangeOrder.count.mockResolvedValue(0)
+  })
+
+  it('blocks close (422) when no APPROVED settlement exists', async () => {
+    prismaMock.projectSettlement.findFirst.mockResolvedValue(null)
+
+    const res = await PATCH(makeReq({ action: 'CLOSE' }), routeCtx)
+    expect(res.status).toBe(422)
+    const json = await res.json()
+    expect(json.ok).toBe(false)
+    expect(json.error).toContain('chưa quyết toán')
+    // Query đúng gate: chỉ chấp nhận status APPROVED
+    expect(prismaMock.projectSettlement.findFirst).toHaveBeenCalledWith({
+      where: { projectId: PROJECT_ID, status: 'APPROVED' },
+    })
+    expect(prismaMock.project.update).not.toHaveBeenCalled()
+  })
+
+  it('allows close (200) when settlement APPROVED and no open NCR/ECO', async () => {
+    prismaMock.projectSettlement.findFirst.mockResolvedValue({ id: 'stl-1', projectId: PROJECT_ID, status: 'APPROVED' } as never)
+    prismaMock.$transaction.mockImplementation((fn: (tx: typeof prismaMock) => Promise<unknown>) => fn(prismaMock))
+    prismaMock.project.update.mockResolvedValue(SAMPLE_PROJECT as never)
+    prismaMock.task.updateMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.auditLog.create.mockResolvedValue({} as never)
+
+    const res = await PATCH(makeReq({ action: 'CLOSE' }), routeCtx)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.ok).toBe(true)
   })
 })

@@ -41,7 +41,7 @@ export default function StockMovementsPage() {
     setLoading(true)
     const params = filterType ? `?type=${filterType}` : ''
     const res = await apiFetch(`/api/stock-movements${params}`)
-    if (res.ok) setMovements(res.stockMovements || [])
+    if (res.ok) setMovements(res.movements || [])
     setLoading(false)
   }
 

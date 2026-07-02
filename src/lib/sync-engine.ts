@@ -1,5 +1,8 @@
+import { Prisma } from '@prisma/client'
 import prisma from './db'
 import { applyStockMovement } from './stock-ledger'
+
+type Tx = Prisma.TransactionClient
 
 // ── Change Event Logger ──
 
@@ -129,9 +132,96 @@ export async function syncPOtoBudget(projectId: string, _poId: string, triggered
 }
 
 
-/** Recalculate budget actual from all non-reversed IN movements (po_receipt + warehouse_receipt).
- *  Price priority: PurchaseOrderItem.unitPrice (via poItemId) → Material.unitPrice fallback. */
-export async function recalcBudgetActual(projectId: string, _triggeredBy: string): Promise<void> {
+// ══════════════════════════════════════════════════════
+//  Dự toán duyệt → Budget planned (form ESTIMATE, P1.2/P1.3)
+// ══════════════════════════════════════════════════════
+
+export interface EstimateTotals {
+  totalMaterial?: number
+  totalLabor?: number
+  totalService?: number
+  totalOverhead?: number
+}
+
+const ESTIMATE_CATEGORY_MAP: ReadonlyArray<readonly [keyof EstimateTotals, string]> = [
+  ['totalMaterial', 'MATERIAL'],
+  ['totalLabor', 'LABOR'],
+  ['totalService', 'SERVICE'],
+  ['totalOverhead', 'OVERHEAD'],
+] as const
+
+/** Dự toán (form ESTIMATE) hoàn thành/duyệt → upsert Budget.planned theo từng category.
+ *  Idempotent: recompute-set theo (projectId, category, month=null, year=null) — gọi nhiều lần không nhân đôi.
+ *  Lưu ý: MATERIAL.planned có thể được syncBOMtoBudget ghi đè sau (BOM Phase 2 chi tiết hơn dự toán Phase 1). */
+export async function syncEstimateToBudget(
+  projectId: string,
+  totals: EstimateTotals,
+  triggeredBy: string,
+  sourceId: string = 'N/A',
+): Promise<void> {
+  const entries = ESTIMATE_CATEGORY_MAP
+    .map(([key, category]) => ({ category, planned: Number(totals[key]) }))
+    .filter(e => Number.isFinite(e.planned) && e.planned > 0)
+  if (entries.length === 0) return
+
+  const before: Record<string, number> = {}
+  const after: Record<string, number> = {}
+
+  await prisma.$transaction(async (tx) => {
+    for (const { category, planned } of entries) {
+      const existing = await tx.budget.findFirst({
+        where: { projectId, category, month: null, year: null },
+      })
+      before[category] = existing ? Number(existing.planned) : 0
+      after[category] = planned
+      if (existing) {
+        await tx.budget.update({ where: { id: existing.id }, data: { planned } })
+      } else {
+        await tx.budget.create({ data: { projectId, category, planned } })
+      }
+    }
+  })
+
+  await logChangeEvent({
+    projectId, sourceStep: 'P1.3', sourceModel: 'Task',
+    sourceId, eventType: 'SYNC',
+    targetModel: 'Budget', targetId: projectId,
+    dataBefore: { planned: before },
+    dataAfter: { planned: after },
+    reason: 'Dự toán duyệt → Budget.planned',
+    triggeredBy,
+  })
+}
+
+// ══════════════════════════════════════════════════════
+//  Actual — NGUỒN DUY NHẤT tính chi phí thực tế theo category
+// ══════════════════════════════════════════════════════
+//  Quy tắc nguồn (chống double-count):
+//  - MATERIAL = giá trị StockMovement IN (po_receipt/warehouse_receipt, không REV-),
+//    đơn giá ưu tiên PurchaseOrderItem.unitPrice → fallback Material.unitPrice.
+//    (GRN là điểm ghi nhận vật tư; thanh toán PO KHÔNG cộng lại.)
+//  - LABOR    = Σ MonthlyPieceRateOutput.totalAmount đã nghiệm thu (status=VERIFIED)
+//    của các hợp đồng khoán thuộc dự án.
+//  - SERVICE  = Σ Invoice.paidAmount của hóa đơn CHI (type != RECEIVABLE) thuộc dự án
+//    KHÔNG gắn PO vật tư (poId=null và description không chứa "Đơn đặt hàng:").
+//    paidAmount là nguồn duy nhất — cả drawdown execute lẫn payment thường đều ghi vào đây.
+//  Mọi điểm phát sinh chi phí (GRN, drawdown execute, payment, duyệt KL khoán) chỉ cần
+//  gọi recalcBudgetActual(projectId) — hàm này recompute toàn bộ, idempotent.
+
+/** Đặt Budget.actual cho 1 category (update nếu có, create nếu chưa có và amount > 0). */
+async function setBudgetActual(projectId: string, category: string, amount: number): Promise<void> {
+  const budget = await prisma.budget.findFirst({
+    where: { projectId, category, month: null, year: null },
+  })
+  if (budget) {
+    await prisma.budget.update({ where: { id: budget.id }, data: { actual: amount } })
+  } else if (amount > 0) {
+    await prisma.budget.create({ data: { projectId, category, actual: amount } })
+  }
+}
+
+/** MATERIAL actual: giá trị nhập kho từ mua hàng (không tính movement đảo REV-). */
+async function calcMaterialActual(projectId: string): Promise<number> {
   const movements = await prisma.stockMovement.findMany({
     where: {
       projectId,
@@ -166,24 +256,100 @@ export async function recalcBudgetActual(projectId: string, _triggeredBy: string
     : []
   const materialPriceMap = new Map(materials.map(m => [m.id, Number(m.unitPrice || 0)]))
 
-  let totalActual = 0
+  let total = 0
   for (const mv of movements) {
     const unitPrice = mv.poItemId
       ? (poItemPriceMap.get(mv.poItemId) ?? 0)
       : (materialPriceMap.get(mv.materialId) ?? 0)
-    totalActual += Number(mv.quantity) * unitPrice
+    total += Number(mv.quantity) * unitPrice
   }
+  return total
+}
 
-  const budget = await prisma.budget.findFirst({
-    where: { projectId, category: 'MATERIAL', month: null, year: null },
+/** LABOR actual: tổng KL khoán đã nghiệm thu (VERIFIED) của dự án. */
+async function calcLaborActual(projectId: string): Promise<number> {
+  const outputs = await prisma.monthlyPieceRateOutput.findMany({
+    where: { status: 'VERIFIED', contract: { projectId } },
+    select: { totalAmount: true },
   })
+  return outputs.reduce((s, o) => s + Number(o.totalAmount), 0)
+}
 
-  if (budget) {
-    await prisma.budget.update({
-      where: { id: budget.id },
-      data: { actual: totalActual },
-    })
-  }
+/** Regex nhận diện hóa đơn gắn PO vật tư (drawdown flow ghi mã PO vào description). */
+const PO_LINKED_DESC_REGEX = /Đơn đặt hàng:/
+
+/** SERVICE actual: tiền đã thực chi (paidAmount) cho hóa đơn CHI không gắn PO vật tư.
+ *  Hóa đơn gắn PO bị loại — giá trị vật tư đã tính ở MATERIAL qua GRN (chống double-count). */
+async function calcServiceActual(projectId: string): Promise<number> {
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      projectId,
+      type: { not: 'RECEIVABLE' },
+      paidAmount: { gt: 0 },
+    },
+    select: { paidAmount: true, poId: true, description: true },
+  })
+  return invoices
+    .filter(inv => !inv.poId && !PO_LINKED_DESC_REGEX.test(inv.description || ''))
+    .reduce((s, inv) => s + Number(inv.paidAmount), 0)
+}
+
+export interface ProjectActualCosts {
+  material: number
+  labor: number
+  service: number
+}
+
+/** Tính chi phí thực tế theo 3 nguồn chuẩn ở trên — dùng chung cho
+ *  recalcBudgetActual (Budget.actual) và quyết toán dự án (ProjectSettlement).
+ *  KHÔNG copy công thức này ra nơi khác — import hàm này. */
+export async function calcProjectActualCosts(projectId: string): Promise<ProjectActualCosts> {
+  const material = await calcMaterialActual(projectId)
+  const labor = await calcLaborActual(projectId)
+  const service = await calcServiceActual(projectId)
+  return { material, labor, service }
+}
+
+/** Recompute toàn bộ Budget.actual của dự án theo quy tắc nguồn ở trên. Idempotent. */
+export async function recalcBudgetActual(projectId: string, _triggeredBy: string): Promise<void> {
+  const { material, labor, service } = await calcProjectActualCosts(projectId)
+
+  await setBudgetActual(projectId, 'MATERIAL', material)
+  await setBudgetActual(projectId, 'LABOR', labor)
+  await setBudgetActual(projectId, 'SERVICE', service)
+}
+
+// ══════════════════════════════════════════════════════
+//  Giải ngân (LoanDrawdown) → CashflowEntry hướng CHI
+// ══════════════════════════════════════════════════════
+
+/** Ghi 1 CashflowEntry OUTFLOW cho hồ sơ giải ngân đã chốt.
+ *  Idempotent theo reference = drawdown.id (gọi 2 lần không nhân đôi).
+ *  Chạy TRONG transaction của caller (cùng transaction với update status EXECUTED).
+ *  @returns true nếu tạo mới, false nếu đã tồn tại. */
+export async function recordDrawdownCashflow(
+  tx: Tx,
+  drawdown: { id: string; drawdownNo: string; amountFundedVnd: Prisma.Decimal | number },
+  projectId: string | null,
+): Promise<boolean> {
+  const existing = await tx.cashflowEntry.findFirst({
+    where: { reference: drawdown.id, category: 'LOAN_DRAWDOWN' },
+  })
+  if (existing) return false
+
+  await tx.cashflowEntry.create({
+    data: {
+      entryCode: `CF-DD-${drawdown.drawdownNo}`,
+      type: 'OUTFLOW',
+      category: 'LOAN_DRAWDOWN',
+      amount: drawdown.amountFundedVnd,
+      description: `Giải ngân hồ sơ ${drawdown.drawdownNo}`,
+      entryDate: new Date(),
+      reference: drawdown.id,
+      projectId,
+    },
+  })
+  return true
 }
 
 const BUDGET_RELEVANT_STEPS = new Set(['P3.1', 'P3.3', 'P3.4', 'P3.5', 'P3.6', 'P4.3', 'P4.4', 'P4.5'])

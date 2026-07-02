@@ -1,7 +1,7 @@
 import prisma from './db'
 import type { CreateTaskInput, CompleteWorkTaskInput, ReassignTaskInput } from './schemas/work.schema'
 import { ROLE_TO_DEPT, DEPT_KEYWORDS, DEPT_PRIMARY_ROLE, DEPT_NAME } from './org-map'
-import { runHooks } from './work-hooks'
+import { runHooks, maybeSyncEstimateToBudget } from './work-hooks'
 import { emitTaskUpdated } from './webhook'
 import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
 import { whereDoerOverdue, whereReviewLate } from './task-where'
@@ -404,6 +404,9 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
       emitTaskUpdated(taskId, prevStatus).catch(() => {})
       const hookKeys = (task as { hookKeys?: string[] }).hookKeys
       await runHooks(hookKeys, { projectId: task.projectId, userId, resultData: input.resultData })
+      // Task mang dữ liệu dự toán (form ESTIMATE) → đồng bộ Budget.planned (auto-detect, không cần hookKeys)
+      const rdForEstimate = (input.resultData ?? (task as { resultData?: unknown }).resultData) as Record<string, unknown> | null | undefined
+      await maybeSyncEstimateToBudget(task.projectId, userId, rdForEstimate)
       // Nếu user chọn FORWARD thì KHÔNG chain next (forward task thay thế luồng tự động)
       if (!forwardedId) {
         await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId)
@@ -449,6 +452,12 @@ export async function finalizeTask(taskId: string, userId: string) {
   // Chạy hook nghiệp vụ khi người giao chốt kết thúc
   const hookKeys = (task as { hookKeys?: string[] }).hookKeys
   await runHooks(hookKeys, { projectId: task.projectId, userId })
+  // Duyệt task mang dữ liệu dự toán (VD: task chuyển tiếp P1.3) → đồng bộ Budget.planned
+  await maybeSyncEstimateToBudget(
+    task.projectId,
+    userId,
+    (task as { resultData?: unknown }).resultData as Record<string, unknown> | null | undefined,
+  )
   return { ok: true }
 }
 

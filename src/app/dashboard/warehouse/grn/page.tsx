@@ -13,7 +13,7 @@ interface GRN {
 }
 
 interface PO {
-  id: string; poCode: string; status: string;
+  id: string; poCode: string; status: string; vendorId?: string;
   vendor: { name: string } | null;
   items: Array<{
     id: string; materialId: string | null; quantity: number; receivedQty: number;
@@ -24,7 +24,13 @@ interface PO {
 
 interface ReceiveItem {
   poItemId: string; receivedQty: number; heatNumber: string; lotNumber: string; notes: string;
+  millCertificateId: string;
   maxQty: number; materialName: string; unit: string;
+}
+
+interface MillCert {
+  id: string; certNumber: string; heatNumber: string; grade: string | null;
+  vendorId?: string;
 }
 
 export default function GRNPage() {
@@ -34,6 +40,7 @@ export default function GRNPage() {
   const [poList, setPOList] = useState<PO[]>([])
   const [selectedPO, setSelectedPO] = useState<PO | null>(null)
   const [receiveItems, setReceiveItems] = useState<ReceiveItem[]>([])
+  const [millCerts, setMillCerts] = useState<MillCert[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   const loadReceipts = () => {
@@ -63,12 +70,28 @@ export default function GRNPage() {
     const detail = await apiFetch(`/api/purchase-orders/${poId}`)
     const fullPO = detail.ok ? (detail.purchaseOrder || detail.data || po) : po
     setSelectedPO(fullPO)
+
+    // Mill Cert của vendor này (optional — API lọc theo vendorId, fallback lọc client-side)
+    const vendorId: string | undefined = fullPO.vendorId
+    if (vendorId) {
+      const certRes = await apiFetch(`/api/mill-certificates?vendorId=${vendorId}`)
+      if (certRes.ok) {
+        const certs: MillCert[] = certRes.certificates || []
+        setMillCerts(certs.filter(c => !c.vendorId || c.vendorId === vendorId))
+      } else {
+        setMillCerts([])
+      }
+    } else {
+      setMillCerts([])
+    }
+
     setReceiveItems(
       (fullPO.items || []).map((item: PO['items'][0]) => ({
         poItemId: item.id,
         receivedQty: 0,
         heatNumber: '',
         lotNumber: '',
+        millCertificateId: '',
         notes: '',
         maxQty: Number(item.quantity) - Number(item.receivedQty),
         materialName: item.material ? `${item.material.materialCode} — ${item.material.name}` : (item.itemCode ? `${item.itemCode} — ${item.description || ''}` : item.description || '—'),
@@ -96,6 +119,7 @@ export default function GRNPage() {
           receivedQty: i.receivedQty,
           heatNumber: i.heatNumber || undefined,
           lotNumber: i.lotNumber || undefined,
+          millCertificateId: i.millCertificateId || undefined,
           notes: i.notes || undefined,
         })),
       }),
@@ -192,6 +216,7 @@ export default function GRNPage() {
                       <th>SL Nhận</th>
                       <th>Heat No.</th>
                       <th>Lot No.</th>
+                      <th>Mill Cert</th>
                       <th>Ghi chú</th>
                     </tr>
                   </thead>
@@ -234,6 +259,21 @@ export default function GRNPage() {
                             className="input font-mono"
                             style={{ width: '90px', padding: '4px 8px', fontSize: '0.8rem' }}
                           />
+                        </td>
+                        <td>
+                          <select
+                            value={item.millCertificateId}
+                            onChange={e => updateItem(idx, 'millCertificateId', e.target.value)}
+                            className="input font-mono"
+                            style={{ width: '140px', padding: '4px 8px', fontSize: '0.8rem' }}
+                          >
+                            <option value="">— Không —</option>
+                            {millCerts.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.certNumber} (Heat {c.heatNumber})
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td>
                           <input

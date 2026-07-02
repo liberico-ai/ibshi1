@@ -68,11 +68,13 @@ export default function ProductionPage() {
   const [pagination, setPagination] = useState<PaginationData>({ page: 1, limit: 20, total: 0, totalPages: 0 })
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [showFromBom, setShowFromBom] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
   const canCreate = ['R01', 'R06', 'R06b'].includes(user?.roleCode || '')
+  const canGenerateFromBom = ['R01', 'R02', 'R06'].includes(user?.roleCode || '')
 
   const loadData = useCallback(async () => {
     const params = new URLSearchParams()
@@ -96,6 +98,12 @@ export default function ProductionPage() {
     setShowCreate(true)
   }
 
+  const openFromBom = async () => {
+    const res = await apiFetch('/api/projects')
+    if (res.ok) setProjects(res.projects)
+    setShowFromBom(true)
+  }
+
   useEffect(() => { setPage(1) }, [search, statusFilter])
   useEffect(() => { loadData() }, [loadData])
 
@@ -106,7 +114,12 @@ export default function ProductionPage() {
       <PageHeader
         title="Quản lý Sản xuất"
         subtitle={`${pagination.total} lệnh sản xuất`}
-        actions={canCreate ? <Button variant="primary" onClick={openCreate}>+ Tạo WO</Button> : undefined}
+        actions={(canCreate || canGenerateFromBom) ? (
+          <div className="flex gap-2">
+            {canGenerateFromBom && <Button variant="outline" onClick={openFromBom}>Sinh WO từ BOM</Button>}
+            {canCreate && <Button variant="primary" onClick={openCreate}>+ Tạo WO</Button>}
+          </div>
+        ) : undefined}
       />
 
       {/* Progress summary */}
@@ -219,7 +232,54 @@ export default function ProductionPage() {
         onClose={() => setShowCreate(false)}
         onCreated={() => { setShowCreate(false); loadData() }}
       />
+
+      <GenerateFromBomModal
+        open={showFromBom}
+        projects={projects}
+        onClose={() => setShowFromBom(false)}
+        onDone={() => { setShowFromBom(false); loadData() }}
+      />
     </div>
+  )
+}
+
+function GenerateFromBomModal({ open, projects, onClose, onDone }: {
+  open: boolean; projects: ProjectOption[]; onClose: () => void; onDone: () => void
+}) {
+  const [projectId, setProjectId] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async () => {
+    if (!projectId) return alert('Chọn dự án')
+    setSubmitting(true)
+    const res = await apiFetch('/api/production/work-orders/from-bom', {
+      method: 'POST',
+      body: JSON.stringify({ projectId }),
+    })
+    setSubmitting(false)
+    if (res.ok) {
+      alert(res.message || `Đã tạo ${res.created} WO, bỏ qua ${res.skipped}`)
+      onDone()
+    } else {
+      alert(res.error || 'Lỗi sinh WO từ BOM')
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Sinh WO từ BOM">
+      <div className="space-y-3">
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Tạo lệnh sản xuất cho từng piece-mark trong BOM version đã duyệt (ACTIVE) mới nhất của dự án.
+          Piece-mark đã có WO sẽ được bỏ qua — bấm lại không tạo trùng.
+        </p>
+        <SelectField label="Dự án *" value={projectId} onChange={e => setProjectId(e.target.value)}
+          options={[{ value: '', label: 'Chọn...' }, ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))]} />
+      </div>
+      <div className="flex gap-3 mt-5">
+        <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Sinh WO</Button>
+      </div>
+    </Modal>
   )
 }
 

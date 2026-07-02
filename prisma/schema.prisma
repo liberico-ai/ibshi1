@@ -108,6 +108,7 @@ model Project {
   baselines          ProjectBaseline[]
   submission         ProjectSubmission?
   mrbReleases        MrbRelease[]
+  settlement         ProjectSettlement?
 
   @@index([status])
   @@index([pmUserId])
@@ -402,14 +403,17 @@ model StockMovement {
   lotNumber   String?  @map("lot_number")
   poItemId    String?    @map("po_item_id")
   warehouseId String?    @map("warehouse_id")
+  millCertificateId String? @map("mill_certificate_id")
   material    Material   @relation(fields: [materialId], references: [id])
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  millCertificate MillCertificate? @relation(fields: [millCertificateId], references: [id], onDelete: SetNull)
 
   @@index([materialId, createdAt])
   @@index([projectId])
   @@index([type])
   @@index([heatNumber])
   @@index([warehouseId])
+  @@index([millCertificateId])
   @@map("stock_movements")
 }
 
@@ -517,6 +521,7 @@ model MillCertificate {
   createdAt       DateTime @default(now()) @map("created_at")
   material        Material @relation(fields: [materialId], references: [id])
   vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  stockMovements  StockMovement[]
 
   @@index([materialId])
   @@index([heatNumber])
@@ -1161,6 +1166,35 @@ model Budget {
   @@unique([projectId, category, month, year])
   @@index([projectId])
   @@map("budgets")
+}
+
+// Quyết toán dự án — 1 bản/dự án, gate bắt buộc APPROVED trước khi đóng dự án (Track B)
+model ProjectSettlement {
+  id               String    @id @default(cuid())
+  projectId        String    @unique @map("project_id")
+  revenueContract  Decimal   @default(0) @map("revenue_contract") // giá trị hợp đồng
+  revenueInvoiced  Decimal   @default(0) @map("revenue_invoiced") // đã xuất hóa đơn AR (RECEIVABLE totalAmount)
+  revenueCollected Decimal   @default(0) @map("revenue_collected") // đã thu (RECEIVABLE paidAmount)
+  costMaterial     Decimal   @default(0) @map("cost_material") // GRN nhập kho (nguồn recalcBudgetActual)
+  costLabor        Decimal   @default(0) @map("cost_labor") // khoán VERIFIED
+  costService      Decimal   @default(0) @map("cost_service") // hóa đơn CHI paidAmount không gắn PO vật tư
+  costOther        Decimal   @default(0) @map("cost_other") // Budget.actual các category khác
+  totalCost        Decimal   @default(0) @map("total_cost")
+  profit           Decimal   @default(0)
+  marginPct        Decimal   @default(0) @map("margin_pct")
+  status           String    @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED
+  snapshot         Json? // chi tiết nguồn số tại thời điểm REFRESH
+  notes            String?
+  createdBy        String    @map("created_by")
+  submittedAt      DateTime? @map("submitted_at")
+  approvedBy       String?   @map("approved_by")
+  approvedAt       DateTime? @map("approved_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  project          Project   @relation(fields: [projectId], references: [id])
+
+  @@index([status])
+  @@map("project_settlements")
 }
 
 model CashflowEntry {

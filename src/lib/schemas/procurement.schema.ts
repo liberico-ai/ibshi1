@@ -60,6 +60,7 @@ const grnItemSchema = z.object({
   receivedQty: z.number().positive('Số lượng nhận phải > 0'),
   heatNumber: z.string().optional(),
   lotNumber: z.string().optional(),
+  millCertificateId: z.string().optional(),
   notes: z.string().optional(),
 })
 

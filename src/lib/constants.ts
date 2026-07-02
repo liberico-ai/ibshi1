@@ -286,7 +286,7 @@ export const MENU_ITEMS = [
 // [ẨN tạm các module chưa ổn — P1 đã hé lộ 14 trang hoạt động tốt]
 export const HIDDEN_MENU_KEYS = new Set<string>([
   'design', 'purchase-requests',
-  'material-issue', 'movements', 'workshops', 'fat-sat',
+  'workshops', 'fat-sat',
   'safety', 'delivery',
 ])
 

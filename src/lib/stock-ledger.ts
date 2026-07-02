@@ -15,6 +15,7 @@ export interface StockMovementInput {
   notes?: string | null
   heatNumber?: string | null
   lotNumber?: string | null
+  millCertificateId?: string | null
 }
 
 type Tx = Prisma.TransactionClient
@@ -54,6 +55,7 @@ export async function applyStockMovement(tx: Tx, input: StockMovementInput) {
       notes: input.notes || null,
       heatNumber: input.heatNumber || null,
       lotNumber: input.lotNumber || null,
+      millCertificateId: input.millCertificateId || null,
     },
   })
 

@@ -115,6 +115,20 @@ export async function POST(req: NextRequest) {
         })
       }
 
+      // Mill Certificate: ưu tiên cert do người dùng chọn; nếu chỉ có heat number
+      // thì tự tìm cert khớp heatNumber + vendor của PO (không tự tạo cert mới)
+      let millCertificateId: string | null = item.millCertificateId || null
+      if (millCertificateId) {
+        const cert = await tx.millCertificate.findUnique({ where: { id: millCertificateId } })
+        if (!cert) millCertificateId = null
+      } else if (item.heatNumber) {
+        const cert = await tx.millCertificate.findFirst({
+          where: { heatNumber: item.heatNumber, vendorId: po.vendorId },
+          orderBy: { createdAt: 'desc' },
+        })
+        if (cert) millCertificateId = cert.id
+      }
+
       const movement = await applyStockMovement(tx, {
         materialId,
         type: 'IN',
@@ -124,6 +138,7 @@ export async function POST(req: NextRequest) {
         poItemId: item.poItemId,
         heatNumber: item.heatNumber || null,
         lotNumber: item.lotNumber || null,
+        millCertificateId,
         performedBy: user.userId,
         notes: item.notes || `Nhận hàng từ ${po.poCode}`,
       })

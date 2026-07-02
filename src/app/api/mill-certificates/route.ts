@@ -5,13 +5,15 @@ import { validateBody } from '@/lib/api-helpers'
 import { createMillCertSchema } from '@/lib/schemas'
 
 const ALLOWED_ROLES = ['R01', 'R09', 'R09a']
+// Đọc danh sách cert: mở thêm cho Kho/QLDA/TM để chọn cert khi nhận hàng (GRN)
+const READ_ROLES = [...ALLOWED_ROLES, 'R02', 'R02a', 'R05', 'R05a', 'R07', 'R07a']
 
 // GET /api/mill-certificates — list mill certificates
 export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
-    if (!requireRoles(user.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
+    if (!requireRoles(user.roleCode, READ_ROLES)) return errorResponse('Forbidden', 403)
 
     const { searchParams } = new URL(req.url)
     const vendorId = searchParams.get('vendorId')

@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createPieceRateOutputSchema } from '@/lib/schemas'
+import { recalcBudgetActual } from '@/lib/sync-engine'
 
 // GET /api/hr/piece-rate-output
 export async function GET(req: NextRequest) {
@@ -81,6 +82,47 @@ export async function POST(req: NextRequest) {
     return successResponse({ output }, `KL khoán T${month}/${year}: ${quantity} ${contract.unit} × ${unitPrice.toLocaleString()} = ${totalAmount.toLocaleString()}₫`)
   } catch (err) {
     console.error('POST /api/hr/piece-rate-output error:', err)
+    return errorResponse('Lỗi hệ thống', 500)
+  }
+}
+
+// PATCH /api/hr/piece-rate-output — nghiệm thu KL khoán (DRAFT → VERIFIED)
+// Nghiệm thu = chốt chi phí LABOR thực tế của dự án → recalcBudgetActual.
+export async function PATCH(req: NextRequest) {
+  try {
+    const user = await authenticateRequest(req)
+    if (!user) return unauthorizedResponse()
+    if (!['R01', 'R02', 'R08', 'R10'].includes(user.roleCode)) {
+      return errorResponse('Không có quyền nghiệm thu KL khoán', 403)
+    }
+
+    const body = await req.json().catch(() => null)
+    const outputId = body?.outputId
+    if (!outputId || typeof outputId !== 'string') return errorResponse('Thiếu outputId', 400)
+
+    const output = await prisma.monthlyPieceRateOutput.findUnique({
+      where: { id: outputId },
+      include: { contract: { select: { projectId: true } } },
+    })
+    if (!output) return errorResponse('KL khoán không tồn tại', 404)
+
+    // Idempotent: đã VERIFIED thì trả về luôn, không ghi lại
+    if (output.status === 'VERIFIED') {
+      return successResponse({ output }, 'KL khoán đã được nghiệm thu trước đó')
+    }
+
+    const updated = await prisma.monthlyPieceRateOutput.update({
+      where: { id: outputId },
+      data: { status: 'VERIFIED', verifiedBy: user.userId },
+    })
+
+    // Nguồn duy nhất tính actual: recalcBudgetActual (LABOR = Σ output VERIFIED)
+    try { await recalcBudgetActual(output.contract.projectId, user.userId) }
+    catch (e) { console.error('[piece-rate-output] recalcBudgetActual error:', e) }
+
+    return successResponse({ output: updated }, 'Đã nghiệm thu KL khoán')
+  } catch (err) {
+    console.error('PATCH /api/hr/piece-rate-output error:', err)
     return errorResponse('Lỗi hệ thống', 500)
   }
 }

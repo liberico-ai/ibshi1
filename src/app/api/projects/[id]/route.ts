@@ -186,6 +186,14 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
       return errorResponse(`Không thể đóng: còn ${parts.join(' / ')} chưa đóng`, 422)
     }
 
+    // Gate: quyết toán dự án phải được BGĐ duyệt (ProjectSettlement APPROVED)
+    const approvedSettlement = await prisma.projectSettlement.findFirst({
+      where: { projectId: id, status: 'APPROVED' },
+    })
+    if (!approvedSettlement) {
+      return errorResponse('Không thể đóng: chưa quyết toán (settlement chưa APPROVED)', 422)
+    }
+
     // Close project + complete P6.4 in single transaction
     const project = await prisma.$transaction(async (tx) => {
       const p = await tx.project.update({

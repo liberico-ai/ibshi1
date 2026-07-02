@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { recalcBudgetActual, recordDrawdownCashflow } from '@/lib/sync-engine'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -24,13 +25,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse('Hồ sơ phải ở trạng thái Đã phê duyệt mới có thể chốt giải ngân.', 400)
     }
 
+    // Xác định dự án của hồ sơ giải ngân: khế ước → dự án chính, fallback invoice đầu tiên có projectId
+    const contract = await prisma.loanContract.findUnique({ where: { id: drawdown.contractId } })
+    let projectId: string | null = contract?.primaryProjectId || null
+    if (!projectId) {
+      projectId = drawdown.beneficiaryLines.find(l => l.invoice?.projectId)?.invoice?.projectId || null
+    }
+
     // Execute the drawdown -> Mark POs as PAID
     const updated = await prisma.$transaction(async (tx) => {
       const res = await tx.loanDrawdown.update({
         where: { id },
         data: { status: 'EXECUTED', executedBy: user.userId || 'SYSTEM', executionDate: new Date() }
       })
-      
+
+      // Ghi dòng tiền CHI (OUTFLOW) cho giải ngân — CÙNG transaction, idempotent theo drawdown.id
+      await recordDrawdownCashflow(tx, drawdown, projectId)
+
+
       for (const line of drawdown.beneficiaryLines) {
         if (line.invoiceId) {
           // 1. Update Invoice to PAID
@@ -60,6 +72,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
       return res
     })
+
+    // Thực chi ảnh hưởng chi phí thực tế → recompute actual (nguồn duy nhất: recalcBudgetActual)
+    if (projectId) {
+      try { await recalcBudgetActual(projectId, user.userId) }
+      catch (e) { console.error('[Drawdown execute] recalcBudgetActual error:', e) }
+    }
 
     return successResponse({ drawdown: updated })
   } catch (err) {

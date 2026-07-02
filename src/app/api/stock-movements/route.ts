@@ -18,12 +18,14 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const materialId = searchParams.get('materialId')
     const type = searchParams.get('type') // IN, OUT, ADJUSTMENT
+    const reason = searchParams.get('reason') // po_receipt, wo_issue, manual...
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = 30
 
     const where: Record<string, unknown> = {}
     if (materialId) where.materialId = materialId
     if (type) where.type = type
+    if (reason) where.reason = reason
 
     const [total, movements] = await Promise.all([
       prisma.stockMovement.count({ where }),
