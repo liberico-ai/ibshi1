@@ -1,19 +1,143 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, Button, SelectField, InputField, TextareaField } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { formatNumber } from '@/lib/utils'
 
 interface ProjectOption { id: string; projectCode: string; projectName: string }
-interface MaterialOption { id: string; materialCode: string; name: string; unit: string }
+interface MaterialOption { id: string; materialCode: string; name: string; unit: string; currentStock?: number }
 
 interface PrItemRow {
   materialId: string
+  materialLabel: string
   quantity: string
   notes: string
+}
+
+// ── Combobox vật tư: search server-side (debounce 300ms), không load toàn bộ danh mục ──
+function MaterialCombobox({
+  label,
+  selectedId,
+  selectedLabel,
+  onSelect,
+}: {
+  label?: string
+  selectedId: string
+  selectedLabel: string
+  onSelect: (material: MaterialOption | null) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<MaterialOption[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Debounce 300ms → fetch server-side search (chỉ khi đã gõ)
+  useEffect(() => {
+    if (!open) return
+    const q = query.trim()
+    if (!q) { setResults([]); setLoading(false); return }
+    let cancelled = false
+    setLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiFetch(`/api/materials?search=${encodeURIComponent(q)}&status=ACTIVE&limit=20`)
+        if (!cancelled && res.ok) setResults(res.materials || [])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, open])
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [])
+
+  return (
+    <div className="input-field" ref={containerRef} style={{ position: 'relative' }}>
+      {label && <label className="input-label">{label}</label>}
+      {selectedId ? (
+        <div className="input" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span className="truncate" title={selectedLabel} style={{ color: 'var(--text-primary)' }}>{selectedLabel}</span>
+          <button
+            type="button"
+            aria-label="Bỏ chọn vật tư"
+            onClick={() => { onSelect(null); setQuery(''); setOpen(false) }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+          >
+            ×
+          </button>
+        </div>
+      ) : (
+        <>
+          <input
+            className="input"
+            value={query}
+            placeholder="Gõ mã hoặc tên vật tư để tìm..."
+            onChange={e => { setQuery(e.target.value); setOpen(true) }}
+            onFocus={() => setOpen(true)}
+          />
+          {open && (
+            <div
+              style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4,
+                maxHeight: 280, overflowY: 'auto',
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8,
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+              }}
+            >
+              {loading && (
+                <div className="text-xs" style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>Đang tìm...</div>
+              )}
+              {!loading && !query.trim() && (
+                <div className="text-xs" style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
+                  Gõ mã hoặc tên vật tư để tìm kiếm...
+                </div>
+              )}
+              {!loading && query.trim() && results.length === 0 && (
+                <div className="text-xs" style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
+                  Không tìm thấy vật tư phù hợp
+                </div>
+              )}
+              {!loading && results.map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { onSelect(m); setQuery(''); setOpen(false) }}
+                  className="text-sm"
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border-light)',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-card-hover)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                >
+                  <span className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{m.materialCode}</span>
+                  <span style={{ color: 'var(--text-primary)' }}> · {m.name}</span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {' '}· {m.unit}
+                    {m.currentStock != null ? ` · tồn ${formatNumber(m.currentStock)}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
 }
 
 const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05']
@@ -44,22 +168,33 @@ function CreatePrForm() {
   const hasOrigin = Boolean(originType && originId)
 
   const [projects, setProjects] = useState<ProjectOption[]>([])
-  const [materials, setMaterials] = useState<MaterialOption[]>([])
   const [projectId, setProjectId] = useState(presetProjectId)
   const [urgency, setUrgency] = useState('NORMAL')
   const [notes, setNotes] = useState('')
-  const [items, setItems] = useState<PrItemRow[]>([{ materialId: '', quantity: '', notes: '' }])
+  const [items, setItems] = useState<PrItemRow[]>([{ materialId: '', materialLabel: '', quantity: '', notes: '' }])
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
+    // Vật tư KHÔNG load toàn bộ nữa — combobox search server-side theo từ khóa
     apiFetch('/api/projects').then(res => { if (res.ok) setProjects(res.projects || []) })
-    apiFetch('/api/materials').then(res => { if (res.ok) setMaterials(res.materials || []) })
   }, [])
 
   const canCreate = CAN_CREATE_ROLES.includes(user?.roleCode || '')
 
   const updateItem = (idx: number, field: keyof PrItemRow, value: string) => {
     setItems(prev => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)))
+  }
+
+  const selectMaterial = (idx: number, material: MaterialOption | null) => {
+    setItems(prev => prev.map((it, i) => (
+      i === idx
+        ? {
+            ...it,
+            materialId: material?.id || '',
+            materialLabel: material ? `${material.materialCode} — ${material.name} (${material.unit})` : '',
+          }
+        : it
+    )))
   }
 
   const submit = async () => {
@@ -176,7 +311,7 @@ function CreatePrForm() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setItems(prev => [...prev, { materialId: '', quantity: '', notes: '' }])}
+            onClick={() => setItems(prev => [...prev, { materialId: '', materialLabel: '', quantity: '', notes: '' }])}
           >
             + Thêm dòng
           </Button>
@@ -184,14 +319,11 @@ function CreatePrForm() {
 
         {items.map((item, idx) => (
           <div key={idx} className="grid grid-cols-1 md:grid-cols-[2fr_120px_1fr_auto] gap-3 items-end">
-            <SelectField
+            <MaterialCombobox
               label={idx === 0 ? 'Vật tư *' : undefined}
-              value={item.materialId}
-              onChange={e => updateItem(idx, 'materialId', e.target.value)}
-              options={[
-                { value: '', label: 'Chọn vật tư...' },
-                ...materials.map(m => ({ value: m.id, label: `${m.materialCode} — ${m.name} (${m.unit})` })),
-              ]}
+              selectedId={item.materialId}
+              selectedLabel={item.materialLabel}
+              onSelect={m => selectMaterial(idx, m)}
             />
             <InputField
               label={idx === 0 ? 'Số lượng *' : undefined}

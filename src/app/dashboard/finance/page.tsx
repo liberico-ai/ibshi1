@@ -119,14 +119,22 @@ function CreateInvoiceForm({ onClose, onCreated }: { onClose: () => void; onCrea
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSubmitting(true)
-    const res = await apiFetch('/api/finance/invoices', { method: 'POST', body: JSON.stringify(form) })
+    // Gửi số (không gửi string) — taxRate 0 hợp lệ, chỉ bỏ trống mới để server default 10%
+    const payload = {
+      ...form,
+      amount: Number(form.amount),
+      taxRate: form.taxRate === '' ? undefined : Number(form.taxRate),
+    }
+    const res = await apiFetch('/api/finance/invoices', { method: 'POST', body: JSON.stringify(payload) })
     setSubmitting(false)
     if (res.ok) onCreated()
     else setError(res.error)
   }
 
   const numAmount = Number(form.amount) || 0
-  const tax = numAmount * Number(form.taxRate) / 100
+  // Đồng bộ với server: bỏ trống VAT → default 10%; nhập 0 → 0%
+  const previewRate = form.taxRate === '' ? 10 : Number(form.taxRate)
+  const tax = Math.round(numAmount * previewRate / 100)
   const total = numAmount + tax
 
   return (
@@ -146,7 +154,7 @@ function CreateInvoiceForm({ onClose, onCreated }: { onClose: () => void; onCrea
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Số tiền trước thuế *</label>
           <input className="input" type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required /></div>
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>VAT %</label>
-          <input className="input" type="number" value={form.taxRate} onChange={e => setForm({ ...form, taxRate: e.target.value })} /></div>
+          <input className="input" type="number" min={0} max={100} step="any" value={form.taxRate} onChange={e => setForm({ ...form, taxRate: e.target.value })} /></div>
         <div><label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>Tổng (auto)</label>
           <div className="input font-semibold" style={{ color: SEMANTIC_COLORS.success.solid, background: 'var(--bg-primary)' }}>{formatCurrency(total)}</div></div>
         <div className="col-span-3 flex gap-3 justify-end">

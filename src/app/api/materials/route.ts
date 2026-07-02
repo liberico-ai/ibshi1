@@ -7,8 +7,9 @@ import { RBAC } from '@/lib/rbac-rules'
 
 export const dynamic = 'force-dynamic'
 
-const MGMT_PARAMS = ['page', 'q', 'status', 'category', 'provisional']
+const MGMT_PARAMS = ['page', 'q', 'search', 'limit', 'status', 'category', 'provisional']
 const PAGE_SIZE = 20
+const MAX_PAGE_SIZE = 50
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,7 +22,10 @@ export async function GET(req: NextRequest) {
       if (!payload) return unauthorizedResponse()
 
       const page = Math.max(1, Number(url.searchParams.get('page') || 1))
-      const q = url.searchParams.get('q')?.trim()
+      // `search` là alias của `q` (dùng cho combobox autocomplete); `limit` tùy chọn (mặc định 20, tối đa 50)
+      const q = (url.searchParams.get('q') ?? url.searchParams.get('search'))?.trim()
+      const rawLimit = Number(url.searchParams.get('limit'))
+      const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), MAX_PAGE_SIZE) : PAGE_SIZE
       const status = url.searchParams.get('status') || undefined
       const category = url.searchParams.get('category') || undefined
       const provisional = url.searchParams.get('provisional')
@@ -51,8 +55,8 @@ export async function GET(req: NextRequest) {
             _count: { select: { aliases: true } },
           },
           orderBy: [{ isProvisional: 'desc' }, { materialCode: 'asc' }],
-          skip: (page - 1) * PAGE_SIZE,
-          take: PAGE_SIZE,
+          skip: (page - 1) * limit,
+          take: limit,
         }),
       ])
 
@@ -63,7 +67,7 @@ export async function GET(req: NextRequest) {
           unitPrice: m.unitPrice == null ? null : Number(m.unitPrice),
           aliasCount: m._count.aliases,
         })),
-        pagination: { page, limit: PAGE_SIZE, total, totalPages: Math.ceil(total / PAGE_SIZE) },
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       })
     }
 
