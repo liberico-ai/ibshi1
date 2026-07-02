@@ -16,6 +16,11 @@ export type { WorkflowStep } from './workflow-constants'
 const DYNAMIC_STEPS = [
   'P4.3', 'P4.4',
   'P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A',
+  // P4.5 (tạo per-request bởi api/tasks/[id]/daily-report) và P5.5 (AUTO-OPEN
+  // theo khối lượng lũy kế trong api/tasks/[id]/weekly-acceptance) cũng có
+  // handler riêng — gate trong WORKFLOW_RULES chỉ phục vụ template engine
+  // (work-engine chainNextTemplateTasks), không được kích hoạt qua engine này.
+  'P4.5', 'P5.5',
 ]
 
 export async function completeTask(
@@ -244,6 +249,10 @@ export async function completeTask(
   // check if any gated step now has all prerequisites met
   if (activatedSteps.length === 0) {
     for (const [code, r] of Object.entries(WORKFLOW_RULES)) {
+      // Dynamic steps have dedicated creation/activation handlers (GRN, cron,
+      // daily-report, weekly-acceptance AUTO-OPEN) — never (re)activate them
+      // via the generic gate scan (activateTask would flip DONE → IN_PROGRESS).
+      if (DYNAMIC_STEPS.includes(code)) continue
       if (!r.gate || r.gate.length === 0) continue
       if (!r.gate.includes(task.taskType)) continue
       // This gated step depends on the step we just completed
