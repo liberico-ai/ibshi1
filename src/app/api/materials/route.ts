@@ -14,6 +14,22 @@ const MAX_PAGE_SIZE = 50
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)
+
+    // ── Count mode: số mã tạm chờ chuẩn hóa (badge sidebar + card cảnh báo material-codes) ──
+    // Additive: chỉ kích hoạt khi countProvisional=1, không ảnh hưởng caller cũ
+    if (url.searchParams.get('countProvisional') === '1') {
+      const payload = await authenticateRequest(req)
+      if (!payload) return unauthorizedResponse()
+      const pendingCount = await prisma.material.count({
+        where: {
+          isProvisional: true,
+          promotedToId: null, // chưa promote sang mã chuẩn
+          status: { notIn: ['ARCHIVE', 'OBSOLETE'] }, // đã archive/ngừng dùng thì không chờ nữa
+        },
+      })
+      return successResponse({ pendingCount })
+    }
+
     const isMgmt = MGMT_PARAMS.some((p) => url.searchParams.has(p))
 
     // ── Management / search mode (material-code admin UI) ──

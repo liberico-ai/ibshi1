@@ -105,6 +105,43 @@ describe('GET /api/materials — search + limit', () => {
   })
 })
 
+// ── GET /api/materials?countProvisional=1 (badge sidebar + card cảnh báo) ──
+describe('GET /api/materials — countProvisional=1', () => {
+  it('trả pendingCount = số mã tạm chờ chuẩn hóa (đúng where)', async () => {
+    prismaMock.material.count.mockResolvedValue(7 as never)
+    const res = await materialsGET(new NextRequest('http://localhost/api/materials?countProvisional=1'))
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.pendingCount).toBe(7)
+    expect(prismaMock.material.count).toHaveBeenCalledWith({
+      where: {
+        isProvisional: true,
+        promotedToId: null,
+        status: { notIn: ['ARCHIVE', 'OBSOLETE'] },
+      },
+    })
+    // count mode không query danh sách
+    expect(prismaMock.material.findMany).not.toHaveBeenCalled()
+  })
+
+  it('yêu cầu đăng nhập (401 khi chưa auth)', async () => {
+    mockAuth.mockResolvedValue(null)
+    const res = await materialsGET(new NextRequest('http://localhost/api/materials?countProvisional=1'))
+    expect(res.status).toBe(401)
+    expect(prismaMock.material.count).not.toHaveBeenCalled()
+  })
+
+  it('không kích hoạt khi countProvisional khác 1 — caller cũ không đổi hành vi', async () => {
+    prismaMock.material.count.mockResolvedValue(1 as never)
+    prismaMock.material.findMany.mockResolvedValue([] as never)
+    const res = await materialsGET(new NextRequest('http://localhost/api/materials?q=que&countProvisional=0'))
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.pendingCount).toBeUndefined()
+    expect(body.materials).toBeDefined()
+  })
+})
+
 // ── /resolve ──
 describe('GET /api/materials/resolve', () => {
   it('resolves a canonical code', async () => {

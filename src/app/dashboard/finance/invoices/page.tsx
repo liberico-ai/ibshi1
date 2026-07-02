@@ -26,6 +26,7 @@ const emptyForm = { amount: '', method: 'BANK', receivedAt: new Date().toISOStri
 export default function InvoicesPage() {
   const user = useAuthStore(s => s.user)
   const canWrite = !!user && (FINANCE_WRITE_ROLES as readonly string[]).includes(user.roleCode)
+  const canDelete = user?.roleCode === 'R01' // chỉ BGĐ được xóa hóa đơn tạo nhầm
 
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [totals, setTotals] = useState({ receivable: 0, payable: 0, paid: 0, outstanding: 0 })
@@ -39,6 +40,7 @@ export default function InvoicesPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ ...emptyForm })
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [message, setMessage] = useState('')
 
   const load = () => {
@@ -70,6 +72,26 @@ export default function InvoicesPage() {
   }
 
   const closeDetail = () => { setDetail(null); setReceipts([]); setShowForm(false); setMessage('') }
+
+  // Xóa hóa đơn tạo nhầm — chỉ R01; server chặn 409 nếu đã có tiền/chứng từ gắn vào
+  const deleteInvoice = async () => {
+    if (!detail || deleting) return
+    if (!window.confirm(`Xóa hóa đơn ${detail.invoiceCode}? Hành động không thể hoàn tác.`)) return
+    setDeleting(true)
+    try {
+      const res = await apiFetch(`/api/finance/invoices/${detail.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        closeDetail()
+        load()
+      } else {
+        setMessage(res.error || 'Không xóa được hóa đơn')
+      }
+    } catch {
+      setMessage('Có lỗi xảy ra khi gọi máy chủ')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const submitReceipt = async () => {
     if (!detail || saving) return
@@ -181,7 +203,15 @@ export default function InvoicesPage() {
                   {detail.clientName || '—'} · {detail.project?.projectName || detail.project?.projectCode || 'Không gắn dự án'}
                 </p>
               </div>
-              <button onClick={closeDetail} className="text-sm px-2 py-1 rounded-lg" style={{ background: 'var(--surface-hover)', color: 'var(--text-muted)' }}>✕</button>
+              <div className="flex items-center gap-2">
+                {canDelete && (
+                  <button onClick={deleteInvoice} disabled={deleting} className="text-xs px-3 py-1.5 rounded-lg font-bold"
+                    style={{ background: 'rgba(220,38,38,.12)', color: '#dc2626', opacity: deleting ? 0.6 : 1 }}>
+                    {deleting ? 'Đang xóa…' : 'Xóa hóa đơn'}
+                  </button>
+                )}
+                <button onClick={closeDetail} className="text-sm px-2 py-1 rounded-lg" style={{ background: 'var(--surface-hover)', color: 'var(--text-muted)' }}>✕</button>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">

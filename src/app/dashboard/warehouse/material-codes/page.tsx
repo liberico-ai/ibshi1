@@ -32,6 +32,7 @@ export default function MaterialCodesPage() {
   const [status, setStatus] = useState('')
   const [provisional, setProvisional] = useState('')
   const [page, setPage] = useState(1)
+  const [pendingCount, setPendingCount] = useState(0)
 
   // resolve box
   const [resolveCode, setResolveCode] = useState('')
@@ -49,6 +50,10 @@ export default function MaterialCodesPage() {
     apiFetch(`/api/materials?${params.toString()}`).then((res) => {
       if (res.ok) { setMaterials(res.materials); setPagination(res.pagination) }
       setLoading(false)
+    })
+    // Đếm mã tạm chờ chuẩn hóa — refresh cùng load() để cập nhật sau duyệt/promote
+    apiFetch('/api/materials?countProvisional=1').then((res) => {
+      if (res.ok) setPendingCount(res.pendingCount || 0)
     })
   }, [page, q, status, provisional])
 
@@ -123,6 +128,26 @@ export default function MaterialCodesPage() {
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{pagination.total} mã · mã chuẩn duy nhất + bí danh các phòng</p>
         </div>
       </div>
+
+      {/* Cảnh báo mã tạm chờ chuẩn hóa */}
+      {pendingCount > 0 && (
+        <div className="rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap" style={{ background: '#fffbeb', border: '1px solid #fcd34d' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg" aria-hidden>⚠️</span>
+            <div>
+              <span className="text-sm font-semibold" style={{ color: '#92400e' }}>{pendingCount} mã tạm chờ chuẩn hóa</span>
+              <span className="text-xs block" style={{ color: '#b45309' }}>Duyệt (→ ACTIVE) hoặc promote vào mã chuẩn để dữ liệu kho/BOM thống nhất</span>
+            </div>
+          </div>
+          <button
+            onClick={() => { setPage(1); setStatus(''); setQ(''); setProvisional('true') }}
+            className="text-sm px-4 py-2 rounded-lg font-semibold"
+            style={{ background: '#f59e0b', color: 'white' }}
+          >
+            Lọc mã tạm
+          </button>
+        </div>
+      )}
 
       {/* Resolve box */}
       <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

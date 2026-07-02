@@ -283,9 +283,9 @@ export const MENU_ITEMS = [
   { key: 'style-guide', label: 'Design System', labelEn: 'Style Guide', icon: 'Ruler', href: '/dashboard/style-guide', roles: ['R10'], group: 'system' },
 ] as const
 
-// [ẨN tạm các module chưa ổn — P1 đã hé lộ 14 trang hoạt động tốt]
+// [ẨN tạm các module chưa ổn — P1 đã hé lộ 14 trang hoạt động tốt; P2 hé lộ purchase-requests]
 export const HIDDEN_MENU_KEYS = new Set<string>([
-  'design', 'purchase-requests',
+  'design',
   'workshops', 'fat-sat',
   'safety', 'delivery',
 ])

@@ -18,6 +18,9 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
+// Roles thấy menu 'Quản lý mã vật tư' — lấy từ MENU_ITEMS để không lệch khi đổi phân quyền menu
+const MATERIAL_CODES_MENU_ROLES = (MENU_ITEMS.find((m) => m.key === 'material-codes')?.roles ?? []) as readonly string[]
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -29,6 +32,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [p45TaskCount, setP45TaskCount] = useState(0)
   const [paymentCount, setPaymentCount] = useState(0)
   const [meetingInviteCount, setMeetingInviteCount] = useState(0)
+  const [provisionalCount, setProvisionalCount] = useState(0)
 
   useEffect(() => {
     hydrate()
@@ -45,6 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!ready || !isAuthenticated) return
     const isAccountant = user?.roleCode === 'R08' || user?.roleCode === 'R08a'
+    const canSeeMaterialCodes = MATERIAL_CODES_MENU_ROLES.includes(user?.roleCode || '')
     const fetchCount = () => {
       apiFetch('/api/work/inbox?tab=assigned').then(res => {
         if (res.ok) {
@@ -64,6 +69,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (isAccountant) {
         apiFetch('/api/purchase-orders?status=APPROVED').then(res => {
           if (res.ok) setPaymentCount(res.pagination?.total || 0)
+        })
+      }
+      // Roles thấy menu 'Quản lý mã vật tư': badge số mã tạm chờ chuẩn hóa
+      if (canSeeMaterialCodes) {
+        apiFetch('/api/materials?countProvisional=1').then(res => {
+          if (res.ok) setProvisionalCount(res.pendingCount || 0)
         })
       }
     }
@@ -245,6 +256,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 padding: '0 4px', lineHeight: 1,
                               }}>{paymentCount > 99 ? '99+' : paymentCount}</span>
                             )}
+                            {item.key === 'material-codes' && provisionalCount > 0 && sidebarCollapsed && (
+                              <span style={{
+                                position: 'absolute', top: -6, right: -8,
+                                minWidth: 16, height: 16, borderRadius: 8,
+                                background: 'var(--ibs-red)', color: 'white',
+                                fontSize: 10, fontWeight: 700,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                padding: '0 4px', lineHeight: 1,
+                              }}>{provisionalCount > 99 ? '99+' : provisionalCount}</span>
+                            )}
                           </span>
                           {!sidebarCollapsed && (
                             <>
@@ -288,6 +309,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   padding: '0 6px', lineHeight: 1,
                                 }}>{meetingInviteCount}</span>
+                              )}
+                              {item.key === 'material-codes' && provisionalCount > 0 && (
+                                <span style={{
+                                  marginLeft: 'auto',
+                                  minWidth: 20, height: 20, borderRadius: 10,
+                                  background: 'var(--ibs-red)', color: 'white',
+                                  fontSize: 11, fontWeight: 700,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  padding: '0 6px', lineHeight: 1,
+                                }}>{provisionalCount > 99 ? '99+' : provisionalCount}</span>
                               )}
                             </>
                           )}

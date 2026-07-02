@@ -51,23 +51,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             data: { status: 'PAID', paidAmount: line.amountVnd, updatedAt: new Date() }
           })
 
-          // 2. Extract PO/PR Code from description and update PO & Procurement Tracking status
-          const m = invoice.description?.match(/Đơn đặt hàng:\s*([^\s]+)/)
-          if (m && m[1]) {
-            const poCode = m[1].trim()
-            
-            // Update physical PO if exists
-            const po = await tx.purchaseOrder.findUnique({ where: { poCode } })
-            if (po) {
-              await tx.purchaseOrder.update({
-                where: { id: po.id },
-                data: { status: 'PAID' }
-              })
+          // 2. Tìm PO gắn hóa đơn: ưu tiên FK Invoice.poId; fallback regex description
+          //    (dữ liệu cũ trước khi có cột po_id chỉ có "Đơn đặt hàng: <poCode>" trong description).
+          let po = invoice.poId
+            ? await tx.purchaseOrder.findUnique({ where: { id: invoice.poId } })
+            : null
+          if (!po) {
+            const m = invoice.description?.match(/Đơn đặt hàng:\s*([^\s]+)/)
+            if (m && m[1]) {
+              po = await tx.purchaseOrder.findUnique({ where: { poCode: m[1].trim() } })
             }
-            
-            // DEPRECATED: legacy WorkflowTask, đã ngừng dùng
-            // P3.6 procurement tracking status update was here but workflowTask table is dead — removed.
           }
+          if (po) {
+            await tx.purchaseOrder.update({
+              where: { id: po.id },
+              data: { status: 'PAID' }
+            })
+          }
+
+          // DEPRECATED: legacy WorkflowTask, đã ngừng dùng
+          // P3.6 procurement tracking status update was here but workflowTask table is dead — removed.
         }
       }
       return res
