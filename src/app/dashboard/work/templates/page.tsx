@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 
 interface Step { id: string; code: string; title: string; roleCode: string | null; deptCode: string | null; deadlineDays: number | null; hookKeys: string[] }
-interface Tpl { id: string; code: string; name: string; projectType: string; version: number; _count: { steps: number } }
+interface Tpl { id: string; code: string; name: string; projectType: string; productType: string | null; version: number; _count: { steps: number } }
 interface Proj { id: string; projectCode: string; projectName: string }
 
 export default function TemplatesPage() {
@@ -38,7 +38,7 @@ export default function TemplatesPage() {
           <div key={t.id} onClick={() => open(t)} className="rounded-xl p-4 cursor-pointer hover:shadow-md"
             style={{ background: 'var(--surface)', border: `1px solid ${sel?.id === t.id ? 'var(--text-heading)' : 'var(--border)'}` }}>
             <div className="font-bold" style={{ color: 'var(--text-primary)' }}>{t.name}</div>
-            <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{t.code} · {t.projectType} · v{t.version} · {t._count.steps} bước</div>
+            <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{t.code} · {t.projectType}{t.productType ? ` · ${t.productType}` : ' · Chung'} · v{t.version} · {t._count.steps} bước</div>
           </div>
         ))}
         {templates.length === 0 && <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Chưa có template. Chạy seed-dynamic-workflow.</div>}
