@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    if (!['R01', 'R02', 'R03', 'R08'].includes(user.roleCode)) {
+    if (!['R01', 'R08', 'R08a'].includes(user.roleCode)) {
       return errorResponse('Bạn không có quyền tính lương', 403)
     }
 

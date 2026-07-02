@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
-  if (!requireRoles(user.roleCode, ['R01', 'R04', 'R02', 'R06'])) {
+  if (!requireRoles(user.roleCode, ['R01', 'R04', 'R04a', 'R02', 'R02a', 'R06', 'R09'])) {
     return errorResponse('Không có quyền tạo ECO', 403)
   }
 

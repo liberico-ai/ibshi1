@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a']
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R08', 'R08a']
 
 // GET /api/employees — list employees
 export async function GET(req: NextRequest) {

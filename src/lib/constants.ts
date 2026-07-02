@@ -186,7 +186,7 @@ export const MENU_ITEMS = [
   // [ẨN: luồng 36 bước cũ — đang test hệ động. Bật lại bằng cách bỏ comment dòng dưới]
   // { key: 'tasks', label: 'Công việc (cũ)', labelEn: 'Tasks (legacy)', icon: 'ClipboardList', href: '/dashboard/tasks', roles: 'all', group: 'overview' },
   { key: 'work', label: 'Công việc', labelEn: 'Work Inbox', icon: 'Inbox', href: '/dashboard/work', roles: 'all', group: 'overview' },
-  { key: 'work-team', label: 'Phòng của tôi', labelEn: 'My Department', icon: 'Users', href: '/dashboard/work/team', roles: ['R01', 'R02', 'R03', 'R04', 'R06', 'R08', 'R09', 'R10', 'R13'], group: 'overview' },
+  { key: 'work-team', label: 'Phòng của tôi', labelEn: 'My Department', icon: 'Users', href: '/dashboard/work/team', roles: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R09', 'R10', 'R13'], group: 'overview' },
   { key: 'work-meetings', label: 'Lịch họp', labelEn: 'Meetings', icon: 'CalendarCheck', href: '/dashboard/work/meetings', roles: 'all', group: 'overview' },
   { key: 'notifications', label: 'Thông báo', labelEn: 'Notifications', icon: 'Bell', href: '/dashboard/notifications', roles: 'all', group: 'overview' },
 
@@ -196,7 +196,7 @@ export const MENU_ITEMS = [
   { key: 'work-perf', label: 'Hiệu suất & KPI', labelEn: 'Performance', icon: 'BarChart3', href: '/dashboard/work/performance', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'], group: 'management' },
 
   // ── Project ──
-  { key: 'projects', label: 'Dự án', labelEn: 'Projects', icon: 'FolderKanban', href: '/dashboard/projects', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a', 'R06', 'R06a'], group: 'project' },
+  { key: 'projects', label: 'Dự án', labelEn: 'Projects', icon: 'FolderKanban', href: '/dashboard/projects', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a', 'R06', 'R06a', 'R07'], group: 'project' },
   { key: 'milestones', label: 'Cột mốc', labelEn: 'Milestones', icon: 'Target', href: '/dashboard/milestones', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'project' },
   { key: 'subcontracts', label: 'Thầu phụ', labelEn: 'Subcontracts', icon: 'Handshake', href: '/dashboard/subcontracts', roles: ['R01', 'R02', 'R02a', 'R07', 'R07a'], group: 'project' },
   { key: 'lessons', label: 'Bài học kinh nghiệm', labelEn: 'Lessons', icon: 'BookOpen', href: '/dashboard/lessons', roles: ['R01', 'R02', 'R02a'], group: 'project' },
@@ -206,7 +206,7 @@ export const MENU_ITEMS = [
   { key: 'design', label: 'Thiết kế', labelEn: 'Design', icon: 'Pencil', href: '/dashboard/design', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a'], group: 'design' },
   { key: 'bom', label: 'Định mức vật tư', labelEn: 'BOM', icon: 'Layers', href: '/dashboard/design/bom', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a'], group: 'design' },
   { key: 'drawings', label: 'Bản vẽ', labelEn: 'Drawings', icon: 'Ruler', href: '/dashboard/design/drawings', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a'], group: 'design' },
-  { key: 'eco', label: 'Thay đổi TK', labelEn: 'ECO', icon: 'RefreshCw', href: '/dashboard/design/eco', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a', 'R06'], group: 'design' },
+  { key: 'eco', label: 'Thay đổi TK', labelEn: 'ECO', icon: 'RefreshCw', href: '/dashboard/design/eco', roles: ['R01', 'R04', 'R04a', 'R02', 'R02a', 'R06', 'R09'], group: 'design' },
   { key: 'norms', label: 'Định mức tiêu hao', labelEn: 'Norms', icon: 'Calculator', href: '/dashboard/design/norms', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a'], group: 'design' },
 
   // ── Warehouse ──
@@ -251,13 +251,13 @@ export const MENU_ITEMS = [
   { key: 'mrb', label: 'Hồ sơ chất lượng', labelEn: 'MRB Dossier', icon: 'FolderCheck', href: '/dashboard/qc/mrb', roles: ['R01', 'R02', 'R02a', 'R09', 'R09a'], group: 'qc' },
 
   // ── HR ──
-  { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: 'UserCheck', href: '/dashboard/hr', roles: ['R01', 'R02', 'R02a'], group: 'hr' },
-  { key: 'employees', label: 'Nhân viên', labelEn: 'Employees', icon: 'Contact', href: '/dashboard/hr/employees', roles: ['R01', 'R02', 'R02a'], group: 'hr' },
-  { key: 'salary', label: 'Bảng lương', labelEn: 'Salary', icon: 'DollarSign', href: '/dashboard/hr/salary', roles: ['R01', 'R02', 'R02a'], group: 'hr' },
-  { key: 'timesheets', label: 'Chấm công', labelEn: 'Timesheets', icon: 'Clock', href: '/dashboard/hr/timesheets', roles: ['R01', 'R02', 'R02a'], group: 'hr' },
-  { key: 'attendance', label: 'Điểm danh', labelEn: 'Attendance', icon: 'CalendarCheck', href: '/dashboard/hr/attendance', roles: ['R01', 'R02', 'R02a'], group: 'hr' },
-  { key: 'departments', label: 'Phòng ban', labelEn: 'Departments', icon: 'Building2', href: '/dashboard/hr/departments', roles: ['R01', 'R02', 'R02a'], group: 'hr' },
-  { key: 'contracts', label: 'Hợp đồng lao động', labelEn: 'Contracts', icon: 'FileSignature', href: '/dashboard/hr/contracts', roles: ['R01', 'R02', 'R02a'], group: 'hr' },
+  { key: 'hr', label: 'Nhân sự', labelEn: 'HR', icon: 'UserCheck', href: '/dashboard/hr', roles: ['R01', 'R02', 'R02a', 'R08', 'R08a'], group: 'hr' },
+  { key: 'employees', label: 'Nhân viên', labelEn: 'Employees', icon: 'Contact', href: '/dashboard/hr/employees', roles: ['R01', 'R02', 'R02a', 'R08', 'R08a'], group: 'hr' },
+  { key: 'salary', label: 'Bảng lương', labelEn: 'Salary', icon: 'DollarSign', href: '/dashboard/hr/salary', roles: ['R01', 'R08', 'R08a'], group: 'hr' },
+  { key: 'timesheets', label: 'Chấm công', labelEn: 'Timesheets', icon: 'Clock', href: '/dashboard/hr/timesheets', roles: ['R01', 'R02', 'R02a', 'R08', 'R08a'], group: 'hr' },
+  { key: 'attendance', label: 'Điểm danh', labelEn: 'Attendance', icon: 'CalendarCheck', href: '/dashboard/hr/attendance', roles: ['R01', 'R02', 'R02a', 'R08', 'R08a'], group: 'hr' },
+  { key: 'departments', label: 'Phòng ban', labelEn: 'Departments', icon: 'Building2', href: '/dashboard/hr/departments', roles: ['R01', 'R02', 'R02a', 'R08', 'R08a'], group: 'hr' },
+  { key: 'contracts', label: 'Hợp đồng lao động', labelEn: 'Contracts', icon: 'FileSignature', href: '/dashboard/hr/contracts', roles: ['R01', 'R08', 'R08a'], group: 'hr' },
   { key: 'piece-rate', label: 'Hợp đồng khoán', labelEn: 'Piece Rate', icon: 'Hammer', href: '/dashboard/hr/piece-rate', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a'], group: 'hr' },
   { key: 'piece-rate-output', label: 'Khối lượng khoán', labelEn: 'Output', icon: 'BarChart', href: '/dashboard/hr/piece-rate-output', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R06b'], group: 'hr' },
 
@@ -271,7 +271,7 @@ export const MENU_ITEMS = [
   { key: 'settlement', label: 'Quyết toán', labelEn: 'Settlement', icon: 'Calculator', href: '/dashboard/finance/settlement', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a'], group: 'finance' },
 
   // ── Reports ──
-  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R08', 'R08a', 'R09', 'R09a', 'R13'], group: 'reports' },
+  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R06', 'R06a', 'R07', 'R07a', 'R08', 'R08a', 'R09', 'R09a', 'R13'], group: 'reports' },
   { key: 'audit-log', label: 'Nhật ký', labelEn: 'Audit Log', icon: 'ScrollText', href: '/dashboard/audit-log', roles: ['R01', 'R10'], group: 'reports' },
   { key: 'error-logs', label: 'Error Logs', labelEn: 'Error Logs', icon: 'AlertTriangle', href: '/dashboard/admin/error-logs', roles: ['R01', 'R10'], group: 'reports' },
 

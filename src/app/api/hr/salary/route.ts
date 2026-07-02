@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
-    if (!['R01', 'R02', 'R08'].includes(user.roleCode)) return forbiddenResponse()
+    if (!['R01', 'R08', 'R08a'].includes(user.roleCode)) return forbiddenResponse()
 
     const { searchParams } = new URL(req.url)
     const month = Number(searchParams.get('month')) || new Date().getMonth() + 1
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
-    if (!['R01', 'R02'].includes(user.roleCode)) {
+    if (!['R01', 'R08', 'R08a'].includes(user.roleCode)) {
       return forbiddenResponse('Không có quyền')
     }
 

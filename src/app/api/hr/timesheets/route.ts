@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
-    if (!['R01', 'R02', 'R08'].includes(user.roleCode)) return forbiddenResponse()
+    if (!['R01', 'R02', 'R02a', 'R08', 'R08a'].includes(user.roleCode)) return forbiddenResponse()
 
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')

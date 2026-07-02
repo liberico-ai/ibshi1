@@ -72,7 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => clearInterval(interval)
   }, [ready, isAuthenticated, user?.roleCode])
 
-  const roleCode = user?.roleCode || 'R01'
+  const roleCode = user?.roleCode || ''
   const roleName = ROLES[roleCode as keyof typeof ROLES]?.name || roleCode
 
   const pageBlocked = useMemo(() => {
@@ -97,7 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Build grouped menu sorted by role priority
   const groupedMenu = useMemo(() => {
-    const rolePriority = ROLE_GROUP_PRIORITY[roleCode] || ROLE_GROUP_PRIORITY['R01']
+    const rolePriority = ROLE_GROUP_PRIORITY[roleCode] || ['overview']
     const itemsByGroup: Record<string, typeof filteredMenu> = {}
     filteredMenu.forEach(item => {
       const g = item.group
@@ -118,7 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Auto-expand first 2 groups on role change
   useEffect(() => {
-    const rolePriority = ROLE_GROUP_PRIORITY[roleCode] || ROLE_GROUP_PRIORITY['R01']
+    const rolePriority = ROLE_GROUP_PRIORITY[roleCode] || ['overview']
     const initial: Record<string, boolean> = {}
     rolePriority.forEach((g, i) => { initial[g] = i < 2 })
     setExpandedGroups(initial)

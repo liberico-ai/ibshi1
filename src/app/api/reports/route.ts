@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { whereOverdue } from '@/lib/task-where'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R08', 'R08a', 'R09', 'R09a', 'R13']
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R06', 'R06a', 'R07', 'R07a', 'R08', 'R08a', 'R09', 'R09a', 'R13']
 
 // GET /api/reports — Aggregated reports data — supports 13+ report types
 export async function GET(req: NextRequest) {
