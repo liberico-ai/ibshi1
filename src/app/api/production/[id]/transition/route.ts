@@ -64,6 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         status: nextStatus,
         ...(nextStatus === 'IN_PROGRESS' && !wo.actualStart ? { actualStart: new Date() } : {}),
         ...(nextStatus === 'COMPLETED' ? { actualEnd: new Date() } : {}),
+        ...(nextStatus === 'QC_PASSED' ? { needsReQc: false, reQcReason: null } : {}),
       },
     })
 

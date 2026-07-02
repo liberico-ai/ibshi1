@@ -34,6 +34,7 @@ function mockTx() {
     inspection: { findMany: vi.fn().mockResolvedValue([
       { id: 'i1', inspectionCode: 'INS-001', type: 'FAT', status: 'PASSED' },
     ]) },
+    workOrder: { findMany: vi.fn().mockResolvedValue([]) },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
   }
   prismaMock.$transaction.mockImplementation(async (fn: any) => fn(tx))
@@ -116,6 +117,18 @@ describe('POST /api/qc/mrb/release', () => {
     const body = await res.json()
     expect(res.status).toBe(422)
     expect(body.error).toContain('FAT')
+  })
+
+  it('BLOCK khi có WO cần re-QC → 422', async () => {
+    const tx = mockTx()
+    tx.mrbRelease.findFirst.mockResolvedValue(null)
+    tx.workOrder.findMany.mockResolvedValue([{ woCode: 'WO-ECO-001' }])
+    const { POST } = await import('@/app/api/qc/mrb/release/route')
+    const res = await POST(makeReq({ projectId: 'p1' }))
+    const body = await res.json()
+    expect(res.status).toBe(422)
+    expect(body.error).toContain('re-QC')
+    expect(body.error).toContain('WO-ECO-001')
   })
 
   it('MDR chặn khi chưa có MrbRelease RELEASED', async () => {

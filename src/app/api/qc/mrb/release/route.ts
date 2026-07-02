@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Tính gate TRONG transaction (chống TOCTOU)
-      const [ncrs, checkpoints, inspections] = await Promise.all([
+      const [ncrs, checkpoints, inspections, reQcWos] = await Promise.all([
         tx.nonConformanceReport.findMany({
           where: { projectId, status: { notIn: ['CLOSED', 'CANCELLED'] } },
           select: { ncrCode: true, status: true },
@@ -47,9 +47,16 @@ export async function POST(req: NextRequest) {
           where: { projectId },
           select: { id: true, inspectionCode: true, type: true, status: true },
         }),
+        tx.workOrder.findMany({
+          where: { projectId, needsReQc: true },
+          select: { woCode: true },
+        }),
       ])
 
       const blockers: string[] = []
+      if (reQcWos.length > 0) {
+        blockers.push(`${reQcWos.length} WO cần re-QC: ${reQcWos.map(w => w.woCode).join(', ')}`)
+      }
       if (ncrs.length > 0) {
         blockers.push(`${ncrs.length} NCR chưa đóng: ${ncrs.map(n => n.ncrCode).join(', ')}`)
       }

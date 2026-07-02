@@ -10,9 +10,14 @@ export async function isWorkOrderQcPassed(workOrderId: string): Promise<QcResult
 
   const wo = await prisma.workOrder.findUnique({
     where: { id: workOrderId },
-    select: { id: true, woCode: true, status: true },
+    select: { id: true, woCode: true, status: true, needsReQc: true, reQcReason: true },
   })
   if (!wo) return { passed: false, reasons: ['Work Order không tồn tại'] }
+
+  // C0: ECO/revision yêu cầu re-QC
+  if (wo.needsReQc) {
+    reasons.push(`${wo.woCode} cần re-QC${wo.reQcReason ? `: ${wo.reQcReason}` : ''}`)
+  }
 
   // C3: WO đang ở trạng thái QC_FAILED
   if (wo.status === 'QC_FAILED') {
@@ -93,10 +98,11 @@ export type PieceMarkQcStatus = 'PASSED' | 'FAILED' | 'PENDING'
 export async function getPieceMarkQcStatus(workOrderId: string): Promise<PieceMarkQcStatus> {
   const wo = await prisma.workOrder.findUnique({
     where: { id: workOrderId },
-    select: { status: true },
+    select: { status: true, needsReQc: true },
   })
   if (!wo) return 'PENDING'
 
+  if (wo.needsReQc) return 'FAILED'
   if (wo.status === 'QC_FAILED') return 'FAILED'
 
   if (wo.status === 'QC_PASSED' || wo.status === 'COMPLETED') {

@@ -553,6 +553,8 @@ model WorkOrder {
   earnedQty      Decimal?         @default(0) @map("earned_qty")
   quantity       Decimal?
   woType         String           @default("INTERNAL") @map("wo_type")
+  needsReQc      Boolean          @default(false) @map("needs_re_qc")
+  reQcReason     String?          @map("re_qc_reason")
   workshopId     String?          @map("workshop_id")
   pieceMark      String?          @map("piece_mark")
   bomVersionId   String?          @map("bom_version_id")

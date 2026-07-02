@@ -162,7 +162,7 @@ export async function createRevisionWithEco(params: CreateRevisionWithEcoParams)
 // ── 2. Approve a BOM version (DRAFT → ACTIVE) ──
 
 export async function approveRevision(bomVersionId: string, userId: string) {
-  const { updated, cascadeParams } = await prisma.$transaction(async (tx) => {
+  const { updated, cascadeParams, reQcCount } = await prisma.$transaction(async (tx) => {
     const version = await tx.bomVersion.findUnique({
       where: { id: bomVersionId },
     })
@@ -202,33 +202,67 @@ export async function approveRevision(bomVersionId: string, userId: string) {
     })
 
     let params: { oldVersionId: string; newVersionId: string; projectId: string; ecoCode: string; userId: string } | null = null
+    let reQcCount = 0
 
-    if (isEnabled('BOM_REVISION_CASCADE')) {
-      const oldVersion = await tx.bomVersion.findFirst({
-        where: { bomId: version.bomId, status: 'SUPERSEDED' },
-        orderBy: { versionNo: 'desc' },
-        select: { id: true },
-      })
+    const oldVersion = await tx.bomVersion.findFirst({
+      where: { bomId: version.bomId, status: 'SUPERSEDED' },
+      orderBy: { versionNo: 'desc' },
+      select: { id: true },
+    })
 
-      if (oldVersion) {
-        const eco = version.ecoId
-          ? await tx.engineeringChangeOrder.findUnique({
-              where: { id: version.ecoId },
-              select: { ecoCode: true, projectId: true },
-            })
-          : null
+    if (isEnabled('BOM_REVISION_CASCADE') && oldVersion) {
+      const eco = version.ecoId
+        ? await tx.engineeringChangeOrder.findUnique({
+            where: { id: version.ecoId },
+            select: { ecoCode: true, projectId: true },
+          })
+        : null
 
-        params = {
-          oldVersionId: oldVersion.id,
-          newVersionId: bomVersionId,
-          projectId: eco?.projectId || version.bomId,
-          ecoCode: eco?.ecoCode || `BOM-v${version.versionNo}`,
-          userId,
-        }
+      params = {
+        oldVersionId: oldVersion.id,
+        newVersionId: bomVersionId,
+        projectId: eco?.projectId || version.bomId,
+        ecoCode: eco?.ecoCode || `BOM-v${version.versionNo}`,
+        userId,
       }
     }
 
-    return { updated: result, cascadeParams: params }
+    // Re-QC gate: flag affected WOs (QC_PASSED/COMPLETED) when piece-marks change
+    if (oldVersion) {
+      const [oldItems, newItems] = await Promise.all([
+        tx.bomItem.findMany({ where: { bomVersionId: oldVersion.id }, select: { pieceMark: true, materialId: true, quantity: true } }),
+        tx.bomItem.findMany({ where: { bomVersionId }, select: { pieceMark: true, materialId: true, quantity: true } }),
+      ])
+      const oldKey = (i: { pieceMark: string | null; materialId: string; quantity: unknown }) =>
+        `${i.pieceMark || ''}::${i.materialId}::${Number(i.quantity)}`
+      const oldSet = new Set(oldItems.map(oldKey))
+      const affectedMarks = new Set<string>()
+      for (const item of newItems) {
+        if (item.pieceMark && !oldSet.has(oldKey(item))) affectedMarks.add(item.pieceMark)
+      }
+      for (const item of oldItems) {
+        if (item.pieceMark && !new Set(newItems.map(oldKey)).has(oldKey(item))) affectedMarks.add(item.pieceMark)
+      }
+
+      if (affectedMarks.size > 0) {
+        const eco = version.ecoId
+          ? await tx.engineeringChangeOrder.findUnique({ where: { id: version.ecoId }, select: { ecoCode: true, projectId: true } })
+          : null
+        const projectId = eco?.projectId || version.bomId
+        const ecoLabel = eco?.ecoCode || `BOM-v${version.versionNo}`
+        const { count } = await tx.workOrder.updateMany({
+          where: {
+            projectId,
+            pieceMark: { in: [...affectedMarks] },
+            status: { in: ['QC_PASSED', 'COMPLETED'] },
+          },
+          data: { needsReQc: true, reQcReason: `Re-QC do ${ecoLabel}` },
+        })
+        reQcCount = count
+      }
+    }
+
+    return { updated: result, cascadeParams: params, reQcCount }
   })
 
   if (cascadeParams) {
@@ -242,6 +276,23 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       )
     } catch (err) {
       console.error('[approveRevision] Cascade failed (non-blocking):', err)
+    }
+  }
+
+  // Create re-QC task if any WOs were flagged
+  if (reQcCount > 0 && cascadeParams) {
+    try {
+      const { createTask } = await import('./work-engine')
+      await createTask({
+        title: `[Re-QC] Kiểm tra lại ${reQcCount} WO — ${cascadeParams.ecoCode}`,
+        description: `ECO ${cascadeParams.ecoCode} thay đổi BOM ảnh hưởng ${reQcCount} Work Order đã QC. Cần kiểm tra lại chất lượng các hạng mục bị ảnh hưởng.`,
+        projectId: cascadeParams.projectId,
+        taskType: 'RE_QC',
+        priority: 'HIGH',
+        assignees: [{ role: 'R09' }],
+      }, cascadeParams.userId)
+    } catch (err) {
+      console.error('[approveRevision] Re-QC task creation failed (non-blocking):', err)
     }
   }
 
