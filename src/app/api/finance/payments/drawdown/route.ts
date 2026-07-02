@@ -64,11 +64,14 @@ export async function POST(req: NextRequest) {
     // PO-Gate: chỉ lập hồ sơ giải ngân/tạm ứng cho PO đã được duyệt (APPROVED trở đi).
     // invoices[].id là PO id (xem CreateDrawdownForm) — PO PENDING/DRAFT/REJECTED/CANCELLED → 422.
     const linkedPoIds: string[] = invoices.map((inv: { id?: string }) => inv.id).filter(Boolean)
+    // PO ids thật sự tồn tại — dùng để set Invoice.poId (FK) khi tạo hóa đơn tạm ứng bên dưới
+    const existingPoIds = new Set<string>()
     if (linkedPoIds.length > 0) {
       const linkedPos = await prisma.purchaseOrder.findMany({
         where: { id: { in: linkedPoIds } },
-        select: { poCode: true, status: true },
+        select: { id: true, poCode: true, status: true },
       })
+      for (const po of linkedPos) existingPoIds.add(po.id)
       const notApproved = linkedPos.filter(po => ['PENDING', 'DRAFT', 'REJECTED', 'CANCELLED'].includes(po.status))
       if (notApproved.length > 0) {
         return errorResponse(
@@ -119,10 +122,13 @@ export async function POST(req: NextRequest) {
         const foundProjectId = invPayload.projectId || null;
 
         // Auto-spawn Advance Invoice
+        // invPayload.id là PO id (xem CreateDrawdownForm) → gắn FK Invoice.poId
+        // để sync-engine loại hóa đơn này khỏi SERVICE actual (chống double-count với GRN).
         const newInvoice = await tx.invoice.create({
           data: {
             invoiceCode: `INV-${invPayload.poCode || 'TAMP'}-${Math.floor(Math.random()*10000)}`,
             vendorId: invPayload.vendorId || defaultVendor.id,
+            poId: invPayload.id && existingPoIds.has(invPayload.id) ? invPayload.id : null,
             type: 'ADVANCE_PAYMENT',
             clientName: invPayload.vendorName,
             description: `Tạm ứng cho Đơn đặt hàng: ${invPayload.poCode}`,

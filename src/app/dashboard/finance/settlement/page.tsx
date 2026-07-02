@@ -82,13 +82,19 @@ export default function SettlementPage() {
       if (reason === undefined) return
     }
     setActing(true)
-    const res = await apiFetch('/api/finance/settlement', {
-      method: 'POST',
-      body: JSON.stringify({ projectId, action, ...(reason ? { reason } : {}) }),
-    })
-    setMessage(res.ok ? (res.message || 'Thành công') : (res.error || 'Có lỗi xảy ra'))
-    if (res.ok) await load(projectId)
-    setActing(false)
+    try {
+      const res = await apiFetch('/api/finance/settlement', {
+        method: 'POST',
+        body: JSON.stringify({ projectId, action, ...(reason ? { reason } : {}) }),
+      })
+      setMessage(res.ok ? (res.message || 'Thành công') : (res.error || 'Có lỗi xảy ra'))
+      if (res.ok) await load(projectId)
+    } catch {
+      setMessage('Có lỗi xảy ra khi gọi máy chủ')
+    } finally {
+      // Luôn nhả nút — fetch lỗi trên prod từng làm nút kẹt vĩnh viễn
+      setActing(false)
+    }
   }
 
   const badge = settlement ? STATUS_BADGE[settlement.status] : null
