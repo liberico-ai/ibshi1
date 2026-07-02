@@ -96,7 +96,7 @@ function CreateInner() {
   const [assigning, setAssigning] = useState(false)
 
   useEffect(() => {
-    apiFetch('/api/projects?limit=100').then((r) => { if (r.ok) setProjects(r.projects || []) })
+    apiFetch('/api/projects/options').then((r) => { if (r.ok) setProjects(r.projects || []) })
     apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) })
   }, [])
 
