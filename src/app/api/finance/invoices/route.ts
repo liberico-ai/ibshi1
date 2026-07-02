@@ -61,14 +61,35 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { invoiceCode, projectId, vendorId, poId, type, clientName, description, amount, taxRate, dueDate } = body
+    const { invoiceCode, projectId, vendorId, poId, type, clientName, description, amount, dueDate } = body
 
     if (!invoiceCode || !type || !amount) return errorResponse('Thiếu thông tin', 400)
 
     const numAmount = Number(amount)
-    const numTaxRate = Number(taxRate || 10)
-    const taxAmount = numAmount * numTaxRate / 100
-    const totalAmount = numAmount + taxAmount
+    if (!Number.isFinite(numAmount) || numAmount <= 0) return errorResponse('Số tiền không hợp lệ', 400)
+
+    // Tôn trọng taxRate client gửi (kể cả 0). Chỉ default 10% khi không gửi / rỗng.
+    // Lưu ý falsy: KHÔNG dùng || (0 sẽ bị ép về 10) — dùng ?? + check chuỗi rỗng (form gửi string).
+    const rawTaxRate = body.taxRate ?? null
+    const numTaxRate = rawTaxRate === null || rawTaxRate === '' ? 10 : Number(rawTaxRate)
+    if (!Number.isFinite(numTaxRate) || numTaxRate < 0 || numTaxRate > 100) {
+      return errorResponse('Thuế suất (taxRate) không hợp lệ (0–100)', 400)
+    }
+
+    const rawTaxAmount = body.taxAmount ?? null
+    const taxAmount = rawTaxAmount === null || rawTaxAmount === ''
+      ? Math.round(numAmount * numTaxRate / 100)
+      : Number(rawTaxAmount)
+    if (!Number.isFinite(taxAmount) || taxAmount < 0) return errorResponse('Tiền thuế (taxAmount) không hợp lệ', 400)
+
+    const expectedTotal = numAmount + taxAmount
+    const rawTotalAmount = body.totalAmount ?? null
+    const totalAmount = rawTotalAmount === null || rawTotalAmount === '' ? expectedTotal : Number(rawTotalAmount)
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) return errorResponse('Tổng tiền (totalAmount) không hợp lệ', 400)
+    // Chống số mâu thuẫn: totalAmount client gửi phải khớp amount + taxAmount (dung sai 1đ)
+    if (Math.abs(totalAmount - expectedTotal) > 1) {
+      return errorResponse(`Tổng tiền không khớp: totalAmount = ${totalAmount} nhưng amount + taxAmount = ${expectedTotal}`, 400)
+    }
 
     const invoice = await prisma.invoice.create({
       data: {

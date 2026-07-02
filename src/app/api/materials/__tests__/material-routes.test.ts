@@ -12,6 +12,7 @@ vi.mock('@/lib/auth', async (importOriginal) => {
   return { ...actual, authenticateRequest: (...a: unknown[]) => mockAuth(...a) }
 })
 
+import { GET as materialsGET } from '@/app/api/materials/route'
 import { GET as resolveGET } from '@/app/api/materials/resolve/route'
 import { POST as mergePOST } from '@/app/api/materials/merge/route'
 
@@ -23,6 +24,85 @@ beforeEach(() => {
   ;(prismaMock.$transaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
     async (cb: (tx: typeof prismaMock) => unknown) => cb(prismaMock),
   )
+})
+
+// ── GET /api/materials (search + limit — combobox autocomplete) ──
+describe('GET /api/materials — search + limit', () => {
+  const ROW = {
+    id: 'm1', materialCode: 'VLH-QUEH-001', name: 'Que hàn', unit: 'kg', category: 'VLH',
+    groupCode: null, specification: null, grade: null, currentStock: 5, unitPrice: 100,
+    currency: 'VND', status: 'ACTIVE', isProvisional: false, createdByUnit: null,
+    _count: { aliases: 0 },
+  }
+
+  beforeEach(() => {
+    prismaMock.material.count.mockResolvedValue(1 as never)
+    prismaMock.material.findMany.mockResolvedValue([ROW] as never)
+  })
+
+  it('search=... lọc theo materialCode/name (insensitive), limit mặc định 20', async () => {
+    const res = await materialsGET(new NextRequest('http://localhost/api/materials?search=que'))
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.materials).toHaveLength(1)
+    expect(body.pagination.limit).toBe(20)
+    expect(prismaMock.material.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 20,
+        skip: 0,
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            { name: { contains: 'que', mode: 'insensitive' } },
+            { materialCode: { contains: 'que', mode: 'insensitive' } },
+          ]),
+        }),
+      }),
+    )
+  })
+
+  it('limit được tôn trọng và cap tại 50', async () => {
+    await materialsGET(new NextRequest('http://localhost/api/materials?search=que&limit=5'))
+    expect(prismaMock.material.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ take: 5 }))
+
+    await materialsGET(new NextRequest('http://localhost/api/materials?search=que&limit=999'))
+    expect(prismaMock.material.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ take: 50 }))
+
+    // limit rác → về mặc định 20
+    await materialsGET(new NextRequest('http://localhost/api/materials?search=que&limit=abc'))
+    expect(prismaMock.material.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ take: 20 }))
+  })
+
+  it('search kết hợp status=ACTIVE (combobox PR dùng)', async () => {
+    await materialsGET(new NextRequest('http://localhost/api/materials?search=que&status=ACTIVE&limit=20'))
+    expect(prismaMock.material.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ status: 'ACTIVE' }) }),
+    )
+  })
+
+  it('caller cũ (q + page) không đổi hành vi: limit 20/trang', async () => {
+    await materialsGET(new NextRequest('http://localhost/api/materials?q=que&page=2'))
+    expect(prismaMock.material.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 20, skip: 20 }),
+    )
+  })
+
+  it('search mode yêu cầu đăng nhập', async () => {
+    mockAuth.mockResolvedValue(null)
+    const res = await materialsGET(new NextRequest('http://localhost/api/materials?search=que'))
+    expect(res.status).toBe(401)
+  })
+
+  it('legacy mode (không param) vẫn trả flat list theo currentStock > 0', async () => {
+    prismaMock.material.findMany.mockResolvedValue([
+      { id: 'm1', materialCode: 'VLH-QUEH-001', name: 'Que hàn', unit: 'kg', category: 'VLH', groupCode: null, specification: null, grade: null, currentStock: 5 },
+    ] as never)
+    const res = await materialsGET(new NextRequest('http://localhost/api/materials'))
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(prismaMock.material.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { currentStock: { gt: 0 } } }),
+    )
+  })
 })
 
 // ── /resolve ──
