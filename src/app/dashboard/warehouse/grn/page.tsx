@@ -57,7 +57,10 @@ export default function GRNPage() {
     // PARTIAL_RECEIVED ones can continue receiving remaining items.
     const res = await apiFetch('/api/purchase-orders?status=PAID,PARTIAL_RECEIVED')
     if (res.ok) {
-      setPOList(res.purchaseOrders || res.data || [])
+      // PO-Gate: loại PO chưa duyệt khỏi dropdown (an toàn 2 lớp — server /api/grn cũng chặn 422)
+      const NOT_RECEIVABLE = ['DRAFT', 'PENDING', 'REJECTED', 'CANCELLED']
+      const list: PO[] = res.purchaseOrders || res.data || []
+      setPOList(list.filter(po => !NOT_RECEIVABLE.includes(po.status)))
     }
     setShowReceiveForm(true)
     setSelectedPO(null)

@@ -61,6 +61,23 @@ export async function POST(req: NextRequest) {
       return errorResponse('Missing required data: contractId or invoices', 400)
     }
 
+    // PO-Gate: chỉ lập hồ sơ giải ngân/tạm ứng cho PO đã được duyệt (APPROVED trở đi).
+    // invoices[].id là PO id (xem CreateDrawdownForm) — PO PENDING/DRAFT/REJECTED/CANCELLED → 422.
+    const linkedPoIds: string[] = invoices.map((inv: { id?: string }) => inv.id).filter(Boolean)
+    if (linkedPoIds.length > 0) {
+      const linkedPos = await prisma.purchaseOrder.findMany({
+        where: { id: { in: linkedPoIds } },
+        select: { poCode: true, status: true },
+      })
+      const notApproved = linkedPos.filter(po => ['PENDING', 'DRAFT', 'REJECTED', 'CANCELLED'].includes(po.status))
+      if (notApproved.length > 0) {
+        return errorResponse(
+          `PO chưa được duyệt: ${notApproved.map(po => `${po.poCode} (${po.status})`).join(', ')} — cần R01/R07 duyệt PO trước khi giải ngân`,
+          422
+        )
+      }
+    }
+
     const totalAmount = invoices.reduce((sum: number, inv: any) => sum + Number(inv.totalAmount || 0), 0)
 
     const drawdownNo = `DD-${new Date().toISOString().slice(0,10).replace(/-/g, '')}-${Math.floor(Math.random() * 1000)}`

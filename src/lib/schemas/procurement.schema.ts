@@ -1,6 +1,11 @@
 import { z } from 'zod'
+import { searchFilterSchema } from './common.schema'
 
 // ── Purchase Request ──
+
+// Đợt 2D — nguồn phát sinh PR (truy vết revise bản vẽ / sản xuất sai)
+export const prOriginTypeSchema = z.enum(['ECO', 'NCR'])
+export type PrOriginType = z.infer<typeof prOriginTypeSchema>
 
 const purchaseRequestItemSchema = z.object({
   materialId: z.string().min(1, 'Vật tư là bắt buộc'),
@@ -15,9 +20,21 @@ export const createPurchaseRequestSchema = z.object({
   urgency: z.enum(['NORMAL', 'URGENT', 'CRITICAL']).default('NORMAL'),
   notes: z.string().optional(),
   items: z.array(purchaseRequestItemSchema).min(1, 'Cần ít nhất 1 vật tư'),
+  // Nguồn phát sinh (optional): PR từ ECO (bomVersionId) hoặc NCR (ncr.id)
+  originType: prOriginTypeSchema.optional(),
+  originId: z.string().optional(),
+  originLabel: z.string().optional(),
 })
 
 export type CreatePurchaseRequestInput = z.infer<typeof createPurchaseRequestSchema>
+
+// GET /api/purchase-requests — query params (thêm lọc theo nguồn phát sinh)
+export const prListQuerySchema = searchFilterSchema.extend({
+  originType: prOriginTypeSchema.optional(),
+  originId: z.string().optional(),
+  projectId: z.string().optional(),
+})
+export type PrListQuery = z.infer<typeof prListQuerySchema>
 
 // ── Purchase Order ──
 

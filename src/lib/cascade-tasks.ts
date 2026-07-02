@@ -108,6 +108,30 @@ export interface CascadeResult {
   skippedNoChanges: boolean
 }
 
+/**
+ * Đợt 2D — Truy vết PR phát sinh từ ECO:
+ * Task nhóm PROCUREMENT mang theo context nguồn (originType/originId/originLabel)
+ * + link tạo PR đã prefill query để PR mới lưu nguồn phát sinh.
+ */
+function buildProcurementOriginBlock(
+  newVersionId: string,
+  projectId: string,
+  ecoCode: string,
+): string {
+  const params = new URLSearchParams({
+    originType: 'ECO',
+    originId: newVersionId,
+    originLabel: ecoCode,
+    projectId,
+  })
+  return [
+    '─── Nguồn phát sinh (truy vết) ───',
+    `originType: ECO | originId: ${newVersionId} | originLabel: ${ecoCode}`,
+    `👉 Tạo PR bổ sung (đã gắn nguồn ${ecoCode}): /dashboard/warehouse/purchase-requests/new?${params.toString()}`,
+    'Gợi ý vật tư cần mua lấy từ bảng "Chi tiết vật tư thay đổi" ở trên.',
+  ].join('\n')
+}
+
 export async function runCascade(
   oldVersionId: string,
   newVersionId: string,
@@ -151,6 +175,10 @@ export async function runCascade(
       '─── Chi tiết vật tư thay đổi ───',
       itemDetails,
       '',
+      // Nhóm PROCUREMENT: gắn context nguồn ECO để PR tạo ra truy vết được
+      ...(group === 'PROCUREMENT'
+        ? [buildProcurementOriginBlock(newVersionId, projectId, ecoCode), '']
+        : []),
       `⚠️ Task này do hệ thống tự sinh khi BOM version được kích hoạt.`,
       `Chỉ xử lý điều chỉnh theo hướng dẫn — KHÔNG sửa PR/PO cũ trực tiếp.`,
     ].join('\n')

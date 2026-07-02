@@ -99,9 +99,12 @@ export async function syncBOMtoBudget(projectId: string, triggeredBy: string): P
   })
 }
 
-/** PO approved → recompute Budget.MATERIAL.committed = SUM(approved PO totalValue) (idempotent) */
+/** PO approved → recompute Budget.MATERIAL.committed = SUM(approved PO totalValue) (idempotent)
+ *  PO-Gate: committed CHỈ tính PO từ APPROVED trở đi — PENDING/DRAFT/REJECTED/CANCELLED không tính.
+ *  Bao gồm cả các trạng thái sau duyệt (PROCESSING_PAYMENT/PAID/PARTIAL_RECEIVED/COMPLETED)
+ *  để committed không tụt khi PO đi tiếp trong chuỗi thanh toán/nhận hàng. */
 export async function syncPOtoBudget(projectId: string, _poId: string, triggeredBy: string): Promise<void> {
-  const COMMITTED_STATUSES = ['APPROVED', 'SENT', 'CONFIRMED', 'RECEIVED']
+  const COMMITTED_STATUSES = ['APPROVED', 'SENT', 'CONFIRMED', 'PROCESSING_PAYMENT', 'PAID', 'PARTIAL_RECEIVED', 'RECEIVED', 'COMPLETED']
   const pos = await prisma.purchaseOrder.findMany({
     where: { projectId, status: { in: COMMITTED_STATUSES } },
     select: { totalValue: true },

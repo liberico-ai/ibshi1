@@ -1,8 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { OriginPrSection } from '@/components/OriginPrSection'
 import { PageHeader, StatusBadge, KPICard, Button, EmptyState, Modal, SelectField, TextareaField, InputField, FilterBar } from '@/components/ui'
 import { STATUS_COLORS, SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList } from 'lucide-react'
@@ -188,13 +190,30 @@ export default function NCRPage() {
   )
 }
 
+// Disposition cần mua bù vật tư → cho phép tạo PR bổ sung có truy vết (Đợt 2D)
+const PR_DISPOSITIONS = ['REWORK', 'REJECT', 'SCRAP']
+
 function NCRDetailModal({ ncr, onClose, onUpdated }: { ncr: NCR; onClose: () => void; onUpdated: () => void }) {
+  const router = useRouter()
   const [data, setData] = useState(ncr)
   const [showActionForm, setShowActionForm] = useState(false)
   const [updating, setUpdating] = useState(false)
   const user = useAuthStore(s => s.user)
   const canEdit = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
   const canAddAction = ['R01', 'R09', 'R09a', 'R06'].includes(user?.roleCode || '')
+  // Quyền tạo PR theo API /api/purchase-requests (R01, R02, R03, R05)
+  const canCreatePr = ['R01', 'R02', 'R03', 'R05'].includes(user?.roleCode || '')
+  const needsPr = PR_DISPOSITIONS.includes(data.disposition || '')
+
+  const goCreatePr = () => {
+    const params = new URLSearchParams({
+      originType: 'NCR',
+      originId: data.id,
+      originLabel: data.ncrCode,
+      projectId: data.projectId,
+    })
+    router.push(`/dashboard/warehouse/purchase-requests/new?${params.toString()}`)
+  }
 
   const stepIdx = NCR_STEPS.indexOf(data.status as typeof NCR_STEPS[number])
   const openActions = data.actions.filter(a => a.status === 'OPEN').length
@@ -304,6 +323,23 @@ function NCRDetailModal({ ncr, onClose, onUpdated }: { ncr: NCR; onClose: () => 
             />
           </div>
         )}
+
+        {/* Sửa chữa / loại bỏ → cần mua bù vật tư: tạo PR bổ sung có truy vết NCR (Đợt 2D) */}
+        {needsPr && canCreatePr && (
+          <div
+            className="flex items-center justify-between p-3 rounded-lg"
+            style={{ background: SEMANTIC_COLORS.warning.bg, border: `1px solid ${SEMANTIC_COLORS.warning.solid}30` }}
+          >
+            <p className="text-xs" style={{ color: 'var(--text-primary)', margin: 0 }}>
+              Disposition <b>{DISPOSITION_OPTIONS.find(d => d.value === data.disposition)?.label || data.disposition}</b>
+              {' '}— nếu cần mua bù vật tư, tạo PR gắn nguồn {data.ncrCode}
+            </p>
+            <Button variant="primary" size="sm" onClick={goCreatePr}>Tạo PR bổ sung</Button>
+          </div>
+        )}
+
+        {/* Truy vết ngược: PR đã phát sinh từ NCR này */}
+        <OriginPrSection originType="NCR" originId={data.id} />
 
         {/* Actions list */}
         <div>

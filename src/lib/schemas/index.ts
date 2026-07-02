@@ -72,6 +72,10 @@ export {
 // ── Procurement ──
 export {
   createPurchaseRequestSchema,
+  prListQuerySchema,
+  prOriginTypeSchema,
+  type PrListQuery,
+  type PrOriginType,
   createPurchaseOrderSchema,
   convertPrToPoSchema,
   createGrnSchema,
@@ -198,6 +202,7 @@ export {
   createInvoiceSchema,
   updateInvoiceSchema,
   createPaymentSchema,
+  createReceiptSchema,
   createBudgetSchema,
   updateBudgetSchema,
   createCashflowSchema,
@@ -205,6 +210,7 @@ export {
   type CreateInvoiceInput,
   type UpdateInvoiceInput,
   type CreatePaymentInput,
+  type CreateReceiptInput,
   type CreateBudgetInput,
   type UpdateBudgetInput,
   type CreateCashflowInput,

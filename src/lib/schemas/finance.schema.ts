@@ -47,6 +47,19 @@ export const createPaymentSchema = z.object({
 
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>
 
+// ── Customer Receipt (phiếu thu tiền khách — hóa đơn RECEIVABLE) ──
+
+export const createReceiptSchema = z.object({
+  invoiceId: z.string().min(1, 'Hóa đơn là bắt buộc'),
+  amount: z.number().positive('Số tiền phải > 0'),
+  method: z.enum(['BANK', 'CASH', 'OTHER']).default('BANK'),
+  receivedAt: z.string().optional(),
+  referenceNo: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+})
+
+export type CreateReceiptInput = z.infer<typeof createReceiptSchema>
+
 // ── Budget ──
 
 export const createBudgetSchema = z.object({
