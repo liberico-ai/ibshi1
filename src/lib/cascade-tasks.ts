@@ -145,7 +145,9 @@ export async function runCascade(
     return { taskIds: [], groups: [], skippedNoChanges: true }
   }
 
-  const impact = await computeImpact(newVersionId)
+  // Baseline tường minh = oldVersionId: runCascade được gọi SAU khi new version đã ACTIVE,
+  // để computeImpact tự tìm ACTIVE sẽ so version với chính nó → impact rỗng → 0 task (bug #V2).
+  const impact = await computeImpact(newVersionId, oldVersionId)
 
   const grouped = new Map<CascadeGroup, ImpactLine[]>()
   for (const line of impact.lines) {

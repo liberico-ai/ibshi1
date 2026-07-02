@@ -5,7 +5,13 @@ interface QcResult {
   reasons: string[]
 }
 
-export async function isWorkOrderQcPassed(workOrderId: string): Promise<QcResult> {
+/**
+ * opts.ignoreReQcFlag: CHỈ dùng ở transition QC_PENDING→QC_PASSED (chính là hành động re-QC —
+ * QC đã lập biên bản mới, các điều kiện C1-C5 vẫn kiểm đủ). Nếu không có option này,
+ * WO bị flag needsReQc sẽ deadlock: gate chặn vào QC_PASSED → auto-clear không bao giờ chạy.
+ * Các cổng khác (đóng kiện, MRB) gọi mặc định — flag vẫn chặn.
+ */
+export async function isWorkOrderQcPassed(workOrderId: string, opts?: { ignoreReQcFlag?: boolean }): Promise<QcResult> {
   const reasons: string[] = []
 
   const wo = await prisma.workOrder.findUnique({
@@ -15,7 +21,7 @@ export async function isWorkOrderQcPassed(workOrderId: string): Promise<QcResult
   if (!wo) return { passed: false, reasons: ['Work Order không tồn tại'] }
 
   // C0: ECO/revision yêu cầu re-QC
-  if (wo.needsReQc) {
+  if (wo.needsReQc && !opts?.ignoreReQcFlag) {
     reasons.push(`${wo.woCode} cần re-QC${wo.reQcReason ? `: ${wo.reQcReason}` : ''}`)
   }
 

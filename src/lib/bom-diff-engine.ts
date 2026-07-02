@@ -302,25 +302,33 @@ function suggestAction(
   return { action: 'Không thay đổi', code: 'NONE' }
 }
 
-export async function computeImpact(versionId: string): Promise<ImpactResult> {
+/**
+ * Tính impact của version so với baseline.
+ * - baselineVersionId KHÔNG truyền (mặc định): so với version ACTIVE hiện tại — dùng cho PREVIEW khi version còn DRAFT.
+ * - baselineVersionId truyền tường minh: so với đúng version đó — BẮT BUỘC khi gọi SAU khi activate
+ *   (lúc đó version chính là ACTIVE, so mặc định ra rỗng → cascade 0 task — bug #V2 bắt được).
+ */
+export async function computeImpact(versionId: string, baselineVersionId?: string): Promise<ImpactResult> {
   const version = await prisma.bomVersion.findUniqueOrThrow({
     where: { id: versionId },
     include: { bom: { select: { projectId: true, id: true } } },
   })
 
-  const activeVersion = await prisma.bomVersion.findFirst({
-    where: { bomId: version.bom.id, status: 'ACTIVE' },
-    select: { id: true },
-  })
+  const baseline = baselineVersionId
+    ? { id: baselineVersionId }
+    : await prisma.bomVersion.findFirst({
+        where: { bomId: version.bom.id, status: 'ACTIVE' },
+        select: { id: true },
+      })
 
-  if (!activeVersion || activeVersion.id === versionId) {
+  if (!baseline || baseline.id === versionId) {
     return {
       versionId, projectId: version.bom.projectId,
       lines: [], summary: { totalChanges: 0, needPurchase: 0, canUseStock: 0, needPOAlert: 0, needNCR: 0 },
     }
   }
 
-  const diff = await diffBomVersions(activeVersion.id, versionId)
+  const diff = await diffBomVersions(baseline.id, versionId)
   const projectId = version.bom.projectId
 
   const impactLines: ImpactLine[] = []
