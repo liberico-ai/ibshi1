@@ -9,6 +9,8 @@ import { isWorkOrderQcPassed } from '@/lib/qc-gate'
 
 // Valid WO transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
+  // WO sinh từ BOM mặc định chờ vật tư — SX/kho xác nhận đủ vật tư thì mở
+  PENDING_MATERIAL: ['OPEN'],
   OPEN: ['IN_PROGRESS'],
   IN_PROGRESS: ['QC_PENDING', 'ON_HOLD'],
   ON_HOLD: ['IN_PROGRESS'],
@@ -46,6 +48,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Role check: only R06/R06b can start/progress, R09 for QC
     if (['IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].includes(nextStatus) && !RBAC.PRODUCTION_ACTION.includes(user.roleCode)) {
       return errorResponse('Chỉ bộ phận SX hoặc GĐ được thao tác trạng thái này', 403)
+    }
+    // Mở WO (đủ vật tư): SX hoặc Kho
+    if (nextStatus === 'OPEN' && !([...RBAC.PRODUCTION_ACTION, 'R05', 'R05a'].includes(user.roleCode))) {
+      return errorResponse('Chỉ SX/Kho hoặc GĐ được mở WO', 403)
     }
     if (['QC_PASSED', 'QC_FAILED'].includes(nextStatus) && !RBAC.QC_ACTION.includes(user.roleCode)) {
       return errorResponse('Chỉ máy trưởng QC hoặc GĐ được đánh giá kết quả kiểm tra', 403)
