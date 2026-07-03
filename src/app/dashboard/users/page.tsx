@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
-import { DEPARTMENTS_V2, DEPT_NAME, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
+import { DEPARTMENTS_V2, ROLE_TO_DEPT } from '@/lib/org-map'
 import { SearchBar } from '@/components/SearchPagination'
 import { PageHeader, Button } from '@/components/ui'
+import { Pencil, KeyRound, Trash2 } from 'lucide-react'
 
 interface UserItem {
   id: string; username: string; fullName: string; roleCode: string;
@@ -173,10 +174,10 @@ export default function UsersPage() {
                   <div className="flex gap-1.5 justify-center">
                     <button onClick={() => setEditUser(u)} title="Sửa"
                       className="w-7 h-7 rounded-lg flex items-center justify-center text-xs cursor-pointer transition-all hover:scale-110"
-                      style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)' }}></button>
+                      style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)' }}><Pencil size={14} /></button>
                     <button onClick={() => setResetUser(u)} title="Reset mật khẩu"
                       className="w-7 h-7 rounded-lg flex items-center justify-center text-xs cursor-pointer transition-all hover:scale-110"
-                      style={{ background: '#fef3c7', color: '#d97706' }}></button>
+                      style={{ background: '#fef3c7', color: '#d97706' }}><KeyRound size={14} /></button>
                     <button onClick={() => deleteUser(u)} disabled={u.isActive}
                       title={u.isActive ? 'Vô hiệu hoá user trước khi xoá' : 'Xoá vĩnh viễn'}
                       className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all ${u.isActive ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110'}`}
@@ -184,7 +185,7 @@ export default function UsersPage() {
                         background: u.isActive ? '#f3f4f6' : '#fee2e2',
                         color: u.isActive ? '#9ca3af' : '#dc2626',
                         opacity: u.isActive ? 0.4 : 1,
-                      }}></button>
+                      }}><Trash2 size={14} /></button>
                   </div>
                 </td>
               </tr>
