@@ -5,6 +5,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { validateQuery, validateBody } from '@/lib/api-helpers'
 import { prListQuerySchema, createPurchaseRequestSchema } from '@/lib/schemas'
+import { fetchPoCoverageMap, computePrCoverage, type PrCoverageSummary } from '@/lib/pr-coverage'
 
 // GET /api/purchase-requests — List purchase requests
 export async function GET(req: NextRequest) {
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
 
     const qResult = validateQuery(req.url, prListQuerySchema)
     if (!qResult.success) return qResult.response
-    const { page, status, originType, originId, projectId } = qResult.data
+    const { page, status, originType, originId, projectId, withCoverage } = qResult.data
     const limit = 20
 
     const where: Record<string, unknown> = {}
@@ -40,11 +41,29 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
+    // [P2-đợt2 B1] ?withCoverage=1 → tính độ phủ PO cho các PR APPROVED trong trang
+    // (query gộp theo projectIds + materialIds — tránh N+1). Không có flag → shape cũ giữ nguyên.
+    let coverageByPrId: Map<string, PrCoverageSummary> | null = null
+    if (withCoverage === '1') {
+      coverageByPrId = new Map()
+      const approved = prs.filter(pr => pr.status === 'APPROVED')
+      if (approved.length > 0) {
+        const projectIds = [...new Set(approved.map(pr => pr.projectId))]
+        const materialIds = [...new Set(approved.flatMap(pr => pr.items.map(i => i.materialId)))]
+        const poMap = await fetchPoCoverageMap(projectIds, materialIds)
+        for (const pr of approved) {
+          coverageByPrId.set(pr.id, computePrCoverage(pr.projectId, pr.items, poMap).summary)
+        }
+      }
+    }
+
     return successResponse({
       purchaseRequests: prs.map((pr: Record<string, unknown> & { items: Array<Record<string, unknown>> }) => ({
         ...pr,
         itemCount: pr.items.length,
         totalItems: pr.items.reduce((sum: number, i: Record<string, unknown>) => sum + Number(i.quantity || 0), 0),
+        // coverage chỉ xuất hiện khi withCoverage=1; PR không APPROVED → null
+        ...(coverageByPrId ? { coverage: coverageByPrId.get(pr.id as string) ?? null } : {}),
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     })

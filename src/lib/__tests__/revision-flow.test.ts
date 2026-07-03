@@ -107,7 +107,7 @@ describe('approveRevision — gate 2C (#V2)', () => {
     )
 
     // Cascade chạy với đúng version cũ/mới
-    expect(mockRunCascade).toHaveBeenCalledWith('bv-old', 'bv-new', 'proj-1', 'ECO-26-001', 'user-1')
+    expect(mockRunCascade).toHaveBeenCalledWith('bv-old', 'bv-new', 'proj-1', 'ECO-26-001', 'user-1', 'bom-1')
 
     // Task RE_QC giao R09
     expect(mockCreateTask).toHaveBeenCalledTimes(1)

@@ -33,6 +33,8 @@ export const prListQuerySchema = searchFilterSchema.extend({
   originType: prOriginTypeSchema.optional(),
   originId: z.string().optional(),
   projectId: z.string().optional(),
+  // ?withCoverage=1 → đính kèm summary độ phủ PO cho PR APPROVED (P2-đợt2 B1)
+  withCoverage: z.string().optional(),
 })
 export type PrListQuery = z.infer<typeof prListQuerySchema>
 

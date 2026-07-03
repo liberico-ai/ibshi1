@@ -207,6 +207,13 @@ export default function BomRevisionDetailPage() {
   const [createReason, setCreateReason] = useState('')
   const [creating, setCreating] = useState(false)
 
+  // Đợt2-A: ECO auto-apply — modal preview + tạo PR bổ sung tự động từ impact
+  const [showAutoPr, setShowAutoPr] = useState(false)
+  const [autoPrImpact, setAutoPrImpact] = useState<ImpactResult | null>(null)
+  const [autoPrLoading, setAutoPrLoading] = useState(false)
+  const [autoPrCreating, setAutoPrCreating] = useState(false)
+  const [originPrRefresh, setOriginPrRefresh] = useState(0)
+
   // ── Load BOM info ──
   const loadBom = useCallback(async () => {
     if (!id) return
@@ -316,6 +323,48 @@ export default function BomRevisionDetailPage() {
       loadVersions()
     } else {
       alert(res.error || 'Khong the tao phien ban moi')
+    }
+  }
+
+  // ── Đợt2-A: ECO auto-apply ──
+  // Baseline = ban SUPERSEDED versionNo lon nhat truoc version dang chon (cung logic voi API create-pr)
+  const autoPrBaseline = versionDetail
+    ? versions
+        .filter(v => v.status === 'SUPERSEDED' && v.versionNo < versionDetail.versionNo)
+        .sort((a, b) => b.versionNo - a.versionNo)[0] || null
+    : null
+
+  const autoPrBuyLines = (autoPrImpact?.lines || []).filter(
+    l => (l.suggestedActionCode === 'ADD_PR' || l.suggestedActionCode === 'UPDATE_PR') && l.diffLine.qtyDelta > 0
+  )
+  const autoPrPoAlerts = (autoPrImpact?.lines || []).filter(l => l.suggestedActionCode === 'ALERT_PO')
+
+  const openAutoPrPreview = async () => {
+    if (!versionDetail) return
+    setShowAutoPr(true)
+    setAutoPrImpact(null)
+    if (!autoPrBaseline) return
+    setAutoPrLoading(true)
+    // Version da ACTIVE → phai so tuong minh voi ban truoc (baselineVersionId), khong dung baseline mac dinh
+    const res = await apiFetch(`/api/design/bom/versions/${versionDetail.id}/impact?baselineVersionId=${autoPrBaseline.id}`)
+    setAutoPrImpact(res.ok ? (res.impact || null) : null)
+    setAutoPrLoading(false)
+  }
+
+  const handleCreateAutoPr = async () => {
+    if (!versionDetail) return
+    setAutoPrCreating(true)
+    const res = await apiFetch(`/api/design/bom/versions/${versionDetail.id}/create-pr`, { method: 'POST' })
+    setAutoPrCreating(false)
+    if (res.ok) {
+      alert(res.message
+        || (res.existing ? `Da co PR ${res.prCode} tu ECO nay — khong tao trung`
+          : res.created ? `Da tao PR ${res.prCode}`
+          : 'Khong co dong nao can mua them — khong tao PR'))
+      setShowAutoPr(false)
+      setOriginPrRefresh(k => k + 1) // refresh section "PR phat sinh"
+    } else {
+      alert(res.error || 'Loi khi tao PR tu dong')
     }
   }
 
@@ -510,6 +559,12 @@ export default function BomRevisionDetailPage() {
                         Tao PR bo sung
                       </Button>
                     )}
+                    {/* Đợt2-A: ECO auto-apply — hệ thống tự đề xuất + tạo PR từ impact (chỉ version ACTIVE có ECO) */}
+                    {versionDetail.eco && versionDetail.status === 'ACTIVE' && (
+                      <Button variant="primary" onClick={openAutoPrPreview}>
+                        Tao PR bo sung TU DONG
+                      </Button>
+                    )}
                     {canApproveThisVersion && (
                       <Button variant="primary" loading={approving} onClick={handleApprove}>
                         Phat hanh BomVersion
@@ -520,7 +575,7 @@ export default function BomRevisionDetailPage() {
 
                 {/* Truy vết ngược: PR phát sinh từ phiên bản này (ECO) */}
                 <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
-                  <OriginPrSection originType="ECO" originId={versionDetail.id} />
+                  <OriginPrSection key={originPrRefresh} originType="ECO" originId={versionDetail.id} />
                 </div>
               </div>
 
@@ -895,6 +950,111 @@ export default function BomRevisionDetailPage() {
           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
             Phien ban moi se sao chep cac dong vat tu tu phien ban hieu luc hien tai.
           </p>
+        </div>
+      </Modal>
+
+      {/* ── Đợt2-A: Auto PR Modal — preview đề xuất mua từ impact rồi xác nhận tạo PR ── */}
+      <Modal
+        open={showAutoPr}
+        onClose={() => setShowAutoPr(false)}
+        title={`Tao PR bo sung tu dong — ${versionDetail?.eco?.ecoCode || ''}`}
+        size="lg"
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setShowAutoPr(false)}>Huy</Button>
+            <Button
+              variant="primary"
+              loading={autoPrCreating}
+              disabled={autoPrLoading || !autoPrBaseline || autoPrBuyLines.length === 0}
+              onClick={handleCreateAutoPr}
+            >
+              Xac nhan tao PR ({autoPrBuyLines.length} dong)
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {!autoPrBaseline ? (
+            <p style={{ fontSize: 'var(--text-sm)', color: SEMANTIC_COLORS.danger.solid }}>
+              Khong co ban truoc (SUPERSEDED) de so sanh — khong tinh duoc vat tu can mua them.
+            </p>
+          ) : autoPrLoading ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}
+            </div>
+          ) : !autoPrImpact ? (
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+              Khong tai duoc du lieu impact. Dong modal va thu lai.
+            </p>
+          ) : (
+            <>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: 0 }}>
+                So sanh Rev {versionDetail?.versionNo} voi Rev {autoPrBaseline.versionNo}.
+                He thong de xuat cac dong can mua them (Tao PR bo sung / Tang SL tren PR) co qtyDelta &gt; 0.
+                PR tao ra o trang thai DRAFT, gan nguon ECO de truy vet.
+              </p>
+
+              {autoPrBuyLines.length === 0 ? (
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                  Khong co dong nao can mua them tu thay doi nay — se khong tao PR.
+                </p>
+              ) : (
+                <div className="dt-wrapper">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left' }}>Ma VT</th>
+                        <th style={{ textAlign: 'left' }}>Ten VT</th>
+                        <th style={{ textAlign: 'left' }}>PieceMark</th>
+                        <th style={{ textAlign: 'right' }}>SL can mua</th>
+                        <th style={{ textAlign: 'left' }}>DVT</th>
+                        <th style={{ textAlign: 'left' }}>De xuat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {autoPrBuyLines.map((line, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <span className="font-mono" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                              {line.diffLine.materialCode}
+                            </span>
+                          </td>
+                          <td style={{ color: 'var(--text-primary)' }}>{line.diffLine.materialName}</td>
+                          <td className="font-mono" style={{ color: 'var(--text-secondary)' }}>
+                            {line.diffLine.pieceMark || '—'}
+                          </td>
+                          <td className="font-mono" style={{ textAlign: 'right', fontWeight: 700, color: SEMANTIC_COLORS.success.solid }}>
+                            +{line.diffLine.qtyDelta}
+                          </td>
+                          <td style={{ color: 'var(--text-muted)' }}>{line.diffLine.unit}</td>
+                          <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+                            {line.suggestedAction}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {autoPrPoAlerts.length > 0 && (
+                <div style={{
+                  padding: '0.75rem 1rem', borderRadius: 'var(--radius)',
+                  background: SEMANTIC_COLORS.danger.bg, border: `1px solid ${SEMANTIC_COLORS.danger.solid}`,
+                }}>
+                  <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: SEMANTIC_COLORS.danger.solid, margin: '0 0 6px' }}>
+                    Canh bao PO ({autoPrPoAlerts.length} dong) — KHONG dua vao PR, chi bao TM dam phan
+                  </p>
+                  {autoPrPoAlerts.map((line, idx) => (
+                    <p key={idx} style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', margin: '2px 0' }}>
+                      <span className="font-mono" style={{ fontWeight: 600 }}>{line.diffLine.materialCode}</span>
+                      {' — '}{line.diffLine.materialName} (da PO {line.currentPoQty}, delta {line.diffLine.qtyDelta > 0 ? `+${line.diffLine.qtyDelta}` : line.diffLine.qtyDelta} {line.diffLine.unit})
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Modal>
     </div>

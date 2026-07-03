@@ -12,9 +12,27 @@ import { ClipboardList } from 'lucide-react'
 
 interface PrItem {
   id: string
+  materialId: string
   quantity: number
   notes: string | null
   material: { materialCode: string; name: string; unit: string } | null
+}
+
+// Độ phủ PO (P2-đợt2 B1) — summary từ list ?withCoverage=1, per-item từ /coverage
+interface PrCoverageSummary {
+  totalItems: number
+  coveredItems: number
+  shortageItems: number
+  coveragePct: number
+  fullyCovered: boolean
+}
+
+interface PrItemCoverage {
+  materialId: string
+  needed: number
+  covered: number
+  shortage: number
+  isCovered: boolean
 }
 
 interface PurchaseRequest {
@@ -30,6 +48,7 @@ interface PurchaseRequest {
   project: { projectCode: string; projectName: string }
   items: PrItem[]
   itemCount: number
+  coverage?: PrCoverageSummary | null
 }
 
 interface PaginationData { page: number; limit: number; total: number; totalPages: number }
@@ -73,6 +92,27 @@ function OriginBadge({ pr }: { pr: PurchaseRequest }) {
   )
 }
 
+/** Badge "Thiếu PO x%" màu cam — PR APPROVED nhưng PO chưa phủ đủ (P2-đợt2 B1) */
+function CoverageBadge({ pr }: { pr: PurchaseRequest }) {
+  if (pr.status !== 'APPROVED' || !pr.coverage || pr.coverage.fullyCovered) return null
+  const missingPct = 100 - pr.coverage.coveragePct
+  return (
+    <span
+      className="badge"
+      title={`${pr.coverage.coveredItems}/${pr.coverage.totalItems} dòng vật tư đã có PO phủ đủ — mở rộng để xem chi tiết`}
+      style={{
+        background: SEMANTIC_COLORS.warning.bg,
+        color: SEMANTIC_COLORS.warning.solid,
+        fontSize: 'var(--text-2xs)',
+        fontWeight: 700,
+        marginLeft: 6,
+      }}
+    >
+      Thiếu PO {missingPct}%
+    </span>
+  )
+}
+
 export default function PurchaseRequestsPage() {
   const router = useRouter()
   const user = useAuthStore(s => s.user)
@@ -87,6 +127,7 @@ export default function PurchaseRequestsPage() {
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     params.set('page', String(page))
+    params.set('withCoverage', '1') // badge "Thiếu PO" cho PR APPROVED
     const res = await apiFetch(`/api/purchase-requests?${params}`)
     if (res.ok) {
       setPrs(res.purchaseRequests || [])
@@ -164,6 +205,21 @@ export default function PurchaseRequestsPage() {
 }
 
 function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: boolean; onToggle: () => void }) {
+  // Per-item coverage — chỉ fetch khi expand PR APPROVED (lazy, 1 lần)
+  const [itemCoverage, setItemCoverage] = useState<Record<string, PrItemCoverage> | null>(null)
+  useEffect(() => {
+    if (!expanded || pr.status !== 'APPROVED' || itemCoverage) return
+    apiFetch(`/api/purchase-requests/${pr.id}/coverage`).then(res => {
+      if (res.ok) {
+        const map: Record<string, PrItemCoverage> = {}
+        for (const it of (res.items || []) as PrItemCoverage[]) map[it.materialId] = it
+        setItemCoverage(map)
+      }
+    })
+  }, [expanded, pr.id, pr.status, itemCoverage])
+
+  const showCoverageCols = expanded && pr.status === 'APPROVED' && itemCoverage !== null
+
   return (
     <>
       <tr className="cursor-pointer" onClick={onToggle}>
@@ -176,7 +232,7 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
           <span style={{ color: 'var(--text-primary)' }}>{pr.project.projectCode}</span>
           <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>{pr.project.projectName}</span>
         </td>
-        <td><StatusBadge category="pr" status={pr.status} /></td>
+        <td><StatusBadge category="pr" status={pr.status} /><CoverageBadge pr={pr} /></td>
         <td className="text-xs" style={{ color: pr.urgency === 'NORMAL' ? 'var(--text-secondary)' : SEMANTIC_COLORS.danger.solid }}>
           {URGENCY_LABELS[pr.urgency] || pr.urgency}
         </td>
@@ -200,16 +256,35 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
             {pr.notes && (
               <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>Ghi chú: {pr.notes}</p>
             )}
+            {pr.status === 'APPROVED' && pr.coverage && (
+              <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>
+                Độ phủ PO:{' '}
+                <span style={{ fontWeight: 700, color: pr.coverage.fullyCovered ? SEMANTIC_COLORS.info.solid : SEMANTIC_COLORS.warning.solid }}>
+                  {pr.coverage.coveredItems}/{pr.coverage.totalItems} dòng vật tư đã đủ ({pr.coverage.coveragePct}%)
+                </span>
+                <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                  — tính theo PO cùng dự án, không tính PO nháp/hủy/từ chối
+                </span>
+              </p>
+            )}
             <table style={{ width: '100%', fontSize: 'var(--text-xs)' }}>
               <thead>
                 <tr style={{ color: 'var(--text-muted)' }}>
                   <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 6 }}>Vật tư</th>
                   <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6 }}>Số lượng</th>
+                  {showCoverageCols && (
+                    <>
+                      <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Đã đặt PO</th>
+                      <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Còn thiếu</th>
+                    </>
+                  )}
                   <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Ghi chú</th>
                 </tr>
               </thead>
               <tbody>
-                {pr.items.map(item => (
+                {pr.items.map(item => {
+                  const cov = showCoverageCols ? itemCoverage?.[item.materialId] : undefined
+                  return (
                   <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '0.375rem 0' }}>
                       <span className="font-mono" style={{ color: 'var(--accent)', fontWeight: 600, marginRight: 8 }}>
@@ -220,9 +295,28 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
                     <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0' }}>
                       {Number(item.quantity)} {item.material?.unit || ''}
                     </td>
+                    {showCoverageCols && (
+                      <>
+                        <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0 0.375rem 16px' }}>
+                          {cov ? cov.covered : '—'}
+                        </td>
+                        <td
+                          className="font-mono"
+                          style={{
+                            textAlign: 'right',
+                            padding: '0.375rem 0 0.375rem 16px',
+                            fontWeight: cov && cov.shortage > 0 ? 700 : 400,
+                            color: cov && cov.shortage > 0 ? SEMANTIC_COLORS.warning.solid : 'var(--text-muted)',
+                          }}
+                        >
+                          {cov ? (cov.shortage > 0 ? cov.shortage : 'Đủ') : '—'}
+                        </td>
+                      </>
+                    )}
                     <td style={{ padding: '0.375rem 0 0.375rem 16px', color: 'var(--text-muted)' }}>{item.notes || ''}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </td>
