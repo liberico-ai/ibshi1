@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    if (!['R01', 'R02', 'R05', 'R07'].includes(user.roleCode)) {
+    if (!['R01', 'R02', 'R05', 'R07', 'R08', 'R08a'].includes(user.roleCode)) {
       return errorResponse('Bạn không có quyền chuyển PR→PO', 403)
     }
 

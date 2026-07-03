@@ -4,7 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { createShipmentSchema } from '@/lib/schemas'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a']
+const ALLOWED_ROLES = ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a']
 
 // GET /api/logistics/shipments
 export async function GET(req: NextRequest) {

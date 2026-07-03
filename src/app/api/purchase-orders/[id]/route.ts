@@ -4,7 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a']
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a']
 
 // GET /api/purchase-orders/[id] — PO detail with items + vendor
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

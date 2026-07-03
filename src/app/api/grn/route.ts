@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
-  if (!requireRoles(user.roleCode, ['R01', 'R02', 'R02a', 'R05', 'R05a', 'R07', 'R07a'])) {
+  if (!requireRoles(user.roleCode, ['R01', 'R02', 'R02a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'])) {
     return errorResponse('Không có quyền nhận hàng', 403)
   }
 

@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { withCache } from '@/lib/cache'
 
-const ALLOWED_ROLES = ['R01', 'R03', 'R03a', 'R05', 'R05a']
+const ALLOWED_ROLES = ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R08', 'R08a']
 
 // GET /api/warehouse/stats — Warehouse KPI dashboard
 export async function GET(req: NextRequest) {

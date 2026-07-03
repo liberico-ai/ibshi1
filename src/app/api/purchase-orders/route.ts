@@ -6,7 +6,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateQuery } from '@/lib/api-helpers'
 import { searchFilterSchema } from '@/lib/schemas'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a']
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a']
 
 // GET /api/purchase-orders — List POs
 export async function GET(req: NextRequest) {

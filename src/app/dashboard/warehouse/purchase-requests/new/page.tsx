@@ -140,7 +140,7 @@ function MaterialCombobox({
   )
 }
 
-const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05']
+const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05', 'R08', 'R08a']
 
 const URGENCY_OPTIONS = [
   { value: 'NORMAL', label: 'Bình thường' },

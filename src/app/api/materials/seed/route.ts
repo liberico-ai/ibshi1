@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
-    if (!['R01', 'R03', 'R05', 'R10'].includes(user.roleCode)) return forbiddenResponse()
+    if (!['R01', 'R03', 'R05', 'R08', 'R08a', 'R10'].includes(user.roleCode)) return forbiddenResponse()
 
     const existing = await prisma.material.count()
     if (existing > 0) {

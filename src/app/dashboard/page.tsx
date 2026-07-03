@@ -190,11 +190,11 @@ function RoleInsights({ data, role }: { data: RoleData; role: string }) {
   const myTasks = data.myTasks || { total: 0, byStatus: {} }
   const roleIcon: Record<string, React.ReactNode> = {
     R01: <BarChart3 size={16} />, R02: <ClipboardList size={16} />, R04: <Ruler size={16} />, R05: <Package size={16} />,
-    R06: <Factory size={16} />, R07: <Handshake size={16} />, R09: <ShieldCheck size={16} />,
+    R06: <Factory size={16} />, R07: <Handshake size={16} />, R08: <FileBarChart size={16} />, R09: <ShieldCheck size={16} />,
   }
   const roleLabel: Record<string, string> = {
     R01: 'BGĐ', R02: 'PM', R04: 'Thiết kế', R05: 'Kho',
-    R06: 'Sản xuất', R07: 'Thương mại', R09: 'QC',
+    R06: 'Sản xuất', R07: 'Thương mại', R08: 'Tài chính', R09: 'QC',
   }
 
   return (

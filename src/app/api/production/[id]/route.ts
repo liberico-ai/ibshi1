@@ -87,7 +87,7 @@ export const POST = withErrorHandler(async (req: NextRequest, { params }: { para
   const payload = await authenticateRequest(req)
   if (!payload) return unauthorizedResponse()
 
-  if (!['R01', 'R05', 'R06'].includes(payload.roleCode)) {
+  if (!['R01', 'R05', 'R06', 'R08', 'R08a'].includes(payload.roleCode)) {
     return errorResponse('Không có quyền cấp vật tư', 403)
   }
 

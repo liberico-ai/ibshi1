@@ -53,7 +53,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (action === 'convert') {
       // Convert approved PR → PO
-      if (!['R01', 'R05', 'R07'].includes(payload.roleCode)) {
+      if (!['R01', 'R05', 'R07', 'R08', 'R08a'].includes(payload.roleCode)) {
         return errorResponse('Không có quyền chuyển PR thành PO', 403)
       }
       if (pr.status !== 'APPROVED') {

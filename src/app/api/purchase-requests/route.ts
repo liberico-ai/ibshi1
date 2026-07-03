@@ -79,8 +79,8 @@ export async function POST(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    // R02 (PM), R03 (KTKH), R05 (Kho), R01 (BGĐ) can create PR
-    if (!['R01', 'R02', 'R03', 'R05'].includes(payload.roleCode)) {
+    // R02 (PM), R03 (KTKH), R05 (Kho), R08/R08a (Kế toán), R01 (BGĐ) can create PR
+    if (!['R01', 'R02', 'R03', 'R05', 'R08', 'R08a'].includes(payload.roleCode)) {
       return errorResponse('Bạn không có quyền tạo yêu cầu mua hàng', 403)
     }
 

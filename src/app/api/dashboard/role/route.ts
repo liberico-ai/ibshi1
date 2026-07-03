@@ -53,7 +53,7 @@ async function fetchRoleWidgets(user: { userId: string; roleCode: string }) {
       }
     }
 
-    if (['R01', 'R05', 'R07'].includes(role)) {
+    if (['R01', 'R05', 'R07', 'R08', 'R08a'].includes(role)) {
       // Kho / Thương mại — procurement
       const [pendingPR, pendingPO, allMaterials] = await Promise.all([
         prisma.purchaseRequest.count({ where: { status: 'PENDING' } }),

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse('Chỉ bộ phận SX hoặc GĐ được thao tác trạng thái này', 403)
     }
     // Mở WO (đủ vật tư): SX hoặc Kho
-    if (nextStatus === 'OPEN' && !([...RBAC.PRODUCTION_ACTION, 'R05', 'R05a'].includes(user.roleCode))) {
+    if (nextStatus === 'OPEN' && !([...RBAC.PRODUCTION_ACTION, 'R05', 'R05a', 'R08', 'R08a'].includes(user.roleCode))) {
       return errorResponse('Chỉ SX/Kho hoặc GĐ được mở WO', 403)
     }
     if (['QC_PASSED', 'QC_FAILED'].includes(nextStatus) && !RBAC.QC_ACTION.includes(user.roleCode)) {

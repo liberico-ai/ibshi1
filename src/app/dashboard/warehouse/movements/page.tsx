@@ -53,7 +53,7 @@ export default function StockMovementsPage() {
     setShowForm(true)
   }
 
-  const canCreate = ['R01', 'R02', 'R05', 'R05a'].includes(user?.roleCode || '')
+  const canCreate = ['R01', 'R02', 'R05', 'R05a', 'R08', 'R08a'].includes(user?.roleCode || '')
 
   if (loading) {
     return (

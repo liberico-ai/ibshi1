@@ -5,7 +5,7 @@ import { getPieceMarkQcStatus } from '@/lib/qc-gate'
 import { validateBody } from '@/lib/api-helpers'
 import { createPackingListSchema } from '@/lib/schemas'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a']
+const ALLOWED_ROLES = ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a']
 
 // GET /api/logistics/packing-lists
 export async function GET(req: NextRequest) {

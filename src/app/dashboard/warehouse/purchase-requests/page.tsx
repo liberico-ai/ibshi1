@@ -53,7 +53,7 @@ interface PurchaseRequest {
 
 interface PaginationData { page: number; limit: number; total: number; totalPages: number }
 
-const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05']
+const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05', 'R08', 'R08a']
 
 const STATUS_FILTERS = [
   { value: '', label: 'Tất cả' },

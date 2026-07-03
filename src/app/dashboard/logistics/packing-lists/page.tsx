@@ -40,7 +40,7 @@ export default function PackingListsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [showCreate, setShowCreate] = useState(false)
 
-  const canCreate = ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'].includes(user?.roleCode || '')
+  const canCreate = ['R01', 'R02', 'R05', 'R05a', 'R08', 'R08a', 'R07', 'R07a'].includes(user?.roleCode || '')
 
   const loadData = useCallback(async () => {
     const params = new URLSearchParams()

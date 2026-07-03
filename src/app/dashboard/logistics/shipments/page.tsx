@@ -43,7 +43,7 @@ export default function ShipmentsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
-  const canCreate = ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a'].includes(user?.roleCode || '')
+  const canCreate = ['R01', 'R02', 'R05', 'R05a', 'R08', 'R08a', 'R07', 'R07a'].includes(user?.roleCode || '')
 
   const loadData = useCallback(async () => {
     const params = new URLSearchParams()

@@ -5,7 +5,7 @@ import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a']
+const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a']
 
 export async function GET(request: NextRequest) {
   try {

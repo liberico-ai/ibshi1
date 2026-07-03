@@ -65,7 +65,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!['R01', 'R05'].includes(payload.roleCode)) {
+    if (!['R01', 'R05', 'R08', 'R08a'].includes(payload.roleCode)) {
       return errorResponse('Không có quyền', 403)
     }
 
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!['R01', 'R05', 'R06'].includes(payload.roleCode)) {
+    if (!['R01', 'R05', 'R06', 'R08', 'R08a'].includes(payload.roleCode)) {
       return errorResponse('Không có quyền xuất/nhập kho', 403)
     }
 

@@ -202,7 +202,7 @@ function NCRDetailModal({ ncr, onClose, onUpdated }: { ncr: NCR; onClose: () => 
   const canEdit = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
   const canAddAction = ['R01', 'R09', 'R09a', 'R06'].includes(user?.roleCode || '')
   // Quyền tạo PR theo API /api/purchase-requests (R01, R02, R03, R05)
-  const canCreatePr = ['R01', 'R02', 'R03', 'R05'].includes(user?.roleCode || '')
+  const canCreatePr = ['R01', 'R02', 'R03', 'R05', 'R08', 'R08a'].includes(user?.roleCode || '')
   const needsPr = PR_DISPOSITIONS.includes(data.disposition || '')
 
   const goCreatePr = () => {

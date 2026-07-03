@@ -7,7 +7,7 @@ import { generateMaterialCode } from '@/lib/material-code'
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_ROLES = ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R10']
+const ALLOWED_ROLES = ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R08', 'R08a', 'R10']
 
 // POST /api/materials/quick-create
 // Auto-generate a PROVISIONAL canonical code for a brand-new material raised in a PR.
