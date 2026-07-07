@@ -13,6 +13,7 @@ import {
   aggregateBomItems, fetchEstimateData, fetchSupplierData,
   fetchPoData, fetchPlanData, fetchStepResult, fetchAllMaterials, fetchAvailableInventory
 } from '@/lib/data-fetchers'
+import { USE_QUOTE_TABLES, syncQuoteGroups } from '@/lib/quote-sync'
 
 // GET /api/tasks/[id]
 export const GET = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -739,6 +740,9 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
           resultData: { ...rd, groups: merged, sourceP35Id: id },
         },
       })
+      if (USE_QUOTE_TABLES) {
+        await syncQuoteGroups(openP36.id, task.projectId, merged).catch(e => console.error('[quote-sync] P3.5→P3.6 merge:', e))
+      }
     } else {
       const newP36 = await prisma.task.create({
         data: {
@@ -755,6 +759,9 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
       await prisma.taskAssignee.create({
         data: { taskId: newP36.id, role: 'R01', userId: p36User.id, isPrimary: true },
       })
+      if (USE_QUOTE_TABLES) {
+        await syncQuoteGroups(newP36.id, task.projectId, newGroups).catch(e => console.error('[quote-sync] P3.5→new P3.6:', e))
+      }
     }
 
     return successResponse({ task: updatedTask, nextSteps: ['P3.6'] }, 'Đã đệ trình báo giá')
@@ -841,7 +848,7 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
          }
        })
 
-       // NOTE: P3.7 has been architecturally removed. 
+       // NOTE: P3.7 has been architecturally removed.
        // Approved groups are now centrally managed in /dashboard/warehouse/procurement Dashboard
     } else {
        // Partial save, do not complete task
@@ -851,6 +858,10 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
             resultData: { ...currentRd, groups }
          }
        })
+    }
+
+    if (USE_QUOTE_TABLES) {
+      await syncQuoteGroups(id, task.projectId, groups).catch(e => console.error('[quote-sync] P3.6 evaluate:', e))
     }
 
     return successResponse({ task: updatedTask }, 'Đã xử lý quyết định nhóm')

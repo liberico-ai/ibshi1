@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticateRequest, unauthorizedResponse, successResponse, errorResponse, requireRoles } from '@/lib/auth'
 import { formatCurrency } from '@/lib/utils'
+import { USE_QUOTE_TABLES, readApprovedGroups, syncQuoteGroups } from '@/lib/quote-sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,37 +14,41 @@ export async function GET(request: NextRequest) {
     if (!payload?.userId) return unauthorizedResponse()
     if (!requireRoles(payload.roleCode, ALLOWED_ROLES)) return errorResponse('Forbidden', 403)
 
-    // Find all P3.6 Tasks
-    const tasks = await prisma.task.findMany({
-      where: { taskType: 'P3.6' },
-      include: { project: true },
-      orderBy: { createdAt: 'desc' }
-    })
+    let allApprovedGroups: any[]
 
-    const allApprovedGroups: any[] = []
+    if (USE_QUOTE_TABLES) {
+      allApprovedGroups = await readApprovedGroups()
+    } else {
+      // Legacy JSON scan
+      const tasks = await prisma.task.findMany({
+        where: { taskType: 'P3.6' },
+        include: { project: true },
+        orderBy: { createdAt: 'desc' }
+      })
 
-    for (const task of tasks) {
-      const rd = (task.resultData as any) || {}
-      const groups = rd.groups || []
-      
-      for (const g of groups) {
-        if (g.status === 'APPROVED') {
-          // Flatten into trackable units
-          allApprovedGroups.push({
-            taskId: task.id,
-            projectId: task.projectId,
-            projectName: task.project?.projectName || '',
-            projectCode: task.project?.projectCode || '',
-            groupId: g.id || `GRP-${Math.random()}`,
-            groupName: g.name || g.groupName || 'Nhóm vật tư',
-            prCode: g.prCode || `PR-LEGACY-${String(g.id || Math.floor(Math.random()*10000)).slice(-4)}`,
-            supplier: g.assignedSupplier || (g.items?.length > 0 ? (g.items[0].quotes?.[g.items[0].selectedQuoteIndex || 0]?.ncc || 'Chưa chốt NCC') : 'Chưa chốt NCC'),
-            totalValue: g.totalValue || (g.items || []).reduce((sum: number, item: any) => sum + ((item.quotes?.[item.selectedQuoteIndex || 0]?.price || 0) * (item.shortfall || 0)), 0),
-            items: g.items || [],
-            paymentStatus: g.paymentStatus || 'PENDING',
-            deliveryDate: g.deliveryDate || null,
-            paymentDate: g.paymentDate || null,
-          })
+      allApprovedGroups = []
+      for (const task of tasks) {
+        const rd = (task.resultData as any) || {}
+        const groups = rd.groups || []
+
+        for (const g of groups) {
+          if (g.status === 'APPROVED') {
+            allApprovedGroups.push({
+              taskId: task.id,
+              projectId: task.projectId,
+              projectName: task.project?.projectName || '',
+              projectCode: task.project?.projectCode || '',
+              groupId: g.id || `GRP-${Math.random()}`,
+              groupName: g.name || g.groupName || 'Nhóm vật tư',
+              prCode: g.prCode || `PR-LEGACY-${String(g.id || Math.floor(Math.random()*10000)).slice(-4)}`,
+              supplier: g.assignedSupplier || (g.items?.length > 0 ? (g.items[0].quotes?.[g.items[0].selectedQuoteIndex || 0]?.ncc || 'Chưa chốt NCC') : 'Chưa chốt NCC'),
+              totalValue: g.totalValue || (g.items || []).reduce((sum: number, item: any) => sum + ((item.quotes?.[item.selectedQuoteIndex || 0]?.price || 0) * (item.shortfall || 0)), 0),
+              items: g.items || [],
+              paymentStatus: g.paymentStatus || 'PENDING',
+              deliveryDate: g.deliveryDate || null,
+              paymentDate: g.paymentDate || null,
+            })
+          }
         }
       }
     }
@@ -223,6 +228,10 @@ export async function PUT(request: NextRequest) {
       where: { id: taskId },
       data: { resultData: { ...rd, groups } }
     })
+
+    if (USE_QUOTE_TABLES) {
+      await syncQuoteGroups(taskId, task.projectId, groups).catch(e => console.error('[quote-sync] procurement PUT:', e))
+    }
 
     return successResponse({ message: 'Đã cập nhật thành công' })
   } catch (error) {

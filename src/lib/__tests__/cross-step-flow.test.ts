@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { prismaMock } from '@/lib/__mocks__/db'
 
 import { aggregateBomItems } from '@/lib/data-fetchers'
@@ -8,11 +8,9 @@ import {
   safeParseSuppliers,
   bomEntrySchema,
   estimateTotalsSchema,
-  supplierEntrySchema,
 } from '@/lib/schemas/cross-step.schema'
 import type {
   BomEntry,
-  BomEntryWithSource,
   EstimateTotals,
   SupplierEntry,
   WbsRow,
@@ -349,5 +347,187 @@ describe('Zod schema validation', () => {
 
       expect(result).toBeNull()
     })
+  })
+})
+
+// ════════════════════════════════════════════════════════════════
+// Quote Groups: P3.5/P3.6 JSON ↔ table sync (dual-write parity)
+// ════════════════════════════════════════════════════════════════
+
+function makeQuoteGroup(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'GROUP_1719000000001',
+    name: 'Nhóm thép tấm',
+    status: 'PENDING',
+    totalValue: 185000000,
+    items: [
+      {
+        name: 'Thép tấm Q345B',
+        code: 'VT-001',
+        spec: '10mm x 2400 x 6000',
+        unit: 'kg',
+        source: 'P2.1',
+        quantity: '150',
+        requestedQty: 150,
+        inStock: 30,
+        shortfall: 120,
+        specMatch: true,
+        matchedMaterial: { code: 'VT-001', name: 'Thép tấm Q345B', spec: '10mm' },
+        selectedQuoteIndex: 1,
+        quotes: [
+          { ncc: 'NCC Alpha', price: 18000 },
+          { ncc: 'NCC Beta', price: 17500 },
+          { ncc: 'NCC Gamma', price: 19000 },
+        ],
+      },
+    ],
+    ...overrides,
+  }
+}
+
+describe('Quote group sync (dual-write)', () => {
+  it('syncQuoteGroups calls upsert for each group with correct groupKey', async () => {
+    const { syncQuoteGroups } = await import('@/lib/quote-sync')
+
+    const groups = [
+      makeQuoteGroup({ id: 'G1', name: 'Nhóm 1' }),
+      makeQuoteGroup({ id: 'G2', name: 'Nhóm 2', status: 'APPROVED' }),
+    ]
+
+    // Mock upsert to return a group with id
+    prismaMock.quoteGroup.upsert.mockResolvedValue({ id: 'qg-mock-1' } as any)
+    prismaMock.quoteGroupItem.deleteMany.mockResolvedValue({ count: 0 })
+    prismaMock.quoteGroupItem.create.mockResolvedValue({ id: 'qi-mock-1' } as any)
+    prismaMock.supplierQuoteLine.createMany.mockResolvedValue({ count: 3 })
+
+    await syncQuoteGroups('task-1', 'proj-1', groups)
+
+    expect(prismaMock.quoteGroup.upsert).toHaveBeenCalledTimes(2)
+
+    // First call: group G1
+    const call1 = prismaMock.quoteGroup.upsert.mock.calls[0][0]
+    expect(call1.where.taskId_groupKey).toEqual({ taskId: 'task-1', groupKey: 'G1' })
+    expect(call1.create.name).toBe('Nhóm 1')
+    expect(call1.create.status).toBe('PENDING')
+
+    // Second call: group G2
+    const call2 = prismaMock.quoteGroup.upsert.mock.calls[1][0]
+    expect(call2.where.taskId_groupKey).toEqual({ taskId: 'task-1', groupKey: 'G2' })
+    expect(call2.create.status).toBe('APPROVED')
+  })
+
+  it('syncQuoteGroups creates items + quote lines for each group', async () => {
+    const { syncQuoteGroups } = await import('@/lib/quote-sync')
+
+    const group = makeQuoteGroup()
+
+    prismaMock.quoteGroup.upsert.mockResolvedValue({ id: 'qg-1' } as any)
+    prismaMock.quoteGroupItem.deleteMany.mockResolvedValue({ count: 0 })
+    prismaMock.quoteGroupItem.create.mockResolvedValue({ id: 'qi-1' } as any)
+    prismaMock.supplierQuoteLine.createMany.mockResolvedValue({ count: 3 })
+
+    await syncQuoteGroups('task-1', 'proj-1', [group])
+
+    // 1 item created
+    expect(prismaMock.quoteGroupItem.create).toHaveBeenCalledTimes(1)
+    const itemData = prismaMock.quoteGroupItem.create.mock.calls[0][0].data
+    expect(itemData.name).toBe('Thép tấm Q345B')
+    expect(itemData.shortfall).toBe(120)
+    expect(itemData.selectedQuoteIndex).toBe(1)
+
+    // 3 quote lines created via createMany
+    expect(prismaMock.supplierQuoteLine.createMany).toHaveBeenCalledTimes(1)
+    const linesData = prismaMock.supplierQuoteLine.createMany.mock.calls[0]?.[0]?.data as any[]
+    expect(linesData).toHaveLength(3)
+    expect(linesData[0].supplierName).toBe('NCC Alpha')
+    expect(linesData[1].unitPrice).toBe(17500)
+    expect(linesData[2].lineIndex).toBe(2)
+  })
+
+  it('syncQuoteGroups handles group with no items gracefully', async () => {
+    const { syncQuoteGroups } = await import('@/lib/quote-sync')
+
+    const emptyGroup = makeQuoteGroup({ items: [] })
+
+    prismaMock.quoteGroup.upsert.mockResolvedValue({ id: 'qg-empty' } as any)
+    prismaMock.quoteGroupItem.deleteMany.mockResolvedValue({ count: 0 })
+
+    await syncQuoteGroups('task-1', null, [emptyGroup])
+
+    expect(prismaMock.quoteGroup.upsert).toHaveBeenCalledTimes(1)
+    expect(prismaMock.quoteGroupItem.create).not.toHaveBeenCalled()
+    expect(prismaMock.supplierQuoteLine.createMany).not.toHaveBeenCalled()
+  })
+
+  it('readApprovedGroups maps table data to tracking list shape', async () => {
+    const { readApprovedGroups } = await import('@/lib/quote-sync')
+
+    prismaMock.quoteGroup.findMany.mockResolvedValue([
+      {
+        id: 'qg-1',
+        taskId: 'task-1',
+        projectId: 'proj-1',
+        groupKey: 'GROUP_123',
+        name: 'Nhóm thép',
+        status: 'APPROVED',
+        totalValue: 185000000 as any,
+        prCode: 'PR-100-01',
+        paymentStatus: 'PENDING',
+        deliveryDate: new Date('2026-08-01'),
+        paymentDate: null,
+        assignedSupplier: 'NCC Beta',
+        rejectedReason: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        task: { id: 'task-1' },
+        project: { id: 'proj-1', projectName: 'Dự án ABC', projectCode: '26-ABC-001' },
+        items: [
+          {
+            id: 'qi-1',
+            quoteGroupId: 'qg-1',
+            name: 'Thép tấm',
+            code: 'VT-001',
+            spec: '10mm',
+            unit: 'kg',
+            source: 'P2.1',
+            quantity: '150',
+            requestedQty: 150 as any,
+            inStock: 30 as any,
+            shortfall: 120 as any,
+            specMatch: true,
+            matchedMaterialJson: { code: 'VT-001' },
+            selectedQuoteIndex: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            quoteLines: [
+              { id: 'ql-1', itemId: 'qi-1', lineIndex: 0, supplierName: 'NCC Alpha', unitPrice: 18000 as any, createdAt: new Date() },
+              { id: 'ql-2', itemId: 'qi-1', lineIndex: 1, supplierName: 'NCC Beta', unitPrice: 17500 as any, createdAt: new Date() },
+              { id: 'ql-3', itemId: 'qi-1', lineIndex: 2, supplierName: 'NCC Gamma', unitPrice: 19000 as any, createdAt: new Date() },
+            ],
+          },
+        ],
+      },
+    ] as any)
+
+    const result = await readApprovedGroups()
+
+    expect(result).toHaveLength(1)
+    const g = result[0]
+    expect(g.groupId).toBe('GROUP_123')
+    expect(g.groupName).toBe('Nhóm thép')
+    expect(g.supplier).toBe('NCC Beta')
+    expect(g.prCode).toBe('PR-100-01')
+    expect(g.totalValue).toBe(185000000)
+    expect(g.items).toHaveLength(1)
+    expect(g.items[0].quotes).toHaveLength(3)
+    expect(g.items[0].quotes[1].ncc).toBe('NCC Beta')
+    expect(g.items[0].quotes[1].price).toBe(17500)
+    expect(g.paymentStatus).toBe('PENDING')
+    expect(g.deliveryDate).toContain('2026-08-01')
+  })
+
+  it('USE_QUOTE_TABLES defaults to false (flag OFF)', async () => {
+    const { USE_QUOTE_TABLES } = await import('@/lib/quote-sync')
+    expect(USE_QUOTE_TABLES).toBe(false)
   })
 })

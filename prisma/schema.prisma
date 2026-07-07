@@ -109,6 +109,7 @@ model Project {
   submission         ProjectSubmission?
   mrbReleases        MrbRelease[]
   settlement         ProjectSettlement?
+  quoteGroups        QuoteGroup[]
 
   @@index([status])
   @@index([pmUserId])
@@ -1893,6 +1894,7 @@ model Task {
   assignees            TaskAssignee[]
   docs                 TaskDocRequirement[]
   history              TaskHistory[]
+  quoteGroups          QuoteGroup[]
 
   @@index([projectId, status])
   @@index([parentId])
@@ -2143,4 +2145,70 @@ model LaborRate {
   @@unique([stage, subItem, revision])
   @@index([projectId])
   @@map("labor_rates")
+}
+
+// ── Supplier Quote Groups (normalized from P3.6 resultData JSON) ──
+
+model QuoteGroup {
+  id               String           @id @default(cuid())
+  taskId           String           @map("task_id")
+  projectId        String?          @map("project_id")
+  groupKey         String           @map("group_key")
+  name             String
+  status           String           @default("PENDING")
+  totalValue       Decimal          @default(0) @map("total_value")
+  prCode           String?          @map("pr_code")
+  paymentStatus    String?          @map("payment_status")
+  deliveryDate     DateTime?        @map("delivery_date")
+  paymentDate      DateTime?        @map("payment_date")
+  assignedSupplier String?          @map("assigned_supplier")
+  rejectedReason   String?          @map("rejected_reason")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  task             Task             @relation(fields: [taskId], references: [id])
+  project          Project?         @relation(fields: [projectId], references: [id])
+  items            QuoteGroupItem[]
+
+  @@unique([taskId, groupKey])
+  @@index([projectId])
+  @@index([status])
+  @@map("quote_groups")
+}
+
+model QuoteGroupItem {
+  id                 String              @id @default(cuid())
+  quoteGroupId       String              @map("quote_group_id")
+  name               String
+  code               String              @default("")
+  spec               String?
+  unit               String              @default("")
+  source             String              @default("")
+  quantity           String              @default("0")
+  requestedQty       Decimal             @default(0) @map("requested_qty")
+  inStock            Decimal             @default(0) @map("in_stock")
+  shortfall          Decimal             @default(0)
+  specMatch          Boolean             @default(false) @map("spec_match")
+  matchedMaterialJson Json?              @map("matched_material")
+  selectedQuoteIndex Int                 @default(0) @map("selected_quote_index")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  quoteGroup         QuoteGroup          @relation(fields: [quoteGroupId], references: [id], onDelete: Cascade)
+  quoteLines         SupplierQuoteLine[]
+
+  @@index([quoteGroupId])
+  @@map("quote_group_items")
+}
+
+model SupplierQuoteLine {
+  id           String         @id @default(cuid())
+  itemId       String         @map("item_id")
+  lineIndex    Int            @map("line_index")
+  supplierName String         @map("supplier_name")
+  unitPrice    Decimal        @map("unit_price")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  item         QuoteGroupItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, lineIndex])
+  @@index([itemId])
+  @@map("supplier_quote_lines")
 }
