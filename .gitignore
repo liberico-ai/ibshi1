@@ -135,4 +135,7 @@ prisma/dev.db
 /Prompt_*.md
 /plans/
 Vault IBSHI/
-docs/handoff/
+docs/handoff/*
+# ...trừ dữ liệu import tham chiếu lô (budget/PO CSV) — cần theo dõi trong repo
+!docs/handoff/import/
+!docs/handoff/import/**
