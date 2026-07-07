@@ -136,6 +136,9 @@ prisma/dev.db
 /plans/
 Vault IBSHI/
 docs/handoff/*
-# ...trừ dữ liệu import tham chiếu lô (budget/PO CSV) — cần theo dõi trong repo
+# Dữ liệu import (csv/xlsx/.DS_Store) KHÔNG vào git — chỉ giữ script .ts trong scripts/.
+# budget_import.csv + po_import.csv đã commit ở lô 1 vẫn tracked (gitignore không untrack file cũ).
 !docs/handoff/import/
-!docs/handoff/import/**
+docs/handoff/import/*.csv
+docs/handoff/import/bom/
+docs/handoff/import/.DS_Store

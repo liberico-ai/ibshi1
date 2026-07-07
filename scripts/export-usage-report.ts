@@ -130,6 +130,7 @@ function isoDate(d: Date): string {
 
 async function main() {
   const { from, to } = parseArgs()
+  const excludeTest = process.argv.includes('--exclude-test')
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) { console.error('❌ DATABASE_URL không set'); process.exit(1) }
   const isRemote = !connectionString.includes('@localhost') && !connectionString.includes('@127.0.0.1')
@@ -145,9 +146,9 @@ async function main() {
   // ── Fetch data (READ-ONLY) ──
 
   const [
-    auditLogs, taskHistories, fileAttachments,
-    allUsers, tasksInPeriod, completedTasks,
-    activeTasks, projects,
+    auditLogsAll, taskHistoriesAll, fileAttachmentsAll,
+    allUsers, tasksInPeriodAll, completedTasksAll,
+    activeTasksAll, projects,
     prCount, poCount,
     briefingSnapshots,
   ] = await Promise.all([
@@ -164,10 +165,58 @@ async function main() {
     prisma.briefingSnapshot.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { id: true, weekOf: true, publishedAt: true, createdBy: true } }),
   ])
 
-  // Supplier quotes from task resultData
-  const quoteTaskCount = await prisma.task.count({
+  // ── Loại dữ liệu test (--exclude-test) ──
+  // Tín hiệu test: (1) API external đẩy vào (externalRef / externalSource='sale' / do user api-system tạo),
+  // (2) dự án test (mã ZZ* hoặc tên chứa "test"), (3) title là task test rõ ràng ("Phòng TK Test", "round-trip test", "ZZ-TEST").
+  // KHÔNG dùng %test% chung để tránh loại nhầm nghiệp vụ thật như "load test / thử tải".
+  const TEST_TITLE_MARKERS = ['Phòng TK Test', 'round-trip test', 'ZZ-TEST']
+  const testTaskIds = new Set<string>()
+  let apiSystemId: string | null = null
+  if (excludeTest) {
+    const [testProjects, apiUser] = await Promise.all([
+      prisma.project.findMany({
+        where: { OR: [
+          { projectCode: { startsWith: 'ZZ', mode: 'insensitive' } },
+          { projectName: { startsWith: 'ZZ', mode: 'insensitive' } },  // vd "ZZ-PILOT ..." (code thật nhưng tên mang tiền tố test)
+          { projectName: { contains: 'test', mode: 'insensitive' } },
+        ] },
+        select: { id: true },
+      }),
+      prisma.user.findUnique({ where: { username: 'api-system' }, select: { id: true } }),
+    ])
+    apiSystemId = apiUser?.id ?? null
+    const testProjIds = testProjects.map(p => p.id)
+    const testTasks = await prisma.task.findMany({
+      where: {
+        OR: [
+          { externalRef: { not: null } },
+          { externalSource: 'sale' },
+          ...(testProjIds.length ? [{ projectId: { in: testProjIds } }] : []),
+          ...(apiSystemId ? [{ createdBy: apiSystemId }] : []),
+          ...TEST_TITLE_MARKERS.map(m => ({ title: { contains: m, mode: 'insensitive' as const } })),
+        ],
+      },
+      select: { id: true },
+    })
+    for (const t of testTasks) testTaskIds.add(t.id)
+  }
+  const keepTask = (id: string | null | undefined) => !excludeTest || !id || !testTaskIds.has(id)
+  const keepUser = (uid: string | null | undefined) => !excludeTest || !apiSystemId || uid !== apiSystemId
+  const fileTaskId = (entityId: string) => entityId.split('_')[0]
+
+  const auditLogs = auditLogsAll.filter(l => keepUser(l.userId) && keepTask(l.entityId))
+  const taskHistories = taskHistoriesAll.filter(h => keepUser(h.byUserId) && keepTask(h.taskId))
+  const fileAttachments = fileAttachmentsAll.filter(f => keepUser(f.uploadedBy) && keepTask(fileTaskId(f.entityId)))
+  const tasksInPeriod = tasksInPeriodAll.filter(t => keepTask(t.id))
+  const completedTasks = completedTasksAll.filter(t => keepTask(t.id))
+  const activeTasks = activeTasksAll.filter(t => keepTask(t.id))
+
+  // Supplier quotes from task resultData (loại test nếu bật cờ)
+  const quoteTasks = await prisma.task.findMany({
     where: { createdAt: { gte: from, lte: to }, taskType: { in: ['P3.3', 'P3.5'] } },
+    select: { id: true },
   })
+  const quoteTaskCount = quoteTasks.filter(t => keepTask(t.id)).length
 
   const userMap = new Map(allUsers.map(u => [u.id, u]))
   const projMap = new Map(projects.map(p => [p.id, p]))
@@ -326,7 +375,10 @@ async function main() {
   sections.push(new Paragraph({ children: [txt('Hệ thống quản trị IBS-ERP', { size: 22 })], alignment: AlignmentType.CENTER, spacing: { after: 60 } }))
   sections.push(new Paragraph({ children: [txt('BÁO CÁO HOẠT ĐỘNG HỆ THỐNG', { bold: true, size: 32 })], alignment: AlignmentType.CENTER, spacing: { after: 100 } }))
   sections.push(new Paragraph({ children: [txt(`Kỳ báo cáo: tuần ${isoDate(from)} – ${isoDate(to)}`, { size: 22 })], alignment: AlignmentType.CENTER, spacing: { after: 40 } }))
-  sections.push(new Paragraph({ children: [txt(`Xuất lúc: ${nowVN} (giờ VN)`, { size: 18, italics: true, color: '666666' })], alignment: AlignmentType.CENTER, spacing: { after: 300 } }))
+  sections.push(new Paragraph({ children: [txt(`Xuất lúc: ${nowVN} (giờ VN)`, { size: 18, italics: true, color: '666666' })], alignment: AlignmentType.CENTER, spacing: { after: excludeTest ? 40 : 300 } }))
+  if (excludeTest) {
+    sections.push(new Paragraph({ children: [txt(`(Đã loại dữ liệu test: task do API external đẩy vào + task/dự án có dấu hiệu test — ${testTaskIds.size} task)`, { size: 16, italics: true, color: '999999' })], alignment: AlignmentType.CENTER, spacing: { after: 300 } }))
+  }
 
   // I. ĐANG LÀM
   sections.push(heading('I. ĐANG LÀM'))
@@ -497,6 +549,7 @@ async function main() {
   fs.writeFileSync(outPath, buffer)
 
   console.log(`\n✅ Xuất thành công: ${outPath}`)
+  if (excludeTest) console.log(`🧹 Đã loại dữ liệu test: ${testTaskIds.size} task (API external + dấu hiệu test)${apiSystemId ? ' + user api-system' : ''}`)
   console.log(`\n── Tóm tắt ──`)
   console.log(`Đăng nhập:       ${loginCount} lượt`)
   console.log(`Người dùng HĐ:   ${activeUserCount}`)
