@@ -470,6 +470,7 @@ async function autoCreateProvisionalCodes(
 export async function enrichBomPrItems(
   items: PrItem[],
   projectCode: string | undefined,
+  opts?: { matchOnly?: boolean },
 ): Promise<PrItem[]> {
   const codes = items.map(it => it.canonicalCode).filter(Boolean) as string[]
   const [inventory, codeResolved] = await Promise.all([
@@ -479,7 +480,10 @@ export async function enrichBomPrItems(
 
   const matchMap = matchInventoryServer(items, inventory, codeResolved)
 
-  const provisionalMap = await autoCreateProvisionalCodes(items, matchMap)
+  // matchOnly: chỉ gắn materialId khi khớp kho, KHÔNG tạo mã tạm (dùng cho import lô — item không khớp để materialId=null)
+  const provisionalMap = opts?.matchOnly
+    ? new Map<number, { code: string; materialId: string }>()
+    : await autoCreateProvisionalCodes(items, matchMap)
 
   return items.map((item, idx) => {
     const match = matchMap.get(idx)
