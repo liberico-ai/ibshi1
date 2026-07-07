@@ -29,6 +29,8 @@ export interface BomLineSnapshot {
   grade: string | null
   quantity: number
   unit: string
+  surfaceAreaM2: number | null
+  weldLengthM: number | null
 }
 
 export type DiffAction = 'ADDED' | 'REMOVED' | 'QTY_CHANGED' | 'SPEC_CHANGED'
@@ -114,6 +116,8 @@ async function loadVersionLines(versionId: string): Promise<BomLineSnapshot[]> {
     grade: item.grade,
     quantity: Number(item.quantity),
     unit: item.unit,
+    surfaceAreaM2: item.surfaceAreaM2 ? Number(item.surfaceAreaM2) : null,
+    weldLengthM: item.weldLengthM ? Number(item.weldLengthM) : null,
   }))
 }
 
@@ -373,6 +377,7 @@ export type NormResult = {
   basisValue: number
   basisUnit: string
   rate: number
+  estimated?: boolean
 }
 
 export type NormWarning = {
@@ -409,6 +414,7 @@ export async function computeNormLines(
 
     const rate = Number(norm.rate)
     let basisValue = 0
+    let estimated = false
 
     switch (norm.basisUnit) {
       case 'ton':
@@ -417,10 +423,42 @@ export async function computeNormLines(
       case 'kg':
         basisValue = totalWeightKg
         break
+      case 'm²': {
+        const sumArea = mainLines
+          .filter(l => l.category === 'MAIN')
+          .reduce((s, l) => s + (l.surfaceAreaM2 ?? 0), 0)
+        if (sumArea > 0) {
+          basisValue = sumArea
+        } else {
+          basisValue = totalWeightTon * 0.15
+          estimated = true
+          warnings.push({
+            normCode: norm.code,
+            message: `Chưa có diện tích bề mặt (surfaceAreaM2) trên BOM → ước lượng ${Math.round(basisValue * 100) / 100} m² (0.15 m²/tấn). Nhập diện tích thực để chính xác hơn.`,
+          })
+        }
+        break
+      }
+      case 'm': {
+        const sumLen = mainLines
+          .filter(l => l.category === 'MAIN')
+          .reduce((s, l) => s + (l.weldLengthM ?? 0), 0)
+        if (sumLen > 0) {
+          basisValue = sumLen
+        } else {
+          basisValue = totalWeightKg * 0.02
+          estimated = true
+          warnings.push({
+            normCode: norm.code,
+            message: `Chưa có chiều dài đường hàn (weldLengthM) trên BOM → ước lượng ${Math.round(basisValue * 100) / 100} m (0.02 m/kg). Nhập chiều dài thực để chính xác hơn.`,
+          })
+        }
+        break
+      }
       default:
         warnings.push({
           normCode: norm.code,
-          message: `Đơn vị cơ sở "${norm.basisUnit}" chưa hỗ trợ tính tự động cho ${norm.name}. Chỉ hỗ trợ: ton, kg.`,
+          message: `Đơn vị cơ sở "${norm.basisUnit}" chưa hỗ trợ tính tự động cho ${norm.name}. Chỉ hỗ trợ: ton, kg, m², m.`,
         })
         continue
     }
@@ -446,6 +484,7 @@ export async function computeNormLines(
         basisValue: Math.round(basisValue * 100) / 100,
         basisUnit: norm.basisUnit,
         rate,
+        estimated,
       })
     }
   }

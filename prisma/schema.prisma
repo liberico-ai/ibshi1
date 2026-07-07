@@ -930,6 +930,8 @@ model BomItem {
   unit          String
   profile       String?
   grade         String?
+  surfaceAreaM2 Decimal?       @map("surface_area_m2")
+  weldLengthM   Decimal?       @map("weld_length_m")
   remarks       String?
   sortOrder     Int            @default(0) @map("sort_order")
   bom           BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
@@ -2123,4 +2125,22 @@ model SaleCustomer {
   @@index([nameNorm, country])
   @@index([saleUpdatedAt])
   @@map("sale_customers")
+}
+
+model LaborRate {
+  id             String    @id @default(cuid())
+  stage          String
+  stageName      String    @map("stage_name")
+  subItem        String    @map("sub_item")
+  unitPrice      Decimal   @map("unit_price")
+  unit           String
+  revision       String    @default("Rev2")
+  effectiveDate  DateTime  @default(now()) @map("effective_date")
+  projectId      String?   @map("project_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([stage, subItem, revision])
+  @@index([projectId])
+  @@map("labor_rates")
 }

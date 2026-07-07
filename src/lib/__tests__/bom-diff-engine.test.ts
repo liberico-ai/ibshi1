@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { prismaMock } from '@/lib/__mocks__/db'
 
 import { diffBomVersions, computeImpact, computeNormLines } from '@/lib/bom-diff-engine'
-import type { BomLineSnapshot, BomCategory } from '@/lib/bom-diff-engine'
+import type { BomLineSnapshot } from '@/lib/bom-diff-engine'
 
 // ── Mock data factories ──
 
@@ -18,6 +18,8 @@ function makeBomDbItem(overrides: Record<string, unknown> = {}) {
     grade: 'Q345B',
     quantity: 100,
     unit: 'kg',
+    surfaceAreaM2: null,
+    weldLengthM: null,
     sortOrder: 1,
     ...overrides,
   }
@@ -36,6 +38,8 @@ function makeMainLine(overrides: Partial<BomLineSnapshot> = {}): BomLineSnapshot
     grade: 'Q345B',
     quantity: 100,
     unit: 'kg',
+    surfaceAreaM2: null,
+    weldLengthM: null,
     ...overrides,
   }
 }
@@ -423,7 +427,7 @@ describe('computeNormLines', () => {
         name: 'Sơn epoxy',
         unit: 'L',
         rate: 0.2,
-        basisUnit: 'm²',
+        basisUnit: 'ft²',
         materialId: null,
         notes: null,
         createdAt: new Date(),
@@ -438,6 +442,84 @@ describe('computeNormLines', () => {
     expect(results).toHaveLength(0)
     expect(warnings).toHaveLength(1)
     expect(warnings[0].normCode).toBe('PAINT-EP01')
-    expect(warnings[0].message).toContain('m²')
+    expect(warnings[0].message).toContain('ft²')
+  })
+
+  it('m² norm with real surfaceAreaM2 → uses actual area, no warning', async () => {
+    prismaMock.norm.findMany.mockResolvedValue([{
+      id: 'norm-m2', projectId: null, category: 'PAINT', code: 'PAINT-EP01',
+      name: 'Sơn epoxy', unit: 'L', rate: 0.2, basisUnit: 'm²',
+      materialId: null, notes: null, createdAt: new Date(), updatedAt: new Date(),
+    }] as never)
+
+    const mainLines = [
+      makeMainLine({ quantity: 2000, surfaceAreaM2: 50 }),
+      makeMainLine({ id: 'line-2', pieceMark: 'C2', quantity: 1000, surfaceAreaM2: 30 }),
+    ]
+    const { results, warnings } = await computeNormLines(mainLines, 'proj-1')
+
+    expect(results).toHaveLength(1)
+    expect(results[0].basisValue).toBe(80)  // 50 + 30
+    expect(results[0].quantity).toBe(16)    // 80 × 0.2
+    expect(results[0].basisUnit).toBe('m²')
+    expect(results[0].estimated).toBeFalsy()
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('m² norm without surfaceAreaM2 → fallback estimate with warning', async () => {
+    prismaMock.norm.findMany.mockResolvedValue([{
+      id: 'norm-m2', projectId: null, category: 'PAINT', code: 'PAINT-EP01',
+      name: 'Sơn epoxy', unit: 'L', rate: 0.2, basisUnit: 'm²',
+      materialId: null, notes: null, createdAt: new Date(), updatedAt: new Date(),
+    }] as never)
+
+    const mainLines = [makeMainLine({ quantity: 5000 })]  // 5 ton, no surfaceAreaM2
+    const { results, warnings } = await computeNormLines(mainLines, 'proj-1')
+
+    expect(results).toHaveLength(1)
+    expect(results[0].basisValue).toBe(0.75)  // 5 ton × 0.15 = 0.75 m²
+    expect(results[0].quantity).toBe(0.15)    // 0.75 × 0.2
+    expect(results[0].estimated).toBe(true)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0].message).toContain('ước lượng')
+  })
+
+  it('m norm with real weldLengthM → uses actual length, no warning', async () => {
+    prismaMock.norm.findMany.mockResolvedValue([{
+      id: 'norm-m', projectId: null, category: 'WELD', code: 'WE-WIRE',
+      name: 'Dây hàn MIG', unit: 'kg', rate: 0.5, basisUnit: 'm',
+      materialId: null, notes: null, createdAt: new Date(), updatedAt: new Date(),
+    }] as never)
+
+    const mainLines = [
+      makeMainLine({ quantity: 1000, weldLengthM: 120 }),
+      makeMainLine({ id: 'line-2', pieceMark: 'C2', quantity: 500, weldLengthM: 80 }),
+    ]
+    const { results, warnings } = await computeNormLines(mainLines, 'proj-1')
+
+    expect(results).toHaveLength(1)
+    expect(results[0].basisValue).toBe(200)  // 120 + 80
+    expect(results[0].quantity).toBe(100)    // 200 × 0.5
+    expect(results[0].basisUnit).toBe('m')
+    expect(results[0].estimated).toBeFalsy()
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('m norm without weldLengthM → fallback estimate with warning', async () => {
+    prismaMock.norm.findMany.mockResolvedValue([{
+      id: 'norm-m', projectId: null, category: 'WELD', code: 'WE-WIRE',
+      name: 'Dây hàn MIG', unit: 'kg', rate: 0.5, basisUnit: 'm',
+      materialId: null, notes: null, createdAt: new Date(), updatedAt: new Date(),
+    }] as never)
+
+    const mainLines = [makeMainLine({ quantity: 2000 })]  // 2000 kg, no weldLengthM
+    const { results, warnings } = await computeNormLines(mainLines, 'proj-1')
+
+    expect(results).toHaveLength(1)
+    expect(results[0].basisValue).toBe(40)   // 2000 × 0.02 = 40 m
+    expect(results[0].quantity).toBe(20)     // 40 × 0.5
+    expect(results[0].estimated).toBe(true)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0].message).toContain('ước lượng')
   })
 })

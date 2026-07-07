@@ -28,6 +28,8 @@ const CATEGORY_OPTIONS = [
 const BASIS_OPTIONS = [
   { value: 'ton', label: 'tấn thép (ton)' },
   { value: 'kg', label: 'kg thép (kg)' },
+  { value: 'm²', label: 'diện tích bề mặt (m²)' },
+  { value: 'm', label: 'chiều dài đường hàn (m)' },
 ]
 
 const EDIT_ROLES = ['R01', 'R03', 'R03a']
@@ -105,7 +107,7 @@ export default function NormsPage() {
                 }}>{CATEGORY_LABELS[n.category] || n.category}</span></td>
                 <td className="text-xs font-mono">{n.unit}</td>
                 <td className="text-xs font-mono font-bold" style={{ color: SEMANTIC_COLORS.info.solid }}>{Number(n.rate)}</td>
-                <td className="text-xs font-mono">{n.basisUnit === 'ton' ? '/tấn' : `/${n.basisUnit}`}</td>
+                <td className="text-xs font-mono">{({ ton: '/tấn', kg: '/kg', 'm²': '/m²', m: '/m' } as Record<string, string>)[n.basisUnit] || `/${n.basisUnit}`}</td>
                 <td className="text-xs max-w-[200px] truncate" style={{ color: 'var(--text-muted)' }}>{n.notes || '—'}</td>
                 {canEdit && (
                   <td>
@@ -124,13 +126,13 @@ export default function NormsPage() {
         </table>
       </div>
 
-      {/* Tóm tắt: nếu có 10t thép chính, mỗi norm sẽ tiêu bao nhiêu */}
       {norms.length > 0 && (
         <div className="card p-4">
-          <label className="input-label mb-2">Ước tính cho 10 tấn thép chính</label>
+          <label className="input-label mb-2">Ước tính cho 10 tấn thép chính (100 m² bề mặt, 200 m đường hàn)</label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {norms.map(n => {
-              const basis = n.basisUnit === 'ton' ? 10 : 10000
+              const basisMap: Record<string, number> = { ton: 10, kg: 10000, 'm²': 100, m: 200 }
+              const basis = basisMap[n.basisUnit] ?? 0
               const qty = Math.round(basis * Number(n.rate) * 100) / 100
               return (
                 <div key={n.id} className="text-xs p-2 rounded" style={{ background: 'var(--bg-secondary)' }}>
