@@ -39,6 +39,7 @@ vi.mock('@/lib/cache', () => ({
 }))
 
 import { GET, POST } from '@/app/api/projects/route'
+import { GET as optionsGET } from '@/app/api/projects/options/route'
 import { authenticateRequest } from '@/lib/auth'
 
 const SAMPLE_PROJECT = {
@@ -196,5 +197,64 @@ describe('POST /api/projects', () => {
     expect(json.ok).toBe(true)
     expect(json.project).toMatchObject({ projectCode: 'P-001' })
     expect(json.message).toBeTruthy()
+  })
+})
+
+// ── /api/projects/options — dropdown chọn dự án (mọi vai đều thấy, KHÔNG lọc theo user) ──
+describe('GET /api/projects/options', () => {
+  const OPT_A = { id: 'p-a', projectCode: 'A-001', projectName: 'Alpha', status: 'ACTIVE' }
+  const OPT_B = { id: 'p-b', projectCode: 'B-002', projectName: 'Beta', status: 'IN_PROGRESS' }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(authenticateRequest).mockResolvedValue(mockAuthUser)
+  })
+
+  it('returns 401 when not authenticated', async () => {
+    vi.mocked(authenticateRequest).mockResolvedValue(null)
+    const res = await optionsGET(new NextRequest('http://localhost/api/projects/options'))
+    expect(res.status).toBe(401)
+  })
+
+  it('low role (R06a) sees ALL non-CLOSED projects — NOT filtered by getUserProjectIds', async () => {
+    vi.mocked(authenticateRequest).mockResolvedValue({ ...mockAuthUser, roleCode: 'R06a' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.project.findMany.mockResolvedValue([OPT_A, OPT_B] as any)
+
+    const res = await optionsGET(new NextRequest('http://localhost/api/projects/options'))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.projects).toHaveLength(2)
+    // where CHỈ lọc status != CLOSED — KHÔNG có filter id theo dự án của user
+    const arg = prismaMock.project.findMany.mock.calls[0][0]
+    expect(arg.where).toEqual({ status: { not: 'CLOSED' } })
+    expect(arg.where).not.toHaveProperty('id')
+  })
+
+  it('excludes CLOSED projects (where status != CLOSED)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.project.findMany.mockResolvedValue([OPT_A] as any)
+    await optionsGET(new NextRequest('http://localhost/api/projects/options'))
+    expect(prismaMock.project.findMany.mock.calls[0][0].where).toEqual({ status: { not: 'CLOSED' } })
+  })
+
+  it('each item exposes ONLY {id, projectCode, projectName, status}', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.project.findMany.mockResolvedValue([OPT_A] as any)
+    const res = await optionsGET(new NextRequest('http://localhost/api/projects/options'))
+    const body = await res.json()
+
+    expect(Object.keys(body.projects[0]).sort()).toEqual(['id', 'projectCode', 'projectName', 'status'])
+    expect(prismaMock.project.findMany.mock.calls[0][0].select).toEqual({
+      id: true, projectCode: true, projectName: true, status: true,
+    })
+  })
+
+  it('sorts by projectCode asc', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.project.findMany.mockResolvedValue([OPT_A, OPT_B] as any)
+    await optionsGET(new NextRequest('http://localhost/api/projects/options'))
+    expect(prismaMock.project.findMany.mock.calls[0][0].orderBy).toEqual({ projectCode: 'asc' })
   })
 })
