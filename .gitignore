@@ -142,3 +142,15 @@ docs/handoff/*
 docs/handoff/import/*.csv
 docs/handoff/import/bom/
 docs/handoff/import/.DS_Store
+
+# Backup DB (chứa password hash / PII) — KHÔNG commit
+backup_*.sql
+backup_*.dump
+
+# Xuất dữ liệu người dùng / PII (SĐT, Mã NV) — KHÔNG commit; prompt .md thì được
+scripts/out/
+docs/handoff/*.xlsx
+docs/handoff/username_phone_mapping*.csv
+docs/handoff/TaoMoi_*.csv
+docs/handoff/DanhBa_*.csv
+docs/handoff/taikhoan_reconcile*.csv
