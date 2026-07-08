@@ -21,6 +21,7 @@ export const ROLES = {
   R10: { code: 'R10', name: 'Quản trị Hệ thống', nameEn: 'System Admin' },
   R11: { code: 'R11', name: 'Nhân viên HCNS', nameEn: 'HR & Admin Staff' },
   R13: { code: 'R13', name: 'Trưởng phòng Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical Head' },
+  R13a: { code: 'R13a', name: 'Nhân viên Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical Staff' },
 } as const
 
 export type RoleCode = keyof typeof ROLES
@@ -175,6 +176,7 @@ export const ROLE_GROUP_PRIORITY: Record<string, string[]> = {
   R09a: ['overview', 'qc', 'reports'],
   R10:  ['overview', 'management', 'project', 'design', 'warehouse', 'production', 'qc', 'logistics', 'tbcg', 'hse', 'hr', 'finance', 'reports', 'system'],
   R13:  ['overview', 'production', 'tbcg', 'reports'],
+  R13a: ['overview', 'production', 'tbcg', 'reports'],
 }
 
 // ── Menu Items with Group ──
@@ -230,8 +232,8 @@ export const MENU_ITEMS = [
   { key: 'mdr', label: 'MDR', labelEn: 'MDR', icon: 'FileCheck2', href: '/dashboard/logistics/mdr', roles: ['R01', 'R02', 'R07', 'R07a', 'R09', 'R09a'], group: 'logistics' },
 
   // ── TBCG ──
-  { key: 'equipment', label: 'Thiết bị', labelEn: 'Equipment', icon: 'Wrench', href: '/dashboard/tbcg/equipment', roles: ['R01', 'R10', 'R13', 'R06'], group: 'tbcg' },
-  { key: 'maintenance', label: 'Bảo trì', labelEn: 'Maintenance', icon: 'Settings', href: '/dashboard/tbcg/maintenance', roles: ['R01', 'R10', 'R13', 'R06'], group: 'tbcg' },
+  { key: 'equipment', label: 'Thiết bị', labelEn: 'Equipment', icon: 'Wrench', href: '/dashboard/tbcg/equipment', roles: ['R01', 'R10', 'R13', 'R13a', 'R06'], group: 'tbcg' },
+  { key: 'maintenance', label: 'Bảo trì', labelEn: 'Maintenance', icon: 'Settings', href: '/dashboard/tbcg/maintenance', roles: ['R01', 'R10', 'R13', 'R13a', 'R06'], group: 'tbcg' },
 
   // ── HSE ──
   { key: 'hse-dashboard', label: 'Tổng quan HSE', labelEn: 'HSE Dashboard', icon: 'HardHat', href: '/dashboard/hse', roles: ['R01', 'R10', 'R06'], group: 'hse' },
@@ -270,7 +272,7 @@ export const MENU_ITEMS = [
   { key: 'settlement', label: 'Quyết toán', labelEn: 'Settlement', icon: 'Calculator', href: '/dashboard/finance/settlement', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a'], group: 'finance' },
 
   // ── Reports ──
-  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R06', 'R06a', 'R07', 'R07a', 'R08', 'R08a', 'R09', 'R09a', 'R13'], group: 'reports' },
+  { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R06', 'R06a', 'R07', 'R07a', 'R08', 'R08a', 'R09', 'R09a', 'R13', 'R13a'], group: 'reports' },
   { key: 'audit-log', label: 'Nhật ký', labelEn: 'Audit Log', icon: 'ScrollText', href: '/dashboard/audit-log', roles: ['R01', 'R10'], group: 'reports' },
   { key: 'error-logs', label: 'Error Logs', labelEn: 'Error Logs', icon: 'AlertTriangle', href: '/dashboard/admin/error-logs', roles: ['R01', 'R10'], group: 'reports' },
 

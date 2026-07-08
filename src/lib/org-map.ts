@@ -25,7 +25,7 @@ export const ROLE_TO_DEPT: Record<string, string> = {
   R07: 'KTKT', R07a: 'KTKT',
   R09: 'QC', R09a: 'QC',
   R10: 'CNTT',
-  R13: 'TBCG',
+  R13: 'TBCG', R13a: 'TBCG',
 }
 
 export const DEPT_NAME: Record<string, string> = Object.fromEntries(
