@@ -45,8 +45,8 @@ describe('successResponse envelope', () => {
 // ── DEPARTMENTS_V2 ──
 
 describe('DEPARTMENTS_V2', () => {
-  it('has 10 departments', () => {
-    expect(DEPARTMENTS_V2).toHaveLength(10)
+  it('has 9 departments', () => {
+    expect(DEPARTMENTS_V2).toHaveLength(9)
   })
 
   it('each has code and name', () => {
@@ -59,7 +59,7 @@ describe('DEPARTMENTS_V2', () => {
   it('maps to expected deptCode/displayLabel shape', () => {
     const mapped = DEPARTMENTS_V2.map(d => ({ deptCode: d.code, displayLabel: d.name }))
     expect(mapped[0]).toEqual({ deptCode: 'BGD', displayLabel: 'Ban Giám đốc' })
-    expect(mapped[9]).toEqual({ deptCode: 'TBCG', displayLabel: 'Thiết bị & Cơ giới' })
+    expect(mapped[8]).toEqual({ deptCode: 'TBCG', displayLabel: 'Thiết bị & Cơ giới' })
   })
 })
 

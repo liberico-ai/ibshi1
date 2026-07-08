@@ -29,10 +29,9 @@ export type RoleCode = keyof typeof ROLES
 export const DEPARTMENTS = [
   { code: 'BGD', name: 'Ban Giám đốc', nameEn: 'Board of Directors' },
   { code: 'QLDA', name: 'Quản lý Dự án', nameEn: 'Project Management' },
-  { code: 'KTKH', name: 'Kinh tế Kế hoạch', nameEn: 'Planning & Economics' },
+  { code: 'KTKT', name: 'Kinh tế Kỹ thuật', nameEn: 'Techno-Economics' },
   { code: 'TK', name: 'Thiết kế', nameEn: 'Engineering' },
   { code: 'SX', name: 'Sản xuất', nameEn: 'Production' },
-  { code: 'TM', name: 'Thương mại', nameEn: 'Commercial' },
   { code: 'TCKT', name: 'Tài chính Kế toán & Kho', nameEn: 'Finance & Warehouse' },
   { code: 'QC', name: 'QA/QC', nameEn: 'Quality Control' },
   { code: 'TBCG', name: 'Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical' },

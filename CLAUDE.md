@@ -54,16 +54,15 @@ npx vitest run --reporter=verbose 2>&1 | tail -20                          # Che
 ### Role Codes
 R01=BGĐ, R02=PM, R02a=NV QLDA, R03=KTKH, R03a=NV KTKH, R04=Design, R04a=NV TK, R05=Warehouse, R05a=NV Kho, R06=Production, R06a=NV SX, R06b=Tổ trưởng SX, R07=Commercial, R07a=NV TM, R08=Finance, R08a=NV KT, R09=QC, R09a=Kiểm tra viên, R10=Admin, R11=NV HCNS (inactive), R12=NV EPC (0 user), R13=TP TBCG
 
-### Cơ cấu phòng ban (sau quy hoạch 2026-06)
-10 phòng chuẩn, nguồn gốc: `ROLE_TO_DEPT` trong `src/lib/org-map.ts`.
+### Cơ cấu phòng ban (sau quy hoạch 2026-06, gộp KTKT 2026-07)
+9 phòng chuẩn, nguồn gốc: `ROLE_TO_DEPT` trong `src/lib/org-map.ts`.
 
 | Phòng | Code | Role trưởng | Role khác | Ghi chú |
 |-------|------|-------------|-----------|---------|
 | Ban Giám đốc | BGD | R01 | | |
 | CNTT & Dữ liệu | CNTT | R10 | | |
 | Phòng Kỹ thuật | TK | R04 | R04a | |
-| Kinh tế Kế hoạch | KTKH | R03 | R03a | |
-| Thương mại | TM | R07 | R07a | |
+| Kinh tế Kỹ thuật | KTKT | R03 | R03a, R07, R07a | Gộp KTKH + TM (2026-07). Giữ 4 roleCode — RBAC keyed by roleCode |
 | Quản lý Dự án | QLDA | R02 | R02a | |
 | Sản xuất | SX | R06 | R06a, R06b | Tổ TO-\* là dept con qua `Department.parentId` |
 | Tài chính KT & Kho | TCKT | R08 | R08a, R05, R05a | Gộp Kho + Kế toán |
