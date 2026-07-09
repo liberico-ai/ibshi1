@@ -52,7 +52,36 @@ export default function SettingsPage() {
   const isAdmin = authUser?.roleCode === 'R10'
   const isTgAdmin = authUser?.roleCode === 'R01' || authUser?.roleCode === 'R10'
 
+  // Đổi mật khẩu (self-service)
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
+  const [pwSaving, setPwSaving] = useState(false)
+
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
+
+  async function changePassword() {
+    if (!pwForm.current || !pwForm.next) { showToast('Nhập đủ mật khẩu hiện tại và mật khẩu mới'); return }
+    if (pwForm.next.length < 6) { showToast('Mật khẩu mới phải có ít nhất 6 ký tự'); return }
+    if (pwForm.next !== pwForm.confirm) { showToast('Xác nhận mật khẩu không khớp'); return }
+    if (pwForm.next === pwForm.current) { showToast('Mật khẩu mới phải khác mật khẩu hiện tại'); return }
+    setPwSaving(true)
+    try {
+      const res = await apiFetch('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
+      })
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        showToast('Đổi mật khẩu thành công')
+        setPwForm({ current: '', next: '', confirm: '' })
+      } else {
+        showToast(data.error || 'Đổi mật khẩu thất bại')
+      }
+    } catch {
+      showToast('Lỗi kết nối')
+    } finally {
+      setPwSaving(false)
+    }
+  }
 
   useEffect(() => {
     setLocale(localStorage.getItem('ibs-locale') || 'vi')
@@ -202,6 +231,22 @@ export default function SettingsPage() {
             <Button variant="ghost" onClick={toggleTheme}>
               {theme === 'dark' ? 'Dark' : 'Light'}
             </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Đổi mật khẩu (mọi người dùng) */}
+      <Card padding="default">
+        <h2 className="section-title" style={{ fontSize: 'var(--text-sm)', marginBottom: 'var(--space-md)' }}>Đổi mật khẩu</h2>
+        <div className="space-y-4" style={{ maxWidth: 420 }}>
+          <InputField label="Mật khẩu hiện tại" type="password" autoComplete="current-password"
+            value={pwForm.current} onChange={e => setPwForm({ ...pwForm, current: e.target.value })} />
+          <InputField label="Mật khẩu mới (tối thiểu 6 ký tự)" type="password" autoComplete="new-password"
+            value={pwForm.next} onChange={e => setPwForm({ ...pwForm, next: e.target.value })} />
+          <InputField label="Xác nhận mật khẩu mới" type="password" autoComplete="new-password"
+            value={pwForm.confirm} onChange={e => setPwForm({ ...pwForm, confirm: e.target.value })} />
+          <div className="flex justify-end">
+            <Button variant="primary" onClick={changePassword} loading={pwSaving}>Đổi mật khẩu</Button>
           </div>
         </div>
       </Card>
