@@ -65,16 +65,16 @@ export default function SettingsPage() {
     if (pwForm.next === pwForm.current) { showToast('Mật khẩu mới phải khác mật khẩu hiện tại'); return }
     setPwSaving(true)
     try {
+      // apiFetch trả về JSON đã parse (không phải Response) — dùng trực tiếp res.ok/res.error
       const res = await apiFetch('/api/auth/change-password', {
         method: 'POST',
         body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
       })
-      const data = await res.json()
-      if (res.ok && data.ok) {
+      if (res.ok) {
         showToast('Đổi mật khẩu thành công')
         setPwForm({ current: '', next: '', confirm: '' })
       } else {
-        showToast(data.error || 'Đổi mật khẩu thất bại')
+        showToast(res.error || 'Đổi mật khẩu thất bại')
       }
     } catch {
       showToast('Lỗi kết nối')
