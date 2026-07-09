@@ -1,6 +1,7 @@
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import prisma from '@/lib/db'
+import { putObject, isMinioConfigured } from '@/lib/minio'
 
 // ── Allowlists (shared with /api/upload) ──
 
@@ -69,14 +70,18 @@ export async function saveAttachmentFromBuffer(input: SaveAttachmentInput): Prom
   const ext = path.extname(fileName).toLowerCase()
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_')
 
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', entityType.toLowerCase(), entityId)
-  await mkdir(uploadDir, { recursive: true })
-
-  const filePath = path.join(uploadDir, safeName)
-  await writeFile(filePath, buffer)
-
   const fileUrl = `/uploads/${entityType.toLowerCase()}/${entityId}/${safeName}`
   const mimeType = EXT_TO_MIME[ext] || 'application/octet-stream'
+
+  // Ưu tiên MinIO (object key = fileUrl bỏ "/" đầu). Chưa cấu hình MinIO → ghi disk (hành vi cũ).
+  // fileUrl giữ nguyên "/uploads/..." làm reference ở cả 2 chế độ.
+  if (isMinioConfigured()) {
+    await putObject(fileUrl.slice(1), buffer, mimeType)
+  } else {
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', entityType.toLowerCase(), entityId)
+    await mkdir(uploadDir, { recursive: true })
+    await writeFile(path.join(uploadDir, safeName), buffer)
+  }
 
   const attachment = await prisma.fileAttachment.create({
     data: {
