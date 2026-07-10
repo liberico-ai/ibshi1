@@ -15,6 +15,7 @@ interface TelegramConfig {
   botToken: string | null
   webhookSecret: string | null
   groupChatId: string | null
+  notifyEnabled: boolean // kill-switch cho push noti hệ thống → Telegram (mặc định bật)
 }
 
 let configCache: TelegramConfig | null = null
@@ -29,7 +30,7 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
 
   try {
     const configs = await prisma.systemConfig.findMany({
-      where: { key: { in: ['telegram_bot_token', 'telegram_webhook_secret', 'telegram_group_chat_id'] } },
+      where: { key: { in: ['telegram_bot_token', 'telegram_webhook_secret', 'telegram_group_chat_id', 'telegram_notify_enabled'] } },
     })
 
     const dbValues: Record<string, string> = {}
@@ -45,6 +46,8 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
       botToken: dbValues.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || null,
       webhookSecret: dbValues.telegram_webhook_secret || process.env.TELEGRAM_WEBHOOK_SECRET || null,
       groupChatId: dbValues.telegram_group_chat_id || process.env.TELEGRAM_GROUP_CHAT_ID || null,
+      // Tắt khi SystemConfig 'telegram_notify_enabled' = 'false' (hoặc env TELEGRAM_NOTIFY_ENABLED=false). Mặc định bật.
+      notifyEnabled: (dbValues.telegram_notify_enabled ?? process.env.TELEGRAM_NOTIFY_ENABLED) !== 'false',
     }
   } catch {
     // DB unavailable — fall back to env
@@ -52,6 +55,7 @@ export async function getTelegramConfig(): Promise<TelegramConfig> {
       botToken: process.env.TELEGRAM_BOT_TOKEN || null,
       webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || null,
       groupChatId: process.env.TELEGRAM_GROUP_CHAT_ID || null,
+      notifyEnabled: process.env.TELEGRAM_NOTIFY_ENABLED !== 'false',
     }
   }
 
@@ -145,9 +149,11 @@ export async function getWebhookSecret(): Promise<string | null> {
 // ── Send message to company group ───────────────────────────
 
 export async function sendGroupMessage(text: string): Promise<void> {
+  const config = await getTelegramConfig()
+  if (!config.notifyEnabled) return // kill-switch: push noti hệ thống đang tắt
   const bot = await getBot()
   if (!bot) { console.warn('🤖 sendGroupMessage: no bot (token missing)'); return }
-  const chatId = await getGroupChatId()
+  const chatId = config.groupChatId
   if (!chatId) { console.warn('🤖 sendGroupMessage: no groupChatId'); return }
   try {
     await bot.api.sendMessage(chatId, text, { parse_mode: 'HTML' })
@@ -159,6 +165,8 @@ export async function sendGroupMessage(text: string): Promise<void> {
 // ── Send DM to a user (by ERP user ID) ─────────────────────
 
 export async function sendDirectMessage(userId: string, text: string): Promise<void> {
+  const config = await getTelegramConfig()
+  if (!config.notifyEnabled) return // kill-switch: push noti hệ thống đang tắt
   const bot = await getBot()
   if (!bot) return
   const user = await prisma.user.findUnique({
