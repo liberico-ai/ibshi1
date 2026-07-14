@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { KEY_TO_FORM, canEditForm } from '@/lib/constants'
+import { materializePrSafe } from '@/lib/pr-materialize'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +59,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       SET "result_data" = COALESCE("result_data", '{}'::jsonb) || ${patch}::jsonb,
           "updated_at" = now()
       WHERE "id" = ${id}`
+    // Sinh/cập nhật PR (sau FF_PR_MATERIALIZE, mặc định TẮT). Không bao giờ throw.
+    await materializePrSafe(id, payload.userId)
     return successResponse({})
   } catch (err) {
     console.error('POST /api/work/tasks/[id]/result-data error:', err)

@@ -1,5 +1,17 @@
 import * as XLSX from 'xlsx'
 import type { PrItem } from './quote-parser'
+import { toQty, toQtyOrNull } from './pr-normalizer'
+
+/**
+ * Số lượng cần mua của 1 dòng PR. Ép kiểu an toàn (số có thể lưu dạng CHUỖI).
+ * QUAN TRỌNG: có needToBuyQty thì dùng luôn — KỂ CẢ khi = 0 (đủ kho ⟹ không mua).
+ * Chỉ khi VẮNG needToBuyQty mới lùi về quantity → qty.
+ */
+function buyQty(p: PrItem): number {
+  const need = toQtyOrNull(p.needToBuyQty)
+  if (need !== null) return need
+  return toQty(p.quantity) || toQty(p.qty)
+}
 
 interface ExportOpts {
   projectCode?: string
@@ -20,10 +32,7 @@ function detectCategory(item: PrItem): string {
 }
 
 export function exportQuoteTemplate(prItems: PrItem[], opts: ExportOpts = {}): XLSX.WorkBook {
-  const buyItems = prItems.filter(p => {
-    const qty = typeof p.needToBuyQty === 'number' ? p.needToBuyQty : (p.quantity || p.qty || 0)
-    return qty > 0
-  })
+  const buyItems = prItems.filter(p => buyQty(p) > 0)
 
   const groups = new Map<string, PrItem[]>()
   for (const item of buyItems) {
@@ -60,7 +69,7 @@ export function exportQuoteTemplate(prItems: PrItem[], opts: ExportOpts = {}): X
       const profile = item.profile || ''
       const grade = item.grade || ''
       const unit = item.unit || item.uom || ''
-      const qty = typeof item.needToBuyQty === 'number' ? item.needToBuyQty : (item.quantity || item.qty || 0)
+      const qty = buyQty(item)
 
       const matCode = item.canonicalCode || ''
       aoa.push([code, matCode, desc, profile, grade, unit, qty, null, null, null])

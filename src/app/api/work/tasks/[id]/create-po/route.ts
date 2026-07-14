@@ -6,6 +6,7 @@ import {
 } from '@/lib/auth'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
+import { toQty } from '@/lib/pr-normalizer'
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R07', 'R07a']
 
@@ -73,7 +74,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (line.matchedPrIndex == null) continue
     const prItem = prItems[line.matchedPrIndex]
     if (!prItem) continue
-    const needToBuy = typeof prItem.needToBuyQty === 'number' ? prItem.needToBuyQty : 0
+    // BUG CŨ: `typeof needToBuyQty === 'number'` → dòng lưu số dạng CHUỖI ({"needToBuyQty":"1"})
+    // bị coi là 0 và BỎ QUA IM LẶNG → vật tư không bao giờ được đặt mua mà không ai biết.
+    const needToBuy = toQty(prItem.needToBuyQty)
     if (needToBuy <= 0) continue
 
     poItems.push({

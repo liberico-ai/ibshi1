@@ -59,15 +59,36 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
-/** Ép về số hữu hạn. Chấp nhận cả number lẫn chuỗi số ("1", "0.175"). Không hợp lệ → null. */
-function toNum(v: unknown): number | null {
+/** Chỉ khớp phân cách NGHÌN kiểu Anh–Mỹ: 1,500 · 12,345.67 (KHÔNG khớp "1,5") */
+const THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/
+
+/**
+ * Ép về số hữu hạn. Chấp nhận number lẫn CHUỖI SỐ ("1", "0.175") — dữ liệu thật
+ * trong Task.resultData có lưu số dạng chuỗi (vd {"quantity":"1"}).
+ * Không hợp lệ → null.
+ *
+ * ⚠️ Dấu phẩy: chỉ xoá khi đúng dạng phân cách nghìn ("1,500" → 1500).
+ * KHÔNG xoá mù, vì tiếng Việt "1,5" nghĩa là 1.5 — xoá phẩy sẽ thành 15 (sai 10 lần).
+ * Chuỗi phẩy nhập nhằng → null (từ chối) thay vì đoán sai số lượng mua hàng.
+ */
+export function toQtyOrNull(v: unknown): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
-  if (typeof v === 'string' && v.trim() !== '') {
-    const n = Number(v)
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (s === '') return null
+    const cleaned = THOUSANDS.test(s) ? s.replace(/,/g, '') : s
+    const n = Number(cleaned) // "1,5" → NaN → null (an toàn)
     return Number.isFinite(n) ? n : null
   }
   return null
 }
+
+/** Như toQtyOrNull nhưng mặc định 0 — dùng cho chỗ cần số để tính toán. */
+export function toQty(v: unknown): number {
+  return toQtyOrNull(v) ?? 0
+}
+
+const toNum = toQtyOrNull
 
 /** Chuỗi đã trim; rỗng → undefined. */
 function toStr(v: unknown): string | undefined {

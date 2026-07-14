@@ -1,4 +1,5 @@
 import { detectSectionType, normalizeDims, dimsMatch } from './section-type'
+import { toQty } from './pr-normalizer'
 
 // ── Types ──
 
@@ -245,9 +246,11 @@ export interface CoverageResult {
 }
 
 export function computeQuoteCoverage(prItems: PrItem[], allQuotes: Array<{ lines?: QuoteLine[] }>): CoverageResult {
+  // toQty: dòng lưu số dạng CHUỖI ({"needToBuyQty":"1"}) trước đây bị `typeof === 'number'`
+  // lọc văng khỏi ma trận báo giá → R07 không nhìn thấy vật tư để đi hỏi giá.
   const needToBuyItems = prItems
     .map((p, i) => ({ p, i }))
-    .filter(({ p }) => typeof p.needToBuyQty === 'number' && p.needToBuyQty > 0)
+    .filter(({ p }) => toQty(p.needToBuyQty) > 0)
 
   const totalNeedToBuy = needToBuyItems.length
   const perItemVendorCount: Record<number, number> = {}
