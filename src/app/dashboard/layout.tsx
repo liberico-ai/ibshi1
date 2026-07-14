@@ -127,11 +127,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return sortedGroups.map(g => ({ ...g, items: itemsByGroup[g.key] }))
   }, [filteredMenu, roleCode])
 
-  // Auto-expand first 2 groups on role change
+  // Mở sẵn các nhóm THUỘC ưu tiên của role; thu gọn nhóm ngoài ưu tiên.
+  // (Trước đây chỉ set state cho nhóm ưu tiên → nhóm ngoài ưu tiên bị undefined,
+  //  mà render dùng `!== false` nên chúng lại MỞ, còn nhóm ưu tiên thứ 3+ bị ĐÓNG — ngược.)
   useEffect(() => {
     const rolePriority = ROLE_GROUP_PRIORITY[roleCode] || ['overview']
     const initial: Record<string, boolean> = {}
-    rolePriority.forEach((g, i) => { initial[g] = i < 2 })
+    MENU_GROUPS.forEach((g) => { initial[g.key] = rolePriority.includes(g.key) })
     setExpandedGroups(initial)
   }, [roleCode])
 
