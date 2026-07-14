@@ -8,6 +8,7 @@ import { formatCurrency, formatNumber } from '@/lib/utils'
 import { QUOTE_EDIT_ROLES } from '@/lib/constants'
 import { parseQuoteExcel, matchQuoteLinesToPr, computeQuoteCoverage, computeQtyMismatches, type QuoteLine, type PrItem } from '@/lib/quote-parser'
 import { exportQuoteTemplate } from '@/lib/quote-template-export'
+import { toQty, toQtyOrNull } from '@/lib/pr-normalizer'
 
 export interface QuoteFile { id: string; fileName: string; fileUrl: string; kind: 'Báo giá' | 'Hợp đồng' | 'Khác' }
 
@@ -242,10 +243,13 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       profile: String(it.profile || ''),
       grade: String(it.grade || ''),
       unit: String(it.unit || it.uom || ''),
-      quantity: Number(it.quantity || it.qty || 0),
-      neededQty: typeof it.neededQty === 'number' ? it.neededQty : undefined,
-      availableQty: typeof it.availableQty === 'number' ? it.availableQty : undefined,
-      needToBuyQty: typeof it.needToBuyQty === 'number' ? it.needToBuyQty : undefined,
+      // toQty: số trong resultData có thể lưu dạng CHUỖI ({"needToBuyQty":"1"}). Kiểm
+      // `typeof === 'number'` như trước khiến các cột tồn/cần mua hiện TRỐNG với dòng đó.
+      // Đây là điểm parse DUY NHẤT — mọi consumer bên dưới đều nhận parsedPrItems.
+      quantity: toQty(it.quantity) || toQty(it.qty),
+      neededQty: toQtyOrNull(it.neededQty) ?? undefined,
+      availableQty: toQtyOrNull(it.availableQty) ?? undefined,
+      needToBuyQty: toQtyOrNull(it.needToBuyQty) ?? undefined,
       requiredDate: typeof it.requiredDate === 'string' ? it.requiredDate : undefined,
     }))
   }, [bomPrData]) // eslint-disable-line react-hooks/exhaustive-deps

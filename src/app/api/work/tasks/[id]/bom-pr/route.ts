@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { canEditForm } from '@/lib/constants'
 import { enrichBomPrItems } from '@/lib/bompr-enrich'
+import { materializePrSafe } from '@/lib/pr-materialize'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         SET "result_data" = COALESCE("result_data", '{}'::jsonb) || ${patch}::jsonb,
             "updated_at" = now()
         WHERE "id" = ${id}`
+      await materializePrSafe(id, payload.userId)
       return successResponse({ updated: true })
     }
 
@@ -79,6 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         SET "result_data" = COALESCE("result_data", '{}'::jsonb) || ${patch}::jsonb,
             "updated_at" = now()
         WHERE "id" = ${id}`
+      await materializePrSafe(id, payload.userId)
       return successResponse({ enriched: true, count: enriched.length })
     }
 
@@ -105,6 +108,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       SET "result_data" = COALESCE("result_data", '{}'::jsonb) || ${patch}::jsonb,
           "updated_at" = now()
       WHERE "id" = ${id}`
+    // Sinh/cập nhật PR (sau FF_PR_MATERIALIZE, mặc định TẮT). Không bao giờ throw.
+    await materializePrSafe(id, payload.userId)
     return successResponse({})
   } catch (err) {
     console.error('POST /api/work/tasks/[id]/bom-pr error:', err)
