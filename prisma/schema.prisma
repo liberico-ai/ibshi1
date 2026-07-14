@@ -432,6 +432,9 @@ model PurchaseRequest {
   originType  String?               @map("origin_type") // 'ECO' | 'NCR'
   originId    String?               @map("origin_id") // ECO: bomVersionId | NCR: ncr.id
   originLabel String?               @map("origin_label") // mã hiển thị: ECO code / NCR code
+  // Nối luồng Task → PR. UNIQUE ⟹ 1 task sinh tối đa 1 PR (materialize idempotent,
+  // chạy lại không nhân bản). @unique đã tự tạo index → không cần @@index riêng.
+  sourceTaskId String?              @unique @map("source_task_id")
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
   items       PurchaseRequestItem[]
@@ -446,14 +449,23 @@ model PurchaseRequest {
 model PurchaseRequestItem {
   id              String          @id @default(cuid())
   prId            String          @map("pr_id")
-  materialId      String          @map("material_id")
+  // materialId NULLABLE + snapshot field — sao y PurchaseOrderItem.
+  // Lý do: 1307/3017 dòng PR thật trong Task.resultData chưa khớp được mã vật tư
+  // (materialId = null), và vật tư tiêu hao như "dây hàn E71T-1C" chưa có bản ghi
+  // Material. Bắt buộc materialId thì không materialize được đúng ca đang lỗi.
+  materialId      String?         @map("material_id")
+  itemCode        String?         @map("item_code")
+  description     String?         @map("item_description")
+  profile         String?         @map("item_profile")
+  grade           String?         @map("item_grade")
+  unit            String?         @map("item_unit")
   bomItemId       String?         @map("bom_item_id")
   bomVersionId    String?         @map("bom_version_id")
   quantity        Decimal
   requiredDate    DateTime?       @map("required_date")
   specification   String?
   notes           String?
-  material        Material        @relation(fields: [materialId], references: [id])
+  material        Material?       @relation(fields: [materialId], references: [id])
   purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 
   @@index([prId])

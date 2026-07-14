@@ -31,7 +31,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const poMap = await fetchPoCoverageMap(
       [pr.projectId],
-      pr.items.map(i => i.materialId),
+      // Bỏ dòng chưa khớp mã vật tư (materialId null) — không có khoá để đối chiếu PO
+      pr.items.map(i => i.materialId).filter((id): id is string => id !== null),
     )
     const { items, summary } = computePrCoverage(pr.projectId, pr.items, poMap)
 
