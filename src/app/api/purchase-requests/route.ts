@@ -49,7 +49,9 @@ export async function GET(req: NextRequest) {
       const approved = prs.filter(pr => pr.status === 'APPROVED')
       if (approved.length > 0) {
         const projectIds = [...new Set(approved.map(pr => pr.projectId))]
+        // Bỏ dòng chưa khớp mã vật tư (materialId null) — không có khoá để đối chiếu PO
         const materialIds = [...new Set(approved.flatMap(pr => pr.items.map(i => i.materialId)))]
+          .filter((id): id is string => id !== null)
         const poMap = await fetchPoCoverageMap(projectIds, materialIds)
         for (const pr of approved) {
           coverageByPrId.set(pr.id, computePrCoverage(pr.projectId, pr.items, poMap).summary)
