@@ -256,6 +256,8 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
             projectCode={projectCode}
             projectName={project?.projectName}
             value={resultData.supplierQuotes ? (Array.isArray(resultData.supplierQuotes) ? resultData.supplierQuotes : (() => { try { return JSON.parse(String(resultData.supplierQuotes)) } catch { return [] } })()) : undefined}
+            existingPoId={resultData.poId ? String(resultData.poId) : undefined}
+            existingPoCode={resultData.poCode ? String(resultData.poCode) : undefined}
             onChange={async (quotes) => {
               const chosen = quotes.find(q => q.selected)
               await saveField('supplierQuotes', quotes)
