@@ -27,17 +27,39 @@ export const PR_EXCLUDED_STEPS = ['P3.5', 'P3.6'] as const
 /** Task tự do (không thuộc quy trình 36 bước) — vẫn là nhu cầu mua thật */
 const FREE_TASK = 'FREE'
 
-export function isPrMaterializeEnabled(): boolean {
-  return process.env.FF_PR_MATERIALIZE === 'true'
+// Cờ bật/tắt: env FF_PR_MATERIALIZE thắng tuyệt đối (dùng cho script backfill / CI);
+// nếu env không đặt → đọc SystemConfig 'ff_pr_materialize' (bật/tắt runtime, không restart).
+// Cache 30s để không đọc DB mỗi lần lưu task. Mặc định TẮT.
+let ffCache: { val: boolean; at: number } | null = null
+const FF_TTL_MS = 30_000
+
+export async function isPrMaterializeEnabled(): Promise<boolean> {
+  if (process.env.FF_PR_MATERIALIZE === 'true') return true
+  if (process.env.FF_PR_MATERIALIZE === 'false') return false
+
+  const now = Date.now()
+  if (ffCache && now - ffCache.at < FF_TTL_MS) return ffCache.val
+  let val = false
+  try {
+    const row = await prisma.systemConfig.findUnique({ where: { key: 'ff_pr_materialize' } })
+    val = row?.value === 'true'
+  } catch { val = false } // DB lỗi → coi như TẮT (an toàn)
+  ffCache = { val, at: now }
+  return val
 }
+
+/** Xoá cache cờ (gọi sau khi đổi SystemConfig để có hiệu lực ngay). */
+export function invalidatePrFlagCache(): void { ffCache = null }
 
 export type MaterializeResult =
   | { materialized: false; reason: string }
   | { materialized: true; created: boolean; prId: string; prCode: string; lineCount: number }
 
-function isAllowed(taskType: string): boolean {
+/** Task thuộc diện materialize PR? (nguồn nhu cầu P2.1/2.2/2.3 hoặc task FREE) */
+export function isTaskTypeAllowedForPr(taskType: string): boolean {
   return (PR_DEMAND_STEPS as readonly string[]).includes(taskType) || taskType === FREE_TASK
 }
+const isAllowed = isTaskTypeAllowedForPr
 
 function isExcluded(taskType: string): boolean {
   return (PR_EXCLUDED_STEPS as readonly string[]).includes(taskType)
@@ -74,7 +96,7 @@ async function nextPrCode(): Promise<string> {
  * PR luôn ở trạng thái DRAFT — KHÔNG tự duyệt, KHÔNG tự tạo PO. Người vẫn duyệt.
  */
 export async function maybeMaterializePr(taskId: string, actorUserId: string): Promise<MaterializeResult> {
-  if (!isPrMaterializeEnabled()) return { materialized: false, reason: 'flag-off' }
+  if (!(await isPrMaterializeEnabled())) return { materialized: false, reason: 'flag-off' }
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
