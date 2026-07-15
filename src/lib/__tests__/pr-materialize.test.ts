@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { prismaMock } from '@/lib/__mocks__/db'
-import { maybeMaterializePr, materializePrSafe, isPrMaterializeEnabled } from '@/lib/pr-materialize'
+import { maybeMaterializePr, materializePrSafe, isPrMaterializeEnabled, invalidatePrFlagCache } from '@/lib/pr-materialize'
 
 // Fixture thật (prod): task "PR dây hàn" — FREE, không có bước
 const DAY_HAN = JSON.stringify([
@@ -22,7 +22,8 @@ function mockTask(taskType: string, resultData: any, projectId: string | null = 
 describe('pr-materialize', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.FF_PR_MATERIALIZE = 'true' // bật trong test
+    process.env.FF_PR_MATERIALIZE = 'true' // bật trong test (env thắng tuyệt đối)
+    prismaMock.systemConfig.findUnique.mockResolvedValue(null as never)
     prismaMock.purchaseRequest.findUnique.mockResolvedValue(null as never)
     prismaMock.purchaseRequest.findFirst.mockResolvedValue(null as never)
     prismaMock.purchaseRequest.create.mockResolvedValue({ id: 'pr-1', prCode: 'PR-26-001' } as never)
@@ -31,18 +32,29 @@ describe('pr-materialize', () => {
   afterEach(() => { delete process.env.FF_PR_MATERIALIZE })
 
   describe('FEATURE FLAG — mặc định TẮT', () => {
-    it('không set env → TẮT, không đọc DB, không sinh gì', async () => {
+    it('không env + không SystemConfig → TẮT, không sinh gì', async () => {
       delete process.env.FF_PR_MATERIALIZE
-      expect(isPrMaterializeEnabled()).toBe(false)
+      invalidatePrFlagCache()
+      prismaMock.systemConfig.findUnique.mockResolvedValue(null as never)
+      expect(await isPrMaterializeEnabled()).toBe(false)
       const r = await maybeMaterializePr('t1', 'u1')
       expect(r).toEqual({ materialized: false, reason: 'flag-off' })
-      expect(prismaMock.task.findUnique).not.toHaveBeenCalled()
       expect(prismaMock.purchaseRequest.create).not.toHaveBeenCalled()
     })
-    it('FF_PR_MATERIALIZE="false" → vẫn TẮT', async () => {
+    it('FF_PR_MATERIALIZE="false" (env) → vẫn TẮT dù DB bật', async () => {
       process.env.FF_PR_MATERIALIZE = 'false'
+      invalidatePrFlagCache()
+      prismaMock.systemConfig.findUnique.mockResolvedValue({ key: 'ff_pr_materialize', value: 'true' } as never)
       expect((await maybeMaterializePr('t1', 'u1')).materialized).toBe(false)
       expect(prismaMock.purchaseRequest.create).not.toHaveBeenCalled()
+    })
+    it('không env, SystemConfig ff_pr_materialize="true" → BẬT (toggle runtime)', async () => {
+      delete process.env.FF_PR_MATERIALIZE
+      invalidatePrFlagCache()
+      prismaMock.systemConfig.findUnique.mockResolvedValue({ key: 'ff_pr_materialize', value: 'true' } as never)
+      mockTask('P2.1', { bomPrItems: THEP })
+      const r = await maybeMaterializePr('t1', 'u1')
+      expect(r.materialized).toBe(true)
     })
   })
 

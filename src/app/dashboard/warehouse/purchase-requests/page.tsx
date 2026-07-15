@@ -12,10 +12,14 @@ import { ClipboardList } from 'lucide-react'
 
 interface PrItem {
   id: string
-  materialId: string
+  materialId: string | null
   quantity: number
   notes: string | null
   material: { materialCode: string; name: string; unit: string } | null
+  // Snapshot (dòng chưa khớp mã vật tư — materialId null): hiển thị thay cho material
+  itemCode: string | null
+  description: string | null
+  unit: string | null
 }
 
 // Độ phủ PO (P2-đợt2 B1) — summary từ list ?withCoverage=1, per-item từ /coverage
@@ -49,6 +53,9 @@ interface PurchaseRequest {
   items: PrItem[]
   itemCount: number
   coverage?: PrCoverageSummary | null
+  // Bước 5 — truy vết nguồn: task đã sinh ra PR + PO đã tạo từ cùng task
+  sourceTask: { id: string; title: string } | null
+  relatedPo: { id: string; poCode: string; status: string } | null
 }
 
 interface PaginationData { page: number; limit: number; total: number; totalPages: number }
@@ -256,6 +263,28 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
             {pr.notes && (
               <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>Ghi chú: {pr.notes}</p>
             )}
+            {/* Bước 5 — truy vết: task nguồn + PO liên quan (cùng sourceTaskId) */}
+            {(pr.sourceTask || pr.relatedPo) && (
+              <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {pr.sourceTask && (
+                  <span>
+                    Task nguồn:{' '}
+                    <Link href={`/dashboard/tasks/${pr.sourceTask.id}`} style={{ color: 'var(--accent)', fontWeight: 600 }} onClick={e => e.stopPropagation()}>
+                      {pr.sourceTask.title} ↗
+                    </Link>
+                  </span>
+                )}
+                {pr.relatedPo && (
+                  <span>
+                    PO liên quan:{' '}
+                    <Link href="/dashboard/warehouse/purchase-orders" className="font-mono" style={{ color: 'var(--accent)', fontWeight: 600 }} onClick={e => e.stopPropagation()}>
+                      {pr.relatedPo.poCode} ↗
+                    </Link>
+                    <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({pr.relatedPo.status})</span>
+                  </span>
+                )}
+              </p>
+            )}
             {pr.status === 'APPROVED' && pr.coverage && (
               <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>
                 Độ phủ PO:{' '}
@@ -283,17 +312,21 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
               </thead>
               <tbody>
                 {pr.items.map(item => {
-                  const cov = showCoverageCols ? itemCoverage?.[item.materialId] : undefined
+                  const cov = showCoverageCols && item.materialId ? itemCoverage?.[item.materialId] : undefined
+                  // Dòng chưa khớp mã vật tư (materialId null) → dùng snapshot itemCode/description
+                  const code = item.material?.materialCode || item.itemCode || '—'
+                  const name = item.material?.name || item.description || 'Vật tư chưa khớp mã'
+                  const unit = item.material?.unit || item.unit || ''
                   return (
                   <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '0.375rem 0' }}>
                       <span className="font-mono" style={{ color: 'var(--accent)', fontWeight: 600, marginRight: 8 }}>
-                        {item.material?.materialCode || '—'}
+                        {code}
                       </span>
-                      {item.material?.name || 'Vật tư đã xóa'}
+                      {name}
                     </td>
                     <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0' }}>
-                      {Number(item.quantity)} {item.material?.unit || ''}
+                      {Number(item.quantity)} {unit}
                     </td>
                     {showCoverageCols && (
                       <>
