@@ -194,6 +194,7 @@ export async function emitTaskCreated(taskId: string): Promise<void> {
     const nameById = new Map(users.map(u => [u.id, u.fullName]))
 
     await broadcastWebhook('task.created', {
+      taskId: task.id,
       ibsTaskId: task.id,
       title: task.title,
       description: task.description || null,
