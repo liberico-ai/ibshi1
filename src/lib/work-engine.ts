@@ -11,6 +11,18 @@ import { whereDoerOverdue, whereReviewLate } from './task-where'
 
 const TASK_STATUS = { OPEN: 'OPEN', IN_PROGRESS: 'IN_PROGRESS', AWAITING_REVIEW: 'AWAITING_REVIEW', DONE: 'DONE', RETURNED: 'RETURNED', CANCELLED: 'CANCELLED' } as const
 
+const PRESERVED_RD_KEYS = ['externalClientId', 'templateType'] as const
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mergeResultData(existing: unknown, incoming: Record<string, unknown>): any {
+  const prev = (existing && typeof existing === 'object') ? (existing as Record<string, unknown>) : {}
+  const merged: Record<string, unknown> = { ...incoming }
+  for (const key of PRESERVED_RD_KEYS) {
+    if (key in prev && !(key in merged)) merged[key] = prev[key]
+  }
+  return JSON.parse(JSON.stringify(merged))
+}
+
 // Trưởng phòng của 1 role = người giữ role đại diện phòng (DEPT_PRIMARY_ROLE), userLevel cao nhất (L1<L2).
 // Trả null nếu phòng chưa có trưởng phòng → buộc người tạo chọn nhân sự cụ thể.
 export async function getDeptHead(roleCode: string): Promise<{ id: string; fullName: string; deptCode: string; deptName: string } | null> {
@@ -397,7 +409,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
     if (templateStepId) {
       // Task thuộc template: giữ luồng tự động — DONE + hook + sinh bước kế tiếp
       await prisma.$transaction([
-        prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.DONE, completedAt: new Date(), completedBy: userId, resultData: input.resultData ? JSON.parse(JSON.stringify(input.resultData)) : undefined } }),
+        prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.DONE, completedAt: new Date(), completedBy: userId, resultData: input.resultData ? mergeResultData(task.resultData, input.resultData) : undefined } }),
         prisma.taskHistory.create({ data: { taskId, action: 'COMPLETED', byUserId: userId } }),
         prisma.notification.create({ data: { userId: task.createdBy, title: `Hoàn thành: ${task.title}`, message: 'Công việc bạn giao đã hoàn thành.', type: 'task_completed', linkUrl: `/dashboard/work/${taskId}` } }),
       ])
@@ -415,7 +427,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
       // Task ad-hoc: trả về NGƯỜI GIAO để xem & kết thúc (chờ duyệt). Người giao sẽ chọn:
       // (1) Hoàn thành & kết thúc  hoặc  (2) Tạo việc tiếp theo.
       await prisma.$transaction([
-        prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.AWAITING_REVIEW, submittedAt: new Date(), resultData: input.resultData ? JSON.parse(JSON.stringify(input.resultData)) : undefined } }),
+        prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.AWAITING_REVIEW, submittedAt: new Date(), resultData: input.resultData ? mergeResultData(task.resultData, input.resultData) : undefined } }),
         prisma.taskHistory.create({ data: { taskId, action: 'SUBMITTED_TO_CREATOR', byUserId: userId, toUserId: task.createdBy } }),
         prisma.notification.create({ data: { userId: task.createdBy, title: `Cần xem & kết thúc: ${task.title}`, message: 'Người nhận đã hoàn thành và trả lại. Hãy kết thúc hoặc tạo việc tiếp theo.', type: 'task_review', linkUrl: `/dashboard/work/${taskId}` } }),
       ])

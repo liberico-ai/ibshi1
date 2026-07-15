@@ -96,6 +96,12 @@ export async function emitTaskUpdated(taskId: string, previousStatus?: string): 
     const briefing = (rd.briefing && typeof rd.briefing === 'object') ? (rd.briefing as Record<string, unknown>) : {}
     const decision = typeof briefing.decision === 'string' ? briefing.decision : ''
 
+    const evidenceFiles = await prisma.fileAttachment.findMany({
+      where: { entityType: 'TaskEvidence', entityId: { startsWith: `${task.id}_` } },
+      select: { id: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    })
+
     const payload: Record<string, unknown> = {
       externalRef: task.externalRef,
       taskId: task.id,
@@ -111,6 +117,13 @@ export async function emitTaskUpdated(taskId: string, previousStatus?: string): 
       decision,
       updatedAt: task.updatedAt,
       completedAt: task.completedAt || null,
+      evidenceFiles: evidenceFiles.map(f => ({
+        fileId: f.id,
+        fileName: f.fileName,
+        fileSize: f.fileSize,
+        mimeType: f.mimeType,
+        downloadUrl: `/api/external/v1/files/${f.id}`,
+      })),
     }
 
     const externalClientId = typeof rd.externalClientId === 'string' ? rd.externalClientId : null
