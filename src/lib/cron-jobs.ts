@@ -96,10 +96,19 @@ export async function runDailyDigest() {
     }
 
     if (overdue) {
-      overdueTasks.push({ title: t.title, assignee, projCode, daysOverdue: daysOver })
+      const isReviewLate = t.status === 'AWAITING_REVIEW'
+      const responsible = isReviewLate
+        ? (nameById.get(t.createdBy) || 'Người giao')
+        : assignee
+      overdueTasks.push({ title: t.title, assignee: responsible, projCode, daysOverdue: daysOver })
       overdueByProject.set(projCode || 'Chung', (overdueByProject.get(projCode || 'Chung') || 0) + 1)
-      const names = t.assignees.filter(a => a.userId).map(a => nameById.get(a.userId!) || 'NV')
-      for (const n of names) overdueByAssignee.set(n, (overdueByAssignee.get(n) || 0) + 1)
+      if (isReviewLate) {
+        const creatorName = nameById.get(t.createdBy) || 'Người giao'
+        overdueByAssignee.set(creatorName, (overdueByAssignee.get(creatorName) || 0) + 1)
+      } else {
+        const names = t.assignees.filter(a => a.userId).map(a => nameById.get(a.userId!) || 'NV')
+        for (const n of names) overdueByAssignee.set(n, (overdueByAssignee.get(n) || 0) + 1)
+      }
     }
 
     if (isDueSoon) totalDueSoon++
