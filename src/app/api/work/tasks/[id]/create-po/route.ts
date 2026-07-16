@@ -8,6 +8,7 @@ import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { toQty } from '@/lib/pr-normalizer'
 import { fetchPoCoverageMap, coverageKey } from '@/lib/pr-coverage'
+import { nextPoCode } from '@/lib/po-code'
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R07', 'R07a']
 
@@ -219,9 +220,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const totalValue = poItems.reduce((s, it) => s + it.quantity * it.unitPrice, 0)
 
   // Generate PO code
-  const lastPo = await prisma.purchaseOrder.findFirst({ orderBy: { poCode: 'desc' } })
-  const lastNum = lastPo?.poCode ? parseInt(lastPo.poCode.replace('PO-', ''), 10) || 0 : 0
-  const poCode = `PO-${String(lastNum + 1).padStart(5, '0')}`
+  const poCode = await nextPoCode()
 
   const po = await prisma.purchaseOrder.create({
     data: {
