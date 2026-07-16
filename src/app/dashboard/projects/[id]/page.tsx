@@ -235,6 +235,19 @@ export default function ProjectDetailPage() {
         </a>
       )}
 
+      {/* Hợp đồng mua (T1) — role mua hàng / QLDA / tài chính */}
+      {['R01', 'R02', 'R02a', 'R03', 'R03a', 'R07', 'R07a', 'R08', 'R08a', 'R10'].includes(currentUserRole) && (
+        <a
+          href={`/dashboard/projects/${params.id}/purchase-contracts`}
+          className="card p-3 flex items-center gap-3 transition-all hover:shadow-md"
+          style={{ borderLeft: '4px solid #d97706', textDecoration: 'none' }}
+        >
+          <span style={{ fontSize: '18px' }}>📜</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--text-heading)' }}>Hợp đồng mua</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>HĐMB/HĐKT với NCC · gắn PO · file ký</span>
+        </a>
+      )}
+
       {/* Sổ tài liệu dự án (T5) — trang tự RBAC */}
       <a
         href={`/dashboard/projects/${params.id}/documents`}

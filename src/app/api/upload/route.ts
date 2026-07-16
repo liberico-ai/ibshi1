@@ -7,6 +7,7 @@ import { saveAttachmentFromBuffer, validateFileName, ENTITY_ID_REGEX } from '@/l
 const ALLOWED_ENTITY_TYPES = new Set([
   'TaskDoc', 'TaskQuote', 'Project', 'ProjectDoc', 'ProjectDraft',
   'PO', 'PR', 'GRN', 'Meeting', 'General', 'Task', 'TaskEvidence',
+  'PurchaseContract',
 ])
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB

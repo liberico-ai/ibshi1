@@ -91,6 +91,7 @@ model Project {
   ncrs               NonConformanceReport[]
   pieceRateContracts PieceRateContract[]
   purchaseOrders     PurchaseOrder[]
+  purchaseContracts  PurchaseContract[]
   purchaseReqs       PurchaseRequest[]
   safetyIncidents    SafetyIncident[]
   hseManHours        HseManHours[]
@@ -278,11 +279,12 @@ model Vendor {
   notes          String?
   createdAt      DateTime                  @default(now()) @map("created_at")
   updatedAt      DateTime                  @updatedAt @map("updated_at")
-  invoices       Invoice[]
-  millCerts      MillCertificate[]
-  purchaseOrders PurchaseOrder[]
-  subcontracts   SubcontractorContract[]
-  drawdownLines  DrawdownBeneficiaryLine[]
+  invoices          Invoice[]
+  millCerts         MillCertificate[]
+  purchaseOrders    PurchaseOrder[]
+  purchaseContracts PurchaseContract[]
+  subcontracts      SubcontractorContract[]
+  drawdownLines     DrawdownBeneficiaryLine[]
 
   @@index([category])
   @@map("vendors")
@@ -488,6 +490,7 @@ model PurchaseOrder {
   deliveryDate DateTime?           @map("delivery_date")
   paymentTerms String?             @map("payment_terms")
   sourceTaskId String?             @map("source_task_id")
+  contractId   String?             @map("contract_id")
   createdBy    String              @map("created_by")
   notes        String?
   createdAt    DateTime            @default(now()) @map("created_at")
@@ -496,11 +499,45 @@ model PurchaseOrder {
   invoices     Invoice[]
   project      Project?            @relation(fields: [projectId], references: [id])
   vendor       Vendor              @relation(fields: [vendorId], references: [id])
+  contract     PurchaseContract?   @relation(fields: [contractId], references: [id])
 
   @@index([projectId])
   @@index([vendorId])
   @@index([status])
+  @@index([contractId])
   @@map("purchase_orders")
+}
+
+// T1 — Hợp đồng mua (Purchase Contract)
+// Lớp bao bọc PO: 1 HĐ ký với NCC → nhiều PO/đợt giao. HĐ KHÔNG bắt buộc trước PO
+// (giữ nguyên luồng PO hiện tại). File ký lưu ở FileAttachment (FK mềm qua signedFileId).
+model PurchaseContract {
+  id            String          @id @default(cuid())
+  contractCode  String          @unique @map("contract_code") // số HĐ, vd HDMB-2025-HH-095
+  contractType  String          @default("HDMB") @map("contract_type") // HDMB | HDKT | KHAC
+  projectId     String?         @map("project_id")
+  vendorId      String          @map("vendor_id")
+  title         String
+  value         Decimal?
+  currency      String          @default("VND")
+  signedDate    DateTime?       @map("signed_date")
+  effectiveDate DateTime?       @map("effective_date")
+  paymentTerms  String?         @map("payment_terms")
+  deliveryTerms String?         @map("delivery_terms")
+  status        String          @default("DRAFT") // DRAFT | ACTIVE | COMPLETED | CANCELLED
+  signedFileId  String?         @map("signed_file_id") // FK mềm → FileAttachment.id
+  notes         String?
+  createdBy     String          @map("created_by")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  project       Project?        @relation(fields: [projectId], references: [id])
+  vendor        Vendor          @relation(fields: [vendorId], references: [id])
+  orders        PurchaseOrder[]
+
+  @@index([projectId])
+  @@index([vendorId])
+  @@index([status])
+  @@map("purchase_contracts")
 }
 
 model PurchaseOrderItem {
