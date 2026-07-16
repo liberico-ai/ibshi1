@@ -7,6 +7,7 @@ import {
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { toQty } from '@/lib/pr-normalizer'
+import { fetchPoCoverageMap, coverageKey } from '@/lib/pr-coverage'
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R07', 'R07a']
 
@@ -48,6 +49,13 @@ function buildPriceMap(
  * Build PO item từ dòng PurchaseRequestItem đã materialize của dự án.
  * quantity đã là "số cần mua" (normalizer ưu tiên needToBuyQty khi materialize).
  * Bỏ dòng quantity <= 0. Đơn giá tra từ báo giá NCC (nếu khớp), không có → 0.
+ *
+ * CHỐNG MUA TRÙNG (coverage per-item): nếu truyền `coverage`, mỗi dòng bị TRỪ phần
+ * đã được PO khác của dự án phủ (gom theo materialId, loại PO DRAFT/CANCELLED/REJECTED).
+ * Chỉ đưa vào PO phần CÒN LẠI = quantity − đã phủ (> 0). Phủ hết → bỏ dòng.
+ * GIỚI HẠN: coverage tra theo materialId. Dòng snapshot materialId=null KHÔNG có dữ
+ * liệu coverage → giữ hành vi cũ (đề nghị FULL quantity) — rủi ro mua trùng còn tồn
+ * với các dòng không link vật tư kho.
  */
 function buildPoItemsFromPr(
   prItems: Array<{
@@ -55,24 +63,39 @@ function buildPoItemsFromPr(
     grade?: string | null; unit?: string | null; materialId?: string | null; quantity: unknown;
   }>,
   priceMap: Map<string, number>,
+  coverage?: { projectId: string; map: Map<string, number> },
 ): PoItem[] {
   const out: PoItem[] = []
   for (const it of prItems) {
     // quantity là Prisma Decimal (object) → String() rồi toQty; toQty(Decimal) thẳng sẽ ra 0.
     const quantity = toQty(String(it.quantity ?? ''))
     if (quantity <= 0) continue
+
+    // Trừ phần đã phủ (chỉ khi có materialId để tra coverage).
+    let remaining = quantity
+    const materialId = it.materialId || null
+    if (materialId && coverage) {
+      const key = coverageKey(coverage.projectId, materialId)
+      const covered = coverage.map.get(key) || 0
+      // min(): nhiều dòng PR cùng mã → tiêu hao dần coverage, không trừ trùng.
+      const consumed = Math.min(quantity, covered)
+      remaining = quantity - consumed
+      coverage.map.set(key, covered - consumed) // giảm coverage còn lại cho dòng sau
+      if (remaining <= 0) continue // đã phủ hết → không tạo dòng
+    }
+
     const unitPrice =
       priceMap.get(priceKey(it.itemCode) ?? '') ??
       priceMap.get(priceKey(it.description) ?? '') ??
       0
     out.push({
       itemCode: it.itemCode || '',
-      materialId: it.materialId || null,
+      materialId,
       description: it.description || '',
       profile: it.profile || '',
       grade: it.grade || '',
       unit: it.unit || '',
-      quantity,
+      quantity: remaining,
       unitPrice,
     })
   }
@@ -175,8 +198,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
       orderBy: { purchaseRequest: { createdAt: 'asc' } },
     })
+    // Coverage per-item: gom số đã được PO khác của dự án phủ (theo materialId), để
+    // TRỪ khỏi nhu cầu mua → tránh đề nghị mua lại phần đã có PO. Chỉ tra được item
+    // có materialId; item snapshot (materialId=null) không có dữ liệu → giữ full.
+    const materialIds = Array.from(
+      new Set(prRows.map(r => r.materialId).filter((m): m is string => !!m)),
+    )
+    const coverageMap = await fetchPoCoverageMap([task.projectId], materialIds)
+
     const priceMap = buildPriceMap(quoteLines)
-    poItems.push(...buildPoItemsFromPr(prRows, priceMap))
+    poItems.push(
+      ...buildPoItemsFromPr(prRows, priceMap, { projectId: task.projectId, map: coverageMap }),
+    )
   }
 
   if (poItems.length === 0) {
