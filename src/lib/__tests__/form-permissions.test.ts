@@ -46,7 +46,10 @@ describe('canEditForm', () => {
     for (const f of forms) expect(canEditForm(f, 'R01')).toBe(true)
   })
   it('R02 can edit PR', () => expect(canEditForm('PR', 'R02')).toBe(true))
-  it('R07 cannot edit PR', () => expect(canEditForm('PR', 'R07')).toBe(false))
+  // Gap #3: R07/R07a (Thương mại) ghi bomPr đường chính ở P3.5 (procurement)
+  it('R07 can edit PR (bomPr, P3.5)', () => expect(canEditForm('PR', 'R07')).toBe(true))
+  it('R07a can edit PR (bomPr, P3.5)', () => expect(canEditForm('PR', 'R07a')).toBe(true))
+  it('R06 cannot edit PR', () => expect(canEditForm('PR', 'R06')).toBe(false))
 })
 
 describe('POST /result-data — server gate', () => {
@@ -170,8 +173,26 @@ describe('POST /bom-pr — server gate', () => {
     prismaMock.$executeRaw.mockResolvedValue(1 as any)
   })
 
-  it('R07 → 403', async () => {
+  // Gap #3: R07 (Thương mại) là PARTICIPANT của task (creator/assignee) → ghi bomPr được (form-gate PR đã nới R07).
+  it('R07 là participant → 200', async () => {
     vi.mocked(authenticateRequest).mockResolvedValue({ userId: 'u1', roleCode: 'R07', fullName: 'TM' } as any)
+
+    const req = new NextRequest('http://localhost/api/work/tasks/t1/bom-pr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: '[]' }),
+    })
+    const res = await POST_BOM_PR(req, { params: Promise.resolve({ id: 't1' }) })
+    expect(res.status).toBe(200)
+  })
+
+  // ⚠️ Chặn RÒ RỈ QUYỀN: R07 KHÔNG phải participant (task của bước khác, vd P2.1 design) → 403 ở row-level,
+  // TRƯỚC form-gate. Nới form-gate KHÔNG cho R07 sửa bomPr ở task người khác.
+  it('R07 KHÔNG participant → 403 (row-level, không phải form)', async () => {
+    vi.mocked(authenticateRequest).mockResolvedValue({ userId: 'u1', roleCode: 'R07', fullName: 'TM' } as any)
+    prismaMock.task.findUnique.mockResolvedValue({
+      id: 't1', createdBy: 'other-user', assignees: [{ userId: 'r04-user', role: 'R04' }],
+    } as any)
 
     const req = new NextRequest('http://localhost/api/work/tasks/t1/bom-pr', {
       method: 'POST',
