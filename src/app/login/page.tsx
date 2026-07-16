@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/hooks/useAuth'
+import { resolvePostLoginPath } from '@/lib/mobile-nav'
 import Image from 'next/image'
 
 const FEATURES = [
@@ -44,7 +45,9 @@ export default function LoginPage() {
       const data = await res.json()
       if (!data.ok) { setError(data.error || 'Đăng nhập thất bại'); setLoading(false); return }
       login(data.token, data.user)
-      router.push('/dashboard')
+      // Quay lại nơi người dùng định vào (?next=), nếu không thì theo vai + thiết bị.
+      const next = new URLSearchParams(window.location.search).get('next')
+      router.push(resolvePostLoginPath(data.user.roleCode, next))
     } catch {
       setError('Lỗi kết nối server')
       setLoading(false)
