@@ -50,9 +50,12 @@ const baseTask = {
 beforeEach(() => {
   vi.clearAllMocks()
   prismaMock.vendor.findUnique.mockResolvedValue({ id: 'ven-1', name: 'NCC A' } as never)
-  prismaMock.purchaseOrder.findFirst.mockResolvedValue(null as never)
   prismaMock.purchaseOrder.create.mockResolvedValue({ id: 'po-1', poCode: 'PO-00001' } as never)
   prismaMock.$executeRaw.mockResolvedValue(1 as never)
+  // nextPoCode() đọc purchaseOrder.findMany (mã canonical) + findUnique (guard va chạm).
+  prismaMock.purchaseOrder.findMany.mockResolvedValue([] as never)
+  // findUnique = null: idempotent check không thấy PO cũ + nextPoCode guard không va chạm.
+  prismaMock.purchaseOrder.findUnique.mockResolvedValue(null as never)
   // fetchPoCoverageMap() đọc purchaseOrderItem.findMany — mặc định chưa có PO nào phủ.
   prismaMock.purchaseOrderItem.findMany.mockResolvedValue([] as never)
 })

@@ -4,6 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { convertPrToPoSchema } from '@/lib/schemas'
 import { recalcPOTotal } from '@/lib/sync-engine'
+import { nextPoCode } from '@/lib/po-code'
 
 // POST /api/purchase-orders/convert — Convert approved PR to PO
 export async function POST(req: NextRequest) {
@@ -27,8 +28,7 @@ export async function POST(req: NextRequest) {
     if (!pr) return errorResponse('PR không tồn tại', 404)
     if (pr.status !== 'APPROVED') return errorResponse('PR chưa được duyệt, không thể chuyển thành PO')
 
-    const poCount = await prisma.purchaseOrder.count()
-    const poCode = `PO-${String(poCount + 1).padStart(5, '0')}`
+    const poCode = await nextPoCode()
 
     // PR items: materialId, quantity, specification. PO items add unitPrice.
     // Default unitPrice=0 if not provided (user edits PO later)
