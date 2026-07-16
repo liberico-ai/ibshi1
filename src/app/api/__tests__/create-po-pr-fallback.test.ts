@@ -53,6 +53,8 @@ beforeEach(() => {
   prismaMock.purchaseOrder.findFirst.mockResolvedValue(null as never)
   prismaMock.purchaseOrder.create.mockResolvedValue({ id: 'po-1', poCode: 'PO-00001' } as never)
   prismaMock.$executeRaw.mockResolvedValue(1 as never)
+  // fetchPoCoverageMap() đọc purchaseOrderItem.findMany — mặc định chưa có PO nào phủ.
+  prismaMock.purchaseOrderItem.findMany.mockResolvedValue([] as never)
 })
 
 describe('create-po — fallback nguồn PurchaseRequest (P3.5)', () => {
@@ -109,6 +111,94 @@ describe('create-po — fallback nguồn PurchaseRequest (P3.5)', () => {
     // totalValue = 5*200000 + 3*0 + 7*0
     expect(createArg.data.totalValue).toBe(1000000)
     expect(createArg.data.paymentTerms).toBe('30 ngày')
+  })
+
+  it('coverage per-item: PR item đã được PO khác phủ MỘT PHẦN → PO chỉ lấy phần còn lại; phủ HẾT → bỏ dòng', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({
+      ...baseTask,
+      resultData: {
+        chosenVendorId: 'ven-1',
+        supplierQuotes: [{
+          vendorId: 'ven-1', paymentTerms: '30 ngày',
+          lines: [
+            { code: 'VTC-001', description: 'Thép chữ C', unitPrice: 200000 },
+            { code: 'VTC-005', description: 'Thép tấm', unitPrice: 100000 },
+          ],
+        }],
+      },
+    } as never)
+
+    prismaMock.purchaseRequestItem.findMany.mockResolvedValue([
+      // cần 10, đã phủ 4 → còn 6
+      { itemCode: 'VTC-001', description: 'Thép chữ C', profile: 'C200', grade: 'SS400', unit: 'cây', materialId: 'mat-1', quantity: 10 },
+      // cần 5, đã phủ 5 → phủ hết → bỏ
+      { itemCode: 'VTC-005', description: 'Thép tấm', profile: '', grade: '', unit: 'tấm', materialId: 'mat-2', quantity: 5 },
+      // materialId null → không tra coverage → giữ full (3)
+      { itemCode: 'VTC-002', description: 'Tôn tấm', profile: '', grade: '', unit: 'tấm', materialId: null, quantity: '3' },
+    ] as never)
+
+    // fetchPoCoverageMap gom PO item theo materialId (loại DRAFT/CANCELLED/REJECTED)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([
+      { materialId: 'mat-1', quantity: 4, purchaseOrder: { projectId: 'proj-1' } },
+      { materialId: 'mat-2', quantity: 5, purchaseOrder: { projectId: 'proj-1' } },
+    ] as never)
+
+    const res = await POST(jsonReq() as never, ctx)
+    expect(res.status).toBe(200)
+
+    // coverage query đúng project + materialIds (chỉ item có materialId)
+    expect(prismaMock.purchaseOrderItem.findMany).toHaveBeenCalledTimes(1)
+
+    const createArg = prismaMock.purchaseOrder.create.mock.calls[0][0] as CreateArg
+    const items = createArg.data.items.create
+    expect(items).toHaveLength(2) // mat-2 phủ hết bị loại
+    expect(items[0]).toMatchObject({ itemCode: 'VTC-001', materialId: 'mat-1', quantity: 6, unitPrice: 200000 })
+    expect(items[1]).toMatchObject({ itemCode: 'VTC-002', materialId: null, quantity: 3, unitPrice: 0 })
+    // totalValue = 6*200000 + 3*0
+    expect(createArg.data.totalValue).toBe(1200000)
+  })
+
+  it('coverage: nhiều dòng PR CÙNG materialId → coverage tiêu hao dần, không trừ trùng', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({
+      ...baseTask,
+      resultData: {
+        chosenVendorId: 'ven-1',
+        supplierQuotes: [{ vendorId: 'ven-1', lines: [{ code: 'VTC-001', unitPrice: 100 }] }],
+      },
+    } as never)
+
+    prismaMock.purchaseRequestItem.findMany.mockResolvedValue([
+      // 2 dòng cùng mat-1: cần 4 + 4 = 8, đã phủ 5 → dòng1 phủ hết (còn 0, bỏ), dòng2 còn 3
+      { itemCode: 'VTC-001', description: 'A', profile: '', grade: '', unit: 'cây', materialId: 'mat-1', quantity: 4 },
+      { itemCode: 'VTC-001', description: 'A', profile: '', grade: '', unit: 'cây', materialId: 'mat-1', quantity: 4 },
+    ] as never)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([
+      { materialId: 'mat-1', quantity: 5, purchaseOrder: { projectId: 'proj-1' } },
+    ] as never)
+
+    const res = await POST(jsonReq() as never, ctx)
+    expect(res.status).toBe(200)
+    const createArg = prismaMock.purchaseOrder.create.mock.calls[0][0] as CreateArg
+    const items = createArg.data.items.create
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ materialId: 'mat-1', quantity: 3 })
+  })
+
+  it('coverage: PR item phủ HẾT toàn bộ → 0 item → 400, không tạo PO', async () => {
+    prismaMock.task.findUnique.mockResolvedValue({
+      ...baseTask,
+      resultData: { chosenVendorId: 'ven-1' },
+    } as never)
+    prismaMock.purchaseRequestItem.findMany.mockResolvedValue([
+      { itemCode: 'VTC-001', description: 'A', profile: '', grade: '', unit: 'cây', materialId: 'mat-1', quantity: 5 },
+    ] as never)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([
+      { materialId: 'mat-1', quantity: 5, purchaseOrder: { projectId: 'proj-1' } },
+    ] as never)
+
+    const res = await POST(jsonReq() as never, ctx)
+    expect(res.status).toBe(400)
+    expect(prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
   })
 
   it('PR đã mua hết (CONVERTED) → findMany rỗng → 400, không tạo PO', async () => {

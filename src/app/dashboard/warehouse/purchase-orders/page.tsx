@@ -7,7 +7,7 @@ import { PageHeader, StatusBadge, Button, EmptyState, KPICard } from '@/componen
 import { ShoppingCart, ClipboardList, Banknote, Clock, CheckCircle2 } from 'lucide-react'
 
 interface PO {
-  id: string; poCode: string; status: string; totalAmount: number | null; orderDate: string | null; deliveryDate: string | null;
+  id: string; poCode: string; status: string; totalValue: number | null; orderDate: string | null; deliveryDate: string | null;
   vendor: { vendorCode: string; name: string } | null
   contract: { id: string; contractCode: string; contractType: string; projectId: string | null } | null
   items: { id: string; quantity: number; unitPrice: number }[]
@@ -43,7 +43,7 @@ export default function PurchaseOrdersPage() {
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
 
-  const totalValue = pos.reduce((s, p) => s + (p.totalAmount || 0), 0)
+  const totalValue = pos.reduce((s, p) => s + (p.totalValue || 0), 0)
   const pendingCount = pos.filter(p => p.status === 'DRAFT' || p.status === 'PENDING').length
   const approvedCount = pos.filter(p => p.status === 'APPROVED' || p.status === 'COMPLETED').length
 
@@ -136,7 +136,7 @@ export default function PurchaseOrdersPage() {
                 </td>
                 <td className="text-right">
                   <span className="font-mono text-xs font-bold" style={{ color: 'var(--success)' }}>
-                    {formatCurrency(po.totalAmount || 0)}
+                    {formatCurrency(po.totalValue || 0)}
                   </span>
                 </td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.deliveryDate ? formatDate(po.deliveryDate) : '—'}</td>
