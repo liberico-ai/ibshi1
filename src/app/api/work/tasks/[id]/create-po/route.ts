@@ -58,7 +58,8 @@ function buildPoItemsFromPr(
 ): PoItem[] {
   const out: PoItem[] = []
   for (const it of prItems) {
-    const quantity = toQty(it.quantity)
+    // quantity là Prisma Decimal (object) → String() rồi toQty; toQty(Decimal) thẳng sẽ ra 0.
+    const quantity = toQty(String(it.quantity ?? ''))
     if (quantity <= 0) continue
     const unitPrice =
       priceMap.get(priceKey(it.itemCode) ?? '') ??

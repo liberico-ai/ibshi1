@@ -10,6 +10,7 @@
  *  - đường CŨ (bomPr) vẫn chạy, KHÔNG chạm PurchaseRequestItem
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { Prisma } from '@prisma/client'
 import { prismaMock } from '@/lib/__mocks__/db'
 
 type CreateArg = {
@@ -75,6 +76,8 @@ describe('create-po — fallback nguồn PurchaseRequest (P3.5)', () => {
       { itemCode: 'VTC-002', description: 'Tôn tấm', profile: '', grade: '', unit: 'tấm', materialId: null, quantity: '3' },
       // quantity 0 → bỏ
       { itemCode: 'VTC-003', description: 'Bu lông', profile: '', grade: '', unit: 'bộ', materialId: null, quantity: 0 },
+      // quantity là Prisma Decimal (object) — shape THẬT Prisma trả về. Regression: toQty(Decimal) trực tiếp = 0 → mất dòng.
+      { itemCode: 'VTC-004', description: 'Thép hộp', profile: '', grade: '', unit: 'cây', materialId: null, quantity: new Prisma.Decimal('7') },
     ] as never)
 
     const res = await POST(jsonReq() as never, ctx)
@@ -93,7 +96,7 @@ describe('create-po — fallback nguồn PurchaseRequest (P3.5)', () => {
 
     const createArg = prismaMock.purchaseOrder.create.mock.calls[0][0] as CreateArg
     const items = createArg.data.items.create
-    expect(items).toHaveLength(2) // dòng qty 0 bị loại
+    expect(items).toHaveLength(3) // dòng qty 0 bị loại; Decimal(7) được giữ
     expect(items[0]).toMatchObject({
       itemCode: 'VTC-001', description: 'Thép chữ C', profile: 'C200', grade: 'SS400',
       unit: 'cây', materialId: 'mat-1', quantity: 5, unitPrice: 200000,
@@ -101,7 +104,9 @@ describe('create-po — fallback nguồn PurchaseRequest (P3.5)', () => {
     expect(items[1]).toMatchObject({
       itemCode: 'VTC-002', materialId: null, quantity: 3, unitPrice: 0,
     })
-    // totalValue = 5*200000 + 3*0
+    // Prisma Decimal → quantity number đúng (regression guard)
+    expect(items[2]).toMatchObject({ itemCode: 'VTC-004', quantity: 7, unitPrice: 0 })
+    // totalValue = 5*200000 + 3*0 + 7*0
     expect(createArg.data.totalValue).toBe(1000000)
     expect(createArg.data.paymentTerms).toBe('30 ngày')
   })
