@@ -146,11 +146,30 @@ export interface EstimateTotals {
   totalOverhead?: number
 }
 
+/** Taxonomy chuẩn: 4 nhóm DTTC (dự toán tài chính, mã tiếng Việt trong
+ *  docs/handoff/import/budget_import.csv) → Budget.category (mã tiếng Anh).
+ *  ĐÂY LÀ NGUỒN DUY NHẤT của ánh xạ 4 nhóm — nơi khác import.
+ *  Lưu ý: DICH_VU có danh mục riêng SERVICE — KHÔNG gộp vào MATERIAL/OVERHEAD, nếu không dòng dịch vụ bị mất. */
+export const DTTC_GROUP_TO_BUDGET_CATEGORY = {
+  VAT_TU: 'MATERIAL',
+  NHAN_CONG: 'LABOR',
+  DICH_VU: 'SERVICE',
+  CHI_PHI_CHUNG: 'OVERHEAD',
+} as const
+
+export type DttcGroupCode = keyof typeof DTTC_GROUP_TO_BUDGET_CATEGORY
+
+/** Map 1 mã nhóm DTTC → Budget.category. Trả null nếu mã không thuộc 4 nhóm chuẩn. */
+export function dttcGroupToBudgetCategory(group: string): string | null {
+  return (DTTC_GROUP_TO_BUDGET_CATEGORY as Record<string, string>)[group] ?? null
+}
+
+// EstimateTotals key ↔ nhóm DTTC (giữ đủ 4 field — DICH_VU→totalService, không đọc thiếu field nào).
 const ESTIMATE_CATEGORY_MAP: ReadonlyArray<readonly [keyof EstimateTotals, string]> = [
-  ['totalMaterial', 'MATERIAL'],
-  ['totalLabor', 'LABOR'],
-  ['totalService', 'SERVICE'],
-  ['totalOverhead', 'OVERHEAD'],
+  ['totalMaterial', DTTC_GROUP_TO_BUDGET_CATEGORY.VAT_TU],
+  ['totalLabor', DTTC_GROUP_TO_BUDGET_CATEGORY.NHAN_CONG],
+  ['totalService', DTTC_GROUP_TO_BUDGET_CATEGORY.DICH_VU],
+  ['totalOverhead', DTTC_GROUP_TO_BUDGET_CATEGORY.CHI_PHI_CHUNG],
 ] as const
 
 /** Dự toán (form ESTIMATE) hoàn thành/duyệt → upsert Budget.planned theo từng category.

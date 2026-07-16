@@ -64,7 +64,8 @@ export type CreateReceiptInput = z.infer<typeof createReceiptSchema>
 
 export const createBudgetSchema = z.object({
   projectId: z.string().min(1, 'Dự án là bắt buộc'),
-  category: z.enum(['MATERIAL', 'LABOR', 'EQUIPMENT', 'SUBCONTRACT', 'OVERHEAD']),
+  // SERVICE = nhóm DTTC "DỊCH_VỤ" (thuê ngoài). Phải có danh mục riêng, không gộp vào MATERIAL/OVERHEAD.
+  category: z.enum(['MATERIAL', 'LABOR', 'SERVICE', 'EQUIPMENT', 'SUBCONTRACT', 'OVERHEAD']),
   planned: z.number().min(0).default(0),
   actual: z.number().min(0).default(0),
   committed: z.number().min(0).default(0),

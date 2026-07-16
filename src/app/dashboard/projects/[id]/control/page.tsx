@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, Badge } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -55,13 +55,18 @@ function pctBar(pct: number, color: string) {
   )
 }
 
+const BASELINE_ROLES = ['R01', 'R03', 'R03a']
+
 export default function ControlDashboardPage() {
   const params = useParams()
+  const user = useAuthStore(s => s.user)
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [freezing, setFreezing] = useState(false)
+  const [freezeMsg, setFreezeMsg] = useState('')
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!params.id) return
     apiFetch(`/api/projects/${params.id}/control-dashboard`).then(r => {
       if (r.ok) setData(r)
@@ -69,6 +74,24 @@ export default function ControlDashboardPage() {
       setLoading(false)
     })
   }, [params.id])
+
+  useEffect(() => { load() }, [load])
+
+  const canFreeze = user ? BASELINE_ROLES.includes(user.roleCode) : false
+
+  const handleFreeze = async () => {
+    if (!params.id || freezing) return
+    setFreezing(true)
+    setFreezeMsg('')
+    const r = await apiFetch(`/api/projects/${params.id}/baseline`, { method: 'POST', body: JSON.stringify({}) })
+    setFreezing(false)
+    if (r.ok) {
+      setFreezeMsg(r.message || `Đã tạo baseline ${r.baseline?.label || ''}`)
+      load()
+    } else {
+      setFreezeMsg(r.error || 'Không tạo được baseline')
+    }
+  }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3, 4].map(i => <div key={i} className="h-32 skeleton rounded-xl" />)}</div>
   if (error || !data) return <div className="card p-6 text-center" style={{ color: SEMANTIC_COLORS.danger.solid }}>{error || 'Lỗi'}</div>
@@ -89,6 +112,19 @@ export default function ControlDashboardPage() {
           value={volume.baseline.tons != null ? `${fmt(volume.baseline.tons)} tấn` : 'Chưa đông cứng'}
           sub={volume.baseline.label ? `${volume.baseline.label} — ${volume.baseline.frozenAt ? formatDate(volume.baseline.frozenAt) : ''}` : null}
           color={SEMANTIC_COLORS.info.solid}
+          extra={canFreeze ? (
+            <div>
+              <button
+                onClick={handleFreeze}
+                disabled={freezing}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-white disabled:opacity-60"
+                style={{ background: SEMANTIC_COLORS.info.solid }}
+              >
+                {freezing ? 'Đang tạo…' : (volume.baseline.tons != null ? 'Tạo Rev mới' : 'Tạo baseline')}
+              </button>
+              {freezeMsg && <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{freezeMsg}</p>}
+            </div>
+          ) : null}
         />
         <SummaryCard
           label="② HIỆN HÀNH (BOM)"
