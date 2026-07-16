@@ -110,6 +110,7 @@ model Project {
   mrbReleases        MrbRelease[]
   settlement         ProjectSettlement?
   quoteGroups        QuoteGroup[]
+  documents          ProjectDocument[]
 
   @@index([status])
   @@index([pmUserId])
@@ -1573,6 +1574,31 @@ model FileAttachment {
 
   @@index([entityType, entityId])
   @@map("file_attachments")
+}
+
+// ── Sổ tài liệu dự án (Project Document Register) ──
+// Hồ sơ hợp nhất per-project: mã tài liệu / loại / revision / phòng phát hành / file.
+// File thật lưu ở FileAttachment (entityType="ProjectDoc"); ở đây chỉ tham chiếu qua fileAttachmentId.
+model ProjectDocument {
+  id               String   @id @default(cuid())
+  projectId        String   @map("project_id")
+  docCode          String   @map("doc_code") // mã tài liệu (do người dùng đặt)
+  docType          String   @map("doc_type") // BAN_VE | BOM | HDMB | DTTC | QC | KHAC ...
+  revision         String   @default("Rev0")
+  deptCode         String?  @map("dept_code") // phòng phát hành (roleCode/deptCode)
+  title            String
+  fileAttachmentId String?  @map("file_attachment_id") // FK mềm → FileAttachment.id
+  taskId           String?  @map("task_id") // liên kết truy vết công việc (nếu có)
+  status           String   @default("ACTIVE") // ACTIVE | SUPERSEDED | ARCHIVED
+  uploadedBy       String   @map("uploaded_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  project          Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([docType])
+  @@index([deptCode])
+  @@map("project_documents")
 }
 
 model PieceRateContract {
