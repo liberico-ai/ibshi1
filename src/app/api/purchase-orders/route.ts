@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
         where,
         include: {
           vendor: { select: { vendorCode: true, name: true } },
+          contract: { select: { id: true, contractCode: true, contractType: true, projectId: true } },
           items: {
             include: { material: { select: { materialCode: true, name: true, unit: true } } },
           },

@@ -9,6 +9,7 @@ import { ShoppingCart, ClipboardList, Banknote, Clock, CheckCircle2 } from 'luci
 interface PO {
   id: string; poCode: string; status: string; totalAmount: number | null; orderDate: string | null; deliveryDate: string | null;
   vendor: { vendorCode: string; name: string } | null
+  contract: { id: string; contractCode: string; contractType: string; projectId: string | null } | null
   items: { id: string; quantity: number; unitPrice: number }[]
 }
 
@@ -87,6 +88,7 @@ export default function PurchaseOrdersPage() {
             <tr>
               <th>Mã PO</th>
               <th>NCC</th>
+              <th>Hợp đồng nguồn</th>
               <th>Trạng thái</th>
               <th className="text-right">Giá trị</th>
               <th>Ngày giao</th>
@@ -97,7 +99,7 @@ export default function PurchaseOrdersPage() {
           <tbody>
             {pos.length === 0 ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <EmptyState icon={<ShoppingCart />} title="Chưa có PO" description="Chưa có đơn đặt hàng nào được tạo" />
                 </td>
               </tr>
@@ -111,6 +113,24 @@ export default function PurchaseOrdersPage() {
                   <span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{po.poCode}</span>
                 </td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.vendor?.name || '—'}</td>
+                <td className="text-xs">
+                  {po.contract ? (
+                    po.contract.projectId ? (
+                      <a
+                        href={`/dashboard/projects/${po.contract.projectId}/purchase-contracts`}
+                        className="font-mono font-bold underline"
+                        style={{ color: 'var(--info)' }}
+                        title={`Loại: ${po.contract.contractType}`}
+                      >
+                        {po.contract.contractCode}
+                      </a>
+                    ) : (
+                      <span className="font-mono font-bold" style={{ color: 'var(--info)' }} title={`Loại: ${po.contract.contractType}`}>{po.contract.contractCode}</span>
+                    )
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>—</span>
+                  )}
+                </td>
                 <td>
                   <StatusBadge category="po" status={po.status} className={po.status === 'PENDING' ? 'font-bold' : ''} />
                 </td>
