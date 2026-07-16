@@ -6,6 +6,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { RBAC } from '@/lib/rbac-rules'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
+import { nextPoCode } from '@/lib/po-code'
 
 // PUT /api/purchase-requests/[id] — Approve/Reject/Update PR
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -63,14 +64,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         return errorResponse('Cần chọn nhà cung cấp')
       }
 
-      // Generate PO code
-      const year = new Date().getFullYear().toString().slice(-2)
-      const lastPo = await prisma.purchaseOrder.findFirst({
-        where: { poCode: { startsWith: `PO-${year}-` } },
-        orderBy: { poCode: 'desc' },
-      })
-      const seq = lastPo ? parseInt(lastPo.poCode.split('-')[2]) + 1 : 1
-      const poCode = `PO-${year}-${String(seq).padStart(3, '0')}`
+      // Generate PO code — dùng helper chuẩn (format PO-<năm>-NNN, có guard va chạm)
+      const poCode = await nextPoCode()
 
       // Create PO with items from PR
       const totalValue = pr.items.reduce((sum, item) => {
