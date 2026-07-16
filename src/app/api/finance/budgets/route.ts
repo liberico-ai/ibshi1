@@ -5,7 +5,9 @@ import { validateBody } from '@/lib/api-helpers'
 import { createBudgetSchema } from '@/lib/schemas'
 import { FINANCE_WRITE_ROLES } from '@/lib/constants'
 
-const ALL_CATS = ['MATERIAL', 'LABOR', 'EQUIPMENT', 'SUBCONTRACT', 'OVERHEAD']
+// 4 nhóm DTTC → Budget.category: VAT_TU→MATERIAL, NHAN_CONG→LABOR, DICH_VU→SERVICE, CHI_PHI_CHUNG→OVERHEAD.
+// SERVICE bắt buộc có mặt, nếu thiếu thì dòng ngân sách DỊCH_VỤ (DICH_VU) bị rơi khỏi bảng + tổng hợp.
+const ALL_CATS = ['MATERIAL', 'LABOR', 'SERVICE', 'EQUIPMENT', 'SUBCONTRACT', 'OVERHEAD']
 
 // GET /api/finance/budgets — project budgets with variance analysis
 export async function GET(req: NextRequest) {

@@ -17,6 +17,8 @@ import {
   recalcPOTotal,
   recordDrawdownCashflow,
   runReverseHooks,
+  dttcGroupToBudgetCategory,
+  DTTC_GROUP_TO_BUDGET_CATEGORY,
 } from '@/lib/sync-engine'
 
 // ── Helpers ──
@@ -243,6 +245,28 @@ describe('recalcPOTotal', () => {
   })
 })
 
+// ── Taxonomy 4 nhóm DTTC → Budget.category ──
+
+describe('DTTC taxonomy (4 nhóm → Budget.category)', () => {
+  it('map đủ 4 nhóm, DICH_VU có danh mục riêng SERVICE', () => {
+    expect(dttcGroupToBudgetCategory('VAT_TU')).toBe('MATERIAL')
+    expect(dttcGroupToBudgetCategory('NHAN_CONG')).toBe('LABOR')
+    expect(dttcGroupToBudgetCategory('DICH_VU')).toBe('SERVICE')
+    expect(dttcGroupToBudgetCategory('CHI_PHI_CHUNG')).toBe('OVERHEAD')
+  })
+
+  it('DICH_VU KHÔNG bị gộp vào MATERIAL/OVERHEAD (mỗi nhóm ra 1 category duy nhất)', () => {
+    const cats = Object.values(DTTC_GROUP_TO_BUDGET_CATEGORY)
+    expect(new Set(cats).size).toBe(4) // không trùng → không nhóm nào bị nuốt
+    expect(cats).toContain('SERVICE')
+  })
+
+  it('trả null cho mã nhóm không hợp lệ', () => {
+    expect(dttcGroupToBudgetCategory('UNKNOWN')).toBeNull()
+    expect(dttcGroupToBudgetCategory('')).toBeNull()
+  })
+})
+
 // ── syncEstimateToBudget (dự toán duyệt → planned) ──
 
 describe('syncEstimateToBudget', () => {
@@ -266,6 +290,26 @@ describe('syncEstimateToBudget', () => {
     expect(prismaMock.budget.create).toHaveBeenCalledWith({ data: { projectId: PROJECT_ID, category: 'LABOR', planned: 500 } })
     expect(prismaMock.budget.create).toHaveBeenCalledWith({ data: { projectId: PROJECT_ID, category: 'SERVICE', planned: 200 } })
     expect(prismaMock.budget.create).toHaveBeenCalledWith({ data: { projectId: PROJECT_ID, category: 'OVERHEAD', planned: 100 } })
+  })
+
+  it('E2E thật: 4 nhóm DTTC (25-VPI-I-095) → 4 dòng Budget riêng, DICH_VU không mất', async () => {
+    prismaMock.budget.findFirst.mockResolvedValue(null)
+    prismaMock.budget.create.mockResolvedValue({} as any)
+
+    // Số liệu thật từ docs/handoff/import/budget_import.csv (VAT_TU/NHAN_CONG/DICH_VU/CHI_PHI_CHUNG)
+    await syncEstimateToBudget(
+      PROJECT_ID,
+      { totalMaterial: 109189686612, totalLabor: 43691372573, totalService: 5612774255, totalOverhead: 43312109057 },
+      USER,
+    )
+
+    expect(prismaMock.budget.create).toHaveBeenCalledTimes(4)
+    const cats = prismaMock.budget.create.mock.calls.map((c: any) => c[0].data.category)
+    expect(new Set(cats)).toEqual(new Set(['MATERIAL', 'LABOR', 'SERVICE', 'OVERHEAD']))
+    // DICH_VU → SERVICE với đúng số tiền (không bị gộp/rơi)
+    expect(prismaMock.budget.create).toHaveBeenCalledWith({
+      data: { projectId: PROJECT_ID, category: 'SERVICE', planned: 5612774255 },
+    })
   })
 
   it('idempotent — gọi 2 lần chỉ recompute-set, không nhân đôi', async () => {

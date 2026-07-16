@@ -10,6 +10,74 @@ import { toQty } from '@/lib/pr-normalizer'
 
 const ALLOWED_ROLES = ['R01', 'R02', 'R02a', 'R07', 'R07a']
 
+// PR đã "CONVERTED" (đã ra PO) / "REJECTED" / "CANCELLED" → KHÔNG lấy làm nguồn mua,
+// tránh đặt mua trùng. Chỉ lấy PR còn "sống" (DRAFT/SUBMITTED/PENDING/APPROVED…).
+const PR_EXCLUDED_STATUSES = ['CONVERTED', 'REJECTED', 'CANCELLED']
+
+type PoItem = {
+  itemCode: string; materialId: string | null; description: string; profile: string; grade: string;
+  unit: string; quantity: number; unitPrice: number;
+}
+
+/** Chuẩn hoá khoá tra giá: trim + hạ chữ thường. Rỗng → null. */
+function priceKey(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim().toLowerCase()
+  return s === '' ? null : s
+}
+
+/**
+ * Bảng tra đơn giá từ các dòng báo giá của NCC đã chọn — keyed theo code + description.
+ * Dùng cho nhánh dự phòng (nguồn PR) để gắn đơn giá khi báo giá có dòng khớp;
+ * không khớp → đơn giá 0 (giống luồng convert PR→PO, người sửa giá sau).
+ */
+function buildPriceMap(
+  quoteLines: Array<{ code?: string; description?: string; unitPrice?: number }>,
+): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const line of quoteLines) {
+    const price = typeof line.unitPrice === 'number' && Number.isFinite(line.unitPrice) ? line.unitPrice : 0
+    for (const k of [priceKey(line.code), priceKey(line.description)]) {
+      if (k && !map.has(k)) map.set(k, price)
+    }
+  }
+  return map
+}
+
+/**
+ * Build PO item từ dòng PurchaseRequestItem đã materialize của dự án.
+ * quantity đã là "số cần mua" (normalizer ưu tiên needToBuyQty khi materialize).
+ * Bỏ dòng quantity <= 0. Đơn giá tra từ báo giá NCC (nếu khớp), không có → 0.
+ */
+function buildPoItemsFromPr(
+  prItems: Array<{
+    itemCode?: string | null; description?: string | null; profile?: string | null;
+    grade?: string | null; unit?: string | null; materialId?: string | null; quantity: unknown;
+  }>,
+  priceMap: Map<string, number>,
+): PoItem[] {
+  const out: PoItem[] = []
+  for (const it of prItems) {
+    const quantity = toQty(it.quantity)
+    if (quantity <= 0) continue
+    const unitPrice =
+      priceMap.get(priceKey(it.itemCode) ?? '') ??
+      priceMap.get(priceKey(it.description) ?? '') ??
+      0
+    out.push({
+      itemCode: it.itemCode || '',
+      materialId: it.materialId || null,
+      description: it.description || '',
+      profile: it.profile || '',
+      grade: it.grade || '',
+      unit: it.unit || '',
+      quantity,
+      unitPrice,
+    })
+  }
+  return out
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
@@ -64,11 +132,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const prItems: Array<{ stt?: string; canonicalCode?: string; materialId?: string; description?: string; profile?: string; grade?: string; unit?: string; needToBuyQty?: number }> =
     Array.isArray(bomPr) ? bomPr : []
 
-  // Build PO items: only lines matched to PR items with needToBuyQty > 0
-  const poItems: Array<{
-    itemCode: string; materialId: string | null; description: string; profile: string; grade: string;
-    unit: string; quantity: number; unitPrice: number;
-  }> = []
+  // Build PO items (đường CHÍNH): chỉ dòng báo giá khớp PR-index trong bomPr với needToBuyQty > 0
+  const poItems: PoItem[] = []
 
   for (const line of quoteLines) {
     if (line.matchedPrIndex == null) continue
@@ -91,8 +156,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
   }
 
+  // FALLBACK (HƯỚNG A) — gỡ deadlock P3.5→PO:
+  // Ở P3.5 (Thương mại) task KHÔNG có `bomPr` (R07 không ghi được → đường chính rỗng).
+  // Nhu cầu mua THẬT đã materialize ở bảng PurchaseRequest/PurchaseRequestItem của DỰ ÁN.
+  // → lấy dòng cần mua từ đó khi đường chính không dựng được item nào.
+  if (poItems.length === 0 && task.projectId) {
+    const prRows = await prisma.purchaseRequestItem.findMany({
+      where: {
+        purchaseRequest: {
+          projectId: task.projectId,
+          status: { notIn: PR_EXCLUDED_STATUSES },
+        },
+      },
+      select: {
+        itemCode: true, description: true, profile: true, grade: true, unit: true,
+        materialId: true, quantity: true,
+      },
+      orderBy: { purchaseRequest: { createdAt: 'asc' } },
+    })
+    const priceMap = buildPriceMap(quoteLines)
+    poItems.push(...buildPoItemsFromPr(prRows, priceMap))
+  }
+
   if (poItems.length === 0) {
-    return errorResponse('Không có vật tư cần mua (đủ kho)', 400)
+    return errorResponse('Không có vật tư cần mua (đủ kho hoặc chưa có yêu cầu mua)', 400)
   }
 
   const totalValue = poItems.reduce((s, it) => s + it.quantity * it.unitPrice, 0)

@@ -13,9 +13,10 @@ interface ProjectBudget {
   variance: number; variancePct: number;
 }
 
-const CATEGORIES = ['MATERIAL', 'LABOR', 'EQUIPMENT', 'SUBCONTRACT', 'OVERHEAD']
+// SERVICE = nhóm DTTC "DỊCH_VỤ" (thuê ngoài) — phải có ở FE, nếu không dòng dịch vụ bị mất khỏi bảng chi tiết.
+const CATEGORIES = ['MATERIAL', 'LABOR', 'SERVICE', 'EQUIPMENT', 'SUBCONTRACT', 'OVERHEAD']
 const catLabel: Record<string, string> = {
-  MATERIAL: 'Vật tư', LABOR: 'Nhân công', EQUIPMENT: 'Thiết bị', SUBCONTRACT: 'Thầu phụ', OVERHEAD: 'Quản lý chung',
+  MATERIAL: 'Vật tư', LABOR: 'Nhân công', SERVICE: 'Dịch vụ', EQUIPMENT: 'Thiết bị', SUBCONTRACT: 'Thầu phụ', OVERHEAD: 'Quản lý chung',
 }
 
 export default function BudgetsPage() {

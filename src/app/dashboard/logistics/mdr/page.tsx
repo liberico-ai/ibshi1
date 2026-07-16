@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import {
   PageHeader, KPICard, EmptyState, SelectField,
@@ -32,12 +32,14 @@ export default function MDRPage() {
   const [projectId, setProjectId] = useState('')
   const [data, setData] = useState<MDRData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [releasing, setReleasing] = useState(false)
+  const [releaseMsg, setReleaseMsg] = useState('')
 
   useEffect(() => {
     apiFetch('/api/projects').then(r => { if (r.ok) setProjects(r.projects) })
   }, [])
 
-  useEffect(() => {
+  const loadMdr = useCallback(() => {
     if (!projectId) { setData(null); return }
     setLoading(true)
     apiFetch(`/api/logistics/mdr?projectId=${projectId}`).then(r => {
@@ -47,7 +49,28 @@ export default function MDRPage() {
     })
   }, [projectId])
 
+  useEffect(() => { setReleaseMsg(''); loadMdr() }, [loadMdr])
+
   const canRelease = data?.canRelease || false
+  // Chỉ QC/BGĐ được phát hành MRB (khớp RBAC POST /api/qc/mrb/release: R01/R09/R09a).
+  // Ẩn nút với PM/TM để không bấm rồi nhận 403.
+  const canReleaseRole = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
+
+  const handleRelease = async () => {
+    if (!projectId || releasing) return
+    setReleasing(true)
+    setReleaseMsg('')
+    const r = await apiFetch('/api/qc/mrb/release', { method: 'POST', body: JSON.stringify({ projectId }) })
+    setReleasing(false)
+    if (r.ok) {
+      setReleaseMsg(r.reused
+        ? `MRB đã phát hành trước đó (Rev ${r.release?.revision ?? ''})`
+        : `Đã phát hành MRB Rev ${r.release?.revision ?? ''}`)
+      loadMdr()
+    } else {
+      setReleaseMsg(r.error || 'Không phát hành được MRB')
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -81,6 +104,16 @@ export default function MDRPage() {
                     <span style={{ color: 'var(--text-secondary)' }}>{b}</span>
                   </p>
                 ))}
+                {!data.mrbRelease && canReleaseRole && (
+                  <div className="text-center mt-4">
+                    <button onClick={handleRelease} disabled={releasing}
+                      className="px-5 py-2 rounded-lg font-bold text-white disabled:opacity-60"
+                      style={{ background: SEMANTIC_COLORS.info.solid }}>
+                      {releasing ? 'Đang phát hành…' : 'Phát hành MRB (Quality Dossier)'}
+                    </button>
+                    {releaseMsg && <p className="text-xs mt-2" style={{ color: SEMANTIC_COLORS.danger.solid }}>{releaseMsg}</p>}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -143,10 +176,14 @@ export default function MDRPage() {
                   MRB Rev {data.mrbRelease.revision} — phát hành {new Date(data.mrbRelease.releasedAt).toLocaleDateString('vi-VN')}
                 </p>
               )}
-              <button className="px-6 py-2 rounded-lg font-bold text-white"
-                style={{ background: SEMANTIC_COLORS.success.solid }}>
-                Phát hành MDR
-              </button>
+              {canReleaseRole && (
+                <button onClick={handleRelease} disabled={releasing}
+                  className="px-6 py-2 rounded-lg font-bold text-white disabled:opacity-60"
+                  style={{ background: SEMANTIC_COLORS.success.solid }}>
+                  {releasing ? 'Đang phát hành…' : 'Phát hành MDR'}
+                </button>
+              )}
+              {releaseMsg && <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>{releaseMsg}</p>}
             </div>
           )}
         </>

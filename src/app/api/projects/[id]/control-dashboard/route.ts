@@ -197,31 +197,130 @@ function extractBaselineTons(snapshot: Record<string, unknown>): number {
   return vtc ? vtc.planned : 0
 }
 
-async function loadBomCurrentData(projectId: string) {
+type BomCurrent = {
+  totalTons: number
+  pieceMarkCount: number
+  activeVersionNo: number | null
+  source: 'bom-table' | 'task-resultData' | 'none'
+}
+
+/**
+ * HIỆN HÀNH — tổng khối lượng BOM của dự án.
+ *
+ * Nguồn ưu tiên 1: BOM đã structured (BillOfMaterial → BomVersion ACTIVE → BomItem).
+ * Nguồn ưu tiên 2 (fallback): BOM còn nằm trong Task.resultData của bước P2.1
+ *   (key `bomPrItems`, double-encoded JSON). Rất nhiều dự án thật CHƯA được
+ *   materialize sang bảng BomVersion/BomItem → nếu chỉ đọc bảng silo thì
+ *   dashboard hiển thị 0 tấn dù dự án có BOM 500+ dòng trong task.
+ *   Đây CHỈ là phía ĐỌC (report) — không tạo bản ghi, không sync.
+ */
+async function loadBomCurrentData(projectId: string): Promise<BomCurrent> {
+  // ── Ưu tiên 1: bảng BOM structured ──
   const bom = await prisma.billOfMaterial.findFirst({
     where: { projectId },
     select: { id: true },
   })
-  if (!bom) return { totalTons: 0, pieceMarkCount: 0, activeVersionNo: null }
+  if (bom) {
+    const activeVersion = await prisma.bomVersion.findFirst({
+      where: { bomId: bom.id, status: 'ACTIVE' },
+      select: { id: true, versionNo: true },
+    })
+    if (activeVersion) {
+      const lines = await prisma.bomItem.findMany({
+        where: { bomVersionId: activeVersion.id, category: 'MAIN' },
+        select: { quantity: true, pieceMark: true },
+      })
+      const totalKg = lines.reduce((s, l) => s + Number(l.quantity), 0)
+      if (totalKg > 0) {
+        const pieceMarks = new Set(lines.map(l => l.pieceMark).filter(Boolean))
+        return {
+          totalTons: round2(totalKg / 1000),
+          pieceMarkCount: pieceMarks.size,
+          activeVersionNo: activeVersion.versionNo,
+          source: 'bom-table',
+        }
+      }
+    }
+  }
 
-  const activeVersion = await prisma.bomVersion.findFirst({
-    where: { bomId: bom.id, status: 'ACTIVE' },
-    select: { id: true, versionNo: true },
+  // ── Ưu tiên 2: BOM còn trong Task.resultData (bước P2.1) ──
+  const fromTask = await loadBomFromTaskData(projectId)
+  if (fromTask) return fromTask
+
+  return { totalTons: 0, pieceMarkCount: 0, activeVersionNo: null, source: 'none' }
+}
+
+/** Ép về số hữu hạn (chấp nhận cả chuỗi số "1", "12,345.6"); không hợp lệ → 0. */
+function toKg(v: unknown): number {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (s === '') return 0
+    // xoá phân cách nghìn kiểu 12,345.6 (không xoá dấu phẩy thập phân "1,5")
+    const cleaned = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s) ? s.replace(/,/g, '') : s
+    const n = Number(cleaned)
+    return Number.isFinite(n) ? n : 0
+  }
+  return 0
+}
+
+/**
+ * Đọc BOM từ resultData bước P2.1 (VT chính). Trả null nếu không có dữ liệu dùng được.
+ * bomPrItems thường DOUBLE-ENCODED (chuỗi chứa JSON) → phải JSON.parse.
+ * Khối lượng mỗi dòng: ưu tiên `weight` (KL đặt hiện tại, kg) → `netWeight` (KL net BOM)
+ *   → `unitWeight * quantity`. Khớp cách BomPrUploadUI tính "tổng KL".
+ */
+async function loadBomFromTaskData(projectId: string): Promise<BomCurrent | null> {
+  const p21 = await prisma.task.findFirst({
+    where: { projectId, taskType: 'P2.1' },
+    select: { resultData: true },
+    orderBy: { completedAt: 'desc' },
   })
-  if (!activeVersion) return { totalTons: 0, pieceMarkCount: 0, activeVersionNo: null }
+  const rd = p21?.resultData as Record<string, unknown> | null
+  if (!rd) return null
 
-  const lines = await prisma.bomItem.findMany({
-    where: { bomVersionId: activeVersion.id, category: 'MAIN' },
-    select: { quantity: true, pieceMark: true },
-  })
+  const raw = rd.bomPrItems
+  let items: unknown[] = []
+  if (Array.isArray(raw)) {
+    items = raw
+  } else if (typeof raw === 'string' && raw.trim() !== '') {
+    try {
+      const parsed = JSON.parse(raw)
+      items = Array.isArray(parsed) ? parsed : []
+    } catch {
+      return null // JSON hỏng → không đoán số, coi như không có
+    }
+  }
+  if (items.length === 0) return null
 
-  const totalKg = lines.reduce((s, l) => s + Number(l.quantity), 0)
-  const pieceMarks = new Set(lines.map(l => l.pieceMark).filter(Boolean))
+  let totalKg = 0
+  let lineCount = 0
+  for (const it of items) {
+    if (!it || typeof it !== 'object') continue
+    const o = it as Record<string, unknown>
+    const weight = toKg(o.weight)
+    const netWeight = toKg(o.netWeight)
+    const unitWeight = toKg(o.unitWeight)
+    const quantity = toKg(o.quantity)
+    const kg = weight > 0
+      ? weight
+      : netWeight > 0
+        ? netWeight
+        : unitWeight > 0
+          ? unitWeight * quantity
+          : 0
+    if (kg <= 0) continue
+    totalKg += kg
+    lineCount++
+  }
+  if (totalKg <= 0) return null
 
   return {
     totalTons: round2(totalKg / 1000),
-    pieceMarkCount: pieceMarks.size,
-    activeVersionNo: activeVersion.versionNo,
+    // BOM mua VT chính không có "piece mark" riêng → dùng số DÒNG vật tư làm thước đo quy mô.
+    pieceMarkCount: lineCount,
+    activeVersionNo: null,
+    source: 'task-resultData',
   }
 }
 
