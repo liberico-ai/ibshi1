@@ -5,6 +5,7 @@
  */
 
 import { vi } from 'vitest'
+import { Prisma } from '@prisma/client'
 
 // ── Mock Prisma ──
 import { prismaMock } from '@/lib/__mocks__/db'
@@ -84,8 +85,17 @@ describe('logChangeEvent', () => {
 // ── syncBOMtoBudget ──
 
 describe('syncBOMtoBudget', () => {
+  const D = (n: number) => new Prisma.Decimal(n)
+
   beforeEach(() => {
     prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
+    // Mặc định: các nguồn fallback rỗng — từng test override khi cần.
+    prismaMock.purchaseRequestItem.findMany.mockResolvedValue([] as any)
+    prismaMock.task.findFirst.mockResolvedValue(null as any)
+    prismaMock.purchaseOrderItem.findMany.mockResolvedValue([] as any)
+    prismaMock.quoteGroupItem.findMany.mockResolvedValue([] as any)
+    prismaMock.materialCodeAlias.findMany.mockResolvedValue([] as any)
+    prismaMock.changeEvent.create.mockResolvedValue({} as any)
   })
 
   it('calculates totalPlanned from BOM items and updates existing budget', async () => {
@@ -94,21 +104,20 @@ describe('syncBOMtoBudget', () => {
       {
         id: 'bom-1',
         items: [
-          { quantity: 10, material: { unitPrice: 20 } },
-          { quantity: 5, material: { unitPrice: 30 } },
+          { quantity: D(10), materialId: 'm1', profile: null, grade: null, unit: 'kg', material: { materialCode: 'M1', name: 'a', unitPrice: D(20) } },
+          { quantity: D(5), materialId: 'm2', profile: null, grade: null, unit: 'kg', material: { materialCode: 'M2', name: 'b', unitPrice: D(30) } },
         ],
       },
     ] as any)
     prismaMock.budget.findFirst.mockResolvedValue(budget as any)
     prismaMock.budget.update.mockResolvedValue({} as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
 
     await syncBOMtoBudget(PROJECT_ID, USER)
 
-    // 10*20 + 5*30 = 350
+    // 10*20 + 5*30 = 350 — đơn giá inline từ BOM include material (lớp 1)
     expect(prismaMock.budget.update).toHaveBeenCalledWith({
       where: { id: 'budget-1' },
-      data: { planned: 350 },
+      data: expect.objectContaining({ planned: 350 }),
     })
   })
 
@@ -116,37 +125,128 @@ describe('syncBOMtoBudget', () => {
     prismaMock.billOfMaterial.findMany.mockResolvedValue([
       {
         id: 'bom-1',
-        items: [{ quantity: 2, material: { unitPrice: 100 } }],
+        items: [{ quantity: D(2), materialId: 'm1', profile: null, grade: null, unit: 'kg', material: { materialCode: 'M1', name: 'a', unitPrice: D(100) } }],
       },
     ] as any)
     prismaMock.budget.findFirst.mockResolvedValue(null)
     prismaMock.budget.create.mockResolvedValue({} as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
 
     await syncBOMtoBudget(PROJECT_ID, USER)
 
     expect(prismaMock.budget.create).toHaveBeenCalledWith({
-      data: { projectId: PROJECT_ID, category: 'MATERIAL', planned: 200 },
+      data: expect.objectContaining({ projectId: PROJECT_ID, category: 'MATERIAL', planned: 200 }),
     })
     expect(prismaMock.budget.update).not.toHaveBeenCalled()
   })
 
-  it('treats null unitPrice as zero', async () => {
+  it('treats null unitPrice as zero (BOM item không định giá được → không khớp thêm)', async () => {
     prismaMock.billOfMaterial.findMany.mockResolvedValue([
       {
+        // materialId có nhưng unitPrice null → lớp 1 = 0; item có materialId nên KHÔNG chạy khớp lại (lớp 2 chỉ cho item thiếu materialId)
         id: 'bom-1',
-        items: [{ quantity: 10, material: { unitPrice: null } }],
+        items: [{ quantity: D(10), materialId: 'm1', profile: null, grade: null, unit: 'kg', material: { materialCode: 'M1', name: 'a', unitPrice: null } }],
       },
     ] as any)
     prismaMock.budget.findFirst.mockResolvedValue(null)
     prismaMock.budget.create.mockResolvedValue({} as any)
-    prismaMock.changeEvent.create.mockResolvedValue({} as any)
 
     await syncBOMtoBudget(PROJECT_ID, USER)
 
     expect(prismaMock.budget.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ planned: 0 }) }),
     )
+  })
+
+  // ── Gap #1: nguồn fallback + định giá phân lớp ──
+
+  it('(a) BOM + resultData rỗng nhưng có PR items có materialId → planned>0 (nguồn pr-items-net = NET, lớp 1)', async () => {
+    prismaMock.billOfMaterial.findMany.mockResolvedValue([] as any)
+    // resultData (nguồn gross) rỗng → rơi xuống PR (net = needToBuyQty) là fallback cuối
+    prismaMock.task.findFirst.mockResolvedValue(null as any)
+    prismaMock.purchaseRequestItem.findMany.mockResolvedValue([
+      { itemCode: 'IC1', description: 'Thép tấm', profile: 'PL10', grade: 'SS400', unit: 'kg', materialId: 'mat-1', quantity: D(10) },
+    ] as any)
+    // Lớp 1 query đơn giá theo materialId
+    prismaMock.material.findMany.mockImplementation(async (args: any) => {
+      if (args?.where?.id?.in) return [{ id: 'mat-1', unitPrice: D(50) }] as any
+      return [] as any
+    })
+    prismaMock.budget.findFirst.mockResolvedValue(null)
+    prismaMock.budget.create.mockResolvedValue({} as any)
+
+    await syncBOMtoBudget(PROJECT_ID, USER)
+
+    // 10 * 50 = 500
+    expect(prismaMock.budget.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ planned: 500 }) }),
+    )
+    // resultData (gross) được kiểm TRƯỚC PR (net); rỗng nên PR mới được dùng
+    expect(prismaMock.task.findFirst).toHaveBeenCalled()
+  })
+
+  it('(b) item không materialId nhưng khớp canonical → dùng đơn giá Material Master (lớp 2)', async () => {
+    prismaMock.billOfMaterial.findMany.mockResolvedValue([] as any)
+    prismaMock.purchaseRequestItem.findMany.mockResolvedValue([] as any)
+    // Nguồn resultData P2.1 — item không materialId, có canonicalCode
+    prismaMock.task.findFirst.mockResolvedValue({
+      resultData: { bomPrItems: [{ stt: '1', description: 'Thép tấm', profile: 'PL10', grade: 'SS400', unit: 'kg', quantity: 10, canonicalCode: 'X-CODE' }] },
+      status: 'DONE',
+    } as any)
+    // 3 loại material.findMany phân biệt theo where:
+    //  - status ACTIVE (loadInventory) → rỗng
+    //  - materialCode in (loadCodeResolved – canonical) → material khớp
+    //  - id in (lớp 2 tra đơn giá) → unitPrice
+    prismaMock.material.findMany.mockImplementation(async (args: any) => {
+      if (args?.where?.materialCode?.in) {
+        return [{ id: 'mat-X', materialCode: 'X-CODE', name: 'Thép tấm', unit: 'kg', specification: 'PL10', grade: 'SS400', groupCode: '1.1', currentStock: D(0), stocks: [] }] as any
+      }
+      if (args?.where?.id?.in) return [{ id: 'mat-X', unitPrice: D(50) }] as any
+      return [] as any // loadInventory
+    })
+    prismaMock.budget.findFirst.mockResolvedValue(null)
+    prismaMock.budget.create.mockResolvedValue({} as any)
+
+    await syncBOMtoBudget(PROJECT_ID, USER)
+
+    // 10 * 50 = 500, khớp qua canonicalCode → Material Master
+    expect(prismaMock.budget.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ planned: 500 }) }),
+    )
+  })
+
+  it('(c) không định giá được dòng nào → planned=0 + coverage đếm đúng unpriced', async () => {
+    prismaMock.billOfMaterial.findMany.mockResolvedValue([] as any)
+    prismaMock.purchaseRequestItem.findMany.mockResolvedValue([] as any)
+    prismaMock.task.findFirst.mockResolvedValue({
+      resultData: { bomPrItems: [
+        { stt: '1', description: 'Vật tư lạ', profile: 'ZZZ', unit: 'cái', quantity: 5 },
+        { stt: '2', description: 'Vật tư lạ 2', profile: 'YYY', unit: 'cái', quantity: 3 },
+      ] },
+      status: 'DONE',
+    } as any)
+    prismaMock.material.findMany.mockResolvedValue([] as any) // không khớp gì
+    prismaMock.budget.findFirst.mockResolvedValue(null)
+    prismaMock.budget.create.mockResolvedValue({} as any)
+
+    await syncBOMtoBudget(PROJECT_ID, USER)
+
+    expect(prismaMock.budget.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ planned: 0 }) }),
+    )
+    // coverage: 0/2 dòng định giá
+    const logCall = prismaMock.changeEvent.create.mock.calls.at(-1)?.[0] as any
+    expect(logCall.data.dataAfter.pricedLines).toBe(0)
+    expect(logCall.data.dataAfter.unpricedLines).toBe(2)
+  })
+
+  it('(phòng thủ) valueBomMaterial NÉM → hook chỉ log + skip, KHÔNG throw, KHÔNG ghi Budget', async () => {
+    // Định giá là enrichment: lỗi (bảng vắng, matcher lỗi…) không được chặn hoàn thành bước.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.billOfMaterial.findMany.mockRejectedValue(new Error('table does not exist') as any)
+
+    await expect(syncBOMtoBudget(PROJECT_ID, USER)).resolves.toBeUndefined() // KHÔNG ném
+    expect(prismaMock.budget.update).not.toHaveBeenCalled()
+    expect(prismaMock.budget.create).not.toHaveBeenCalled() // giữ planned cũ
   })
 })
 
