@@ -207,6 +207,19 @@ export default function BomRevisionDetailPage() {
   const [createReason, setCreateReason] = useState('')
   const [creating, setCreating] = useState(false)
 
+  // Finding A: Tạo revision LUÔN kèm ECO (luồng chuẩn — chặn "revise quên ECO")
+  const [showCreateEco, setShowCreateEco] = useState(false)
+  const [ecoDrawings, setEcoDrawings] = useState<{ id: string; drawingCode: string; title: string }[]>([])
+  const [ecoForm, setEcoForm] = useState({
+    drawingId: '',
+    revCode: '',
+    description: '',
+    ecoTitle: '',
+    ecoDescription: '',
+    changeType: 'DESIGN',
+  })
+  const [creatingEco, setCreatingEco] = useState(false)
+
   // Đợt2-A: ECO auto-apply — modal preview + tạo PR bổ sung tự động từ impact
   const [showAutoPr, setShowAutoPr] = useState(false)
   const [autoPrImpact, setAutoPrImpact] = useState<ImpactResult | null>(null)
@@ -326,6 +339,39 @@ export default function BomRevisionDetailPage() {
     }
   }
 
+  // ── Finding A: Tạo revision kèm ECO (luồng chuẩn) ──
+  const openCreateEco = async () => {
+    setShowCreateEco(true)
+    // Nạp danh sách bản vẽ cùng dự án để chọn nguồn revision
+    if (bom) {
+      const res = await apiFetch(`/api/drawings?projectId=${bom.projectId}`)
+      if (res.ok) setEcoDrawings((res.drawings || []).map((d: { id: string; drawingCode: string; title: string }) => ({ id: d.id, drawingCode: d.drawingCode, title: d.title })))
+    }
+  }
+
+  const handleCreateRevisionEco = async () => {
+    if (!id) return
+    if (!ecoForm.drawingId || !ecoForm.revCode.trim() || !ecoForm.description.trim() || !ecoForm.ecoTitle.trim() || !ecoForm.ecoDescription.trim()) {
+      alert('Vui long dien day du: ban ve, ma revision, mo ta, tieu de + noi dung ECO')
+      return
+    }
+    setCreatingEco(true)
+    const res = await apiFetch(`/api/design/bom/${id}/create-revision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ecoForm),
+    })
+    setCreatingEco(false)
+    if (res.ok) {
+      setShowCreateEco(false)
+      setEcoForm({ drawingId: '', revCode: '', description: '', ecoTitle: '', ecoDescription: '', changeType: 'DESIGN' })
+      if (res.bomVersion) setSelectedVersionId(res.bomVersion.id)
+      loadVersions()
+    } else {
+      alert(res.error || 'Khong the tao revision kem ECO')
+    }
+  }
+
   // ── Đợt2-A: ECO auto-apply ──
   // Baseline = ban SUPERSEDED versionNo lon nhat truoc version dang chon (cung logic voi API create-pr)
   const autoPrBaseline = versionDetail
@@ -424,8 +470,13 @@ export default function BomRevisionDetailPage() {
               Quay lai
             </Button>
             {canCreate && (
-              <Button variant="primary" icon={<span>+</span>} onClick={() => setShowCreate(true)}>
+              <Button variant="outline" onClick={() => setShowCreate(true)}>
                 Tao Rev moi
+              </Button>
+            )}
+            {canCreate && (
+              <Button variant="primary" icon={<span>+</span>} onClick={openCreateEco}>
+                Tao Rev + ECO
               </Button>
             )}
           </div>
@@ -950,6 +1001,129 @@ export default function BomRevisionDetailPage() {
           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
             Phien ban moi se sao chep cac dong vat tu tu phien ban hieu luc hien tai.
           </p>
+        </div>
+      </Modal>
+
+      {/* ── Finding A: Tạo revision kèm ECO (luồng chuẩn — DrawingRevision + ECO + BomVersion 1 phát) ── */}
+      <Modal
+        open={showCreateEco}
+        onClose={() => setShowCreateEco(false)}
+        title="Tao revision (kem ECO)"
+        size="md"
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setShowCreateEco(false)}>Huy</Button>
+            <Button variant="primary" loading={creatingEco} onClick={handleCreateRevisionEco}>Tao Rev + ECO</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>
+            Luong chuan: tao DrawingRevision + ECO + BomVersion trong 1 buoc. BomVersion se luon gan ECO
+            de khong mat cascade sang phong khac.
+          </p>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+              Ban ve nguon
+            </label>
+            <select
+              value={ecoForm.drawingId}
+              onChange={e => setEcoForm(f => ({ ...f, drawingId: e.target.value }))}
+              style={{
+                width: '100%', padding: '0.625rem 0.875rem', fontSize: 'var(--text-sm)',
+                border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit',
+              }}
+            >
+              <option value="">— Chon ban ve —</option>
+              {ecoDrawings.map(d => (
+                <option key={d.id} value={d.id}>{d.drawingCode} — {d.title}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+                Ma revision
+              </label>
+              <input
+                value={ecoForm.revCode}
+                onChange={e => setEcoForm(f => ({ ...f, revCode: e.target.value }))}
+                placeholder="VD: R1"
+                style={{
+                  width: '100%', padding: '0.625rem 0.875rem', fontSize: 'var(--text-sm)',
+                  border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                  background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+                Loai thay doi
+              </label>
+              <select
+                value={ecoForm.changeType}
+                onChange={e => setEcoForm(f => ({ ...f, changeType: e.target.value }))}
+                style={{
+                  width: '100%', padding: '0.625rem 0.875rem', fontSize: 'var(--text-sm)',
+                  border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                  background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit',
+                }}
+              >
+                <option value="DESIGN">Thiet ke</option>
+                <option value="CUSTOMER">Khach hang</option>
+                <option value="CORRECTION">Sua loi</option>
+                <option value="SUBSTITUTION">Thay the VT</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+              Mo ta revision
+            </label>
+            <textarea
+              value={ecoForm.description}
+              onChange={e => setEcoForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="Noi dung thay doi tren ban ve..."
+              rows={2}
+              style={{
+                width: '100%', padding: '0.625rem 0.875rem', fontSize: 'var(--text-sm)',
+                border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                background: 'var(--bg-card)', color: 'var(--text-primary)', resize: 'vertical', fontFamily: 'inherit',
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+              Tieu de ECO
+            </label>
+            <input
+              value={ecoForm.ecoTitle}
+              onChange={e => setEcoForm(f => ({ ...f, ecoTitle: e.target.value }))}
+              placeholder="VD: Doi quy cach dam chinh"
+              style={{
+                width: '100%', padding: '0.625rem 0.875rem', fontSize: 'var(--text-sm)',
+                border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit',
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+              Noi dung ECO
+            </label>
+            <textarea
+              value={ecoForm.ecoDescription}
+              onChange={e => setEcoForm(f => ({ ...f, ecoDescription: e.target.value }))}
+              placeholder="Ly do va pham vi thay doi ky thuat..."
+              rows={3}
+              style={{
+                width: '100%', padding: '0.625rem 0.875rem', fontSize: 'var(--text-sm)',
+                border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                background: 'var(--bg-card)', color: 'var(--text-primary)', resize: 'vertical', fontFamily: 'inherit',
+              }}
+            />
+          </div>
         </div>
       </Modal>
 

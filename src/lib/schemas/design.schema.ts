@@ -42,10 +42,23 @@ export type DrawingTransitionInput = z.infer<typeof drawingTransitionSchema>
 // ── BOM (Bill of Material) ──
 
 const bomItemSchema = z.object({
-  materialId: z.string().min(1, 'Vật tư là bắt buộc'),
+  // materialId OPTIONAL: item BOM thô có thể thiếu — server sẽ resolve (khớp Material
+  // Master) hoặc tạo material provisional qua enrichBomPrItems trước khi insert BomItem.
+  // BomItem.materialId trong DB VẪN NOT NULL — item nào không resolve được sẽ bị báo lỗi.
+  materialId: z.string().min(1).optional(),
   quantity: z.number().positive('Số lượng phải > 0'),
   unit: z.string().min(1, 'Đơn vị là bắt buộc'),
   remarks: z.string().optional(),
+  // Field thô để enrich khớp kho / tạo provisional khi thiếu materialId
+  description: z.string().optional(),
+  profile: z.string().optional(),
+  grade: z.string().optional(),
+  canonicalCode: z.string().optional(),
+  weight: z.number().optional(),
+  unitWeight: z.number().optional(),
+  thickness: z.number().optional(),
+  length: z.number().optional(),
+  width: z.number().optional(),
 })
 
 export const createBomSchema = z.object({

@@ -218,10 +218,14 @@ export async function diffBomVersions(oldVersionId: string, newVersionId: string
 
 // ── Impact Analysis ──
 
+// WorkOrder status coi như "đã chế tạo" (piece đã được gia công xong / đã qua QC).
+// Nguồn: qc-gate.ts (COMPLETED | QC_PASSED = WO hoàn tất fabrication).
+const FABRICATED_WO_STATUSES = ['COMPLETED', 'QC_PASSED']
+
 async function determineProcurementStatus(
   materialId: string, projectId: string
-): Promise<{ status: ProcurementStatus; prQty: number; poQty: number; stockQty: number }> {
-  const [prItems, poItems, material] = await Promise.all([
+): Promise<{ status: ProcurementStatus; prQty: number; poQty: number; stockQty: number; issuedQty: number; fabricatedQty: number }> {
+  const [prItems, poItems, material, issues] = await Promise.all([
     prisma.purchaseRequestItem.findMany({
       where: {
         materialId,
@@ -240,18 +244,35 @@ async function determineProcurementStatus(
       where: { id: materialId },
       select: { currentStock: true },
     }),
+    // ĐÃ XUẤT cho SX + trạng thái chế tạo: MaterialIssue nối materialId → WorkOrder (quantity, status).
+    // Scope theo dự án qua workOrder.projectId (MaterialIssue không có projectId trực tiếp).
+    prisma.materialIssue.findMany({
+      where: { materialId, workOrder: { projectId } },
+      select: { quantity: true, workOrder: { select: { status: true } } },
+    }),
   ])
 
   const prQty = prItems.reduce((s, i) => s + Number(i.quantity), 0)
   const poQty = poItems.reduce((s, i) => s + Number(i.quantity), 0)
   const stockQty = Number(material?.currentStock || 0)
 
-  let status: ProcurementStatus = 'NOT_PURCHASED'
-  if (poQty > 0 && stockQty > 0) status = 'IN_STOCK'
-  else if (poQty > 0) status = 'IN_PO'
-  else if (prQty > 0) status = 'IN_PR'
+  // ISSUED: tổng lượng đã cấp phát ra sản xuất (mọi WO của dự án dùng material này).
+  const issuedQty = issues.reduce((s, i) => s + Number(i.quantity), 0)
+  // FABRICATED: lượng đã cấp cho WO nay đã hoàn tất chế tạo (COMPLETED/QC_PASSED).
+  const fabricatedQty = issues
+    .filter(i => FABRICATED_WO_STATUSES.includes(i.workOrder?.status ?? ''))
+    .reduce((s, i) => s + Number(i.quantity), 0)
 
-  return { status, prQty, poQty, stockQty }
+  // Phân loại theo mức nặng tăng dần — trả status CAO NHẤT đạt được:
+  // NOT_PURCHASED < IN_PR < IN_PO < IN_STOCK < ISSUED (đã xuất SX) < FABRICATED (đã chế tạo).
+  let status: ProcurementStatus = 'NOT_PURCHASED'
+  if (prQty > 0) status = 'IN_PR'
+  if (poQty > 0) status = 'IN_PO'
+  if (poQty > 0 && stockQty > 0) status = 'IN_STOCK'
+  if (issuedQty > 0) status = 'ISSUED'
+  if (fabricatedQty > 0) status = 'FABRICATED'
+
+  return { status, prQty, poQty, stockQty, issuedQty, fabricatedQty }
 }
 
 function suggestAction(
@@ -262,8 +283,8 @@ function suggestAction(
   const isDecrease = diffLine.qtyDelta < 0 || diffLine.action === 'REMOVED'
 
   if (diffLine.action === 'SPEC_CHANGED') {
-    if (procurement.status === 'IN_STOCK' || procurement.status === 'ISSUED') {
-      return { action: 'Đổi quy cách — VT đã nhập kho, cần NCR đánh giá', code: 'NCR' }
+    if (procurement.status === 'IN_STOCK' || procurement.status === 'ISSUED' || procurement.status === 'FABRICATED') {
+      return { action: 'Đổi quy cách — VT đã nhập kho/cấp phát/chế tạo, cần NCR đánh giá', code: 'NCR' }
     }
     if (procurement.status === 'IN_PO') {
       return { action: 'Đổi quy cách — đã PO, cảnh báo TM để điều chỉnh/huỷ PO + tạo PO mới', code: 'ALERT_PO' }
