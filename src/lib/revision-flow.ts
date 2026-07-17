@@ -162,7 +162,7 @@ export async function createRevisionWithEco(params: CreateRevisionWithEcoParams)
 // ── 2. Approve a BOM version (DRAFT → ACTIVE) ──
 
 export async function approveRevision(bomVersionId: string, userId: string) {
-  const { updated, cascadeParams, reQcCount } = await prisma.$transaction(async (tx) => {
+  const { updated, cascadeParams, reQcCount, reQcContext } = await prisma.$transaction(async (tx) => {
     const version = await tx.bomVersion.findUnique({
       where: { id: bomVersionId },
       include: { bom: { select: { projectId: true } } },
@@ -204,6 +204,9 @@ export async function approveRevision(bomVersionId: string, userId: string) {
 
     let params: { oldVersionId: string; newVersionId: string; projectId: string; ecoCode: string; userId: string; bomId: string } | null = null
     let reQcCount = 0
+    // Finding F: context re-QC ĐỘC LẬP cascadeParams (cascadeParams=null khi FF cascade tắt).
+    // Cờ needsReQc trên WO set không gate FF → task re-QC cũng PHẢI dispatch (an toàn chất lượng).
+    let reQcContext: { projectId: string; ecoLabel: string } | null = null
 
     const oldVersion = await tx.bomVersion.findFirst({
       where: { bomId: version.bomId, status: 'SUPERSEDED' },
@@ -263,10 +266,11 @@ export async function approveRevision(bomVersionId: string, userId: string) {
           data: { needsReQc: true, reQcReason: `Re-QC do ${ecoLabel}` },
         })
         reQcCount = count
+        reQcContext = { projectId, ecoLabel }
       }
     }
 
-    return { updated: result, cascadeParams: params, reQcCount }
+    return { updated: result, cascadeParams: params, reQcCount, reQcContext }
   })
 
   if (cascadeParams) {
@@ -294,20 +298,25 @@ export async function approveRevision(bomVersionId: string, userId: string) {
     }
   }
 
-  // Create re-QC task if any WOs were flagged
-  if (reQcCount > 0 && cascadeParams) {
+  // Create re-QC task if any WOs were flagged.
+  // Finding F: gate trên reQcContext (ĐỘC LẬP FF), KHÔNG trên cascadeParams — nếu không, FF cascade tắt →
+  // WO bị cờ needsReQc nhưng task R09 KHÔNG dispatch → mất âm thầm (cùng lớp bug đợt này nhắm).
+  if (reQcCount > 0 && reQcContext) {
     try {
       const { createTask } = await import('./work-engine')
       await createTask({
-        title: `[Re-QC] Kiểm tra lại ${reQcCount} WO — ${cascadeParams.ecoCode}`,
-        description: `ECO ${cascadeParams.ecoCode} thay đổi BOM ảnh hưởng ${reQcCount} Work Order đã QC. Cần kiểm tra lại chất lượng các hạng mục bị ảnh hưởng.`,
-        projectId: cascadeParams.projectId,
+        title: `[Re-QC] Kiểm tra lại ${reQcCount} WO — ${reQcContext.ecoLabel}`,
+        description: `${reQcContext.ecoLabel} thay đổi BOM ảnh hưởng ${reQcCount} Work Order đã QC. Cần kiểm tra lại chất lượng các hạng mục bị ảnh hưởng.`,
+        projectId: reQcContext.projectId,
         taskType: 'RE_QC',
         priority: 'HIGH',
         assignees: [{ role: 'R09' }],
-      }, cascadeParams.userId)
+      }, userId)
     } catch (err) {
-      console.error('[approveRevision] Re-QC task creation failed (non-blocking):', err)
+      console.error(
+        `[approveRevision] ❌ Tạo task Re-QC THẤT BẠI (${reQcContext.ecoLabel}, project ${reQcContext.projectId}) — ${reQcCount} WO đã cờ re-QC nhưng R09 CHƯA được giao:`,
+        err,
+      )
     }
   }
 
