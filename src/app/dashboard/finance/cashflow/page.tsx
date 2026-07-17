@@ -33,23 +33,24 @@ export default function CashflowPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
 
-  // Plan tab specific state
-  const [plans, setPlans] = useState<any[]>([])
-  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
+  // Plan tab specific state — selector giờ dựa trên DANH SÁCH DỰ ÁN (mọi dự án),
+  // KHÔNG còn dựa trên danh sách plan (F2: xem DTTC kể cả dự án chưa có kế hoạch dòng tiền).
+  const [projects, setProjects] = useState<any[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
   const [planDetails, setPlanDetails] = useState<any>(null)
   const [dttc, setDttc] = useState<any>(null) // Dự toán tài chính KTKH (read-only)
 
   useEffect(() => {
     if (activeTab === 'ENTRIES') loadData()
-    else loadPlans()
+    else loadProjects()
   }, [month, year, activeTab])
 
   useEffect(() => {
-    if (activeTab === 'PLAN' && selectedPlanId) {
-      loadPlanDetails(selectedPlanId)
-      loadDttc(selectedPlanId)
+    if (activeTab === 'PLAN' && selectedProjectId) {
+      loadPlanDetails(selectedProjectId)
+      loadDttc(selectedProjectId)
     }
-  }, [selectedPlanId, activeTab])
+  }, [selectedProjectId, activeTab])
 
   async function loadData() {
     setLoading(true)
@@ -58,19 +59,22 @@ export default function CashflowPage() {
     setLoading(false)
   }
 
-  async function loadPlans(defaultPid?: string) {
-    const res = await apiFetch('/api/finance/cashflow/plan')
+  // Danh sách MỌI dự án (chưa CLOSED) cho selector. /api/projects/options chỉ yêu cầu
+  // đăng nhập (KHÔNG RLS, KHÔNG gate role) nên Kế toán (R08) đọc được đầy đủ mọi dự án.
+  async function loadProjects(defaultPid?: string) {
+    const res = await apiFetch('/api/projects/options')
     if (res.ok) {
-      setPlans(res.plans || [])
+      setProjects(res.projects || [])
       if (defaultPid) {
-        setSelectedPlanId(defaultPid)
-      } else if (res.plans?.length > 0 && !selectedPlanId) {
-        setSelectedPlanId(res.plans[0].projectId)
+        setSelectedProjectId(defaultPid)
+      } else if (res.projects?.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(res.projects[0].id)
       }
     }
   }
 
   async function loadPlanDetails(projectId: string) {
+    setPlanDetails(null) // reset: dự án có thể CHƯA có plan → res.plan = null
     const res = await apiFetch(`/api/finance/cashflow/plan?projectId=${projectId}`)
     if (res.ok) setPlanDetails(res.plan)
   }
@@ -202,22 +206,27 @@ export default function CashflowPage() {
 
       {activeTab === 'PLAN' && (
         <div className="space-y-6 animate-fade-in">
-          <FinancePlanUploader onUploaded={(pid) => { loadPlans(pid); loadPlanDetails(pid) }} />
+          <FinancePlanUploader onUploaded={(pid) => { loadProjects(pid); loadPlanDetails(pid); loadDttc(pid) }} />
           
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Dashboard Phương án Dự án</h2>
-              {plans.length > 0 && (
-                <select className="input max-w-xs" value={selectedPlanId} onChange={e => setSelectedPlanId(e.target.value)}>
-                  {plans.map(p => (
-                   <option key={p.project.id} value={p.projectId}>{p.project.projectCode} - {p.project.projectName}</option>
+              {projects.length > 0 && (
+                <select className="input max-w-xs" value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}>
+                  {projects.map(p => (
+                   <option key={p.id} value={p.id}>{p.projectCode} - {p.projectName}</option>
                   ))}
                 </select>
               )}
             </div>
 
             {!planDetails ? (
-              <p className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>Chưa có dữ liệu kế hoạch dòng tiền. Hãy Upload file Excel để hệ thống tự động bóc tách.</p>
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Dự án chưa có kế hoạch dòng tiền (ProjectFinancePlan).</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Dùng form <span className="font-semibold" style={{ color: 'var(--accent)' }}>Import Phương án Tài chính</span> phía trên để tạo mới — Dự toán tài chính (KTKH) bên dưới vẫn xem được.
+                </p>
+              </div>
             ) : (
               <div className="space-y-6">
                 <div className="grid grid-cols-3 gap-4">
@@ -280,8 +289,9 @@ export default function CashflowPage() {
             )}
           </div>
 
-          {/* Dự toán tài chính (KTKH) — read-only, nguồn: form ESTIMATE (P1.2/P2.1A) + Budget */}
-          {selectedPlanId && (
+          {/* Dự toán tài chính (KTKH) — read-only, nguồn: form ESTIMATE (P1.2/P2.1A) + Budget.
+              Hiện với MỌI dự án đã chọn, kể cả chưa có ProjectFinancePlan (F2). */}
+          {selectedProjectId && (
             <div className="card p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
