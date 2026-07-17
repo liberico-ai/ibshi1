@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
@@ -91,6 +92,11 @@ export async function POST(
       201,
     )
   } catch (err) {
+    // LOW race: revCode/ecoCode trùng do TOCTOU (2 người tạo đồng thời, hoặc ecoCode count()+1 đụng) → Prisma P2002.
+    // Trả 422 thân thiện (retryable) thay vì 500. Transaction đã rollback nên KHÔNG hỏng data.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return errorResponse('Mã revision hoặc mã ECO vừa bị trùng (có thao tác đồng thời) — vui lòng thử lại.', 422)
+    }
     console.error('POST /api/design/bom/[id]/create-revision error:', err)
     return errorResponse('Lỗi hệ thống khi tạo revision', 500)
   }

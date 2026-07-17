@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prismaMock } from '@/lib/__mocks__/db'
 
 const { mockAuthUser } = vi.hoisted(() => ({
@@ -131,5 +132,23 @@ describe('POST /api/design/bom/[id]/create-revision — Finding A', () => {
     const res = await callRoute()
     expect(res.status).toBe(422)
     expect(mockCreateRevisionWithEco).not.toHaveBeenCalled()
+  })
+
+  // LOW#3 race: TOCTOU revCode (unique [drawingId,revision]) hoặc ecoCode (count()+1 đụng) khi 2 thao tác
+  // đồng thời → createRevisionWithEco ném Prisma P2002 → route trả 422 (retryable), KHÔNG 500. Tx đã rollback.
+  it('createRevisionWithEco ném P2002 (race revCode/ecoCode) → 422, không 500', async () => {
+    mockCreateRevisionWithEco.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'x' }),
+    )
+    const res = await callRoute()
+    expect(res.status).toBe(422)
+    const json = await res.json()
+    expect(json.ok).toBe(false)
+  })
+
+  it('createRevisionWithEco ném lỗi KHÁC (không P2002) → vẫn 500 (không nuốt nhầm thành 422)', async () => {
+    mockCreateRevisionWithEco.mockRejectedValue(new Error('DB down'))
+    const res = await callRoute()
+    expect(res.status).toBe(500)
   })
 })
