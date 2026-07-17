@@ -97,6 +97,12 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
+    // Same gate as POST — chống đọc trái phép kế hoạch tài chính mọi dự án.
+    const allowedRoles = ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a']
+    if (!allowedRoles.includes(user.roleCode)) {
+      return errorResponse('Forbidden. Role not allowed.', 403)
+    }
+
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
 

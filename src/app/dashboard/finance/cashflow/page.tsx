@@ -17,6 +17,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   EQUIPMENT: 'Thiết bị', OVERHEAD: 'Chi phí chung', TAX: 'Thuế', OTHER: 'Khác',
 }
 
+// Nhãn 4 nhóm Budget DTTC (dự toán tài chính KTKH)
+const BUDGET_GROUP_LABELS: Record<string, string> = {
+  MATERIAL: 'Vật tư', LABOR: 'Nhân công', SERVICE: 'Dịch vụ', OVERHEAD: 'Chi phí chung',
+}
+
 export default function CashflowPage() {
   const [activeTab, setActiveTab] = useState<'ENTRIES' | 'PLAN'>('ENTRIES')
 
@@ -32,14 +37,18 @@ export default function CashflowPage() {
   const [plans, setPlans] = useState<any[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [planDetails, setPlanDetails] = useState<any>(null)
+  const [dttc, setDttc] = useState<any>(null) // Dự toán tài chính KTKH (read-only)
 
-  useEffect(() => { 
-    if (activeTab === 'ENTRIES') loadData() 
+  useEffect(() => {
+    if (activeTab === 'ENTRIES') loadData()
     else loadPlans()
   }, [month, year, activeTab])
 
   useEffect(() => {
-    if (activeTab === 'PLAN' && selectedPlanId) loadPlanDetails(selectedPlanId)
+    if (activeTab === 'PLAN' && selectedPlanId) {
+      loadPlanDetails(selectedPlanId)
+      loadDttc(selectedPlanId)
+    }
   }, [selectedPlanId, activeTab])
 
   async function loadData() {
@@ -64,6 +73,12 @@ export default function CashflowPage() {
   async function loadPlanDetails(projectId: string) {
     const res = await apiFetch(`/api/finance/cashflow/plan?projectId=${projectId}`)
     if (res.ok) setPlanDetails(res.plan)
+  }
+
+  async function loadDttc(projectId: string) {
+    setDttc(null)
+    const res = await apiFetch(`/api/finance/cashflow/estimate?projectId=${projectId}`)
+    if (res.ok) setDttc({ estimate: res.estimate, budget: res.budget })
   }
 
   const fmt = (v: number) => formatNumber(v)
@@ -264,6 +279,92 @@ export default function CashflowPage() {
               </div>
             )}
           </div>
+
+          {/* Dự toán tài chính (KTKH) — read-only, nguồn: form ESTIMATE (P1.2/P2.1A) + Budget */}
+          {selectedPlanId && (
+            <div className="card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Dự toán tài chính (KTKH)</h2>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chỉ xem — nguồn từ dự toán KTKH (P1.2/P2.1A) và ngân sách dự án</p>
+                </div>
+                <span className="badge bg-gray-100 text-gray-600">Read-only</span>
+              </div>
+
+              {!dttc ? (
+                <p className="text-center py-6 text-sm" style={{ color: 'var(--text-muted)' }}>Đang tải dự toán...</p>
+              ) : (
+                <div className="space-y-5">
+                  {/* Bảng 4 nhóm Budget */}
+                  <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border-light)' }}>
+                    <table className="data-table text-xs">
+                      <thead>
+                        <tr>
+                          <th>Nhóm</th>
+                          <th className="text-right">Dự toán (planned)</th>
+                          <th className="text-right">Đã cam kết (committed)</th>
+                          <th className="text-right">Thực chi (actual)</th>
+                          <th>Ghi chú</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(dttc.budget || []).map((b: any) => (
+                          <tr key={b.category}>
+                            <td className="font-semibold">{BUDGET_GROUP_LABELS[b.category] || b.category}</td>
+                            <td className="text-right font-mono font-medium">{fmt(Number(b.planned || 0))}</td>
+                            <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{fmt(Number(b.committed || 0))}</td>
+                            <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{fmt(Number(b.actual || 0))}</td>
+                            <td className="text-xs truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }}>{b.notes || '-'}</td>
+                          </tr>
+                        ))}
+                        <tr className="font-bold" style={{ background: 'var(--bg-primary)' }}>
+                          <td>Tổng cộng</td>
+                          <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.planned || 0), 0))}</td>
+                          <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.committed || 0), 0))}</td>
+                          <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.actual || 0), 0))}</td>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Tổng dự toán KTKH từ form ESTIMATE (nếu có) */}
+                  {dttc.estimate && Object.keys(dttc.estimate).length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Tổng dự toán (KTKH)</p>
+                        <p className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+                          {fmt(Number(dttc.estimate.totalEstimate || 0))} ₫
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Vật tư / Nhân công</p>
+                        <p className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
+                          {fmt(Number(dttc.estimate.totalMaterial || 0))} / {fmt(Number(dttc.estimate.totalLabor || 0))}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Dịch vụ / Chi phí chung</p>
+                        <p className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
+                          {fmt(Number(dttc.estimate.totalService || 0))} / {fmt(Number(dttc.estimate.totalOverhead || 0))}
+                        </p>
+                      </div>
+                      {planDetails?.contractValue != null && (
+                        <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Lợi nhuận dự kiến (HĐ − dự toán)</p>
+                          <p className="text-base font-bold font-mono text-green-600">
+                            {fmt(Number(planDetails.contractValue || 0) - Number(dttc.estimate.totalEstimate || 0))} ₫
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm px-1" style={{ color: 'var(--text-muted)' }}>Chưa có dự toán KTKH (form ESTIMATE) cho dự án này.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
