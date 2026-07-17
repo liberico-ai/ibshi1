@@ -119,6 +119,19 @@ export default function WorkDetailPage() {
     if (mode === 'RETURN_CREATOR' && (!task.evidenceFiles || task.evidenceFiles.length === 0)) {
       if (!confirm('Chưa đính kèm bằng chứng thực hiện — vẫn hoàn thành?')) return
     }
+    // Mức 1: việc báo giá đã chọn NCC nhưng CHƯA tạo Đơn đặt hàng (PO) → nhắc (không chặn cứng).
+    const rd = (task.resultData && typeof task.resultData === 'object') ? task.resultData as Record<string, unknown> : {}
+    const rawQuotes = rd.supplierQuotes
+    const quotes: unknown[] = Array.isArray(rawQuotes)
+      ? rawQuotes
+      : typeof rawQuotes === 'string'
+        ? (() => { try { const p = JSON.parse(rawQuotes); return Array.isArray(p) ? p : [] } catch { return [] } })()
+        : []
+    const hasSelectedQuote = quotes.some(q => (q as { selected?: boolean } | null)?.selected === true)
+    const hasPo = !!rd.poId
+    if (hasSelectedQuote && !hasPo) {
+      if (!confirm('Bạn đã chọn nhà cung cấp nhưng CHƯA tạo Đơn đặt hàng (PO). Hoàn thành việc bây giờ sẽ khiến phần mua hàng chưa đi tiếp. Vẫn hoàn thành?')) return
+    }
     setBusy(true)
     const res = await apiFetch(`/api/work/tasks/${id}/complete`, { method: 'POST', body: JSON.stringify(buildCompleteBody(mode, forward)) })
     setBusy(false)

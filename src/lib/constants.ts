@@ -129,7 +129,10 @@ export const BRIEFING_WRITE_ROLES = ['R02', 'R02a', 'R10'] as const
 // ── Form-level edit permissions (server + client) ──
 export const FORM_EDIT_ROLES = {
   ESTIMATE: ['R01', 'R03', 'R03a'],
-  PR: PR_EDIT_ROLES as unknown as string[],
+  // Gap #3: bomPr (form PR) — thêm R07/R07a để Thương mại ghi bomPr đường CHÍNH ở P3.5
+  // (procurement), hết phụ thuộc fallback #51. KHÔNG nới PR_EDIT_ROLES const (giữ nguyên gác
+  // route design/create-pr — R07 vẫn không tạo PR từ BOM version của thiết kế).
+  PR: [...PR_EDIT_ROLES, 'R07', 'R07a'] as unknown as string[],
   BBH: ['R01', 'R02', 'R02a'],
   WBS: ['R01', 'R02', 'R02a'],
   WELD_PAINT: ['R01', 'R02', 'R02a', 'R04', 'R04a'],

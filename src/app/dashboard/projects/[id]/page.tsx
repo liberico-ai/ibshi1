@@ -222,6 +222,43 @@ export default function ProjectDetailPage() {
         </a>
       )}
 
+      {/* MCL — theo dõi vật tư per-project (T2) */}
+      {['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a', 'R10'].includes(currentUserRole) && (
+        <a
+          href={`/dashboard/projects/${params.id}/mcl`}
+          className="card p-3 flex items-center gap-3 transition-all hover:shadow-md"
+          style={{ borderLeft: '4px solid #0284c7', textDecoration: 'none' }}
+        >
+          <span style={{ fontSize: '18px' }}>📦</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--text-heading)' }}>Theo dõi vật tư (MCL)</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Cần · Đặt · Về · Tồn · Cấp · Còn thiếu</span>
+        </a>
+      )}
+
+      {/* Hợp đồng mua (T1) — role mua hàng / QLDA / tài chính */}
+      {['R01', 'R02', 'R02a', 'R03', 'R03a', 'R07', 'R07a', 'R08', 'R08a', 'R10'].includes(currentUserRole) && (
+        <a
+          href={`/dashboard/projects/${params.id}/purchase-contracts`}
+          className="card p-3 flex items-center gap-3 transition-all hover:shadow-md"
+          style={{ borderLeft: '4px solid #d97706', textDecoration: 'none' }}
+        >
+          <span style={{ fontSize: '18px' }}>📜</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--text-heading)' }}>Hợp đồng mua</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>HĐMB/HĐKT với NCC · gắn PO · file ký</span>
+        </a>
+      )}
+
+      {/* Sổ tài liệu dự án (T5) — trang tự RBAC */}
+      <a
+        href={`/dashboard/projects/${params.id}/documents`}
+        className="card p-3 flex items-center gap-3 transition-all hover:shadow-md"
+        style={{ borderLeft: '4px solid #16a34a', textDecoration: 'none' }}
+      >
+        <span style={{ fontSize: '18px' }}>📁</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-heading)' }}>Sổ tài liệu dự án</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Bản vẽ · BOM · HĐ · DTTC · QC — có revision</span>
+      </a>
+
       {/* Apply Template — show when project has no template tasks */}
       {project.status !== 'CLOSED' && !project.hasTemplateTasks && ['R01', 'R02', 'R02a', 'R10'].includes(currentUserRole) && (
         <button

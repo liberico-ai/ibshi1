@@ -17,7 +17,7 @@ import prisma from '@/lib/db'
 export const PO_EXCLUDED_STATUSES = ['DRAFT', 'CANCELLED', 'REJECTED']
 
 export interface PrItemCoverage {
-  materialId: string
+  materialId: string | null
   materialCode: string | null
   materialName: string | null
   unit: string | null
@@ -40,7 +40,9 @@ export interface PrCoverageSummary {
 }
 
 interface PrItemLike {
-  materialId: string
+  // NULL khi dòng PR chưa khớp được mã vật tư (vật tư tiêu hao / mã tạm).
+  // Dòng như vậy không đối chiếu PO theo materialId được → covered = 0 (coi như còn thiếu).
+  materialId: string | null
   quantity: unknown // Prisma Decimal | number
   material?: { materialCode: string; name: string; unit: string } | null
 }
@@ -93,7 +95,8 @@ export function computePrCoverage(
 ): { items: PrItemCoverage[]; summary: PrCoverageSummary } {
   const itemCoverages: PrItemCoverage[] = items.map(it => {
     const needed = Number(it.quantity || 0)
-    const covered = poMap.get(coverageKey(projectId, it.materialId)) || 0
+    // materialId null → không có khoá đối chiếu PO → covered = 0 (báo còn thiếu, không báo nhầm là đã phủ)
+    const covered = it.materialId ? (poMap.get(coverageKey(projectId, it.materialId)) || 0) : 0
     const shortage = Math.max(0, needed - covered)
     return {
       materialId: it.materialId,

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import prisma from './db'
 import { applyStockMovement } from './stock-ledger'
+import { valueBomMaterial, formatCoverageNote, type BomValuationResult } from './bom-valuation'
 
 type Tx = Prisma.TransactionClient
 
@@ -60,20 +61,22 @@ export async function recalcPOTotal(poId: string): Promise<number> {
 //  FORWARD SYNC HOOKS (Phase 2)
 // ══════════════════════════════════════════════════════
 
-/** P2.2/P2.3 complete → recalc Budget.MATERIAL.planned from BOM items (idempotent recompute) */
+/** P2.2/P2.3 complete → recalc Budget.MATERIAL.planned từ BOM (idempotent recompute).
+ *  Gap #1: định giá phân lớp qua valueBomMaterial (đọc cả BillOfMaterial lẫn PR/resultData,
+ *  khớp Material Master + báo giá/PO) + ghi coverage vào Budget.notes để planned=0/thấp
+ *  là có lý do NHÌN THẤY. KHÔNG đụng committed / taxonomy 4 nhóm. */
 export async function syncBOMtoBudget(projectId: string, triggeredBy: string): Promise<void> {
-  const boms = await prisma.billOfMaterial.findMany({
-    where: { projectId, status: { in: ['APPROVED', 'RELEASED'] } },
-    include: { items: { include: { material: true } } },
-  })
-
-  let totalPlanned = 0
-  for (const bom of boms) {
-    for (const item of bom.items) {
-      const unitPrice = item.material?.unitPrice ? Number(item.material.unitPrice) : 0
-      totalPlanned += Number(item.quantity) * unitPrice
-    }
+  // Định giá vật tư là ENRICHMENT, KHÔNG phải gate — lỗi định giá (bảng vắng, matcher lỗi…)
+  // TUYỆT ĐỐI không được 500 và chặn hoàn thành bước P2.2/P2.3. Lỗi → log + giữ planned cũ.
+  let valuation: BomValuationResult
+  try {
+    valuation = await valueBomMaterial(projectId)
+  } catch (err) {
+    console.error(`[syncBOMtoBudget] valuation failed for project ${projectId} — skip, giữ planned cũ:`, err)
+    return
   }
+  const totalPlanned = valuation.planned
+  const coverageNote = formatCoverageNote(valuation)
 
   const result = await prisma.$transaction(async (tx) => {
     const existing = await tx.budget.findFirst({
@@ -82,19 +85,25 @@ export async function syncBOMtoBudget(projectId: string, triggeredBy: string): P
     const oldPlanned = existing ? Number(existing.planned) : 0
 
     if (existing) {
-      await tx.budget.update({ where: { id: existing.id }, data: { planned: totalPlanned } })
+      await tx.budget.update({ where: { id: existing.id }, data: { planned: totalPlanned, notes: coverageNote } })
     } else {
-      await tx.budget.create({ data: { projectId, category: 'MATERIAL', planned: totalPlanned } })
+      await tx.budget.create({ data: { projectId, category: 'MATERIAL', planned: totalPlanned, notes: coverageNote } })
     }
     return { oldPlanned, budgetId: existing?.id || 'new' }
-  })
+  }, { timeout: 180000 })
 
   await logChangeEvent({
     projectId, sourceStep: 'P2.2', sourceModel: 'BillOfMaterial',
-    sourceId: boms[0]?.id || 'N/A', eventType: 'SYNC',
+    sourceId: `valuation:${valuation.source}`, eventType: 'SYNC',
     targetModel: 'Budget', targetId: result.budgetId,
     dataBefore: { planned: result.oldPlanned },
-    dataAfter: { planned: totalPlanned },
+    dataAfter: {
+      planned: totalPlanned,
+      coverage: coverageNote,
+      pricedLines: valuation.pricedLines,
+      unpricedLines: valuation.unpricedLines,
+      pricedWeightPct: valuation.pricedWeightPct,
+    },
     triggeredBy,
   })
 }
@@ -146,11 +155,30 @@ export interface EstimateTotals {
   totalOverhead?: number
 }
 
+/** Taxonomy chuẩn: 4 nhóm DTTC (dự toán tài chính, mã tiếng Việt trong
+ *  docs/handoff/import/budget_import.csv) → Budget.category (mã tiếng Anh).
+ *  ĐÂY LÀ NGUỒN DUY NHẤT của ánh xạ 4 nhóm — nơi khác import.
+ *  Lưu ý: DICH_VU có danh mục riêng SERVICE — KHÔNG gộp vào MATERIAL/OVERHEAD, nếu không dòng dịch vụ bị mất. */
+export const DTTC_GROUP_TO_BUDGET_CATEGORY = {
+  VAT_TU: 'MATERIAL',
+  NHAN_CONG: 'LABOR',
+  DICH_VU: 'SERVICE',
+  CHI_PHI_CHUNG: 'OVERHEAD',
+} as const
+
+export type DttcGroupCode = keyof typeof DTTC_GROUP_TO_BUDGET_CATEGORY
+
+/** Map 1 mã nhóm DTTC → Budget.category. Trả null nếu mã không thuộc 4 nhóm chuẩn. */
+export function dttcGroupToBudgetCategory(group: string): string | null {
+  return (DTTC_GROUP_TO_BUDGET_CATEGORY as Record<string, string>)[group] ?? null
+}
+
+// EstimateTotals key ↔ nhóm DTTC (giữ đủ 4 field — DICH_VU→totalService, không đọc thiếu field nào).
 const ESTIMATE_CATEGORY_MAP: ReadonlyArray<readonly [keyof EstimateTotals, string]> = [
-  ['totalMaterial', 'MATERIAL'],
-  ['totalLabor', 'LABOR'],
-  ['totalService', 'SERVICE'],
-  ['totalOverhead', 'OVERHEAD'],
+  ['totalMaterial', DTTC_GROUP_TO_BUDGET_CATEGORY.VAT_TU],
+  ['totalLabor', DTTC_GROUP_TO_BUDGET_CATEGORY.NHAN_CONG],
+  ['totalService', DTTC_GROUP_TO_BUDGET_CATEGORY.DICH_VU],
+  ['totalOverhead', DTTC_GROUP_TO_BUDGET_CATEGORY.CHI_PHI_CHUNG],
 ] as const
 
 /** Dự toán (form ESTIMATE) hoàn thành/duyệt → upsert Budget.planned theo từng category.

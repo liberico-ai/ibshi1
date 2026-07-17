@@ -160,6 +160,9 @@ describe('webhook', () => {
       } as never)
 
       prismaMock.user.findMany.mockResolvedValue([])
+      // emitTaskUpdated truy vấn fileAttachment (evidenceFiles) — phải mock, nếu không
+      // deep-mock trả undefined và `.map` ném (test vốn phụ thuộc hành vi ngầm của proxy).
+      prismaMock.fileAttachment.findMany.mockResolvedValue([] as never)
       prismaMock.apiClient.findFirst.mockResolvedValue({
         id: 'c1', name: 'Sale', callbackUrl: 'https://sale.example.com/webhooks/ibs',
         webhookSecret: 'sec', active: true,

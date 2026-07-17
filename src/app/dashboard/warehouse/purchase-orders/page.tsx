@@ -7,8 +7,9 @@ import { PageHeader, StatusBadge, Button, EmptyState, KPICard } from '@/componen
 import { ShoppingCart, ClipboardList, Banknote, Clock, CheckCircle2 } from 'lucide-react'
 
 interface PO {
-  id: string; poCode: string; status: string; totalAmount: number | null; orderDate: string | null; deliveryDate: string | null;
+  id: string; poCode: string; status: string; totalValue: number | null; orderDate: string | null; deliveryDate: string | null;
   vendor: { vendorCode: string; name: string } | null
+  contract: { id: string; contractCode: string; contractType: string; projectId: string | null } | null
   items: { id: string; quantity: number; unitPrice: number }[]
 }
 
@@ -42,7 +43,7 @@ export default function PurchaseOrdersPage() {
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
 
-  const totalValue = pos.reduce((s, p) => s + (p.totalAmount || 0), 0)
+  const totalValue = pos.reduce((s, p) => s + (p.totalValue || 0), 0)
   const pendingCount = pos.filter(p => p.status === 'DRAFT' || p.status === 'PENDING').length
   const approvedCount = pos.filter(p => p.status === 'APPROVED' || p.status === 'COMPLETED').length
 
@@ -87,6 +88,7 @@ export default function PurchaseOrdersPage() {
             <tr>
               <th>Mã PO</th>
               <th>NCC</th>
+              <th>Hợp đồng nguồn</th>
               <th>Trạng thái</th>
               <th className="text-right">Giá trị</th>
               <th>Ngày giao</th>
@@ -97,7 +99,7 @@ export default function PurchaseOrdersPage() {
           <tbody>
             {pos.length === 0 ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <EmptyState icon={<ShoppingCart />} title="Chưa có PO" description="Chưa có đơn đặt hàng nào được tạo" />
                 </td>
               </tr>
@@ -111,12 +113,30 @@ export default function PurchaseOrdersPage() {
                   <span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{po.poCode}</span>
                 </td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.vendor?.name || '—'}</td>
+                <td className="text-xs">
+                  {po.contract ? (
+                    po.contract.projectId ? (
+                      <a
+                        href={`/dashboard/projects/${po.contract.projectId}/purchase-contracts`}
+                        className="font-mono font-bold underline"
+                        style={{ color: 'var(--info)' }}
+                        title={`Loại: ${po.contract.contractType}`}
+                      >
+                        {po.contract.contractCode}
+                      </a>
+                    ) : (
+                      <span className="font-mono font-bold" style={{ color: 'var(--info)' }} title={`Loại: ${po.contract.contractType}`}>{po.contract.contractCode}</span>
+                    )
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>—</span>
+                  )}
+                </td>
                 <td>
                   <StatusBadge category="po" status={po.status} className={po.status === 'PENDING' ? 'font-bold' : ''} />
                 </td>
                 <td className="text-right">
                   <span className="font-mono text-xs font-bold" style={{ color: 'var(--success)' }}>
-                    {formatCurrency(po.totalAmount || 0)}
+                    {formatCurrency(po.totalValue || 0)}
                   </span>
                 </td>
                 <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{po.deliveryDate ? formatDate(po.deliveryDate) : '—'}</td>

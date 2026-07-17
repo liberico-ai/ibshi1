@@ -35,6 +35,12 @@ export async function GET(
   const briefing = (rd.briefing && typeof rd.briefing === 'object') ? (rd.briefing as Record<string, unknown>) : {}
   const decision = typeof briefing.decision === 'string' ? briefing.decision : ''
 
+  const evidenceFiles = await prisma.fileAttachment.findMany({
+    where: { entityType: 'TaskEvidence', entityId: { startsWith: `${task.id}_` } },
+    select: { id: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  })
+
   const data = {
     taskId: task.id,
     externalRef: task.externalRef || null,
@@ -54,6 +60,13 @@ export async function GET(
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
     completedAt: task.completedAt || null,
+    evidenceFiles: evidenceFiles.map(f => ({
+      fileId: f.id,
+      fileName: f.fileName,
+      fileSize: f.fileSize,
+      mimeType: f.mimeType,
+      downloadUrl: `/api/external/v1/files/${f.id}`,
+    })),
   }
 
   return successResponse({ data })

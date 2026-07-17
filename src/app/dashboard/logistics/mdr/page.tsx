@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import {
   PageHeader, KPICard, EmptyState, SelectField,
@@ -32,12 +32,15 @@ export default function MDRPage() {
   const [projectId, setProjectId] = useState('')
   const [data, setData] = useState<MDRData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [releasing, setReleasing] = useState(false)
+  const [releaseMsg, setReleaseMsg] = useState('')
+  const [releaseErr, setReleaseErr] = useState(false)
 
   useEffect(() => {
     apiFetch('/api/projects').then(r => { if (r.ok) setProjects(r.projects) })
   }, [])
 
-  useEffect(() => {
+  const loadMdr = useCallback(() => {
     if (!projectId) { setData(null); return }
     setLoading(true)
     apiFetch(`/api/logistics/mdr?projectId=${projectId}`).then(r => {
@@ -47,7 +50,34 @@ export default function MDRPage() {
     })
   }, [projectId])
 
+  useEffect(() => { setReleaseMsg(''); setReleaseErr(false); loadMdr() }, [loadMdr])
+
   const canRelease = data?.canRelease || false
+  // MRB đã phát hành hay chưa — quyết định hiển thị nút phát hành (tránh vòng lặp canRelease).
+  const mrbReleased = !!data?.mrbRelease
+  // Chỉ QC/BGĐ được phát hành MRB (khớp RBAC POST /api/qc/mrb/release: R01/R09/R09a).
+  // Ẩn nút với PM/TM để không bấm rồi nhận 403.
+  const canReleaseRole = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
+
+  const handleRelease = async () => {
+    if (!projectId || releasing) return
+    setReleasing(true)
+    setReleaseMsg('')
+    setReleaseErr(false)
+    const r = await apiFetch('/api/qc/mrb/release', { method: 'POST', body: JSON.stringify({ projectId }) })
+    setReleasing(false)
+    if (r.ok) {
+      setReleaseMsg(r.reused
+        ? `MRB đã phát hành trước đó (Rev ${r.release?.revision ?? ''})`
+        : `Đã phát hành MRB Rev ${r.release?.revision ?? ''}`)
+      setReleaseErr(false)
+      loadMdr()
+    } else {
+      // 422 kèm blockers (NCR/ITP/FAT chưa đạt) → API trả chuỗi lỗi liệt kê blocker.
+      setReleaseMsg(r.error || 'Không phát hành được MRB')
+      setReleaseErr(true)
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -73,7 +103,9 @@ export default function MDRPage() {
             <h2 className="text-lg font-bold" style={{ color: canRelease ? SEMANTIC_COLORS.success.solid : SEMANTIC_COLORS.danger.solid }}>
               {canRelease ? 'SẴN SÀNG PHÁT HÀNH' : 'CHƯA ĐỦ ĐIỀU KIỆN'}
             </h2>
-            {!canRelease && (
+
+            {/* Blockers từ GET (NCR/ITP/FAT + trạng thái phát hành MRB) */}
+            {!canRelease && data.blockers.length > 0 && (
               <div className="mt-3 text-left max-w-md mx-auto">
                 {data.blockers.map((b, i) => (
                   <p key={i} className="text-xs flex items-start gap-2 mb-1">
@@ -82,6 +114,42 @@ export default function MDRPage() {
                   </p>
                 ))}
               </div>
+            )}
+
+            {/* MRB đã phát hành → hiển thị revision */}
+            {mrbReleased && data.mrbRelease && (
+              <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>
+                MRB Rev {data.mrbRelease.revision} — phát hành {new Date(data.mrbRelease.releasedAt).toLocaleDateString('vi-VN')}
+              </p>
+            )}
+
+            {/* Nút phát hành MRB: chỉ khi CHƯA phát hành + đúng role (R01/R09/R09a).
+                Không phụ thuộc canRelease (tránh chicken-and-egg). API tự kiểm NCR/ITP/FAT
+                và trả 422 kèm blocker nếu chưa đạt. */}
+            {!mrbReleased && canReleaseRole && (
+              <div className="text-center mt-4">
+                <button onClick={handleRelease} disabled={releasing}
+                  className="px-5 py-2 rounded-lg font-bold text-white disabled:opacity-60"
+                  style={{ background: SEMANTIC_COLORS.info.solid }}>
+                  {releasing ? 'Đang phát hành…' : 'Phát hành MRB (Quality Dossier)'}
+                </button>
+                <p className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>
+                  Hệ thống kiểm tra NCR/ITP/FAT khi phát hành.
+                </p>
+              </div>
+            )}
+
+            {/* Role không được phép phát hành → thông báo thay vì nút để bấm rồi 403 */}
+            {!mrbReleased && !canReleaseRole && (
+              <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>
+                Chỉ QC/BGĐ được phát hành MRB (Quality Dossier).
+              </p>
+            )}
+
+            {releaseMsg && (
+              <p className="text-xs mt-3" style={{ color: releaseErr ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid }}>
+                {releaseMsg}
+              </p>
             )}
           </div>
 
@@ -135,18 +203,9 @@ export default function MDRPage() {
 
           {canRelease && (
             <div className="card p-4 text-center">
-              <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                 Tất cả NCR đã đóng, ITP checkpoint đạt, MRB đã phát hành. Hồ sơ sẵn sàng phát hành cho khách hàng.
               </p>
-              {data.mrbRelease && (
-                <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
-                  MRB Rev {data.mrbRelease.revision} — phát hành {new Date(data.mrbRelease.releasedAt).toLocaleDateString('vi-VN')}
-                </p>
-              )}
-              <button className="px-6 py-2 rounded-lg font-bold text-white"
-                style={{ background: SEMANTIC_COLORS.success.solid }}>
-                Phát hành MDR
-              </button>
             </div>
           )}
         </>

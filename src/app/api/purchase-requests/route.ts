@@ -49,7 +49,9 @@ export async function GET(req: NextRequest) {
       const approved = prs.filter(pr => pr.status === 'APPROVED')
       if (approved.length > 0) {
         const projectIds = [...new Set(approved.map(pr => pr.projectId))]
+        // Bỏ dòng chưa khớp mã vật tư (materialId null) — không có khoá để đối chiếu PO
         const materialIds = [...new Set(approved.flatMap(pr => pr.items.map(i => i.materialId)))]
+          .filter((id): id is string => id !== null)
         const poMap = await fetchPoCoverageMap(projectIds, materialIds)
         for (const pr of approved) {
           coverageByPrId.set(pr.id, computePrCoverage(pr.projectId, pr.items, poMap).summary)
@@ -57,11 +59,30 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Bước 5 — nối task nguồn + PO liên quan (cùng sourceTaskId). Batch, tránh N+1.
+    const sourceTaskIds = [...new Set(prs.map(pr => pr.sourceTaskId).filter((x): x is string => !!x))]
+    const taskById = new Map<string, { id: string; title: string }>()
+    const poByTaskId = new Map<string, { id: string; poCode: string; status: string }>()
+    if (sourceTaskIds.length > 0) {
+      const [srcTasks, relatedPos] = await Promise.all([
+        prisma.task.findMany({ where: { id: { in: sourceTaskIds } }, select: { id: true, title: true } }),
+        prisma.purchaseOrder.findMany({
+          where: { sourceTaskId: { in: sourceTaskIds } },
+          select: { id: true, poCode: true, status: true, sourceTaskId: true },
+        }),
+      ])
+      for (const t of srcTasks) taskById.set(t.id, { id: t.id, title: t.title })
+      for (const po of relatedPos) if (po.sourceTaskId) poByTaskId.set(po.sourceTaskId, { id: po.id, poCode: po.poCode, status: po.status })
+    }
+
     return successResponse({
-      purchaseRequests: prs.map((pr: Record<string, unknown> & { items: Array<Record<string, unknown>> }) => ({
+      purchaseRequests: prs.map((pr: Record<string, unknown> & { items: Array<Record<string, unknown>>; sourceTaskId?: string | null }) => ({
         ...pr,
         itemCount: pr.items.length,
         totalItems: pr.items.reduce((sum: number, i: Record<string, unknown>) => sum + Number(i.quantity || 0), 0),
+        // Task nguồn + PO liên quan (null nếu PR tạo tay/không từ task)
+        sourceTask: pr.sourceTaskId ? (taskById.get(pr.sourceTaskId) ?? null) : null,
+        relatedPo: pr.sourceTaskId ? (poByTaskId.get(pr.sourceTaskId) ?? null) : null,
         // coverage chỉ xuất hiện khi withCoverage=1; PR không APPROVED → null
         ...(coverageByPrId ? { coverage: coverageByPrId.get(pr.id as string) ?? null } : {}),
       })),

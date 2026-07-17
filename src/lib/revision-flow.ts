@@ -162,9 +162,10 @@ export async function createRevisionWithEco(params: CreateRevisionWithEcoParams)
 // ── 2. Approve a BOM version (DRAFT → ACTIVE) ──
 
 export async function approveRevision(bomVersionId: string, userId: string) {
-  const { updated, cascadeParams, reQcCount } = await prisma.$transaction(async (tx) => {
+  const { updated, cascadeParams, reQcCount, reQcContext } = await prisma.$transaction(async (tx) => {
     const version = await tx.bomVersion.findUnique({
       where: { id: bomVersionId },
+      include: { bom: { select: { projectId: true } } },
     })
     if (!version) {
       throw new Error('BomVersion không tồn tại')
@@ -203,6 +204,9 @@ export async function approveRevision(bomVersionId: string, userId: string) {
 
     let params: { oldVersionId: string; newVersionId: string; projectId: string; ecoCode: string; userId: string; bomId: string } | null = null
     let reQcCount = 0
+    // Finding F: context re-QC ĐỘC LẬP cascadeParams (cascadeParams=null khi FF cascade tắt).
+    // Cờ needsReQc trên WO set không gate FF → task re-QC cũng PHẢI dispatch (an toàn chất lượng).
+    let reQcContext: { projectId: string; ecoLabel: string } | null = null
 
     const oldVersion = await tx.bomVersion.findFirst({
       where: { bomId: version.bomId, status: 'SUPERSEDED' },
@@ -221,7 +225,9 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       params = {
         oldVersionId: oldVersion.id,
         newVersionId: bomVersionId,
-        projectId: eco?.projectId || version.bomId,
+        // Finding B: KHÔNG dùng version.bomId làm projectId (là BillOfMaterial id, không phải project!).
+        // Lấy projectId THẬT từ bom → cascade không còn FK-fail + mất âm thầm khi revision không gắn ECO.
+        projectId: eco?.projectId || version.bom.projectId,
         ecoCode: eco?.ecoCode || `BOM-v${version.versionNo}`,
         userId,
         bomId: version.bomId,
@@ -249,7 +255,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
         const eco = version.ecoId
           ? await tx.engineeringChangeOrder.findUnique({ where: { id: version.ecoId }, select: { ecoCode: true, projectId: true } })
           : null
-        const projectId = eco?.projectId || version.bomId
+        const projectId = eco?.projectId || version.bom.projectId // Finding B: projectId thật từ bom, không phải bomId
         const ecoLabel = eco?.ecoCode || `BOM-v${version.versionNo}`
         const { count } = await tx.workOrder.updateMany({
           where: {
@@ -260,15 +266,16 @@ export async function approveRevision(bomVersionId: string, userId: string) {
           data: { needsReQc: true, reQcReason: `Re-QC do ${ecoLabel}` },
         })
         reQcCount = count
+        reQcContext = { projectId, ecoLabel }
       }
     }
 
-    return { updated: result, cascadeParams: params, reQcCount }
+    return { updated: result, cascadeParams: params, reQcCount, reQcContext }
   })
 
   if (cascadeParams) {
     try {
-      await runCascade(
+      const cascadeResult = await runCascade(
         cascadeParams.oldVersionId,
         cascadeParams.newVersionId,
         cascadeParams.projectId,
@@ -276,25 +283,40 @@ export async function approveRevision(bomVersionId: string, userId: string) {
         cascadeParams.userId,
         cascadeParams.bomId,
       )
+      // Finding B: cascade lẽ ra chạy (có thay đổi BOM) mà ra 0 task → CẢNH BÁO, không im lặng.
+      if (!cascadeResult.skippedNoChanges && cascadeResult.taskIds.length === 0) {
+        console.warn(
+          `[approveRevision] ⚠️ Cascade ${cascadeParams.ecoCode} (project ${cascadeParams.projectId}): có thay đổi BOM nhưng KHÔNG sinh task rework nào — kiểm classifyLine/impact.`,
+        )
+      }
     } catch (err) {
-      console.error('[approveRevision] Cascade failed (non-blocking):', err)
+      // Finding B: trước nuốt âm thầm ("non-blocking"). Nay projectId đã đúng → throw là lỗi THẬT, log rõ để không mất cascade lặng lẽ.
+      console.error(
+        `[approveRevision] ❌ Cascade THẤT BẠI — ${cascadeParams.ecoCode} (project ${cascadeParams.projectId}): revision KHÔNG lan sang phòng khác. Cần xử lý:`,
+        err,
+      )
     }
   }
 
-  // Create re-QC task if any WOs were flagged
-  if (reQcCount > 0 && cascadeParams) {
+  // Create re-QC task if any WOs were flagged.
+  // Finding F: gate trên reQcContext (ĐỘC LẬP FF), KHÔNG trên cascadeParams — nếu không, FF cascade tắt →
+  // WO bị cờ needsReQc nhưng task R09 KHÔNG dispatch → mất âm thầm (cùng lớp bug đợt này nhắm).
+  if (reQcCount > 0 && reQcContext) {
     try {
       const { createTask } = await import('./work-engine')
       await createTask({
-        title: `[Re-QC] Kiểm tra lại ${reQcCount} WO — ${cascadeParams.ecoCode}`,
-        description: `ECO ${cascadeParams.ecoCode} thay đổi BOM ảnh hưởng ${reQcCount} Work Order đã QC. Cần kiểm tra lại chất lượng các hạng mục bị ảnh hưởng.`,
-        projectId: cascadeParams.projectId,
+        title: `[Re-QC] Kiểm tra lại ${reQcCount} WO — ${reQcContext.ecoLabel}`,
+        description: `${reQcContext.ecoLabel} thay đổi BOM ảnh hưởng ${reQcCount} Work Order đã QC. Cần kiểm tra lại chất lượng các hạng mục bị ảnh hưởng.`,
+        projectId: reQcContext.projectId,
         taskType: 'RE_QC',
         priority: 'HIGH',
         assignees: [{ role: 'R09' }],
-      }, cascadeParams.userId)
+      }, userId)
     } catch (err) {
-      console.error('[approveRevision] Re-QC task creation failed (non-blocking):', err)
+      console.error(
+        `[approveRevision] ❌ Tạo task Re-QC THẤT BẠI (${reQcContext.ecoLabel}, project ${reQcContext.projectId}) — ${reQcCount} WO đã cờ re-QC nhưng R09 CHƯA được giao:`,
+        err,
+      )
     }
   }
 

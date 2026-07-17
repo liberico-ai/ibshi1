@@ -91,6 +91,7 @@ model Project {
   ncrs               NonConformanceReport[]
   pieceRateContracts PieceRateContract[]
   purchaseOrders     PurchaseOrder[]
+  purchaseContracts  PurchaseContract[]
   purchaseReqs       PurchaseRequest[]
   safetyIncidents    SafetyIncident[]
   hseManHours        HseManHours[]
@@ -110,6 +111,7 @@ model Project {
   mrbReleases        MrbRelease[]
   settlement         ProjectSettlement?
   quoteGroups        QuoteGroup[]
+  documents          ProjectDocument[]
 
   @@index([status])
   @@index([pmUserId])
@@ -277,11 +279,12 @@ model Vendor {
   notes          String?
   createdAt      DateTime                  @default(now()) @map("created_at")
   updatedAt      DateTime                  @updatedAt @map("updated_at")
-  invoices       Invoice[]
-  millCerts      MillCertificate[]
-  purchaseOrders PurchaseOrder[]
-  subcontracts   SubcontractorContract[]
-  drawdownLines  DrawdownBeneficiaryLine[]
+  invoices          Invoice[]
+  millCerts         MillCertificate[]
+  purchaseOrders    PurchaseOrder[]
+  purchaseContracts PurchaseContract[]
+  subcontracts      SubcontractorContract[]
+  drawdownLines     DrawdownBeneficiaryLine[]
 
   @@index([category])
   @@map("vendors")
@@ -432,6 +435,9 @@ model PurchaseRequest {
   originType  String?               @map("origin_type") // 'ECO' | 'NCR'
   originId    String?               @map("origin_id") // ECO: bomVersionId | NCR: ncr.id
   originLabel String?               @map("origin_label") // mã hiển thị: ECO code / NCR code
+  // Nối luồng Task → PR. UNIQUE ⟹ 1 task sinh tối đa 1 PR (materialize idempotent,
+  // chạy lại không nhân bản). @unique đã tự tạo index → không cần @@index riêng.
+  sourceTaskId String?              @unique @map("source_task_id")
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
   items       PurchaseRequestItem[]
@@ -446,14 +452,23 @@ model PurchaseRequest {
 model PurchaseRequestItem {
   id              String          @id @default(cuid())
   prId            String          @map("pr_id")
-  materialId      String          @map("material_id")
+  // materialId NULLABLE + snapshot field — sao y PurchaseOrderItem.
+  // Lý do: 1307/3017 dòng PR thật trong Task.resultData chưa khớp được mã vật tư
+  // (materialId = null), và vật tư tiêu hao như "dây hàn E71T-1C" chưa có bản ghi
+  // Material. Bắt buộc materialId thì không materialize được đúng ca đang lỗi.
+  materialId      String?         @map("material_id")
+  itemCode        String?         @map("item_code")
+  description     String?         @map("item_description")
+  profile         String?         @map("item_profile")
+  grade           String?         @map("item_grade")
+  unit            String?         @map("item_unit")
   bomItemId       String?         @map("bom_item_id")
   bomVersionId    String?         @map("bom_version_id")
   quantity        Decimal
   requiredDate    DateTime?       @map("required_date")
   specification   String?
   notes           String?
-  material        Material        @relation(fields: [materialId], references: [id])
+  material        Material?       @relation(fields: [materialId], references: [id])
   purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 
   @@index([prId])
@@ -475,6 +490,7 @@ model PurchaseOrder {
   deliveryDate DateTime?           @map("delivery_date")
   paymentTerms String?             @map("payment_terms")
   sourceTaskId String?             @map("source_task_id")
+  contractId   String?             @map("contract_id")
   createdBy    String              @map("created_by")
   notes        String?
   createdAt    DateTime            @default(now()) @map("created_at")
@@ -483,11 +499,45 @@ model PurchaseOrder {
   invoices     Invoice[]
   project      Project?            @relation(fields: [projectId], references: [id])
   vendor       Vendor              @relation(fields: [vendorId], references: [id])
+  contract     PurchaseContract?   @relation(fields: [contractId], references: [id])
 
   @@index([projectId])
   @@index([vendorId])
   @@index([status])
+  @@index([contractId])
   @@map("purchase_orders")
+}
+
+// T1 — Hợp đồng mua (Purchase Contract)
+// Lớp bao bọc PO: 1 HĐ ký với NCC → nhiều PO/đợt giao. HĐ KHÔNG bắt buộc trước PO
+// (giữ nguyên luồng PO hiện tại). File ký lưu ở FileAttachment (FK mềm qua signedFileId).
+model PurchaseContract {
+  id            String          @id @default(cuid())
+  contractCode  String          @unique @map("contract_code") // số HĐ, vd HDMB-2025-HH-095
+  contractType  String          @default("HDMB") @map("contract_type") // HDMB | HDKT | KHAC
+  projectId     String?         @map("project_id")
+  vendorId      String          @map("vendor_id")
+  title         String
+  value         Decimal?
+  currency      String          @default("VND")
+  signedDate    DateTime?       @map("signed_date")
+  effectiveDate DateTime?       @map("effective_date")
+  paymentTerms  String?         @map("payment_terms")
+  deliveryTerms String?         @map("delivery_terms")
+  status        String          @default("DRAFT") // DRAFT | ACTIVE | COMPLETED | CANCELLED
+  signedFileId  String?         @map("signed_file_id") // FK mềm → FileAttachment.id
+  notes         String?
+  createdBy     String          @map("created_by")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  project       Project?        @relation(fields: [projectId], references: [id])
+  vendor        Vendor          @relation(fields: [vendorId], references: [id])
+  orders        PurchaseOrder[]
+
+  @@index([projectId])
+  @@index([vendorId])
+  @@index([status])
+  @@map("purchase_contracts")
 }
 
 model PurchaseOrderItem {
@@ -1561,6 +1611,31 @@ model FileAttachment {
 
   @@index([entityType, entityId])
   @@map("file_attachments")
+}
+
+// ── Sổ tài liệu dự án (Project Document Register) ──
+// Hồ sơ hợp nhất per-project: mã tài liệu / loại / revision / phòng phát hành / file.
+// File thật lưu ở FileAttachment (entityType="ProjectDoc"); ở đây chỉ tham chiếu qua fileAttachmentId.
+model ProjectDocument {
+  id               String   @id @default(cuid())
+  projectId        String   @map("project_id")
+  docCode          String   @map("doc_code") // mã tài liệu (do người dùng đặt)
+  docType          String   @map("doc_type") // BAN_VE | BOM | HDMB | DTTC | QC | KHAC ...
+  revision         String   @default("Rev0")
+  deptCode         String?  @map("dept_code") // phòng phát hành (roleCode/deptCode)
+  title            String
+  fileAttachmentId String?  @map("file_attachment_id") // FK mềm → FileAttachment.id
+  taskId           String?  @map("task_id") // liên kết truy vết công việc (nếu có)
+  status           String   @default("ACTIVE") // ACTIVE | SUPERSEDED | ARCHIVED
+  uploadedBy       String   @map("uploaded_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  project          Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([docType])
+  @@index([deptCode])
+  @@map("project_documents")
 }
 
 model PieceRateContract {

@@ -3,6 +3,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { completeWorkTaskSchema } from '@/lib/schemas'
 import { completeTask } from '@/lib/work-engine'
+import { materializePrSafe } from '@/lib/pr-materialize'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const result = await validateBody(req, completeWorkTaskSchema)
     if (!result.success) return result.response
     await completeTask(id, payload.userId, payload.roleCode, result.data)
+    // Sinh/cập nhật PR (sau FF_PR_MATERIALIZE, mặc định TẮT). Không bao giờ throw.
+    await materializePrSafe(id, payload.userId)
     await logAudit(payload.userId, 'COMPLETE', 'Task', id, {}, getClientIP(req))
     return successResponse({}, 'Đã hoàn thành công việc')
   } catch (err) {

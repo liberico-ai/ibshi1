@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
 import MultiFileUpload, { UploadedFile } from '@/components/MultiFileUpload'
@@ -8,6 +9,7 @@ import { formatCurrency, formatNumber } from '@/lib/utils'
 import { QUOTE_EDIT_ROLES } from '@/lib/constants'
 import { parseQuoteExcel, matchQuoteLinesToPr, computeQuoteCoverage, computeQtyMismatches, type QuoteLine, type PrItem } from '@/lib/quote-parser'
 import { exportQuoteTemplate } from '@/lib/quote-template-export'
+import { toQty, toQtyOrNull } from '@/lib/pr-normalizer'
 
 export interface QuoteFile { id: string; fileName: string; fileUrl: string; kind: 'Báo giá' | 'Hợp đồng' | 'Khác' }
 
@@ -38,6 +40,10 @@ interface Props {
   projectName?: string
   value?: SupplierQuote[]
   onChange: (quotes: SupplierQuote[]) => void
+  // PO đã tạo ở phiên trước (task resultData.poId/poCode — nguồn create-po ghi vào).
+  // Truyền vào để dải "Bước tiếp theo" đúng trạng thái sau khi tải lại trang.
+  existingPoId?: string
+  existingPoCode?: string
 }
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
@@ -54,7 +60,48 @@ function fmt(n: number, cur = 'VND') {
   return cur === 'VND' ? formatCurrency(n) : formatNumber(n) + ` ${cur}`
 }
 
-export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bomPrData, projectCode, projectName, value, onChange }: Props) {
+// ── Dải "Bước tiếp theo" — dẫn hướng R07 (mức 2, hiển thị thuần) ──
+// Tách ra module-level: không dùng hook, tránh lint nested-component/IIFE-in-JSX.
+type StepState = 'done' | 'active' | 'todo'
+
+function StepChip({ n, label, state }: { n: number; label: string; state: StepState }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
+        style={{ background: state === 'done' ? '#22c55e' : state === 'active' ? '#0284c7' : '#cbd5e1' }}
+      >
+        {state === 'done' ? '✓' : n}
+      </span>
+      <span className="text-xs font-semibold" style={{ color: state === 'todo' ? '#94a3b8' : 'var(--text-primary)' }}>{label}</span>
+    </div>
+  )
+}
+
+function NextStepBanner({ hasSelected, hasPo }: { hasSelected: boolean; hasPo: boolean }) {
+  const s1: StepState = hasSelected ? 'done' : 'active'
+  const s2: StepState = hasPo ? 'done' : hasSelected ? 'active' : 'todo'
+  const s3: StepState = hasPo ? 'active' : 'todo'
+  return (
+    <div className="rounded-xl p-3 flex items-center gap-3 flex-wrap" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <span className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>BƯỚC TIẾP THEO</span>
+      <StepChip n={1} label="Nhập & chọn báo giá" state={s1} />
+      <span style={{ color: '#cbd5e1' }}>→</span>
+      <StepChip n={2} label="Tạo đơn đặt hàng (PO)" state={s2} />
+      <span style={{ color: '#cbd5e1' }}>→</span>
+      <StepChip n={3} label="Theo dõi đơn đặt hàng" state={s3} />
+      {hasPo ? (
+        <Link href="/dashboard/warehouse/purchase-orders" className="text-xs underline ml-auto" style={{ color: '#0369a1' }}>Xem đơn đặt hàng →</Link>
+      ) : hasSelected ? (
+        <span className="text-xs ml-auto" style={{ color: '#0284c7' }}>Bấm “Tạo đơn đặt hàng (PO)” bên dưới để tiếp tục</span>
+      ) : (
+        <span className="text-xs ml-auto" style={{ color: '#94a3b8' }}>Chọn NCC trước, rồi tạo đơn đặt hàng</span>
+      )}
+    </div>
+  )
+}
+
+export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bomPrData, projectCode, projectName, value, onChange, existingPoId, existingPoCode }: Props) {
   const roleCode = useAuthStore(s => s.user?.roleCode || '')
   const canEditQuote = (QUOTE_EDIT_ROLES as readonly string[]).includes(roleCode)
   const isEditable = isEditableProp && canEditQuote
@@ -66,7 +113,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   const [newVendor, setNewVendor] = useState({ name: '', vendorCode: '', category: 'NCC', contact: '', phone: '' })
   const [creatingVendor, setCreatingVendor] = useState(false)
   const [reasonError, setReasonError] = useState<string | null>(null)
-  const [poState, setPoState] = useState<{ loading: boolean; poId?: string; poCode?: string; error?: string }>({ loading: false })
+  // Khởi tạo từ PO đã tạo trước đó → dải "Bước tiếp theo" đúng ngay sau khi tải lại trang.
+  const [poState, setPoState] = useState<{ loading: boolean; poId?: string; poCode?: string; error?: string }>({ loading: false, poId: existingPoId, poCode: existingPoCode })
   const [prSearch, setPrSearch] = useState('')
   const [showAllPr, setShowAllPr] = useState(false)
   const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set())
@@ -242,10 +290,13 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       profile: String(it.profile || ''),
       grade: String(it.grade || ''),
       unit: String(it.unit || it.uom || ''),
-      quantity: Number(it.quantity || it.qty || 0),
-      neededQty: typeof it.neededQty === 'number' ? it.neededQty : undefined,
-      availableQty: typeof it.availableQty === 'number' ? it.availableQty : undefined,
-      needToBuyQty: typeof it.needToBuyQty === 'number' ? it.needToBuyQty : undefined,
+      // toQty: số trong resultData có thể lưu dạng CHUỖI ({"needToBuyQty":"1"}). Kiểm
+      // `typeof === 'number'` như trước khiến các cột tồn/cần mua hiện TRỐNG với dòng đó.
+      // Đây là điểm parse DUY NHẤT — mọi consumer bên dưới đều nhận parsedPrItems.
+      quantity: toQty(it.quantity) || toQty(it.qty),
+      neededQty: toQtyOrNull(it.neededQty) ?? undefined,
+      availableQty: toQtyOrNull(it.availableQty) ?? undefined,
+      needToBuyQty: toQtyOrNull(it.needToBuyQty) ?? undefined,
       requiredDate: typeof it.requiredDate === 'string' ? it.requiredDate : undefined,
     }))
   }, [bomPrData]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -438,6 +489,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     const chosenNotMin = chosen && minAmount > 0 && chosenAmount > minAmount
     return (
       <div className="space-y-4">
+        <NextStepBanner hasSelected={quotes.some(q => q.selected)} hasPo={!!poState.poCode} />
         {prReferenceSection}
 
         {quotes.length === 0 && (
@@ -557,6 +609,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   // ── EDITABLE MODE ──
   return (
     <div className="space-y-4">
+      {/* Dải "Bước tiếp theo" — dẫn hướng R07 (mức 2) */}
+      <NextStepBanner hasSelected={quotes.some(q => q.selected)} hasPo={!!poState.poCode} />
       {prReferenceSection}
 
       {/* B: Supplier rows */}

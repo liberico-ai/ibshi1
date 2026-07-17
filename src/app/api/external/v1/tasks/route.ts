@@ -57,10 +57,27 @@ export async function GET(req: NextRequest) {
     : []
   const nameById = new Map(users.map(u => [u.id, u.fullName]))
 
+  const taskIds = tasks.map(t => t.id)
+  const allEvidence = taskIds.length
+    ? await prisma.fileAttachment.findMany({
+        where: { entityType: 'TaskEvidence', entityId: { in: taskIds.map(id => `${id}_evidence`) } },
+        select: { id: true, fileName: true, fileSize: true, mimeType: true, entityId: true },
+        orderBy: { createdAt: 'asc' },
+      })
+    : []
+  const evidenceByTask = new Map<string, typeof allEvidence>()
+  for (const f of allEvidence) {
+    const tid = f.entityId.replace(/_evidence$/, '')
+    const arr = evidenceByTask.get(tid) || []
+    arr.push(f)
+    evidenceByTask.set(tid, arr)
+  }
+
   const data = tasks.map(task => {
     const rd = (task.resultData && typeof task.resultData === 'object') ? (task.resultData as Record<string, unknown>) : {}
     const briefing = (rd.briefing && typeof rd.briefing === 'object') ? (rd.briefing as Record<string, unknown>) : {}
     const decision = typeof briefing.decision === 'string' ? briefing.decision : ''
+    const files = evidenceByTask.get(task.id) || []
     return {
       taskId: task.id,
       externalRef: task.externalRef,
@@ -80,6 +97,13 @@ export async function GET(req: NextRequest) {
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       completedAt: task.completedAt || null,
+      evidenceFiles: files.map(f => ({
+        fileId: f.id,
+        fileName: f.fileName,
+        fileSize: f.fileSize,
+        mimeType: f.mimeType,
+        downloadUrl: `/api/external/v1/files/${f.id}`,
+      })),
     }
   })
 
