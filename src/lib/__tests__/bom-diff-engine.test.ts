@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { prismaMock } from '@/lib/__mocks__/db'
 
 import { diffBomVersions, computeImpact, computeNormLines } from '@/lib/bom-diff-engine'
@@ -336,6 +336,35 @@ describe('computeImpact', () => {
     expect(result.summary.canUseStock).toBe(0)
     expect(result.summary.needPOAlert).toBe(0)
     expect(result.summary.needNCR).toBe(0)
+  })
+
+  // ── Finding D (không im lặng): baseline trùng chính version → warn trước khi trả rỗng ──
+  // Xảy ra khi gọi computeImpact SAU activate mà không truyền baselineVersionId (version đã là ACTIVE
+  // → tự-so-chính-nó → impact rỗng). Trước: im lặng "0 thay đổi". Nay: console.warn nhắc truyền baseline.
+  it('Finding D: baseline === version (không truyền baselineVersionId) → console.warn + impact rỗng', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    prismaMock.bomVersion.findUniqueOrThrow.mockResolvedValue(versionPayload as never)
+    // version 'v-draft' đang là ACTIVE → findFirst ACTIVE trả về chính nó
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'v-draft' } as never)
+
+    const result = await computeImpact('v-draft')
+
+    expect(result.lines).toHaveLength(0)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('baseline trùng chính version'))
+    warnSpy.mockRestore()
+  })
+
+  it('Finding D: baselineVersionId tường minh (khác version) → KHÔNG warn', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    prismaMock.bomVersion.findUniqueOrThrow.mockResolvedValue(versionPayload as never)
+    prismaMock.bomItem.findMany
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([] as never)
+
+    await computeImpact('v-draft', 'v-baseline') // baseline khác version → hợp lệ
+
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 })
 

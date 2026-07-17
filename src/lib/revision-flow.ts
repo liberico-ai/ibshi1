@@ -165,6 +165,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
   const { updated, cascadeParams, reQcCount } = await prisma.$transaction(async (tx) => {
     const version = await tx.bomVersion.findUnique({
       where: { id: bomVersionId },
+      include: { bom: { select: { projectId: true } } },
     })
     if (!version) {
       throw new Error('BomVersion không tồn tại')
@@ -221,7 +222,9 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       params = {
         oldVersionId: oldVersion.id,
         newVersionId: bomVersionId,
-        projectId: eco?.projectId || version.bomId,
+        // Finding B: KHÔNG dùng version.bomId làm projectId (là BillOfMaterial id, không phải project!).
+        // Lấy projectId THẬT từ bom → cascade không còn FK-fail + mất âm thầm khi revision không gắn ECO.
+        projectId: eco?.projectId || version.bom.projectId,
         ecoCode: eco?.ecoCode || `BOM-v${version.versionNo}`,
         userId,
         bomId: version.bomId,
@@ -249,7 +252,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
         const eco = version.ecoId
           ? await tx.engineeringChangeOrder.findUnique({ where: { id: version.ecoId }, select: { ecoCode: true, projectId: true } })
           : null
-        const projectId = eco?.projectId || version.bomId
+        const projectId = eco?.projectId || version.bom.projectId // Finding B: projectId thật từ bom, không phải bomId
         const ecoLabel = eco?.ecoCode || `BOM-v${version.versionNo}`
         const { count } = await tx.workOrder.updateMany({
           where: {
@@ -268,7 +271,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
 
   if (cascadeParams) {
     try {
-      await runCascade(
+      const cascadeResult = await runCascade(
         cascadeParams.oldVersionId,
         cascadeParams.newVersionId,
         cascadeParams.projectId,
@@ -276,8 +279,18 @@ export async function approveRevision(bomVersionId: string, userId: string) {
         cascadeParams.userId,
         cascadeParams.bomId,
       )
+      // Finding B: cascade lẽ ra chạy (có thay đổi BOM) mà ra 0 task → CẢNH BÁO, không im lặng.
+      if (!cascadeResult.skippedNoChanges && cascadeResult.taskIds.length === 0) {
+        console.warn(
+          `[approveRevision] ⚠️ Cascade ${cascadeParams.ecoCode} (project ${cascadeParams.projectId}): có thay đổi BOM nhưng KHÔNG sinh task rework nào — kiểm classifyLine/impact.`,
+        )
+      }
     } catch (err) {
-      console.error('[approveRevision] Cascade failed (non-blocking):', err)
+      // Finding B: trước nuốt âm thầm ("non-blocking"). Nay projectId đã đúng → throw là lỗi THẬT, log rõ để không mất cascade lặng lẽ.
+      console.error(
+        `[approveRevision] ❌ Cascade THẤT BẠI — ${cascadeParams.ecoCode} (project ${cascadeParams.projectId}): revision KHÔNG lan sang phòng khác. Cần xử lý:`,
+        err,
+      )
     }
   }
 

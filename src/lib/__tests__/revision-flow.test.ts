@@ -32,6 +32,7 @@ const draftVersion = {
   versionNo: 3,
   status: 'DRAFT',
   ecoId: 'eco-1',
+  bom: { projectId: 'proj-1' }, // Finding B: approveRevision include bom để lấy projectId THẬT (không dùng bomId)
 }
 
 const approvedEco = {
@@ -150,5 +151,49 @@ describe('approveRevision — gate 2C (#V2)', () => {
 
     const result = await approveRevision('bv-new', 'user-1')
     expect(result.status).toBe('ACTIVE')
+  })
+
+  // ── Finding B (regression lock): revision KHÔNG gắn ECO ──
+  // Bug gốc: projectId = eco?.projectId || version.bomId → khi ecoId null, dùng bomId (BillOfMaterial id)
+  // làm projectId → createTask FK-fail → try/catch nuốt → cascade + re-QC MẤT ÂM THẦM.
+  // Fix: || version.bom.projectId. Test này khoá: runCascade phải nhận projectId THẬT ('proj-1'), KHÔNG phải 'bom-1'.
+  it('Finding B: version KHÔNG ECO → runCascade nhận projectId THẬT (proj-1), KHÔNG phải bomId', async () => {
+    const noEcoVersion = { ...draftVersion, ecoId: null }
+    prismaMock.bomVersion.findUnique.mockResolvedValue(noEcoVersion as never)
+    prismaMock.bomVersion.updateMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.bomVersion.update.mockResolvedValue({ ...noEcoVersion, status: 'ACTIVE' } as never)
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'bv-old' } as never)
+    prismaMock.bomItem.findMany.mockResolvedValue([] as never)
+    mockRunCascade.mockResolvedValue({ taskIds: ['t1'], groups: [{}], skippedNoChanges: false })
+
+    await approveRevision('bv-new', 'user-1')
+
+    expect(mockRunCascade).toHaveBeenCalledTimes(1)
+    // args = [oldVersionId, newVersionId, projectId, ecoCode, userId, bomId]
+    const args = mockRunCascade.mock.calls[0]
+    expect(args[2]).toBe('proj-1')       // projectId THẬT từ bom (regression lock Finding B)
+    expect(args[2]).not.toBe('bom-1')    // KHÔNG được là bomId (bug cũ)
+    expect(args[3]).toBe('BOM-v3')       // ecoCode fallback khi không ECO
+    expect(args[5]).toBe('bom-1')        // bomId vẫn đúng ở vị trí bomId (arg cuối)
+    // ECO gate KHÔNG chạy (ecoId null)
+    expect(prismaMock.engineeringChangeOrder.findUnique).not.toHaveBeenCalled()
+  })
+
+  // ── Finding B (báo lỗi, không im lặng): cascade lẽ ra chạy mà ra 0 task → console.warn ──
+  it('Finding B: cascade có thay đổi nhưng 0 task → console.warn (không im lặng)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    prismaMock.bomVersion.findUnique.mockResolvedValue(draftVersion as never)
+    prismaMock.engineeringChangeOrder.findUnique.mockResolvedValue(approvedEco as never)
+    prismaMock.bomVersion.updateMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.bomVersion.update.mockResolvedValue({ ...draftVersion, status: 'ACTIVE' } as never)
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'bv-old' } as never)
+    prismaMock.bomItem.findMany.mockResolvedValue([] as never)
+    // runCascade trả 0 task nhưng KHÔNG phải skippedNoChanges → bất thường → phải cảnh báo
+    mockRunCascade.mockResolvedValue({ taskIds: [], groups: [], skippedNoChanges: false })
+
+    await approveRevision('bv-new', 'user-1')
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('KHÔNG sinh task rework'))
+    warnSpy.mockRestore()
   })
 })

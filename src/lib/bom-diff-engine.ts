@@ -326,6 +326,13 @@ export async function computeImpact(versionId: string, baselineVersionId?: strin
       })
 
   if (!baseline || baseline.id === versionId) {
+    // Finding D: baseline trùng chính version (thường do gọi computeImpact SAU khi version đã ACTIVE
+    // mà không truyền baselineVersionId) → impact rỗng. Cảnh báo để không "im lặng 0 thay đổi".
+    if (baseline && baseline.id === versionId) {
+      console.warn(
+        `[computeImpact] ⚠️ baseline trùng chính version ${versionId} — impact rỗng. Truyền baselineVersionId tường minh khi gọi sau activate (vd runCascade dùng oldVersionId).`,
+      )
+    }
     return {
       versionId, projectId: version.bom.projectId,
       lines: [], summary: { totalChanges: 0, needPurchase: 0, canUseStock: 0, needPOAlert: 0, needNCR: 0 },
