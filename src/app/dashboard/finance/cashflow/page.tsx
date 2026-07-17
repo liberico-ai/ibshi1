@@ -328,39 +328,52 @@ export default function CashflowPage() {
                     </table>
                   </div>
 
-                  {/* Tổng dự toán KTKH từ form ESTIMATE (nếu có) */}
-                  {dttc.estimate && Object.keys(dttc.estimate).length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
-                        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Tổng dự toán (KTKH)</p>
-                        <p className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
-                          {fmt(Number(dttc.estimate.totalEstimate || 0))} ₫
-                        </p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
-                        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Vật tư / Nhân công</p>
-                        <p className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
-                          {fmt(Number(dttc.estimate.totalMaterial || 0))} / {fmt(Number(dttc.estimate.totalLabor || 0))}
-                        </p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
-                        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Dịch vụ / Chi phí chung</p>
-                        <p className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
-                          {fmt(Number(dttc.estimate.totalService || 0))} / {fmt(Number(dttc.estimate.totalOverhead || 0))}
-                        </p>
-                      </div>
-                      {planDetails?.contractValue != null && (
-                        <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
-                          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Lợi nhuận dự kiến (HĐ − dự toán)</p>
-                          <p className="text-base font-bold font-mono text-green-600">
-                            {fmt(Number(planDetails.contractValue || 0) - Number(dttc.estimate.totalEstimate || 0))} ₫
-                          </p>
+                  {/* F1 fix: Tổng dự toán + Lợi nhuận lấy CÙNG NGUỒN Budget (nhất quán với bảng 4 nhóm trên).
+                      KHÔNG dùng estimate.totalEstimate (form thô — thường = 0 → lợi nhuận ảo = HĐ − 0, sai lệch nguy hiểm).
+                      Chỉ tính lợi nhuận khi có đủ cả dự toán (Budget>0) lẫn giá trị HĐ. */}
+                  {(() => {
+                    const budgetTotal = (dttc.budget || []).reduce((s: number, b: any) => s + Number(b.planned || 0), 0)
+                    const hasBudget = budgetTotal > 0
+                    const contractVal = Number(planDetails?.contractValue || 0)
+                    const hasEstimateForm = dttc.estimate && Object.keys(dttc.estimate).length > 0
+                    return (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                            <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Tổng dự toán (Ngân sách 4 nhóm)</p>
+                            <p className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+                              {hasBudget ? `${fmt(budgetTotal)} ₫` : '— chưa có'}
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                            <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Giá trị Hợp đồng</p>
+                            <p className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+                              {contractVal > 0 ? `${fmt(contractVal)} ₫` : '— chưa nhập'}
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                            <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Lợi nhuận dự kiến (HĐ − dự toán)</p>
+                            {hasBudget && contractVal > 0 ? (
+                              <p className="text-base font-bold font-mono" style={{ color: (contractVal - budgetTotal) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                {fmt(contractVal - budgetTotal)} ₫
+                              </p>
+                            ) : (
+                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chưa đủ dữ liệu (cần cả dự toán + giá trị HĐ)</p>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm px-1" style={{ color: 'var(--text-muted)' }}>Chưa có dự toán KTKH (form ESTIMATE) cho dự án này.</p>
-                  )}
+                        {/* F3 mitigation: form dự toán CÓ nhưng Budget chưa có → nói rõ để không hiểu nhầm là "chưa dự toán" */}
+                        {!hasBudget && hasEstimateForm && (
+                          <p className="text-xs px-1 mt-2" style={{ color: '#b45309' }}>
+                            ⚠️ Dự án đã có dự toán (form) nhưng ngân sách 4 nhóm chưa được đồng bộ — liên hệ KTKH hoàn tất/duyệt dự toán để hiện đủ số.
+                          </p>
+                        )}
+                        {!hasBudget && !hasEstimateForm && (
+                          <p className="text-sm px-1 mt-2" style={{ color: 'var(--text-muted)' }}>Chưa có dự toán KTKH cho dự án này.</p>
+                        )}
+                      </>
+                    )
+                  })()}
                 </div>
               )}
             </div>
