@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAuthStore, apiFetch } from '@/hooks/useAuth'
 import { ROLES, MENU_ITEMS, MENU_GROUPS, ROLE_GROUP_PRIORITY, HIDDEN_MENU_KEYS, PAGE_ACCESS } from '@/lib/constants'
+import { resolvePostLoginPath } from '@/lib/mobile-nav'
 import NotificationBell from '@/components/NotificationBell'
 import {
   LayoutDashboard, FolderKanban, ClipboardList, Users, Package, Factory, ShieldCheck,
@@ -44,6 +45,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.push('/login')
     }
   }, [ready, isAuthenticated, router])
+
+  // Xưởng/QC mở dashboard trên điện thoại (kể cả khi đã đăng nhập sẵn) → bản mobile /m.
+  // resolvePostLoginPath chỉ trả '/m' khi ĐỦ cả 2: role Xưởng/QC + thiết bị điện thoại,
+  // nên trên máy tính và với phòng ban khác thì không đụng gì.
+  useEffect(() => {
+    if (ready && isAuthenticated && user && resolvePostLoginPath(user.roleCode) === '/m') {
+      router.replace('/m')
+    }
+  }, [ready, isAuthenticated, user, router])
 
   // Fetch pending task count for current user
   useEffect(() => {
