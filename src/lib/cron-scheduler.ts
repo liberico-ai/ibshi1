@@ -1,6 +1,7 @@
 import cron from 'node-cron'
 import { runDailyDigest, runCustomerSync } from '@/lib/cron-jobs'
 import { checkDeadlines } from '@/lib/task-engine'
+import { purgeOldLogs } from '@/lib/log-retention'
 
 let initialized = false
 
@@ -40,9 +41,18 @@ export function startScheduler() {
         .catch(err => console.error('[CronScheduler] Deadline check failed:', err))
     }, { timezone: 'Asia/Ho_Chi_Minh' })
 
+    // Dọn log quá hạn: 03:00 mỗi ngày (giờ VN). Xóa Nhật ký + Error Logs cũ hơn ngưỡng
+    // (SystemConfig 'log_retention_days', mặc định 90). Xóa theo batch nên an toàn với bảng lớn.
+    const jobLogRetention = cron.schedule('0 3 * * *', () => {
+      console.log('[CronScheduler] 03:00 VN — dọn log quá hạn (retention)')
+      purgeOldLogs()
+        .then(r => console.log(`[CronScheduler] Log retention: xóa ${r.auditLogs} audit + ${r.errorLogs} error (giữ ${r.retentionDays} ngày)`))
+        .catch(err => console.error('[CronScheduler] Log retention failed:', err))
+    }, { timezone: 'Asia/Ho_Chi_Minh' })
+
     initialized = true
     console.log('[CronScheduler] Started successfully')
-    console.log('[CronScheduler] Jobs registered:', { 'daily8am': !!jobDaily, 'sync15min': !!jobSync, 'deadline805am': !!jobDeadline })
+    console.log('[CronScheduler] Jobs registered:', { 'daily8am': !!jobDaily, 'sync15min': !!jobSync, 'deadline805am': !!jobDeadline, 'logRetention3am': !!jobLogRetention })
   } catch (err) {
     console.error('[CronScheduler] Failed to initialize:', err)
   }
