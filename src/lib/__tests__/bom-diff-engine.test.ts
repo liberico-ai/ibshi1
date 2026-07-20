@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { Prisma } from '@prisma/client'
 import { prismaMock } from '@/lib/__mocks__/db'
 
 import { diffBomVersions, computeImpact, computeNormLines } from '@/lib/bom-diff-engine'
@@ -203,15 +204,25 @@ describe('computeImpact', () => {
     bom: { projectId: 'proj-1', id: 'bom-1' },
   }
 
-  function mockProcurement(opts: { prQty?: number; poQty?: number; stockQty?: number } = {}) {
+  function mockProcurement(opts: {
+    prQty?: number; poQty?: number; stockQty?: number
+    // issued: lượng đã cấp phát ra SX. woStatus: trạng thái WO nhận cấp phát
+    // (COMPLETED/QC_PASSED ⟹ đã chế tạo → FABRICATED).
+    issuedQty?: number; woStatus?: string
+  } = {}) {
     prismaMock.purchaseRequestItem.findMany.mockResolvedValue(
-      opts.prQty ? [{ quantity: opts.prQty }] as never : [] as never
+      opts.prQty ? [{ quantity: new Prisma.Decimal(opts.prQty) }] as never : [] as never
     )
     prismaMock.purchaseOrderItem.findMany.mockResolvedValue(
-      opts.poQty ? [{ quantity: opts.poQty }] as never : [] as never
+      opts.poQty ? [{ quantity: new Prisma.Decimal(opts.poQty) }] as never : [] as never
     )
     prismaMock.material.findUnique.mockResolvedValue(
-      { currentStock: opts.stockQty ?? 0 } as never
+      { currentStock: new Prisma.Decimal(opts.stockQty ?? 0) } as never
+    )
+    prismaMock.materialIssue.findMany.mockResolvedValue(
+      opts.issuedQty
+        ? [{ quantity: new Prisma.Decimal(opts.issuedQty), workOrder: { status: opts.woStatus ?? 'IN_PROGRESS' } }] as never
+        : [] as never
     )
   }
 
@@ -322,6 +333,88 @@ describe('computeImpact', () => {
     expect(result.lines).toHaveLength(1)
     expect(result.lines[0].suggestedActionCode).toBe('NCR')
     expect(result.summary.needNCR).toBe(1)
+  })
+
+  // ── Finding E: material ĐÃ XUẤT cho SX / ĐÃ CHẾ TẠO → status ISSUED/FABRICATED → NCR ──
+  // Trước: determineProcurementStatus tối đa chỉ tới IN_STOCK ⟹ nhánh NCR "đã cấp phát/chế tạo"
+  // là code chết. Nay đọc MaterialIssue (→ WorkOrder.status) để bật đúng mức nặng nhất.
+  it('Finding E: SPEC_CHANGED khi VT đã xuất cho SX (ISSUED) → NCR', async () => {
+    prismaMock.bomVersion.findUniqueOrThrow.mockResolvedValue(versionPayload as never)
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'v-active' } as never)
+
+    const oldItem = makeBomDbItem({ id: 'o1', bomVersionId: 'v-active', profile: 'H200x200', grade: 'Q345B', quantity: 80 })
+    const newItem = makeBomDbItem({ id: 'n1', bomVersionId: 'v-draft', profile: 'H300x300', grade: 'Q235B', quantity: 80 })
+    prismaMock.bomItem.findMany
+      .mockResolvedValueOnce([oldItem] as never)
+      .mockResolvedValueOnce([newItem] as never)
+
+    // Đã cấp 80 ra SX, WO còn IN_PROGRESS (chưa chế tạo xong) → ISSUED. KHÔNG có tồn kho/PO.
+    mockProcurement({ issuedQty: 80, woStatus: 'IN_PROGRESS' })
+
+    const result = await computeImpact('v-draft')
+
+    expect(result.lines).toHaveLength(1)
+    expect(result.lines[0].procurementStatus).toBe('ISSUED')
+    expect(result.lines[0].suggestedActionCode).toBe('NCR')
+    expect(result.summary.needNCR).toBe(1)
+  })
+
+  it('Finding E: REMOVED khi VT đã xuất cho SX (ISSUED) → NCR (không phải RETURN_STOCK)', async () => {
+    prismaMock.bomVersion.findUniqueOrThrow.mockResolvedValue(versionPayload as never)
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'v-active' } as never)
+
+    const oldItem = makeBomDbItem({ id: 'o1', bomVersionId: 'v-active', quantity: 40 })
+    prismaMock.bomItem.findMany
+      .mockResolvedValueOnce([oldItem] as never)
+      .mockResolvedValueOnce([] as never)
+
+    mockProcurement({ issuedQty: 40, woStatus: 'IN_PROGRESS' })
+
+    const result = await computeImpact('v-draft')
+
+    expect(result.lines).toHaveLength(1)
+    expect(result.lines[0].procurementStatus).toBe('ISSUED')
+    expect(result.lines[0].suggestedActionCode).toBe('NCR')
+  })
+
+  it('Finding E: SPEC_CHANGED khi VT đã CHẾ TẠO (WO COMPLETED → FABRICATED) → NCR', async () => {
+    prismaMock.bomVersion.findUniqueOrThrow.mockResolvedValue(versionPayload as never)
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'v-active' } as never)
+
+    const oldItem = makeBomDbItem({ id: 'o1', bomVersionId: 'v-active', profile: 'H200x200', grade: 'Q345B', quantity: 80 })
+    const newItem = makeBomDbItem({ id: 'n1', bomVersionId: 'v-draft', profile: 'H300x300', grade: 'Q235B', quantity: 80 })
+    prismaMock.bomItem.findMany
+      .mockResolvedValueOnce([oldItem] as never)
+      .mockResolvedValueOnce([newItem] as never)
+
+    // WO đã COMPLETED → piece đã chế tạo → mức nặng nhất FABRICATED.
+    mockProcurement({ issuedQty: 80, woStatus: 'COMPLETED' })
+
+    const result = await computeImpact('v-draft')
+
+    expect(result.lines).toHaveLength(1)
+    expect(result.lines[0].procurementStatus).toBe('FABRICATED')
+    expect(result.lines[0].suggestedActionCode).toBe('NCR')
+    expect(result.summary.needNCR).toBe(1)
+  })
+
+  it('Finding E: ISSUED nặng hơn IN_STOCK — có cả tồn kho lẫn đã xuất SX → status = ISSUED', async () => {
+    prismaMock.bomVersion.findUniqueOrThrow.mockResolvedValue(versionPayload as never)
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'v-active' } as never)
+
+    const oldItem = makeBomDbItem({ id: 'o1', bomVersionId: 'v-active', quantity: 25 })
+    prismaMock.bomItem.findMany
+      .mockResolvedValueOnce([oldItem] as never)
+      .mockResolvedValueOnce([] as never)
+
+    // poQty>0 & stockQty>0 (IN_STOCK) NHƯNG cũng đã xuất SX → phải leo lên ISSUED.
+    mockProcurement({ poQty: 25, stockQty: 25, issuedQty: 10, woStatus: 'IN_PROGRESS' })
+
+    const result = await computeImpact('v-draft')
+
+    expect(result.lines).toHaveLength(1)
+    expect(result.lines[0].procurementStatus).toBe('ISSUED')
+    expect(result.lines[0].suggestedActionCode).toBe('NCR')
   })
 
   it('no active version → returns empty impact', async () => {

@@ -17,6 +17,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   EQUIPMENT: 'Thiết bị', OVERHEAD: 'Chi phí chung', TAX: 'Thuế', OTHER: 'Khác',
 }
 
+// Nhãn 4 nhóm Budget DTTC (dự toán tài chính KTKH)
+const BUDGET_GROUP_LABELS: Record<string, string> = {
+  MATERIAL: 'Vật tư', LABOR: 'Nhân công', SERVICE: 'Dịch vụ', OVERHEAD: 'Chi phí chung',
+}
+
 export default function CashflowPage() {
   const [activeTab, setActiveTab] = useState<'ENTRIES' | 'PLAN'>('ENTRIES')
 
@@ -28,19 +33,24 @@ export default function CashflowPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
 
-  // Plan tab specific state
-  const [plans, setPlans] = useState<any[]>([])
-  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
+  // Plan tab specific state — selector giờ dựa trên DANH SÁCH DỰ ÁN (mọi dự án),
+  // KHÔNG còn dựa trên danh sách plan (F2: xem DTTC kể cả dự án chưa có kế hoạch dòng tiền).
+  const [projects, setProjects] = useState<any[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
   const [planDetails, setPlanDetails] = useState<any>(null)
+  const [dttc, setDttc] = useState<any>(null) // Dự toán tài chính KTKH (read-only)
 
-  useEffect(() => { 
-    if (activeTab === 'ENTRIES') loadData() 
-    else loadPlans()
+  useEffect(() => {
+    if (activeTab === 'ENTRIES') loadData()
+    else loadProjects()
   }, [month, year, activeTab])
 
   useEffect(() => {
-    if (activeTab === 'PLAN' && selectedPlanId) loadPlanDetails(selectedPlanId)
-  }, [selectedPlanId, activeTab])
+    if (activeTab === 'PLAN' && selectedProjectId) {
+      loadPlanDetails(selectedProjectId)
+      loadDttc(selectedProjectId)
+    }
+  }, [selectedProjectId, activeTab])
 
   async function loadData() {
     setLoading(true)
@@ -49,21 +59,30 @@ export default function CashflowPage() {
     setLoading(false)
   }
 
-  async function loadPlans(defaultPid?: string) {
-    const res = await apiFetch('/api/finance/cashflow/plan')
+  // Danh sách MỌI dự án (chưa CLOSED) cho selector. /api/projects/options chỉ yêu cầu
+  // đăng nhập (KHÔNG RLS, KHÔNG gate role) nên Kế toán (R08) đọc được đầy đủ mọi dự án.
+  async function loadProjects(defaultPid?: string) {
+    const res = await apiFetch('/api/projects/options')
     if (res.ok) {
-      setPlans(res.plans || [])
+      setProjects(res.projects || [])
       if (defaultPid) {
-        setSelectedPlanId(defaultPid)
-      } else if (res.plans?.length > 0 && !selectedPlanId) {
-        setSelectedPlanId(res.plans[0].projectId)
+        setSelectedProjectId(defaultPid)
+      } else if (res.projects?.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(res.projects[0].id)
       }
     }
   }
 
   async function loadPlanDetails(projectId: string) {
+    setPlanDetails(null) // reset: dự án có thể CHƯA có plan → res.plan = null
     const res = await apiFetch(`/api/finance/cashflow/plan?projectId=${projectId}`)
     if (res.ok) setPlanDetails(res.plan)
+  }
+
+  async function loadDttc(projectId: string) {
+    setDttc(null)
+    const res = await apiFetch(`/api/finance/cashflow/estimate?projectId=${projectId}`)
+    if (res.ok) setDttc({ estimate: res.estimate, budget: res.budget })
   }
 
   const fmt = (v: number) => formatNumber(v)
@@ -187,22 +206,27 @@ export default function CashflowPage() {
 
       {activeTab === 'PLAN' && (
         <div className="space-y-6 animate-fade-in">
-          <FinancePlanUploader onUploaded={(pid) => { loadPlans(pid); loadPlanDetails(pid) }} />
+          <FinancePlanUploader onUploaded={(pid) => { loadProjects(pid); loadPlanDetails(pid); loadDttc(pid) }} />
           
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Dashboard Phương án Dự án</h2>
-              {plans.length > 0 && (
-                <select className="input max-w-xs" value={selectedPlanId} onChange={e => setSelectedPlanId(e.target.value)}>
-                  {plans.map(p => (
-                   <option key={p.project.id} value={p.projectId}>{p.project.projectCode} - {p.project.projectName}</option>
+              {projects.length > 0 && (
+                <select className="input max-w-xs" value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}>
+                  {projects.map(p => (
+                   <option key={p.id} value={p.id}>{p.projectCode} - {p.projectName}</option>
                   ))}
                 </select>
               )}
             </div>
 
             {!planDetails ? (
-              <p className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>Chưa có dữ liệu kế hoạch dòng tiền. Hãy Upload file Excel để hệ thống tự động bóc tách.</p>
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Dự án chưa có kế hoạch dòng tiền (ProjectFinancePlan).</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Dùng form <span className="font-semibold" style={{ color: 'var(--accent)' }}>Import Phương án Tài chính</span> phía trên để tạo mới — Dự toán tài chính (KTKH) bên dưới vẫn xem được.
+                </p>
+              </div>
             ) : (
               <div className="space-y-6">
                 <div className="grid grid-cols-3 gap-4">
@@ -264,6 +288,106 @@ export default function CashflowPage() {
               </div>
             )}
           </div>
+
+          {/* Dự toán tài chính (KTKH) — read-only, nguồn: form ESTIMATE (P1.2/P2.1A) + Budget.
+              Hiện với MỌI dự án đã chọn, kể cả chưa có ProjectFinancePlan (F2). */}
+          {selectedProjectId && (
+            <div className="card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Dự toán tài chính (KTKH)</h2>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chỉ xem — nguồn từ dự toán KTKH (P1.2/P2.1A) và ngân sách dự án</p>
+                </div>
+                <span className="badge bg-gray-100 text-gray-600">Read-only</span>
+              </div>
+
+              {!dttc ? (
+                <p className="text-center py-6 text-sm" style={{ color: 'var(--text-muted)' }}>Đang tải dự toán...</p>
+              ) : (
+                <div className="space-y-5">
+                  {/* Bảng 4 nhóm Budget */}
+                  <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border-light)' }}>
+                    <table className="data-table text-xs">
+                      <thead>
+                        <tr>
+                          <th>Nhóm</th>
+                          <th className="text-right">Dự toán (planned)</th>
+                          <th className="text-right">Đã cam kết (committed)</th>
+                          <th className="text-right">Thực chi (actual)</th>
+                          <th>Ghi chú</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(dttc.budget || []).map((b: any) => (
+                          <tr key={b.category}>
+                            <td className="font-semibold">{BUDGET_GROUP_LABELS[b.category] || b.category}</td>
+                            <td className="text-right font-mono font-medium">{fmt(Number(b.planned || 0))}</td>
+                            <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{fmt(Number(b.committed || 0))}</td>
+                            <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{fmt(Number(b.actual || 0))}</td>
+                            <td className="text-xs truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }}>{b.notes || '-'}</td>
+                          </tr>
+                        ))}
+                        <tr className="font-bold" style={{ background: 'var(--bg-primary)' }}>
+                          <td>Tổng cộng</td>
+                          <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.planned || 0), 0))}</td>
+                          <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.committed || 0), 0))}</td>
+                          <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.actual || 0), 0))}</td>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* F1 fix: Tổng dự toán + Lợi nhuận lấy CÙNG NGUỒN Budget (nhất quán với bảng 4 nhóm trên).
+                      KHÔNG dùng estimate.totalEstimate (form thô — thường = 0 → lợi nhuận ảo = HĐ − 0, sai lệch nguy hiểm).
+                      Chỉ tính lợi nhuận khi có đủ cả dự toán (Budget>0) lẫn giá trị HĐ. */}
+                  {(() => {
+                    const budgetTotal = (dttc.budget || []).reduce((s: number, b: any) => s + Number(b.planned || 0), 0)
+                    const hasBudget = budgetTotal > 0
+                    const contractVal = Number(planDetails?.contractValue || 0)
+                    const hasEstimateForm = dttc.estimate && Object.keys(dttc.estimate).length > 0
+                    return (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                            <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Tổng dự toán (Ngân sách 4 nhóm)</p>
+                            <p className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+                              {hasBudget ? `${fmt(budgetTotal)} ₫` : '— chưa có'}
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                            <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Giá trị Hợp đồng</p>
+                            <p className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+                              {contractVal > 0 ? `${fmt(contractVal)} ₫` : '— chưa nhập'}
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-light)]">
+                            <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Lợi nhuận dự kiến (HĐ − dự toán)</p>
+                            {hasBudget && contractVal > 0 ? (
+                              <p className="text-base font-bold font-mono" style={{ color: (contractVal - budgetTotal) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                {fmt(contractVal - budgetTotal)} ₫
+                              </p>
+                            ) : (
+                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chưa đủ dữ liệu (cần cả dự toán + giá trị HĐ)</p>
+                            )}
+                          </div>
+                        </div>
+                        {/* F3 mitigation: form dự toán CÓ nhưng Budget chưa có → nói rõ để không hiểu nhầm là "chưa dự toán" */}
+                        {!hasBudget && hasEstimateForm && (
+                          <p className="text-xs px-1 mt-2" style={{ color: '#b45309' }}>
+                            ⚠️ Dự án đã có dự toán (form) nhưng ngân sách 4 nhóm chưa được đồng bộ — liên hệ KTKH hoàn tất/duyệt dự toán để hiện đủ số.
+                          </p>
+                        )}
+                        {!hasBudget && !hasEstimateForm && (
+                          <p className="text-sm px-1 mt-2" style={{ color: 'var(--text-muted)' }}>Chưa có dự toán KTKH cho dự án này.</p>
+                        )}
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

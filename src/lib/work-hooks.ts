@@ -31,7 +31,9 @@ export const HOOK_REGISTRY: Record<string, HookFn> = {
 
 const ESTIMATE_TOTAL_KEYS = ['totalMaterial', 'totalLabor', 'totalService', 'totalOverhead'] as const
 
-function extractEstimateTotals(rd?: Record<string, unknown> | null): EstimateTotals | null {
+/** Rút totals 4 nhóm từ resultData form ESTIMATE. Export để script backfill (F3) dùng lại
+ *  ở chế độ DRY-RUN (tính số sẽ ghi mà KHÔNG mutate) — cùng logic với đường sync thật. */
+export function extractEstimateTotals(rd?: Record<string, unknown> | null): EstimateTotals | null {
   if (!rd || typeof rd !== 'object') return null
   const totals: EstimateTotals = {}
   let found = false

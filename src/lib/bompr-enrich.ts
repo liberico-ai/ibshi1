@@ -392,8 +392,11 @@ async function autoCreateProvisionalCodes(
   const needsCode: { idx: number; item: PrItem; key: string }[] = []
   for (let i = 0; i < items.length; i++) {
     if (matchMap.get(i)?.inv) continue
+    // MEDIUM: item ĐÃ có materialId (pre-filled) → KHÔNG tạo provisional (tránh rác Material Master + tốn seq).
+    if (items[i].materialId) continue
     if (items[i].canonicalCode) continue
-    if (!items[i].profile && !items[i].description) continue
+    // LOW: trim để profile/description toàn khoảng trắng cũng bị coi là rỗng (tránh junk 'Vật tư tạm').
+    if (!items[i].profile?.trim() && !items[i].description?.trim()) continue
     needsCode.push({ idx: i, item: items[i], key: provisionalDedupeKey(items[i]) })
   }
 
@@ -459,7 +462,10 @@ async function autoCreateProvisionalCodes(
       }
     })
   } catch (err) {
-    console.error('autoCreateProvisionalCodes error:', err)
+    // LOW: $transaction atomic — throw ⇒ toàn bộ provisional đã ROLLBACK. Nhưng result in-memory có thể
+    // đã set entry trước throw → caller dùng materialId không tồn tại → FK-500. Xoá để nhất quán DB↔result.
+    console.error('autoCreateProvisionalCodes error (rollback → clear result):', err)
+    result.clear()
   }
 
   return result
