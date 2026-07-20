@@ -34,6 +34,12 @@ interface Props {
   initialTemplate?: TemplateType
 }
 
+// Màu nhận diện từng biểu mẫu (chip + viền)
+const TPL_COLOR: Record<string, string> = {
+  ESTIMATE: '#2563eb', PR: '#c2410c', BBH: '#7c3aed', WBS: '#0891b2',
+  WELD_PAINT: '#dc2626', BOM: '#059669', SUPPLIER_QUOTE: '#d97706',
+}
+
 export default function TemplateSelector({ taskId, isEditable, projectCode, project, projectId, taskTitle, initialTemplate }: Props) {
   const [selected, setSelected] = useState<TemplateType>(initialTemplate ?? null)
   const [loaded, setLoaded] = useState(false)
@@ -130,27 +136,34 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {TEMPLATES.map((t) => {
             const active = selected === t.value
+            const color = TPL_COLOR[t.value] || '#2563eb'
             return (
               <button
                 key={t.value}
                 onClick={() => isEditable && handleSelectTemplate(active ? null : t.value)}
                 disabled={!isEditable && !active}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '10px 14px', borderRadius: 10,
-                  border: active ? '2px solid #2563eb' : '1px solid var(--border)',
-                  background: active ? '#eff6ff' : 'var(--bg-secondary)',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 14px', borderRadius: 12,
+                  border: `1px solid ${active ? color : 'var(--border, #e2e8f0)'}`,
+                  borderLeft: `4px solid ${color}`,
+                  background: active ? `${color}12` : 'var(--surface, #ffffff)',
+                  boxShadow: active ? `0 0 0 1px ${color}` : '0 1px 2px rgba(16,24,40,.04)',
                   cursor: isEditable ? 'pointer' : 'default',
                   opacity: !isEditable && !active ? 0.5 : 1,
                   transition: 'all 0.15s',
                 }}
               >
-                <span style={{ fontSize: '1.2rem' }}>{t.icon}</span>
+                <span style={{
+                  width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: `${color}18`, color, fontWeight: 700, fontSize: '0.8rem',
+                }}>{t.icon}</span>
                 <div style={{ textAlign: 'left', minWidth: 0 }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: active ? '#1d4ed8' : 'var(--text-primary)' }}>{t.label}</div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 600, color: active ? color : 'var(--text-primary)' }}>{t.label}</div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.desc}</div>
                 </div>
-                {active && <span style={{ fontSize: '0.9rem', color: '#2563eb', marginLeft: 'auto', flexShrink: 0 }}>✓</span>}
+                {active && <span style={{ fontSize: '0.9rem', color, marginLeft: 'auto', flexShrink: 0 }}>✓</span>}
               </button>
             )
           })}

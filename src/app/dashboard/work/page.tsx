@@ -179,16 +179,30 @@ export default function WorkInboxPage() {
               const doerOver = isDoerOverdue(t)
               const revLate = isReviewLate(t)
               const revDays = reviewDaysLate(t)
-              const pc = t.priority === 'URGENT' ? SEMANTIC_COLORS.danger.solid : t.priority === 'HIGH' ? SEMANTIC_COLORS.warning.solid : 'var(--border)'
+              // Màu khung theo mức khẩn: quá hạn → đỏ; ưu tiên; rồi theo trạng thái.
+              const overdue = doerOver || revLate
+              const accent = overdue ? SEMANTIC_COLORS.danger
+                : t.priority === 'URGENT' ? SEMANTIC_COLORS.danger
+                : t.priority === 'HIGH' ? SEMANTIC_COLORS.warning
+                : t.status === 'RETURNED' ? SEMANTIC_COLORS.danger
+                : t.status === 'AWAITING_REVIEW' ? SEMANTIC_COLORS.warning
+                : t.status === 'IN_PROGRESS' ? SEMANTIC_COLORS.info
+                : SEMANTIC_COLORS.neutral
               const rowNum = (page - 1) * 20 + idx + 1
               return (
                 <div key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)}
-                  className="glass-card p-4 cursor-pointer hover:shadow-md transition-all"
-                  style={{ borderLeft: `4px solid ${pc}` }}>
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-                      style={{ background: 'var(--surface-alt, #f1f5f9)', color: 'var(--text-muted)' }}>{rowNum}</span>
-                    <div className="font-bold flex-1 text-sm" style={{ color: 'var(--text-primary)', minWidth: 180 }}>{t.title}</div>
+                  className="cursor-pointer transition-all shadow-sm hover:shadow-md"
+                  style={{
+                    background: overdue ? accent.bg : 'var(--surface, #ffffff)',
+                    border: `1px solid ${overdue ? accent.solid + '55' : 'var(--border, #e2e8f0)'}`,
+                    borderLeft: `5px solid ${accent.solid}`,
+                    borderRadius: 12,
+                    padding: '14px 16px',
+                  }}>
+                  <div className="flex items-start gap-2.5 flex-wrap">
+                    <span className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
+                      style={{ background: accent.bg, color: accent.solid }}>{rowNum}</span>
+                    <div className="font-bold flex-1" style={{ color: 'var(--text-primary)', fontSize: 15, minWidth: 180, lineHeight: 1.35 }}>{t.title}</div>
                     {tab === 'review' && !revLate && <Badge variant="warning">Cần kết thúc</Badge>}
                     {revLate && (tab === 'review' || tab === 'overdue') && <Badge variant="danger">Trễ nghiệm thu ({revDays} ngày)</Badge>}
                     <Badge variant={st.variant}>{st.l}</Badge>

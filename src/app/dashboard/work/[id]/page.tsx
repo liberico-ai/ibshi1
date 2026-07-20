@@ -225,7 +225,7 @@ export default function WorkDetailPage() {
     <div className="space-y-4 animate-fade-in">
       <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/work')}>← Hộp việc</Button>
 
-      <div className="glass-card p-5" style={{ borderLeft: `4px solid ${accent}` }}>
+      <div className="glass-card p-5" style={{ borderLeft: `5px solid ${accent}` }}>
         <div className="flex items-start gap-3">
           <h1 className="text-xl font-bold flex-1" style={{ color: 'var(--text-primary)' }}>{task.title}</h1>
           {isCreator && task.status !== 'DONE' && <Button variant="outline" size="sm" onClick={openEdit}>Sửa</Button>}
@@ -248,10 +248,13 @@ export default function WorkDetailPage() {
           </div>
         )}
         {task.description && <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>{task.description}</p>}
-        <div className="flex flex-wrap gap-3 mt-3 text-xs items-center" style={{ color: 'var(--text-muted)' }}>
+        <div className="flex flex-wrap gap-2 mt-3 text-xs items-center" style={{ color: 'var(--text-muted)' }}>
+          <span className="font-semibold px-2.5 py-1 rounded-full" style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}40` }}>
+            {STATUS_LABEL[task.status] || task.status}
+          </span>
           {task.project && <Badge variant="info">{task.project.projectCode}</Badge>}
           <span>Người tạo: <b>{task.createdByName || '—'}</b></span>
-          {task.deadline && <Badge variant="warning">{formatDate(task.deadline)}</Badge>}
+          {task.deadline && <Badge variant="warning">Hạn: {formatDate(task.deadline)}</Badge>}
           {task.returnCount > 0 && <Badge variant="danger">↩ trả lại {task.returnCount} lần</Badge>}
         </div>
       </div>
