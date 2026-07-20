@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+/* Đã bỏ @import Google Fonts: bị CSP chặn (style-src/font-src 'self'), gây lỗi console ở mọi trang.
+   Body dùng Geist Sans tự-host qua next/font (layout.tsx); tiêu đề fallback về Geist — giao diện không đổi.
+   Muốn dùng Space Grotesk thật thì self-host qua next/font thay vì @import ngoài. */
 @import "tailwindcss";
 
 /* ══════════════════════════════════════════════════════
