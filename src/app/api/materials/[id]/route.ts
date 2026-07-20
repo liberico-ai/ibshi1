@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, logAudit, getClientIP } from '@/lib/auth'
 import { validateBody, validateParams } from '@/lib/api-helpers'
 import { updateMaterialSchema, idParamSchema } from '@/lib/schemas'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 
 // GET /api/materials/[id] — detail + aliases
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -55,7 +55,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!RBAC.MATERIAL_CODE_ADMIN.includes(payload.roleCode)) {
+    if (!(await can(payload, 'action.material_code_admin'))) {
       return forbiddenResponse('Bạn không có quyền sửa mã vật tư')
     }
 

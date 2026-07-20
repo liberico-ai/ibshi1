@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { KEY_TO_FORM, canEditForm } from '@/lib/constants'
+import { KEY_TO_FORM } from '@/lib/constants'
+import { can } from '@/lib/permissions/can'
 import { materializePrSafe } from '@/lib/pr-materialize'
 
 export const dynamic = 'force-dynamic'
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!isParticipant) return errorResponse('Bạn không có quyền sửa công việc này', 403)
 
     const form = KEY_TO_FORM[body.key]
-    if (form && !canEditForm(form, payload.roleCode)) {
+    if (form && !(await can(payload, `form.${form}`))) {
       return errorResponse('Bạn không có quyền sửa biểu mẫu này', 403)
     }
 

@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { nextPoCode } from '@/lib/po-code'
@@ -27,7 +27,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!pr) return errorResponse('Không tìm thấy yêu cầu mua hàng', 404)
 
     if (action === 'approve') {
-      if (!RBAC.PR_APPROVAL.includes(payload.roleCode)) {
+      if (!(await can(payload, 'action.pr_approval'))) {
         return errorResponse('Chỉ Ban Giám đốc hoặc PM mới được duyệt PR', 403)
       }
       if (pr.status !== 'SUBMITTED') {
@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (action === 'reject') {
-      if (!RBAC.PR_APPROVAL.includes(payload.roleCode)) {
+      if (!(await can(payload, 'action.pr_approval'))) {
         return errorResponse('Chỉ Ban Giám đốc hoặc PM mới được từ chối PR', 403)
       }
       const updated = await prisma.purchaseRequest.update({

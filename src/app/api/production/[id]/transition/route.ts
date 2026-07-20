@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { rollUpWorkOrder } from '@/lib/production-weights'
@@ -46,14 +46,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Role check: only R06/R06b can start/progress, R09 for QC
-    if (['IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].includes(nextStatus) && !RBAC.PRODUCTION_ACTION.includes(user.roleCode)) {
+    if (['IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].includes(nextStatus) && !(await can(user, 'action.production'))) {
       return errorResponse('Chỉ bộ phận SX hoặc GĐ được thao tác trạng thái này', 403)
     }
     // Mở WO (đủ vật tư): SX hoặc Kho
-    if (nextStatus === 'OPEN' && !([...RBAC.PRODUCTION_ACTION, 'R05', 'R05a', 'R08', 'R08a'].includes(user.roleCode))) {
+    if (nextStatus === 'OPEN' && !((await can(user, 'action.production')) || ['R05', 'R05a', 'R08', 'R08a'].includes(user.roleCode))) {
       return errorResponse('Chỉ SX/Kho hoặc GĐ được mở WO', 403)
     }
-    if (['QC_PASSED', 'QC_FAILED'].includes(nextStatus) && !RBAC.QC_ACTION.includes(user.roleCode)) {
+    if (['QC_PASSED', 'QC_FAILED'].includes(nextStatus) && !(await can(user, 'action.qc'))) {
       return errorResponse('Chỉ máy trưởng QC hoặc GĐ được đánh giá kết quả kiểm tra', 403)
     }
 
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse(`WO cần QC lại trước khi hoàn thành: ${wo.reQcReason || 'needsReQc'}`, 422)
     }
     // Đưa WO đã QC_PASSED về QC lại: chỉ QC/GĐ
-    if (currentStatus === 'QC_PASSED' && nextStatus === 'QC_PENDING' && !RBAC.QC_ACTION.includes(user.roleCode)) {
+    if (currentStatus === 'QC_PASSED' && nextStatus === 'QC_PENDING' && !(await can(user, 'action.qc'))) {
       return errorResponse('Chỉ QC hoặc GĐ được yêu cầu kiểm tra lại', 403)
     }
 

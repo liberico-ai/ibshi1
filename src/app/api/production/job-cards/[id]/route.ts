@@ -4,7 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody, validateParams } from '@/lib/api-helpers'
 import { updateJobCardSchema, idParamSchema } from '@/lib/schemas'
 import { rollUpWorkOrder } from '@/lib/production-weights'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 
 // GET /api/production/job-cards/[id]
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -46,7 +46,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!jc) return errorResponse('Không tìm thấy phiếu công việc', 404)
     if (jc.status === 'CANCELLED') return errorResponse('Phiếu đã bị hủy')
 
-    if (updates.status === 'COMPLETED' && !RBAC.PRODUCTION_ACTION.includes(user.roleCode)) {
+    if (updates.status === 'COMPLETED' && !(await can(user, 'action.production'))) {
       return errorResponse('Chỉ bộ phận SX được hoàn thành phiếu', 403)
     }
 

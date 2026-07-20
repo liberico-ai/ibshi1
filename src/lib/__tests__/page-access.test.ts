@@ -50,8 +50,9 @@ describe('PAGE_ACCESS route guard', () => {
     expect(isBlocked('/dashboard/admin', 'R06')).toBe(true)
   })
 
-  it('R01 can access all pages (except R10-only style-guide)', () => {
-    const restricted = MENU_ITEMS.filter(m => m.roles !== 'all' && m.key !== 'style-guide')
+  it('R01 can access all pages (except các trang R10-only)', () => {
+    // Trang R10-only (roles đúng bằng ['R10']) — R01 không vào, vd style-guide, permissions.
+    const restricted = MENU_ITEMS.filter(m => m.roles !== 'all' && !(m.roles as readonly string[]).every(r => r === 'R10'))
     for (const item of restricted) {
       expect(isBlocked(item.href, 'R01')).toBe(false)
     }

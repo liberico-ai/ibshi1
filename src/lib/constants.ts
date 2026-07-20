@@ -282,6 +282,7 @@ export const MENU_ITEMS = [
   // ── System ──
   { key: 'users', label: 'Người dùng', labelEn: 'Users', icon: 'Users', href: '/dashboard/users', roles: ['R01', 'R10'], group: 'system' },
   { key: 'admin', label: 'Quản trị hệ thống', labelEn: 'Admin Dashboard', icon: 'Shield', href: '/dashboard/admin', roles: ['R01', 'R10'], group: 'system' },
+  { key: 'permissions', label: 'Phân quyền', labelEn: 'Permissions', icon: 'Shield', href: '/dashboard/admin/permissions', roles: ['R10'], group: 'system' },
   { key: 'work-templates', label: 'Quy trình & Template', labelEn: 'Templates', icon: 'Settings', href: '/dashboard/work/templates', roles: ['R01', 'R02', 'R10'], group: 'system' },
   { key: 'settings', label: 'Cài đặt', labelEn: 'Settings', icon: 'Settings', href: '/dashboard/settings', roles: 'all', group: 'system' },
   { key: 'style-guide', label: 'Design System', labelEn: 'Style Guide', icon: 'Ruler', href: '/dashboard/style-guide', roles: ['R10'], group: 'system' },

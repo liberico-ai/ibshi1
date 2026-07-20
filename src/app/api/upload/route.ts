@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, unauthorizedResponse, successResponse, errorResponse } from '@/lib/auth'
-import { canEditForm } from '@/lib/constants'
+import { can } from '@/lib/permissions/can'
 import { saveAttachmentFromBuffer, validateFileName, ENTITY_ID_REGEX } from '@/lib/save-attachment'
 
 const ALLOWED_ENTITY_TYPES = new Set([
@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
     if (!ALLOWED_ENTITY_TYPES.has(entityType)) {
       return errorResponse('Tham số không hợp lệ', 400)
     }
-    if (entityType === 'TaskQuote' && !canEditForm('SUPPLIER_QUOTE', user.roleCode)) {
+    if (entityType === 'TaskQuote' && !(await can(user, 'form.SUPPLIER_QUOTE'))) {
       return errorResponse('Chỉ Thương mại / BGĐ được upload báo giá NCC', 403)
     }
-    if (entityType === 'PR' && !canEditForm('PR', user.roleCode)) {
+    if (entityType === 'PR' && !(await can(user, 'form.PR'))) {
       return errorResponse('Bạn không có quyền upload file PR', 403)
     }
     if (entityType === 'TaskEvidence') {

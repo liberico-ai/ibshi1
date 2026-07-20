@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { validateBody } from '@/lib/api-helpers'
 import { stockMovementSchema } from '@/lib/schemas'
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!RBAC.STORE_ACTION.includes(payload.roleCode)) {
+    if (!(await can(payload, 'action.store'))) {
       return errorResponse('Chỉ Kho hoặc BGĐ mới được tạo phiếu nhập/xuất', 403)
     }
 

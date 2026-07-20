@@ -4,9 +4,11 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAuthStore, apiFetch } from '@/hooks/useAuth'
-import { ROLES, MENU_ITEMS, MENU_GROUPS, ROLE_GROUP_PRIORITY, HIDDEN_MENU_KEYS, PAGE_ACCESS } from '@/lib/constants'
+import { ROLES, MENU_ITEMS, MENU_GROUPS, ROLE_GROUP_PRIORITY, HIDDEN_MENU_KEYS } from '@/lib/constants'
 import { resolvePostLoginPath } from '@/lib/mobile-nav'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import NotificationBell from '@/components/NotificationBell'
+import PendingAlerts from '@/components/PendingAlerts'
 import {
   LayoutDashboard, FolderKanban, ClipboardList, Users, Package, Factory, ShieldCheck,
   ShoppingCart, ArrowLeftRight, Building, Clipboard, FileCheck, AlertTriangle, Award,
@@ -96,22 +98,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const roleCode = user?.roleCode || ''
   const roleName = ROLES[roleCode as keyof typeof ROLES]?.name || roleCode
 
+  // Quyền xem trang lấy từ ma trận phân quyền (DB). Chưa tải xong → dùng luật tĩnh
+  // (giống hệt, tránh nhấp nháy). Khi admin chỉnh ma trận, menu & guard đổi theo.
+  const caps = useCapabilities()
+
   const pageBlocked = useMemo(() => {
-    const checks = Object.entries(PAGE_ACCESS)
-      .filter(([h]) => h !== '/dashboard')
-      .sort((a, b) => b[0].length - a[0].length)
-    for (const [href, roles] of checks) {
-      if (pathname === href || pathname.startsWith(href + '/')) {
-        if (roles === 'all') return false
-        return !(roles as readonly string[]).includes(roleCode)
+    const items = MENU_ITEMS
+      .filter((m) => m.href !== '/dashboard')
+      .slice()
+      .sort((a, b) => b.href.length - a.href.length)
+    for (const item of items) {
+      if (pathname === item.href || pathname.startsWith(item.href + '/')) {
+        if (item.roles === 'all') return false
+        if (caps) return !caps.has(`page.${item.key}`)
+        return !(item.roles as readonly string[]).includes(roleCode)
       }
     }
     return false
-  }, [pathname, roleCode])
+  }, [pathname, roleCode, caps])
 
   // HIDDEN_MENU_KEYS imported from @/lib/constants
   const filteredMenu = MENU_ITEMS.filter((item) => {
     if (HIDDEN_MENU_KEYS.has(item.key)) return false
+    if (caps) return caps.has(`page.${item.key}`)          // DB-driven khi đã tải
     if (item.roles === 'all') return true
     return (item.roles as readonly string[]).includes(roleCode)
   })
@@ -417,6 +426,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Content */}
         <main style={{ flex: 1, padding: '28px 32px' }}>
+          {!pageBlocked && <PendingAlerts />}
           {pageBlocked ? (
             <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
               <div className="mb-4"><Lock size={48} style={{ color: 'var(--text-muted)' }} /></div>

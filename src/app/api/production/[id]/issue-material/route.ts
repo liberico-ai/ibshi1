@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 import { validateBody, validateParams } from '@/lib/api-helpers'
 import { createMaterialIssueSchema, idParamSchema } from '@/lib/schemas'
 import { applyStockMovement } from '@/lib/stock-ledger'
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
 
-    if (!RBAC.STORE_ACTION.includes(user.roleCode) && !RBAC.PRODUCTION_ACTION.includes(user.roleCode)) {
+    if (!(await can(user, 'action.store')) && !(await can(user, 'action.production'))) {
       return errorResponse('Chỉ Kho hoặc SX được cấp phát vật tư', 403)
     }
 

@@ -5,6 +5,7 @@ import { runHooks, maybeSyncEstimateToBudget } from './work-hooks'
 import { emitTaskUpdated } from './webhook'
 import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
 import { whereDoerOverdue, whereReviewLate } from './task-where'
+import { resolveDesignation } from './permissions/store'
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -39,11 +40,22 @@ export async function getDeptHead(roleCode: string): Promise<{ id: string; fullN
 }
 
 // Resolve role → người cụ thể. Ưu tiên:
+// (0) CHỈ ĐỊNH CÁ NHÂN: nếu bước X của dự án Y đã chỉ định một người cụ thể (kể cả
+//     một L2), ưu tiên người đó — đây là chỗ biến "L2 này chứ L2 kia" thành hiện thực.
+//     Người chỉ định đã nghỉ → suy biến an toàn, rơi về mặc định bên dưới.
 // (a) user active CÓ ĐÚNG roleCode, L1 (trưởng) trước
 // (b) getDeptHead (trưởng phòng, có thể khác roleCode — e.g. R05 → R08 trưởng TCKT)
 // (c) PM của dự án (nếu có projectId)
 // (d) throw — buộc chọn nhân sự cụ thể
-export async function resolveRoleToUser(roleCode: string, projectId?: string | null): Promise<{ id: string; fullName: string }> {
+export async function resolveRoleToUser(roleCode: string, projectId?: string | null, stepCode?: string): Promise<{ id: string; fullName: string }> {
+  if (projectId && stepCode) {
+    const designatedId = await resolveDesignation(projectId, stepCode)
+    if (designatedId) {
+      const u = await prisma.user.findUnique({ where: { id: designatedId }, select: { id: true, fullName: true, isActive: true } })
+      if (u?.isActive) return { id: u.id, fullName: u.fullName }
+    }
+  }
+
   const exact = await prisma.user.findFirst({
     where: { roleCode, isActive: true },
     orderBy: [{ userLevel: 'asc' }, { createdAt: 'asc' }],
@@ -901,7 +913,7 @@ async function spawnTemplateStep(step: TStep, projectId: string, byUser: string)
     },
   })
   if (step.roleCode) {
-    const stepUser = await resolveRoleToUser(step.roleCode, projectId)
+    const stepUser = await resolveRoleToUser(step.roleCode, projectId, step.code)
     await prisma.taskAssignee.create({ data: { taskId: t.id, role: step.roleCode, userId: stepUser.id, isPrimary: true } })
   }
   await prisma.taskHistory.create({ data: { taskId: t.id, action: 'CREATED', byUserId: byUser, toRole: step.roleCode } })

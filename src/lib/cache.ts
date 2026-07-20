@@ -46,6 +46,7 @@ export const CACHE_KEYS = {
   projects: 'projects:*',
   warehouse: 'warehouse:*',
   admin: 'admin:*',
+  permissions: 'perm:*',
 }
 
 /**

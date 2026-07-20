@@ -232,6 +232,7 @@ describe('cache', () => {
         projects: 'projects:*',
         warehouse: 'warehouse:*',
         admin: 'admin:*',
+        permissions: 'perm:*',
       })
     })
   })

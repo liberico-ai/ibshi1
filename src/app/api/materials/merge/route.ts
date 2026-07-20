@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, logAudit, getClientIP } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { mergeMaterialsSchema } from '@/lib/schemas'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!RBAC.MATERIAL_CODE_MERGE.includes(payload.roleCode)) {
+    if (!(await can(payload, 'action.material_code_merge'))) {
       return forbiddenResponse('Chỉ BGĐ/Admin được gộp mã vật tư')
     }
 

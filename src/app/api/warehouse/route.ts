@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 
 // GET /api/warehouse — List materials with stock levels
 export async function GET(req: NextRequest) {
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!RBAC.STORE_ACTION.includes(payload.roleCode)) {
+    if (!(await can(payload, 'action.store'))) {
       return errorResponse('Bạn không có quyền thêm vật tư', 403)
     }
 

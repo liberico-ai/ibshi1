@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { canEditForm } from '@/lib/constants'
+import { can } from '@/lib/permissions/can'
 import { enrichBomPrItems } from '@/lib/bompr-enrich'
 import { materializePrSafe } from '@/lib/pr-materialize'
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Default: save bomPr data + auto-enrich — requires participant + PR edit role
     if (!isParticipant) return errorResponse('Bạn không có quyền sửa công việc này', 403)
-    if (!canEditForm('PR', payload.roleCode)) {
+    if (!(await can(payload, 'form.PR'))) {
       return errorResponse('Bạn không có quyền sửa biểu mẫu PR', 403)
     }
 

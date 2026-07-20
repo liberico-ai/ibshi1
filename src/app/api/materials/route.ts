@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, logAudit, getClientIP } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createMaterialSchema } from '@/lib/schemas'
-import { RBAC } from '@/lib/rbac-rules'
+import { can } from '@/lib/permissions/can'
 
 export const dynamic = 'force-dynamic'
 
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
-    if (!RBAC.MATERIAL_CODE_ADMIN.includes(payload.roleCode)) {
+    if (!(await can(payload, 'action.material_code_admin'))) {
       return forbiddenResponse('Bạn không có quyền tạo mã vật tư')
     }
 
