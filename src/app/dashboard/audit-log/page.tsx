@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { SearchBar } from '@/components/SearchPagination'
+import LogExportButton from '@/components/LogExportButton'
 import { formatDateTime } from '@/lib/utils'
 
 interface AuditEntry {
@@ -65,6 +66,15 @@ export default function AuditLogPage() {
         <input className="input w-40" placeholder="Entity..." value={entityFilter}
           onChange={e => setEntityFilter(e.target.value)}
           style={{ padding: '6px 10px', fontSize: '12px' }} />
+        <div style={{ marginLeft: 'auto' }}>
+          <LogExportButton
+            endpoint="/api/admin/audit-logs/export"
+            secondLabel="Hành động"
+            secondParam="action"
+            secondOptions={ACTION_OPTIONS.filter(Boolean)}
+            filePrefix="nhat-ky"
+          />
+        </div>
       </div>
 
       {/* Table */}
@@ -88,8 +98,8 @@ export default function AuditLogPage() {
               {logs.length === 0 ? (
                 <tr><td colSpan={7} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Không có bản ghi</td></tr>
               ) : logs.map(l => (
-                <>
-                  <tr key={l.id} className="cursor-pointer" onClick={() => setExpandedId(expandedId === l.id ? null : l.id)}>
+                <Fragment key={l.id}>
+                  <tr className="cursor-pointer" onClick={() => setExpandedId(expandedId === l.id ? null : l.id)}>
                     <td>
                       <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{
                         background: `${ACTION_COLORS[l.action] || '#888'}20`,
@@ -106,8 +116,8 @@ export default function AuditLogPage() {
                     <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDateTime(l.createdAt)}</td>
                     <td className="text-center text-xs">{l.changes ? (expandedId === l.id ? '▲' : '▼') : ''}</td>
                   </tr>
-                  {expandedId === l.id && l.changes && (
-                    <tr key={l.id + '-detail'}>
+                  {expandedId === l.id && !!l.changes && (
+                    <tr>
                       <td colSpan={7} style={{ background: 'var(--surface-hover)', padding: '12px 16px' }}>
                         <p className="text-xs font-bold mb-1" style={{ color: 'var(--text-muted)' }}>CHANGES (JSON):</p>
                         <pre className="text-xs font-mono whitespace-pre-wrap break-all" style={{ color: 'var(--text-secondary)', maxHeight: 200, overflow: 'auto' }}>
@@ -116,7 +126,7 @@ export default function AuditLogPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>

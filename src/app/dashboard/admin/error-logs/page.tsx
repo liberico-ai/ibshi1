@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { SearchBar } from '@/components/SearchPagination'
+import LogExportButton from '@/components/LogExportButton'
 import { formatDateTime } from '@/lib/utils'
 
 interface ErrorEntry {
@@ -125,6 +126,15 @@ export default function ErrorLogPage() {
           <option value="false">Unresolved</option>
           <option value="true">Resolved</option>
         </select>
+        <div style={{ marginLeft: 'auto' }}>
+          <LogExportButton
+            endpoint="/api/admin/error-logs/export"
+            secondLabel="Mức (level)"
+            secondParam="level"
+            secondOptions={['ERROR', 'WARN', 'INFO']}
+            filePrefix="error-logs"
+          />
+        </div>
       </div>
 
       {/* Table */}

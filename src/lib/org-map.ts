@@ -37,6 +37,11 @@ export function deptOfRole(roleCode?: string | null): string | null {
   return ROLE_TO_DEPT[roleCode] ?? null
 }
 
+/** Các roleCode thuộc một phòng ban — dùng để lọc log theo phòng. */
+export function rolesOfDept(deptCode: string): string[] {
+  return Object.entries(ROLE_TO_DEPT).filter(([, d]) => d === deptCode).map(([r]) => r)
+}
+
 export const DEPT_PRIMARY_ROLE: Record<string, string> = {
   BGD: 'R01', CNTT: 'R10', TK: 'R04', KTKT: 'R03',
   QLDA: 'R02', SX: 'R06', TCKT: 'R08', QC: 'R09', TBCG: 'R13',
