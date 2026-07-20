@@ -5,6 +5,7 @@ import { useAuthStore } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
 import { tilesForRole } from '@/lib/mobile-nav'
 import { MAppBar } from '@/components/mobile'
+import TelegramLinkCard from '@/components/TelegramLinkCard'
 import { Monitor, LogOut } from 'lucide-react'
 
 export default function MobileHome() {
@@ -37,6 +38,11 @@ export default function MobileHome() {
               </div>
             ),
           )}
+        </div>
+
+        <div className="m-card" style={{ marginTop: 8 }}>
+          <div className="m-section-title" style={{ margin: 0 }}>Thông báo Telegram</div>
+          <TelegramLinkCard variant="compact" />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>

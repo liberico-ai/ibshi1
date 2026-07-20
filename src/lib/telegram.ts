@@ -139,6 +139,22 @@ export async function getGroupChatId(): Promise<string | null> {
   return config.groupChatId
 }
 
+// ── Bot username (cho deep-link liên kết) ──────────────────
+
+let botUsernameCache: string | null = null
+export async function getBotUsername(): Promise<string | null> {
+  if (botUsernameCache) return botUsernameCache
+  const bot = await getBot()
+  if (!bot) return null
+  try {
+    const me = await bot.api.getMe()
+    botUsernameCache = me.username || null
+    return botUsernameCache
+  } catch {
+    return null
+  }
+}
+
 // ── Webhook secret from config ─────────────────────────────
 
 export async function getWebhookSecret(): Promise<string | null> {

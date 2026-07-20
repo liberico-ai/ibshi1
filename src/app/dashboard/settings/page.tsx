@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, Card, Button, InputField } from '@/components/ui'
+import TelegramLinkCard from '@/components/TelegramLinkCard'
 
 interface UserProfile {
   id: string; email: string; fullName: string; roleCode: string; avatar: string | null;
@@ -209,6 +210,9 @@ export default function SettingsPage() {
           </div>
         </div>
       </Card>
+
+      {/* Liên kết Telegram (mọi user — tự phục vụ) */}
+      <TelegramLinkCard />
 
       {/* Language & Theme */}
       <Card padding="default">

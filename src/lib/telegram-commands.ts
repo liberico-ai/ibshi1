@@ -10,6 +10,7 @@ import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import { escapeHtml, formatDeadline } from '@/lib/telegram'
 import { formatNumber, isTaskOverdue } from '@/lib/utils'
 import { whereOverdue } from '@/lib/task-where'
+import { consumeLinkToken } from '@/lib/telegram-link'
 import { runDailyDigest } from '@/lib/cron-jobs'
 
 // ── Command menu (registered with Telegram) ─────────────────
@@ -68,11 +69,42 @@ export function registerCommands(bot: Bot): void {
     console.error('Telegram bot error:', err.message || err)
   })
 
-  // ── /start ──────────────────────────────────────────────
+  // ── /start [token] ──────────────────────────────────────
+  // Có token (từ nút "Liên kết Telegram" trong ERP) → tự gắn tài khoản, một chạm.
   bot.command('start', async (ctx: Context) => {
+    const payload = ctx.match?.toString().trim()
+    if (payload) {
+      const chatId = String(ctx.from!.id)
+      const userId = await consumeLinkToken(payload)
+      if (!userId) {
+        await ctx.reply('❌ Liên kết đã hết hạn hoặc không hợp lệ.\nVào lại ERP và bấm "Liên kết Telegram" để lấy mã mới.')
+        return
+      }
+      // Telegram này đã gắn user khác?
+      const existing = await prisma.user.findUnique({ where: { telegramChatId: chatId } })
+      if (existing) {
+        await ctx.reply(`Tài khoản Telegram này đã liên kết với <b>${escapeHtml(existing.fullName)}</b> (${existing.username}).\nDùng /unlink trước nếu muốn đổi.`, { parse_mode: 'HTML' })
+        return
+      }
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, fullName: true, roleCode: true, telegramChatId: true } })
+      if (!user) {
+        await ctx.reply('Không tìm thấy tài khoản ERP tương ứng. Vui lòng thử lại.')
+        return
+      }
+      if (user.telegramChatId) {
+        await ctx.reply(`Tài khoản <b>${escapeHtml(user.username)}</b> đã liên kết với một Telegram khác.`, { parse_mode: 'HTML' })
+        return
+      }
+      await prisma.user.update({ where: { id: user.id }, data: { telegramChatId: chatId } })
+      await ctx.reply(
+        `✅ Đã liên kết thành công!\n👤 ${escapeHtml(user.fullName)} (${escapeHtml(user.username)})\n\nTừ giờ bạn sẽ nhận thông báo công việc riêng qua đây.`,
+        { parse_mode: 'HTML' },
+      )
+      return
+    }
     await ctx.reply(
       '👋 Xin chào! Tôi là trợ lý <b>IBS-ERP</b>.\n\n' +
-      '🔗 Dùng /link &lt;username&gt; để liên kết tài khoản ERP.\n' +
+      '🔗 Vào ERP → Cài đặt → bấm "Liên kết Telegram" để nhận thông báo riêng.\n' +
       '📖 Dùng /help để xem danh sách lệnh.',
       { parse_mode: 'HTML' },
     )
