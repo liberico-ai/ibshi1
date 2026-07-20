@@ -258,6 +258,7 @@ describe('checkDeadlines', () => {
       }),
     ]
     prismaMock.task.findMany.mockResolvedValue(overdueTasks as never)
+    prismaMock.notification.findFirst.mockResolvedValue(null as never)   // chưa có noti quá hạn nào
     prismaMock.notification.create.mockResolvedValue({} as never)
 
     const count = await checkDeadlines()
@@ -266,10 +267,10 @@ describe('checkDeadlines', () => {
     expect(prismaMock.notification.create).toHaveBeenCalledWith({
       data: {
         userId: 'user-1',
-        title: 'Task quá hạn: Kiểm tra vật tư',
-        message: 'Task P3.1 trong dự án IBS-001 đã quá deadline.',
+        title: 'Việc quá hạn: Kiểm tra vật tư',
+        message: 'Việc trong dự án IBS-001 đã quá hạn, cần xử lý sớm.',
         type: 'deadline_overdue',
-        linkUrl: '/tasks/task-overdue-1',
+        linkUrl: '/dashboard/work/task-overdue-1',
       },
     })
   })
@@ -287,7 +288,7 @@ describe('checkDeadlines', () => {
 
     const count = await checkDeadlines()
 
-    expect(count).toBe(1)
+    expect(count).toBe(0)   // không assignee → không sinh noti nào
     expect(prismaMock.notification.create).not.toHaveBeenCalled()
   })
 

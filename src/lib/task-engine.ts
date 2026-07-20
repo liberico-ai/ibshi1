@@ -280,22 +280,33 @@ export async function checkDeadlines() {
     },
   })
 
+  let created = 0
   for (const task of overdueTasks) {
     const userId = task.assignees[0]?.userId
-    if (userId) {
-      await prisma.notification.create({
-        data: {
-          userId,
-          title: `Task quá hạn: ${task.title}`,
-          message: `Task ${task.taskType} trong dự án ${task.project?.projectCode || ''} đã quá deadline.`,
-          type: 'deadline_overdue',
-          linkUrl: `/tasks/${task.id}`,
-        },
-      })
-    }
+    if (!userId) continue
+    const linkUrl = `/dashboard/work/${task.id}`
+
+    // Chống trùng: nếu user đã có thông báo quá hạn CHƯA ĐỌC cho đúng việc này thì bỏ qua
+    // (chạy hằng ngày không spam lặp lại). Đọc rồi mà vẫn quá hạn thì nhắc lại 1 lần nữa.
+    const existing = await prisma.notification.findFirst({
+      where: { userId, type: 'deadline_overdue', linkUrl, isRead: false },
+      select: { id: true },
+    })
+    if (existing) continue
+
+    await prisma.notification.create({
+      data: {
+        userId,
+        title: `Việc quá hạn: ${task.title}`,
+        message: `Việc trong dự án ${task.project?.projectCode || ''} đã quá hạn, cần xử lý sớm.`,
+        type: 'deadline_overdue',
+        linkUrl,
+      },
+    })
+    created++
   }
 
-  return overdueTasks.length
+  return created
 }
 
 // ── Module Stats for Dashboard ──
