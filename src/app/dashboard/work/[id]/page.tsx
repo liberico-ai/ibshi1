@@ -7,6 +7,7 @@ import { ROLES } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import TemplateSelector from '@/components/TemplateSelector'
+import ChangeRequestAdminCard from '@/components/ChangeRequestAdminCard'
 import { formatDate, formatDateTime, formatShortDateTime } from '@/lib/utils'
 import { Badge, Button } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
@@ -108,6 +109,11 @@ export default function WorkDetailPage() {
   const isAssignee = !!myRow
   const myDone = !!myRow?.done
   const isCreator = task.createdBy === user?.id
+  const isAdmin = user?.roleCode === 'R10' // Quản trị hệ thống — được quyền recall (sửa người nhận)
+  // Yêu cầu chỉnh sửa (change request)
+  const changeReq = task.resultData?.changeRequest as { status?: string; type?: string; reason?: string } | undefined
+  const locked = changeReq?.status === 'PENDING'
+  const changeReqFor = task.resultData?.changeRequestFor as { originalTaskId: string; type: string; reason: string; requestedByName: string; originalTitle: string } | undefined
   const awaitingReview = task.status === 'AWAITING_REVIEW'
   const mustRead = task.docs.filter((d) => d.kind === 'MUST_READ')
   const mustReturn = task.docs.filter((d) => d.kind === 'MUST_RETURN')
@@ -190,13 +196,17 @@ export default function WorkDetailPage() {
     setEditOpen(true)
   }
   const saveEdit = async () => {
-    if (!edit.title.trim()) { showToast('Cần tiêu đề'); return }
-    if (editAsg.length === 0) { showToast('Cần ít nhất một người nhận'); return }
+    const doBasic = isCreator                                    // sửa thông tin việc: chỉ người tạo
+    const doAsg = isAdmin && asgKey(editAsg) !== origAsgKeys      // recall người nhận: chỉ admin (R10)
+    if (doBasic && !edit.title.trim()) { showToast('Cần tiêu đề'); return }
+    if (isAdmin && editAsg.length === 0) { showToast('Cần ít nhất một người nhận'); return }
+    if (!doBasic && !doAsg) { setEditOpen(false); return }        // không có gì để lưu
     setBusy(true)
-    const res = await apiFetch(`/api/work/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ title: edit.title.trim(), description: edit.description, deadline: edit.deadline ? new Date(edit.deadline).toISOString() : null, priority: edit.priority }) })
-    if (!res.ok) { setBusy(false); showToast(res.error || 'Lỗi'); return }
-    // Cập nhật người nhận nếu danh sách thay đổi
-    if (asgKey(editAsg) !== origAsgKeys) {
+    if (doBasic) {
+      const res = await apiFetch(`/api/work/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ title: edit.title.trim(), description: edit.description, deadline: edit.deadline ? new Date(edit.deadline).toISOString() : null, priority: edit.priority }) })
+      if (!res.ok) { setBusy(false); showToast(res.error || 'Lỗi'); return }
+    }
+    if (doAsg) {
       const ares = await apiFetch(`/api/work/tasks/${id}/assignees`, { method: 'PATCH', body: JSON.stringify({ assignees: editAsg.map((a, i) => ({ userId: a.userId, role: a.role, isPrimary: i === 0 })) }) })
       if (!ares.ok) { setBusy(false); showToast(ares.error || 'Lỗi cập nhật người nhận'); return }
     }
@@ -250,23 +260,28 @@ export default function WorkDetailPage() {
       <div className="glass-card p-5" style={{ borderLeft: `5px solid ${accent}` }}>
         <div className="flex items-start gap-3">
           <h1 className="text-xl font-bold flex-1" style={{ color: 'var(--text-primary)' }}>{task.title}</h1>
-          {isCreator && task.status !== 'DONE' && <Button variant="outline" size="sm" onClick={openEdit}>Sửa</Button>}
+          {(isCreator || isAdmin) && task.status !== 'DONE' && !locked && <Button variant="outline" size="sm" onClick={openEdit}>Sửa</Button>}
           <Badge variant={task.status === 'DONE' ? 'success' : task.status === 'RETURNED' ? 'danger' : awaitingReview ? 'warning' : 'info'}>
             {STATUS_LABEL[task.status] || task.status}
           </Badge>
         </div>
         {editOpen && (
           <div className="mt-3 space-y-2 rounded-lg p-3" style={{ background: '#f8fafc', border: '1px solid var(--border)' }}>
-            <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} style={inp} placeholder="Tiêu đề" />
-            <textarea value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} style={{ ...inp, minHeight: 56 }} placeholder="Mô tả" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input type="date" value={edit.deadline} onChange={(e) => setEdit({ ...edit, deadline: e.target.value })} style={inp} />
-              <select value={edit.priority} onChange={(e) => setEdit({ ...edit, priority: e.target.value })} style={inp}><option value="NORMAL">Bình thường</option><option value="HIGH">Cao</option><option value="URGENT">Khẩn</option></select>
-            </div>
+            {isCreator && (
+              <>
+                <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} style={inp} placeholder="Tiêu đề" />
+                <textarea value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} style={{ ...inp, minHeight: 56 }} placeholder="Mô tả" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input type="date" value={edit.deadline} onChange={(e) => setEdit({ ...edit, deadline: e.target.value })} style={inp} />
+                  <select value={edit.priority} onChange={(e) => setEdit({ ...edit, priority: e.target.value })} style={inp}><option value="NORMAL">Bình thường</option><option value="HIGH">Cao</option><option value="URGENT">Khẩn</option></select>
+                </div>
+              </>
+            )}
 
-            {/* Sửa người nhận — chỉ bỏ/đổi được người CHƯA hoàn thành */}
+            {/* RECALL — CHỈ Quản trị hệ thống (R10) được sửa/bỏ người nhận */}
+            {isAdmin && (
             <div>
-              <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)' }}>Người nhận</label>
+              <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)' }}>Người nhận (recall)</label>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {editAsg.map((a, i) => (
                   <span key={(a.userId || a.role || '') + i} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full"
@@ -293,8 +308,9 @@ export default function WorkDetailPage() {
                     ))}
                 </div>
               )}
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Chỉ bỏ/đổi được người CHƯA hoàn thành. Người đã xong (✓ 🔒) được giữ nguyên.</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Recall dành cho Quản trị hệ thống. Chỉ bỏ/đổi được người CHƯA hoàn thành; người đã xong (✓ 🔒) giữ nguyên.</p>
             </div>
+            )}
 
             <div className="flex gap-2">
               <button onClick={saveEdit} disabled={busy} className="text-sm px-4 py-2 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>Lưu</button>
@@ -314,15 +330,31 @@ export default function WorkDetailPage() {
         </div>
       </div>
 
-      <TemplateSelector
-        taskId={id}
-        isEditable={(isAssignee || isCreator) && task.status !== 'DONE'}
-        projectCode={task.project?.projectCode}
-        project={task.project}
-        projectId={task.projectId || undefined}
-        taskTitle={task.title}
-        initialTemplate={(task.resultData?.templateType as string) as import('@/components/TemplateSelector').TemplateType || undefined}
-      />
+      {/* Banner khóa khi có yêu cầu đang chờ QTHT */}
+      {locked && (
+        <div className="rounded-xl p-3 text-sm" style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412' }}>
+          ⏳ Việc đang chờ <b>Quản trị hệ thống</b> xử lý yêu cầu <b>{changeReq?.type === 'DELETE' ? 'Xóa việc' : 'Sửa người nhận'}</b> — tạm khóa mọi thao tác.
+          {changeReq?.reason && <> Lý do: {changeReq.reason}</>}
+        </div>
+      )}
+
+      {/* Card xử lý yêu cầu — chỉ hiện trong việc admin (giao R10) khi chưa xử lý xong */}
+      {changeReqFor && isAdmin && task.status !== 'DONE' && (
+        <ChangeRequestAdminCard crFor={changeReqFor} onDone={load} />
+      )}
+
+      {/* Việc yêu cầu (admin) không cần biểu mẫu nghiệp vụ */}
+      {!changeReqFor && (
+        <TemplateSelector
+          taskId={id}
+          isEditable={(isAssignee || isCreator) && task.status !== 'DONE' && !locked}
+          projectCode={task.project?.projectCode}
+          project={task.project}
+          projectId={task.projectId || undefined}
+          taskTitle={task.title}
+          initialTemplate={(task.resultData?.templateType as string) as import('@/components/TemplateSelector').TemplateType || undefined}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
       {/* ══ CỘT CHÍNH: tài liệu + trao đổi ══ */}
@@ -596,7 +628,7 @@ export default function WorkDetailPage() {
         </div>
       )}
 
-      {isAssignee && !myDone && task.status !== 'DONE' && !fwdOpen && (
+      {isAssignee && !myDone && task.status !== 'DONE' && !fwdOpen && !changeReqFor && (
         <div className="sticky bottom-0 py-3 space-y-1.5" style={{ background: 'var(--bg,#f1f5f9)' }}>
           {!canComplete && (
             <div className="text-xs px-1" style={{ color: 'var(--danger)' }}>

@@ -290,6 +290,7 @@ function isAssignee(task: { createdBy: string; status: string; assignees: { role
 export async function completeTask(taskId: string, userId: string, roleCode: string, input: CompleteWorkTaskInput) {
   const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true, docs: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
+  assertNotPendingRequest(task)
   if (task.status === TASK_STATUS.DONE) throw new Error('Công việc đã hoàn thành')
   if (!isAssignee(task, userId, roleCode)) throw new Error('Bạn không phải người nhận công việc này')
   const prevStatus = task.status
@@ -465,6 +466,7 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
 export async function finalizeTask(taskId: string, userId: string) {
   const task = await prisma.task.findUnique({ where: { id: taskId } })
   if (!task) throw new Error('Không tìm thấy công việc')
+  assertNotPendingRequest(task)
   if (task.createdBy !== userId) throw new Error('Chỉ người giao việc mới được kết thúc')
   if (task.status === TASK_STATUS.DONE) throw new Error('Công việc đã kết thúc')
   const prevStatus = task.status
@@ -627,6 +629,7 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
 export async function returnTask(taskId: string, userId: string, roleCode: string, reason: string) {
   const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
+  assertNotPendingRequest(task)
   if (!isAssignee(task, userId, roleCode)) throw new Error('Bạn không phải người nhận công việc này')
   const prevStatus = task.status
 
@@ -642,8 +645,9 @@ export async function returnTask(taskId: string, userId: string, roleCode: strin
 }
 
 export async function reassignTask(taskId: string, userId: string, input: ReassignTaskInput) {
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true, status: true } })
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true, status: true, resultData: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
+  assertNotPendingRequest(task)
 
   const resolved = await resolveAssignees(input.assignees || [], task.projectId)
 
@@ -669,12 +673,13 @@ export async function reassignTask(taskId: string, userId: string, input: Reassi
 // AN TOÀN: chỉ được BỎ/ĐỔI người CHƯA hoàn thành (done=false). Người đã done được giữ nguyên
 // (không reset dữ liệu của họ). Sau khi sửa, tự tính lại trạng thái theo số người còn lại đã xong.
 export async function editTaskAssignees(
-  taskId: string, userId: string,
+  taskId: string, userId: string, roleCode: string,
   assignees: { role?: string; userId?: string; isPrimary?: boolean }[],
 ) {
+  // Recall (sửa/bỏ người nhận) CHỈ dành cho Quản trị hệ thống (R10) — không phải người giao / user thường.
+  if (roleCode !== 'R10') throw new Error('Chỉ Quản trị hệ thống (admin) được sửa người nhận')
   const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
-  if (task.createdBy !== userId) throw new Error('Chỉ người giao việc mới được sửa người nhận')
   if (task.status === TASK_STATUS.DONE) throw new Error('Việc đã hoàn thành, không sửa được')
 
   const resolved = await resolveAssignees(assignees || [], task.projectId)
@@ -730,14 +735,152 @@ export async function editTaskAssignees(
   return { ok: true, allDone }
 }
 
+// ── Yêu cầu chỉnh sửa (change request) — người tạo gửi, Quản trị hệ thống (R10) xử lý ──
+// Lưu zero-schema trong Task.resultData.changeRequest. PENDING = việc bị khóa.
+
+type ChangeRequestType = 'DELETE' | 'EDIT_ASSIGNEES'
+
+/** Lấy changeRequest hiện tại từ resultData (nếu có). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getChangeRequest(resultData: unknown): any | null {
+  if (resultData && typeof resultData === 'object') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cr = (resultData as any).changeRequest
+    return cr && typeof cr === 'object' ? cr : null
+  }
+  return null
+}
+
+/** Chặn thao tác khi việc đang có yêu cầu chờ xử lý (khóa). */
+function assertNotPendingRequest(task: { resultData?: unknown }) {
+  const cr = getChangeRequest(task.resultData)
+  if (cr?.status === 'PENDING') {
+    throw new Error('Việc đang chờ Quản trị hệ thống xử lý yêu cầu chỉnh sửa — tạm khóa.')
+  }
+}
+
+async function notifyUser(userId: string, title: string, message: string, taskId: string) {
+  await prisma.notification.create({
+    data: { userId, title, message, type: 'change_request', linkUrl: `/dashboard/work/${taskId}` },
+  }).catch(() => {})
+}
+
+async function closeAdminTask(adminTaskId: string | undefined, adminUserId: string, note: string) {
+  if (!adminTaskId) return
+  await prisma.task.update({
+    where: { id: adminTaskId },
+    data: { status: TASK_STATUS.DONE, completedAt: new Date(), completedBy: adminUserId },
+  }).catch(() => {})
+  await prisma.taskHistory.create({ data: { taskId: adminTaskId, action: 'CLOSED', byUserId: adminUserId, reason: note } }).catch(() => {})
+}
+
+// Người TẠO gửi yêu cầu chỉnh sửa (Xóa việc / Sửa người nhận) → tạo việc cho R10 + khóa việc gốc.
+export async function createChangeRequest(taskId: string, userId: string, input: { type: ChangeRequestType; reason: string }) {
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
+  if (!task) throw new Error('Không tìm thấy công việc')
+  if (task.createdBy !== userId) throw new Error('Chỉ người tạo việc mới được gửi yêu cầu chỉnh sửa')
+  if (task.status === TASK_STATUS.DONE || task.status === TASK_STATUS.CANCELLED) throw new Error('Việc đã kết thúc, không gửi yêu cầu được')
+  if (getChangeRequest(task.resultData)?.status === 'PENDING') throw new Error('Việc đã có yêu cầu đang chờ xử lý')
+
+  const reason = (input.reason || '').trim()
+  if (!reason) throw new Error('Cần nhập lý do yêu cầu')
+  if (input.type === 'DELETE' && task.assignees.some((a) => a.done)) {
+    throw new Error('Đã có người hoàn thành phần việc — không thể xóa. Hãy yêu cầu "Sửa người nhận".')
+  }
+
+  const requester = await prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } })
+  const requesterName = requester?.fullName || 'Người dùng'
+  const typeLabel = input.type === 'DELETE' ? 'Xóa việc' : 'Sửa người nhận'
+
+  // Tạo việc cho Quản trị hệ thống (R10) — nổi trong hộp việc của họ.
+  const adminTask = await createTask(
+    {
+      title: `[Yêu cầu] ${typeLabel}: ${task.title}`,
+      description: `Yêu cầu từ ${requesterName}.\nLoại: ${typeLabel}.\nLý do: ${reason}`,
+      projectId: task.projectId || undefined,
+      taskType: 'ADMIN_REQUEST',
+      priority: 'HIGH',
+      assignees: [{ role: 'R10', isPrimary: true }],
+    },
+    userId,
+  )
+  // Gắn liên kết ngược để trang chi tiết việc admin render card xử lý.
+  await prisma.task.update({
+    where: { id: adminTask.id },
+    data: { resultData: { changeRequestFor: { originalTaskId: taskId, type: input.type, reason, requestedBy: userId, requestedByName: requesterName, originalTitle: task.title } } },
+  })
+
+  // Ghi changeRequest lên việc gốc (khóa) — GIỮ NGUYÊN các resultData nghiệp vụ khác.
+  const rd = (task.resultData && typeof task.resultData === 'object') ? (task.resultData as Record<string, unknown>) : {}
+  await prisma.task.update({
+    where: { id: taskId },
+    data: {
+      resultData: {
+        ...rd,
+        changeRequest: { type: input.type, reason, requestedBy: userId, requestedByName: requesterName, adminTaskId: adminTask.id, status: 'PENDING' },
+      },
+    },
+  })
+  await prisma.taskHistory.create({ data: { taskId, action: 'CHANGE_REQUESTED', byUserId: userId, reason: `${typeLabel}: ${reason}` } })
+  emitTaskUpdated(taskId, task.status).catch(() => {})
+  return { ok: true, adminTaskId: adminTask.id }
+}
+
+// Quản trị hệ thống (R10) xử lý yêu cầu: EXECUTE (xóa mềm / recall) hoặc REJECT.
+export async function resolveChangeRequest(
+  originalTaskId: string, adminUserId: string, roleCode: string,
+  input: { action: 'EXECUTE' | 'REJECT'; note?: string; assignees?: { role?: string; userId?: string; isPrimary?: boolean }[] },
+) {
+  if (roleCode !== 'R10') throw new Error('Chỉ Quản trị hệ thống được xử lý yêu cầu')
+  const task = await prisma.task.findUnique({ where: { id: originalTaskId }, include: { assignees: true } })
+  if (!task) throw new Error('Không tìm thấy việc gốc')
+  const cr = getChangeRequest(task.resultData)
+  if (!cr || cr.status !== 'PENDING') throw new Error('Việc không có yêu cầu đang chờ xử lý')
+  const rd = (task.resultData && typeof task.resultData === 'object') ? (task.resultData as Record<string, unknown>) : {}
+  const now = new Date().toISOString()
+  const stamp = (status: string) => ({ ...cr, status, resolvedBy: adminUserId, resolvedAt: now, resolution: input.note })
+
+  if (input.action === 'REJECT') {
+    await prisma.task.update({ where: { id: originalTaskId }, data: { resultData: { ...rd, changeRequest: stamp('REJECTED') } } })
+    await prisma.taskHistory.create({ data: { taskId: originalTaskId, action: 'REQUEST_REJECTED', byUserId: adminUserId, reason: input.note } })
+    await closeAdminTask(cr.adminTaskId, adminUserId, 'Từ chối yêu cầu')
+    await notifyUser(cr.requestedBy, 'Yêu cầu chỉnh sửa bị từ chối', `Việc "${task.title}" — QTHT từ chối. ${input.note || ''}`, originalTaskId)
+    emitTaskUpdated(originalTaskId, task.status).catch(() => {})
+    return { ok: true }
+  }
+
+  // EXECUTE
+  const assigneeUserIds = task.assignees.map((a) => a.userId).filter((x): x is string => !!x)
+  if (cr.type === 'DELETE') {
+    if (task.assignees.some((a) => a.done)) throw new Error('Đã có người hoàn thành phần việc — không thể xóa.')
+    await prisma.task.update({ where: { id: originalTaskId }, data: { status: TASK_STATUS.CANCELLED, resultData: { ...rd, changeRequest: stamp('DONE') } } })
+    await prisma.taskHistory.create({ data: { taskId: originalTaskId, action: 'CANCELLED', byUserId: adminUserId, reason: `Xóa theo yêu cầu: ${cr.reason}` } })
+    for (const uid of new Set([cr.requestedBy, ...assigneeUserIds])) {
+      await notifyUser(uid, 'Việc đã bị xóa', `Việc "${task.title}" đã bị Quản trị hệ thống xóa theo yêu cầu.`, originalTaskId)
+    }
+  } else {
+    // EDIT_ASSIGNEES: dùng lại recall (chỉ bỏ người chưa done) rồi gỡ khóa.
+    if (!input.assignees?.length) throw new Error('Chọn danh sách người nhận mới')
+    await editTaskAssignees(originalTaskId, adminUserId, roleCode, input.assignees)
+    const t2 = await prisma.task.findUnique({ where: { id: originalTaskId }, select: { resultData: true } })
+    const rd2 = (t2?.resultData && typeof t2.resultData === 'object') ? (t2.resultData as Record<string, unknown>) : {}
+    await prisma.task.update({ where: { id: originalTaskId }, data: { resultData: { ...rd2, changeRequest: stamp('DONE') } } })
+    await notifyUser(cr.requestedBy, 'Đã sửa người nhận theo yêu cầu', `Việc "${task.title}" — QTHT đã cập nhật người nhận.`, originalTaskId)
+  }
+  await closeAdminTask(cr.adminTaskId, adminUserId, 'Đã thực hiện yêu cầu')
+  emitTaskUpdated(originalTaskId, task.status).catch(() => {})
+  return { ok: true }
+}
+
 export async function addComment(taskId: string, userId: string, content: string) {
   return prisma.taskHistory.create({ data: { taskId, action: 'COMMENT', byUserId: userId, reason: content } })
 }
 
 // Người TẠO sửa lại việc (tiêu đề/mô tả/deadline/ưu tiên) khi chưa hoàn thành
 export async function updateTask(taskId: string, userId: string, data: { title?: string; description?: string; deadline?: string | null; priority?: string }) {
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { createdBy: true, status: true } })
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { createdBy: true, status: true, resultData: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
+  assertNotPendingRequest(task)
   if (task.createdBy !== userId) throw new Error('Chỉ người tạo việc mới được sửa')
   if (task.status === TASK_STATUS.DONE) throw new Error('Việc đã hoàn thành, không sửa được')
   await prisma.task.update({

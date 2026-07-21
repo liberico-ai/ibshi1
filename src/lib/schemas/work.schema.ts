@@ -82,6 +82,21 @@ export const reassignTaskSchema = z.object({
 })
 export type ReassignTaskInput = z.infer<typeof reassignTaskSchema>
 
+// Yêu cầu chỉnh sửa việc (người tạo gửi) — Xóa việc / Sửa người nhận + lý do
+export const changeRequestSchema = z.object({
+  type: z.enum(['DELETE', 'EDIT_ASSIGNEES']),
+  reason: z.string().min(1, 'Cần nhập lý do'),
+})
+export type ChangeRequestInput = z.infer<typeof changeRequestSchema>
+
+// QTHT xử lý yêu cầu — thực hiện (kèm assignees mới nếu recall) hoặc từ chối
+export const resolveChangeRequestSchema = z.object({
+  action: z.enum(['EXECUTE', 'REJECT']),
+  note: z.string().optional(),
+  assignees: z.array(taskAssigneeInput).optional(),
+})
+export type ResolveChangeRequestInput = z.infer<typeof resolveChangeRequestSchema>
+
 export const commentSchema = z.object({ content: z.string().min(1) })
 export type CommentInput = z.infer<typeof commentSchema>
 

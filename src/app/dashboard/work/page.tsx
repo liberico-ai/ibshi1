@@ -12,6 +12,9 @@ interface Task {
   blocked: boolean; submittedAt: string | null
   project: { projectCode: string; projectName: string } | null
   assigneeNames: string[]; createdByName: string; needsMyReview: boolean; _count: { children: number; docs: number }
+  createdBy?: string
+  assignees?: { done: boolean }[]
+  resultData?: { changeRequest?: { status: string; type: string; reason: string } } | null
 }
 interface Proj { id: string; projectCode: string; projectName: string }
 
@@ -115,6 +118,21 @@ export default function WorkInboxPage() {
   useEffect(() => { const iv = setInterval(load, 30000); return () => clearInterval(iv) }, [load])
   useEffect(() => { setPage(1) }, [tab, q, projectId])
 
+  // Yêu cầu chỉnh sửa (gửi cho Quản trị hệ thống)
+  const [crTask, setCrTask] = useState<Task | null>(null)
+  const [crType, setCrType] = useState<'DELETE' | 'EDIT_ASSIGNEES'>('EDIT_ASSIGNEES')
+  const [crReason, setCrReason] = useState('')
+  const [crBusy, setCrBusy] = useState(false)
+  const crAnyDone = !!crTask?.assignees?.some((a) => a.done)
+  const openCr = (t: Task) => { setCrTask(t); setCrType(t.assignees?.some((a) => a.done) ? 'EDIT_ASSIGNEES' : 'DELETE'); setCrReason('') }
+  const submitCr = async () => {
+    if (!crTask || !crReason.trim()) return
+    setCrBusy(true)
+    const res = await apiFetch(`/api/work/tasks/${crTask.id}/change-request`, { method: 'POST', body: JSON.stringify({ type: crType, reason: crReason.trim() }) })
+    setCrBusy(false)
+    if (res.ok) { setCrTask(null); setCrReason(''); load() } else alert(res.error || 'Lỗi gửi yêu cầu')
+  }
+
   const showCreator = tab === 'assigned' || tab === 'overdue'
   const showAssignees = tab === 'created' || tab === 'dept' || tab === 'review' || tab === 'done'
 
@@ -189,15 +207,18 @@ export default function WorkInboxPage() {
                 : t.status === 'IN_PROGRESS' ? SEMANTIC_COLORS.info
                 : SEMANTIC_COLORS.neutral
               const rowNum = (page - 1) * 20 + idx + 1
+              // Việc đang chờ QTHT xử lý yêu cầu → xám, không click được (chỉ ở tab "Tôi tạo")
+              const pending = tab === 'created' && t.resultData?.changeRequest?.status === 'PENDING'
               return (
-                <div key={t.id} onClick={() => router.push(`/dashboard/work/${t.id}`)}
-                  className="cursor-pointer transition-all shadow-sm hover:shadow-md"
+                <div key={t.id} onClick={pending ? undefined : () => router.push(`/dashboard/work/${t.id}`)}
+                  className={`transition-all shadow-sm ${pending ? '' : 'cursor-pointer hover:shadow-md'}`}
                   style={{
-                    background: overdue ? accent.bg : 'var(--surface, #ffffff)',
+                    background: pending ? '#f1f5f9' : (overdue ? accent.bg : 'var(--surface, #ffffff)'),
                     border: `1px solid ${overdue ? accent.solid + '55' : 'var(--border, #e2e8f0)'}`,
-                    borderLeft: `5px solid ${accent.solid}`,
+                    borderLeft: `5px solid ${pending ? '#94a3b8' : accent.solid}`,
                     borderRadius: 12,
                     padding: '14px 16px',
+                    opacity: pending ? 0.6 : 1,
                   }}>
                   <div className="flex items-start gap-2.5 flex-wrap">
                     <span className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
@@ -206,6 +227,7 @@ export default function WorkInboxPage() {
                     {tab === 'review' && !revLate && <Badge variant="warning">Cần kết thúc</Badge>}
                     {revLate && (tab === 'review' || tab === 'overdue') && <Badge variant="danger">Trễ nghiệm thu ({revDays} ngày)</Badge>}
                     <Badge variant={st.variant}>{st.l}</Badge>
+                    {pending && <Badge variant="default">⏳ Chờ QTHT xử lý</Badge>}
                     {t.taskType === 'CASCADE' && (
                       <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{
                         background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24',
@@ -222,12 +244,54 @@ export default function WorkInboxPage() {
                     {t._count.children > 0 && <span className="font-mono">+{t._count.children} con</span>}
                     {t._count.docs > 0 && <span className="font-mono">{t._count.docs} file</span>}
                   </div>
+                  {tab === 'created' && !pending && t.status !== 'DONE' && (
+                    <div className="mt-2">
+                      <button onClick={(e) => { e.stopPropagation(); openCr(t) }}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: '#fff' }}>
+                        ✎ Yêu cầu chỉnh sửa
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </>
+      )}
+
+      {/* Modal: Yêu cầu chỉnh sửa (gửi cho Quản trị hệ thống) */}
+      {crTask && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => { if (!crBusy) setCrTask(null) }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, padding: 20, background: '#fff', borderRadius: 14, boxShadow: '0 20px 50px rgba(0,0,0,.25)' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, color: 'var(--text-primary)' }}>Yêu cầu chỉnh sửa</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14 }}>{crTask.title}</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13.5, cursor: crAnyDone ? 'not-allowed' : 'pointer', opacity: crAnyDone ? 0.5 : 1 }}>
+                <input type="radio" checked={crType === 'DELETE'} disabled={crAnyDone} onChange={() => setCrType('DELETE')} style={{ marginTop: 3 }} />
+                <span><b>Xóa công việc</b><br /><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{crAnyDone ? 'Đã có người hoàn thành — không xóa được' : 'Hủy việc này (chỉ khi chưa ai hoàn thành)'}</span></span>
+              </label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13.5, cursor: 'pointer' }}>
+                <input type="radio" checked={crType === 'EDIT_ASSIGNEES'} onChange={() => setCrType('EDIT_ASSIGNEES')} style={{ marginTop: 3 }} />
+                <span><b>Chỉnh sửa người nhận</b><br /><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>QTHT sẽ bỏ/đổi người nhận (chỉ người chưa hoàn thành)</span></span>
+              </label>
+            </div>
+
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>Lý do yêu cầu</label>
+            <textarea value={crReason} onChange={(e) => setCrReason(e.target.value)} rows={3}
+              placeholder="Nhập lý do (vd: nhập nhầm tên người nhận / người nhận đã nghỉ việc…)"
+              className="input-field" style={{ width: '100%', marginTop: 4, marginBottom: 14 }} />
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setCrTask(null)} disabled={crBusy} className="text-sm px-4 py-2 rounded-lg cursor-pointer" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+              <button onClick={submitCr} disabled={crBusy || !crReason.trim()} className="text-sm px-4 py-2 rounded-lg font-semibold cursor-pointer" style={{ background: '#dc2626', color: '#fff', opacity: (crBusy || !crReason.trim()) ? 0.6 : 1 }}>{crBusy ? 'Đang gửi…' : 'Gửi yêu cầu'}</button>
+            </div>
+            <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10 }}>Sau khi gửi, việc sẽ bị khóa (xám) tới khi Quản trị hệ thống xử lý.</p>
+          </div>
+        </div>
       )}
     </div>
   )

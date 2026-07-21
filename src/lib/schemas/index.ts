@@ -228,6 +228,8 @@ export {
   returnTaskSchema,
   completeWorkTaskSchema,
   reassignTaskSchema,
+  changeRequestSchema,
+  resolveChangeRequestSchema,
   commentSchema,
   inboxQuerySchema,
   createMeetingSchema,
@@ -237,6 +239,8 @@ export {
   type ReturnTaskInput,
   type CompleteWorkTaskInput,
   type ReassignTaskInput,
+  type ChangeRequestInput,
+  type ResolveChangeRequestInput,
   type CommentInput,
   type InboxQueryInput,
 } from './work.schema'

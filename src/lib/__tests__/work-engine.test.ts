@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { prismaMock } from '@/lib/__mocks__/db'
-import { createTask, completeTask, returnTask, reassignTask, editTaskAssignees, suggestRoute, setTaskStatusAdmin } from '@/lib/work-engine'
+import { createTask, completeTask, returnTask, reassignTask, editTaskAssignees, createChangeRequest, resolveChangeRequest, suggestRoute, setTaskStatusAdmin } from '@/lib/work-engine'
 
 beforeEach(() => {
   // $transaction: hàm → gọi với prismaMock; mảng → Promise.all
@@ -42,9 +42,9 @@ describe('editTaskAssignees', () => {
     title: 'X', assignedAt: new Date(), assignees,
   })
 
-  it('chỉ người GIAO mới được sửa người nhận', async () => {
-    prismaMock.task.findUnique.mockResolvedValue(baseTask([{ id: 'a1', userId: 'u1', role: null, done: false, isPrimary: true }]) as never)
-    await expect(editTaskAssignees('t1', 'khac', [{ userId: 'u1' }])).rejects.toThrow('Chỉ người giao')
+  it('CHỈ Quản trị hệ thống (R10) được sửa người nhận', async () => {
+    // roleCode khác R10 → chặn ngay (kể cả người tạo việc)
+    await expect(editTaskAssignees('t1', 'creator', 'R04', [{ userId: 'u1' }])).rejects.toThrow('Chỉ Quản trị hệ thống')
   })
 
   it('CHẶN bỏ người đã hoàn thành phần việc', async () => {
@@ -53,12 +53,12 @@ describe('editTaskAssignees', () => {
       { id: 'a2', userId: 'u2', role: null, done: false, isPrimary: false },
     ]) as never)
     prismaMock.user.findMany.mockResolvedValue([{ id: 'u2', fullName: 'U2', username: 'u2', roleCode: 'R04', isActive: true }] as never)
-    // Bỏ u1 (đã done) → phải báo lỗi
-    await expect(editTaskAssignees('t1', 'creator', [{ userId: 'u2' }])).rejects.toThrow('Không thể bỏ người đã hoàn thành')
+    // admin R10 bỏ u1 (đã done) → phải báo lỗi
+    await expect(editTaskAssignees('t1', 'admin', 'R10', [{ userId: 'u2' }])).rejects.toThrow('Không thể bỏ người đã hoàn thành')
     expect(prismaMock.taskAssignee.deleteMany).not.toHaveBeenCalled()
   })
 
-  it('bỏ người CHƯA done, giữ người đã done → còn lại đều done → AWAITING_REVIEW', async () => {
+  it('admin bỏ người CHƯA done, giữ người đã done → còn lại đều done → AWAITING_REVIEW', async () => {
     prismaMock.task.findUnique.mockResolvedValue(baseTask([
       { id: 'a1', userId: 'u1', role: null, done: true, isPrimary: true },
       { id: 'a2', userId: 'u2', role: null, done: false, isPrimary: false },
@@ -69,12 +69,61 @@ describe('editTaskAssignees', () => {
     prismaMock.task.update.mockResolvedValue({} as never)
     prismaMock.taskHistory.create.mockResolvedValue({} as never)
 
-    const r = await editTaskAssignees('t1', 'creator', [{ userId: 'u1' }])
+    const r = await editTaskAssignees('t1', 'admin', 'R10', [{ userId: 'u1' }])
     expect(r.allDone).toBe(true)
     expect(prismaMock.taskAssignee.deleteMany).toHaveBeenCalled() // xóa a2 (u2 chưa done)
     expect(prismaMock.task.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'AWAITING_REVIEW' }) }),
     )
+  })
+})
+
+describe('createChangeRequest (guards)', () => {
+  const t = (o: Record<string, unknown>) => ({ id: 't1', createdBy: 'creator', status: 'IN_PROGRESS', resultData: null, assignees: [], title: 'X', projectId: null, ...o })
+  it('chỉ người tạo việc mới gửi yêu cầu', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(t({}) as never)
+    await expect(createChangeRequest('t1', 'khac', { type: 'DELETE', reason: 'x' })).rejects.toThrow('Chỉ người tạo việc')
+  })
+  it('DELETE bị chặn nếu có người đã done', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(t({ assignees: [{ done: true }] }) as never)
+    await expect(createChangeRequest('t1', 'creator', { type: 'DELETE', reason: 'x' })).rejects.toThrow('không thể xóa')
+  })
+  it('chặn khi đã có yêu cầu PENDING', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(t({ resultData: { changeRequest: { status: 'PENDING' } } }) as never)
+    await expect(createChangeRequest('t1', 'creator', { type: 'EDIT_ASSIGNEES', reason: 'x' })).rejects.toThrow('đã có yêu cầu')
+  })
+})
+
+describe('resolveChangeRequest', () => {
+  const withCr = (type: string, extra: Record<string, unknown> = {}) => ({
+    id: 't1', createdBy: 'creator', status: 'IN_PROGRESS', title: 'X', assignees: [],
+    resultData: { changeRequest: { type, status: 'PENDING', reason: 'r', requestedBy: 'creator', adminTaskId: 'adm1' } },
+    ...extra,
+  })
+  beforeEach(() => {
+    prismaMock.task.update.mockResolvedValue({} as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+  })
+  it('chỉ R10 xử lý', async () => {
+    await expect(resolveChangeRequest('t1', 'u', 'R04', { action: 'EXECUTE' })).rejects.toThrow('Chỉ Quản trị hệ thống')
+  })
+  it('REJECT → gỡ khóa (đánh dấu REJECTED)', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(withCr('DELETE') as never)
+    await resolveChangeRequest('t1', 'admin', 'R10', { action: 'REJECT', note: 'không cần' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const call = (prismaMock.task.update as any).mock.calls.find((c: any) => c[0]?.data?.resultData?.changeRequest?.status === 'REJECTED')
+    expect(call).toBeTruthy()
+  })
+  it('EXECUTE DELETE → hủy mềm (CANCELLED)', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(withCr('DELETE') as never)
+    await resolveChangeRequest('t1', 'admin', 'R10', { action: 'EXECUTE' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const call = (prismaMock.task.update as any).mock.calls.find((c: any) => c[0]?.data?.status === 'CANCELLED')
+    expect(call).toBeTruthy()
+  })
+  it('EXECUTE DELETE bị chặn nếu có người đã done', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(withCr('DELETE', { assignees: [{ done: true }] }) as never)
+    await expect(resolveChangeRequest('t1', 'admin', 'R10', { action: 'EXECUTE' })).rejects.toThrow('không thể xóa')
   })
 })
 
