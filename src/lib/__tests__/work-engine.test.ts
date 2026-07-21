@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { prismaMock } from '@/lib/__mocks__/db'
-import { createTask, completeTask, returnTask, reassignTask, suggestRoute, setTaskStatusAdmin } from '@/lib/work-engine'
+import { createTask, completeTask, returnTask, reassignTask, editTaskAssignees, suggestRoute, setTaskStatusAdmin } from '@/lib/work-engine'
 
 beforeEach(() => {
   // $transaction: hàm → gọi với prismaMock; mảng → Promise.all
@@ -33,6 +33,48 @@ describe('createTask', () => {
     expect(prismaMock.task.create).toHaveBeenCalled()
     expect(prismaMock.taskAssignee.createMany).toHaveBeenCalled()
     expect(prismaMock.taskHistory.createMany).toHaveBeenCalled()
+  })
+})
+
+describe('editTaskAssignees', () => {
+  const baseTask = (assignees: unknown[]) => ({
+    id: 't1', createdBy: 'creator', status: 'IN_PROGRESS', projectId: null, deadline: null,
+    title: 'X', assignedAt: new Date(), assignees,
+  })
+
+  it('chỉ người GIAO mới được sửa người nhận', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(baseTask([{ id: 'a1', userId: 'u1', role: null, done: false, isPrimary: true }]) as never)
+    await expect(editTaskAssignees('t1', 'khac', [{ userId: 'u1' }])).rejects.toThrow('Chỉ người giao')
+  })
+
+  it('CHẶN bỏ người đã hoàn thành phần việc', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(baseTask([
+      { id: 'a1', userId: 'u1', role: null, done: true, isPrimary: true },
+      { id: 'a2', userId: 'u2', role: null, done: false, isPrimary: false },
+    ]) as never)
+    prismaMock.user.findMany.mockResolvedValue([{ id: 'u2', fullName: 'U2', username: 'u2', roleCode: 'R04', isActive: true }] as never)
+    // Bỏ u1 (đã done) → phải báo lỗi
+    await expect(editTaskAssignees('t1', 'creator', [{ userId: 'u2' }])).rejects.toThrow('Không thể bỏ người đã hoàn thành')
+    expect(prismaMock.taskAssignee.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('bỏ người CHƯA done, giữ người đã done → còn lại đều done → AWAITING_REVIEW', async () => {
+    prismaMock.task.findUnique.mockResolvedValue(baseTask([
+      { id: 'a1', userId: 'u1', role: null, done: true, isPrimary: true },
+      { id: 'a2', userId: 'u2', role: null, done: false, isPrimary: false },
+    ]) as never)
+    prismaMock.user.findMany.mockResolvedValue([{ id: 'u1', fullName: 'U1', username: 'u1', roleCode: 'R04', isActive: true }] as never)
+    prismaMock.taskAssignee.deleteMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.taskAssignee.findMany.mockResolvedValue([{ done: true }] as never)
+    prismaMock.task.update.mockResolvedValue({} as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+
+    const r = await editTaskAssignees('t1', 'creator', [{ userId: 'u1' }])
+    expect(r.allDone).toBe(true)
+    expect(prismaMock.taskAssignee.deleteMany).toHaveBeenCalled() // xóa a2 (u2 chưa done)
+    expect(prismaMock.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'AWAITING_REVIEW' }) }),
+    )
   })
 })
 

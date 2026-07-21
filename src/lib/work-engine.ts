@@ -665,6 +665,71 @@ export async function reassignTask(taskId: string, userId: string, input: Reassi
   return { ok: true }
 }
 
+// Người GIAO sửa danh sách người nhận khi việc chưa xong (vd nhập sai tên / người nhận nghỉ việc).
+// AN TOÀN: chỉ được BỎ/ĐỔI người CHƯA hoàn thành (done=false). Người đã done được giữ nguyên
+// (không reset dữ liệu của họ). Sau khi sửa, tự tính lại trạng thái theo số người còn lại đã xong.
+export async function editTaskAssignees(
+  taskId: string, userId: string,
+  assignees: { role?: string; userId?: string; isPrimary?: boolean }[],
+) {
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
+  if (!task) throw new Error('Không tìm thấy công việc')
+  if (task.createdBy !== userId) throw new Error('Chỉ người giao việc mới được sửa người nhận')
+  if (task.status === TASK_STATUS.DONE) throw new Error('Việc đã hoàn thành, không sửa được')
+
+  const resolved = await resolveAssignees(assignees || [], task.projectId)
+  if (resolved.length === 0) throw new Error('Cần ít nhất một người nhận')
+
+  const keyOf = (a: { userId?: string | null; role?: string | null }) => (a.userId ? `u:${a.userId}` : a.role ? `r:${a.role}` : '')
+  const newKeys = new Set(resolved.map(keyOf).filter(Boolean))
+
+  // BẢO VỆ: không được bỏ người đã hoàn thành phần việc.
+  const removedDone = task.assignees.filter((a) => a.done && !newKeys.has(keyOf(a)))
+  if (removedDone.length > 0) {
+    throw new Error('Không thể bỏ người đã hoàn thành phần việc — chỉ sửa/bỏ được người CHƯA hoàn thành.')
+  }
+
+  const oldByKey = new Map(task.assignees.map((a) => [keyOf(a), a]))
+  const toDelete = task.assignees.filter((a) => !newKeys.has(keyOf(a))) // đã guard: chỉ gồm người chưa done
+  const toAdd = resolved.filter((a) => !oldByKey.has(keyOf(a)))
+  const primaryKey = keyOf(resolved[0])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ops: any[] = []
+  if (toDelete.length) ops.push(prisma.taskAssignee.deleteMany({ where: { id: { in: toDelete.map((a) => a.id) } } }))
+  for (const a of toAdd) ops.push(prisma.taskAssignee.create({ data: { taskId, role: a.role || null, userId: a.userId, isPrimary: keyOf(a) === primaryKey } }))
+  for (const a of task.assignees.filter((a) => newKeys.has(keyOf(a)))) {
+    const shouldPrimary = keyOf(a) === primaryKey
+    if (a.isPrimary !== shouldPrimary) ops.push(prisma.taskAssignee.update({ where: { id: a.id }, data: { isPrimary: shouldPrimary } }))
+  }
+  if (ops.length) await prisma.$transaction(ops)
+
+  // Tính lại trạng thái: hết người chưa xong → AWAITING_REVIEW (người giao kết thúc); còn lại → IN_PROGRESS/OPEN.
+  const rows = await prisma.taskAssignee.findMany({ where: { taskId }, select: { done: true } })
+  const allDone = rows.length > 0 && rows.every((r) => r.done)
+  let newStatus: string = task.status
+  if (task.status !== TASK_STATUS.DONE) {
+    if (allDone) newStatus = TASK_STATUS.AWAITING_REVIEW
+    else newStatus = rows.some((r) => r.done) ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.OPEN
+  }
+  await prisma.task.update({ where: { id: taskId }, data: { status: newStatus, assignedAt: task.assignedAt ?? new Date() } })
+  await prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, reason: 'Chỉnh sửa người nhận' } })
+  emitTaskUpdated(taskId, task.status).catch(() => {})
+
+  // Thông báo cho người mới được thêm
+  if (toAdd.length) {
+    const [project, creator] = await Promise.all([
+      task.projectId ? prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } }) : null,
+      prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }),
+    ])
+    await notifyAssignees(taskId, task.title, toAdd, {
+      projectCode: project?.projectCode, projectName: project?.projectName,
+      createdByName: creator?.fullName, deadline: task.deadline,
+    })
+  }
+  return { ok: true, allDone }
+}
+
 export async function addComment(taskId: string, userId: string, content: string) {
   return prisma.taskHistory.create({ data: { taskId, action: 'COMMENT', byUserId: userId, reason: content } })
 }

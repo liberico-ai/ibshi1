@@ -49,6 +49,10 @@ const TASK_TYPES = [
 ]
 const inp: React.CSSProperties = { width: '100%', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px', fontSize: '.84rem', background: '#f8fafc' }
 
+// Khóa nhận diện danh sách người nhận (để phát hiện có thay đổi khi lưu).
+const asgKey = (list: { userId?: string; role?: string }[]) =>
+  list.map((a) => (a.userId ? `u:${a.userId}` : `r:${a.role}`)).sort().join('|')
+
 export default function WorkDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -86,6 +90,10 @@ export default function WorkDetailPage() {
   const [rejReason, setRejReason] = useState('')
   const [editOpen, setEditOpen] = useState(false)
   const [edit, setEdit] = useState({ title: '', description: '', deadline: '', priority: 'NORMAL' })
+  // Sửa người nhận (trong modal Sửa): chỉ bỏ/đổi được người CHƯA hoàn thành.
+  const [editAsg, setEditAsg] = useState<{ userId?: string; role?: string; label: string; done: boolean }[]>([])
+  const [editAsgQuery, setEditAsgQuery] = useState('')
+  const [origAsgKeys, setOrigAsgKeys] = useState('')
 
   const load = useCallback(() => { apiFetch(`/api/work/tasks/${id}`).then((r) => { if (r.ok) setTask(r.task); setLoading(false) }) }, [id])
   useEffect(() => { load() }, [load])
@@ -173,13 +181,27 @@ export default function WorkDetailPage() {
     setBusy(false)
     if (res.ok) { setDelOpen(false); setDelQuery(''); setDelDept(''); showToast('Đã chuyển giao'); load() } else showToast(res.error || 'Lỗi')
   }
-  const openEdit = () => { setEdit({ title: task.title, description: task.description || '', deadline: task.deadline ? task.deadline.slice(0, 10) : '', priority: task.priority }); setEditOpen(true) }
+  const openEdit = () => {
+    setEdit({ title: task.title, description: task.description || '', deadline: task.deadline ? task.deadline.slice(0, 10) : '', priority: task.priority })
+    const asg = task.assignees.map((a) => ({ userId: a.userId || undefined, role: a.role || undefined, label: assigneeLabel(a), done: !!a.done }))
+    setEditAsg(asg)
+    setOrigAsgKeys(asgKey(asg))
+    setEditAsgQuery('')
+    setEditOpen(true)
+  }
   const saveEdit = async () => {
     if (!edit.title.trim()) { showToast('Cần tiêu đề'); return }
+    if (editAsg.length === 0) { showToast('Cần ít nhất một người nhận'); return }
     setBusy(true)
     const res = await apiFetch(`/api/work/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ title: edit.title.trim(), description: edit.description, deadline: edit.deadline ? new Date(edit.deadline).toISOString() : null, priority: edit.priority }) })
+    if (!res.ok) { setBusy(false); showToast(res.error || 'Lỗi'); return }
+    // Cập nhật người nhận nếu danh sách thay đổi
+    if (asgKey(editAsg) !== origAsgKeys) {
+      const ares = await apiFetch(`/api/work/tasks/${id}/assignees`, { method: 'PATCH', body: JSON.stringify({ assignees: editAsg.map((a, i) => ({ userId: a.userId, role: a.role, isPrimary: i === 0 })) }) })
+      if (!ares.ok) { setBusy(false); showToast(ares.error || 'Lỗi cập nhật người nhận'); return }
+    }
     setBusy(false)
-    if (res.ok) { setEditOpen(false); showToast('Đã cập nhật'); load() } else showToast(res.error || 'Lỗi')
+    setEditOpen(false); showToast('Đã cập nhật'); load()
   }
   const submitReject = async () => {
     if (!rejReason.trim()) { showToast('Nhập lý do trả lại'); return }
@@ -241,6 +263,39 @@ export default function WorkDetailPage() {
               <input type="date" value={edit.deadline} onChange={(e) => setEdit({ ...edit, deadline: e.target.value })} style={inp} />
               <select value={edit.priority} onChange={(e) => setEdit({ ...edit, priority: e.target.value })} style={inp}><option value="NORMAL">Bình thường</option><option value="HIGH">Cao</option><option value="URGENT">Khẩn</option></select>
             </div>
+
+            {/* Sửa người nhận — chỉ bỏ/đổi được người CHƯA hoàn thành */}
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)' }}>Người nhận</label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {editAsg.map((a, i) => (
+                  <span key={(a.userId || a.role || '') + i} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full"
+                    style={{ background: a.done ? '#ecfdf5' : '#eff6ff', color: a.done ? '#059669' : '#1d4ed8', border: `1px solid ${a.done ? '#a7f3d0' : '#bfdbfe'}` }}>
+                    {a.done && '✓ '}{a.label}
+                    {a.done
+                      ? <span title="Đã hoàn thành phần việc — không thể bỏ" style={{ opacity: 0.6 }}>🔒</span>
+                      : <button type="button" onClick={() => setEditAsg(editAsg.filter((_, j) => j !== i))} title="Bỏ người nhận này" style={{ fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}>×</button>}
+                  </span>
+                ))}
+              </div>
+              <input value={editAsgQuery} onChange={(e) => setEditAsgQuery(e.target.value)} placeholder="Thêm người nhận — gõ tên…" style={{ ...inp, marginTop: 6 }} />
+              {editAsgQuery.trim() && (
+                <div className="mt-1 rounded-lg" style={{ border: '1px solid var(--border)', maxHeight: 160, overflow: 'auto' }}>
+                  {users
+                    .filter((u) => (u.fullName || u.username || '').toLowerCase().includes(editAsgQuery.toLowerCase()))
+                    .filter((u) => !editAsg.some((a) => a.userId === u.id))
+                    .slice(0, 8)
+                    .map((u) => (
+                      <div key={u.id} onClick={() => { setEditAsg([...editAsg, { userId: u.id, label: u.fullName || u.username || '', done: false }]); setEditAsgQuery('') }}
+                        className="text-sm px-2 py-1.5 cursor-pointer hover:bg-blue-50">
+                        {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {roleLabel(u.roleCode)}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Chỉ bỏ/đổi được người CHƯA hoàn thành. Người đã xong (✓ 🔒) được giữ nguyên.</p>
+            </div>
+
             <div className="flex gap-2">
               <button onClick={saveEdit} disabled={busy} className="text-sm px-4 py-2 rounded-lg font-semibold" style={{ background: '#059669', color: '#fff' }}>Lưu</button>
               <button onClick={() => setEditOpen(false)} className="text-sm px-4 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
