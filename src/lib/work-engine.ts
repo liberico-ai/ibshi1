@@ -1012,7 +1012,12 @@ async function doneCodesForProject(steps: TStep[], projectId: string): Promise<S
   return new Set(doneCodes)
 }
 
-export async function applyTemplate(projectId: string, templateCode: string, byUser: string) {
+export async function applyTemplate(
+  projectId: string,
+  templateCode: string,
+  byUser: string,
+  opts?: { fromStepCode?: string },
+) {
   const tpl = await prisma.workflowTemplate.findFirst({
     where: { code: templateCode, isActive: true },
     include: { steps: { orderBy: { orderIndex: 'asc' } } },
@@ -1026,6 +1031,52 @@ export async function applyTemplate(projectId: string, templateCode: string, byU
   const entrySteps = steps.filter((s) => !reachable.has(s.code))
 
   let created = 0
+  let skipped = 0
+
+  // ── Áp GIỮA FLOW (opts.fromStepCode) ──
+  // Dự án đã tiến xa (vd đang sản xuất) mà áp template vẫn bắt đầu từ P1.1 → sinh task lệch giai đoạn.
+  // Giải: coi mọi bước là TỔ TIÊN của X (đi tới X qua nextCodes) là ĐÃ XONG (DONE, đánh dấu bỏ qua)
+  // → gate của X thoả → khối entry/chain phía dưới tự sinh X + các bước frontier cùng mức. Đánh dấu
+  // theo ĐỒ THỊ (không theo orderIndex) để KHÔNG bỏ nhầm nhánh song song cùng mức với X.
+  if (opts?.fromStepCode) {
+    const fromStep = byCode.get(opts.fromStepCode)
+    if (!fromStep) throw new Error(`Bước "${opts.fromStepCode}" không có trong template "${templateCode}"`)
+
+    // reverse-adjacency: code → các bước có code trong nextCodes (tiền nhiệm qua next)
+    const revAdj = new Map<string, string[]>()
+    for (const s of steps) for (const nc of s.nextCodes || []) {
+      if (!revAdj.has(nc)) revAdj.set(nc, [])
+      revAdj.get(nc)!.push(s.code)
+    }
+    // BFS ngược từ X → tập tổ tiên (phải xong trước X). X KHÔNG nằm trong tập này.
+    // Tiền nhiệm của 1 bước = (bước có nó trong nextCodes) ∪ (gateCodes của chính nó).
+    // BẮT BUỘC gồm gateCodes: bước hội tụ (vd P2.4 gate=[P2.1,P2.2,P2.3,P2.1A]) KHÔNG được
+    // ai list trong nextCodes → chỉ theo next sẽ bỏ sót các bước gate → done-set thiếu.
+    const ancestors = new Set<string>()
+    const stack = [fromStep.code]
+    while (stack.length) {
+      const cur = stack.pop()!
+      const curStep = byCode.get(cur)
+      const preds = [...(revAdj.get(cur) || []), ...((curStep?.gateCodes) || [])]
+      for (const p of preds) {
+        if (p !== fromStep.code && !ancestors.has(p)) { ancestors.add(p); stack.push(p) }
+      }
+    }
+    for (const code of ancestors) {
+      const s = byCode.get(code); if (!s) continue
+      const exists = await prisma.task.findFirst({ where: { projectId, templateStepId: s.id }, select: { id: true } })
+      if (exists) continue
+      await prisma.task.create({
+        data: {
+          projectId, level: 2, taskType: s.taskType || s.code, title: s.title,
+          priority: 'NORMAL', createdBy: byUser, status: 'DONE',
+          templateStepId: s.id, completedBy: byUser, completedAt: new Date(),
+          resultData: { appliedMidFlowSkip: true },
+        },
+      })
+      skipped++
+    }
+  }
   // ── THỨ TỰ QUAN TRỌNG (fix bug prod: dự án MỚI áp template sinh cả P1.1B ngày 1) ──
   // Bước 1: spawn ENTRY STEPS TRƯỚC. Gate check giữ nguyên như cũ (done-set tại thời điểm này).
   const doneAtEntry = await doneCodesForProject(steps, projectId)
@@ -1054,7 +1105,7 @@ export async function applyTemplate(projectId: string, templateCode: string, byU
       }
     }
   }
-  return { ok: true, created, template: tpl.name }
+  return { ok: true, created, skipped, template: tpl.name }
 }
 
 // Gọi khi 1 task template hoàn thành → sinh các bước kế (theo next/gate).
