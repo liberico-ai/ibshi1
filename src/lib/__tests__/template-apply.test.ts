@@ -285,6 +285,27 @@ describe('applyTemplate — fromStepCode (áp giữa flow)', () => {
     expect(p12a?.resultData?.appliedMidFlowSkip).toBeUndefined()
   })
 
+  it('gate-based: bước hội tụ (gate=[B1,B2], KHÔNG ai list trong next) → B1,B2 vẫn bỏ qua', async () => {
+    // Mô phỏng P2.4: B1,B2 next RỖNG; BC gate=[B1,B2] không nằm trong next của ai; BN gate=[BC].
+    const STEPS_GATE = [
+      mkStep('B1', 0, [], []),
+      mkStep('B2', 1, [], []),
+      mkStep('BC', 2, ['BN'], ['B1', 'B2']),
+      mkStep('BN', 3, [], ['BC']),
+    ]
+    prismaMock.workflowTemplate.findFirst.mockResolvedValue({ ...TPL, steps: STEPS_GATE } as never)
+    store2()
+    mockResolveRole()
+
+    const r = await applyTemplate('p1', 'TPL-TEST', 'u1', { fromStepCode: 'BN' })
+    expect(r.ok).toBe(true)
+    // Tổ tiên BN = BC (gate) + B1,B2 (gate của BC) = 3. Nếu chỉ theo next sẽ chỉ ra BC (thiếu B1,B2).
+    expect(r.skipped).toBe(3)
+    const marked = createCalls().filter((c) => c.status === 'DONE').map((c) => c.templateStepId).sort()
+    expect(marked).toEqual(['step-B1', 'step-B2', 'step-BC'])
+    expect(r.created).toBe(1) // BN sinh (gate [BC] thoả)
+  })
+
   it('fromStepCode không tồn tại → throw', async () => {
     prismaMock.workflowTemplate.findFirst.mockResolvedValue({ ...TPL, steps: STEPS_LINEAR } as never)
     store2()

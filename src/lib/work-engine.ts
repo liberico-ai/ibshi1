@@ -965,19 +965,24 @@ export async function applyTemplate(
     const fromStep = byCode.get(opts.fromStepCode)
     if (!fromStep) throw new Error(`Bước "${opts.fromStepCode}" không có trong template "${templateCode}"`)
 
-    // reverse-adjacency: code → các bước có code trong nextCodes (tiền nhiệm trực tiếp)
+    // reverse-adjacency: code → các bước có code trong nextCodes (tiền nhiệm qua next)
     const revAdj = new Map<string, string[]>()
     for (const s of steps) for (const nc of s.nextCodes || []) {
       if (!revAdj.has(nc)) revAdj.set(nc, [])
       revAdj.get(nc)!.push(s.code)
     }
     // BFS ngược từ X → tập tổ tiên (phải xong trước X). X KHÔNG nằm trong tập này.
+    // Tiền nhiệm của 1 bước = (bước có nó trong nextCodes) ∪ (gateCodes của chính nó).
+    // BẮT BUỘC gồm gateCodes: bước hội tụ (vd P2.4 gate=[P2.1,P2.2,P2.3,P2.1A]) KHÔNG được
+    // ai list trong nextCodes → chỉ theo next sẽ bỏ sót các bước gate → done-set thiếu.
     const ancestors = new Set<string>()
     const stack = [fromStep.code]
     while (stack.length) {
       const cur = stack.pop()!
-      for (const p of revAdj.get(cur) || []) {
-        if (!ancestors.has(p)) { ancestors.add(p); stack.push(p) }
+      const curStep = byCode.get(cur)
+      const preds = [...(revAdj.get(cur) || []), ...((curStep?.gateCodes) || [])]
+      for (const p of preds) {
+        if (p !== fromStep.code && !ancestors.has(p)) { ancestors.add(p); stack.push(p) }
       }
     }
     for (const code of ancestors) {
