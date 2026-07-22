@@ -44,18 +44,45 @@ Khởi tạo việc
 - **"Bỏ qua" ≠ xoá:** set `SKIPPED_NO_IMPACT` + `skipReason` + người + thời gian → vẫn chain bước kế.
 - **Impact = hint:** mỗi checkpoint gọi `computeImpact` (đã có) chỉ để render nhãn gợi ý; KHÔNG chặn.
 
-### A4. Bản đồ loại-revise → bước vào (ĐỀ XUẤT — cần phòng ban xác nhận)
-| Loại revise | Phòng | Bước vào | Chuỗi hạ nguồn tiêu biểu |
-|---|---|---|---|
-| Bản vẽ / thiết kế | R04 | **P2.1** | P2.1→P2.4(gate)→P2.5→P3.x→P4.x→P5.x→P6.x |
-| BOM / định mức VT | R04/R03 | **P2.2 / P2.3** | →P2.4→P2.5→P3.3/P3.5→… |
-| Dự toán chi phí | R03 | **P1.2** | →P1.3→P2.x→… |
-| Kế hoạch / WBS | R02 | **P1.2A** | →P1.3→… |
-| Giá / nhà cung cấp | R07 | **P3.5** | →P3.6→(module PR/PO)→P4.3/P4.4 |
-| Phương án sản xuất | R06 | **P3.4 / P5.1** | →P5.x→P6.x |
-| Chất lượng / nghiệm thu | R09 | **P4.3 / P5.3** | →… |
+### A4. Bản đồ loại-revise → bước vào — ✅ CHỐT (Toan duyệt 2026-07-22)
+12 loại revise. **Đã verify DB: cả 12 bước-vào tồn tại đúng tên trong template SX-PROD (32 step).**
 
-> ⚠️ Đây là DRAFT. Mỗi phòng chốt "loại revise của mình vào bước nào" trước khi seed.
+| Mã loại | Loại revise | Bước vào | Phòng chủ | Mode | Ghi chú |
+|---|---|---|---|---|---|
+| `REV_DESIGN` | Bản vẽ / VT chính | **P2.1** | R04 | **artifact** | BomVersion+ECO (C3) |
+| `REV_WELDPAINT` | VT hàn / sơn | **P2.2** | R02 | process | |
+| `REV_CONSUMABLE` | VT tiêu hao | **P2.3** | R05 | process | |
+| `REV_ESTIMATE_NEW` | Dự toán — làm lại từ đầu | **P1.2** | R03 | process | walk cả P1.3→Phase 2-6 |
+| `REV_ESTIMATE_ADJ` | Dự toán — điều chỉnh | **P2.4** | R03 | process | gọn: P2.5→hạ nguồn |
+| `REV_WBS` | Kế hoạch / WBS | **P1.2A** | R02 | process | |
+| `REV_CASHFLOW` | Kế hoạch dòng tiền | **P2.1A** | R08 | process | |
+| `REV_QUOTE` | Giá / nhà cung cấp | **P3.5** | R07 | process | →P3.6→module PR/PO |
+| `REV_PRODPLAN` | Phương án SX (tổng thể) | **P3.4** | R06 | process | lan ngược cả mua sắm |
+| `REV_PROD_INPROGRESS` | Điều chỉnh khi đang chế tạo | **P5.1** | R06 | process | cục bộ, không lan ngược mua |
+| `REV_QC_MATERIAL` | QC vật tư | **P4.3** | R09 | process | |
+| `REV_QC_FAB` | Nghiệm thu chế tạo | **P5.3** | R09 | process | |
+
+> Mã `REV_*` chuẩn hoá theo convention repo. Phòng ban có thể xác nhận lại, nhưng đây là bản CHỐT để vào Phase 0.
+
+### A4.1 Format seed `ReviseTypeMap` (Phase 2 — CHƯA seed thật)
+Cấu trúc mỗi entry:
+```ts
+type ReviseTypeDef = {
+  code: string            // 'REV_DESIGN'
+  entryStepCode: string   // 'P2.1' — bước vào (đã verify ∈ SX-PROD)
+  ownerRole: string       // 'R04' — phòng khởi tạo revise
+  label: string           // 'Bản vẽ / VT chính'
+  mode: 'artifact' | 'process'
+}
+```
+- **`mode: 'artifact'`** (chỉ `REV_DESIGN`): trigger = `approveRevision`; nối BomVersion/ECO qua `Task.revisionId = ecoId` → `computeImpact(old,new)` feed hint (mục **C3**).
+- **`mode: 'process'`** (11 loại còn lại): trigger = fork UI; `revisionId = null`; không diff → hint rỗng, người tự quyết.
+- **Nơi lưu — quyết ở Phase 2:**
+  | Phương án | Ưu | Nhược |
+  |---|---|---|
+  | **Config const** (`src/lib/revise-types.ts`) | đơn giản, versioned theo code, không migration | đổi map phải deploy |
+  | **Bảng DB `ReviseTypeMap`** | sửa map không cần deploy, phòng ban tự chỉnh qua admin | thêm migration + UI quản lý |
+  - Đề xuất MVP: **config const** (map ít đổi, gắn chặt logic engine); chuyển DB sau nếu cần phòng ban tự sửa.
 
 ### A5. Cascade cũ → nhập vai "trợ lý gợi ý"
 - **Bỏ** việc cascade tự đẻ task `CASCADE` phẳng — chỉ retire **CALL `runCascade`** ([revision-flow.ts:276-299](../../../src/lib/revision-flow.ts#L276-L299)).
@@ -185,15 +212,15 @@ Walk full downstream = nhiều checkpoint rỗng (revise P2.1 khi dự án ở P
 ---
 
 ## ĐÃ CHỐT (review Toan 2026-07-22)
-1. **Bản đồ A4:** KHÔNG để dev tự chốt → **phỏng vấn từng phòng qua PM** (rủi ro nghiệp vụ). ⏳ chờ PM.
-2. **Pilot:** ✅ 1 trong 7 dự án P5.1 (lộ ca re-enter giữa chuỗi) + 1 dự án phase sớm.
+1. **Bản đồ A4:** ✅ **CHỐT 12 loại** (mục A4, verify DB 12/12 bước-vào khớp SX-PROD).
+2. **Pilot:** ✅ 1 trong 7 dự án P5.1 (lộ ca re-enter giữa chuỗi) + 1 dự án phase sớm — **chưa chọn mã cụ thể**.
 3. **Bulk-skip:** ✅ **có trong MVP** (không để sau).
 4. **Tắt cascade cũ (Phase 3):** ✅ đồng ý — **NHƯNG chỉ sau khi C2 (re-QC) xác nhận còn nguyên** ở path mới. Không thì là bước lùi an toàn.
 
-## Việc phải làm TRƯỚC Phase 0 (điều kiện vào code)
-- [ ] Chốt **bản đồ A4** với các phòng (qua PM).
-- [ ] Thiết kế chi tiết **C1** (entry expansion + round-scoped gate) — viết ra pseudo + test deadlock.
-- [ ] Xác nhận **C2** re-QC không đụng (giữ test Finding F).
-- [ ] Vẽ **C3** luồng artifact↔round (2 trigger).
-- [ ] Liệt kê đủ **C4** 8 điểm + helper `isResolved()`.
-- [ ] Chọn 2 dự án **pilot** cụ thể.
+## Điều kiện vào code (Phase 0)
+- [x] **Bản đồ A4** — ✅ CHỐT (12 loại, verify DB khớp).
+- [x] **Thiết kế C1** (entry expansion fixpoint đồ-thị-hợp + round-scoped gate) — ✅ duyệt ([DESIGN_C1](DESIGN_C1_GateRound_2026-07-22.md), Claude rà 2.2b OK).
+- [x] **C2** re-QC không đụng (giữ test Finding F) — ✅ xác nhận.
+- [x] **C3** luồng artifact↔round (2 trigger) — ✅ vẽ trong C3 + A4.1.
+- [x] **C4** sweep DONE (3 nhóm) + helper `isResolved()` — ✅ liệt kê; **Q3 nhóm B** tách sang [DESIGN_RoundCounting](DESIGN_RoundCounting_2026-07-22.md).
+- [ ] **Chọn 2 dự án pilot cụ thể** — ⏳ **việc DUY NHẤT còn lại trước Phase 0.**
