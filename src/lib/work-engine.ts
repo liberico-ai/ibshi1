@@ -7,6 +7,7 @@ import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
 import { whereDoerOverdue, whereReviewLate } from './task-where'
 import { resolveDesignation } from './permissions/store'
 import { isResolved } from './utils'
+import { reverseBfsInclGate, expandRevisionRound, orphanFeeders, satisfiedForRound } from './revise-engine'
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -1109,15 +1110,20 @@ export async function suggestRoute(fromContext?: string, text?: string) {
 // Phase 3 (chained): spawn ENTRY STEPS (không nằm trong nextCodes nào); xong bước → chain bước kế (next/gate).
 interface TStep { id: string; code: string; title: string; roleCode: string | null; taskType: string; hookKeys: string[]; nextCodes: string[]; gateCodes: string[]; deadlineDays: number | null; orderIndex: number }
 
-async function spawnTemplateStep(step: TStep, projectId: string, byUser: string) {
-  // tránh trùng: 1 bước template chỉ sinh 1 task/dự án
-  const exists = await prisma.task.findFirst({ where: { projectId, templateStepId: step.id }, select: { id: true } })
+async function spawnTemplateStep(
+  step: TStep, projectId: string, byUser: string,
+  opts?: { round?: number; originStepCode?: string | null; revisionId?: string | null },
+) {
+  const round = opts?.round ?? 0
+  // tránh trùng: 1 bước template chỉ sinh 1 task/dự án/round (Q5 — dedup app-level (step,round))
+  const exists = await prisma.task.findFirst({ where: { projectId, templateStepId: step.id, revisionRound: round }, select: { id: true } })
   if (exists) return false
   const t = await prisma.task.create({
     data: {
       projectId, level: 2, taskType: step.taskType || step.code, title: step.title,
       priority: 'NORMAL', createdBy: byUser, assignedAt: new Date(), status: 'OPEN',
       hookKeys: step.hookKeys || [], templateStepId: step.id,
+      revisionRound: round, originStepCode: opts?.originStepCode ?? null, revisionId: opts?.revisionId ?? null,
       deadline: step.deadlineDays ? new Date(Date.now() + step.deadlineDays * 86400000) : null,
     },
   })
@@ -1154,7 +1160,9 @@ async function doneCodesForProject(steps: TStep[], projectId: string, round = 0)
     .map((t) => stepById.get(t.templateStepId!)?.code)
     .filter((c): c is string => !!c)
   const rootSpawned = first ? templateTasks.some((t) => t.templateStepId === first.id) : true
-  if (first && !rootSpawned) doneCodes.push(first.code)
+  // legacy grace CHỈ cho round 0 (dự án cũ áp giữa chừng không có task root thật).
+  // round-N: root là tổ tiên (ngoài subgraph) → kế thừa round-0 qua satisfiedForRound, không cần grace.
+  if (round === 0 && first && !rootSpawned) doneCodes.push(first.code)
   return new Set(doneCodes)
 }
 
@@ -1188,26 +1196,9 @@ export async function applyTemplate(
     const fromStep = byCode.get(opts.fromStepCode)
     if (!fromStep) throw new Error(`Bước "${opts.fromStepCode}" không có trong template "${templateCode}"`)
 
-    // reverse-adjacency: code → các bước có code trong nextCodes (tiền nhiệm qua next)
-    const revAdj = new Map<string, string[]>()
-    for (const s of steps) for (const nc of s.nextCodes || []) {
-      if (!revAdj.has(nc)) revAdj.set(nc, [])
-      revAdj.get(nc)!.push(s.code)
-    }
-    // BFS ngược từ X → tập tổ tiên (phải xong trước X). X KHÔNG nằm trong tập này.
-    // Tiền nhiệm của 1 bước = (bước có nó trong nextCodes) ∪ (gateCodes của chính nó).
-    // BẮT BUỘC gồm gateCodes: bước hội tụ (vd P2.4 gate=[P2.1,P2.2,P2.3,P2.1A]) KHÔNG được
-    // ai list trong nextCodes → chỉ theo next sẽ bỏ sót các bước gate → done-set thiếu.
-    const ancestors = new Set<string>()
-    const stack = [fromStep.code]
-    while (stack.length) {
-      const cur = stack.pop()!
-      const curStep = byCode.get(cur)
-      const preds = [...(revAdj.get(cur) || []), ...((curStep?.gateCodes) || [])]
-      for (const p of preds) {
-        if (p !== fromStep.code && !ancestors.has(p)) { ancestors.add(p); stack.push(p) }
-      }
-    }
+    // Tập TỔ TIÊN của X (reverse-BFS gộp gateCodes) — TÁCH dùng chung `reverseBfsInclGate`
+    // (1 nguồn với expandRevisionRound). Logic y hệt bản inline cũ.
+    const ancestors = reverseBfsInclGate(fromStep.code, steps)
     for (const code of ancestors) {
       const s = byCode.get(code); if (!s) continue
       const exists = await prisma.task.findFirst({ where: { projectId, templateStepId: s.id }, select: { id: true } })
@@ -1256,27 +1247,90 @@ export async function applyTemplate(
 
 // Gọi khi 1 task template hoàn thành → sinh các bước kế (theo next/gate).
 // Export để test trực tiếp (vitest) — nội bộ vẫn chỉ gọi từ completeTask/setTaskStatusAdmin.
-export async function chainNextTemplateTasks(taskId: string, projectId: string | null, templateStepId: string | null, byUser: string) {
+export async function chainNextTemplateTasks(taskId: string, projectId: string | null, templateStepId: string | null, byUser: string, round = 0) {
   if (!templateStepId || !projectId) return
   const step = await prisma.templateStep.findUnique({ where: { id: templateStepId } })
   if (!step) return
   const steps = (await prisma.templateStep.findMany({ where: { templateId: step.templateId } })) as unknown as TStep[]
   const byCode = new Map(steps.map((s) => [s.code, s]))
-  const done = await doneCodesForProject(steps, projectId) // đã gồm task vừa DONE
+  const done = await doneCodesForProject(steps, projectId, round) // done-set round hiện tại (gồm task vừa resolved)
+
+  // ── Round-aware gate eval (DESIGN_C1 2.2c). round 0 → y hệt hành vi cũ. ──
+  let reached: Set<string> | null = null
+  let done0: Set<string> = done            // round-0: done0 ≡ done (không dùng khi round===0)
+  let entry: string | null = null
+  let revId: string | null = null
+  if (round > 0) {
+    const anchor = await prisma.task.findFirst({
+      where: { projectId, revisionRound: round, NOT: { originStepCode: null } },
+      select: { originStepCode: true, revisionId: true },
+    })
+    entry = anchor?.originStepCode ?? null
+    revId = anchor?.revisionId ?? null
+    if (entry) reached = expandRevisionRound(steps, entry)
+    done0 = await doneCodesForProject(steps, projectId, 0)
+  }
+  const gateOk = (gateCodes: string[]) =>
+    round === 0 || !reached
+      ? (gateCodes || []).every((g) => done.has(g))
+      : satisfiedForRound(gateCodes, reached, done, done0, round)
+  const spawnOpts = round > 0 ? { round, originStepCode: entry, revisionId: revId } : undefined
+
   for (const nc of (step as unknown as TStep).nextCodes || []) {
     const ns = byCode.get(nc); if (!ns) continue
-    if ((ns.gateCodes || []).every((g) => done.has(g))) await spawnTemplateStep(ns, projectId, byUser)
+    if (gateOk(ns.gateCodes || [])) await spawnTemplateStep(ns, projectId, byUser, spawnOpts)
   }
   // ── Gate-driven spawn (chịu được data template thiếu cạnh next, vd SX-PROD) ──
-  // Quét MỌI step của template có gateCodes ≠ rỗng mà toàn bộ gate đã nằm trong done-set
-  // → spawn (spawnTemplateStep đã idempotent: 1 templateStep chỉ sinh 1 task/dự án).
-  // Không đổi semantics done-set: vẫn dùng doneCodesForProject (gồm legacy grace cho root).
+  // Quét MỌI step có gateCodes ≠ rỗng mà gate đã thoả → spawn (idempotent). round-N: CHỈ trong subgraph.
   for (const s of steps) {
+    if (round > 0 && reached && !reached.has(s.code)) continue   // round-N: không lan ngoài subgraph
     const gates = s.gateCodes || []
     if (gates.length === 0) continue          // không gate → chỉ sinh theo cạnh next như cũ
     if (done.has(s.code)) continue            // bước đã xong → chắc chắn đã có task
-    if (gates.every((g) => done.has(g))) await spawnTemplateStep(s, projectId, byUser)
+    if (gateOk(gates)) await spawnTemplateStep(s, projectId, byUser, spawnOpts)
   }
+}
+
+// ── Mở 1 VÒNG REVISE (round ≥ 1) — Revise Flow36 Phase 1a, MODEL A (lazy/chain-driven). ──
+// Spawn round-N task cho ENTRY + các ORPHAN-FEEDER song song (bước reached mà chain không tự sinh).
+// KHÔNG pre-spawn gate-step: chúng do chainNextTemplateTasks round-aware tự sinh KHI gate round-N thoả
+// → BẤT BIẾN chống pass-nhầm: gate-step G round-N chỉ tạo khi MỌI gateCodes(G) có task round-N resolved.
+// Chưa nối route/fork (Phase 1b) + FF REVISE_FLOW còn tắt → chỉ gọi được trong test.
+export async function openRevisionRound(
+  projectId: string,
+  entryStepCode: string,
+  round: number,
+  byUser: string,
+  opts?: { templateCode?: string; revisionId?: string | null },
+): Promise<{ ok: true; round: number; spawned: string[] }> {
+  if (round < 1) throw new Error('openRevisionRound: round phải ≥ 1')
+  // Nạp template của dự án: theo templateCode nếu có, hoặc suy từ task template hiện có.
+  let templateId: string | null = null
+  if (opts?.templateCode) {
+    const t = await prisma.workflowTemplate.findFirst({ where: { code: opts.templateCode, isActive: true }, select: { id: true } })
+    templateId = t?.id ?? null
+  } else {
+    const anyTask = await prisma.task.findFirst({ where: { projectId, NOT: { templateStepId: null } }, select: { templateStepId: true } })
+    if (anyTask?.templateStepId) {
+      const ts = await prisma.templateStep.findUnique({ where: { id: anyTask.templateStepId }, select: { templateId: true } })
+      templateId = ts?.templateId ?? null
+    }
+  }
+  if (!templateId) throw new Error('openRevisionRound: không xác định được template của dự án')
+  const steps = (await prisma.templateStep.findMany({ where: { templateId } })) as unknown as TStep[]
+  const byCode = new Map(steps.map((s) => [s.code, s]))
+  if (!byCode.has(entryStepCode)) throw new Error(`openRevisionRound: bước "${entryStepCode}" không có trong template`)
+
+  const reached = expandRevisionRound(steps, entryStepCode)
+  const toSpawn = [entryStepCode, ...orphanFeeders(steps, entryStepCode, reached)]
+  const spawned: string[] = []
+  for (const code of toSpawn) {
+    const s = byCode.get(code)
+    if (!s) continue
+    const ok = await spawnTemplateStep(s, projectId, byUser, { round, originStepCode: entryStepCode, revisionId: opts?.revisionId ?? null })
+    if (ok) spawned.push(code)
+  }
+  return { ok: true, round, spawned }
 }
 
 export async function listTemplates() {
