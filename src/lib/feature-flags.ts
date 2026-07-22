@@ -3,6 +3,8 @@
 
 export const FEATURE_FLAGS = {
   BOM_REVISION_CASCADE: process.env.NEXT_PUBLIC_FF_BOM_CASCADE === 'true',
+  // Revise Flow36 (Phase 0 — khai báo sẵn, MẶC ĐỊNH TẮT, chưa gọi ở đường thực thi nào).
+  REVISE_FLOW: process.env.NEXT_PUBLIC_FF_REVISE_FLOW === 'true',
 } as const
 
 export type FeatureFlag = keyof typeof FEATURE_FLAGS

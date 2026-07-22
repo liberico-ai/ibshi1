@@ -1959,6 +1959,11 @@ model Task {
   externalSource       String?             @map("external_source")
   forwardedFromId      String?             @map("forwarded_from_id") // việc này được "chuyển tiếp" từ task nào (truy vết)
   bomVersionId         String?             @map("bom_version_id")
+  // Revise Flow36 (Phase 0 — additive, behavior-identical, default round 0). Dùng ở Phase 1.
+  revisionRound        Int                 @default(0) @map("revision_round")
+  revisionId           String?             @map("revision_id")
+  originStepCode       String?             @map("origin_step_code")
+  skipReason           String?             @map("skip_reason")
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
   project              Project?            @relation("ProjectDynamicTasks", fields: [projectId], references: [id])
