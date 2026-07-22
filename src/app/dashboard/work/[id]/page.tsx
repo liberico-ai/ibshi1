@@ -37,6 +37,7 @@ interface Task {
   meetings?: LinkMeeting[]
   resultData?: Record<string, unknown> | null
   evidenceFiles?: EvidenceFile[]
+  revisionRound?: number
 }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
 const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao việc', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành phần việc', SUBMITTED_TO_CREATOR: '↩ Trả kết quả', COMPLETED: '✓ Hoàn thành tất cả', CLOSED: 'Kết thúc công việc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: 'Giao lại', SUBTASK_CREATED: '+ Tạo việc con', COMMENT: 'Trao đổi', EDITED: 'Chỉnh sửa' }
@@ -128,6 +129,17 @@ export default function WorkDetailPage() {
     acknowledgedDocIds: mustRead.filter((d) => ackedByMe(d)).map((d) => d.id),
     returnedDocs: mustReturn.map((d) => ({ requirementId: d.id, note: returnNotes[d.id]?.trim() || undefined, fileAttachmentId: returnFiles[d.id]?.id || undefined })),
   })
+
+  // Revise Flow36: "Không ảnh hưởng — Bỏ qua" checkpoint round≥1 (dùng LẠI API skip 1c, validateBody).
+  const doSkip = async () => {
+    const reason = window.prompt('Lý do bỏ qua (không ảnh hưởng bởi revision này):', 'Không ảnh hưởng')
+    if (!reason || !reason.trim()) return
+    setBusy(true)
+    const res = await apiFetch(`/api/work/tasks/${id}/skip`, { method: 'POST', body: JSON.stringify({ skipReason: reason.trim() }) })
+    setBusy(false)
+    if (res.ok) { showToast('Đã bỏ qua (không ảnh hưởng)'); load() }
+    else showToast(res.error || 'Lỗi bỏ qua')
+  }
 
   const doComplete = async (mode: 'RETURN_CREATOR' | 'FORWARD', forward?: unknown) => {
     if (mode === 'RETURN_CREATOR' && (!task.evidenceFiles || task.evidenceFiles.length === 0)) {
@@ -637,6 +649,9 @@ export default function WorkDetailPage() {
             </div>
           )}
           <div className="flex gap-2 flex-wrap">
+            {(task.revisionRound ?? 0) >= 1 && (
+              <button onClick={doSkip} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#475569', border: '1px solid #cbd5e1' }} title="Checkpoint vòng revise — nếu bước này không bị ảnh hưởng thì bỏ qua (có log)">⤼ Không ảnh hưởng — Bỏ qua</button>
+            )}
             <button onClick={() => doComplete('RETURN_CREATOR')} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold flex-1" style={{ background: canComplete ? '#059669' : '#9ca3af', color: '#fff', minWidth: 150 }}>✓ Hoàn thành & trả người tạo</button>
             <button onClick={() => setFwdOpen(true)} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: canComplete ? '#d97706' : '#9ca3af', color: '#fff' }}>↗ Hoàn thành & chuyển tiếp</button>
             <button onClick={() => setDelOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>↪ Chuyển giao</button>
