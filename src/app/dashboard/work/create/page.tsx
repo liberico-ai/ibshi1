@@ -74,6 +74,7 @@ function CreateInner() {
 
   const [reviseType, setReviseType] = useState('')
   const [reviseBusy, setReviseBusy] = useState(false)
+  const [elig, setElig] = useState<{ eligible: boolean; reason?: string; templateName?: string } | null>(null)
   const [projects, setProjects] = useState<Proj[]>([])
   const [users, setUsers] = useState<Usr[]>([])
   const [projectId, setProjectId] = useState(fromProject)
@@ -105,6 +106,16 @@ function CreateInner() {
     apiFetch('/api/projects/options').then((r) => { if (r.ok) setProjects(r.projects || []) })
     apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) })
   }, [])
+
+  // Guard fork Revise (FF ON): dự án có mở được vòng revise không → tránh throw lỗi kỹ thuật cho user.
+  useEffect(() => {
+    if (!FF_REVISE || !projectId) { setElig(null); return }
+    let alive = true
+    apiFetch(`/api/work/revise/eligibility?projectId=${encodeURIComponent(projectId)}`).then((r) => {
+      if (alive) setElig(r.ok ? { eligible: !!r.eligible, reason: r.reason, templateName: r.templateName } : { eligible: false, reason: r.error || 'Không kiểm tra được dự án' })
+    })
+    return () => { alive = false }
+  }, [projectId])
 
   useEffect(() => {
     if (!projectId) { setProjFiles([]); return }
@@ -298,20 +309,34 @@ function CreateInner() {
               <option value="">— Chọn loại revise (12) —</option>
               {REVISE_OPTS.map(([k, v]) => <option key={k} value={k}>{v.label} → vào {v.entryStepCode} ({v.ownerRole})</option>)}
             </select>
-            <button
-              disabled={!reviseType || !projectId || reviseBusy}
-              onClick={async () => {
-                if (!reviseType || !projectId) return
-                setReviseBusy(true)
-                const res = await apiFetch('/api/work/tasks', { method: 'POST', body: JSON.stringify({ reviseType, projectId }) })
-                setReviseBusy(false)
-                if (res.ok) router.push(`/dashboard/work/revise?projectId=${encodeURIComponent(projectId)}&round=${res.revise?.round ?? ''}`)
-                else alert(res.error || 'Không mở được vòng revise')
-              }}
-              style={{ background: reviseType && projectId ? '#4f46e5' : '#c7c7c7', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: '.83rem', fontWeight: 700, cursor: reviseType && projectId ? 'pointer' : 'not-allowed' }}
-            >{reviseBusy ? 'Đang mở…' : 'Mở vòng revise'}</button>
-            <span style={{ fontSize: '.75rem', color: 'var(--text-secondary)' }}>{projectId ? '' : 'Chọn dự án ở dưới trước'}</span>
+            {(() => {
+              const ok = !!reviseType && !!projectId && !!elig?.eligible
+              return (
+                <button
+                  disabled={!ok || reviseBusy}
+                  onClick={async () => {
+                    if (!ok) return
+                    setReviseBusy(true)
+                    const res = await apiFetch('/api/work/tasks', { method: 'POST', body: JSON.stringify({ reviseType, projectId }) })
+                    setReviseBusy(false)
+                    if (res.ok) router.push(`/dashboard/work/revise?projectId=${encodeURIComponent(projectId)}&round=${res.revise?.round ?? ''}`)
+                    else alert(res.error || 'Không mở được vòng revise')
+                  }}
+                  style={{ background: ok ? '#4f46e5' : '#c7c7c7', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: '.83rem', fontWeight: 700, cursor: ok && !reviseBusy ? 'pointer' : 'not-allowed' }}
+                >{reviseBusy ? 'Đang mở…' : 'Mở vòng revise'}</button>
+              )
+            })()}
+            <span style={{ fontSize: '.75rem', color: 'var(--text-secondary)' }}>{!projectId ? 'Chọn dự án ở dưới trước' : elig === null ? 'Đang kiểm tra dự án…' : ''}</span>
           </div>
+          {/* Guard: dự án legacy (không template) → cảnh báo thân thiện, KHÔNG cho mở round */}
+          {projectId && elig && !elig.eligible && (
+            <div style={{ fontSize: '.78rem', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '7px 10px', marginTop: 8 }}>
+              ⚠ {elig.reason || 'Dự án này chưa mở được vòng revise.'}
+            </div>
+          )}
+          {projectId && elig?.eligible && elig.templateName && (
+            <div style={{ fontSize: '.75rem', color: '#15803d', marginTop: 6 }}>✓ Quy trình: <b>{elig.templateName}</b> — mở vòng revise được.</div>
+          )}
           <div style={{ fontSize: '.75rem', color: 'var(--text-secondary)', marginTop: 6 }}>Hoặc để tạo <b>việc khác</b> (không theo quy trình), điền form bên dưới.</div>
         </div>
       )}
