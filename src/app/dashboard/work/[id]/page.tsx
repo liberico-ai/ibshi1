@@ -8,6 +8,7 @@ import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/li
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import TemplateSelector from '@/components/TemplateSelector'
 import ChangeRequestAdminCard from '@/components/ChangeRequestAdminCard'
+import SkipReasonModal from '@/components/SkipReasonModal'
 import { formatDate, formatDateTime, formatShortDateTime } from '@/lib/utils'
 import { Badge, Button } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
@@ -90,6 +91,7 @@ export default function WorkDetailPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2600) }
   const [rejOpen, setRejOpen] = useState(false)
   const [rejReason, setRejReason] = useState('')
+  const [skipOpen, setSkipOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [edit, setEdit] = useState({ title: '', description: '', deadline: '', priority: 'NORMAL' })
   // Sửa người nhận (trong modal Sửa): chỉ bỏ/đổi được người CHƯA hoàn thành.
@@ -130,13 +132,12 @@ export default function WorkDetailPage() {
     returnedDocs: mustReturn.map((d) => ({ requirementId: d.id, note: returnNotes[d.id]?.trim() || undefined, fileAttachmentId: returnFiles[d.id]?.id || undefined })),
   })
 
-  // Revise Flow36: "Không ảnh hưởng — Bỏ qua" checkpoint round≥1 (dùng LẠI API skip 1c, validateBody).
-  const doSkip = async () => {
-    const reason = window.prompt('Lý do bỏ qua (không ảnh hưởng bởi revision này):', 'Không ảnh hưởng')
-    if (!reason || !reason.trim()) return
+  // Revise Flow36: "Không ảnh hưởng — Bỏ qua" checkpoint round≥1 (modal in-app + API skip 1c, validateBody).
+  const confirmSkip = async (reason: string) => {
     setBusy(true)
-    const res = await apiFetch(`/api/work/tasks/${id}/skip`, { method: 'POST', body: JSON.stringify({ skipReason: reason.trim() }) })
+    const res = await apiFetch(`/api/work/tasks/${id}/skip`, { method: 'POST', body: JSON.stringify({ skipReason: reason }) })
     setBusy(false)
+    setSkipOpen(false)
     if (res.ok) { showToast('Đã bỏ qua (không ảnh hưởng)'); load() }
     else showToast(res.error || 'Lỗi bỏ qua')
   }
@@ -650,7 +651,7 @@ export default function WorkDetailPage() {
           )}
           <div className="flex gap-2 flex-wrap">
             {(task.revisionRound ?? 0) >= 1 && (
-              <button onClick={doSkip} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#475569', border: '1px solid #cbd5e1' }} title="Checkpoint vòng revise — nếu bước này không bị ảnh hưởng thì bỏ qua (có log)">⤼ Không ảnh hưởng — Bỏ qua</button>
+              <button onClick={() => setSkipOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#475569', border: '1px solid #cbd5e1' }} title="Checkpoint vòng revise — nếu bước này không bị ảnh hưởng thì bỏ qua (có log)">⤼ Không ảnh hưởng — Bỏ qua</button>
             )}
             <button onClick={() => doComplete('RETURN_CREATOR')} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold flex-1" style={{ background: canComplete ? '#059669' : '#9ca3af', color: '#fff', minWidth: 150 }}>✓ Hoàn thành & trả người tạo</button>
             <button onClick={() => setFwdOpen(true)} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: canComplete ? '#d97706' : '#9ca3af', color: '#fff' }}>↗ Hoàn thành & chuyển tiếp</button>
@@ -730,6 +731,15 @@ export default function WorkDetailPage() {
       {toast && (
         <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-50 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg" style={{ background: 'var(--text-heading)', color: '#fff' }}>{toast}</div>
       )}
+
+      <SkipReasonModal
+        open={skipOpen}
+        busy={busy}
+        title={`Bỏ qua bước ${task.taskType} — không ảnh hưởng`}
+        defaultReason="Không ảnh hưởng"
+        onCancel={() => setSkipOpen(false)}
+        onConfirm={confirmSkip}
+      />
     </div>
   )
 }

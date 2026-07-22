@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
+import SkipReasonModal from '@/components/SkipReasonModal'
 
 const FF_ON = process.env.NEXT_PUBLIC_FF_REVISE_FLOW === 'true'
 
@@ -23,6 +24,8 @@ function ReviseInner() {
   const [view, setView] = useState<View | null>(null)
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(false)
+  const [skipModal, setSkipModal] = useState<{ open: boolean; mode: 'single' | 'bulk'; cp?: Checkpoint }>({ open: false, mode: 'single' })
+  const [skipBusy, setSkipBusy] = useState(false)
 
   const load = useCallback(async () => {
     if (!projectId || !round) return
@@ -35,21 +38,25 @@ function ReviseInner() {
 
   useEffect(() => { if (sp.get('projectId')) load() }, [sp, load])
 
-  async function skipOne(cp: Checkpoint) {
-    const reason = window.prompt('Lý do bỏ qua (không ảnh hưởng):', 'Không ảnh hưởng bởi revision này')
-    if (!reason) return
-    const res = await apiFetch(`/api/work/tasks/${cp.taskId}/skip`, { method: 'POST', body: JSON.stringify({ skipReason: reason }) })
-    setMsg(res.ok ? `Đã bỏ qua ${cp.code}` : res.error || 'Lỗi bỏ qua')
-    await load()
-  }
-
-  async function bulkSkip() {
-    const clean = view?.checkpoints.filter((c) => c.hint === 'clean').map((c) => c.code) || []
+  // Mở modal thay window.prompt; khi Xác nhận mới gọi API (không đổi API/payload).
+  function skipOne(cp: Checkpoint) { setSkipModal({ open: true, mode: 'single', cp }) }
+  function bulkSkip() {
+    const clean = view?.checkpoints.filter((c) => c.hint === 'clean') || []
     if (!clean.length) { setMsg('Không có bước "có thể bỏ qua"'); return }
-    const reason = window.prompt(`Bỏ qua hàng loạt ${clean.length} bước (đã rà, không ảnh hưởng). Lý do chung:`, 'Rà 1 lượt — không ảnh hưởng')
-    if (!reason) return
-    const res = await apiFetch('/api/work/revise', { method: 'POST', body: JSON.stringify({ projectId, round: Number(round), codes: clean, reason }) })
-    setMsg(res.ok ? res.message || `Đã bỏ qua ${res.skipped?.length || 0} bước` : res.error || 'Lỗi bulk-skip')
+    setSkipModal({ open: true, mode: 'bulk' })
+  }
+  async function confirmSkip(reason: string) {
+    setSkipBusy(true)
+    if (skipModal.mode === 'single' && skipModal.cp) {
+      const res = await apiFetch(`/api/work/tasks/${skipModal.cp.taskId}/skip`, { method: 'POST', body: JSON.stringify({ skipReason: reason }) })
+      setMsg(res.ok ? `Đã bỏ qua ${skipModal.cp.code}` : res.error || 'Lỗi bỏ qua')
+    } else {
+      const codes = view?.checkpoints.filter((c) => c.hint === 'clean').map((c) => c.code) || []
+      const res = await apiFetch('/api/work/revise', { method: 'POST', body: JSON.stringify({ projectId, round: Number(round), codes, reason }) })
+      setMsg(res.ok ? res.message || `Đã bỏ qua ${res.skipped?.length || 0} bước` : res.error || 'Lỗi bulk-skip')
+    }
+    setSkipBusy(false)
+    setSkipModal({ open: false, mode: 'single' })
     await load()
   }
 
@@ -116,6 +123,15 @@ function ReviseInner() {
           </div>
         </>
       )}
+
+      <SkipReasonModal
+        open={skipModal.open}
+        busy={skipBusy}
+        title={skipModal.mode === 'single' ? `Bỏ qua bước ${skipModal.cp?.code ?? ''} — không ảnh hưởng` : `Bỏ qua hàng loạt ${cleanCount} bước sạch`}
+        defaultReason={skipModal.mode === 'single' ? 'Không ảnh hưởng bởi revision này' : 'Rà 1 lượt — không ảnh hưởng'}
+        onCancel={() => setSkipModal({ open: false, mode: 'single' })}
+        onConfirm={confirmSkip}
+      />
     </div>
   )
 }
