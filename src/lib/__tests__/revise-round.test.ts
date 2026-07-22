@@ -7,8 +7,12 @@ import { prismaMock } from '@/lib/__mocks__/db'
 
 vi.mock('@/lib/db', () => ({ default: prismaMock }))
 vi.mock('@/lib/telegram', () => ({ sendGroupMessage: vi.fn(), escapeHtml: (s: string) => s, formatDeadline: () => '' }))
+vi.mock('@/lib/webhook', () => ({ emitTaskUpdated: vi.fn(() => Promise.resolve()) }))
+vi.mock('@/lib/work-hooks', () => ({ runHooks: vi.fn(() => Promise.resolve()), maybeSyncEstimateToBudget: vi.fn(() => Promise.resolve()) }))
+vi.mock('@/lib/feature-flags', () => ({ isEnabled: vi.fn() }))
 
-import { openRevisionRound, chainNextTemplateTasks } from '@/lib/work-engine'
+import { isEnabled } from '@/lib/feature-flags'
+import { openRevisionRound, chainNextTemplateTasks, completeTask, dispatchWork } from '@/lib/work-engine'
 import { expandRevisionRound, orphanFeeders, reverseBfsInclGate } from '@/lib/revise-engine'
 
 const TPL_ID = 'tpl-sxprod'
@@ -86,6 +90,15 @@ function setup(seedRound0AllDone: boolean) {
   prismaMock.user.findMany.mockResolvedValue([{ id: 'u1', fullName: 'Test', telegramChatId: null }] as never)
   prismaMock.project.findUnique.mockResolvedValue({ id: PID, projectCode: 'PJ-01', projectName: 'Test' } as never)
   prismaMock.notification.createMany.mockResolvedValue({ count: 1 } as never)
+  // aggregate (nextRevisionRound) + count (guard cấm 2 revise cùng round)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prismaMock.task.aggregate.mockImplementation(((a: any) => {
+    const rows = store.filter((t) => matchTask(t, a?.where))
+    const max = rows.reduce((m, t) => Math.max(m, t.revisionRound), 0)
+    return Promise.resolve({ _max: { revisionRound: rows.length ? max : null } })
+  }) as never)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prismaMock.task.count.mockImplementation(((a: any) => Promise.resolve(store.filter((t) => matchTask(t, a?.where)).length)) as never)
 
   const count = (code: string, round: number) => store.filter((t) => t.templateStepId === `step-${code}` && t.revisionRound === round).length
   const setStatus = (code: string, round: number, status: string) => {
@@ -244,5 +257,130 @@ describe('T6 — kế thừa tổ tiên round-0', () => {
     b.status = 'DONE'
     await chainNextTemplateTasks(b.id, PID, 'step-B', 'u1', 1)
     expect(store.filter((t) => t.templateStepId === 'step-C' && t.revisionRound === 1).length).toBe(1)
+  })
+})
+
+// ══════════════════ #2 FORK — dispatchWork (FF gate) ══════════════════
+describe('Fork tạo việc — dispatchWork (FF REVISE_FLOW)', () => {
+  it('FF ON + REV_DESIGN → mở round: entry P2.1, round=max+1, spawn entry+orphan', async () => {
+    const h = setup(true)
+    vi.mocked(isEnabled).mockReturnValue(true)
+    const r = await dispatchWork({ userId: 'u1', revise: { projectId: PID, reviseType: 'REV_DESIGN' } })
+    expect(r.kind).toBe('revise')
+    if (r.kind === 'revise') {
+      expect(r.entryStepCode).toBe('P2.1')
+      expect(r.round).toBe(1)
+      expect(r.spawned.sort()).toEqual(['P2.1', 'P2.1A', 'P2.2', 'P2.3'])
+    }
+    expect(h.count('P2.4', 1)).toBe(0) // gate-step KHÔNG pre-spawn
+  })
+
+  it('FF ON + loại revise sai → throw', async () => {
+    setup(true)
+    vi.mocked(isEnabled).mockReturnValue(true)
+    await expect(dispatchWork({ userId: 'u1', revise: { projectId: PID, reviseType: 'REV_BOGUS' } })).rejects.toThrow(/không hợp lệ/)
+  })
+
+  it('FF OFF → revise KHÔNG mở (gate); thiếu input → throw', async () => {
+    setup(true)
+    vi.mocked(isEnabled).mockReturnValue(false)
+    await expect(dispatchWork({ userId: 'u1', revise: { projectId: PID, reviseType: 'REV_DESIGN' } })).rejects.toThrow(/thiếu input/)
+  })
+
+  it('revise thứ 2 → round tăng (max+1), map entry đúng', async () => {
+    setup(true)
+    vi.mocked(isEnabled).mockReturnValue(true)
+    const r1 = await dispatchWork({ userId: 'u1', revise: { projectId: PID, reviseType: 'REV_DESIGN' } })
+    const r2 = await dispatchWork({ userId: 'u1', revise: { projectId: PID, reviseType: 'REV_WELDPAINT' } })
+    if (r1.kind === 'revise') { expect(r1.round).toBe(1); expect(r1.entryStepCode).toBe('P2.1') }
+    if (r2.kind === 'revise') { expect(r2.round).toBe(2); expect(r2.entryStepCode).toBe('P2.2') }
+  })
+})
+
+// ══════════════════ #1 completeTask THREAD round (đường thật) ══════════════════
+describe('completeTask — thread revisionRound vào chain', () => {
+  it('round-1 task complete qua completeTask → chain ĐÚNG round-1 (spawn P2.4 round-1)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store: any[] = []
+    for (const s of STEPS) store.push({ id: `t0-${s.code}`, projectId: PID, templateStepId: s.id, revisionRound: 0, status: 'DONE', originStepCode: null })
+    for (const c of ['P2.2', 'P2.3', 'P2.1A']) store.push({ id: `t1-${c}`, projectId: PID, templateStepId: `step-${c}`, revisionRound: 1, status: 'DONE', originStepCode: 'P2.1' })
+    store.push({ id: 't1-P2.1', projectId: PID, templateStepId: 'step-P2.1', revisionRound: 1, status: 'OPEN', originStepCode: 'P2.1' })
+    let idc = 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.task.findUnique.mockImplementation(((a: any) => {
+      const t = store.find((x) => x.id === a?.where?.id)
+      if (!t) return Promise.resolve(null)
+      return Promise.resolve({ ...t, title: 'X', createdBy: 'u1', hookKeys: [], resultData: null, bomVersionId: null, assignees: [{ id: 'a1', userId: 'u1', role: 'R02', done: false }], docs: [] })
+    }) as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.task.findFirst.mockImplementation(((a: any) => Promise.resolve(store.find((t) => matchTask(t, a?.where)) || null)) as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.task.findMany.mockImplementation(((a: any) => Promise.resolve(store.filter((t) => matchTask(t, a?.where)))) as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.task.create.mockImplementation(((a: any) => { const t = { id: `c${++idc}`, projectId: a.data.projectId, templateStepId: a.data.templateStepId, revisionRound: a.data.revisionRound ?? 0, status: a.data.status ?? 'OPEN', originStepCode: a.data.originStepCode ?? null }; store.push(t); return Promise.resolve({ ...t, deadline: null }) }) as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.task.update.mockImplementation(((a: any) => { const t = store.find((x) => x.id === a?.where?.id); if (t) Object.assign(t, a.data); return Promise.resolve(t ?? {}) }) as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.$transaction.mockImplementation(((arg: any) => (typeof arg === 'function' ? arg(prismaMock) : Promise.all(arg))) as never)
+    prismaMock.taskAssignee.findMany.mockResolvedValue([{ done: true }] as never)
+    prismaMock.taskDocRequirement.updateMany.mockResolvedValue({ count: 0 } as never)
+    prismaMock.taskAssignee.create.mockResolvedValue({} as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+    prismaMock.notification.create.mockResolvedValue({} as never)
+    prismaMock.notification.createMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.templateStep.findUnique.mockImplementation(((a: { where: { id: string } }) => Promise.resolve(STEPS.find((s) => s.id === a.where.id) || null)) as never)
+    prismaMock.templateStep.findMany.mockResolvedValue(STEPS as never)
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'u1', fullName: 'T', isActive: true } as never)
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', fullName: 'T' } as never)
+    prismaMock.user.findMany.mockResolvedValue([{ id: 'u1', fullName: 'T', telegramChatId: null }] as never)
+    prismaMock.project.findUnique.mockResolvedValue({ id: PID, projectCode: 'PJ', projectName: 'T' } as never)
+
+    await completeTask('t1-P2.1', 'u1', 'R02', {})
+
+    // Chain dùng round=1 → P2.4 round-1 spawn; round-0 KHÔNG bị đụng
+    expect(store.filter((t) => t.templateStepId === 'step-P2.4' && t.revisionRound === 1).length).toBe(1)
+    expect(store.filter((t) => t.templateStepId === 'step-P2.4' && t.revisionRound === 0).length).toBe(1)
+  })
+})
+
+// ══════════════════ #5 ORPHAN có next riêng (stateful) ══════════════════
+describe('orphan-feeder vừa orphan vừa có next → spawn đúng + chain phần sau', () => {
+  it('entry X: orphan F (feeder + next=[Z]) pre-spawn; complete F → Z round-1 chain', async () => {
+    // X(entry)→[]; F: feeder của G, có next=[Z]; Z; G gate=[X,F]
+    const S = [mkStep('X', 0, []), mkStep('F', 1, ['Z']), mkStep('Z', 2, []), mkStep('G', 3, [], ['X', 'F'])]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store: any[] = []
+    let idc = 0
+    prismaMock.templateStep.findUnique.mockImplementation(((a: { where: { id: string } }) => Promise.resolve(S.find((s) => s.id === a.where.id) || null)) as never)
+    prismaMock.templateStep.findMany.mockResolvedValue(S as never)
+    prismaMock.workflowTemplate.findFirst.mockResolvedValue({ id: TPL_ID } as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.task.findFirst.mockImplementation(((a: any) => Promise.resolve(store.find((t) => matchTask(t, a?.where)) || null)) as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.task.findMany.mockImplementation(((a: any) => Promise.resolve(store.filter((t) => matchTask(t, a?.where)))) as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prismaMock.task.create.mockImplementation(((a: any) => { const t = { id: `t${++idc}`, projectId: a.data.projectId, templateStepId: a.data.templateStepId, revisionRound: a.data.revisionRound ?? 0, status: a.data.status ?? 'OPEN', originStepCode: a.data.originStepCode ?? null }; store.push(t); return Promise.resolve({ ...t, deadline: null }) }) as never)
+    prismaMock.taskAssignee.create.mockResolvedValue({} as never)
+    prismaMock.taskHistory.create.mockResolvedValue({} as never)
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'u1', fullName: 'T', isActive: true } as never)
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', fullName: 'T' } as never)
+    prismaMock.user.findMany.mockResolvedValue([{ id: 'u1', fullName: 'T', telegramChatId: null }] as never)
+    prismaMock.project.findUnique.mockResolvedValue({ id: PID, projectCode: 'PJ', projectName: 'T' } as never)
+    prismaMock.notification.createMany.mockResolvedValue({ count: 1 } as never)
+
+    // orphan-feeder = F (không phải X entry, ∉ nextTargets={Z}, gate rỗng)
+    expect(orphanFeeders(S, 'X', expandRevisionRound(S, 'X')).sort()).toEqual(['F'])
+
+    await openRevisionRound(PID, 'X', 1, 'u1', { templateCode: 'SX-PROD' })
+    const cnt = (code: string) => store.filter((t) => t.templateStepId === `step-${code}` && t.revisionRound === 1).length
+    expect(cnt('X')).toBe(1); expect(cnt('F')).toBe(1)   // pre-spawn entry + orphan
+    expect(cnt('Z')).toBe(0); expect(cnt('G')).toBe(0)   // chưa chain
+
+    // complete F round-1 → F.next=[Z] chain → Z round-1
+    const f = store.find((t) => t.templateStepId === 'step-F' && t.revisionRound === 1)
+    f.status = 'DONE'
+    await chainNextTemplateTasks(f.id, PID, 'step-F', 'u1', 1)
+    expect(cnt('Z')).toBe(1)                             // orphan-có-next: next chain đúng
+    expect(cnt('G')).toBe(0)                             // gate G chờ X chưa xong
   })
 })
