@@ -48,40 +48,54 @@ async function doneCodesForProject(steps, projectId, round = 0): Promise<Set<str
 - Round 0 = flow gốc → giữ 100% hành vi cũ (gọi `round=0`, mặc định).
 - Round N = chỉ đếm task round N. Không lẫn round-0.
 
-### (b) Entry-expansion — TÁI DÙNG BFS-incl-gateCodes của `applyTemplate({fromStepCode})`
-`applyTemplate` ([work-engine.ts:1041-1078](../../../src/lib/work-engine.ts#L1041-L1078)) đã có **reverse-BFS gộp gateCodes** để tìm tổ tiên (dòng [1052-1064](../../../src/lib/work-engine.ts#L1052-L1064)) — cố tình gộp `gateCodes` vì bước hội tụ (P2.4) không nằm trong `nextCodes` của ai. C1 dùng LẠI đúng primitive này (đảo chiều + thêm gate-feeder):
+### (b) Entry-expansion — FIXPOINT trên ĐỒ-THỊ-HỢP (đã sửa: forward-BFS-nextCodes SAI)
+
+> ⚠️ **Sửa lỗi (verified DB SX-PROD):** bước feed gate có `next=[] gate=[]`, chỉ nối tới bước hội tụ **qua `gate:` của bước đó**. Topology thật:
+> ```
+> P2.1  next=[]                     gate=[]            P2.4  next=["P2.5"]  gate=["P2.1","P2.2","P2.3","P2.1A"]
+> P2.2  next=[]                     gate=[]            P2.5  next=["P3.1","P3.3","P3.4"]  gate=[]
+> P2.3  next=[]                     gate=[]            P3.1  next=["P3.5"]  gate=[]
+> P2.1A next=[]                     gate=[]            P3.3/P3.4  next=[]   gate=[]
+> ```
+> ⟹ forward-BFS chỉ theo `nextCodes` từ P2.1 = **{P2.1}** (dead-end) — KHÔNG tới P2.4. Phải đi trên **đồ-thị-hợp**: cạnh `nextCodes` ∪ cạnh **feeder→gate** (F→G nếu G có gate chứa F). `applyTemplate` cũng né bằng "gate-driven spawn" ([work-engine.ts:1124-1133](../../../src/lib/work-engine.ts#L1124-L1133)) — C1 gộp cả 2 loại cạnh trong 1 fixpoint.
 
 ```
 function expandRevisionRound(steps, entryCode, round):
   byCode = index(steps, s => s.code)
 
-  # 1. TỔ TIÊN của entry (reuse y hệt applyTemplate fromStepCode: reverse-BFS gộp gateCodes)
-  ancestors = reverseBfsInclGate(entryCode, byCode)   # = logic dòng 1052-1064, tách hàm dùng chung
+  # Tổ tiên của entry (reuse reverse-BFS-gộp-gateCodes của applyTemplate fromStepCode, dòng 1052-1064)
+  ancestors = reverseBfsInclGate(entryCode, byCode)
 
-  # 2. HẠ NGUỒN của entry (forward-BFS qua nextCodes), gồm cả entry
-  forward = new Set([entryCode])
-  stack = [entryCode]
-  while stack:
-    cur = stack.pop()
-    for nc in byCode[cur].nextCodes or []:
-      if nc not in forward: forward.add(nc); stack.push(nc)
+  # Chỉ mục CẠNH-GATE XUÔI: code F → các bước G có F trong gateCodes(G)
+  gateSucc = {}                        # F -> [G, ...]
+  for G in steps:
+    for f in (G.gateCodes or []): gateSucc[f].push(G.code)
 
-  # 3. GATE-FEEDER closure: bước hạ nguồn nào là gate → kéo feeder (song song) vào,
-  #    NHƯNG feeder nằm trong ancestors (trước điểm vào) thì BỎ (kế thừa round-0, xem (c)).
-  toSpawn = new Set(forward)
+  # FIXPOINT trên đồ-thị-hợp: mỗi vòng chạy CẢ (a) next, (b) feeder→gate, (c) kéo gate-feeder
+  reached = new Set([entryCode])
   changed = true
   while changed:
     changed = false
-    for code in list(toSpawn):
-      for g in byCode[code].gateCodes or []:
-        if g not in toSpawn and g not in ancestors:    # feeder song song, không phải tổ tiên
-          toSpawn.add(g); changed = true
-  return toSpawn      # danh sách step spawn round-N (skippable)
+    for cur in list(reached):
+      s = byCode[cur]
+      # (a) cạnh next
+      for nc in (s.nextCodes or []):
+        if nc not in reached: reached.add(nc); changed = true
+      # (b) cạnh feeder→gate: cur là feeder ⇒ mọi gate-step G nhận cur trở nên reachable
+      for G in (gateSucc[cur] or []):
+        if G not in reached: reached.add(G); changed = true
+      # (c) kéo gate-feeder song song của gate-step cur (bỏ feeder là tổ tiên → kế thừa round-0)
+      for f in (s.gateCodes or []):
+        if f not in reached and f not in ancestors: reached.add(f); changed = true
+  return reached      # danh sách step spawn round-N (skippable)
 ```
 
-- **Ví dụ entry=P2.1:** forward = {P2.1, P2.4, P2.5, P3.x, …}. Xét gate P2.4=[P2.1,P2.2,P2.3,P2.1A]: P2.1 đã có; P2.2/P2.3/P2.1A **không** thuộc ancestors(P2.1) (chúng song song, không phải tổ tiên) → **kéo vào toSpawn**. ⟹ round-1 có đủ P2.1/P2.2/P2.3/P2.1A để gate P2.4 kiểm.
-- **Feeder là tổ tiên thì loại:** entry=P2.5, gate hạ nguồn cần P2.4 (tổ tiên của P2.5) → P2.4 ∈ ancestors → KHÔNG spawn round-1, gate kế thừa round-0 (xem (c)).
+- **Ví dụ entry=P2.1 (đã sửa):** `reached` lớn dần: {P2.1} → **(b)** P2.1∈gate(P2.4) ⇒ +P2.4 → **(a)** P2.4.next ⇒ +P2.5; **(c)** P2.4.gate ⇒ +P2.2/P2.3/P2.1A (không phải tổ tiên) → **(a)** P2.5.next ⇒ +P3.1/P3.3/P3.4 → +P3.5 … ⟹ `reached ⊇ {P2.1,P2.2,P2.3,P2.1A,P2.4,P2.5,P3.1,P3.3,P3.4,P3.5,…}`, **∌ P1.x**.
+- **Feeder là tổ tiên thì loại:** entry=P2.5, nếu gate hạ nguồn cần P2.4 (tổ tiên của P2.5) → P2.4 ∈ ancestors → (c) bỏ → KHÔNG spawn round-N, gate kế thừa round-0 (xem (c) mục dưới).
+- **Q1 (feeder có nhánh `next` riêng dẫn ra ngoài):** fixpoint tự phủ — (a) chạy lại cho feeder vừa add ở vòng sau. **Q2 (gate lồng nhiều tầng):** cùng fixpoint phủ — (b)/(c) áp cho gate-step mới add ở vòng kế. Cả 2 **giải trong 1 fixpoint** nhờ `while changed` chạy cả (a)(b)(c).
 - Mỗi task spawn: `revisionRound=N`, `revisionId`, `originStepCode=entryCode`, status khởi tạo bình thường (OPEN/chưa resolved). Người không đụng → `SKIPPED_NO_IMPACT` + `skipReason`.
+
+> **Phương án tối ưu (chống mệt — cân nhắc khi code):** thay vì pre-spawn TOÀN BỘ `reached` thành task thật, có thể chỉ pre-spawn **entry + các orphan-feeder song song của entry** (những feeder không tự spawn được qua chain), rồi để **chain gate-driven round-scoped** (mục (c)) tự sinh phần còn lại KHI gate thoả — giống engine hiện tại. Khi đó `expandRevisionRound` (full `reached`) chỉ dùng để **UI hiển thị + bulk-skip**, không tạo task trước. Giảm số task "chờ" cùng lúc. Quyết định pre-spawn-full vs lazy-chain để lại lúc code Phase 1.
 
 ### (c) Gate eval round-scoped
 ```
@@ -139,8 +153,9 @@ Các gate phụ thuộc DỮ LIỆU tìm "có task DONE cho step X" — round-0 
 | C4 | guards "Công việc đã hoàn thành" ([work-engine.ts:293,469,678,742](../../../src/lib/work-engine.ts#L293)) | check status CHÍNH task đó, không phải gate. *Nhỏ:* nên chặn complete task đang SKIPPED. |
 | C5 | ITP/MRB/MDR checkpoints PASSED/DONE (qc/logistics) | model khác (checkpoint), không phải Task workflow |
 
-### workflow-engine.ts (engine cũ) — kiểm tra riêng
-- [workflow-engine.ts:810](../../../src/lib/workflow-engine.ts#L810) `checkGate` filter DONE + [:829](../../../src/lib/workflow-engine.ts#L829) `activateTask` reactivation set. **Nếu** revise round KHÔNG route qua engine cũ (đúng thiết kế: dùng work-engine template path) → 2 chỗ này KHÔNG trên đường round → để nguyên. **Cần xác nhận** khi code: task template hoàn thành đi qua `completeTask` của work-engine ([:415-436](../../../src/lib/work-engine.ts#L415-L436)), không phải workflow-engine.
+### workflow-engine.ts (engine cũ) — ĐÃ XÁC NHẬN không đụng (Q4)
+- **Verified:** task template hoàn thành đi qua `completeTask` của **work-engine** → nhánh `if (templateStepId)` gọi `chainNextTemplateTasks` ([work-engine.ts:421-436](../../../src/lib/work-engine.ts#L421-L436)). **KHÔNG** gọi `completeTask`/`checkGate` của workflow-engine.
+- ⟹ [workflow-engine.ts:810](../../../src/lib/workflow-engine.ts#L810) (`checkGate`) + [:829](../../../src/lib/workflow-engine.ts#L829) (`activateTask` reactivation) **KHÔNG nằm trên đường revise-round** → **nhóm A KHÔNG gồm 810/829**. (Đính chính: prompt gốc ghi "CRITICAL workflow-engine:829" — thực ra :829 là reactivation, checkGate là :810; và cả 2 đều off-path.)
 
 ---
 
@@ -162,8 +177,12 @@ Các gate phụ thuộc DỮ LIỆU tìm "có task DONE cho step X" — round-0 
 - **T4 — dedup (step, round):**
   **Assert:** spawn P2.1 round-1 tạo task MỚI (không đụng unique với P2.1 round-0); `findFirst({templateStepId, revisionRound})` phân biệt đúng; gọi lại idempotent trong cùng round.
 
-- **T5 — entry-expansion đủ gate-feeder:**
-  **Assert:** `expandRevisionRound(SX-PROD, 'P2.1', 1)` trả tập CHỨA {P2.1, P2.2, P2.3, P2.1A, P2.4, P2.5, …}; KHÔNG chứa tổ tiên (P1.x). Kiểm feeder-song-song vào, feeder-tổ-tiên bị loại.
+- **T5 — entry-expansion đủ (fixpoint đồ-thị-hợp):**
+  **Assert:** `expandRevisionRound(SX-PROD, 'P2.1', 1)` trả tập:
+  - **⊇ {P2.1, P2.2, P2.3, P2.1A, P2.4, P2.5, P3.1, P3.3, P3.4, P3.5}** — chứng minh đủ 3 loại cạnh: **(b)** feeder→gate (P2.1→P2.4), **(c)** kéo feeder song song (P2.2/P2.3/P2.1A), **(a)** next chain (P2.4→P2.5→P3.1→P3.5).
+  - **∌ P1.x** (tổ tiên bị loại qua `ancestors`).
+  - **T5b (Q1):** template giả có feeder P2.1A.next=[Pz] (Pz ngoài) → assert Pz ∈ reached (fixpoint chạy lại (a) cho feeder).
+  - **T5c (Q2):** template giả gate lồng (G2.gate=[X], X là gate-step G1.gate=[Y]) → assert cả X, Y ∈ reached.
 
 - **T6 (thêm) — kế thừa round-0 cho tổ tiên:**
   Entry=P2.5 round-1; gate hạ nguồn cần P2.4 (tổ tiên, không spawn round-1).
@@ -180,17 +199,24 @@ model Task {
   revisionId     String?
   originStepCode String?
   skipReason     String?
-  @@unique([templateStepId, revisionRound, projectId])   // thay dedup 1-task/step (cân nhắc composite)
+  // Q5 — MVP: KHÔNG thêm @@unique DB. Dedup ở application-level (spawnTemplateStep)
+  //          bằng findFirst({templateStepId, revisionRound}). Lý do: hiện chưa có DB unique,
+  //          thêm mới phải kiểm dữ liệu cũ (task round-0 trùng templateStepId trong data thật?).
 }
 ```
 - `status` thêm chuỗi `SKIPPED_NO_IMPACT` — **String, 0 enum trong schema → KHÔNG cần migration cho status**.
-- ⚠️ Cân nhắc `@@unique`: hiện dedup bằng `findFirst` (application-level), không phải DB unique. Nếu thêm DB unique phải kiểm dữ liệu cũ (task round-0 trùng templateStepId?). **An toàn hơn: giữ dedup application-level `(templateStepId, revisionRound)`**, chưa thêm DB constraint ở MVP.
+- **Q5 chốt:** dedup **application-level `(templateStepId, revisionRound)`** ở MVP; `@@unique` DB để lại sau khi rà dữ liệu.
 
 ---
 
-## Chỗ pseudo-code C1 CHƯA CHẮC — cần Claude/Toan rà
-1. **Gate-feeder closure với nhánh song song có forward riêng.** Nếu 1 gate-feeder (vd P2.1A) tự có `nextCodes` dẫn tới bước NGOÀI forward(entry) → có kéo luôn forward của feeder không? Hiện pseudo chỉ kéo feeder, không forward-BFS từ feeder. Cần xác nhận SX-PROD có ca này không (khả năng thấp — feeder song song thường hội tụ vào cùng gate).
-2. **Nhiều gate lồng nhau nhiều tầng** (gate hạ nguồn của gate) — closure `while changed` có phủ hết không, hay cần forward-BFS lại sau mỗi lần thêm feeder. Cần test trên đồ thị SX-PROD thật.
-3. **Nhóm B "đếm round thế nào"** — chưa chốt luật (latest-round-per-step?). Ảnh hưởng % hiển thị khắp nơi. Cần 1 quyết định riêng trước khi đụng nhóm B.
-4. **workflow-engine.ts (engine cũ) có nằm trên đường round không** — phải xác nhận bằng trace `completeTask` khi code; nếu có, nhóm A phải thêm 810/829.
-5. **`@@unique` DB vs dedup application-level** — chọn cái nào (mục 2.5).
+## Trạng thái 5 điểm rà (cập nhật 2026-07-22 fix-2b)
+| # | Nội dung | Trạng thái |
+|---|---|---|
+| Q1 | Feeder có nhánh `next` riêng dẫn ra ngoài | ✅ **GIẢI trong fixpoint** — (a) chạy lại cho feeder vừa add. Test T5b. |
+| Q2 | Gate lồng nhiều tầng | ✅ **GIẢI trong fixpoint** — (b)/(c) áp cho gate-step mới add. Test T5c. |
+| Q3 | Nhóm B "đếm round thế nào" | ✅ **CHỐT: latest-round-per-step** → tách sang [DESIGN_RoundCounting](DESIGN_RoundCounting_2026-07-22.md), làm ở đợt nhóm-B (sau C1). |
+| Q4 | workflow-engine cũ có trên đường round | ✅ **XÁC NHẬN không** (completeTask work-engine:436 → chainNextTemplateTasks). Nhóm A **không** gồm 810/829. |
+| Q5 | `@@unique` DB vs app-level | ✅ **CHỐT app-level** `(templateStepId, revisionRound)` ở MVP (mục 2.5). |
+
+### Còn 1 điểm cần rà khi code (không chặn duyệt)
+- **Pre-spawn-full vs lazy-chain** (xem "Phương án tối ưu" mục 2.2(b)): tạo task thật cho toàn bộ `reached` ngay, hay chỉ entry+orphan-feeder rồi để gate-driven round-scoped tự chain. Ảnh hưởng số task "chờ" cùng lúc + trải nghiệm bulk-skip. Quyết ở Phase 1 khi code.
