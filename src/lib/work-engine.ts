@@ -1372,6 +1372,72 @@ export async function dispatchWork(args: {
   throw new Error('dispatchWork: thiếu input hoặc revise')
 }
 
+// ── "Không ảnh hưởng — Bỏ qua" 1 chạm (Revise Flow36 Phase 1c). CHỈ task round≥1. ──
+// Set SKIPPED_NO_IMPACT + skipReason (bắt buộc) → chain tiếp round-N (isResolved gồm SKIPPED → gate không kẹt).
+export async function skipTask(taskId: string, userId: string, skipReason: string) {
+  const reason = (skipReason || '').trim()
+  if (!reason) throw new Error('Cần nhập lý do bỏ qua')
+  const task = await prisma.task.findUnique({ where: { id: taskId } })
+  if (!task) throw new Error('Không tìm thấy công việc')
+  const round = (task as { revisionRound?: number }).revisionRound ?? 0
+  if (round < 1) throw new Error('Chỉ bỏ qua được checkpoint của vòng revise (round ≥ 1)')
+  if (task.status === TASK_STATUS.DONE || task.status === 'SKIPPED_NO_IMPACT') throw new Error('Công việc đã kết thúc')
+  const templateStepId = (task as { templateStepId?: string | null }).templateStepId
+  await prisma.$transaction([
+    prisma.task.update({ where: { id: taskId }, data: { status: 'SKIPPED_NO_IMPACT', skipReason: reason, completedBy: userId, completedAt: new Date() } }),
+    prisma.taskHistory.create({ data: { taskId, action: 'SKIPPED_NO_IMPACT', byUserId: userId, reason } }),
+  ])
+  if (templateStepId && task.projectId) {
+    await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId, round)
+  }
+  return { ok: true as const, status: 'SKIPPED_NO_IMPACT' as const }
+}
+
+// ── Xem 1 vòng revise: subgraph (expandRevisionRound) + checkpoint đang mở + hint. ──
+// Hint MVP: entry = 'affected' (phòng khởi tạo phải xử lý); còn lại = 'clean' (có thể bỏ qua).
+// (Tinh chỉnh impact-per-checkpoint qua computeImpact = Phase 2 — xem báo cáo.)
+export async function reviseRoundView(projectId: string, round: number) {
+  const anchor = await prisma.task.findFirst({
+    where: { projectId, revisionRound: round, NOT: { templateStepId: null } },
+    select: { templateStepId: true, originStepCode: true, revisionId: true },
+  })
+  if (!anchor?.templateStepId) return { round, entry: null as string | null, subgraph: [] as Array<{ code: string; role: string | null; spawned: boolean; status: string | null }>, checkpoints: [] as Array<{ code: string; role: string | null; hint: 'affected' | 'clean'; taskId: string; status: string }> }
+  const ts = await prisma.templateStep.findUnique({ where: { id: anchor.templateStepId }, select: { templateId: true } })
+  const steps = (await prisma.templateStep.findMany({ where: { templateId: ts!.templateId } })) as unknown as TStep[]
+  const byCode = new Map(steps.map((s) => [s.code, s]))
+  const codeByStepId = new Map(steps.map((s) => [s.id, s.code]))
+  const entry = anchor.originStepCode
+  const reached = entry ? expandRevisionRound(steps, entry) : new Set<string>()
+
+  const roundTasks = await prisma.task.findMany({ where: { projectId, revisionRound: round, NOT: { templateStepId: null } }, select: { id: true, templateStepId: true, status: true } })
+  const byCodeTask = new Map<string, { id: string; status: string }>()
+  for (const t of roundTasks) { const c = codeByStepId.get(t.templateStepId!); if (c) byCodeTask.set(c, { id: t.id, status: t.status }) }
+
+  const subgraph = [...reached].sort().map((code) => {
+    const rt = byCodeTask.get(code)
+    return { code, role: byCode.get(code)?.roleCode ?? null, spawned: !!rt, status: rt?.status ?? null }
+  })
+  const checkpoints = subgraph
+    .filter((s) => s.spawned && s.status !== TASK_STATUS.DONE && s.status !== 'SKIPPED_NO_IMPACT')
+    .map((s) => ({ code: s.code, role: s.role, hint: (s.code === entry ? 'affected' : 'clean') as 'affected' | 'clean', taskId: byCodeTask.get(s.code)!.id, status: s.status! }))
+  return { round, entry, subgraph, checkpoints }
+}
+
+// ── Bỏ qua HÀNG LOẠT các checkpoint impact-clean của 1 vòng. Bước 'affected' bị TỪ CHỐI. ──
+export async function bulkSkipRound(projectId: string, round: number, codes: string[], reason: string, userId: string) {
+  const view = await reviseRoundView(projectId, round)
+  const cp = new Map(view.checkpoints.map((c) => [c.code, c]))
+  const skipped: string[] = []
+  const refused: string[] = []
+  for (const code of codes) {
+    const c = cp.get(code)
+    if (!c || c.hint === 'affected') { refused.push(code); continue } // 'affected' → buộc xử lý riêng
+    await skipTask(c.taskId, userId, reason)
+    skipped.push(code)
+  }
+  return { skipped, refused }
+}
+
 export async function listTemplates() {
   return prisma.workflowTemplate.findMany({
     where: { isActive: true }, orderBy: [{ projectType: 'asc' }, { version: 'desc' }],

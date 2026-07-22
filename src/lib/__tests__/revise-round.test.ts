@@ -45,7 +45,7 @@ const STEPS = [
 ]
 
 // ── Stateful store mock (spawn → resolve → chain) ──
-interface StoreTask { id: string; projectId: string; templateStepId: string | null; revisionRound: number; status: string; originStepCode: string | null; revisionId: string | null }
+interface StoreTask { id: string; projectId: string; templateStepId: string | null; revisionRound: number; status: string; originStepCode: string | null; revisionId: string | null; skipReason?: string | null }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function matchTask(t: StoreTask, where: any): boolean {
@@ -82,6 +82,13 @@ function setup(seedRound0AllDone: boolean) {
     store.push(t)
     return Promise.resolve({ ...t, deadline: null })
   }) as never)
+  // findUnique (by id) + update + $transaction — cho skipTask/bulkSkipRound
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prismaMock.task.findUnique.mockImplementation(((a: any) => Promise.resolve(store.find((t) => t.id === a?.where?.id) || null)) as never)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prismaMock.task.update.mockImplementation(((a: any) => { const t = store.find((x) => x.id === a?.where?.id); if (t) Object.assign(t, a.data); return Promise.resolve(t ?? {}) }) as never)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prismaMock.$transaction.mockImplementation(((arg: any) => (typeof arg === 'function' ? arg(prismaMock) : Promise.all(arg))) as never)
   // plumbing
   prismaMock.taskAssignee.create.mockResolvedValue({} as never)
   prismaMock.taskHistory.create.mockResolvedValue({} as never)
@@ -335,7 +342,7 @@ describe('completeTask — thread revisionRound vào chain', () => {
     prismaMock.user.findMany.mockResolvedValue([{ id: 'u1', fullName: 'T', telegramChatId: null }] as never)
     prismaMock.project.findUnique.mockResolvedValue({ id: PID, projectCode: 'PJ', projectName: 'T' } as never)
 
-    await completeTask('t1-P2.1', 'u1', 'R02', {})
+    await completeTask('t1-P2.1', 'u1', 'R02', { mode: 'RETURN_CREATOR' })
 
     // Chain dùng round=1 → P2.4 round-1 spawn; round-0 KHÔNG bị đụng
     expect(store.filter((t) => t.templateStepId === 'step-P2.4' && t.revisionRound === 1).length).toBe(1)
@@ -382,5 +389,67 @@ describe('orphan-feeder vừa orphan vừa có next → spawn đúng + chain ph�
     await chainNextTemplateTasks(f.id, PID, 'step-F', 'u1', 1)
     expect(cnt('Z')).toBe(1)                             // orphan-có-next: next chain đúng
     expect(cnt('G')).toBe(0)                             // gate G chờ X chưa xong
+  })
+})
+
+// ══════════════════ Phase 1c — skipTask + bulkSkipRound ══════════════════
+import { skipTask, bulkSkipRound, reviseRoundView } from '@/lib/work-engine'
+
+describe('skipTask — "Không ảnh hưởng — Bỏ qua" (round≥1)', () => {
+  it('round-1 → SKIPPED_NO_IMPACT + skipReason', async () => {
+    const h = setup(true)
+    await openRevisionRound(PID, 'P2.1', 1, 'u1', { templateCode: 'SX-PROD' })
+    const t = h.store.find((x) => x.templateStepId === 'step-P2.2' && x.revisionRound === 1)!
+    const r = await skipTask(t.id, 'u1', 'Không đổi VT hàn')
+    expect(r.status).toBe('SKIPPED_NO_IMPACT')
+    expect(t.status).toBe('SKIPPED_NO_IMPACT')
+    expect(t.skipReason).toBe('Không đổi VT hàn')
+  })
+
+  it('reason rỗng → throw', async () => {
+    const h = setup(true)
+    await openRevisionRound(PID, 'P2.1', 1, 'u1', { templateCode: 'SX-PROD' })
+    const t = h.store.find((x) => x.templateStepId === 'step-P2.1' && x.revisionRound === 1)!
+    await expect(skipTask(t.id, 'u1', '   ')).rejects.toThrow(/lý do/)
+  })
+
+  it('round-0 → throw (chỉ checkpoint revise)', async () => {
+    const h = setup(true)
+    const t = h.store.find((x) => x.templateStepId === 'step-P2.1' && x.revisionRound === 0)!
+    await expect(skipTask(t.id, 'u1', 'x')).rejects.toThrow(/round/)
+  })
+
+  it('skip cả 4 feeder round-1 (SKIPPED=resolved) → gate P2.4 round-1 thoả', async () => {
+    const h = setup(true)
+    await openRevisionRound(PID, 'P2.1', 1, 'u1', { templateCode: 'SX-PROD' })
+    for (const c of ['P2.1', 'P2.2', 'P2.3', 'P2.1A']) {
+      const t = h.store.find((x) => x.templateStepId === `step-${c}` && x.revisionRound === 1)!
+      await skipTask(t.id, 'u1', 'không ảnh hưởng')
+    }
+    expect(h.count('P2.4', 1)).toBe(1)
+  })
+})
+
+describe('reviseRoundView + bulkSkipRound (hint entry=affected, rest=clean)', () => {
+  it('view: checkpoint entry hint=affected, sibling hint=clean; subgraph có bước chưa spawn', async () => {
+    setup(true)
+    await openRevisionRound(PID, 'P2.1', 1, 'u1', { templateCode: 'SX-PROD' })
+    const v = await reviseRoundView(PID, 1)
+    expect(v.entry).toBe('P2.1')
+    const byCode = new Map(v.checkpoints.map((c) => [c.code, c.hint]))
+    expect(byCode.get('P2.1')).toBe('affected')
+    expect(byCode.get('P2.2')).toBe('clean')
+    // P2.4 trong subgraph nhưng CHƯA spawn (gate chưa tới)
+    const p24 = v.subgraph.find((s) => s.code === 'P2.4')
+    expect(p24?.spawned).toBe(false)
+  })
+
+  it('bulkSkip: skip clean (siblings), TỪ CHỐI affected (entry)', async () => {
+    const h = setup(true)
+    await openRevisionRound(PID, 'P2.1', 1, 'u1', { templateCode: 'SX-PROD' })
+    const r = await bulkSkipRound(PID, 1, ['P2.1', 'P2.2', 'P2.3', 'P2.1A'], 'rà 1 lượt, không ảnh hưởng', 'u1')
+    expect(r.refused).toEqual(['P2.1'])                       // entry affected → từ chối
+    expect(r.skipped.sort()).toEqual(['P2.1A', 'P2.2', 'P2.3'])
+    expect(h.count('P2.4', 1)).toBe(0)                        // P2.1 chưa xử lý → gate chưa thoả
   })
 })
