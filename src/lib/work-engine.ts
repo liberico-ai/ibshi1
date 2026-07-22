@@ -8,6 +8,8 @@ import { whereDoerOverdue, whereReviewLate } from './task-where'
 import { resolveDesignation } from './permissions/store'
 import { isResolved } from './utils'
 import { reverseBfsInclGate, expandRevisionRound, orphanFeeders, satisfiedForRound } from './revise-engine'
+import { getReviseTypeDef } from './revise-map'
+import { isEnabled } from './feature-flags'
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -436,7 +438,8 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
       await maybeSyncEstimateToBudget(task.projectId, userId, rdForEstimate)
       // Nếu user chọn FORWARD thì KHÔNG chain next (forward task thay thế luồng tự động)
       if (!forwardedId) {
-        await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId)
+        // Revise Flow36: chain trong ĐÚNG round của task vừa hoàn thành (round-N complete → chain round-N).
+        await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId, (task as { revisionRound?: number }).revisionRound ?? 0)
       }
     } else {
       // Task ad-hoc: trả về NGƯỜI GIAO để xem & kết thúc (chờ duyệt). Người giao sẽ chọn:
@@ -591,7 +594,7 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
     if (templateStepId && task.projectId) {
       const hookKeys = (task as { hookKeys?: string[] }).hookKeys
       await runHooks(hookKeys, { projectId: task.projectId, userId: byUserId })
-      await chainNextTemplateTasks(taskId, task.projectId, templateStepId, byUserId)
+      await chainNextTemplateTasks(taskId, task.projectId, templateStepId, byUserId, (task as { revisionRound?: number }).revisionRound ?? 0)
     }
   } else if (input.status === TASK_STATUS.RETURNED) {
     updateData.returnCount = { increment: 1 }
@@ -1331,6 +1334,42 @@ export async function openRevisionRound(
     if (ok) spawned.push(code)
   }
   return { ok: true, round, spawned }
+}
+
+// round tiếp theo cho dự án = max(revisionRound task template) + 1.
+export async function nextRevisionRound(projectId: string): Promise<number> {
+  const agg = await prisma.task.aggregate({ where: { projectId, NOT: { templateStepId: null } }, _max: { revisionRound: true } })
+  return (agg._max.revisionRound ?? 0) + 1
+}
+
+// Mở 1 vòng revise theo LOẠI (bản đồ A4). round = max+1, cấm 2 revise cùng round
+// (invariant 1a: 1 round = 1 revise = 1 entry — chainNextTemplateTasks anchor dựa vào).
+export async function startReviseRound(
+  projectId: string, reviseType: string, userId: string, opts?: { revisionId?: string | null },
+): Promise<{ ok: true; round: number; spawned: string[]; entryStepCode: string; reviseType: string }> {
+  const def = getReviseTypeDef(reviseType)
+  if (!def) throw new Error(`Loại revise không hợp lệ: ${reviseType}`)
+  const round = await nextRevisionRound(projectId)
+  const taken = await prisma.task.count({ where: { projectId, revisionRound: round } })
+  if (taken > 0) throw new Error(`Round ${round} đã có revise khác đang mở — thử lại`)
+  const res = await openRevisionRound(projectId, def.entryStepCode, round, userId, { revisionId: opts?.revisionId ?? null })
+  return { ...res, entryStepCode: def.entryStepCode, reviseType }
+}
+
+// Fork tạo việc (Revise Flow36). FF ON + có `revise` → mở vòng revise; ngược lại → createTask động (y hệt).
+// FF OFF → luôn nhánh createTask → hành vi tạo việc KHÔNG đổi. `input`/`revise` tách riêng vì
+// revise KHÔNG cần assignees (createTaskSchema yêu cầu), openRevisionRound tự giao theo bước.
+export async function dispatchWork(args: {
+  userId: string
+  input?: CreateTaskInput
+  revise?: { projectId: string; reviseType: string; revisionId?: string | null }
+}) {
+  if (args.revise && isEnabled('REVISE_FLOW')) {
+    const r = await startReviseRound(args.revise.projectId, args.revise.reviseType, args.userId, { revisionId: args.revise.revisionId })
+    return { kind: 'revise' as const, ...r }
+  }
+  if (args.input) return { kind: 'task' as const, task: await createTask(args.input, args.userId) }
+  throw new Error('dispatchWork: thiếu input hoặc revise')
 }
 
 export async function listTemplates() {

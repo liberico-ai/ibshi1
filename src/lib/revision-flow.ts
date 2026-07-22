@@ -202,7 +202,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       },
     })
 
-    let params: { oldVersionId: string; newVersionId: string; projectId: string; ecoCode: string; userId: string; bomId: string } | null = null
+    let params: { oldVersionId: string; newVersionId: string; projectId: string; ecoCode: string; ecoId: string | null; userId: string; bomId: string } | null = null
     let reQcCount = 0
     // Finding F: context re-QC ĐỘC LẬP cascadeParams (cascadeParams=null khi FF cascade tắt).
     // Cờ needsReQc trên WO set không gate FF → task re-QC cũng PHẢI dispatch (an toàn chất lượng).
@@ -229,6 +229,7 @@ export async function approveRevision(bomVersionId: string, userId: string) {
         // Lấy projectId THẬT từ bom → cascade không còn FK-fail + mất âm thầm khi revision không gắn ECO.
         projectId: eco?.projectId || version.bom.projectId,
         ecoCode: eco?.ecoCode || `BOM-v${version.versionNo}`,
+        ecoId: version.ecoId ?? null,     // revisionId khi mở vòng revise (mode artifact)
         userId,
         bomId: version.bomId,
       }
@@ -273,7 +274,9 @@ export async function approveRevision(bomVersionId: string, userId: string) {
     return { updated: result, cascadeParams: params, reQcCount, reQcContext }
   })
 
-  if (cascadeParams) {
+  // ── Revise Flow36 (Phase 1b): FF ON → mở VÒNG REVISE thay cascade phẳng; FF OFF → cascade cũ y nguyên. ──
+  // Khối re-QC bên dưới ĐỘC LẬP FF (Finding F) → CHẠY cả 2 nhánh. TUYỆT ĐỐI không gộp vào đây.
+  if (cascadeParams && !isEnabled('REVISE_FLOW')) {
     try {
       const cascadeResult = await runCascade(
         cascadeParams.oldVersionId,
@@ -293,6 +296,19 @@ export async function approveRevision(bomVersionId: string, userId: string) {
       // Finding B: trước nuốt âm thầm ("non-blocking"). Nay projectId đã đúng → throw là lỗi THẬT, log rõ để không mất cascade lặng lẽ.
       console.error(
         `[approveRevision] ❌ Cascade THẤT BẠI — ${cascadeParams.ecoCode} (project ${cascadeParams.projectId}): revision KHÔNG lan sang phòng khác. Cần xử lý:`,
+        err,
+      )
+    }
+  } else if (cascadeParams && isEnabled('REVISE_FLOW')) {
+    // FF ON — REV_DESIGN (artifact): mở vòng revise entry P2.1, revisionId=ecoId. runCascade KHÔNG chạy.
+    try {
+      const { openRevisionRound, nextRevisionRound } = await import('./work-engine')
+      const { REVISE_TYPE_MAP } = await import('./revise-map')
+      const round = await nextRevisionRound(cascadeParams.projectId)
+      await openRevisionRound(cascadeParams.projectId, REVISE_TYPE_MAP.REV_DESIGN.entryStepCode, round, cascadeParams.userId, { revisionId: cascadeParams.ecoId })
+    } catch (err) {
+      console.error(
+        `[approveRevision] ❌ Mở vòng revise THẤT BẠI — ${cascadeParams.ecoCode} (project ${cascadeParams.projectId}):`,
         err,
       )
     }
