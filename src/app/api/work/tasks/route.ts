@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
-import { validateBody } from '@/lib/api-helpers'
+import { validateBody, validateData } from '@/lib/api-helpers'
 import { createTaskSchema } from '@/lib/schemas'
 import { createTask, dispatchWork } from '@/lib/work-engine'
 import { isEnabled } from '@/lib/feature-flags'
@@ -25,15 +25,16 @@ export async function POST(req: NextRequest) {
     if (isEnabled('REVISE_FLOW')) {
       const raw = await req.json().catch(() => null)
       if (raw && typeof raw === 'object' && (raw as { reviseType?: string }).reviseType) {
-        const p = reviseSchema.safeParse(raw)
-        if (!p.success) return errorResponse('Dữ liệu revise không hợp lệ', 400)
+        // Concern #2: dùng validateData → format lỗi 400 GIỐNG validateBody (nhất quán nhánh cũ).
+        const p = validateData(raw, reviseSchema)
+        if (!p.success) return p.response
         const r = await dispatchWork({ userId: payload.userId, revise: p.data })
         const round = r.kind === 'revise' ? r.round : undefined
         await logAudit(payload.userId, 'OPEN_REVISE_ROUND', 'Project', p.data.projectId, { reviseType: p.data.reviseType, round }, getClientIP(req))
         return successResponse({ revise: r }, `Đã mở vòng revise (round ${round})`, 201)
       }
-      const p = createTaskSchema.safeParse(raw)
-      if (!p.success) return errorResponse('Dữ liệu không hợp lệ', 400)
+      const p = validateData(raw, createTaskSchema)
+      if (!p.success) return p.response
       const task = await createTask(p.data, payload.userId)
       await logAudit(payload.userId, 'CREATE', 'Task', task.id, { title: task.title }, getClientIP(req))
       return successResponse({ task }, 'Đã tạo & giao việc', 201)

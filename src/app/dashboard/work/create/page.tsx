@@ -9,6 +9,10 @@ import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload
 import { CheckCircle2 } from 'lucide-react'
 import { TEMPLATES, type TemplateType } from '@/components/TemplateSelector'
 import TemplateSelector from '@/components/TemplateSelector'
+import { REVISE_TYPE_MAP } from '@/lib/revise-map'
+
+const FF_REVISE = process.env.NEXT_PUBLIC_FF_REVISE_FLOW === 'true'
+const REVISE_OPTS = Object.entries(REVISE_TYPE_MAP)
 
 interface Proj { id: string; projectCode: string; projectName: string }
 interface Usr { id: string; fullName?: string; username?: string; roleCode: string; isActive?: boolean; department?: { code: string; name: string } | null }
@@ -68,6 +72,8 @@ function CreateInner() {
   const fromProject = sp.get('project') || ''
   const [draftId] = useState(() => `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
 
+  const [reviseType, setReviseType] = useState('')
+  const [reviseBusy, setReviseBusy] = useState(false)
   const [projects, setProjects] = useState<Proj[]>([])
   const [users, setUsers] = useState<Usr[]>([])
   const [projectId, setProjectId] = useState(fromProject)
@@ -282,6 +288,33 @@ function CreateInner() {
       <h1 className="text-xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
         {parentId ? '+ Tạo việc con' : fromId ? '+ Tạo việc tiếp theo' : '+ Tạo việc mới'}
       </h1>
+
+      {/* Fork Revise Flow36 (khi FF ON): [1] Revise theo 12 loại → mở vòng revise; [2] Việc khác → form dưới. */}
+      {FF_REVISE && (
+        <div className="rounded-xl p-4 mb-4" style={{ border: '1px solid #c7d2fe', background: '#eef2ff' }}>
+          <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 8 }}>Đây là REVISE (đổi thiết kế/BOM/dự toán…)?</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select value={reviseType} onChange={(e) => setReviseType(e.target.value)} style={{ ...inp, maxWidth: 420 }}>
+              <option value="">— Chọn loại revise (12) —</option>
+              {REVISE_OPTS.map(([k, v]) => <option key={k} value={k}>{v.label} → vào {v.entryStepCode} ({v.ownerRole})</option>)}
+            </select>
+            <button
+              disabled={!reviseType || !projectId || reviseBusy}
+              onClick={async () => {
+                if (!reviseType || !projectId) return
+                setReviseBusy(true)
+                const res = await apiFetch('/api/work/tasks', { method: 'POST', body: JSON.stringify({ reviseType, projectId }) })
+                setReviseBusy(false)
+                if (res.ok) router.push(`/dashboard/work/revise?projectId=${encodeURIComponent(projectId)}&round=${res.revise?.round ?? ''}`)
+                else alert(res.error || 'Không mở được vòng revise')
+              }}
+              style={{ background: reviseType && projectId ? '#4f46e5' : '#c7c7c7', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: '.83rem', fontWeight: 700, cursor: reviseType && projectId ? 'pointer' : 'not-allowed' }}
+            >{reviseBusy ? 'Đang mở…' : 'Mở vòng revise'}</button>
+            <span style={{ fontSize: '.75rem', color: 'var(--text-secondary)' }}>{projectId ? '' : 'Chọn dự án ở dưới trước'}</span>
+          </div>
+          <div style={{ fontSize: '.75rem', color: 'var(--text-secondary)', marginTop: 6 }}>Hoặc để tạo <b>việc khác</b> (không theo quy trình), điền form bên dưới.</div>
+        </div>
+      )}
 
       <Stepper step={1} hasTemplate={!!selectedTemplate} />
 

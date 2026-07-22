@@ -13,6 +13,7 @@ interface Task {
   assignedRole: string; status: string; deadline: string | null; notes: string | null;
   assignee: { fullName: string; username: string } | null;
   completedAt: string | null;
+  revisionRound?: number; revisionId?: string | null;
 }
 
 interface ProjectDetail {
@@ -154,7 +155,7 @@ export default function ProjectDetailPage() {
 
   const tasksByStatus: Record<string, Task[]> = { IN_PROGRESS: [], RETURNED: [], DONE: [] }
   for (const t of project.tasks) {
-    const col = t.status === 'DONE' ? 'DONE' : t.status === 'RETURNED' || t.status === 'REJECTED' ? 'RETURNED' : 'IN_PROGRESS'
+    const col = t.status === 'DONE' || t.status === 'SKIPPED_NO_IMPACT' ? 'DONE' : t.status === 'RETURNED' || t.status === 'REJECTED' ? 'RETURNED' : 'IN_PROGRESS'
     tasksByStatus[col].push(t)
   }
 
@@ -377,8 +378,18 @@ function TaskCard({ task, onCompleteClick, onRejectClick, onAssignClick, current
     >
       {/* Header: code + role */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent)', background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px' }}>
-          {task.stepCode}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent)', background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px' }}>
+            {task.stepCode}
+          </span>
+          {(task.revisionRound ?? 0) >= 1 && (
+            <span title={task.revisionId ? `Nguồn: ${task.revisionId}` : 'Vòng revise'} style={{ fontSize: '10px', fontWeight: 700, color: '#4f46e5', background: '#eef2ff', padding: '1px 6px', borderRadius: '999px' }}>
+              Rev.{task.revisionRound}
+            </span>
+          )}
+          {task.status === 'SKIPPED_NO_IMPACT' && (
+            <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: '999px' }}>Đã bỏ qua</span>
+          )}
         </span>
         <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px' }}>
           {(ROLES as Record<string, { name: string }>)[task.assignedRole]?.name || task.assignedRole}
