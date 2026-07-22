@@ -6,6 +6,7 @@ import { emitTaskUpdated } from './webhook'
 import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
 import { whereDoerOverdue, whereReviewLate } from './task-where'
 import { resolveDesignation } from './permissions/store'
+import { isResolved } from './utils'
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -1139,15 +1140,17 @@ async function spawnTemplateStep(step: TStep, projectId: string, byUser: string)
 // Tập "code đã xong": task template DONE + legacy grace cho root chưa spawn.
 // Root (orderIndex nhỏ nhất) auto-done CHỈ KHI chưa có task nào với templateStepId=root.id.
 // Nếu root đã spawn → done tính theo DONE thật.
-async function doneCodesForProject(steps: TStep[], projectId: string): Promise<Set<string>> {
+// round mặc định 0 = flow gốc → behavior-identical (mọi task hiện có revisionRound=0).
+// Phase 1 truyền round=N cho vòng revise (round-scoped done-set, DESIGN_C1 mục (a)).
+async function doneCodesForProject(steps: TStep[], projectId: string, round = 0): Promise<Set<string>> {
   const first = steps.slice().sort((a, b) => a.orderIndex - b.orderIndex)[0]
   const templateTasks = await prisma.task.findMany({
-    where: { projectId, NOT: { templateStepId: null } },
+    where: { projectId, NOT: { templateStepId: null }, revisionRound: round },
     select: { templateStepId: true, status: true },
   })
   const stepById = new Map(steps.map((s) => [s.id, s]))
   const doneCodes = templateTasks
-    .filter((t) => t.status === 'DONE')
+    .filter((t) => isResolved(t.status))
     .map((t) => stepById.get(t.templateStepId!)?.code)
     .filter((c): c is string => !!c)
   const rootSpawned = first ? templateTasks.some((t) => t.templateStepId === first.id) : true

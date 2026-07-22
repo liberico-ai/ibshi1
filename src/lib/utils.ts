@@ -144,6 +144,15 @@ export function isTaskOverdue(t: OverdueTask): boolean {
   return isOverdueForDoer(t) || isLateForReview(t)
 }
 
+/**
+ * Trạng thái task được coi là "đã xử lý xong" cho mục đích gate/tiến độ.
+ * DONE = hoàn thành thật; SKIPPED_NO_IMPACT = người bấm bỏ qua (Revise Flow36, Phase 1).
+ * Phase 0: chưa task nào có SKIPPED_NO_IMPACT → isResolved ≡ (status === 'DONE') cho dữ liệu hiện có.
+ */
+export function isResolved(status: string): boolean {
+  return status === 'DONE' || status === 'SKIPPED_NO_IMPACT'
+}
+
 export function taskDaysOverdue(t: OverdueTask): number {
   if (t.status === 'DONE' || t.status === 'CANCELLED') {
     if (!t.deadline || !t.completedAt) return 0
