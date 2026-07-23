@@ -40,6 +40,7 @@ interface Task {
   evidenceFiles?: EvidenceFile[]
   revisionRound?: number
   parentDocs?: { id: string; kind: string; label: string; file: DocFile | null }[]
+  templateStepId?: string | null
 }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
 const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao việc', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành phần việc', SUBMITTED_TO_CREATOR: '↩ Trả kết quả', COMPLETED: '✓ Hoàn thành tất cả', CLOSED: 'Kết thúc công việc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: 'Giao lại', SUBTASK_CREATED: '+ Tạo việc con', COMMENT: 'Trao đổi', EDITED: 'Chỉnh sửa' }
@@ -93,6 +94,7 @@ export default function WorkDetailPage() {
   const [rejOpen, setRejOpen] = useState(false)
   const [rejReason, setRejReason] = useState('')
   const [skipOpen, setSkipOpen] = useState(false)
+  const [redoOpen, setRedoOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [edit, setEdit] = useState({ title: '', description: '', deadline: '', priority: 'NORMAL' })
   // Sửa người nhận (trong modal Sửa): chỉ bỏ/đổi được người CHƯA hoàn thành.
@@ -142,6 +144,18 @@ export default function WorkDetailPage() {
     if (res.ok) { showToast('Đã bỏ qua (không ảnh hưởng)'); load() }
     else showToast(res.error || 'Lỗi bỏ qua')
   }
+
+  // "Yêu cầu làm lại" — người tạo đánh giá không đạt → đẩy về người nhận (log REDO_REQUESTED).
+  const confirmRedo = async (reason: string) => {
+    setBusy(true)
+    const res = await apiFetch(`/api/work/tasks/${id}/request-redo`, { method: 'POST', body: JSON.stringify({ reason }) })
+    setBusy(false)
+    setRedoOpen(false)
+    if (res.ok) { showToast('Đã yêu cầu làm lại'); load() }
+    else showToast(res.error || 'Lỗi yêu cầu làm lại')
+  }
+  // Số lần bị yêu cầu làm lại (log-only, đếm từ lịch sử REDO_REQUESTED) — badge + nguồn KPI.
+  const redoCount = task.history.filter((h) => h.action === 'REDO_REQUESTED').length
 
   const doComplete = async (mode: 'RETURN_CREATOR' | 'FORWARD', forward?: unknown) => {
     if (mode === 'RETURN_CREATOR' && (!task.evidenceFiles || task.evidenceFiles.length === 0)) {
@@ -341,6 +355,7 @@ export default function WorkDetailPage() {
           <span>Người tạo: <b>{task.createdByName || '—'}</b></span>
           {task.deadline && <Badge variant="warning">Hạn: {formatDate(task.deadline)}</Badge>}
           {task.returnCount > 0 && <Badge variant="danger">↩ trả lại {task.returnCount} lần</Badge>}
+          {redoCount > 0 && <Badge variant="warning">↺ làm lại {redoCount} lần</Badge>}
         </div>
       </div>
 
@@ -357,8 +372,9 @@ export default function WorkDetailPage() {
         <ChangeRequestAdminCard crFor={changeReqFor} onDone={load} />
       )}
 
-      {/* Việc yêu cầu (admin) không cần biểu mẫu nghiệp vụ */}
-      {!changeReqFor && (
+      {/* Biểu mẫu (Dự toán/WBS/BOM/PR/Báo giá…) gắn với BƯỚC CỐ ĐỊNH → chỉ hiện khi task có templateStepId.
+          Task động (FREE / templateStepId=null) KHÔNG hiện — tránh lạc luồng. (Việc yêu cầu admin cũng ẩn.) */}
+      {!changeReqFor && task.templateStepId && (
         <TemplateSelector
           taskId={id}
           isEditable={(isAssignee || isCreator) && task.status !== 'DONE' && !locked}
@@ -743,6 +759,7 @@ export default function WorkDetailPage() {
           <div className="text-xs px-1" style={{ color: '#b45309' }}>Người nhận đã hoàn thành và trả lại. Bạn có thể kết thúc, hoặc tạo việc tiếp theo.</div>
           <div className="flex gap-2 flex-wrap">
             <button onClick={doFinalize} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold flex-1" style={{ background: '#059669', color: '#fff', minWidth: 160 }}>✓ Hoàn thành &amp; kết thúc</button>
+            <button onClick={() => setRedoOpen(true)} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: '#d97706', color: '#fff' }} title="Đánh giá không đạt → đẩy về người nhận làm lại (có log)">↺ Yêu cầu làm lại</button>
             <button onClick={goCreateNext} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--text-heading)', color: '#fff' }}>+ Tạo việc tiếp theo</button>
           </div>
         </div>
@@ -760,6 +777,14 @@ export default function WorkDetailPage() {
         defaultReason="Không ảnh hưởng"
         onCancel={() => setSkipOpen(false)}
         onConfirm={confirmSkip}
+      />
+      <SkipReasonModal
+        open={redoOpen}
+        busy={busy}
+        title="Yêu cầu làm lại — nêu rõ chưa đạt ở đâu"
+        defaultReason=""
+        onCancel={() => setRedoOpen(false)}
+        onConfirm={confirmRedo}
       />
     </div>
   )

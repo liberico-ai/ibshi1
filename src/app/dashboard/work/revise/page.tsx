@@ -8,8 +8,8 @@ import SkipReasonModal from '@/components/SkipReasonModal'
 
 const FF_ON = process.env.NEXT_PUBLIC_FF_REVISE_FLOW === 'true'
 
-interface SubStep { code: string; role: string | null; spawned: boolean; status: string | null }
-interface Checkpoint { code: string; role: string | null; hint: 'affected' | 'clean'; taskId: string; status: string }
+interface SubStep { code: string; title: string | null; role: string | null; spawned: boolean; status: string | null }
+interface Checkpoint { code: string; title: string | null; role: string | null; hint: 'affected' | 'clean'; taskId: string; status: string }
 interface View { round: number; entry: string | null; subgraph: SubStep[]; checkpoints: Checkpoint[] }
 
 const roleName = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '—')
@@ -95,7 +95,7 @@ function ReviseInner() {
               {view.checkpoints.map((c) => (
                 <div key={c.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
                   <span style={{ fontFamily: 'monospace', fontWeight: 700, minWidth: 56 }}>{c.code}</span>
-                  <span style={{ fontSize: '.82rem', flex: 1 }}>{roleName(c.role)}</span>
+                  <span style={{ fontSize: '.82rem', flex: 1 }}><span style={{ fontWeight: 600 }}>{c.title || c.code}</span><span style={{ color: 'var(--text-secondary)' }}> · {roleName(c.role)}</span></span>
                   <span style={{ fontSize: '.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: c.hint === 'affected' ? '#fee2e2' : '#dcfce7', color: c.hint === 'affected' ? '#b91c1c' : '#15803d' }}>
                     {c.hint === 'affected' ? 'cần làm' : 'có thể bỏ qua'}
                   </span>
@@ -111,12 +111,14 @@ function ReviseInner() {
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Toàn bộ chuỗi vòng (subgraph) — bước chưa tới hiện mờ</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {view.subgraph.map((s) => (
-                <span key={s.code} title={roleName(s.role)} style={{
-                  fontFamily: 'monospace', fontSize: '.75rem', padding: '3px 8px', borderRadius: 6,
-                  border: '1px solid var(--border)', opacity: s.spawned ? 1 : 0.4,
+                <span key={s.code} title={`${s.title || ''}${s.title ? ' · ' : ''}${roleName(s.role)}`} style={{
+                  fontSize: '.75rem', padding: '3px 8px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: 260,
+                  border: '1px solid var(--border)', opacity: s.spawned ? 1 : 0.5,
                   background: s.status === 'DONE' ? '#dcfce7' : s.status === 'SKIPPED_NO_IMPACT' ? '#f1f5f9' : s.spawned ? '#fff' : '#f8fafc',
                 }}>
-                  {s.code}{s.status === 'SKIPPED_NO_IMPACT' ? ' ⤼' : s.status === 'DONE' ? ' ✓' : !s.spawned ? ' · chờ gate' : ''}
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{s.code}</span>
+                  {s.title && <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>}
+                  <span style={{ color: 'var(--text-secondary)' }}>{s.status === 'SKIPPED_NO_IMPACT' ? '⤼' : s.status === 'DONE' ? '✓' : !s.spawned ? '· chờ gate' : ''}</span>
                 </span>
               ))}
             </div>
