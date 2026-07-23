@@ -782,6 +782,8 @@ export default function WorkDetailPage() {
         open={redoOpen}
         busy={busy}
         title="Yêu cầu làm lại — nêu rõ chưa đạt ở đâu"
+        subtitle="Đánh giá không đạt → đẩy về người nhận làm lại (được ghi log, tính KPI). Bắt buộc."
+        placeholder="Chưa đạt ở đâu, cần làm lại gì…"
         defaultReason=""
         onCancel={() => setRedoOpen(false)}
         onConfirm={confirmRedo}

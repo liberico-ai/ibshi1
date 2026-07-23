@@ -7,13 +7,15 @@ interface Props {
   title: string
   defaultReason: string
   busy?: boolean
+  subtitle?: string
+  placeholder?: string
   onCancel: () => void
   onConfirm: (reason: string) => void
 }
 
-// Modal in-app nhập lý do "Không ảnh hưởng — Bỏ qua" (thay window.prompt native).
+// Modal in-app nhập lý do (thay window.prompt native) — dùng cho "Bỏ qua" và "Yêu cầu làm lại".
 // Reason bắt buộc (nút Xác nhận disabled khi rỗng); server cũng chặn min(1).
-export default function SkipReasonModal({ open, title, defaultReason, busy, onCancel, onConfirm }: Props) {
+export default function SkipReasonModal({ open, title, defaultReason, busy, subtitle, placeholder, onCancel, onConfirm }: Props) {
   const [reason, setReason] = useState(defaultReason)
   useEffect(() => { if (open) setReason(defaultReason) }, [open, defaultReason])
   if (!open) return null
@@ -28,13 +30,13 @@ export default function SkipReasonModal({ open, title, defaultReason, busy, onCa
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ fontWeight: 800, fontSize: '.98rem', marginBottom: 4 }}>{title}</div>
-        <div style={{ fontSize: '.78rem', color: 'var(--text-secondary,#64748b)', marginBottom: 10 }}>Nêu lý do bỏ qua (được ghi log). Bắt buộc.</div>
+        <div style={{ fontSize: '.78rem', color: 'var(--text-secondary,#64748b)', marginBottom: 10 }}>{subtitle || 'Nêu lý do bỏ qua (được ghi log). Bắt buộc.'}</div>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={3}
           autoFocus
-          placeholder="Lý do bỏ qua…"
+          placeholder={placeholder || 'Lý do bỏ qua…'}
           style={{ width: '100%', border: '1px solid var(--border,#cbd5e1)', borderRadius: 9, padding: '9px 11px', fontSize: '.86rem', background: '#f8fafc', resize: 'vertical' }}
         />
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
