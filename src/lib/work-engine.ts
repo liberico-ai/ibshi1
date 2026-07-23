@@ -1064,9 +1064,25 @@ export async function getTaskDetail(id: string) {
   }))
   const doneCount = assignees.filter((a) => a.done).length
 
+  // (3) Tài liệu của VIỆC CHA — read-only, đọc tại chỗ (không copy) → mọi việc con đều xem được tài liệu cha.
+  let parentDocs: Array<{ id: string; kind: string; label: string; file: { id: string; fileName: string; fileUrl: string } | null }> = []
+  if (task.parentId) {
+    const pDocs = await prisma.taskDocRequirement.findMany({
+      where: { taskId: task.parentId },
+      select: { id: true, kind: true, label: true, fileAttachmentId: true },
+    })
+    const pFileIds = pDocs.map((d) => d.fileAttachmentId).filter((x): x is string => !!x)
+    const pFiles = pFileIds.length
+      ? await prisma.fileAttachment.findMany({ where: { id: { in: pFileIds } }, select: { id: true, fileName: true, fileUrl: true } })
+      : []
+    const pFileById = new Map(pFiles.map((f) => [f.id, f]))
+    parentDocs = pDocs.map((d) => ({ id: d.id, kind: d.kind, label: d.label, file: d.fileAttachmentId ? pFileById.get(d.fileAttachmentId) || null : null }))
+  }
+
   return {
     ...task,
     docs,
+    parentDocs,
     history,
     createdByName: nameOf(task.createdBy),
     completedByName: nameOf(task.completedBy),
