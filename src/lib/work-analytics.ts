@@ -65,14 +65,19 @@ export async function getPerformance(from?: Date, to?: Date) {
     where: { action: 'RETURNED', createdAt: { gte: start, lte: end } },
     select: { task: { select: { createdBy: true } } },
   })
+  // Lượt "yêu cầu làm lại" trong kỳ (người tạo đánh giá không đạt) — tính cho phòng NGƯỜI NHẬN (bị đẩy làm lại)
+  const redos = await prisma.taskHistory.findMany({
+    where: { action: 'REDO_REQUESTED', createdAt: { gte: start, lte: end } },
+    select: { task: { select: { assignees: { where: { isPrimary: true }, select: { role: true } } } } },
+  })
   // map creator userId → role → dept
   const creatorIds = [...new Set([...done.map((d) => d.createdBy), ...returned.map((r) => r.task?.createdBy).filter(Boolean) as string[]])]
   const users = await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, roleCode: true } })
   const userDept = new Map(users.map((u) => [u.id, deptOf(u.roleCode)]))
 
-  type Row = { dept: string; done: number; onTime: number; late: number; ahead: number; cycleSum: number; returned: number; misRoute: number }
+  type Row = { dept: string; done: number; onTime: number; late: number; ahead: number; cycleSum: number; returned: number; misRoute: number; redo: number }
   const rows = new Map<string, Row>()
-  const get = (d: string): Row => { if (!rows.has(d)) rows.set(d, { dept: d, done: 0, onTime: 0, late: 0, ahead: 0, cycleSum: 0, returned: 0, misRoute: 0 }); return rows.get(d)! }
+  const get = (d: string): Row => { if (!rows.has(d)) rows.set(d, { dept: d, done: 0, onTime: 0, late: 0, ahead: 0, cycleSum: 0, returned: 0, misRoute: 0, redo: 0 }); return rows.get(d)! }
 
   for (const t of done) {
     const dept = deptOf(t.assignees[0]?.role)
@@ -94,21 +99,27 @@ export async function getPerformance(from?: Date, to?: Date) {
     const dept = rt.task ? userDept.get(rt.task.createdBy) || 'KHAC' : 'KHAC'
     get(dept).misRoute++
   }
+  // redo: mỗi lượt REDO_REQUESTED tính cho phòng NGƯỜI NHẬN (bị đẩy làm lại)
+  for (const rd of redos) {
+    const dept = deptOf(rd.task?.assignees[0]?.role)
+    get(dept).redo++
+  }
 
   const result = [...rows.values()].map((r) => {
     const onTimePct = r.done ? Math.round(((r.onTime + r.ahead) / r.done) * 100) : 0
     const avgCycle = r.done ? +(r.cycleSum / r.done).toFixed(1) : 0
     // điểm tổng hợp 0–100
     const score = Math.max(0, Math.min(100, Math.round(
-      onTimePct - r.late * 1.5 - r.returned * 2 - r.misRoute * 3,
+      onTimePct - r.late * 1.5 - r.returned * 2 - r.misRoute * 3 - r.redo * 2,
     )))
-    return { deptCode: r.dept, deptName: DEPT_NAME[r.dept] || r.dept, done: r.done, ahead: r.ahead, onTime: r.onTime, late: r.late, onTimePct, avgCycle, returned: r.returned, misRoute: r.misRoute, score }
+    return { deptCode: r.dept, deptName: DEPT_NAME[r.dept] || r.dept, done: r.done, ahead: r.ahead, onTime: r.onTime, late: r.late, onTimePct, avgCycle, returned: r.returned, misRoute: r.misRoute, redo: r.redo, score }
   }).sort((a, b) => b.score - a.score)
 
   const totalDone = result.reduce((s, r) => s + r.done, 0)
   const totalOnTime = result.reduce((s, r) => s + r.onTime + r.ahead, 0)
   const totalLate = result.reduce((s, r) => s + r.late, 0)
   const totalReturned = result.reduce((s, r) => s + r.returned, 0)
+  const totalRedo = result.reduce((s, r) => s + r.redo, 0)
   return {
     period: { from: start, to: end },
     kpi: {
@@ -116,6 +127,7 @@ export async function getPerformance(from?: Date, to?: Date) {
       late: totalLate, done: totalDone,
       avgCycle: result.length ? +(result.reduce((s, r) => s + r.avgCycle, 0) / result.length).toFixed(1) : 0,
       returnRate: totalDone ? +((totalReturned / totalDone) * 100).toFixed(1) : 0,
+      redo: totalRedo,
     },
     departments: result,
   }

@@ -649,6 +649,33 @@ export async function returnTask(taskId: string, userId: string, roleCode: strin
   return { ok: true, returnedTo: task.createdBy }
 }
 
+// "Yêu cầu làm lại" — NGƯỜI TẠO đánh giá không đạt → đẩy việc về lại người nhận gốc.
+// Chỉ người tạo, lý do bắt buộc, không khi DONE, chỉ khi việc đã về người tạo (chờ đánh giá / bị trả).
+// Log taskHistory action REDO_REQUESTED (byUserId = người tạo) = NGUỒN KPI (không cột riêng, log-only).
+export async function requestRedo(taskId: string, userId: string, reason: string) {
+  const r = (reason || '').trim()
+  if (!r) throw new Error('Cần nhập lý do làm lại')
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
+  if (!task) throw new Error('Không tìm thấy công việc')
+  if (task.createdBy !== userId) throw new Error('Chỉ người tạo mới yêu cầu làm lại')
+  if (task.status === TASK_STATUS.DONE) throw new Error('Việc đã hoàn thành, không yêu cầu làm lại')
+  // Chỉ khi việc đã VỀ người tạo: chờ đánh giá (AWAITING_REVIEW) / bị trả (RETURNED) / người nhận đã done.
+  const backWithCreator = task.status === TASK_STATUS.AWAITING_REVIEW || task.status === TASK_STATUS.RETURNED || task.assignees.some((a) => a.done)
+  if (!backWithCreator) throw new Error('Chỉ yêu cầu làm lại khi việc đã được trả về bạn')
+  const prevStatus = task.status
+  await prisma.$transaction([
+    prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.IN_PROGRESS } }),
+    // reset để việc quay lại inbox người nhận gốc
+    prisma.taskAssignee.updateMany({ where: { taskId }, data: { done: false, doneAt: null, doneBy: null } }),
+    prisma.taskHistory.create({ data: { taskId, action: 'REDO_REQUESTED', byUserId: userId, reason: r } }),
+    ...task.assignees.filter((a) => a.userId).map((a) => prisma.notification.create({
+      data: { userId: a.userId!, title: `Yêu cầu làm lại: ${task.title}`, message: `Lý do: ${r}`, type: 'task_redo', linkUrl: `/dashboard/work/${taskId}` },
+    })),
+  ])
+  emitTaskUpdated(taskId, prevStatus).catch(() => {})
+  return { ok: true as const, status: TASK_STATUS.IN_PROGRESS as string }
+}
+
 export async function reassignTask(taskId: string, userId: string, input: ReassignTaskInput) {
   const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true, status: true, resultData: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
@@ -1417,7 +1444,7 @@ export async function reviseRoundView(projectId: string, round: number) {
     where: { projectId, revisionRound: round, NOT: { templateStepId: null } },
     select: { templateStepId: true, originStepCode: true, revisionId: true },
   })
-  if (!anchor?.templateStepId) return { round, entry: null as string | null, subgraph: [] as Array<{ code: string; role: string | null; spawned: boolean; status: string | null }>, checkpoints: [] as Array<{ code: string; role: string | null; hint: 'affected' | 'clean'; taskId: string; status: string }> }
+  if (!anchor?.templateStepId) return { round, entry: null as string | null, subgraph: [] as Array<{ code: string; title: string | null; role: string | null; spawned: boolean; status: string | null }>, checkpoints: [] as Array<{ code: string; title: string | null; role: string | null; hint: 'affected' | 'clean'; taskId: string; status: string }> }
   const ts = await prisma.templateStep.findUnique({ where: { id: anchor.templateStepId }, select: { templateId: true } })
   const steps = (await prisma.templateStep.findMany({ where: { templateId: ts!.templateId } })) as unknown as TStep[]
   const byCode = new Map(steps.map((s) => [s.code, s]))
@@ -1431,11 +1458,11 @@ export async function reviseRoundView(projectId: string, round: number) {
 
   const subgraph = [...reached].sort().map((code) => {
     const rt = byCodeTask.get(code)
-    return { code, role: byCode.get(code)?.roleCode ?? null, spawned: !!rt, status: rt?.status ?? null }
+    return { code, title: byCode.get(code)?.title ?? null, role: byCode.get(code)?.roleCode ?? null, spawned: !!rt, status: rt?.status ?? null }
   })
   const checkpoints = subgraph
     .filter((s) => s.spawned && s.status !== TASK_STATUS.DONE && s.status !== 'SKIPPED_NO_IMPACT')
-    .map((s) => ({ code: s.code, role: s.role, hint: (s.code === entry ? 'affected' : 'clean') as 'affected' | 'clean', taskId: byCodeTask.get(s.code)!.id, status: s.status! }))
+    .map((s) => ({ code: s.code, title: s.title, role: s.role, hint: (s.code === entry ? 'affected' : 'clean') as 'affected' | 'clean', taskId: byCodeTask.get(s.code)!.id, status: s.status! }))
   return { round, entry, subgraph, checkpoints }
 }
 

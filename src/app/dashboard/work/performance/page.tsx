@@ -6,8 +6,8 @@ import { PageHeader, Button, KPICard, EmptyState } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { BarChart3 } from 'lucide-react'
 
-interface Dept { deptCode: string; deptName: string; done: number; ahead: number; onTime: number; late: number; onTimePct: number; avgCycle: number; returned: number; misRoute: number; score: number }
-interface Kpi { onTimePct: number; late: number; done: number; avgCycle: number; returnRate: number }
+interface Dept { deptCode: string; deptName: string; done: number; ahead: number; onTime: number; late: number; onTimePct: number; avgCycle: number; returned: number; misRoute: number; redo: number; score: number }
+interface Kpi { onTimePct: number; late: number; done: number; avgCycle: number; returnRate: number; redo: number }
 
 const scoreColor = (s: number) => s >= 85 ? { b: SEMANTIC_COLORS.success.bg, c: SEMANTIC_COLORS.success.solid } : s >= 65 ? { b: SEMANTIC_COLORS.warning.bg, c: SEMANTIC_COLORS.warning.solid } : { b: SEMANTIC_COLORS.danger.bg, c: SEMANTIC_COLORS.danger.solid }
 
@@ -43,6 +43,7 @@ export default function PerformancePage() {
               <KPICard label="Việc chậm" value={kpi.late} accentColor={kpi.late > 0 ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.success.solid} />
               <KPICard label="T.gian xử lý TB" value={`${kpi.avgCycle} ngày`} accentColor={SEMANTIC_COLORS.info.solid} />
               <KPICard label="Tỷ lệ bị trả lại" value={`${kpi.returnRate}%`} accentColor={SEMANTIC_COLORS.warning.solid} />
+              <KPICard label="Bị yêu cầu làm lại" value={kpi.redo} accentColor={kpi.redo > 0 ? SEMANTIC_COLORS.warning.solid : SEMANTIC_COLORS.success.solid} />
             </div>
           )}
 
@@ -51,7 +52,7 @@ export default function PerformancePage() {
             <div className="dt-wrapper">
               <table className="data-table">
                 <thead><tr>
-                  {['Phòng ban', 'Xong', 'Vượt TĐ', 'Đúng hạn', 'Chậm', '%', 'T.gian', 'Trả lại', 'Sai PV', 'Điểm'].map((h) =>
+                  {['Phòng ban', 'Xong', 'Vượt TĐ', 'Đúng hạn', 'Chậm', '%', 'T.gian', 'Trả lại', 'Sai PV', 'Làm lại', 'Điểm'].map((h) =>
                     <th key={h}>{h}</th>)}
                 </tr></thead>
                 <tbody>
@@ -68,11 +69,12 @@ export default function PerformancePage() {
                         <td>{d.avgCycle}d</td>
                         <td>{d.returned}</td>
                         <td style={{ color: d.misRoute > 0 ? SEMANTIC_COLORS.danger.solid : 'inherit', fontWeight: d.misRoute > 0 ? 700 : 400 }}>{d.misRoute}</td>
+                        <td style={{ color: d.redo > 0 ? SEMANTIC_COLORS.warning.solid : 'inherit', fontWeight: d.redo > 0 ? 700 : 400 }}>{d.redo}</td>
                         <td><span className="text-[10px] px-1.5 py-0.5 rounded font-extrabold" style={{ background: sc.b, color: sc.c }}>{d.score}</span></td>
                       </tr>
                     )
                   })}
-                  {depts.length === 0 && <tr><td colSpan={10}><EmptyState icon={<BarChart3 />} title="Chưa có dữ liệu trong kỳ" /></td></tr>}
+                  {depts.length === 0 && <tr><td colSpan={11}><EmptyState icon={<BarChart3 />} title="Chưa có dữ liệu trong kỳ" /></td></tr>}
                 </tbody>
               </table>
             </div>
