@@ -372,9 +372,11 @@ export default function WorkDetailPage() {
         <ChangeRequestAdminCard crFor={changeReqFor} onDone={load} />
       )}
 
-      {/* Biểu mẫu (Dự toán/WBS/BOM/PR/Báo giá…) gắn với BƯỚC CỐ ĐỊNH → chỉ hiện khi task có templateStepId.
-          Task động (FREE / templateStepId=null) KHÔNG hiện — tránh lạc luồng. (Việc yêu cầu admin cũng ẩn.) */}
-      {!changeReqFor && task.templateStepId && (
+      {/* Biểu mẫu (Dự toán/WBS/BOM/PR/Báo giá…) hiện khi task GẮN với biểu mẫu:
+          - bước cố định (templateStepId != null), HOẶC
+          - việc tạo tay có đính biểu mẫu (resultData.templateType != null).
+          Việc động THUẦN (không cả hai) KHÔNG hiện — tránh lạc luồng. (Việc yêu cầu admin cũng ẩn.) */}
+      {!changeReqFor && !!(task.templateStepId || task.resultData?.templateType) && (
         <TemplateSelector
           taskId={id}
           isEditable={(isAssignee || isCreator) && task.status !== 'DONE' && !locked}
