@@ -39,6 +39,7 @@ interface Task {
   resultData?: Record<string, unknown> | null
   evidenceFiles?: EvidenceFile[]
   revisionRound?: number
+  parentDocs?: { id: string; kind: string; label: string; file: DocFile | null }[]
 }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
 const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao việc', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành phần việc', SUBMITTED_TO_CREATOR: '↩ Trả kết quả', COMPLETED: '✓ Hoàn thành tất cả', CLOSED: 'Kết thúc công việc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: 'Giao lại', SUBTASK_CREATED: '+ Tạo việc con', COMMENT: 'Trao đổi', EDITED: 'Chỉnh sửa' }
@@ -536,6 +537,26 @@ export default function WorkDetailPage() {
             {task.parent && linkRow(task.parent, 'Việc cha')}
             {task.forwardedFrom && linkRow(task.forwardedFrom, 'Chuyển tiếp từ')}
             {task.forwards?.map((t) => linkRow(t, '↗ Chuyển tiếp tới'))}
+          </div>
+        )}
+
+        {/* Tài liệu từ VIỆC CHA (read-only) — mọi việc con đều xem được tài liệu của việc cha */}
+        {task.parentDocs && task.parentDocs.length > 0 && (
+          <div className="rounded-xl p-4" style={{ background: '#f8fafc', border: '1px solid var(--border)' }}>
+            <div className="text-sm font-semibold mb-2">📎 Tài liệu từ việc cha <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>(chỉ xem)</span></div>
+            <div className="space-y-1.5">
+              {task.parentDocs.map((d) => (
+                <div key={d.id} className="flex items-center gap-2 text-xs flex-wrap">
+                  <span style={{ fontWeight: 700, color: d.kind === 'MUST_READ' ? '#92400e' : d.kind === 'MUST_RETURN' ? '#1e40af' : 'var(--text-muted)' }}>
+                    {d.kind === 'MUST_READ' ? 'Phải đọc' : d.kind === 'MUST_RETURN' ? 'Phải trả' : 'Tài liệu'}
+                  </span>
+                  <span>{d.label}</span>
+                  {d.file
+                    ? <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }} style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{d.file.fileName} ↗</a>
+                    : <span style={{ color: 'var(--text-muted)' }}>(chưa có tệp)</span>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
