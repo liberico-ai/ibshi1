@@ -357,7 +357,8 @@ function CreateInner() {
             </div>
             <div>
               <label className="text-sm font-semibold">Loại việc</label>
-              <select value={taskType} onChange={(e) => setTaskType(e.target.value)} style={inp}>
+              {/* Việc động (FREE) KHÔNG gắn biểu mẫu → bỏ chọn template ngay khi đổi sang FREE (tránh set-state-in-effect). */}
+              <select value={taskType} onChange={(e) => { const v = e.target.value; setTaskType(v); if (v === 'FREE') setSelectedTemplate(null) }} style={inp}>
                 {TASK_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
               </select>
             </div>
@@ -372,8 +373,8 @@ function CreateInner() {
           </div>
         </div>
 
-        {/* ── ② Biểu mẫu (tuỳ chọn) ── */}
-        {allowedTemplates.length === 0 ? (
+        {/* ── ② Biểu mẫu (tuỳ chọn) — CHỈ hiện cho loại việc bước-cố-định; việc động (FREE/"Việc khác") ẩn ── */}
+        {taskType !== 'FREE' && (allowedTemplates.length === 0 ? (
           <div className="rounded-xl p-4" style={sectionStyle}>
             <h3 className="font-semibold mb-1" style={{ color: 'var(--text-heading)', margin: 0 }}>② Biểu mẫu (tuỳ chọn)</h3>
             <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -418,11 +419,11 @@ function CreateInner() {
               })}
             </div>
           </div>
-        )}
+        ))}
 
         {/* ── ③ Thời hạn & tài liệu ── */}
         <div className="rounded-xl p-5" style={sectionStyle}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>③ Thời hạn & tài liệu</h3>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>{taskType === 'FREE' ? '②' : '③'} Thời hạn & tài liệu</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
               <label className="text-sm font-semibold">Deadline</label>
@@ -485,7 +486,7 @@ function CreateInner() {
 
         {/* ── ④ Giao cho ai ── */}
         <div className="rounded-xl p-5" style={sectionStyle}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>④ Giao cho ai?</h3>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>{taskType === 'FREE' ? '③' : '④'} Giao cho ai?</h3>
           {sugg.length > 0 && (
             <div className="rounded-lg p-3 mb-3" style={{ background: 'linear-gradient(135deg,#eff6ff,#f5f3ff)', border: '1px dashed #93c5fd' }}>
               <div className="text-xs font-bold mb-2" style={{ color: '#1d4ed8' }}>Gợi ý phòng ban</div>
