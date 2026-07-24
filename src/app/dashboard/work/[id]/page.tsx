@@ -723,7 +723,7 @@ export default function WorkDetailPage() {
               <input value={delQuery} onChange={(e) => setDelQuery(e.target.value)} placeholder={delDept ? `Gõ tên (trong ${DEPT_NAME[ROLE_TO_DEPT[delDept]]})…` : 'Gõ tên nhân sự…'} style={inp} />
               {delUsers().length > 0 && (
                 <div className="rounded-lg" style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, right: 0, border: '1px solid var(--border)', background: 'var(--surface)', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}>
-                  {delUsers().map((u) => <div key={u.id} onClick={() => doDelegate(u.id, u.fullName || u.username || '')} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span></div>)}
+                  {delUsers().map((u) => <div key={u.id} onClick={() => doDelegate(u.id, `${u.fullName || u.username || ''} (${userDistinguisher(u)})`)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span></div>)}
                 </div>
               )}
             </div>

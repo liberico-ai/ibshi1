@@ -1,6 +1,7 @@
 import prisma from './db'
 import type { CreateTaskInput, CompleteWorkTaskInput, ReassignTaskInput } from './schemas/work.schema'
 import { ROLE_TO_DEPT, DEPT_KEYWORDS, DEPT_PRIMARY_ROLE, DEPT_NAME } from './org-map'
+import { userDistinguisher } from './user-display'
 import { runHooks, maybeSyncEstimateToBudget } from './work-hooks'
 import { emitTaskUpdated } from './webhook'
 import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
@@ -1061,11 +1062,18 @@ export async function getTaskDetail(id: string) {
   const users = userIds.size
     ? await prisma.user.findMany({
         where: { id: { in: [...userIds] } },
-        select: { id: true, fullName: true, roleCode: true },
+        select: { id: true, fullName: true, roleCode: true, username: true },
       })
     : []
   const userById = new Map(users.map((u) => [u.id, u]))
-  const nameOf = (uid?: string | null) => (uid ? userById.get(uid)?.fullName || 'Người dùng' : null)
+  // Tên hiển thị kèm phân biệt "username · chức danh" (đồng bộ với ô chọn người) — tránh nhầm khi trùng tên.
+  const nameOf = (uid?: string | null) => {
+    if (!uid) return null
+    const u = userById.get(uid)
+    if (!u) return 'Người dùng'
+    const sub = userDistinguisher(u)
+    return sub ? `${u.fullName} (${sub})` : u.fullName
+  }
   const roleName = (rc?: string | null) => (rc ? ROLE_TO_DEPT[rc] ? `${rc} (${ROLE_TO_DEPT[rc]})` : rc : null)
 
   // Tài liệu + tệp đính kèm + lưu vết người đã đọc
