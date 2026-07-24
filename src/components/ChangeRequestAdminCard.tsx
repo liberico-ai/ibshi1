@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
+import { userDistinguisher } from '@/lib/user-display'
 
 interface CrFor { originalTaskId: string; type: string; reason: string; requestedByName: string; originalTitle: string }
 interface Asg { userId?: string | null; role?: string | null; done?: boolean; userName?: string | null; roleName?: string | null }
@@ -79,7 +80,7 @@ export default function ChangeRequestAdminCard({ crFor, onDone }: { crFor: CrFor
             <div className="rounded-lg" style={{ border: '1px solid var(--border)', maxHeight: 150, overflow: 'auto', marginTop: 4, background: '#fff' }}>
               {users.filter((u) => (u.fullName || u.username || '').toLowerCase().includes(q.toLowerCase())).filter((u) => !editAsg.some((a) => a.userId === u.id)).slice(0, 8).map((u) => (
                 <div key={u.id} onClick={() => { setEditAsg([...editAsg, { userId: u.id, label: u.fullName || u.username || '', done: false }]); setQ('') }}
-                  className="text-sm px-2 py-1.5 cursor-pointer hover:bg-blue-50">{u.fullName || u.username}</div>
+                  className="text-sm px-2 py-1.5 cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span></div>
               ))}
             </div>
           )}

@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
 import MultiFileUpload from '@/components/MultiFileUpload'
-import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
+import { ROLE_TO_DEPT, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
+import { userDistinguisher } from '@/lib/user-display'
 import { formatShortDateTime } from '@/lib/utils'
 
 interface Invite { id: string; userId: string; status: string; userName: string | null; deptName: string | null; note: string | null }
@@ -284,7 +285,7 @@ export default function MeetingDetailPage() {
                           <input value={rowPick[i]?.label || rowQuery[i] || ''} onChange={(e) => { setRowQuery((s) => ({ ...s, [i]: e.target.value })); setRowPick((s) => { const n = { ...s }; delete n[i]; return n }) }} placeholder="Gõ tên…" style={fld} />
                           {us.length > 0 && !rowPick[i] && (
                             <div className="rounded-lg" style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, right: 0, border: '1px solid var(--border)', background: 'var(--surface)', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}>
-                              {us.map((u) => <div key={u.id} onClick={() => { setRowPick((s) => ({ ...s, [i]: { userId: u.id, label: u.fullName || u.username || '' } })); setRowQuery((s) => ({ ...s, [i]: '' })) }} className="px-2.5 py-1.5 text-xs cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span style={{ color: 'var(--text-muted)' }}>· {DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode}</span></div>)}
+                              {us.map((u) => <div key={u.id} onClick={() => { setRowPick((s) => ({ ...s, [i]: { userId: u.id, label: u.fullName || u.username || '' } })); setRowQuery((s) => ({ ...s, [i]: '' })) }} className="px-2.5 py-1.5 text-xs cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span></div>)}
                             </div>
                           )}
                         </div>

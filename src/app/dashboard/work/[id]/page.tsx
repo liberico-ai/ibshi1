@@ -8,6 +8,7 @@ import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/li
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import TemplateSelector from '@/components/TemplateSelector'
 import ChangeRequestAdminCard from '@/components/ChangeRequestAdminCard'
+import { userDistinguisher } from '@/lib/user-display'
 import SkipReasonModal from '@/components/SkipReasonModal'
 import { formatDate, formatDateTime, formatShortDateTime } from '@/lib/utils'
 import { Badge, Button } from '@/components/ui'
@@ -331,7 +332,7 @@ export default function WorkDetailPage() {
                     .map((u) => (
                       <div key={u.id} onClick={() => { setEditAsg([...editAsg, { userId: u.id, label: u.fullName || u.username || '', done: false }]); setEditAsgQuery('') }}
                         className="text-sm px-2 py-1.5 cursor-pointer hover:bg-blue-50">
-                        {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {roleLabel(u.roleCode)}</span>
+                        {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span>
                       </div>
                     ))}
                 </div>
@@ -630,7 +631,7 @@ export default function WorkDetailPage() {
               <input value={fwdQuery} onChange={(e) => setFwdQuery(e.target.value)} style={inp} placeholder="Gõ tên nhân sự…" />
               {fwdUsers.length > 0 && (
                 <div className="rounded-lg mt-1" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
-                  {fwdUsers.map((u) => <div key={u.id} onClick={() => addFwdUser(u)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode}</span></div>)}
+                  {fwdUsers.map((u) => <div key={u.id} onClick={() => addFwdUser(u)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span></div>)}
                 </div>
               )}
             </div>
@@ -722,7 +723,7 @@ export default function WorkDetailPage() {
               <input value={delQuery} onChange={(e) => setDelQuery(e.target.value)} placeholder={delDept ? `Gõ tên (trong ${DEPT_NAME[ROLE_TO_DEPT[delDept]]})…` : 'Gõ tên nhân sự…'} style={inp} />
               {delUsers().length > 0 && (
                 <div className="rounded-lg" style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, right: 0, border: '1px solid var(--border)', background: 'var(--surface)', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}>
-                  {delUsers().map((u) => <div key={u.id} onClick={() => doDelegate(u.id, u.fullName || u.username || '')} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode}</span></div>)}
+                  {delUsers().map((u) => <div key={u.id} onClick={() => doDelegate(u.id, u.fullName || u.username || '')} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span></div>)}
                 </div>
               )}
             </div>

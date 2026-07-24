@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { apiFetch } from '@/hooks/useAuth'
-import { DEPARTMENTS_V2, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
+import { DEPARTMENTS_V2, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
+import { userDistinguisher } from '@/lib/user-display'
 import type { MomItem, MomSection, MomAttendant } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 
@@ -481,7 +482,7 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
                                       style={{ padding: '6px 10px', fontSize: '0.78rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
                                       onMouseEnter={e => (e.currentTarget.style.background = '#eff6ff')}
                                       onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                                      {u.fullName || u.username} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>· {DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode}</span>
+                                      {u.fullName || u.username} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>· {userDistinguisher(u)}</span>
                                     </div>
                                   ))}
                                 </div>

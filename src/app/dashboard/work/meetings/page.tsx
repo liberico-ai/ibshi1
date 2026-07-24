@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { DEPT_NAME, ROLE_TO_DEPT, DEPT_PRIMARY_ROLE, DEPARTMENTS_V2 } from '@/lib/org-map'
+import { userDistinguisher } from '@/lib/user-display'
 import MultiFileUpload from '@/components/MultiFileUpload'
 import { formatShortDateTime } from '@/lib/utils'
 
@@ -141,7 +142,7 @@ function MeetingsInner() {
             </div>
             {found.length > 0 && (
               <div className="rounded-lg mt-1" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
-                {found.map((u) => <div key={u.id} onClick={() => addUser(u)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode}</span></div>)}
+                {found.map((u) => <div key={u.id} onClick={() => addUser(u)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">{u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span></div>)}
               </div>
             )}
           </div>

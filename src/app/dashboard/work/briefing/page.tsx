@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { BRIEFING_WRITE_ROLES } from '@/lib/constants'
 import { DEPARTMENTS_V2, DEPT_NAME, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
+import { userDistinguisher } from '@/lib/user-display'
 import { PageHeader, Button, Badge, KPICard, EmptyState } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList, CheckCircle2 } from 'lucide-react'
@@ -233,7 +234,7 @@ function UserAutocomplete({ value, users, warning, onChange }: {
               className="w-full text-left text-xs px-2 py-1.5 hover:bg-blue-50"
               onClick={() => { onChange(u.fullName, u.id); setQuery(u.fullName); setOpen(false) }}
             >
-              {u.fullName} <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+              {u.fullName} <span style={{ color: 'var(--text-muted)' }}>({userDistinguisher(u)})</span>
             </button>
           ))}
         </div>
@@ -1866,7 +1867,7 @@ export default function BriefingPage() {
                         <div className="max-h-32 overflow-y-auto space-y-0.5 rounded-lg border p-1" style={{ borderColor: 'var(--border)' }}>
                           {actionUsers.filter(u => !blockUserQuery || u.fullName.toLowerCase().includes(blockUserQuery.toLowerCase())).slice(0, 15).map(u => (
                             <div key={u.id} onClick={() => { setBlockResolverUserId(u.id); setBlockUserQuery(u.fullName) }} className="text-xs px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50" style={{ background: blockResolverUserId === u.id ? '#eff6ff' : undefined }}>
-                              {u.fullName} <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+                              {u.fullName} <span style={{ color: 'var(--text-muted)' }}>({userDistinguisher(u)})</span>
                             </div>
                           ))}
                         </div>
@@ -1920,7 +1921,7 @@ export default function BriefingPage() {
                               }}
                             />
                             <span>{u.fullName}</span>
-                            <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+                            <span style={{ color: 'var(--text-muted)' }}>({userDistinguisher(u)})</span>
                           </label>
                         ))}
                       </div>
@@ -1995,7 +1996,7 @@ export default function BriefingPage() {
                                 }}
                               />
                               <span>{u.fullName}</span>
-                              <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+                              <span style={{ color: 'var(--text-muted)' }}>({userDistinguisher(u)})</span>
                             </label>
                           ))}
                         </div>
@@ -2068,7 +2069,7 @@ export default function BriefingPage() {
                             }}
                           />
                           <span>{u.fullName}</span>
-                          <span style={{ color: 'var(--text-muted)' }}>({DEPT_NAME[ROLE_TO_DEPT[u.roleCode]] || u.roleCode})</span>
+                          <span style={{ color: 'var(--text-muted)' }}>({userDistinguisher(u)})</span>
                         </label>
                       ))}
                     </div>

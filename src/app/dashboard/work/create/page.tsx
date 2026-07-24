@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { ROLES, canEditForm, type FormKey } from '@/lib/constants'
 import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
+import { userDistinguisher } from '@/lib/user-display'
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import { CheckCircle2 } from 'lucide-react'
 import { TEMPLATES, type TemplateType } from '@/components/TemplateSelector'
@@ -527,7 +528,7 @@ function CreateInner() {
                 <div className="rounded-lg mt-1" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
                   {filteredUsers.map((u) => (
                     <div key={u.id} onClick={() => addUser(u)} className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50">
-                      {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>({u.username}) · {deptNameOfUser(u)}</span>
+                      {u.fullName || u.username} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {userDistinguisher(u)}</span>
                     </div>
                   ))}
                 </div>
