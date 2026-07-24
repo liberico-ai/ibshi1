@@ -6,6 +6,10 @@ import { emitTaskUpdated } from './webhook'
 import { sendGroupMessage, escapeHtml, formatDeadline } from './telegram'
 import { whereDoerOverdue, whereReviewLate } from './task-where'
 import { resolveDesignation } from './permissions/store'
+import { isResolved } from './utils'
+import { reverseBfsInclGate, expandRevisionRound, orphanFeeders, satisfiedForRound } from './revise-engine'
+import { getReviseTypeDef } from './revise-map'
+import { isEnabled } from './feature-flags'
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -434,7 +438,8 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
       await maybeSyncEstimateToBudget(task.projectId, userId, rdForEstimate)
       // Nếu user chọn FORWARD thì KHÔNG chain next (forward task thay thế luồng tự động)
       if (!forwardedId) {
-        await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId)
+        // Revise Flow36: chain trong ĐÚNG round của task vừa hoàn thành (round-N complete → chain round-N).
+        await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId, (task as { revisionRound?: number }).revisionRound ?? 0)
       }
     } else {
       // Task ad-hoc: trả về NGƯỜI GIAO để xem & kết thúc (chờ duyệt). Người giao sẽ chọn:
@@ -589,7 +594,7 @@ export async function setTaskStatusAdmin(taskId: string, byUserId: string, input
     if (templateStepId && task.projectId) {
       const hookKeys = (task as { hookKeys?: string[] }).hookKeys
       await runHooks(hookKeys, { projectId: task.projectId, userId: byUserId })
-      await chainNextTemplateTasks(taskId, task.projectId, templateStepId, byUserId)
+      await chainNextTemplateTasks(taskId, task.projectId, templateStepId, byUserId, (task as { revisionRound?: number }).revisionRound ?? 0)
     }
   } else if (input.status === TASK_STATUS.RETURNED) {
     updateData.returnCount = { increment: 1 }
@@ -642,6 +647,33 @@ export async function returnTask(taskId: string, userId: string, roleCode: strin
   ])
   emitTaskUpdated(taskId, prevStatus).catch(() => {})
   return { ok: true, returnedTo: task.createdBy }
+}
+
+// "Yêu cầu làm lại" — NGƯỜI TẠO đánh giá không đạt → đẩy việc về lại người nhận gốc.
+// Chỉ người tạo, lý do bắt buộc, không khi DONE, chỉ khi việc đã về người tạo (chờ đánh giá / bị trả).
+// Log taskHistory action REDO_REQUESTED (byUserId = người tạo) = NGUỒN KPI (không cột riêng, log-only).
+export async function requestRedo(taskId: string, userId: string, reason: string) {
+  const r = (reason || '').trim()
+  if (!r) throw new Error('Cần nhập lý do làm lại')
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
+  if (!task) throw new Error('Không tìm thấy công việc')
+  if (task.createdBy !== userId) throw new Error('Chỉ người tạo mới yêu cầu làm lại')
+  if (task.status === TASK_STATUS.DONE) throw new Error('Việc đã hoàn thành, không yêu cầu làm lại')
+  // Chỉ khi việc đã VỀ người tạo: chờ đánh giá (AWAITING_REVIEW) / bị trả (RETURNED) / người nhận đã done.
+  const backWithCreator = task.status === TASK_STATUS.AWAITING_REVIEW || task.status === TASK_STATUS.RETURNED || task.assignees.some((a) => a.done)
+  if (!backWithCreator) throw new Error('Chỉ yêu cầu làm lại khi việc đã được trả về bạn')
+  const prevStatus = task.status
+  await prisma.$transaction([
+    prisma.task.update({ where: { id: taskId }, data: { status: TASK_STATUS.IN_PROGRESS } }),
+    // reset để việc quay lại inbox người nhận gốc
+    prisma.taskAssignee.updateMany({ where: { taskId }, data: { done: false, doneAt: null, doneBy: null } }),
+    prisma.taskHistory.create({ data: { taskId, action: 'REDO_REQUESTED', byUserId: userId, reason: r } }),
+    ...task.assignees.filter((a) => a.userId).map((a) => prisma.notification.create({
+      data: { userId: a.userId!, title: `Yêu cầu làm lại: ${task.title}`, message: `Lý do: ${r}`, type: 'task_redo', linkUrl: `/dashboard/work/${taskId}` },
+    })),
+  ])
+  emitTaskUpdated(taskId, prevStatus).catch(() => {})
+  return { ok: true as const, status: TASK_STATUS.IN_PROGRESS as string }
 }
 
 export async function reassignTask(taskId: string, userId: string, input: ReassignTaskInput) {
@@ -1059,9 +1091,25 @@ export async function getTaskDetail(id: string) {
   }))
   const doneCount = assignees.filter((a) => a.done).length
 
+  // (3) Tài liệu của VIỆC CHA — read-only, đọc tại chỗ (không copy) → mọi việc con đều xem được tài liệu cha.
+  let parentDocs: Array<{ id: string; kind: string; label: string; file: { id: string; fileName: string; fileUrl: string } | null }> = []
+  if (task.parentId) {
+    const pDocs = await prisma.taskDocRequirement.findMany({
+      where: { taskId: task.parentId },
+      select: { id: true, kind: true, label: true, fileAttachmentId: true },
+    })
+    const pFileIds = pDocs.map((d) => d.fileAttachmentId).filter((x): x is string => !!x)
+    const pFiles = pFileIds.length
+      ? await prisma.fileAttachment.findMany({ where: { id: { in: pFileIds } }, select: { id: true, fileName: true, fileUrl: true } })
+      : []
+    const pFileById = new Map(pFiles.map((f) => [f.id, f]))
+    parentDocs = pDocs.map((d) => ({ id: d.id, kind: d.kind, label: d.label, file: d.fileAttachmentId ? pFileById.get(d.fileAttachmentId) || null : null }))
+  }
+
   return {
     ...task,
     docs,
+    parentDocs,
     history,
     createdByName: nameOf(task.createdBy),
     completedByName: nameOf(task.completedBy),
@@ -1108,15 +1156,20 @@ export async function suggestRoute(fromContext?: string, text?: string) {
 // Phase 3 (chained): spawn ENTRY STEPS (không nằm trong nextCodes nào); xong bước → chain bước kế (next/gate).
 interface TStep { id: string; code: string; title: string; roleCode: string | null; taskType: string; hookKeys: string[]; nextCodes: string[]; gateCodes: string[]; deadlineDays: number | null; orderIndex: number }
 
-async function spawnTemplateStep(step: TStep, projectId: string, byUser: string) {
-  // tránh trùng: 1 bước template chỉ sinh 1 task/dự án
-  const exists = await prisma.task.findFirst({ where: { projectId, templateStepId: step.id }, select: { id: true } })
+async function spawnTemplateStep(
+  step: TStep, projectId: string, byUser: string,
+  opts?: { round?: number; originStepCode?: string | null; revisionId?: string | null },
+) {
+  const round = opts?.round ?? 0
+  // tránh trùng: 1 bước template chỉ sinh 1 task/dự án/round (Q5 — dedup app-level (step,round))
+  const exists = await prisma.task.findFirst({ where: { projectId, templateStepId: step.id, revisionRound: round }, select: { id: true } })
   if (exists) return false
   const t = await prisma.task.create({
     data: {
       projectId, level: 2, taskType: step.taskType || step.code, title: step.title,
       priority: 'NORMAL', createdBy: byUser, assignedAt: new Date(), status: 'OPEN',
       hookKeys: step.hookKeys || [], templateStepId: step.id,
+      revisionRound: round, originStepCode: opts?.originStepCode ?? null, revisionId: opts?.revisionId ?? null,
       deadline: step.deadlineDays ? new Date(Date.now() + step.deadlineDays * 86400000) : null,
     },
   })
@@ -1139,19 +1192,23 @@ async function spawnTemplateStep(step: TStep, projectId: string, byUser: string)
 // Tập "code đã xong": task template DONE + legacy grace cho root chưa spawn.
 // Root (orderIndex nhỏ nhất) auto-done CHỈ KHI chưa có task nào với templateStepId=root.id.
 // Nếu root đã spawn → done tính theo DONE thật.
-async function doneCodesForProject(steps: TStep[], projectId: string): Promise<Set<string>> {
+// round mặc định 0 = flow gốc → behavior-identical (mọi task hiện có revisionRound=0).
+// Phase 1 truyền round=N cho vòng revise (round-scoped done-set, DESIGN_C1 mục (a)).
+async function doneCodesForProject(steps: TStep[], projectId: string, round = 0): Promise<Set<string>> {
   const first = steps.slice().sort((a, b) => a.orderIndex - b.orderIndex)[0]
   const templateTasks = await prisma.task.findMany({
-    where: { projectId, NOT: { templateStepId: null } },
+    where: { projectId, NOT: { templateStepId: null }, revisionRound: round },
     select: { templateStepId: true, status: true },
   })
   const stepById = new Map(steps.map((s) => [s.id, s]))
   const doneCodes = templateTasks
-    .filter((t) => t.status === 'DONE')
+    .filter((t) => isResolved(t.status))
     .map((t) => stepById.get(t.templateStepId!)?.code)
     .filter((c): c is string => !!c)
   const rootSpawned = first ? templateTasks.some((t) => t.templateStepId === first.id) : true
-  if (first && !rootSpawned) doneCodes.push(first.code)
+  // legacy grace CHỈ cho round 0 (dự án cũ áp giữa chừng không có task root thật).
+  // round-N: root là tổ tiên (ngoài subgraph) → kế thừa round-0 qua satisfiedForRound, không cần grace.
+  if (round === 0 && first && !rootSpawned) doneCodes.push(first.code)
   return new Set(doneCodes)
 }
 
@@ -1185,26 +1242,9 @@ export async function applyTemplate(
     const fromStep = byCode.get(opts.fromStepCode)
     if (!fromStep) throw new Error(`Bước "${opts.fromStepCode}" không có trong template "${templateCode}"`)
 
-    // reverse-adjacency: code → các bước có code trong nextCodes (tiền nhiệm qua next)
-    const revAdj = new Map<string, string[]>()
-    for (const s of steps) for (const nc of s.nextCodes || []) {
-      if (!revAdj.has(nc)) revAdj.set(nc, [])
-      revAdj.get(nc)!.push(s.code)
-    }
-    // BFS ngược từ X → tập tổ tiên (phải xong trước X). X KHÔNG nằm trong tập này.
-    // Tiền nhiệm của 1 bước = (bước có nó trong nextCodes) ∪ (gateCodes của chính nó).
-    // BẮT BUỘC gồm gateCodes: bước hội tụ (vd P2.4 gate=[P2.1,P2.2,P2.3,P2.1A]) KHÔNG được
-    // ai list trong nextCodes → chỉ theo next sẽ bỏ sót các bước gate → done-set thiếu.
-    const ancestors = new Set<string>()
-    const stack = [fromStep.code]
-    while (stack.length) {
-      const cur = stack.pop()!
-      const curStep = byCode.get(cur)
-      const preds = [...(revAdj.get(cur) || []), ...((curStep?.gateCodes) || [])]
-      for (const p of preds) {
-        if (p !== fromStep.code && !ancestors.has(p)) { ancestors.add(p); stack.push(p) }
-      }
-    }
+    // Tập TỔ TIÊN của X (reverse-BFS gộp gateCodes) — TÁCH dùng chung `reverseBfsInclGate`
+    // (1 nguồn với expandRevisionRound). Logic y hệt bản inline cũ.
+    const ancestors = reverseBfsInclGate(fromStep.code, steps)
     for (const code of ancestors) {
       const s = byCode.get(code); if (!s) continue
       const exists = await prisma.task.findFirst({ where: { projectId, templateStepId: s.id }, select: { id: true } })
@@ -1253,27 +1293,192 @@ export async function applyTemplate(
 
 // Gọi khi 1 task template hoàn thành → sinh các bước kế (theo next/gate).
 // Export để test trực tiếp (vitest) — nội bộ vẫn chỉ gọi từ completeTask/setTaskStatusAdmin.
-export async function chainNextTemplateTasks(taskId: string, projectId: string | null, templateStepId: string | null, byUser: string) {
+export async function chainNextTemplateTasks(taskId: string, projectId: string | null, templateStepId: string | null, byUser: string, round = 0) {
   if (!templateStepId || !projectId) return
   const step = await prisma.templateStep.findUnique({ where: { id: templateStepId } })
   if (!step) return
   const steps = (await prisma.templateStep.findMany({ where: { templateId: step.templateId } })) as unknown as TStep[]
   const byCode = new Map(steps.map((s) => [s.code, s]))
-  const done = await doneCodesForProject(steps, projectId) // đã gồm task vừa DONE
+  const done = await doneCodesForProject(steps, projectId, round) // done-set round hiện tại (gồm task vừa resolved)
+
+  // ── Round-aware gate eval (DESIGN_C1 2.2c). round 0 → y hệt hành vi cũ. ──
+  let reached: Set<string> | null = null
+  let done0: Set<string> = done            // round-0: done0 ≡ done (không dùng khi round===0)
+  let entry: string | null = null
+  let revId: string | null = null
+  if (round > 0) {
+    const anchor = await prisma.task.findFirst({
+      where: { projectId, revisionRound: round, NOT: { originStepCode: null } },
+      select: { originStepCode: true, revisionId: true },
+    })
+    entry = anchor?.originStepCode ?? null
+    revId = anchor?.revisionId ?? null
+    if (entry) reached = expandRevisionRound(steps, entry)
+    done0 = await doneCodesForProject(steps, projectId, 0)
+  }
+  const gateOk = (gateCodes: string[]) =>
+    round === 0 || !reached
+      ? (gateCodes || []).every((g) => done.has(g))
+      : satisfiedForRound(gateCodes, reached, done, done0, round)
+  const spawnOpts = round > 0 ? { round, originStepCode: entry, revisionId: revId } : undefined
+
   for (const nc of (step as unknown as TStep).nextCodes || []) {
     const ns = byCode.get(nc); if (!ns) continue
-    if ((ns.gateCodes || []).every((g) => done.has(g))) await spawnTemplateStep(ns, projectId, byUser)
+    if (gateOk(ns.gateCodes || [])) await spawnTemplateStep(ns, projectId, byUser, spawnOpts)
   }
   // ── Gate-driven spawn (chịu được data template thiếu cạnh next, vd SX-PROD) ──
-  // Quét MỌI step của template có gateCodes ≠ rỗng mà toàn bộ gate đã nằm trong done-set
-  // → spawn (spawnTemplateStep đã idempotent: 1 templateStep chỉ sinh 1 task/dự án).
-  // Không đổi semantics done-set: vẫn dùng doneCodesForProject (gồm legacy grace cho root).
+  // Quét MỌI step có gateCodes ≠ rỗng mà gate đã thoả → spawn (idempotent). round-N: CHỈ trong subgraph.
   for (const s of steps) {
+    if (round > 0 && reached && !reached.has(s.code)) continue   // round-N: không lan ngoài subgraph
     const gates = s.gateCodes || []
     if (gates.length === 0) continue          // không gate → chỉ sinh theo cạnh next như cũ
     if (done.has(s.code)) continue            // bước đã xong → chắc chắn đã có task
-    if (gates.every((g) => done.has(g))) await spawnTemplateStep(s, projectId, byUser)
+    if (gateOk(gates)) await spawnTemplateStep(s, projectId, byUser, spawnOpts)
   }
+}
+
+// ── Mở 1 VÒNG REVISE (round ≥ 1) — Revise Flow36 Phase 1a, MODEL A (lazy/chain-driven). ──
+// Spawn round-N task cho ENTRY + các ORPHAN-FEEDER song song (bước reached mà chain không tự sinh).
+// KHÔNG pre-spawn gate-step: chúng do chainNextTemplateTasks round-aware tự sinh KHI gate round-N thoả
+// → BẤT BIẾN chống pass-nhầm: gate-step G round-N chỉ tạo khi MỌI gateCodes(G) có task round-N resolved.
+// Chưa nối route/fork (Phase 1b) + FF REVISE_FLOW còn tắt → chỉ gọi được trong test.
+export async function openRevisionRound(
+  projectId: string,
+  entryStepCode: string,
+  round: number,
+  byUser: string,
+  opts?: { templateCode?: string; revisionId?: string | null },
+): Promise<{ ok: true; round: number; spawned: string[] }> {
+  if (round < 1) throw new Error('openRevisionRound: round phải ≥ 1')
+  // Nạp template của dự án: theo templateCode nếu có, hoặc suy từ task template hiện có.
+  let templateId: string | null = null
+  if (opts?.templateCode) {
+    const t = await prisma.workflowTemplate.findFirst({ where: { code: opts.templateCode, isActive: true }, select: { id: true } })
+    templateId = t?.id ?? null
+  } else {
+    const anyTask = await prisma.task.findFirst({ where: { projectId, NOT: { templateStepId: null } }, select: { templateStepId: true } })
+    if (anyTask?.templateStepId) {
+      const ts = await prisma.templateStep.findUnique({ where: { id: anyTask.templateStepId }, select: { templateId: true } })
+      templateId = ts?.templateId ?? null
+    }
+  }
+  if (!templateId) throw new Error('openRevisionRound: không xác định được template của dự án')
+  const steps = (await prisma.templateStep.findMany({ where: { templateId } })) as unknown as TStep[]
+  const byCode = new Map(steps.map((s) => [s.code, s]))
+  if (!byCode.has(entryStepCode)) throw new Error(`openRevisionRound: bước "${entryStepCode}" không có trong template`)
+
+  const reached = expandRevisionRound(steps, entryStepCode)
+  const toSpawn = [entryStepCode, ...orphanFeeders(steps, entryStepCode, reached)]
+  const spawned: string[] = []
+  for (const code of toSpawn) {
+    const s = byCode.get(code)
+    if (!s) continue
+    const ok = await spawnTemplateStep(s, projectId, byUser, { round, originStepCode: entryStepCode, revisionId: opts?.revisionId ?? null })
+    if (ok) spawned.push(code)
+  }
+  return { ok: true, round, spawned }
+}
+
+// round tiếp theo cho dự án = max(revisionRound task template) + 1.
+export async function nextRevisionRound(projectId: string): Promise<number> {
+  const agg = await prisma.task.aggregate({ where: { projectId, NOT: { templateStepId: null } }, _max: { revisionRound: true } })
+  return (agg._max.revisionRound ?? 0) + 1
+}
+
+// Mở 1 vòng revise theo LOẠI (bản đồ A4). round = max+1, cấm 2 revise cùng round
+// (invariant 1a: 1 round = 1 revise = 1 entry — chainNextTemplateTasks anchor dựa vào).
+export async function startReviseRound(
+  projectId: string, reviseType: string, userId: string, opts?: { revisionId?: string | null },
+): Promise<{ ok: true; round: number; spawned: string[]; entryStepCode: string; reviseType: string }> {
+  const def = getReviseTypeDef(reviseType)
+  if (!def) throw new Error(`Loại revise không hợp lệ: ${reviseType}`)
+  const round = await nextRevisionRound(projectId)
+  const taken = await prisma.task.count({ where: { projectId, revisionRound: round } })
+  if (taken > 0) throw new Error(`Round ${round} đã có revise khác đang mở — thử lại`)
+  const res = await openRevisionRound(projectId, def.entryStepCode, round, userId, { revisionId: opts?.revisionId ?? null })
+  return { ...res, entryStepCode: def.entryStepCode, reviseType }
+}
+
+// Fork tạo việc (Revise Flow36). FF ON + có `revise` → mở vòng revise; ngược lại → createTask động (y hệt).
+// FF OFF → luôn nhánh createTask → hành vi tạo việc KHÔNG đổi. `input`/`revise` tách riêng vì
+// revise KHÔNG cần assignees (createTaskSchema yêu cầu), openRevisionRound tự giao theo bước.
+export async function dispatchWork(args: {
+  userId: string
+  input?: CreateTaskInput
+  revise?: { projectId: string; reviseType: string; revisionId?: string | null }
+}) {
+  if (args.revise && isEnabled('REVISE_FLOW')) {
+    const r = await startReviseRound(args.revise.projectId, args.revise.reviseType, args.userId, { revisionId: args.revise.revisionId })
+    return { kind: 'revise' as const, ...r }
+  }
+  if (args.input) return { kind: 'task' as const, task: await createTask(args.input, args.userId) }
+  throw new Error('dispatchWork: thiếu input hoặc revise')
+}
+
+// ── "Không ảnh hưởng — Bỏ qua" 1 chạm (Revise Flow36 Phase 1c). CHỈ task round≥1. ──
+// Set SKIPPED_NO_IMPACT + skipReason (bắt buộc) → chain tiếp round-N (isResolved gồm SKIPPED → gate không kẹt).
+export async function skipTask(taskId: string, userId: string, skipReason: string) {
+  const reason = (skipReason || '').trim()
+  if (!reason) throw new Error('Cần nhập lý do bỏ qua')
+  const task = await prisma.task.findUnique({ where: { id: taskId } })
+  if (!task) throw new Error('Không tìm thấy công việc')
+  const round = (task as { revisionRound?: number }).revisionRound ?? 0
+  if (round < 1) throw new Error('Chỉ bỏ qua được checkpoint của vòng revise (round ≥ 1)')
+  if (task.status === TASK_STATUS.DONE || task.status === 'SKIPPED_NO_IMPACT') throw new Error('Công việc đã kết thúc')
+  const templateStepId = (task as { templateStepId?: string | null }).templateStepId
+  await prisma.$transaction([
+    prisma.task.update({ where: { id: taskId }, data: { status: 'SKIPPED_NO_IMPACT', skipReason: reason, completedBy: userId, completedAt: new Date() } }),
+    prisma.taskHistory.create({ data: { taskId, action: 'SKIPPED_NO_IMPACT', byUserId: userId, reason } }),
+  ])
+  if (templateStepId && task.projectId) {
+    await chainNextTemplateTasks(taskId, task.projectId, templateStepId, userId, round)
+  }
+  return { ok: true as const, status: 'SKIPPED_NO_IMPACT' as const }
+}
+
+// ── Xem 1 vòng revise: subgraph (expandRevisionRound) + checkpoint đang mở + hint. ──
+// Hint MVP: entry = 'affected' (phòng khởi tạo phải xử lý); còn lại = 'clean' (có thể bỏ qua).
+// (Tinh chỉnh impact-per-checkpoint qua computeImpact = Phase 2 — xem báo cáo.)
+export async function reviseRoundView(projectId: string, round: number) {
+  const anchor = await prisma.task.findFirst({
+    where: { projectId, revisionRound: round, NOT: { templateStepId: null } },
+    select: { templateStepId: true, originStepCode: true, revisionId: true },
+  })
+  if (!anchor?.templateStepId) return { round, entry: null as string | null, subgraph: [] as Array<{ code: string; title: string | null; role: string | null; spawned: boolean; status: string | null }>, checkpoints: [] as Array<{ code: string; title: string | null; role: string | null; hint: 'affected' | 'clean'; taskId: string; status: string }> }
+  const ts = await prisma.templateStep.findUnique({ where: { id: anchor.templateStepId }, select: { templateId: true } })
+  const steps = (await prisma.templateStep.findMany({ where: { templateId: ts!.templateId } })) as unknown as TStep[]
+  const byCode = new Map(steps.map((s) => [s.code, s]))
+  const codeByStepId = new Map(steps.map((s) => [s.id, s.code]))
+  const entry = anchor.originStepCode
+  const reached = entry ? expandRevisionRound(steps, entry) : new Set<string>()
+
+  const roundTasks = await prisma.task.findMany({ where: { projectId, revisionRound: round, NOT: { templateStepId: null } }, select: { id: true, templateStepId: true, status: true } })
+  const byCodeTask = new Map<string, { id: string; status: string }>()
+  for (const t of roundTasks) { const c = codeByStepId.get(t.templateStepId!); if (c) byCodeTask.set(c, { id: t.id, status: t.status }) }
+
+  const subgraph = [...reached].sort().map((code) => {
+    const rt = byCodeTask.get(code)
+    return { code, title: byCode.get(code)?.title ?? null, role: byCode.get(code)?.roleCode ?? null, spawned: !!rt, status: rt?.status ?? null }
+  })
+  const checkpoints = subgraph
+    .filter((s) => s.spawned && s.status !== TASK_STATUS.DONE && s.status !== 'SKIPPED_NO_IMPACT')
+    .map((s) => ({ code: s.code, title: s.title, role: s.role, hint: (s.code === entry ? 'affected' : 'clean') as 'affected' | 'clean', taskId: byCodeTask.get(s.code)!.id, status: s.status! }))
+  return { round, entry, subgraph, checkpoints }
+}
+
+// ── Bỏ qua HÀNG LOẠT các checkpoint impact-clean của 1 vòng. Bước 'affected' bị TỪ CHỐI. ──
+export async function bulkSkipRound(projectId: string, round: number, codes: string[], reason: string, userId: string) {
+  const view = await reviseRoundView(projectId, round)
+  const cp = new Map(view.checkpoints.map((c) => [c.code, c]))
+  const skipped: string[] = []
+  const refused: string[] = []
+  for (const code of codes) {
+    const c = cp.get(code)
+    if (!c || c.hint === 'affected') { refused.push(code); continue } // 'affected' → buộc xử lý riêng
+    await skipTask(c.taskId, userId, reason)
+    skipped.push(code)
+  }
+  return { skipped, refused }
 }
 
 export async function listTemplates() {

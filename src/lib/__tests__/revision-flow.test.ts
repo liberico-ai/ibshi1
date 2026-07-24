@@ -14,14 +14,19 @@ vi.mock('@/lib/cascade-tasks', () => ({
 }))
 
 const mockCreateTask = vi.fn()
+const mockOpenRevisionRound = vi.fn()
+const mockNextRevisionRound = vi.fn()
 vi.mock('@/lib/work-engine', () => ({
   createTask: (...args: unknown[]) => mockCreateTask(...args),
+  openRevisionRound: (...args: unknown[]) => mockOpenRevisionRound(...args),
+  nextRevisionRound: (...args: unknown[]) => mockNextRevisionRound(...args),
 }))
 
-let mockFFEnabled = true
+let mockFFEnabled = true       // BOM_REVISION_CASCADE
+let mockReviseFF = false       // REVISE_FLOW (Phase 1b)
 vi.mock('@/lib/feature-flags', () => ({
-  isEnabled: (flag: string) => (flag === 'BOM_REVISION_CASCADE' ? mockFFEnabled : false),
-  FEATURE_FLAGS: { BOM_REVISION_CASCADE: false },
+  isEnabled: (flag: string) => (flag === 'BOM_REVISION_CASCADE' ? mockFFEnabled : flag === 'REVISE_FLOW' ? mockReviseFF : false),
+  FEATURE_FLAGS: { BOM_REVISION_CASCADE: false, REVISE_FLOW: false },
 }))
 
 import { approveRevision } from '@/lib/revision-flow'
@@ -46,9 +51,12 @@ describe('approveRevision — gate 2C (#V2)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockFFEnabled = true
+    mockReviseFF = false
     prismaMock.$transaction.mockImplementation(((fn: (tx: unknown) => unknown) => fn(prismaMock)) as never)
     mockRunCascade.mockResolvedValue({ taskIds: [], groups: [], skippedNoChanges: true })
     mockCreateTask.mockResolvedValue({ id: 'task-reqc-1' })
+    mockNextRevisionRound.mockResolvedValue(2)
+    mockOpenRevisionRound.mockResolvedValue({ ok: true, round: 2, spawned: ['P2.1', 'P2.2', 'P2.3', 'P2.1A'] })
   })
 
   it('BomVersion không tồn tại → throw', async () => {
@@ -203,7 +211,7 @@ describe('approveRevision — gate 2C (#V2)', () => {
   // Fix: gate trên reQcContext (set độc lập FF). Test này khoá: FF TẮT + WO đổi piece-mark →
   // createTask RE_QC (R09) VẪN gọi với projectId THẬT ('proj-1'). Fail trên code pre-fix (cascadeParams null → 0 task).
   it('Finding F: FF cascade TẮT + WO đổi piece-mark → task Re-QC (R09) VẪN dispatch, projectId đúng', async () => {
-    mockFFEnabled = false // FF cascade TẮT → cascadeParams=null → runCascade KHÔNG chạy
+    mockFFEnabled = false // BOM_REVISION_CASCADE + REVISE_FLOW đều TẮT → context tính nhưng KHÔNG propagate → runCascade KHÔNG chạy
     const noEcoVersion = { ...draftVersion, ecoId: null }
     prismaMock.bomVersion.findUnique.mockResolvedValue(noEcoVersion as never)
     prismaMock.bomVersion.updateMany.mockResolvedValue({ count: 1 } as never)
@@ -253,5 +261,69 @@ describe('approveRevision — gate 2C (#V2)', () => {
     const taskInput = mockCreateTask.mock.calls[0][0] as { title: string; projectId: string }
     expect(taskInput.title).toContain('ECO-26-001')
     expect(taskInput.projectId).toBe('proj-1')
+  })
+})
+
+describe('approveRevision — Phase 1b (FF REVISE_FLOW ON): mở vòng revise thay cascade, GIỮ re-QC', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFFEnabled = true          // BOM_REVISION_CASCADE (để cascadeParams được tính)
+    mockReviseFF = true           // REVISE_FLOW ON
+    prismaMock.$transaction.mockImplementation(((fn: (tx: unknown) => unknown) => fn(prismaMock)) as never)
+    mockRunCascade.mockResolvedValue({ taskIds: [], groups: [], skippedNoChanges: true })
+    mockCreateTask.mockResolvedValue({ id: 'task-reqc-1' })
+    mockNextRevisionRound.mockResolvedValue(2)
+    mockOpenRevisionRound.mockResolvedValue({ ok: true, round: 2, spawned: ['P2.1', 'P2.2', 'P2.3', 'P2.1A'] })
+  })
+
+  it('FF ON: openRevisionRound(entry P2.1, revisionId=ecoId) — runCascade KHÔNG chạy — re-QC VẪN sinh', async () => {
+    prismaMock.bomVersion.findUnique.mockResolvedValue(draftVersion as never)
+    prismaMock.engineeringChangeOrder.findUnique.mockResolvedValue(approvedEco as never)
+    prismaMock.bomVersion.updateMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.bomVersion.update.mockResolvedValue({ ...draftVersion, status: 'ACTIVE' } as never)
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'bv-old' } as never)
+    prismaMock.bomItem.findMany
+      .mockResolvedValueOnce([{ pieceMark: 'PM-1', materialId: 'm1', quantity: 10 }] as never)
+      .mockResolvedValueOnce([{ pieceMark: 'PM-1', materialId: 'm1', quantity: 20 }] as never)
+    prismaMock.workOrder.updateMany.mockResolvedValue({ count: 2 } as never)
+
+    await approveRevision('bv-new', 'user-1')
+
+    // Mở vòng revise: entry P2.1 (REV_DESIGN), revisionId = ecoId
+    expect(mockOpenRevisionRound).toHaveBeenCalledTimes(1)
+    expect(mockOpenRevisionRound).toHaveBeenCalledWith('proj-1', 'P2.1', 2, 'user-1', { revisionId: 'eco-1' })
+    // Cascade phẳng KHÔNG chạy (round thay thế)
+    expect(mockRunCascade).not.toHaveBeenCalled()
+    // re-QC VẪN sinh (Finding F độc lập FF) — an toàn chất lượng còn nguyên
+    expect(mockCreateTask).toHaveBeenCalledTimes(1)
+    const taskInput = mockCreateTask.mock.calls[0][0] as { title: string; taskType: string }
+    expect(taskInput.taskType).toBe('RE_QC')
+    expect(prismaMock.workOrder.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ needsReQc: true }) })
+    )
+  })
+
+  it('vá #1: REVISE_FLOW ON + BOM_REVISION_CASCADE OFF → round VẪN mở (revisionId=eco), runCascade không chạy', async () => {
+    mockFFEnabled = false      // BOM_REVISION_CASCADE OFF — context không còn bị gate bởi nó
+    mockReviseFF = true        // REVISE_FLOW ON
+    prismaMock.bomVersion.findUnique.mockResolvedValue(draftVersion as never)
+    prismaMock.engineeringChangeOrder.findUnique.mockResolvedValue(approvedEco as never)
+    prismaMock.bomVersion.updateMany.mockResolvedValue({ count: 1 } as never)
+    prismaMock.bomVersion.update.mockResolvedValue({ ...draftVersion, status: 'ACTIVE' } as never)
+    prismaMock.bomVersion.findFirst.mockResolvedValue({ id: 'bv-old' } as never)
+    prismaMock.bomItem.findMany
+      .mockResolvedValueOnce([{ pieceMark: 'PM-1', materialId: 'm1', quantity: 10 }] as never)
+      .mockResolvedValueOnce([{ pieceMark: 'PM-1', materialId: 'm1', quantity: 20 }] as never)
+    prismaMock.workOrder.updateMany.mockResolvedValue({ count: 2 } as never)
+
+    await approveRevision('bv-new', 'user-1')
+
+    // Round VẪN mở dù BOM_REVISION_CASCADE tắt (context decoupled)
+    expect(mockOpenRevisionRound).toHaveBeenCalledTimes(1)
+    expect(mockOpenRevisionRound).toHaveBeenCalledWith('proj-1', 'P2.1', 2, 'user-1', { revisionId: 'eco-1' })
+    expect(mockRunCascade).not.toHaveBeenCalled()
+    // re-QC vẫn nguyên
+    expect(mockCreateTask).toHaveBeenCalledTimes(1)
+    expect((mockCreateTask.mock.calls[0][0] as { taskType: string }).taskType).toBe('RE_QC')
   })
 })

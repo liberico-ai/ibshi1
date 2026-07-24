@@ -51,6 +51,8 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       assignedRole: primary?.role || rule?.role || '',
       assignedTo: primary?.userId || null,
       status,
+      revisionRound: (t as { revisionRound?: number }).revisionRound ?? 0,
+      revisionId: (t as { revisionId?: string | null }).revisionId ?? null,
       deadline: t.deadline,
       startedAt: t.startedAt,
       completedAt: t.completedAt,

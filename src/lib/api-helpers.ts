@@ -65,6 +65,18 @@ export async function validateBody<T>(
 }
 
 /**
+ * Validate dữ liệu ĐÃ parse (không đọc body) — format lỗi 400 giống validateBody.
+ * Dùng khi phải peek raw body 1 lần rồi rẽ nhánh nhiều schema (vd fork Revise Flow36).
+ */
+export function validateData<T>(data: unknown, schema: ZodSchema<T>): ValidationResult<T> {
+  const parsed = schema.safeParse(data)
+  if (!parsed.success) {
+    return { success: false, response: errorResponse(formatZodErrors(parsed.error), 400) }
+  }
+  return { success: true, data: parsed.data }
+}
+
+/**
  * Parse and validate URL search params with a Zod schema.
  *
  * Converts URLSearchParams to a plain object, then validates.

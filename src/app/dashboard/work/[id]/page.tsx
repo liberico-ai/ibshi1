@@ -8,6 +8,7 @@ import { ROLE_TO_DEPT, DEPT_NAME, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/li
 import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload'
 import TemplateSelector from '@/components/TemplateSelector'
 import ChangeRequestAdminCard from '@/components/ChangeRequestAdminCard'
+import SkipReasonModal from '@/components/SkipReasonModal'
 import { formatDate, formatDateTime, formatShortDateTime } from '@/lib/utils'
 import { Badge, Button } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
@@ -37,6 +38,9 @@ interface Task {
   meetings?: LinkMeeting[]
   resultData?: Record<string, unknown> | null
   evidenceFiles?: EvidenceFile[]
+  revisionRound?: number
+  parentDocs?: { id: string; kind: string; label: string; file: DocFile | null }[]
+  templateStepId?: string | null
 }
 const roleLabel = (r: string | null) => (r ? (ROLES as Record<string, { name: string }>)[r]?.name || r : '')
 const ACT: Record<string, string> = { CREATED: 'Tạo việc', ASSIGNED: 'Giao việc', STARTED: 'Bắt đầu', ASSIGNEE_DONE: '✓ Hoàn thành phần việc', SUBMITTED_TO_CREATOR: '↩ Trả kết quả', COMPLETED: '✓ Hoàn thành tất cả', CLOSED: 'Kết thúc công việc', FORWARDED: '↗ Chuyển tiếp', RETURNED: '↩ Trả lại', REASSIGNED: 'Giao lại', SUBTASK_CREATED: '+ Tạo việc con', COMMENT: 'Trao đổi', EDITED: 'Chỉnh sửa' }
@@ -89,6 +93,8 @@ export default function WorkDetailPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2600) }
   const [rejOpen, setRejOpen] = useState(false)
   const [rejReason, setRejReason] = useState('')
+  const [skipOpen, setSkipOpen] = useState(false)
+  const [redoOpen, setRedoOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [edit, setEdit] = useState({ title: '', description: '', deadline: '', priority: 'NORMAL' })
   // Sửa người nhận (trong modal Sửa): chỉ bỏ/đổi được người CHƯA hoàn thành.
@@ -128,6 +134,28 @@ export default function WorkDetailPage() {
     acknowledgedDocIds: mustRead.filter((d) => ackedByMe(d)).map((d) => d.id),
     returnedDocs: mustReturn.map((d) => ({ requirementId: d.id, note: returnNotes[d.id]?.trim() || undefined, fileAttachmentId: returnFiles[d.id]?.id || undefined })),
   })
+
+  // Revise Flow36: "Không ảnh hưởng — Bỏ qua" checkpoint round≥1 (modal in-app + API skip 1c, validateBody).
+  const confirmSkip = async (reason: string) => {
+    setBusy(true)
+    const res = await apiFetch(`/api/work/tasks/${id}/skip`, { method: 'POST', body: JSON.stringify({ skipReason: reason }) })
+    setBusy(false)
+    setSkipOpen(false)
+    if (res.ok) { showToast('Đã bỏ qua (không ảnh hưởng)'); load() }
+    else showToast(res.error || 'Lỗi bỏ qua')
+  }
+
+  // "Yêu cầu làm lại" — người tạo đánh giá không đạt → đẩy về người nhận (log REDO_REQUESTED).
+  const confirmRedo = async (reason: string) => {
+    setBusy(true)
+    const res = await apiFetch(`/api/work/tasks/${id}/request-redo`, { method: 'POST', body: JSON.stringify({ reason }) })
+    setBusy(false)
+    setRedoOpen(false)
+    if (res.ok) { showToast('Đã yêu cầu làm lại'); load() }
+    else showToast(res.error || 'Lỗi yêu cầu làm lại')
+  }
+  // Số lần bị yêu cầu làm lại (log-only, đếm từ lịch sử REDO_REQUESTED) — badge + nguồn KPI.
+  const redoCount = task.history.filter((h) => h.action === 'REDO_REQUESTED').length
 
   const doComplete = async (mode: 'RETURN_CREATOR' | 'FORWARD', forward?: unknown) => {
     if (mode === 'RETURN_CREATOR' && (!task.evidenceFiles || task.evidenceFiles.length === 0)) {
@@ -327,6 +355,7 @@ export default function WorkDetailPage() {
           <span>Người tạo: <b>{task.createdByName || '—'}</b></span>
           {task.deadline && <Badge variant="warning">Hạn: {formatDate(task.deadline)}</Badge>}
           {task.returnCount > 0 && <Badge variant="danger">↩ trả lại {task.returnCount} lần</Badge>}
+          {redoCount > 0 && <Badge variant="warning">↺ làm lại {redoCount} lần</Badge>}
         </div>
       </div>
 
@@ -343,8 +372,11 @@ export default function WorkDetailPage() {
         <ChangeRequestAdminCard crFor={changeReqFor} onDone={load} />
       )}
 
-      {/* Việc yêu cầu (admin) không cần biểu mẫu nghiệp vụ */}
-      {!changeReqFor && (
+      {/* Biểu mẫu (Dự toán/WBS/BOM/PR/Báo giá…) hiện khi task GẮN với biểu mẫu:
+          - bước cố định (templateStepId != null), HOẶC
+          - việc tạo tay có đính biểu mẫu (resultData.templateType != null).
+          Việc động THUẦN (không cả hai) KHÔNG hiện — tránh lạc luồng. (Việc yêu cầu admin cũng ẩn.) */}
+      {!changeReqFor && !!(task.templateStepId || task.resultData?.templateType) && (
         <TemplateSelector
           taskId={id}
           isEditable={(isAssignee || isCreator) && task.status !== 'DONE' && !locked}
@@ -526,6 +558,26 @@ export default function WorkDetailPage() {
           </div>
         )}
 
+        {/* Tài liệu từ VIỆC CHA (read-only) — mọi việc con đều xem được tài liệu của việc cha */}
+        {task.parentDocs && task.parentDocs.length > 0 && (
+          <div className="rounded-xl p-4" style={{ background: '#f8fafc', border: '1px solid var(--border)' }}>
+            <div className="text-sm font-semibold mb-2">📎 Tài liệu từ việc cha <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>(chỉ xem)</span></div>
+            <div className="space-y-1.5">
+              {task.parentDocs.map((d) => (
+                <div key={d.id} className="flex items-center gap-2 text-xs flex-wrap">
+                  <span style={{ fontWeight: 700, color: d.kind === 'MUST_READ' ? '#92400e' : d.kind === 'MUST_RETURN' ? '#1e40af' : 'var(--text-muted)' }}>
+                    {d.kind === 'MUST_READ' ? 'Phải đọc' : d.kind === 'MUST_RETURN' ? 'Phải trả' : 'Tài liệu'}
+                  </span>
+                  <span>{d.label}</span>
+                  {d.file
+                    ? <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }} style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{d.file.fileName} ↗</a>
+                    : <span style={{ color: 'var(--text-muted)' }}>(chưa có tệp)</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Lịch họp */}
         <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="flex justify-between items-center mb-2">
@@ -637,6 +689,9 @@ export default function WorkDetailPage() {
             </div>
           )}
           <div className="flex gap-2 flex-wrap">
+            {(task.revisionRound ?? 0) >= 1 && (
+              <button onClick={() => setSkipOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#475569', border: '1px solid #cbd5e1' }} title="Checkpoint vòng revise — nếu bước này không bị ảnh hưởng thì bỏ qua (có log)">⤼ Không ảnh hưởng — Bỏ qua</button>
+            )}
             <button onClick={() => doComplete('RETURN_CREATOR')} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold flex-1" style={{ background: canComplete ? '#059669' : '#9ca3af', color: '#fff', minWidth: 150 }}>✓ Hoàn thành & trả người tạo</button>
             <button onClick={() => setFwdOpen(true)} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: canComplete ? '#d97706' : '#9ca3af', color: '#fff' }}>↗ Hoàn thành & chuyển tiếp</button>
             <button onClick={() => setDelOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>↪ Chuyển giao</button>
@@ -706,6 +761,7 @@ export default function WorkDetailPage() {
           <div className="text-xs px-1" style={{ color: '#b45309' }}>Người nhận đã hoàn thành và trả lại. Bạn có thể kết thúc, hoặc tạo việc tiếp theo.</div>
           <div className="flex gap-2 flex-wrap">
             <button onClick={doFinalize} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold flex-1" style={{ background: '#059669', color: '#fff', minWidth: 160 }}>✓ Hoàn thành &amp; kết thúc</button>
+            <button onClick={() => setRedoOpen(true)} disabled={busy} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: '#d97706', color: '#fff' }} title="Đánh giá không đạt → đẩy về người nhận làm lại (có log)">↺ Yêu cầu làm lại</button>
             <button onClick={goCreateNext} className="text-sm px-5 py-3 rounded-xl font-semibold" style={{ background: 'var(--text-heading)', color: '#fff' }}>+ Tạo việc tiếp theo</button>
           </div>
         </div>
@@ -715,6 +771,25 @@ export default function WorkDetailPage() {
       {toast && (
         <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-50 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg" style={{ background: 'var(--text-heading)', color: '#fff' }}>{toast}</div>
       )}
+
+      <SkipReasonModal
+        open={skipOpen}
+        busy={busy}
+        title={`Bỏ qua bước ${task.taskType} — không ảnh hưởng`}
+        defaultReason="Không ảnh hưởng"
+        onCancel={() => setSkipOpen(false)}
+        onConfirm={confirmSkip}
+      />
+      <SkipReasonModal
+        open={redoOpen}
+        busy={busy}
+        title="Yêu cầu làm lại — nêu rõ chưa đạt ở đâu"
+        subtitle="Đánh giá không đạt → đẩy về người nhận làm lại (được ghi log, tính KPI). Bắt buộc."
+        placeholder="Chưa đạt ở đâu, cần làm lại gì…"
+        defaultReason=""
+        onCancel={() => setRedoOpen(false)}
+        onConfirm={confirmRedo}
+      />
     </div>
   )
 }

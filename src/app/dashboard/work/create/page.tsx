@@ -9,6 +9,10 @@ import MultiFileUpload, { type UploadedFile } from '@/components/MultiFileUpload
 import { CheckCircle2 } from 'lucide-react'
 import { TEMPLATES, type TemplateType } from '@/components/TemplateSelector'
 import TemplateSelector from '@/components/TemplateSelector'
+import { REVISE_TYPE_MAP } from '@/lib/revise-map'
+
+const FF_REVISE = process.env.NEXT_PUBLIC_FF_REVISE_FLOW === 'true'
+const REVISE_OPTS = Object.entries(REVISE_TYPE_MAP)
 
 interface Proj { id: string; projectCode: string; projectName: string }
 interface Usr { id: string; fullName?: string; username?: string; roleCode: string; isActive?: boolean; department?: { code: string; name: string } | null }
@@ -68,6 +72,9 @@ function CreateInner() {
   const fromProject = sp.get('project') || ''
   const [draftId] = useState(() => `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
 
+  const [reviseType, setReviseType] = useState('')
+  const [reviseBusy, setReviseBusy] = useState(false)
+  const [elig, setElig] = useState<{ eligible: boolean; reason?: string; templateName?: string } | null>(null)
   const [projects, setProjects] = useState<Proj[]>([])
   const [users, setUsers] = useState<Usr[]>([])
   const [projectId, setProjectId] = useState(fromProject)
@@ -99,6 +106,16 @@ function CreateInner() {
     apiFetch('/api/projects/options').then((r) => { if (r.ok) setProjects(r.projects || []) })
     apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) })
   }, [])
+
+  // Guard fork Revise (FF ON): dự án có mở được vòng revise không → tránh throw lỗi kỹ thuật cho user.
+  useEffect(() => {
+    if (!FF_REVISE || !projectId) { setElig(null); return }
+    let alive = true
+    apiFetch(`/api/work/revise/eligibility?projectId=${encodeURIComponent(projectId)}`).then((r) => {
+      if (alive) setElig(r.ok ? { eligible: !!r.eligible, reason: r.reason, templateName: r.templateName } : { eligible: false, reason: r.error || 'Không kiểm tra được dự án' })
+    })
+    return () => { alive = false }
+  }, [projectId])
 
   useEffect(() => {
     if (!projectId) { setProjFiles([]); return }
@@ -283,6 +300,47 @@ function CreateInner() {
         {parentId ? '+ Tạo việc con' : fromId ? '+ Tạo việc tiếp theo' : '+ Tạo việc mới'}
       </h1>
 
+      {/* Fork Revise Flow36 (khi FF ON): [1] Revise theo 12 loại → mở vòng revise; [2] Việc khác → form dưới. */}
+      {FF_REVISE && (
+        <div className="rounded-xl p-4 mb-4" style={{ border: '1px solid #c7d2fe', background: '#eef2ff' }}>
+          <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 8 }}>Đây là REVISE (đổi thiết kế/BOM/dự toán…)?</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select value={reviseType} onChange={(e) => setReviseType(e.target.value)} style={{ ...inp, maxWidth: 420 }}>
+              <option value="">— Chọn loại revise (12) —</option>
+              {REVISE_OPTS.map(([k, v]) => <option key={k} value={k}>{v.label} → vào {v.entryStepCode} ({v.ownerRole})</option>)}
+            </select>
+            {(() => {
+              const ok = !!reviseType && !!projectId && !!elig?.eligible
+              return (
+                <button
+                  disabled={!ok || reviseBusy}
+                  onClick={async () => {
+                    if (!ok) return
+                    setReviseBusy(true)
+                    const res = await apiFetch('/api/work/tasks', { method: 'POST', body: JSON.stringify({ reviseType, projectId }) })
+                    setReviseBusy(false)
+                    if (res.ok) router.push(`/dashboard/work/revise?projectId=${encodeURIComponent(projectId)}&round=${res.revise?.round ?? ''}`)
+                    else alert(res.error || 'Không mở được vòng revise')
+                  }}
+                  style={{ background: ok ? '#4f46e5' : '#c7c7c7', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: '.83rem', fontWeight: 700, cursor: ok && !reviseBusy ? 'pointer' : 'not-allowed' }}
+                >{reviseBusy ? 'Đang mở…' : 'Mở vòng revise'}</button>
+              )
+            })()}
+            <span style={{ fontSize: '.75rem', color: 'var(--text-secondary)' }}>{!projectId ? 'Chọn dự án ở dưới trước' : elig === null ? 'Đang kiểm tra dự án…' : ''}</span>
+          </div>
+          {/* Guard: dự án legacy (không template) → cảnh báo thân thiện, KHÔNG cho mở round */}
+          {projectId && elig && !elig.eligible && (
+            <div style={{ fontSize: '.78rem', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '7px 10px', marginTop: 8 }}>
+              ⚠ {elig.reason || 'Dự án này chưa mở được vòng revise.'}
+            </div>
+          )}
+          {projectId && elig?.eligible && elig.templateName && (
+            <div style={{ fontSize: '.75rem', color: '#15803d', marginTop: 6 }}>✓ Quy trình: <b>{elig.templateName}</b> — mở vòng revise được.</div>
+          )}
+          <div style={{ fontSize: '.75rem', color: 'var(--text-secondary)', marginTop: 6 }}>Hoặc để tạo <b>việc khác</b> (không theo quy trình), điền form bên dưới.</div>
+        </div>
+      )}
+
       <Stepper step={1} hasTemplate={!!selectedTemplate} />
 
       <div className="space-y-4">
@@ -299,7 +357,8 @@ function CreateInner() {
             </div>
             <div>
               <label className="text-sm font-semibold">Loại việc</label>
-              <select value={taskType} onChange={(e) => setTaskType(e.target.value)} style={inp}>
+              {/* Việc động (FREE) KHÔNG gắn biểu mẫu → bỏ chọn template ngay khi đổi sang FREE (tránh set-state-in-effect). */}
+              <select value={taskType} onChange={(e) => { const v = e.target.value; setTaskType(v); if (v === 'FREE') setSelectedTemplate(null) }} style={inp}>
                 {TASK_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
               </select>
             </div>
@@ -314,8 +373,8 @@ function CreateInner() {
           </div>
         </div>
 
-        {/* ── ② Biểu mẫu (tuỳ chọn) ── */}
-        {allowedTemplates.length === 0 ? (
+        {/* ── ② Biểu mẫu (tuỳ chọn) — CHỈ hiện cho loại việc bước-cố-định; việc động (FREE/"Việc khác") ẩn ── */}
+        {taskType !== 'FREE' && (allowedTemplates.length === 0 ? (
           <div className="rounded-xl p-4" style={sectionStyle}>
             <h3 className="font-semibold mb-1" style={{ color: 'var(--text-heading)', margin: 0 }}>② Biểu mẫu (tuỳ chọn)</h3>
             <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -360,11 +419,11 @@ function CreateInner() {
               })}
             </div>
           </div>
-        )}
+        ))}
 
         {/* ── ③ Thời hạn & tài liệu ── */}
         <div className="rounded-xl p-5" style={sectionStyle}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>③ Thời hạn & tài liệu</h3>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>{taskType === 'FREE' ? '②' : '③'} Thời hạn & tài liệu</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
               <label className="text-sm font-semibold">Deadline</label>
@@ -427,7 +486,7 @@ function CreateInner() {
 
         {/* ── ④ Giao cho ai ── */}
         <div className="rounded-xl p-5" style={sectionStyle}>
-          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>④ Giao cho ai?</h3>
+          <h3 className="font-semibold mb-3" style={{ color: 'var(--text-heading)' }}>{taskType === 'FREE' ? '③' : '④'} Giao cho ai?</h3>
           {sugg.length > 0 && (
             <div className="rounded-lg p-3 mb-3" style={{ background: 'linear-gradient(135deg,#eff6ff,#f5f3ff)', border: '1px dashed #93c5fd' }}>
               <div className="text-xs font-bold mb-2" style={{ color: '#1d4ed8' }}>Gợi ý phòng ban</div>
