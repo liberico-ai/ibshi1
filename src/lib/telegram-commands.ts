@@ -176,10 +176,12 @@ export function registerCommands(bot: Bot): void {
       return
     }
 
+    // Khớp tab web "Được giao cho tôi": OPEN + IN_PROGRESS + RETURNED (không chỉ IN_PROGRESS)
+    const ASSIGNED_STATUSES = ['OPEN', 'IN_PROGRESS', 'RETURNED']
     const tasks = await prisma.task.findMany({
       where: {
         assignees: { some: { OR: [{ userId: user.id }, { role: user.roleCode }] } },
-        status: 'IN_PROGRESS',
+        status: { in: ASSIGNED_STATUSES },
       },
       include: {
         project: { select: { projectCode: true, projectName: true } },
@@ -202,7 +204,7 @@ export function registerCommands(bot: Bot): void {
     const total = await prisma.task.count({
       where: {
         assignees: { some: { OR: [{ userId: user.id }, { role: user.roleCode }] } },
-        status: 'IN_PROGRESS',
+        status: { in: ASSIGNED_STATUSES },
       },
     })
 
