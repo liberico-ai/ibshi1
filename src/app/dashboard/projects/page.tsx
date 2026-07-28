@@ -153,17 +153,22 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
     contractValue: '', currency: 'VND', description: '', startDate: '', endDate: '',
   })
   const isProduction = form.projectType === 'EXTERNAL_PROD' || form.projectType === 'INTERNAL_PROD'
+  const [customProductType, setCustomProductType] = useState('')
+  const isOtherProduct = form.productType === '__other__'
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [draftId] = useState(() => `draft-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    // Loại sản phẩm "Khác" → dùng giá trị nhập tay
+    const productType = isOtherProduct ? customProductType.trim() : form.productType
+    if (isOtherProduct && !productType) { setError('Nhập Loại sản phẩm (Khác)'); return }
     setError(''); setSubmitting(true)
 
     const res = await apiFetch('/api/projects', {
       method: 'POST',
-      body: JSON.stringify({ ...form, draftId }),
+      body: JSON.stringify({ ...form, productType, draftId }),
     })
     setSubmitting(false)
     if (res.ok) {
@@ -194,7 +199,12 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
         <div className="input-field"><label className="input-label">Loại sản phẩm *</label>
           <select className="input" value={form.productType} onChange={(e) => setForm({ ...form, productType: e.target.value })}>
             {PRODUCT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select></div>
+            <option value="__other__">Khác...</option>
+          </select>
+          {isOtherProduct && (
+            <input className="input" style={{ marginTop: 8 }} placeholder="Nhập loại sản phẩm khác"
+              value={customProductType} onChange={(e) => setCustomProductType(e.target.value)} required />
+          )}</div>
         <div className="input-field"><label className="input-label">Giá trị hợp đồng</label>
           <input className="input" type="text" inputMode="numeric" placeholder="0"
             value={form.contractValue ? form.contractValue.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}

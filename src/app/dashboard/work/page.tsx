@@ -171,13 +171,13 @@ export default function WorkInboxPage() {
       </div>
 
       {/* Search + project filter */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <form onSubmit={(e) => { e.preventDefault(); setQ(qInput) }} className="flex gap-2 flex-1" style={{ minWidth: 200 }}>
-          <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Tìm theo tiêu đề..."
-            className="input-field flex-1" />
+          <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="🔍 Tìm theo tiêu đề..."
+            className="input-field flex-1" style={{ border: '1px solid var(--border)', background: 'var(--bg-primary)' }} />
           <Button variant="outline" type="submit" size="sm">Tìm</Button>
         </form>
-        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="input-field text-sm" style={{ minWidth: 140 }}>
+        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="input-field text-sm" style={{ minWidth: 140, border: '1px solid var(--border)', background: 'var(--bg-primary)' }}>
           <option value="">Tất cả dự án</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.projectCode}</option>)}
         </select>
