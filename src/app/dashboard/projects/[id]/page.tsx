@@ -17,6 +17,27 @@ interface Task {
   revisionRound?: number; revisionId?: string | null;
 }
 
+interface PhaseStep {
+  stepCode: string
+  stepName: string
+  status: 'DONE' | 'IN_PROGRESS' | 'RETURNED' | 'PENDING'
+  assignedRole: string
+  roleName: string
+  assignee: { fullName: string; username: string } | null
+  deadline: string | null
+  completedAt: string | null
+  taskId: string | null
+}
+
+interface Phase {
+  phase: number
+  name: string
+  steps: PhaseStep[]
+  totalSteps: number
+  completedSteps: number
+  pct: number
+}
+
 interface ProjectDetail {
   id: string; projectCode: string; projectName: string; clientName: string;
   productType: string; status: string; contractValue: string; currency: string;
@@ -24,6 +45,7 @@ interface ProjectDetail {
   hasTemplateTasks: boolean;
   progress: { total: number; completed: number; inProgress: number; percentage: number; currentPhase: number };
   tasks: Task[];
+  phases?: Phase[];
 }
 
 const COLUMNS = [
@@ -41,6 +63,7 @@ export default function ProjectDetailPage() {
   const [assigningTask, setAssigningTask] = useState<Task | null>(null)
   const [closing, setClosing] = useState(false)
   const [applyingTpl, setApplyingTpl] = useState(false)
+  const [collapsedPhases, setCollapsedPhases] = useState<Set<number> | null>(null)
   const { user: currentUser } = useAuthStore()
 
   async function reload() {
@@ -163,6 +186,22 @@ export default function ProjectDetailPage() {
   const doneTasks = project.progress.completed
   const totalTasks = project.progress.total
   const inProgTasks = project.progress.inProgress
+  const pendingTasks = totalTasks - doneTasks - inProgTasks
+
+  const resolvedCollapsed = collapsedPhases ?? new Set(
+    (project.phases || []).filter(p => p.phase !== project.progress.currentPhase).map(p => p.phase)
+  )
+
+  function togglePhase(phaseNum: number) {
+    if (!project) return
+    const current = collapsedPhases ?? new Set(
+      (project.phases || []).filter(p => p.phase !== project.progress.currentPhase).map(p => p.phase)
+    )
+    const next = new Set(current)
+    if (next.has(phaseNum)) next.delete(phaseNum)
+    else next.add(phaseNum)
+    setCollapsedPhases(next)
+  }
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -295,6 +334,180 @@ export default function ProjectDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* Phase Timeline Section */}
+      {project.phases && project.phases.length > 0 && (
+        <>
+          {/* Summary Bar: Task Analysis + Phase Progress */}
+          <div className="card" style={{ padding: '20px 24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+              {/* Left: Task Analysis */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <span style={{ fontSize: '14px' }}>&#x1f4ca;</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-heading)' }}>Ph&#226;n t&#237;ch Task</span>
+                </div>
+                {[
+                  { label: 'Ho&#224;n th&#224;nh', count: doneTasks, color: '#16a34a' },
+                  { label: '&#272;ang x&#7917; l&#253;', count: inProgTasks, color: '#2563eb' },
+                  { label: 'Ch&#7901; x&#7917; l&#253;', count: pendingTasks, color: '#94a3b8' },
+                ].map(item => (
+                  <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', width: '90px', flexShrink: 0 }}>{item.label}</span>
+                    <div style={{ flex: 1, height: '8px', background: 'var(--bg-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ width: `${totalTasks > 0 ? (item.count / totalTasks) * 100 : 0}%`, height: '100%', background: item.color, borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: item.color, width: '28px', textAlign: 'right' }}>{item.count}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: Phase Progress */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <span style={{ fontSize: '14px' }}>&#x1f4cb;</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-heading)' }}>Ti&#7871;n &#273;&#7897; Phase</span>
+                </div>
+                {project.phases.map(p => (
+                  <div key={p.phase} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', width: '24px', flexShrink: 0 }}>P{p.phase}</span>
+                    <div style={{ flex: 1, height: '8px', background: 'var(--bg-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${p.pct}%`,
+                        height: '100%',
+                        background: p.pct >= 100 ? '#16a34a' : p.pct > 0 ? '#2563eb' : '#e2e8f0',
+                        borderRadius: '4px',
+                        transition: 'width 0.5s ease',
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: p.pct >= 100 ? '#16a34a' : p.pct > 0 ? '#2563eb' : 'var(--text-muted)', width: '36px', textAlign: 'right' }}>{p.pct}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Phase Steps (Collapsible) */}
+          {project.phases.map(phase => {
+            const isCollapsed = resolvedCollapsed.has(phase.phase)
+            return (
+              <div key={phase.phase} className="card" style={{ overflow: 'hidden' }}>
+                {/* Phase Header */}
+                <div
+                  onClick={() => togglePhase(phase.phase)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    padding: '14px 20px', cursor: 'pointer',
+                    userSelect: 'none',
+                  }}
+                >
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', width: '16px', textAlign: 'center' }}>
+                    {isCollapsed ? '▸' : '▾'}
+                  </span>
+                  <span style={{
+                    fontSize: '12px', fontWeight: 800, fontFamily: 'monospace',
+                    color: phase.pct >= 100 ? '#16a34a' : phase.pct > 0 ? '#2563eb' : 'var(--text-muted)',
+                    background: phase.pct >= 100 ? '#16a34a12' : phase.pct > 0 ? '#2563eb12' : 'var(--bg-secondary)',
+                    padding: '2px 8px', borderRadius: '4px',
+                  }}>
+                    P{phase.phase}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-heading)', flex: 1 }}>
+                    {phase.name}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                    <div style={{ width: '80px', height: '6px', background: 'var(--bg-secondary)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${phase.pct}%`,
+                        height: '100%',
+                        background: phase.pct >= 100 ? '#16a34a' : phase.pct > 0 ? '#2563eb' : '#e2e8f0',
+                        borderRadius: '3px',
+                        transition: 'width 0.5s ease',
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {phase.completedSteps}/{phase.totalSteps} ho&#224;n th&#224;nh
+                    </span>
+                    <span style={{
+                      fontSize: '11px', fontWeight: 700,
+                      color: phase.pct >= 100 ? '#16a34a' : phase.pct > 0 ? '#2563eb' : 'var(--text-muted)',
+                    }}>
+                      {phase.pct}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Steps */}
+                {!isCollapsed && (
+                  <div style={{ borderTop: '1px solid var(--border-light)', overflowX: 'auto' }}>
+                    {phase.steps.map((step, idx) => {
+                      const statusConfig = {
+                        DONE: { icon: '✓', color: '#16a34a', bg: '#16a34a12', label: 'Xong' },
+                        IN_PROGRESS: { icon: '⟳', color: '#2563eb', bg: '#2563eb12', label: 'Đang XL' },
+                        RETURNED: { icon: '↩', color: '#f59e0b', bg: '#f59e0b12', label: 'Trả lại' },
+                        PENDING: { icon: '◌', color: '#94a3b8', bg: '#94a3b812', label: 'Chờ' },
+                      }[step.status]
+                      const isLast = idx === phase.steps.length - 1
+                      const stepRow = (
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '24px 56px 1fr 72px 140px 64px 76px',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '10px 20px',
+                            fontSize: '12px',
+                            borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
+                            background: step.status === 'IN_PROGRESS' ? 'rgba(37,99,235,0.03)' : step.status === 'RETURNED' ? 'rgba(245,158,11,0.03)' : 'transparent',
+                            minWidth: '640px',
+                          }}
+                        >
+                          {/* Status icon */}
+                          <span style={{ color: statusConfig.color, fontWeight: 700, fontSize: '14px', textAlign: 'center' }}>
+                            {statusConfig.icon}
+                          </span>
+                          {/* Step code */}
+                          <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '11px' }}>
+                            {step.stepCode}
+                          </span>
+                          {/* Step name */}
+                          <span style={{ color: step.status === 'PENDING' ? 'var(--text-muted)' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {step.stepName}
+                          </span>
+                          {/* Role badge */}
+                          <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {step.assignedRole}
+                          </span>
+                          {/* Assignee */}
+                          <span style={{ color: step.assignee ? 'var(--text-secondary)' : 'var(--text-muted)', fontStyle: step.assignee ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {step.assignee ? step.assignee.fullName : (step.status !== 'PENDING' ? 'Chưa phân công' : '—')}
+                          </span>
+                          {/* Status badge */}
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: statusConfig.color, background: statusConfig.bg, padding: '2px 6px', borderRadius: '4px', textAlign: 'center' }}>
+                            {statusConfig.label}
+                          </span>
+                          {/* Date */}
+                          <span style={{ color: step.completedAt ? '#16a34a' : 'var(--text-muted)', textAlign: 'right', fontSize: '11px' }}>
+                            {step.completedAt ? formatDate(step.completedAt) : step.deadline ? formatDate(step.deadline) : '—'}
+                          </span>
+                        </div>
+                      )
+                      if (step.taskId) {
+                        return (
+                          <a key={step.stepCode} href={`/dashboard/work/${step.taskId}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }} className="transition-all hover:opacity-80">
+                            {stepRow}
+                          </a>
+                        )
+                      }
+                      return <div key={step.stepCode}>{stepRow}</div>
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </>
+      )}
 
       {/* Kanban Board */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', alignItems: 'start' }}>

@@ -178,6 +178,9 @@ function buildTaskAnalytics(tasks: TaskRow[]) {
   const progress = total ? Math.round((completed / total) * 100) : 0
 
   const phaseAgg: Record<string, { total: number; done: number }> = {}
+  for (let i = 1; i <= 6; i++) {
+    phaseAgg[`P${i}`] = { total: 0, done: 0 }
+  }
   for (const t of tasks) {
     const m = /^P(\d)/.exec(t.taskType || '')
     const ph = m ? `P${m[1]}` : 'Khác'
