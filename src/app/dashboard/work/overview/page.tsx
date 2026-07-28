@@ -6,6 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { PageHeader, Button, Badge, KPICard, EmptyState } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { PHASE_LABELS } from '@/lib/workflow-constants'
 import { FolderOpen, ClipboardList } from 'lucide-react'
 
 interface ProjectSummary {
@@ -39,7 +40,10 @@ const ST_LABEL: Record<string, string> = {
   OPEN: 'Mới', IN_PROGRESS: 'Đang xử lý', AWAITING_REVIEW: 'Chờ kết thúc', RETURNED: 'Bị trả lại', DONE: 'Hoàn thành',
 }
 const billion = (n: number) => formatNumber(n / 1e9)
-const PHASE_NAME: Record<string, string> = { P1: 'Khởi tạo', P2: 'Thiết kế & dự toán', P3: 'Cung ứng', P4: 'Mua & nhập kho', P5: 'Sản xuất', P6: 'Đóng dự án', Khác: 'Khác' }
+const PHASE_NAME: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(PHASE_LABELS).map(([k, v]) => [`P${k}`, v.name])),
+  'Khác': 'Khác',
+}
 
 export default function WorkOverviewPage() {
   const router = useRouter()
