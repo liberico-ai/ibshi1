@@ -130,6 +130,7 @@ export default function WorkDetailPage() {
   const allRead = mustRead.every((d) => ackedByMe(d))
   const allReturned = mustReturn.every((d) => d.fulfilled || (returnNotes[d.id]?.trim() || returnFiles[d.id]))
   const canComplete = allRead && allReturned
+  const isFixedStep = !!task.templateStepId
 
   const buildCompleteBody = (mode: 'RETURN_CREATOR' | 'FORWARD', forward?: unknown) => ({
     mode, forward,
@@ -610,7 +611,10 @@ export default function WorkDetailPage() {
       {/* Form chuyển tiếp */}
       {fwdOpen && isAssignee && !myDone && (
         <div className="rounded-xl p-4" style={{ background: '#fffbeb', border: '1px solid #fcd34d' }}>
-          <div className="text-sm font-semibold mb-2" style={{ color: '#b45309' }}>↗ Hoàn thành & chuyển tiếp sang bộ phận khác</div>
+          <div className="text-sm font-semibold mb-2" style={{ color: '#b45309' }}>{isFixedStep ? '↗ Giao người khác (ngoài quy trình)' : '↗ Hoàn thành & chuyển tiếp sang bộ phận khác'}</div>
+          {isFixedStep && (
+            <div className="text-xs rounded-lg px-3 py-2 mb-2" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>⚠ Thao tác này thay thế bước kế tự động của quy trình — chỉ dùng khi thực sự cần giao tay.</div>
+          )}
           <label className="text-xs font-semibold">Loại việc chuyển tiếp</label>
           <select value={fwdType} onChange={(e) => setFwdType(e.target.value)} style={inp}>{TASK_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</select>
           <div className="mt-2">
@@ -694,11 +698,11 @@ export default function WorkDetailPage() {
             {(task.revisionRound ?? 0) >= 1 && (
               <button onClick={() => setSkipOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#475569', border: '1px solid #cbd5e1' }} title="Checkpoint vòng revise — nếu bước này không bị ảnh hưởng thì bỏ qua (có log)">⤼ Không ảnh hưởng — Bỏ qua</button>
             )}
-            <button onClick={() => doComplete('RETURN_CREATOR')} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold flex-1" style={{ background: canComplete ? '#059669' : '#9ca3af', color: '#fff', minWidth: 150 }}>✓ Hoàn thành & trả người tạo</button>
-            <button onClick={() => setFwdOpen(true)} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: canComplete ? '#d97706' : '#9ca3af', color: '#fff' }}>↗ Hoàn thành & chuyển tiếp</button>
+            <button onClick={() => doComplete('RETURN_CREATOR')} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold flex-1" style={{ background: canComplete ? '#059669' : '#9ca3af', color: '#fff', minWidth: 150 }} title={isFixedStep ? 'Hoàn thành và chuyển sang bước kế theo quy trình' : undefined}>{isFixedStep ? '✓ Hoàn thành bước này' : '✓ Hoàn thành & trả người tạo'}</button>
+            <button onClick={() => setFwdOpen(true)} disabled={busy || !canComplete} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: canComplete ? '#d97706' : '#9ca3af', color: '#fff' }}>{isFixedStep ? '↗ Giao người khác (ngoài quy trình)' : '↗ Hoàn thành & chuyển tiếp'}</button>
             <button onClick={() => setDelOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>↪ Chuyển giao</button>
             <button onClick={() => router.push(`/dashboard/work/create?parent=${id}${task.projectId ? `&project=${task.projectId}` : ''}`)} className="text-sm px-4 py-3 rounded-xl" style={{ background: 'var(--text-heading)', color: '#fff' }}>+ Việc con</button>
-            <button onClick={() => setRejOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: 'var(--danger)', border: '1px solid #fecaca' }}>✕ Từ chối / trả lại</button>
+            <button onClick={() => setRejOpen(true)} disabled={busy} className="text-sm px-4 py-3 rounded-xl font-semibold" style={{ background: 'var(--surface)', color: 'var(--danger)', border: '1px solid #fecaca' }}>{isFixedStep ? '✕ Trả lại · ghi lý do' : '✕ Từ chối / trả lại'}</button>
           </div>
         </div>
       )}
@@ -737,7 +741,7 @@ export default function WorkDetailPage() {
       {/* Trả lại (inline) */}
       {rejOpen && isAssignee && !myDone && (
         <div className="rounded-xl p-4 space-y-2" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
-          <div className="text-sm font-semibold" style={{ color: 'var(--danger)' }}>✕ Trả lại người giao (sai phạm vi)</div>
+          <div className="text-sm font-semibold" style={{ color: 'var(--danger)' }}>{isFixedStep ? '✕ Trả lại · ghi lý do' : '✕ Trả lại người giao (sai phạm vi)'}</div>
           <textarea value={rejReason} onChange={(e) => setRejReason(e.target.value)} rows={3} style={{ ...inp, background: '#fff' }} placeholder="Lý do trả lại…" />
           <div className="flex gap-2">
             <button onClick={submitReject} disabled={busy} className="text-sm px-4 py-2.5 rounded-lg font-semibold" style={{ background: 'var(--danger)', color: '#fff' }}>Gửi trả lại</button>
