@@ -5,6 +5,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import CreateDrawdownForm from './components/CreateDrawdownForm'
 import * as XLSX from 'xlsx'
 import { formatDate, formatDateTime, formatNumber } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface Payment {
   id: string; amount: string; paymentDate: string; method: string; reference: string | null; notes: string | null;
@@ -60,17 +61,17 @@ export default function PaymentsPage() {
   }
 
   const handleApproveDrawdown = async (id: string) => {
-    if (!confirm('Bạn có chắc chắn muốn duyệt Hồ sơ giải ngân này?')) return
+    if (!await confirmDialog('Bạn có chắc chắn muốn duyệt Hồ sơ giải ngân này?')) return
     const res = await apiFetch(`/api/finance/payments/drawdown/${id}/approve`, { method: 'POST' })
-    if (res.ok) { alert('Đã duyệt thành công!'); loadDrawdowns() }
-    else alert(res.error || 'Lỗi phân quyền')
+    if (res.ok) { notify('Đã duyệt thành công!'); loadDrawdowns() }
+    else notify(res.error || 'Lỗi phân quyền')
   }
 
   const handleExecuteDrawdown = async (id: string) => {
-    if (!confirm('Xác nhận CHỐT GIẢI NGÂN? Hành động này sẽ cập nhật toàn bộ trạng thái Hợp đồng (PO) về Đã Thanh Toán.')) return
+    if (!await confirmDialog('Xác nhận CHỐT GIẢI NGÂN? Hành động này sẽ cập nhật toàn bộ trạng thái Hợp đồng (PO) về Đã Thanh Toán.')) return
     const res = await apiFetch(`/api/finance/payments/drawdown/${id}/execute`, { method: 'POST' })
-    if (res.ok) { alert('Chốt giải ngân thành công! Đã lật trạng thái PO.'); loadDrawdowns() }
-    else alert(res.error || 'Lỗi phân quyền')
+    if (res.ok) { notify('Chốt giải ngân thành công! Đã lật trạng thái PO.'); loadDrawdowns() }
+    else notify(res.error || 'Lỗi phân quyền')
   }
 
   const handleExportVPBank = async (id: string, code: string) => {
@@ -83,19 +84,19 @@ export default function PaymentsPage() {
       XLSX.utils.book_append_sheet(wb, ws, "VPBank Export")
       XLSX.writeFile(wb, res.filename)
       loadDrawdowns() // refresh status
-    } else alert(res.error || 'Lỗi export')
+    } else notify(res.error || 'Lỗi export')
   }
 
   const handleMisaSync = async (id: string, drawdownNo: string) => {
-    if (!confirm(`Xác nhận đồng bộ hồ sơ ${drawdownNo} lên phần mềm Misa AMIS?`)) return
+    if (!await confirmDialog(`Xác nhận đồng bộ hồ sơ ${drawdownNo} lên phần mềm Misa AMIS?`)) return
     
     // Call real synchronization API
     const res = await apiFetch(`/api/finance/payments/drawdown/${id}/sync-misa`, { method: 'POST' })
     if (res.ok) {
-      alert(`Đồng bộ sơ ${drawdownNo} sang Misa AMIS thành công! Bút toán tự động đã được ghi sổ hệ thống.`)
+      notify(`Đồng bộ sơ ${drawdownNo} sang Misa AMIS thành công! Bút toán tự động đã được ghi sổ hệ thống.`)
       loadDrawdowns() // refresh to update 'misaSynced' status
     } else {
-      alert(res.error || 'Lỗi đồng bộ')
+      notify(res.error || 'Lỗi đồng bộ')
     }
   }
 
@@ -116,7 +117,7 @@ export default function PaymentsPage() {
       body: JSON.stringify(data),
     })
     if (res.ok) { setShowForm(false); load() }
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const openForm = async () => {

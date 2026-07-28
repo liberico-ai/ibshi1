@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import {  } from "lucide-react";
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow } from '@/lib/types'
 import { formatNumber } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 export type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow }
 
 
@@ -232,11 +233,11 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
           if (imported.length > 0) {
             save(imported);
           } else {
-            alert('Không có dữ liệu hợp lệ trong file!');
+            notify('Không có dữ liệu hợp lệ trong file!');
           }
         } catch(err) {
           console.error(err);
-          alert('Lỗi đọc file Excel!');
+          notify('Lỗi đọc file Excel!');
         }
       };
       reader.readAsBinaryString(file);
@@ -509,7 +510,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                                 ) : (
                                   <>
                                     <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 800 }}>FAIL</div>
-                                    <button type="button" onClick={() => { if(confirm('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
+                                    <button type="button" onClick={async () => { if(await confirmDialog('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
                                       style={{ padding: '4px 8px', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
                                       Tạo Rework
                                     </button>

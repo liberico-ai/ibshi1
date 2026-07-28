@@ -12,6 +12,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Factory } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
@@ -73,8 +74,9 @@ export default function ProductionPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
-  const canCreate = ['R01', 'R06', 'R06b'].includes(user?.roleCode || '')
-  const canGenerateFromBom = ['R01', 'R02', 'R06'].includes(user?.roleCode || '')
+  // Tạo LSX: chỉ PM (R02) + BGĐ (R01) — QLSX/Tổ trưởng không còn tạo
+  const canCreate = ['R01', 'R02'].includes(user?.roleCode || '')
+  const canGenerateFromBom = ['R01', 'R02'].includes(user?.roleCode || '')
 
   const loadData = useCallback(async () => {
     const params = new URLSearchParams()
@@ -250,7 +252,7 @@ function GenerateFromBomModal({ open, projects, onClose, onDone }: {
   const [submitting, setSubmitting] = useState(false)
 
   const submit = async () => {
-    if (!projectId) return alert('Chọn dự án')
+    if (!projectId) return notify('Chọn dự án')
     setSubmitting(true)
     const res = await apiFetch('/api/production/work-orders/from-bom', {
       method: 'POST',
@@ -258,10 +260,10 @@ function GenerateFromBomModal({ open, projects, onClose, onDone }: {
     })
     setSubmitting(false)
     if (res.ok) {
-      alert(res.message || `Đã tạo ${res.created} WO, bỏ qua ${res.skipped}`)
+      notify(res.message || `Đã tạo ${res.created} WO, bỏ qua ${res.skipped}`)
       onDone()
     } else {
-      alert(res.error || 'Lỗi sinh WO từ BOM')
+      notify(res.error || 'Lỗi sinh WO từ BOM')
     }
   }
 
@@ -295,7 +297,7 @@ function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
   const update = (f: string, v: string) => setForm({ ...form, [f]: v })
 
   const submit = async () => {
-    if (!form.woCode || !form.projectId || !form.description || !form.teamCode) return alert('Nhập đầy đủ')
+    if (!form.woCode || !form.projectId || !form.description || !form.teamCode) return notify('Nhập đầy đủ')
     setSubmitting(true)
     const res = await apiFetch('/api/production', {
       method: 'POST',
@@ -307,7 +309,7 @@ function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (

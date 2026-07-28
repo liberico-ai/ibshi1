@@ -76,6 +76,35 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       include: { checklistItems: true },
     })
 
+    // Nghiệm thu vật tư KHÔNG ĐẠT → trả về TM (R07/R07a) để tìm nhà cung cấp khác.
+    if (status === 'FAILED' && inspection.type === 'material_incoming') {
+      try {
+        const poIds = ((inspection.resultData as { poIds?: string[] } | null)?.poIds) || []
+        let poCodes = ''
+        if (poIds.length > 0) {
+          const pos = await prisma.purchaseOrder.findMany({ where: { id: { in: poIds } }, select: { poCode: true } })
+          poCodes = pos.map(p => p.poCode).join(', ')
+        }
+        const tmUsers = await prisma.user.findMany({
+          where: { roleCode: { in: ['R07', 'R07a'] }, isActive: true },
+          select: { id: true },
+        })
+        if (tmUsers.length > 0) {
+          await prisma.notification.createMany({
+            data: tmUsers.map((u) => ({
+              userId: u.id,
+              title: 'Hàng không đạt QC — cần tìm NCC khác',
+              message: `Biên bản ${inspection.inspectionCode} KHÔNG ĐẠT${poCodes ? ` (PO: ${poCodes})` : ''}. Vui lòng tìm nhà cung cấp khác.`,
+              type: 'qc_failed',
+              linkUrl: '/dashboard/warehouse/purchase-orders',
+            })),
+          })
+        }
+      } catch (e) {
+        console.error('[QC] notify TM (failed) error:', e)
+      }
+    }
+
     return successResponse({ inspection }, `Biên bản đã ${status === 'PASSED' ? 'đạt' : status === 'FAILED' ? 'không đạt' : 'đạt có điều kiện'}`)
   } catch (err) {
     console.error('PUT /api/qc/:id error:', err)

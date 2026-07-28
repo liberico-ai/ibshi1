@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     include: {
       vendor: true,
       items: {
-        include: { material: { select: { materialCode: true, name: true, unit: true, currentStock: true } } },
+        include: { material: { select: { materialCode: true, name: true, unit: true, currentStock: true, category: true } } },
       },
     },
   })

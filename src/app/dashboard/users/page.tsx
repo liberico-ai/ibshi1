@@ -7,6 +7,7 @@ import { DEPARTMENTS_V2, ROLE_TO_DEPT } from '@/lib/org-map'
 import { SearchBar } from '@/components/SearchPagination'
 import { PageHeader, Button } from '@/components/ui'
 import { Pencil, KeyRound, Trash2 } from 'lucide-react'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface UserItem {
   id: string; username: string; fullName: string; roleCode: string;
@@ -52,13 +53,13 @@ export default function UsersPage() {
   }
 
   const deleteUser = async (user: UserItem) => {
-    if (!confirm(`Xoá vĩnh viễn tài khoản "${user.username}" (${user.fullName})?\n\nHành động này KHÔNG THỂ hoàn tác.`)) return
+    if (!await confirmDialog(`Xoá vĩnh viễn tài khoản "${user.username}" (${user.fullName})?\n\nHành động này KHÔNG THỂ hoàn tác.`)) return
     const res = await apiFetch(`/api/users/${user.id}`, { method: 'DELETE' })
     if (res.ok) {
       reload()
       showToast(`Đã xoá ${user.username}`)
     } else {
-      alert(res.error || 'Không xoá được user')
+      notify(res.error || 'Không xoá được user')
     }
   }
 

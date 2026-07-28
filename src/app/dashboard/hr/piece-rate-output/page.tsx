@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatCurrency, formatNumber } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface Output {
   id: string; month: number; year: number; quantity: string; unitPrice: string; totalAmount: string; status: string; notes: string | null;
@@ -28,10 +29,10 @@ export default function PieceRateOutputPage() {
 
   // Nghiệm thu KL khoán → server chốt LABOR actual vào ngân sách dự án
   const verifyOutput = async (id: string) => {
-    if (!confirm('Nghiệm thu khối lượng khoán này? Chi phí nhân công sẽ được ghi vào ngân sách dự án.')) return
+    if (!await confirmDialog('Nghiệm thu khối lượng khoán này? Chi phí nhân công sẽ được ghi vào ngân sách dự án.')) return
     const res = await apiFetch('/api/hr/piece-rate-output', { method: 'PATCH', body: JSON.stringify({ outputId: id }) })
     if (res.ok) fetchData()
-    else alert(res.error || 'Lỗi nghiệm thu KL khoán')
+    else notify(res.error || 'Lỗi nghiệm thu KL khoán')
   }
 
   return (

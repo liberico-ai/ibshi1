@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatCurrency, formatNumber } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface P3_5Props {
   task: any
@@ -123,14 +124,14 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
   }
 
   const handleSaveGroup = async () => {
-    if (!groupName.trim()) return alert("Vui lòng nhập tên nhóm")
-    if (selectedItems.length === 0) return alert("Vui lòng chọn ít nhất 1 vật tư")
+    if (!groupName.trim()) return notify("Vui lòng nhập tên nhóm")
+    if (selectedItems.length === 0) return notify("Vui lòng chọn ít nhất 1 vật tư")
     
     // Check if supplier/price are filled for all 3 quotes of all items
     for (const item of selectedItems) {
       for (let i = 0; i < 3; i++) {
-        if (!item.quotes[i].ncc || item.quotes[i].ncc.trim() === '') return alert(`Vui lòng nhập Nhà cung cấp #${i+1} cho vật tư: ${item.name}`)
-        if (item.quotes[i].price <= 0) return alert(`Vui lòng nhập đơn giá #${i+1} cho vật tư: ${item.name}`)
+        if (!item.quotes[i].ncc || item.quotes[i].ncc.trim() === '') return notify(`Vui lòng nhập Nhà cung cấp #${i+1} cho vật tư: ${item.name}`)
+        if (item.quotes[i].price <= 0) return notify(`Vui lòng nhập đơn giá #${i+1} cho vật tư: ${item.name}`)
       }
     }
 
@@ -164,14 +165,14 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
       setLocalGroups(updatedGroups)
       router.refresh()
     } catch (e: any) {
-      alert("Lỗi: " + e.message)
+      notify("Lỗi: " + e.message)
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleSubmitGroups = async (groups: any[]) => {
-    if (!confirm(`Xác nhận trình duyệt ${groups.length} nhóm báo giá này cho BGĐ?`)) return
+    if (!await confirmDialog(`Xác nhận trình duyệt ${groups.length} nhóm báo giá này cho BGĐ?`)) return
     setSubmitting(true)
     try {
       await apiFetch(`/api/tasks/${task.id}`, {
@@ -185,7 +186,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
           }
         })
       })
-      alert("Đã trình duyệt thành công!")
+      notify("Đã trình duyệt thành công!")
       
       const updatedLocal = [...localGroups]
       for (const g of groups) {
@@ -195,7 +196,7 @@ export default function P3_5CommercialGroupUI({ task, previousStepData, isActive
       setLocalGroups(updatedLocal)
       router.refresh()
     } catch (e: any) {
-      alert("Lỗi: " + e.message)
+      notify("Lỗi: " + e.message)
     } finally {
       setSubmitting(false)
     }

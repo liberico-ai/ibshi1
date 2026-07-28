@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import { notify } from '@/components/ui/Toast'
 
 interface Dept { id: string; code: string; name: string; nameEn: string; _count: { employees: number; users: number } }
 
@@ -22,7 +23,7 @@ export default function DepartmentsPage() {
       method: 'POST',
       body: JSON.stringify({ code: fd.get('code'), name: fd.get('name'), nameEn: fd.get('nameEn') || '' }),
     })
-    if (res.ok) { setShowForm(false); load() } else alert(res.error || 'Lỗi')
+    if (res.ok) { setShowForm(false); load() } else notify(res.error || 'Lỗi')
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>

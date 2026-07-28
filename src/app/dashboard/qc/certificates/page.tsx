@@ -9,6 +9,7 @@ import {
   InputField, SelectField,
 } from '@/components/ui'
 import { ClipboardList } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface Certificate {
   id: string; certType: string; certNumber: string; holderName: string;
@@ -184,12 +185,12 @@ function CreateCertModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const update = (f: string, v: string) => setForm({ ...form, [f]: v })
 
   const submit = async () => {
-    if (!form.certNumber || !form.holderName || !form.issuedBy || !form.issueDate || !form.expiryDate) return alert('Dien day du thong tin')
+    if (!form.certNumber || !form.holderName || !form.issuedBy || !form.issueDate || !form.expiryDate) return notify('Dien day du thong tin')
     setSubmitting(true)
     const res = await apiFetch('/api/qc/certificates', { method: 'POST', body: JSON.stringify(form) })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Loi tao chung chi')
+    else notify(res.error || 'Loi tao chung chi')
   }
 
   const typeOptions = Object.entries(TYPE_MAP).map(([k, v]) => ({
@@ -278,14 +279,14 @@ function RenewCertModal({ cert, onClose, onCreated }: { cert: Certificate; onClo
   const update = (f: string, v: string) => setForm({ ...form, [f]: v })
 
   const submit = async () => {
-    if (!form.certNumber || !form.issueDate || !form.expiryDate) return alert('Điền đầy đủ')
+    if (!form.certNumber || !form.issueDate || !form.expiryDate) return notify('Điền đầy đủ')
     setSubmitting(true)
     const res = await apiFetch(`/api/qc/certificates/${cert.id}/renew`, {
       method: 'POST', body: JSON.stringify(form),
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi gia hạn')
+    else notify(res.error || 'Lỗi gia hạn')
   }
 
   return (

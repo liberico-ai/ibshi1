@@ -6,6 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { PageHeader, Button, Badge, EmptyState, Pagination } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Inbox } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface Task {
   id: string; title: string; status: string; priority: string; deadline: string | null; taskType: string
@@ -130,7 +131,7 @@ export default function WorkInboxPage() {
     setCrBusy(true)
     const res = await apiFetch(`/api/work/tasks/${crTask.id}/change-request`, { method: 'POST', body: JSON.stringify({ type: crType, reason: crReason.trim() }) })
     setCrBusy(false)
-    if (res.ok) { setCrTask(null); setCrReason(''); load() } else alert(res.error || 'Lỗi gửi yêu cầu')
+    if (res.ok) { setCrTask(null); setCrReason(''); load() } else notify(res.error || 'Lỗi gửi yêu cầu')
   }
 
   const showCreator = tab === 'assigned' || tab === 'overdue'

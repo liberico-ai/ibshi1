@@ -120,8 +120,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // HIDDEN_MENU_KEYS imported from @/lib/constants
   const filteredMenu = MENU_ITEMS.filter((item) => {
     if (HIDDEN_MENU_KEYS.has(item.key)) return false
+    if (item.roles === 'all') return true                  // public — hiện cho MỌI user (vd Kho: ai cũng xem tồn)
     if (caps) return caps.has(`page.${item.key}`)          // DB-driven khi đã tải
-    if (item.roles === 'all') return true
     return (item.roles as readonly string[]).includes(roleCode)
   })
 

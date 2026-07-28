@@ -7,6 +7,7 @@ import { WORKFLOW_RULES } from '@/lib/workflow-constants'
 import { ROLES } from '@/lib/constants'
 import { getStepFormConfig } from '@/lib/step-form-configs'
 import { formatDate, formatCurrency, isTaskOverdue } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface Task {
   id: string; stepCode: string; stepName: string; stepNameEn: string;
@@ -64,20 +65,20 @@ export default function ProjectDetailPage() {
     })
     setLoadingTaskId(null)
     if (res.ok) await reload()
-    else alert(res.error || 'Lỗi hoàn thành task')
+    else notify(res.error || 'Lỗi hoàn thành task')
   }
 
   async function handleCloseProject() {
-    if (!confirm('Bạn chắc chắn muốn đóng dự án? Hành động này không thể hoàn tác.')) return
+    if (!await confirmDialog('Bạn chắc chắn muốn đóng dự án? Hành động này không thể hoàn tác.')) return
     setClosing(true)
     const res = await apiFetch(`/api/projects/${params.id}`, {
       method: 'PATCH', body: JSON.stringify({ action: 'CLOSE' }),
     })
     if (res.ok) {
-      alert(res.message || 'Dự án đã đóng thành công')
+      notify(res.message || 'Dự án đã đóng thành công')
       await reload()
     } else {
-      alert(res.error || 'Lỗi đóng dự án')
+      notify(res.error || 'Lỗi đóng dự án')
     }
     setClosing(false)
   }
@@ -86,18 +87,18 @@ export default function ProjectDetailPage() {
     if (!project) return
     setApplyingTpl(true)
     const tplRes = await apiFetch('/api/work/templates')
-    if (!tplRes.ok) { alert(tplRes.error || 'Lỗi lấy danh sách template'); setApplyingTpl(false); return }
+    if (!tplRes.ok) { notify(tplRes.error || 'Lỗi lấy danh sách template'); setApplyingTpl(false); return }
     const templates = tplRes.templates as { code: string; productType: string | null }[]
     const match = templates.find(t => t.productType === project.productType) || templates.find(t => !t.productType)
-    if (!match) { alert('Không tìm thấy template phù hợp'); setApplyingTpl(false); return }
+    if (!match) { notify('Không tìm thấy template phù hợp'); setApplyingTpl(false); return }
     const res = await apiFetch('/api/work/templates/apply', {
       method: 'POST', body: JSON.stringify({ projectId: project.id, templateCode: match.code }),
     })
     if (res.ok) {
-      alert(res.message || `Đã áp dụng template, tạo ${res.created} bước`)
+      notify(res.message || `Đã áp dụng template, tạo ${res.created} bước`)
       await reload()
     } else {
-      alert(res.error || 'Lỗi áp dụng template')
+      notify(res.error || 'Lỗi áp dụng template')
     }
     setApplyingTpl(false)
   }
@@ -120,7 +121,7 @@ export default function ProjectDetailPage() {
       setRejectingTask(null)
       await reload()
     } else {
-      alert(res.error || 'Lỗi từ chối task')
+      notify(res.error || 'Lỗi từ chối task')
     }
   }
 
@@ -133,7 +134,7 @@ export default function ProjectDetailPage() {
       setAssigningTask(null)
       await reload()
     } else {
-      alert(res.error || 'Lỗi phân công task')
+      notify(res.error || 'Lỗi phân công task')
     }
   }
 

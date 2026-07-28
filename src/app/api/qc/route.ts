@@ -75,13 +75,13 @@ export async function POST(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    if (!['R01', 'R09'].includes(payload.roleCode)) {
+    if (!['R01', 'R09', 'R09a'].includes(payload.roleCode)) {
       return errorResponse('Không có quyền tạo biên bản QC', 403)
     }
 
     const result = await validateBody(req, createInspectionSchema)
     if (!result.success) return result.response
-    const { inspectionCode, projectId, type, stepCode, checklistItems, workOrderId, pieceMark } = result.data
+    const { inspectionCode, projectId, type, stepCode, checklistItems, workOrderId, pieceMark, poIds } = result.data
 
     const existing = await prisma.inspection.findUnique({ where: { inspectionCode } })
     if (existing) return errorResponse(`Mã biên bản ${inspectionCode} đã tồn tại`)
@@ -101,6 +101,8 @@ export async function POST(req: NextRequest) {
         inspectorId: payload.userId,
         workOrderId: workOrderId || null,
         pieceMark: resolvedPieceMark,
+        // Nghiệm thu vật tư: lưu danh sách PO đã chọn (zero-schema)
+        resultData: poIds && poIds.length > 0 ? { poIds } : undefined,
         checklistItems: {
           create: (checklistItems || []).map((item: { checkItem: string; standard?: string }) => ({
             checkItem: item.checkItem,

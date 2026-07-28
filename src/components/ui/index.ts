@@ -45,3 +45,6 @@ export type { ModalProps } from './Modal'
 
 export { InputField, SelectField, TextareaField } from './Input'
 export type { InputFieldProps, SelectFieldProps, TextareaFieldProps } from './Input'
+
+export { ToastHost, notify, confirmDialog } from './Toast'
+export type { ToastType } from './Toast'

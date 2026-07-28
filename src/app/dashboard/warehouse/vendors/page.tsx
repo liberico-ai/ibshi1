@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface Vendor {
   id: string; vendorCode: string; name: string; contactName: string | null;
@@ -164,7 +165,7 @@ function CreateVendorModal({ onClose, onCreated }: { onClose: () => void; onCrea
   const update = (field: string, value: string) => setForm({ ...form, [field]: value })
 
   const submit = async () => {
-    if (!form.vendorCode || !form.name) return alert('Nhập mã và tên NCC')
+    if (!form.vendorCode || !form.name) return notify('Nhập mã và tên NCC')
     setSubmitting(true)
     const res = await apiFetch('/api/vendors', {
       method: 'POST',
@@ -172,7 +173,7 @@ function CreateVendorModal({ onClose, onCreated }: { onClose: () => void; onCrea
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi tạo NCC')
+    else notify(res.error || 'Lỗi tạo NCC')
   }
 
   const inputStyle = {

@@ -8,6 +8,7 @@ import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { formatDate } from '@/lib/utils'
 import { Package, ClipboardList, Search, BarChart3, CheckCircle } from 'lucide-react'
 import { OriginPrSection } from '@/components/OriginPrSection'
+import { notify } from '@/components/ui/Toast'
 
 /* ── Types ── */
 
@@ -314,7 +315,7 @@ export default function BomRevisionDetailPage() {
       // Reload versions to reflect status changes (SUPERSEDED, ACTIVE)
       loadVersions()
     } else {
-      alert(res.error || 'Loi khi phat hanh phien ban')
+      notify(res.error || 'Loi khi phat hanh phien ban')
     }
   }
 
@@ -335,7 +336,7 @@ export default function BomRevisionDetailPage() {
       if (newVersion) setSelectedVersionId(newVersion.id)
       loadVersions()
     } else {
-      alert(res.error || 'Khong the tao phien ban moi')
+      notify(res.error || 'Khong the tao phien ban moi')
     }
   }
 
@@ -352,7 +353,7 @@ export default function BomRevisionDetailPage() {
   const handleCreateRevisionEco = async () => {
     if (!id) return
     if (!ecoForm.drawingId || !ecoForm.revCode.trim() || !ecoForm.description.trim() || !ecoForm.ecoTitle.trim() || !ecoForm.ecoDescription.trim()) {
-      alert('Vui long dien day du: ban ve, ma revision, mo ta, tieu de + noi dung ECO')
+      notify('Vui long dien day du: ban ve, ma revision, mo ta, tieu de + noi dung ECO')
       return
     }
     setCreatingEco(true)
@@ -368,7 +369,7 @@ export default function BomRevisionDetailPage() {
       if (res.bomVersion) setSelectedVersionId(res.bomVersion.id)
       loadVersions()
     } else {
-      alert(res.error || 'Khong the tao revision kem ECO')
+      notify(res.error || 'Khong the tao revision kem ECO')
     }
   }
 
@@ -403,14 +404,14 @@ export default function BomRevisionDetailPage() {
     const res = await apiFetch(`/api/design/bom/versions/${versionDetail.id}/create-pr`, { method: 'POST' })
     setAutoPrCreating(false)
     if (res.ok) {
-      alert(res.message
+      notify(res.message
         || (res.existing ? `Da co PR ${res.prCode} tu ECO nay — khong tao trung`
           : res.created ? `Da tao PR ${res.prCode}`
           : 'Khong co dong nao can mua them — khong tao PR'))
       setShowAutoPr(false)
       setOriginPrRefresh(k => k + 1) // refresh section "PR phat sinh"
     } else {
-      alert(res.error || 'Loi khi tao PR tu dong')
+      notify(res.error || 'Loi khi tao PR tu dong')
     }
   }
 

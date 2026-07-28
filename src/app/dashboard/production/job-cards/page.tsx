@@ -8,6 +8,7 @@ import {
   KPICard, Modal, InputField, SelectField, TextareaField,
 } from '@/components/ui'
 import { ClipboardList, Scissors, Flame, Wrench, Paintbrush, Wind, Cog, Search, Calendar, BarChart3, CheckCircle2 } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface JobCard {
   id: string; jobCode: string; workOrderId: string; teamCode: string; workType: string;
@@ -188,7 +189,7 @@ function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
   const update = (field: string, value: string) => setForm({ ...form, [field]: value })
 
   const submit = async () => {
-    if (!form.workOrderId || !form.workType || !form.workDate) return alert('Chọn WO, loại việc, và ngày')
+    if (!form.workOrderId || !form.workType || !form.workDate) return notify('Chọn WO, loại việc, và ngày')
     setSubmitting(true)
     const res = await apiFetch('/api/production/job-cards', {
       method: 'POST',
@@ -201,7 +202,7 @@ function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi tạo phiếu')
+    else notify(res.error || 'Lỗi tạo phiếu')
   }
 
   return (

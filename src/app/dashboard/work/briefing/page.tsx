@@ -9,6 +9,7 @@ import { userDistinguisher } from '@/lib/user-display'
 import { PageHeader, Button, Badge, KPICard, EmptyState } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList, CheckCircle2 } from 'lucide-react'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 // ── Types ──
 
@@ -631,7 +632,7 @@ export default function BriefingPage() {
       a.remove()
       URL.revokeObjectURL(url)
     } catch {
-      alert('Lỗi xuất file. Vui lòng thử lại.')
+      notify('Lỗi xuất file. Vui lòng thử lại.')
     }
     setExporting(false)
   }
@@ -668,10 +669,10 @@ export default function BriefingPage() {
         const rows: PreviewRow[] = previewData.rows || []
         setEditRows(rows.map((r) => toEditable(r, previewData.projects || [])))
       } else {
-        alert(previewData.error || 'Lỗi đọc file')
+        notify(previewData.error || 'Lỗi đọc file')
       }
     } catch {
-      alert('Lỗi kết nối server')
+      notify('Lỗi kết nối server')
     }
     setPreviewing(false)
     if (fileRef.current) fileRef.current.value = ''
@@ -744,10 +745,10 @@ export default function BriefingPage() {
         setEditRows(null)
         load()
       } else {
-        alert(data.error || 'Lỗi ghi dữ liệu')
+        notify(data.error || 'Lỗi ghi dữ liệu')
       }
     } catch {
-      alert('Lỗi kết nối server')
+      notify('Lỗi kết nối server')
     }
     setApplying(false)
   }
@@ -868,10 +869,10 @@ export default function BriefingPage() {
       if (r.ok) {
         load()
       } else {
-        alert(r.error || 'Lỗi cập nhật trạng thái')
+        notify(r.error || 'Lỗi cập nhật trạng thái')
       }
     } catch {
-      alert('Lỗi kết nối')
+      notify('Lỗi kết nối')
     }
     setStatusSaving(false)
     setStatusEditing(null)
@@ -885,7 +886,7 @@ export default function BriefingPage() {
       body: JSON.stringify({ taskId, briefingPatch: { [field]: value } }),
     })
     if (r.ok) load()
-    else alert(r.error || 'Lỗi cập nhật')
+    else notify(r.error || 'Lỗi cập nhật')
   }
 
   const openEscalateModal = (taskId: string) => {
@@ -904,7 +905,7 @@ export default function BriefingPage() {
     })
     setEscSaving(false)
     if (r.ok) { setEscModal(null); load() }
-    else alert(r.error || 'Lỗi cập nhật')
+    else notify(r.error || 'Lỗi cập nhật')
   }
 
   const handleDeescalate = async (taskId: string) => {
@@ -914,7 +915,7 @@ export default function BriefingPage() {
       body: JSON.stringify({ taskId, escalated: false }),
     })
     if (r.ok) load()
-    else alert(r.error || 'Lỗi cập nhật')
+    else notify(r.error || 'Lỗi cập nhật')
   }
 
   const handleExecReview = async (taskId: string, reviewed: boolean) => {
@@ -924,7 +925,7 @@ export default function BriefingPage() {
       body: JSON.stringify({ taskId, execReviewed: reviewed }),
     })
     if (r.ok) load()
-    else alert(r.error || 'Lỗi cập nhật')
+    else notify(r.error || 'Lỗi cập nhật')
   }
 
   const handleDiscussed = async (taskId: string, checked: boolean, note?: string) => {
@@ -986,7 +987,7 @@ export default function BriefingPage() {
     })
     setPublishing(false)
     if (r.ok && r.alreadyPublished && !force) {
-      const again = confirm(`Kỳ này đã phát hành lúc ${new Date(r.publishedAt).toLocaleString('vi-VN')}. Phát hành lại?`)
+      const again = await confirmDialog(`Kỳ này đã phát hành lúc ${new Date(r.publishedAt).toLocaleString('vi-VN')}. Phát hành lại?`)
       if (again) { handlePublish(true); return }
       return
     }

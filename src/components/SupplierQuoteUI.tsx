@@ -10,6 +10,7 @@ import { QUOTE_EDIT_ROLES } from '@/lib/constants'
 import { parseQuoteExcel, matchQuoteLinesToPr, computeQuoteCoverage, computeQtyMismatches, type QuoteLine, type PrItem } from '@/lib/quote-parser'
 import { exportQuoteTemplate } from '@/lib/quote-template-export'
 import { toQty, toQtyOrNull } from '@/lib/pr-normalizer'
+import { confirmDialog } from '@/components/ui/Toast'
 
 export interface QuoteFile { id: string; fileName: string; fileUrl: string; kind: 'Báo giá' | 'Hợp đồng' | 'Khác' }
 
@@ -271,8 +272,8 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
     fire(quotes.map(q => q.id === id ? { ...q, lines: [], files: [], totalAmount: 0 } : q))
   }
 
-  const resetAllQuotes = () => {
-    if (!confirm('Xóa toàn bộ báo giá đã nhập? (Giữ danh sách NCC)')) return
+  const resetAllQuotes = async () => {
+    if (!await confirmDialog('Xóa toàn bộ báo giá đã nhập? (Giữ danh sách NCC)')) return
     fire(quotes.map(q => ({ ...q, lines: [], files: [], totalAmount: 0, selected: false, selectReason: '' })))
   }
 

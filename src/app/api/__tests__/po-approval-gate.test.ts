@@ -135,9 +135,10 @@ describe('PO-Gate: GRN chặn PO chưa duyệt', () => {
     vi.mocked(authenticateRequest).mockResolvedValue({ ...mockUser, roleCode: 'R05' })
   })
 
+  // Vật tư không phải tiêu hao → GRN bắt buộc Heat No + Lot No (xem gate trong /api/grn)
   const grnBody = {
     poId: 'po-1',
-    items: [{ poItemId: 'poi-1', receivedQty: 5 }],
+    items: [{ poItemId: 'poi-1', receivedQty: 5, heatNumber: 'H-123', lotNumber: 'L-456' }],
   }
 
   it.each(['PENDING', 'DRAFT', 'REJECTED'])('PO %s → 422', async (status) => {
@@ -166,9 +167,14 @@ describe('PO-Gate: GRN chặn PO chưa duyệt', () => {
       .mockResolvedValueOnce({
         id: 'po-1', items: [{ ...poItem, receivedQty: 5 }],
       } as any)
+    // Vật tư không tiêu hao → GRN yêu cầu có hồ sơ đính kèm (mock: đã có 1 file)
+    prismaMock.fileAttachment.count.mockResolvedValue(1 as any)
     prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
     prismaMock.purchaseOrderItem.update.mockResolvedValue({} as any)
     prismaMock.purchaseOrder.update.mockResolvedValue({} as any)
+    // GRN nay chi ghi ban ghi RECEIPT (log-only), khong cong ton — mock stockMovement.create
+    prismaMock.stockMovement.create.mockResolvedValue({ id: 'mv-1' } as any)
+    prismaMock.user.findMany.mockResolvedValue([] as any)
 
     const res = await grnPOST(jsonReq('http://localhost/api/grn', 'POST', grnBody) as any)
     expect(res.status).toBe(200)

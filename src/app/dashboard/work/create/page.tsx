@@ -11,6 +11,7 @@ import { CheckCircle2 } from 'lucide-react'
 import { TEMPLATES, type TemplateType } from '@/components/TemplateSelector'
 import TemplateSelector from '@/components/TemplateSelector'
 import { REVISE_TYPE_MAP } from '@/lib/revise-map'
+import { notify } from '@/components/ui/Toast'
 
 const FF_REVISE = process.env.NEXT_PUBLIC_FF_REVISE_FLOW === 'true'
 const REVISE_OPTS = Object.entries(REVISE_TYPE_MAP)
@@ -321,7 +322,7 @@ function CreateInner() {
                     const res = await apiFetch('/api/work/tasks', { method: 'POST', body: JSON.stringify({ reviseType, projectId }) })
                     setReviseBusy(false)
                     if (res.ok) router.push(`/dashboard/work/revise?projectId=${encodeURIComponent(projectId)}&round=${res.revise?.round ?? ''}`)
-                    else alert(res.error || 'Không mở được vòng revise')
+                    else notify(res.error || 'Không mở được vòng revise')
                   }}
                   style={{ background: ok ? '#4f46e5' : '#c7c7c7', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: '.83rem', fontWeight: 700, cursor: ok && !reviseBusy ? 'pointer' : 'not-allowed' }}
                 >{reviseBusy ? 'Đang mở…' : 'Mở vòng revise'}</button>

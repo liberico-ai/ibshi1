@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatCurrency } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface P3_6Props {
   task: any
@@ -28,7 +29,7 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
   // Triggered inline immediately for one group at a time
   const submitEvaluations = async (groupId: string, action: 'APPROVE' | 'REJECT', reason: string = '') => {
     if (action === 'REJECT' && !reason.trim()) {
-      alert('Vui lòng nhập lý do từ chối để bộ phận Thương mại có thể cập nhật lại.')
+      notify('Vui lòng nhập lý do từ chối để bộ phận Thương mại có thể cập nhật lại.')
       return
     }
 
@@ -53,7 +54,7 @@ export default function P3_6ApprovalUI({ task, isActive, currentUser }: P3_6Prop
            window.location.reload()
         }
       } else {
-        alert(res.error || 'Có lỗi xảy ra khi lưu.')
+        notify(res.error || 'Có lỗi xảy ra khi lưu.')
       }
     } finally {
       setIsSubmitting(false)

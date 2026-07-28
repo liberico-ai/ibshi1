@@ -6,6 +6,7 @@ import { PageHeader, KPICard, Button, InputField, Modal } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import Link from 'next/link'
 import { HardHat, ClipboardList, MessageCircle } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface DashData {
   incidents: {
@@ -136,7 +137,7 @@ function ManHoursModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   }, [form.periodYear])
 
   const submit = async () => {
-    if (!form.manHours) return alert('Nhập số giờ công')
+    if (!form.manHours) return notify('Nhập số giờ công')
     setSubmitting(true)
     const res = await apiFetch('/api/hse/man-hours', {
       method: 'POST',
@@ -149,7 +150,7 @@ function ManHoursModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     })
     setSubmitting(false)
     if (res.ok) onSaved()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const months = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12']

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { RBAC } from '@/lib/rbac-rules'
 import { formatCurrency, formatNumber } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface PromoteTarget { id: string; materialCode: string; name: string }
 
@@ -73,7 +74,7 @@ export default function MaterialCodesPage() {
 
   const approve = async (id: string) => {
     const res = await apiFetch(`/api/materials/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ACTIVE', isProvisional: false }) })
-    if (res.ok) { setDetail(null); load() } else alert(res.error || 'Lỗi')
+    if (res.ok) { setDetail(null); load() } else notify(res.error || 'Lỗi')
   }
 
   const addAlias = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -85,14 +86,14 @@ export default function MaterialCodesPage() {
       body: JSON.stringify({ aliasCode: fd.get('aliasCode'), source: fd.get('source'), note: fd.get('note') || undefined }),
     })
     if (res.ok) openDetail(detail.id)
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const delAlias = async (aliasId: string) => {
-    if (!detail || !confirm('Xoá mã bí danh này?')) return
+    if (!detail || !await confirmDialog('Xoá mã bí danh này?')) return
     const res = await apiFetch(`/api/materials/aliases/${aliasId}`, { method: 'DELETE' })
     if (res.ok) openDetail(detail.id)
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const canPromote = !!user && RBAC.MATERIAL_CODE_PROMOTE.includes(user.roleCode)
@@ -109,7 +110,7 @@ export default function MaterialCodesPage() {
   }
 
   const doPromote = async (targetId: string) => {
-    if (!detail || !confirm(`Promote ${detail.materialCode} → mã chuẩn? Thao tác không thể hoàn tác.`)) return
+    if (!detail || !await confirmDialog(`Promote ${detail.materialCode} → mã chuẩn? Thao tác không thể hoàn tác.`)) return
     setPromoting(true)
     const res = await apiFetch('/api/materials/promote', {
       method: 'POST',
@@ -117,7 +118,7 @@ export default function MaterialCodesPage() {
     })
     setPromoting(false)
     if (res.ok) { setDetail(null); setPromoteOpen(false); load() }
-    else alert(res.error || 'Lỗi promote')
+    else notify(res.error || 'Lỗi promote')
   }
 
   return (

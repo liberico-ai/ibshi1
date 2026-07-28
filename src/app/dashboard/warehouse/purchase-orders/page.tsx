@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { PageHeader, StatusBadge, Button, EmptyState, KPICard } from '@/components/ui'
 import { ShoppingCart, ClipboardList, Banknote, Clock, CheckCircle2 } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface PO {
   id: string; poCode: string; status: string; totalValue: number | null; orderDate: string | null; deliveryDate: string | null;
@@ -37,7 +38,7 @@ export default function PurchaseOrdersPage() {
       method: 'POST', body: JSON.stringify({ action }),
     })
     if (res.ok) fetchData()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
     setActionLoading(null)
   }
 

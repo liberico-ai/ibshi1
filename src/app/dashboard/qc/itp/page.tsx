@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, StatusBadge, Button, EmptyState, Modal, InputField, SelectField, KPICard } from '@/components/ui'
 import { STATUS_COLORS, SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList } from 'lucide-react'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface Checkpoint {
   id: string; checkpointNo: number; activity: string; description: string;
@@ -80,9 +81,9 @@ export default function ITPPage() {
     })
     if (res.ok) {
       loadData()
-      if (res.ncrId) alert(`Đã tạo NCR tự động (${res.ncrId.slice(0, 8)}…)`)
+      if (res.ncrId) notify(`Đã tạo NCR tự động (${res.ncrId.slice(0, 8)}…)`)
     } else {
-      alert(res.error || 'Lỗi cập nhật')
+      notify(res.error || 'Lỗi cập nhật')
     }
   }
 
@@ -173,10 +174,10 @@ export default function ITPPage() {
                               <button
                                 className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
                                 style={{ background: SEMANTIC_COLORS.danger.solid }}
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                   e.stopPropagation()
                                   const wantNcr = (cp.inspectionType === 'HOLD' || cp.inspectionType === 'WITNESS')
-                                    ? confirm('Tạo NCR tự động cho lỗi này?')
+                                    ? await confirmDialog('Tạo NCR tự động cho lỗi này?')
                                     : false
                                   updateCheckpoint(itp.id, cp.id, 'FAILED', wantNcr)
                                 }}
@@ -275,7 +276,7 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
   ]
 
   const submit = async () => {
-    if (!projectId || !name) return alert('Chọn dự án và nhập tên ITP')
+    if (!projectId || !name) return notify('Chọn dự án và nhập tên ITP')
     const validCPs = checkpoints
       .filter(c => c.description)
       .map(c => ({
@@ -293,7 +294,7 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi tạo ITP')
+    else notify(res.error || 'Lỗi tạo ITP')
   }
 
   return (

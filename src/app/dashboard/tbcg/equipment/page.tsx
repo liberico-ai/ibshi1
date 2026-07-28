@@ -8,6 +8,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Wrench } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface Equip {
   id: string; equipmentCode: string; name: string; category: string;
@@ -133,7 +134,7 @@ function CreateEquipmentModal({ onClose, onCreated }: { onClose: () => void; onC
   }, [])
 
   const submit = async () => {
-    if (!form.name) return alert('Nhập tên thiết bị')
+    if (!form.name) return notify('Nhập tên thiết bị')
     setSubmitting(true)
     const res = await apiFetch('/api/tbcg/equipment', {
       method: 'POST',
@@ -141,7 +142,7 @@ function CreateEquipmentModal({ onClose, onCreated }: { onClose: () => void; onC
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (

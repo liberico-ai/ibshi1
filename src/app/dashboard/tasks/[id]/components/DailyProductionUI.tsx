@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatNumber } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface DailyReportRow {
   lsxCode: string
@@ -80,7 +81,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
       .filter(item => item.reportedVolume > 0)
 
     if (itemsToSubmit.length === 0) {
-      alert('Vui lòng nhập khối lượng hoàn thành cho ít nhất 1 tổ/công đoạn để gửi báo cáo.')
+      notify('Vui lòng nhập khối lượng hoàn thành cho ít nhất 1 tổ/công đoạn để gửi báo cáo.')
       return
     }
 
@@ -90,7 +91,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
       if (row) {
         const maxAllowed = Math.max(0, row.totalLsx - (row.previousAccumulated || 0))
         if (item.reportedVolume > maxAllowed) {
-          alert(`Khối lượng nhập (${item.reportedVolume}) vượt quá cấn trừ còn lại (${maxAllowed}) cho công đoạn ${row.stageLabel}.`)
+          notify(`Khối lượng nhập (${item.reportedVolume}) vượt quá cấn trừ còn lại (${maxAllowed}) cho công đoạn ${row.stageLabel}.`)
           return
         }
       }
@@ -107,14 +108,14 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
         })
       })
       if (res.success) {
-        alert('Gửi báo cáo thành công! Báo cáo hôm nay đã được khóa.')
+        notify('Gửi báo cáo thành công! Báo cáo hôm nay đã được khóa.')
         // Reload data để cập nhật todayLogId → khóa input
         fetchData()
       } else {
-        alert('Lỗi: ' + (res.error || 'Không thể gửi báo cáo'))
+        notify('Lỗi: ' + (res.error || 'Không thể gửi báo cáo'))
       }
     } catch (err) {
-      alert('Lỗi kết nối')
+      notify('Lỗi kết nối')
     } finally {
       setSubmitting(false)
     }

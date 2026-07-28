@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface Contract {
   id: string; contractCode: string; description: string; contractValue: string; currency: string;
@@ -53,7 +54,7 @@ export default function SubcontractsPage() {
       }),
     })
     if (res.ok) { setShowForm(false); load() }
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const fmt = (v: number | string) => formatNumber(v)

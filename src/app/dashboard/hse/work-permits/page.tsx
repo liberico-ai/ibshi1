@@ -9,6 +9,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface Permit {
   id: string; permitCode: string; permitType: string; description: string;
@@ -56,13 +57,13 @@ export default function WorkPermitsPage() {
   const approve = async (id: string) => {
     const res = await apiFetch(`/api/hse/work-permits/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'APPROVED' }) })
     if (res.ok) loadData()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const close = async (id: string) => {
     const res = await apiFetch(`/api/hse/work-permits/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'CLOSED' }) })
     if (res.ok) loadData()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1,2].map(i => <div key={i} className="h-20 skeleton rounded-xl" />)}</div>
@@ -138,7 +139,7 @@ function CreatePermitModal({ onClose, onCreated }: { onClose: () => void; onCrea
   }, [])
 
   const submit = async () => {
-    if (!form.description || !form.validFrom || !form.validTo) return alert('Nhập mô tả + thời hạn')
+    if (!form.description || !form.validFrom || !form.validTo) return notify('Nhập mô tả + thời hạn')
     setSubmitting(true)
     const res = await apiFetch('/api/hse/work-permits', {
       method: 'POST',
@@ -146,7 +147,7 @@ function CreatePermitModal({ onClose, onCreated }: { onClose: () => void; onCrea
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (

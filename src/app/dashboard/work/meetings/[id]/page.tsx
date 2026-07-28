@@ -7,6 +7,7 @@ import MultiFileUpload from '@/components/MultiFileUpload'
 import { ROLE_TO_DEPT, DEPARTMENTS_V2, DEPT_PRIMARY_ROLE } from '@/lib/org-map'
 import { userDistinguisher } from '@/lib/user-display'
 import { formatShortDateTime } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface Invite { id: string; userId: string; status: string; userName: string | null; deptName: string | null; note: string | null }
 interface MFile { id: string; fileName: string; fileUrl: string }
@@ -61,7 +62,7 @@ export default function MeetingDetailPage() {
     setBusy(true)
     const res = await apiFetch(`/api/work/meetings/${id}/respond`, { method: 'POST', body: JSON.stringify({ status }) })
     setBusy(false)
-    if (res.ok) load(); else alert(res.error || 'Lỗi')
+    if (res.ok) load(); else notify(res.error || 'Lỗi')
   }
   const saveMinutes = async () => {
     setBusy(true)
@@ -76,16 +77,16 @@ export default function MeetingDetailPage() {
       }),
     })
     setBusy(false)
-    if (res.ok) load(); else alert(res.error || 'Lỗi')
+    if (res.ok) load(); else notify(res.error || 'Lỗi')
   }
   const setItem = (i: number, k: keyof MomItem, v: string) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, [k]: v } : it))
   // Tạo task từ 1 mục hành động (gắn deadline + người/phòng đã chọn)
   const createTaskFromItem = async (i: number) => {
     const it = items[i]
-    if (!it.noiDung?.trim()) { alert('Mục chưa có nội dung'); return }
+    if (!it.noiDung?.trim()) { notify('Mục chưa có nội dung'); return }
     const role = rowDept[i] || it.role || undefined
     const pick = rowPick[i]
-    if (!pick && !role) { alert('Chọn phòng hoặc nhân sự để giao'); return }
+    if (!pick && !role) { notify('Chọn phòng hoặc nhân sự để giao'); return }
     setBusy(true)
     const res = await apiFetch('/api/work/tasks', {
       method: 'POST',
@@ -100,7 +101,7 @@ export default function MeetingDetailPage() {
     })
     setBusy(false)
     if (res.ok && res.task?.id) setRowDone((s) => ({ ...s, [i]: res.task.id }))
-    else alert(res.error || 'Lỗi tạo task')
+    else notify(res.error || 'Lỗi tạo task')
   }
   const rowUsers = (i: number) => {
     const q = (rowQuery[i] || '').trim().toLowerCase()
@@ -137,16 +138,16 @@ export default function MeetingDetailPage() {
         const fd2 = new FormData(); fd2.append('file', file); fd2.append('entityType', 'Meeting'); fd2.append('entityId', id)
         await fetch('/api/upload', { method: 'POST', body: fd2, headers: token ? { Authorization: `Bearer ${token}` } : {} }).catch(() => {})
         load()
-      } else alert(res.error || 'Không đọc được file')
-    } catch { alert('Lỗi đọc file') }
+      } else notify(res.error || 'Không đọc được file')
+    } catch { notify('Lỗi đọc file') }
     setBusy(false)
   }
   const doCancel = async () => {
-    if (!confirm('Hủy cuộc họp này? Người dự sẽ được thông báo.')) return
+    if (!await confirmDialog('Hủy cuộc họp này? Người dự sẽ được thông báo.')) return
     setBusy(true)
     const res = await apiFetch(`/api/work/meetings/${id}/cancel`, { method: 'POST', body: '{}' })
     setBusy(false)
-    if (res.ok) load(); else alert(res.error || 'Lỗi')
+    if (res.ok) load(); else notify(res.error || 'Lỗi')
   }
 
   const stColor = isCancelled ? 'var(--danger)' : isDone ? '#059669' : '#1d4ed8'

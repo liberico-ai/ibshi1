@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import QuickCreateMaterialDialog from './QuickCreateMaterialDialog'
 import { resolveCodes, type ResolvedLite } from './material-resolve-client'
 import { formatNumber } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -249,11 +250,11 @@ function MaterialSection({ label, icon, color, category, data, onChange, isEdita
           if (parsed.length > 0) {
             onChange(JSON.stringify(parsed))
           } else {
-            alert(`Không đọc được dữ liệu vật tư ${category === 'weld' ? 'hàn' : 'sơn'} từ file. Kiểm tra lại định dạng (cần có cột STT/Item, Description, Grade/Color, Unit, Q.ty).`)
+            notify(`Không đọc được dữ liệu vật tư ${category === 'weld' ? 'hàn' : 'sơn'} từ file. Kiểm tra lại định dạng (cần có cột STT/Item, Description, Grade/Color, Unit, Q.ty).`)
           }
         } catch (err) {
           console.error(`${category} parse error:`, err)
-          alert(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
+          notify(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
         }
         setUploading(false)
       }

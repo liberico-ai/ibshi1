@@ -8,6 +8,7 @@ import { OriginPrSection } from '@/components/OriginPrSection'
 import { PageHeader, StatusBadge, KPICard, Button, EmptyState, Modal, SelectField, TextareaField, InputField, FilterBar } from '@/components/ui'
 import { STATUS_COLORS, SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface NcrAction {
   id: string; actionType: string; description: string; assignedTo: string;
@@ -231,7 +232,7 @@ function NCRDetailModal({ ncr, onClose, onUpdated }: { ncr: NCR; onClose: () => 
     const res = await apiFetch(`/api/qc/ncr/${data.id}`, { method: 'PUT', body: JSON.stringify(body) })
     setUpdating(false)
     if (res.ok) { setData(res.ncr); if (status === 'CLOSED') onUpdated() }
-    else alert(res.error || 'Lỗi cập nhật')
+    else notify(res.error || 'Lỗi cập nhật')
   }
 
   const updateDisposition = async (disposition: string) => {
@@ -239,7 +240,7 @@ function NCRDetailModal({ ncr, onClose, onUpdated }: { ncr: NCR; onClose: () => 
     if (data.status === 'OPEN' || data.status === 'INVESTIGATING') body.status = 'INVESTIGATING'
     const res = await apiFetch(`/api/qc/ncr/${data.id}`, { method: 'PUT', body: JSON.stringify(body) })
     if (res.ok) setData(res.ncr)
-    else alert(res.error || 'Lỗi cập nhật')
+    else notify(res.error || 'Lỗi cập nhật')
   }
 
   const updateRootCause = async (rootCause: string) => {
@@ -252,7 +253,7 @@ function NCRDetailModal({ ncr, onClose, onUpdated }: { ncr: NCR; onClose: () => 
       method: 'PUT', body: JSON.stringify({ status: 'COMPLETED' }),
     })
     if (res.ok) refreshDetail()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const stepLabels = ['Mở', 'Điều tra', 'Đã XL', 'Đóng']
@@ -426,7 +427,7 @@ function AddActionModal({ ncrId, onClose, onCreated }: { ncrId: string; onClose:
   }, [])
 
   const submit = async () => {
-    if (!form.description || !form.assignedTo) return alert('Nhập mô tả và chọn người phụ trách')
+    if (!form.description || !form.assignedTo) return notify('Nhập mô tả và chọn người phụ trách')
     setSubmitting(true)
     const res = await apiFetch(`/api/qc/ncr/${ncrId}`, {
       method: 'POST',
@@ -434,7 +435,7 @@ function AddActionModal({ ncrId, onClose, onCreated }: { ncrId: string; onClose:
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (
@@ -475,12 +476,12 @@ function CreateNCRModal({ open, projects, onClose, onCreated }: {
   const update = (f: string, v: string) => setForm({ ...form, [f]: v })
 
   const submit = async () => {
-    if (!form.projectId || !form.description) return alert('Chọn dự án và nhập mô tả')
+    if (!form.projectId || !form.description) return notify('Chọn dự án và nhập mô tả')
     setSubmitting(true)
     const res = await apiFetch('/api/qc/ncr', { method: 'POST', body: JSON.stringify(form) })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi tạo NCR')
+    else notify(res.error || 'Lỗi tạo NCR')
   }
 
   return (

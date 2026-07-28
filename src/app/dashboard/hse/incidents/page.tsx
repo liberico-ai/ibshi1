@@ -9,6 +9,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { HardHat } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface Incident {
   id: string; incidentCode: string; severity: string; category: string;
@@ -120,7 +121,7 @@ function CreateIncidentModal({ onClose, onCreated }: { onClose: () => void; onCr
   }, [])
 
   const submit = async () => {
-    if (!form.projectId || !form.category || !form.description) return alert('Nhập đủ trường bắt buộc')
+    if (!form.projectId || !form.category || !form.description) return notify('Nhập đủ trường bắt buộc')
     setSubmitting(true)
     const res = await apiFetch('/api/hse/incidents', {
       method: 'POST',
@@ -128,7 +129,7 @@ function CreateIncidentModal({ onClose, onCreated }: { onClose: () => void; onCr
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (

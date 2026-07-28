@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { STATUS_COLORS } from '@/lib/design-tokens'
 import { RefreshCw } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 import {
   PageHeader,
   Button,
@@ -128,7 +129,7 @@ export default function ECOPage() {
     if (res.ok) {
       loadData()
     } else {
-      alert(res.error || 'Lỗi cập nhật trạng thái')
+      notify(res.error || 'Lỗi cập nhật trạng thái')
     }
   }
 
@@ -413,7 +414,7 @@ function CreateECOModal({
 
   const submit = async () => {
     if (!form.projectId || !form.title || !form.description) {
-      return alert('Điền đầy đủ thông tin')
+      return notify('Điền đầy đủ thông tin')
     }
     setSubmitting(true)
     const res = await apiFetch('/api/design/eco', {
@@ -428,7 +429,7 @@ function CreateECOModal({
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi tạo ECO')
+    else notify(res.error || 'Lỗi tạo ECO')
   }
 
   return (

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { notify } from '@/components/ui/Toast'
 
 interface User {
   id: string
@@ -71,7 +72,7 @@ export async function openAuthedFile(id: string, fileName: string, mimeType?: st
     })
     if (!res.ok) {
       const msg = await res.json().then(d => d.error).catch(() => res.statusText)
-      alert(`Không tải được file: ${msg}`)
+      notify(`Không tải được file: ${msg}`)
       return
     }
     const blob = await res.blob()
@@ -93,7 +94,7 @@ export async function openAuthedFile(id: string, fileName: string, mimeType?: st
       setTimeout(() => URL.revokeObjectURL(url), 5_000)
     }
   } catch {
-    alert('Không tải được file — lỗi mạng')
+    notify('Không tải được file — lỗi mạng')
   }
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface Milestone {
   id: string; name: string; nameEn: string; description: string | null; billingPercent: string;
@@ -54,7 +55,7 @@ export default function MilestonePage() {
       }),
     })
     if (res.ok) { setShowForm(false); load() }
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const updateStatus = async (id: string, status: string) => {

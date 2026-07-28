@@ -25,6 +25,7 @@ import MomSectionsUI from '@/components/MomSectionsUI'
 import TemplateSelector from '@/components/TemplateSelector'
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, MomItem, MomSection, MomAttendant, SupplierQuote, SupplierEntry, PrevStepFile, WbsRow } from '@/lib/types'
 import { formatCurrency, formatDate, formatDateTime, formatNumber } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 // ── Number formatting helpers ──
 const formatNumberWithCommas = (val: string | number): string => {
@@ -378,11 +379,11 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
           if (imported.length > 0) {
             save(imported);
           } else {
-            alert('Không có dữ liệu hợp lệ trong file!');
+            notify('Không có dữ liệu hợp lệ trong file!');
           }
         } catch(err) {
           console.error(err);
-          alert('Lỗi đọc file Excel!');
+          notify('Lỗi đọc file Excel!');
         }
       };
       reader.readAsBinaryString(file);
@@ -676,7 +677,7 @@ function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, o
                                   <>
                                     <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 800 }}>FAIL</div>
                                     {!isCloned ? (
-                                      <button type="button" onClick={() => { if(confirm('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
+                                      <button type="button" onClick={async () => { if(await confirmDialog('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
                                         style={{ padding: '4px 8px', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
                                         Tạo Rework
                                       </button>
@@ -2204,16 +2205,16 @@ export default function TaskDetailPage() {
                       <button
                         className="btn-primary"
                         onClick={async () => {
-                          if (!confirm(`Xác nhận gửi yêu cầu nghiệm thu chất lượng cho hạng mục "${rd.hangMucName}"?`)) return
+                          if (!await confirmDialog(`Xác nhận gửi yêu cầu nghiệm thu chất lượng cho hạng mục "${rd.hangMucName}"?`)) return
                           try {
                             await apiFetch(`/api/tasks/${task.id}/complete`, {
                               method: 'POST',
                               body: JSON.stringify({ userId: currentUser?.id, resultData: { ...rd, requestedAt: new Date().toISOString() } })
                             })
-                            alert('Đã gửi yêu cầu nghiệm thu chất lượng. Task QAQC sẽ được tạo tự động.')
+                            notify('Đã gửi yêu cầu nghiệm thu chất lượng. Task QAQC sẽ được tạo tự động.')
                             window.location.reload()
                           } catch (err) {
-                            alert('Lỗi gửi yêu cầu: ' + (err as Error).message)
+                            notify('Lỗi gửi yêu cầu: ' + (err as Error).message)
                           }
                         }}
                         style={{ padding: '10px 24px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: '1rem' }}

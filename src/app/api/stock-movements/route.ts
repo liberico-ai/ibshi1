@@ -24,7 +24,9 @@ export async function GET(req: NextRequest) {
 
     const where: Record<string, unknown> = {}
     if (materialId) where.materialId = materialId
+    // Loại RECEIPT (bản ghi "hàng về" chờ nhập kho) khỏi danh sách Xuất Nhập Kho — chỉ hiện IN/OUT/RETURN/ADJUSTMENT
     if (type) where.type = type
+    else where.type = { not: 'RECEIPT' }
     if (reason) where.reason = reason
 
     const [total, movements] = await Promise.all([

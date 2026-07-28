@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatNumber } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface BudgetCat {
   id: string; category: string; planned: string; actual: string; committed: string; forecast: string; notes: string | null
@@ -56,7 +57,7 @@ export default function BudgetsPage() {
       }),
     })
     if (res.ok) { setShowForm(false); load() }
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const fmt = (v: number | string) => formatNumber(v)

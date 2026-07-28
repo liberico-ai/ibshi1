@@ -3,7 +3,8 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { withErrorHandler } from '@/lib/with-error-handler'
 
-const ALLOWED_ROLES = ['R01', 'R02', 'R06']
+// Tạo LSX từ BOM: chỉ PM (R02) + BGĐ (R01). QLSX (R06) không còn tạo.
+const ALLOWED_ROLES = ['R01', 'R02']
 
 // POST /api/production/work-orders/from-bom — Sinh WO từ BOM version đã duyệt (ACTIVE)
 // Body: { projectId, bomVersionId? }

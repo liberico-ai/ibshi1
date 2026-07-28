@@ -5,8 +5,8 @@ import { prismaMock } from '@/lib/__mocks__/db'
 const { mockAuthUser } = vi.hoisted(() => ({
   mockAuthUser: {
     userId: 'user-1',
-    roleCode: 'R06',
-    username: 'sanxuat',
+    roleCode: 'R02', // PM — người phụ trách TẠO LSX (R06/QLSX không còn tạo)
+    username: 'pm',
     userLevel: 2,
     fullName: 'Trưởng phòng SX',
   },

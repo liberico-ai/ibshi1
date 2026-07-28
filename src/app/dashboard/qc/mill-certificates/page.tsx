@@ -9,6 +9,7 @@ import {
   InputField,
 } from '@/components/ui'
 import { FileText } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface MillCert {
   id: string; certNumber: string; heatNumber: string; grade: string | null; thickness: string | null;
@@ -60,13 +61,13 @@ export default function MillCertificatesPage() {
         grade: fd.get('grade') || null, thickness: fd.get('thickness') || null,
       }),
     })
-    if (res.ok) { setShowForm(false); load() } else alert(res.error || 'Loi')
+    if (res.ok) { setShowForm(false); load() } else notify(res.error || 'Loi')
   }
 
   const openTrace = async (certId: string) => {
     const res = await apiFetch(`/api/mill-certificates/${certId}/trace`)
     if (res.ok) setTraceTarget(res as TraceData)
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatCurrency } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface PieceContract {
   id: string; contractCode: string; teamCode: string; workType: string;
@@ -36,7 +37,7 @@ export default function PieceRatePage() {
       setShowForm(false)
       const updated = await apiFetch('/api/hr/piece-rate-contracts')
       if (updated.ok) setContracts(updated.contracts || [])
-    } else alert(res.error)
+    } else notify(res.error)
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>

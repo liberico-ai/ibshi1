@@ -6,6 +6,7 @@ import { resolveCodes, type ResolvedLite } from './material-resolve-client'
 import { detectSectionType, normalizeDims, dimsMatch } from '@/lib/section-type'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -596,11 +597,11 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
             // Expand all categories
             setExpandedCats(new Set(parsed.map(i => i.category)))
           } else {
-            alert(`Không đọc được dữ liệu PR từ sheet "${sheetName}". Kiểm tra lại định dạng (cần có header với STT/Item, Description, Profile, Grade, Unit, Q.ty).`)
+            notify(`Không đọc được dữ liệu PR từ sheet "${sheetName}". Kiểm tra lại định dạng (cần có header với STT/Item, Description, Profile, Grade, Unit, Q.ty).`)
           }
         } catch (err) {
           console.error('PR Excel parse error:', err)
-          alert(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
+          notify(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
         }
         setUploading(false)
       }

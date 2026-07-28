@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { sanitizeString, sanitizeObject } from '@/lib/sanitize'
+import { notify } from '@/components/ui/Toast'
 
 describe('sanitizeString', () => {
   it('strips HTML tags', () => {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate, formatNumber, formatCurrency } from '@/lib/utils'
 import { FINANCE_WRITE_ROLES } from '@/lib/constants'
+import { confirmDialog } from '@/components/ui/Toast'
 
 interface Invoice {
   id: string; invoiceCode: string; type: string; status: string; clientName: string | null;
@@ -76,7 +77,7 @@ export default function InvoicesPage() {
   // Xóa hóa đơn tạo nhầm — chỉ R01; server chặn 409 nếu đã có tiền/chứng từ gắn vào
   const deleteInvoice = async () => {
     if (!detail || deleting) return
-    if (!window.confirm(`Xóa hóa đơn ${detail.invoiceCode}? Hành động không thể hoàn tác.`)) return
+    if (!await confirmDialog(`Xóa hóa đơn ${detail.invoiceCode}? Hành động không thể hoàn tác.`)) return
     setDeleting(true)
     try {
       const res = await apiFetch(`/api/finance/invoices/${detail.id}`, { method: 'DELETE' })

@@ -22,6 +22,9 @@ export const createInspectionSchema = z.object({
   stepCode: z.string().min(1, 'Bước workflow là bắt buộc'),
   workOrderId: z.string().optional(),
   pieceMark: z.string().optional(),
+  // Nghiệm thu vật tư (material_incoming): các PO mà TM đã xác nhận hàng về được gộp vào 1 biên bản.
+  // Lưu zero-schema vào Inspection.resultData.poIds.
+  poIds: z.array(z.string()).optional(),
   checklistItems: z.array(checklistItemSchema).optional().default([]),
 })
 

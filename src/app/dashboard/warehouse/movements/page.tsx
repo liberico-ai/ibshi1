@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface Movement {
   id: string; materialId: string; type: string; quantity: number | string;
@@ -34,6 +35,7 @@ export default function StockMovementsPage() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [showGrn, setShowGrn] = useState(false)
   const [filterType, setFilterType] = useState<string>('')
   const user = useAuthStore((s) => s.user)
 
@@ -54,6 +56,8 @@ export default function StockMovementsPage() {
   }
 
   const canCreate = ['R01', 'R02', 'R05', 'R05a', 'R08', 'R08a'].includes(user?.roleCode || '')
+  // Nhập hàng (GRN) từ PO đã QC Đạt: mặc định chỉ Kho (R05/R05a) + BGĐ (R01)
+  const canGrnStockIn = ['R01', 'R05', 'R05a'].includes(user?.roleCode || '')
 
   if (loading) {
     return (
@@ -70,13 +74,22 @@ export default function StockMovementsPage() {
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Xuất Nhập Kho</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Theo dõi mọi biến động vật tư</p>
         </div>
-        {canCreate && (
-          <button onClick={openForm}
-            className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:shadow-lg"
-            style={{ background: 'var(--accent)' }}>
-            + Nhập/Xuất
-          </button>
-        )}
+        <div className="flex gap-2">
+          {canGrnStockIn && (
+            <button onClick={() => setShowGrn(true)}
+              className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:shadow-lg"
+              style={{ background: 'var(--success)' }}>
+              + Nhập hàng (GRN)
+            </button>
+          )}
+          {canCreate && (
+            <button onClick={openForm}
+              className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:shadow-lg"
+              style={{ background: 'var(--accent)' }}>
+              + Nhập/Xuất
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -154,6 +167,162 @@ export default function StockMovementsPage() {
           onCreated={() => { setShowForm(false); loadData() }}
         />
       )}
+
+      {showGrn && (
+        <GrnStockInModal
+          onClose={() => setShowGrn(false)}
+          onDone={() => { setShowGrn(false); loadData() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Nhập hàng (GRN): nhập kho cho PO đã QC Đạt ──
+interface StockInItem {
+  receiptId: string; poItemId: string | null; materialName: string; unit: string;
+  claimedQty: number; heatNumber: string | null; lotNumber: string | null; millCert: string | null;
+}
+interface POReady { poId: string; poCode: string; vendorName: string; projectCode: string | null; items: StockInItem[] }
+interface StockInRow extends StockInItem { actualQty: number; reason: string }
+
+function GrnStockInModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [pos, setPos] = useState<POReady[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedPoId, setSelectedPoId] = useState('')
+  const [rows, setRows] = useState<StockInRow[]>([])
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    apiFetch('/api/warehouse/grn-stockin').then(res => {
+      if (res.ok) setPos(res.purchaseOrders || [])
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
+  const selectedPO = pos.find(p => p.poId === selectedPoId) || null
+
+  const onSelectPO = (poId: string) => {
+    setSelectedPoId(poId)
+    const po = pos.find(p => p.poId === poId)
+    setRows((po?.items || []).map(it => ({ ...it, actualQty: it.claimedQty, reason: '' })))
+  }
+
+  const updateRow = (idx: number, field: 'actualQty' | 'reason', value: string | number) => {
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
+  }
+
+  const submit = async () => {
+    if (!selectedPO) return
+    for (const r of rows) {
+      if (!(r.actualQty > 0)) return notify(`Nhập SL thực nhận > 0 cho: ${r.materialName}`)
+      if (r.actualQty !== r.claimedQty && !r.reason.trim()) {
+        return notify(`SL thực nhận lệch so với TM báo — bắt buộc nhập lý do cho: ${r.materialName}`)
+      }
+    }
+    setSubmitting(true)
+    const res = await apiFetch('/api/warehouse/grn-stockin', {
+      method: 'POST',
+      body: JSON.stringify({
+        poId: selectedPO.poId,
+        items: rows.map(r => ({ receiptId: r.receiptId, actualQty: r.actualQty, reason: r.reason.trim() || undefined })),
+      }),
+    })
+    setSubmitting(false)
+    if (res.ok) { notify(res.message || 'Đã nhập kho'); onDone() }
+    else notify('Lỗi: ' + (res.error || res.message || 'Không rõ'))
+  }
+
+  const cellInput = {
+    width: '90px', padding: '4px 8px', borderRadius: '8px',
+    border: '1px solid var(--border-light)', background: 'var(--bg-primary)',
+    color: 'var(--text-primary)', fontSize: '0.8rem', outline: 'none',
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <div className="card p-6 w-full max-w-3xl max-h-[90vh] overflow-auto animate-fade-in" style={{ background: 'var(--bg-card)' }}>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Nhập hàng (GRN) — từ PO đã QC Đạt</h2>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Nhập số lượng thực nhận. Lệch so với TM báo thì bắt buộc nhập lý do.</p>
+          </div>
+          <button onClick={onClose} className="text-xl" style={{ color: 'var(--text-muted)' }}>✕</button>
+        </div>
+
+        {loading ? (
+          <div className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>Đang tải danh sách PO...</div>
+        ) : pos.length === 0 ? (
+          <div className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>Chưa có PO nào đã QC Đạt chờ nhập kho.</div>
+        ) : (
+          <div className="space-y-4">
+            {/* Chọn PO */}
+            <div>
+              <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Chọn PO *</label>
+              <select value={selectedPoId} onChange={e => onSelectPO(e.target.value)}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid var(--border-light)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', outline: 'none' }}>
+                <option value="">— Chọn PO —</option>
+                {pos.map(p => (
+                  <option key={p.poId} value={p.poId}>{p.poCode} — {p.vendorName}{p.projectCode ? ` (${p.projectCode})` : ''} · {p.items.length} vật tư</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Bảng vật tư */}
+            {selectedPO && (
+              <div className="dt-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Vật tư</th>
+                      <th>SL TM báo về</th>
+                      <th>SL thực nhận</th>
+                      <th>Heat / Lot / Cert</th>
+                      <th>Lý do (nếu lệch)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, idx) => {
+                      const lech = r.actualQty !== r.claimedQty
+                      return (
+                        <tr key={r.receiptId}>
+                          <td className="text-xs" style={{ color: 'var(--text-primary)' }}>{r.materialName}</td>
+                          <td>
+                            <span className="font-mono text-xs font-bold" style={{ color: 'var(--text-muted)' }}>{r.claimedQty} {r.unit}</span>
+                          </td>
+                          <td>
+                            <input type="number" min={0} value={r.actualQty || ''}
+                              onChange={e => updateRow(idx, 'actualQty', Number(e.target.value))}
+                              className="font-mono"
+                              style={{ ...cellInput, borderColor: lech ? 'var(--warning)' : 'var(--border-light)' }} />
+                          </td>
+                          <td className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {r.heatNumber || '—'} / {r.lotNumber || '—'} / {r.millCert || '—'}
+                          </td>
+                          <td>
+                            <input type="text" value={r.reason} placeholder={lech ? 'Bắt buộc *' : '—'}
+                              onChange={e => updateRow(idx, 'reason', e.target.value)}
+                              style={{ ...cellInput, width: '160px', borderColor: (lech && !r.reason.trim()) ? 'var(--danger)' : 'var(--border-light)' }} />
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm font-semibold" style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Hủy</button>
+              <button onClick={submit} disabled={!selectedPO || submitting}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+                style={{ background: (!selectedPO || submitting) ? '#94a3b8' : 'var(--success)' }}>
+                {submitting ? 'Đang nhập kho...' : 'Xác nhận nhập kho'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -171,7 +340,7 @@ function CreateMovementModal({ materials, onClose, onCreated }: {
   const [submitting, setSubmitting] = useState(false)
 
   const submit = async () => {
-    if (!materialId || quantity <= 0) return alert('Chọn vật tư và nhập số lượng')
+    if (!materialId || quantity <= 0) return notify('Chọn vật tư và nhập số lượng')
     setSubmitting(true)
     const res = await apiFetch('/api/stock-movements', {
       method: 'POST',
@@ -179,7 +348,7 @@ function CreateMovementModal({ materials, onClose, onCreated }: {
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi tạo phiếu')
+    else notify(res.error || 'Lỗi tạo phiếu')
   }
 
   const inputStyle = {

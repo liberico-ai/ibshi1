@@ -3,6 +3,7 @@ import Script from "next/script";
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import "./globals.css";
+import { ToastHost } from '@/components/ui/Toast';
 
 export const metadata: Metadata = {
   title: "IBS-ERP | Heavy Industry ERP System",
@@ -22,6 +23,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         {children}
+        <ToastHost />
       </body>
     </html>
   );

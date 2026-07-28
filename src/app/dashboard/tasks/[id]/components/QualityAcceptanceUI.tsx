@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatNumber } from '@/lib/utils'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface QualityAcceptanceUIProps {
   task: any
@@ -20,7 +21,7 @@ export default function QualityAcceptanceUI({ task, isActive, project, currentUs
 
   const handleSubmit = async () => {
     if (!ntDate || !ntResult) return
-    if (!confirm(`Xác nhận nghiệm thu chất lượng: ${ntResult === 'PASS' ? 'ĐẠT' : 'KHÔNG ĐẠT'}?`)) return
+    if (!await confirmDialog(`Xác nhận nghiệm thu chất lượng: ${ntResult === 'PASS' ? 'ĐẠT' : 'KHÔNG ĐẠT'}?`)) return
 
     setSubmitting(true)
     try {
@@ -37,10 +38,10 @@ export default function QualityAcceptanceUI({ task, isActive, project, currentUs
           }
         })
       })
-      alert(`Nghiệm thu chất lượng: ${ntResult === 'PASS' ? 'ĐẠT' : 'KHÔNG ĐẠT'}`)
+      notify(`Nghiệm thu chất lượng: ${ntResult === 'PASS' ? 'ĐẠT' : 'KHÔNG ĐẠT'}`)
       window.location.reload()
     } catch (err) {
-      alert('Lỗi: ' + (err as Error).message)
+      notify('Lỗi: ' + (err as Error).message)
     } finally {
       setSubmitting(false)
     }

@@ -9,6 +9,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Wrench } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface MaintRecord {
   id: string; maintCode: string; type: string; description: string;
@@ -108,7 +109,7 @@ function CreateMaintModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }, [])
 
   const submit = async () => {
-    if (!form.equipmentId || !form.description) return alert('Chọn TB và nhập mô tả')
+    if (!form.equipmentId || !form.description) return notify('Chọn TB và nhập mô tả')
     setSubmitting(true)
     const res = await apiFetch('/api/tbcg/maintenance', {
       method: 'POST',
@@ -116,7 +117,7 @@ function CreateMaintModal({ onClose, onCreated }: { onClose: () => void; onCreat
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (

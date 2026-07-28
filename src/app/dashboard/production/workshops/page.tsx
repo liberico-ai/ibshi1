@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { notify } from '@/components/ui/Toast'
 
 interface Workshop { id: string; code: string; name: string; nameEn: string; capacity: number; _count: { workOrders: number } }
 
@@ -27,7 +28,7 @@ export default function WorkshopsPage() {
       method: 'POST',
       body: JSON.stringify({ code: fd.get('code'), name: fd.get('name'), nameEn: fd.get('nameEn') || '', capacity: fd.get('capacity') || 100 }),
     })
-    if (res.ok) { setShowForm(false); load() } else alert(res.error || 'Lỗi')
+    if (res.ok) { setShowForm(false); load() } else notify(res.error || 'Lỗi')
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>

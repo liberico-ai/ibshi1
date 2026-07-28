@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface Lesson {
   id: string; category: string; description: string; rootCause: string | null; actionTaken: string | null;
@@ -50,7 +51,7 @@ export default function LessonsPage() {
       }),
     })
     if (res.ok) { setShowForm(false); load() }
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>

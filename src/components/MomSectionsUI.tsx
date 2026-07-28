@@ -7,6 +7,7 @@ import { DEPARTMENTS_V2, DEPT_PRIMARY_ROLE, ROLE_TO_DEPT } from '@/lib/org-map'
 import { userDistinguisher } from '@/lib/user-display'
 import type { MomItem, MomSection, MomAttendant } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 export const DEFAULT_SECTIONS: MomSection[] = [
   { key: 'I', title: 'Hợp đồng', items: [{ stt: '1', noiDung: '', actionBy: '', dueDate: '', remark: '' }] },
@@ -189,11 +190,11 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
         if (parsedSections.length > 0) updateSections(parsedSections)
         if (onHeaderImport && Object.keys(header).length > 0) onHeaderImport(header)
         if (parsedAttendants.length === 0 && parsedSections.length === 0 && Object.keys(header).length === 0) {
-          alert('Không đọc được dữ liệu từ file BB họp. Kiểm tra lại định dạng file.')
+          notify('Không đọc được dữ liệu từ file BB họp. Kiểm tra lại định dạng file.')
         }
         } catch (err) {
           console.error('Import MOM Excel error:', err)
-          alert(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
+          notify(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
         }
       }
       reader.readAsBinaryString(file)
@@ -252,11 +253,11 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
 
   const createTaskFromItem = async (secIdx: number, itemIdx: number) => {
     const item = sections[secIdx]?.items[itemIdx]
-    if (!item?.noiDung?.trim()) { alert('Mục chưa có nội dung'); return }
+    if (!item?.noiDung?.trim()) { notify('Mục chưa có nội dung'); return }
     const key = rowKey(secIdx, itemIdx)
     const role = rowDept[key] || undefined
     const pick = rowPick[key]
-    if (!pick && !role) { alert('Chọn phòng hoặc nhân sự để giao'); return }
+    if (!pick && !role) { notify('Chọn phòng hoặc nhân sự để giao'); return }
 
     let deadline: string | undefined
     if (item.dueDate) {
@@ -281,7 +282,7 @@ export default function MomSectionsUI({ isEditable, attendantsData, sectionsData
     if (res.ok && res.task?.id) {
       setRowDone((s) => ({ ...s, [key]: res.task.id }))
       setOpenAssign(null)
-    } else alert(res.error || 'Lỗi tạo task')
+    } else notify(res.error || 'Lỗi tạo task')
   }
 
   const cellStyle = { padding: '4px 6px', border: '1px solid var(--border)', fontSize: '0.8rem' }

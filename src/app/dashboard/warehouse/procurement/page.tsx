@@ -6,6 +6,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { PageHeader, StatusBadge, Button, FilterBar, KPICard, EmptyState, InputField } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList } from 'lucide-react'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 
 interface TrackingGroup {
   taskId: string
@@ -187,12 +188,12 @@ function ExpandableRow({ group, onReload, userRole }: { group: TrackingGroup, on
 
   const handleRequestPayment = async () => {
     if (!deliveryDate) {
-      alert('Vui lòng cập nhật Ngày hàng về trước khi Yêu cầu thanh toán!')
+      notify('Vui lòng cập nhật Ngày hàng về trước khi Yêu cầu thanh toán!')
       setExpanded(true)
       return
     }
 
-    if (!confirm('Bạn có chắc muốn Yêu cầu thanh toán cho Nhóm báo giá này không? Kế toán sẽ nhận được Task thanh toán.')) return
+    if (!await confirmDialog('Bạn có chắc muốn Yêu cầu thanh toán cho Nhóm báo giá này không? Kế toán sẽ nhận được Task thanh toán.')) return
 
     setSaving(true)
     const res = await apiFetch('/api/procurement-tracking', {
@@ -201,10 +202,10 @@ function ExpandableRow({ group, onReload, userRole }: { group: TrackingGroup, on
     })
     setSaving(false)
     if (res.ok) {
-      alert('Đã gửi Yêu cầu thanh toán thành công!')
+      notify('Đã gửi Yêu cầu thanh toán thành công!')
       onReload()
     } else {
-      alert('Lỗi: ' + res.error)
+      notify('Lỗi: ' + res.error)
     }
   }
 

@@ -3,7 +3,6 @@ import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createGrnSchema } from '@/lib/schemas'
-import { applyStockMovement } from '@/lib/stock-ledger'
 import { recalcBudgetActual } from '@/lib/sync-engine'
 import { generateMaterialCode } from '@/lib/material-code'
 import { detectPrefixSubgroup } from '@/lib/bompr-enrich'
@@ -18,9 +17,9 @@ export async function GET(req: NextRequest) {
   const limit = parseInt(url.searchParams.get('limit') || '20')
   const poCode = url.searchParams.get('poCode') || undefined
 
+  // Lịch sử "hàng về" = các bản ghi RECEIPT (cả chờ nhập kho lẫn đã nhập)
   const where: Record<string, unknown> = {
-    type: 'IN',
-    reason: 'po_receipt',
+    type: 'RECEIPT',
   }
 
   if (poCode) {
@@ -33,6 +32,7 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         material: { select: { materialCode: true, name: true, unit: true } },
+        millCertificate: { select: { certNumber: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
@@ -41,7 +41,10 @@ export async function GET(req: NextRequest) {
   ])
 
   return successResponse({
-    receipts: movements,
+    receipts: movements.map((m: Record<string, unknown> & { millCertificate: { certNumber: string } | null }) => ({
+      ...m,
+      millCert: m.millCertificate?.certNumber || null,
+    })),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   })
 }
@@ -69,6 +72,35 @@ export async function POST(req: NextRequest) {
   // PENDING/DRAFT/REJECTED/CANCELLED → 422, chờ R01/R07 duyệt qua /api/purchase-orders/[id]/approve.
   if (['CANCELLED', 'DRAFT', 'PENDING', 'REJECTED'].includes(po.status)) {
     return errorResponse(`PO ${po.poCode} chưa được duyệt hoặc đã hủy (trạng thái: ${po.status}) — không thể nhận hàng`, 422)
+  }
+
+  // BẮT BUỘC Heat No + Lot No cho vật tư KHÔNG phải tiêu hao (category = 'consumable' được miễn).
+  const missingCert: string[] = []
+  for (const it of items) {
+    if (it.receivedQty <= 0) continue
+    const poItem = po.items.find(i => i.id === it.poItemId)
+    if (!poItem) continue
+    const isConsumable = (poItem.material?.category || '').toLowerCase() === 'consumable'
+    if (!isConsumable && (!it.heatNumber?.trim() || !it.lotNumber?.trim())) {
+      missingCert.push(poItem.material?.name || poItem.description || poItem.itemCode || it.poItemId)
+    }
+  }
+  if (missingCert.length > 0) {
+    return errorResponse(`Cần nhập Heat No + Lot No cho vật tư (trừ tiêu hao): ${missingCert.join(', ')}`, 422)
+  }
+
+  // BẮT BUỘC đính kèm hồ sơ (hợp đồng / Mill Cert / chứng chỉ) nếu có vật tư không phải tiêu hao.
+  // File upload trước qua /api/upload với entityType='GRN', entityId=poId.
+  const hasNonConsumable = items.some(it => {
+    if (it.receivedQty <= 0) return false
+    const poItem = po.items.find(i => i.id === it.poItemId)
+    return poItem && (poItem.material?.category || '').toLowerCase() !== 'consumable'
+  })
+  if (hasNonConsumable) {
+    const docCount = await prisma.fileAttachment.count({ where: { entityType: 'GRN', entityId: po.id } })
+    if (docCount === 0) {
+      return errorResponse('Bắt buộc đính kèm hồ sơ Heat/Lot/Mill Cert (hợp đồng / chứng chỉ chất lượng) trước khi nhận hàng (trừ vật tư tiêu hao)', 422)
+    }
   }
 
   // Process each item in a transaction
@@ -131,18 +163,23 @@ export async function POST(req: NextRequest) {
         if (cert) millCertificateId = cert.id
       }
 
-      const movement = await applyStockMovement(tx, {
-        materialId,
-        type: 'IN',
-        quantity: item.receivedQty,
-        reason: 'po_receipt',
-        referenceNo: po.poCode,
-        poItemId: item.poItemId,
-        heatNumber: item.heatNumber || null,
-        lotNumber: item.lotNumber || null,
-        millCertificateId,
-        performedBy: user.userId,
-        notes: item.notes || `Nhận hàng từ ${po.poCode}`,
+      // Bản ghi "hàng về" (RECEIPT) — LOG-ONLY, KHÔNG cộng tồn kho.
+      // Việc cộng tồn thực hiện ở bước Kho "Nhập hàng (GRN)" sau khi QC nghiệm thu Đạt.
+      // reason='po_receipt' = chờ nhập kho; sẽ đổi 'po_receipt_stocked' khi Kho đã nhập.
+      const movement = await tx.stockMovement.create({
+        data: {
+          materialId,
+          type: 'RECEIPT',
+          quantity: item.receivedQty,
+          reason: 'po_receipt',
+          referenceNo: po.poCode,
+          poItemId: item.poItemId,
+          heatNumber: item.heatNumber || null,
+          lotNumber: item.lotNumber || null,
+          millCertificateId,
+          performedBy: user.userId,
+          notes: item.notes || `Hàng về từ ${po.poCode}`,
+        },
       })
       movements.push(movement)
     }
@@ -169,6 +206,29 @@ export async function POST(req: NextRequest) {
   if (result.movements.length > 0 && po.projectId) {
     try { await recalcBudgetActual(po.projectId, user.userId) }
     catch (e) { console.error('[GRN] recalcBudgetActual error:', e) }
+  }
+
+  // Báo QAQC (R09 + R09a) rằng hàng đã về → hiện ở chuông thông báo để QC vào nghiệm thu.
+  if (result.movements.length > 0) {
+    try {
+      const qcUsers = await prisma.user.findMany({
+        where: { roleCode: { in: ['R09', 'R09a'] }, isActive: true },
+        select: { id: true },
+      })
+      if (qcUsers.length) {
+        await prisma.notification.createMany({
+          data: qcUsers.map((u) => ({
+            userId: u.id,
+            title: 'Hàng đã về — cần nghiệm thu',
+            message: `Đơn hàng ${po.poCode} đã về. Vào QC → Nghiệm thu vật tư để kiểm tra chất lượng.`,
+            type: 'goods_received',
+            linkUrl: '/dashboard/qc/inspections',
+          })),
+        })
+      }
+    } catch (e) {
+      console.error('[GRN] notify QC error:', e)
+    }
   }
 
   return successResponse({

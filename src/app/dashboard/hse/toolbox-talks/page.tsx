@@ -9,6 +9,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { MessageCircle } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface Talk {
   id: string; talkCode: string; topic: string; content: string | null;
@@ -89,7 +90,7 @@ function CreateTalkModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }, [])
 
   const submit = async () => {
-    if (!form.topic || !form.talkDate || !form.attendees) return alert('Nhập chủ đề, ngày, số người')
+    if (!form.topic || !form.talkDate || !form.attendees) return notify('Nhập chủ đề, ngày, số người')
     setSubmitting(true)
     const res = await apiFetch('/api/hse/toolbox-talks', {
       method: 'POST',
@@ -97,7 +98,7 @@ function CreateTalkModal({ onClose, onCreated }: { onClose: () => void; onCreate
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (

@@ -8,6 +8,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { AlertTriangle } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface WeldJoint {
   id: string; jointNo: string; jointType: string; wpsNo: string | null;
@@ -63,7 +64,7 @@ export default function WeldMapPage() {
       method: 'PUT', body: JSON.stringify(data),
     })
     if (res.ok) loadData()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1,2].map(i => <div key={i} className="h-20 skeleton rounded-xl" />)}</div>
@@ -198,7 +199,7 @@ function CreateJointModal({ workOrders, onClose, onCreated }: {
   }, [])
 
   const submit = async () => {
-    if (!form.workOrderId || !form.jointNo) return alert('Chọn WO và nhập số mối')
+    if (!form.workOrderId || !form.jointNo) return notify('Chọn WO và nhập số mối')
     setSubmitting(true)
     const res = await apiFetch('/api/production/weld-map', {
       method: 'POST',
@@ -212,7 +213,7 @@ function CreateJointModal({ workOrders, onClose, onCreated }: {
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (

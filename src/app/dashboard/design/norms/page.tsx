@@ -8,6 +8,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Ruler } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface Norm {
   id: string; code: string; name: string; category: string;
@@ -177,7 +178,7 @@ function NormFormModal({ open, editing, onClose, onSaved }: {
   }, [editing, open])
 
   const submit = async () => {
-    if (!form.name || !form.unit || !form.rate) return alert('Nhập đầy đủ tên, đơn vị, định mức')
+    if (!form.name || !form.unit || !form.rate) return notify('Nhập đầy đủ tên, đơn vị, định mức')
     setSubmitting(true)
 
     if (editing) {
@@ -191,7 +192,7 @@ function NormFormModal({ open, editing, onClose, onSaved }: {
       })
       setSubmitting(false)
       if (res.ok) onSaved()
-      else alert(res.error || 'Lỗi')
+      else notify(res.error || 'Lỗi')
     } else {
       const res = await apiFetch('/api/design/norms', {
         method: 'POST',
@@ -204,7 +205,7 @@ function NormFormModal({ open, editing, onClose, onSaved }: {
       })
       setSubmitting(false)
       if (res.ok) onSaved()
-      else alert(res.error || 'Lỗi')
+      else notify(res.error || 'Lỗi')
     }
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface CashflowEntry {
   id: string; entryCode: string; type: string; category: string; amount: string;
@@ -52,7 +53,7 @@ export default function CashflowEntriesPage() {
       }),
     })
     if (res.ok) { setShowForm(false); load() }
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const fmt = (v: number | string) => formatNumber(v)

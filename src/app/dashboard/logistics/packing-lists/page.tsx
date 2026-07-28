@@ -9,6 +9,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Package } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface PLItem {
   id: string; pieceMark: string; weight: number | null; quantity: number; qcStatus: string;
@@ -171,7 +172,7 @@ function CreatePLModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i))
 
   const submit = async () => {
-    if (!projectId || items.length === 0) return alert('Chọn dự án và thêm piece-mark')
+    if (!projectId || items.length === 0) return notify('Chọn dự án và thêm piece-mark')
     setSubmitting(true)
     setError('')
     const res = await apiFetch('/api/logistics/packing-lists', {

@@ -7,6 +7,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, Button, SelectField, InputField, TextareaField } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { formatNumber } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 interface ProjectOption { id: string; projectCode: string; projectName: string }
 interface MaterialOption { id: string; materialCode: string; name: string; unit: string; currentStock?: number }
@@ -198,9 +199,9 @@ function CreatePrForm() {
   }
 
   const submit = async () => {
-    if (!projectId) return alert('Chọn dự án')
+    if (!projectId) return notify('Chọn dự án')
     const validItems = items.filter(it => it.materialId && Number(it.quantity) > 0)
-    if (validItems.length === 0) return alert('Cần ít nhất 1 dòng vật tư với số lượng > 0')
+    if (validItems.length === 0) return notify('Cần ít nhất 1 dòng vật tư với số lượng > 0')
 
     setSubmitting(true)
     const res = await apiFetch('/api/purchase-requests', {
@@ -220,10 +221,10 @@ function CreatePrForm() {
     })
     setSubmitting(false)
     if (res.ok) {
-      alert(res.message || 'Đã tạo yêu cầu mua hàng')
+      notify(res.message || 'Đã tạo yêu cầu mua hàng')
       router.push('/dashboard/warehouse/purchase-requests')
     } else {
-      alert(res.error || 'Lỗi tạo PR')
+      notify(res.error || 'Lỗi tạo PR')
     }
   }
 

@@ -6,6 +6,7 @@ import { apiFetch, openAuthedFile } from '@/hooks/useAuth'
 import { PageHeader, Badge } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { notify } from '@/components/ui/Toast'
 
 // T1 — Hợp đồng mua (Purchase Contract)
 
@@ -192,7 +193,7 @@ export default function PurchaseContractsPage() {
   const updateStatus = async (c: Contract, status: string) => {
     const res = await apiFetch(`/api/purchase-contracts/${c.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
     if (res.ok) load()
-    else alert(res.error || 'Không cập nhật được trạng thái')
+    else notify(res.error || 'Không cập nhật được trạng thái')
   }
 
   // PO có thể gắn vào HĐ đang chọn: chưa có HĐ + cùng NCC của HĐ

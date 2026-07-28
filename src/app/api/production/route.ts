@@ -80,7 +80,8 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   const payload = await authenticateRequest(req)
   if (!payload) return unauthorizedResponse()
 
-  if (!['R01', 'R06', 'R06b'].includes(payload.roleCode)) {
+  // Tạo LSX: chỉ PM (R02) phụ trách; BGĐ (R01) là cấp cao. QLSX (R06) + Tổ trưởng (R06b) KHÔNG còn tạo.
+  if (!['R01', 'R02'].includes(payload.roleCode)) {
     return errorResponse('Không có quyền tạo lệnh sản xuất', 403)
   }
 

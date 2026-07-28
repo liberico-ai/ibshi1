@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { RBAC } from '@/lib/rbac-rules'
+import { notify } from '@/components/ui/Toast'
 
 interface WorkOrderDetail {
   id: string; woCode: string; projectId: string; description: string;
@@ -66,7 +67,7 @@ export default function ProductionDetailPage() {
       method: 'POST', body: JSON.stringify({ nextStatus }),
     })
     if (res.ok) loadWO()
-    else alert(res.error || 'Lỗi chuyển trạng thái')
+    else notify(res.error || 'Lỗi chuyển trạng thái')
     setTransitioning(false)
   }
 

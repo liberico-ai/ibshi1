@@ -9,6 +9,7 @@ import {
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Truck } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface ShipmentPLItem { pieceMark: string; weight: number | null; quantity: number }
 interface ShipmentItem {
@@ -67,7 +68,7 @@ export default function ShipmentsPage() {
       method: 'PUT', body: JSON.stringify({ status: nextStatus }),
     })
     if (res.ok) loadData()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
     setActionLoading(null)
   }
 
@@ -187,7 +188,7 @@ function CreateShipmentModal({ onClose, onCreated }: { onClose: () => void; onCr
   }
 
   const submit = async () => {
-    if (!projectId || selectedPLs.length === 0) return alert('Chọn dự án và ít nhất 1 kiện')
+    if (!projectId || selectedPLs.length === 0) return notify('Chọn dự án và ít nhất 1 kiện')
     setSubmitting(true)
     const res = await apiFetch('/api/logistics/shipments', {
       method: 'POST',
@@ -203,7 +204,7 @@ function CreateShipmentModal({ onClose, onCreated }: { onClose: () => void; onCr
     })
     setSubmitting(false)
     if (res.ok) onCreated()
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   return (

@@ -9,6 +9,7 @@ import {
   EmptyState, Modal, InputField, SelectField,
 } from '@/components/ui'
 import { Ruler } from 'lucide-react'
+import { notify } from '@/components/ui/Toast'
 
 interface Drawing {
   id: string; drawingCode: string; title: string; discipline: string; currentRev: string;
@@ -69,7 +70,7 @@ export default function DrawingRegisterPage() {
       }),
     })
     if (res.ok) { setShowForm(false); load() }
-    else alert(res.error || 'Lỗi')
+    else notify(res.error || 'Lỗi')
   }
 
   const handleTransition = async (id: string, nextStatus: string) => {
@@ -78,7 +79,7 @@ export default function DrawingRegisterPage() {
       method: 'POST', body: JSON.stringify({ nextStatus }),
     })
     if (res.ok) load()
-    else alert(res.error || 'Lỗi chuyển trạng thái')
+    else notify(res.error || 'Lỗi chuyển trạng thái')
     setActionLoading(null)
   }
 
