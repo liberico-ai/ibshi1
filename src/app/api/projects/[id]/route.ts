@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, getUserProjectIds } from '@/lib/auth'
-import { WORKFLOW_RULES, getWorkflowProgress } from '@/lib/workflow-engine'
+import { WORKFLOW_RULES, PHASE_LABELS, getWorkflowProgress } from '@/lib/workflow-engine'
+import { ROLES } from '@/lib/constants'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { emitContractUpdated } from '@/lib/webhook'
 import { validateBody, validateParams } from '@/lib/api-helpers'
@@ -75,7 +76,126 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     }
   }
 
-  const total = tasks.length
+  const hasTemplateTasks = project.dynamicTasks.some(t => t.templateStepId !== null)
+
+  // ── Resolve template steps for per-phase progress ──
+  let templateSteps: { code: string; title: string; roleCode: string | null; orderIndex: number }[] = []
+  if (hasTemplateTasks) {
+    const firstWithTemplate = project.dynamicTasks.find(t => t.templateStepId !== null)
+    if (firstWithTemplate?.templateStepId) {
+      const ts = await prisma.templateStep.findUnique({
+        where: { id: firstWithTemplate.templateStepId },
+        select: { templateId: true },
+      })
+      if (ts) {
+        templateSteps = await prisma.templateStep.findMany({
+          where: { templateId: ts.templateId },
+          orderBy: { orderIndex: 'asc' },
+          select: { code: true, title: true, roleCode: true, orderIndex: true },
+        })
+      }
+    }
+  }
+
+  // If no template found, fall back to WORKFLOW_RULES keys
+  const allStepCodes = templateSteps.length > 0
+    ? templateSteps.map(s => s.code)
+    : Object.keys(WORKFLOW_RULES)
+
+  const templateStepMap = new Map(templateSteps.map(s => [s.code, s]))
+
+  // ── Build per-phase breakdown ──
+  const phaseMap = new Map<number, {
+    phase: number
+    name: string
+    steps: {
+      stepCode: string
+      stepName: string
+      status: 'DONE' | 'IN_PROGRESS' | 'RETURNED' | 'PENDING'
+      assignedRole: string
+      roleName: string
+      assignee: { fullName: string; username: string } | null
+      deadline: string | null
+      completedAt: string | null
+      taskId: string | null
+    }[]
+  }>()
+
+  for (const stepCode of allStepCodes) {
+    const rule = WORKFLOW_RULES[stepCode]
+    const tplStep = templateStepMap.get(stepCode)
+
+    // Determine phase
+    let phase = rule?.phase
+    if (!phase) {
+      const m = stepCode.match(/^P(\d)/)
+      phase = m ? parseInt(m[1], 10) : 0
+    }
+
+    const label = PHASE_LABELS[phase]
+    if (!phaseMap.has(phase)) {
+      phaseMap.set(phase, {
+        phase,
+        name: label?.name || `Phase ${phase}`,
+        steps: [],
+      })
+    }
+
+    // Find matching tasks (could be multiple for dynamic steps like P4.3)
+    const matchingTasks = tasks.filter(t => t.stepCode === stepCode)
+
+    // Determine step status
+    let status: 'DONE' | 'IN_PROGRESS' | 'RETURNED' | 'PENDING' = 'PENDING'
+    let bestTask: typeof tasks[number] | null = null
+    if (matchingTasks.length > 0) {
+      if (matchingTasks.some(t => t.status === 'DONE')) {
+        status = 'DONE'
+        bestTask = matchingTasks.find(t => t.status === 'DONE') || matchingTasks[0]
+      } else if (matchingTasks.some(t => t.status === 'RETURNED')) {
+        status = 'RETURNED'
+        bestTask = matchingTasks.find(t => t.status === 'RETURNED') || matchingTasks[0]
+      } else if (matchingTasks.some(t => ACTIVE.includes(t.status))) {
+        status = 'IN_PROGRESS'
+        bestTask = matchingTasks.find(t => ACTIVE.includes(t.status)) || matchingTasks[0]
+      } else {
+        status = 'IN_PROGRESS'
+        bestTask = matchingTasks[0]
+      }
+    }
+
+    // Resolve role
+    const assignedRole = bestTask?.assignedRole || tplStep?.roleCode || rule?.role || ''
+    const roleEntry = ROLES[assignedRole as keyof typeof ROLES]
+    const roleName = roleEntry?.name || ''
+
+    phaseMap.get(phase)!.steps.push({
+      stepCode,
+      stepName: bestTask?.stepName || tplStep?.title || rule?.name || stepCode,
+      status,
+      assignedRole,
+      roleName,
+      assignee: bestTask?.assignee ? { fullName: bestTask.assignee.fullName, username: bestTask.assignee.username } : null,
+      deadline: bestTask?.deadline?.toISOString() || null,
+      completedAt: bestTask?.completedAt?.toISOString() || null,
+      taskId: bestTask?.id || null,
+    })
+  }
+
+  // Sort phases by number and build final array
+  const phases = Array.from(phaseMap.values())
+    .sort((a, b) => a.phase - b.phase)
+    .map(p => {
+      const completedSteps = p.steps.filter(s => s.status === 'DONE').length
+      return {
+        ...p,
+        totalSteps: p.steps.length,
+        completedSteps,
+        pct: p.steps.length > 0 ? Math.round((completedSteps / p.steps.length) * 100) : 0,
+      }
+    })
+
+  // ── Overall progress (denominator = template steps, not spawned tasks) ──
+  const totalStepCount = allStepCodes.length
   const completed = tasks.filter(t => t.status === 'DONE').length
   const inProgress = tasks.filter(t => ACTIVE.includes(t.status)).length
 
@@ -86,7 +206,12 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     if (rule) currentPhase = rule.phase
   }
 
-  const hasTemplateTasks = project.dynamicTasks.some(t => t.templateStepId !== null)
+  // Count completed by unique step codes (not task count, for template-based denominator)
+  const doneStepCodes = new Set(
+    tasks.filter(t => t.status === 'DONE').map(t => t.stepCode)
+  )
+  const completedUniqueSteps = allStepCodes.filter(c => doneStepCodes.has(c)).length
+
   const { dynamicTasks: _dt, ...projectData } = project
 
   return successResponse({
@@ -96,12 +221,13 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       hasTemplateTasks,
       contractValue: project.contractValue?.toString(),
       progress: {
-        total,
+        total: totalStepCount,
         completed,
         inProgress,
-        percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+        percentage: totalStepCount > 0 ? Math.round((completedUniqueSteps / totalStepCount) * 100) : 0,
         currentPhase,
       },
+      phases,
     },
   })
 })
