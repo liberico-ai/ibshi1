@@ -348,9 +348,9 @@ export default function ProjectDetailPage() {
                   <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-heading)' }}>Ph&#226;n t&#237;ch Task</span>
                 </div>
                 {[
-                  { label: 'Ho&#224;n th&#224;nh', count: doneTasks, color: '#16a34a' },
-                  { label: '&#272;ang x&#7917; l&#253;', count: inProgTasks, color: '#2563eb' },
-                  { label: 'Ch&#7901; x&#7917; l&#253;', count: pendingTasks, color: '#94a3b8' },
+                  { label: 'Hoàn thành', count: doneTasks, color: '#16a34a' },
+                  { label: 'Đang xử lý', count: inProgTasks, color: '#2563eb' },
+                  { label: 'Chờ xử lý', count: pendingTasks, color: '#94a3b8' },
                 ].map(item => (
                   <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
                     <span style={{ fontSize: '12px', color: 'var(--text-secondary)', width: '90px', flexShrink: 0 }}>{item.label}</span>

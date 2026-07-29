@@ -1,15 +1,17 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
-import { tilesForRole } from '@/lib/mobile-nav'
+import { tilesForRole, setForceDesktop } from '@/lib/mobile-nav'
 import { MAppBar } from '@/components/mobile'
 import TelegramLinkCard from '@/components/TelegramLinkCard'
 import { Monitor, LogOut } from 'lucide-react'
 
 export default function MobileHome() {
   const { user, logout } = useAuthStore()
+  const router = useRouter()
 
   const roleCode = user?.roleCode || ''
   const roleName = ROLES[roleCode as keyof typeof ROLES]?.name || roleCode
@@ -46,9 +48,13 @@ export default function MobileHome() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-          <Link href="/dashboard" className="m-btn m-btn-quiet" style={{ textDecoration: 'none' }}>
+          <button
+            type="button"
+            className="m-btn m-btn-quiet"
+            onClick={() => { setForceDesktop(true); router.push('/dashboard') }}
+          >
             <Monitor size={18} /> Mở bản máy tính
-          </Link>
+          </button>
           <button
             type="button"
             className="m-btn m-btn-quiet"

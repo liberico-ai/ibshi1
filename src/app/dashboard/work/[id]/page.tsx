@@ -161,8 +161,16 @@ export default function WorkDetailPage() {
   const redoCount = task.history.filter((h) => h.action === 'REDO_REQUESTED').length
 
   const doComplete = async (mode: 'RETURN_CREATOR' | 'FORWARD', forward?: unknown) => {
-    if (mode === 'RETURN_CREATOR' && (!task.evidenceFiles || task.evidenceFiles.length === 0)) {
-      if (!await confirmDialog('Chưa đính kèm bằng chứng thực hiện — vẫn hoàn thành?')) return
+    if (mode === 'RETURN_CREATOR') {
+      // Kiểm số file bằng chứng THỰC TẾ trên server (state task.evidenceFiles có thể cũ do vừa upload trong phiên)
+      let hasEvidence = !!(task.evidenceFiles && task.evidenceFiles.length > 0)
+      if (!hasEvidence) {
+        const att = await apiFetch(`/api/upload?entityType=TaskEvidence&entityId=${id}_evidence`)
+        hasEvidence = !!(att.ok && att.attachments && att.attachments.length > 0)
+      }
+      if (!hasEvidence) {
+        if (!await confirmDialog('Chưa đính kèm bằng chứng thực hiện — vẫn hoàn thành?')) return
+      }
     }
     // Mức 1: việc báo giá đã chọn NCC nhưng CHƯA tạo Đơn đặt hàng (PO) → nhắc (không chặn cứng).
     const rd = (task.resultData && typeof task.resultData === 'object') ? task.resultData as Record<string, unknown> : {}

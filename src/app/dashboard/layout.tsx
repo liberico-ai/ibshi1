@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAuthStore, apiFetch } from '@/hooks/useAuth'
 import { ROLES, MENU_ITEMS, MENU_GROUPS, ROLE_GROUP_PRIORITY, HIDDEN_MENU_KEYS } from '@/lib/constants'
-import { resolvePostLoginPath } from '@/lib/mobile-nav'
+import { resolvePostLoginPath, isForceDesktop } from '@/lib/mobile-nav'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import NotificationBell from '@/components/NotificationBell'
 import PendingAlerts from '@/components/PendingAlerts'
@@ -52,7 +52,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // resolvePostLoginPath chỉ trả '/m' khi ĐỦ cả 2: role Xưởng/QC + thiết bị điện thoại,
   // nên trên máy tính và với phòng ban khác thì không đụng gì.
   useEffect(() => {
-    if (ready && isAuthenticated && user && resolvePostLoginPath(user.roleCode) === '/m') {
+    // Bỏ qua nếu người dùng chủ động chọn "Mở bản máy tính" (cờ trong bộ nhớ, reload sẽ reset)
+    if (ready && isAuthenticated && user && !isForceDesktop() && resolvePostLoginPath(user.roleCode) === '/m') {
       router.replace('/m')
     }
   }, [ready, isAuthenticated, user, router])

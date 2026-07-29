@@ -41,6 +41,15 @@ export function isMobileDevice(): boolean {
 }
 
 /**
+ * Cờ "chủ động dùng bản máy tính" — CHỈ trong bộ nhớ (không lưu storage).
+ * Xưởng/QC bấm "Mở bản máy tính" → set true → điều hướng /dashboard mà không bị đẩy về /m.
+ * Tải lại trang (F5) sẽ reset về false → quay lại bản mobile như cũ.
+ */
+let _forceDesktop = false
+export function setForceDesktop(v: boolean): void { _forceDesktop = v }
+export function isForceDesktop(): boolean { return _forceDesktop }
+
+/**
  * Đích đến sau khi đăng nhập.
  * 1. Có ?next= hợp lệ (đường dẫn nội bộ) → quay lại đúng chỗ người dùng định vào.
  *    Đây là thứ làm cho việc mở thẳng /m và icon PWA hoạt động.
