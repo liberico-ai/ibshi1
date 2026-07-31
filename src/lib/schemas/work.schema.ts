@@ -135,7 +135,7 @@ export const closeMeetingSchema = z.object({
 })
 
 export const inboxQuerySchema = z.object({
-  tab: z.enum(['assigned', 'review', 'dept', 'created', 'overdue', 'done']).default('assigned'),
+  tab: z.enum(['assigned', 'review', 'dept', 'created', 'overdue', 'done', 'cancelled']).default('assigned'),
   page: z.coerce.number().min(1).default(1),
   q: z.string().optional(),
   projectId: z.string().optional(),

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
@@ -68,6 +68,7 @@ export default function WorkDetailPage() {
   const [loading, setLoading] = useState(true)
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
+  const submittingRef = useRef(false)   // khóa đồng bộ chống double-submit (giao lại / hoàn thành…)
   // Hoàn thành: đọc/trả tài liệu
   const [acked, setAcked] = useState<Record<string, boolean>>({})
   const [returnNotes, setReturnNotes] = useState<Record<string, string>>({})
@@ -185,10 +186,15 @@ export default function WorkDetailPage() {
     if (hasSelectedQuote && !hasPo) {
       if (!await confirmDialog('Bạn đã chọn nhà cung cấp nhưng CHƯA tạo Đơn đặt hàng (PO). Hoàn thành việc bây giờ sẽ khiến phần mua hàng chưa đi tiếp. Vẫn hoàn thành?')) return
     }
+    if (submittingRef.current) return   // chống double-submit (tránh tạo trùng task khi FORWARD)
+    submittingRef.current = true
     setBusy(true)
-    const res = await apiFetch(`/api/work/tasks/${id}/complete`, { method: 'POST', body: JSON.stringify(buildCompleteBody(mode, forward)) })
-    setBusy(false)
-    if (res.ok) { setFwdOpen(false); showToast(mode === 'FORWARD' ? 'Đã hoàn thành & chuyển tiếp' : 'Đã ghi nhận hoàn thành'); load() } else showToast(res.error || 'Lỗi')
+    try {
+      const res = await apiFetch(`/api/work/tasks/${id}/complete`, { method: 'POST', body: JSON.stringify(buildCompleteBody(mode, forward)) })
+      if (res.ok) { setFwdOpen(false); showToast(mode === 'FORWARD' ? 'Đã hoàn thành & chuyển tiếp' : 'Đã ghi nhận hoàn thành'); load() } else showToast(res.error || 'Lỗi')
+    } finally {
+      setBusy(false); submittingRef.current = false
+    }
   }
   const doForward = async () => {
     if (fwdPicks.length === 0) { showToast('Chọn nơi nhận để chuyển tiếp'); return }
@@ -207,10 +213,15 @@ export default function WorkDetailPage() {
     })
   }
   const doFinalize = async () => {
+    if (submittingRef.current) return
+    submittingRef.current = true
     setBusy(true)
-    const res = await apiFetch(`/api/work/tasks/${id}/finalize`, { method: 'POST', body: '{}' })
-    setBusy(false)
-    if (res.ok) { showToast('Đã kết thúc công việc'); load() } else showToast(res.error || 'Lỗi')
+    try {
+      const res = await apiFetch(`/api/work/tasks/${id}/finalize`, { method: 'POST', body: '{}' })
+      if (res.ok) { showToast('Đã kết thúc công việc'); load() } else showToast(res.error || 'Lỗi')
+    } finally {
+      setBusy(false); submittingRef.current = false
+    }
   }
   const goCreateNext = () => router.push(`/dashboard/work/create?from=${id}${task.projectId ? `&project=${task.projectId}` : ''}`)
   const goCreateMeeting = () => router.push(`/dashboard/work/meetings?new=1&task=${id}${task.projectId ? `&project=${task.projectId}` : ''}${task.project ? `&projectName=${encodeURIComponent(`${task.project.projectCode} — ${task.project.projectName}`)}` : ''}&title=${encodeURIComponent(task.title)}`)
@@ -221,10 +232,17 @@ export default function WorkDetailPage() {
     return users.filter((u) => (u.fullName || u.username || '').toLowerCase().includes(qd)).filter((u) => !dept || ROLE_TO_DEPT[u.roleCode] === dept).slice(0, 8)
   }
   const doDelegate = async (userId: string, label: string) => {
+    // Khóa đồng bộ chống double-submit (bấm nhiều lần lúc chưa phản hồi) — ref chặn ngay cùng nhịp.
+    if (submittingRef.current) return
+    submittingRef.current = true
     setBusy(true)
-    const res = await apiFetch(`/api/work/tasks/${id}/reassign`, { method: 'POST', body: JSON.stringify({ assignees: [{ userId, isPrimary: true }], note: `Chuyển giao cho ${label}` }) })
-    setBusy(false)
-    if (res.ok) { setDelOpen(false); setDelQuery(''); setDelDept(''); showToast('Đã chuyển giao'); load() } else showToast(res.error || 'Lỗi')
+    setDelOpen(false); setDelQuery(''); setDelDept('')   // đóng picker NGAY → không bấm lại được
+    try {
+      const res = await apiFetch(`/api/work/tasks/${id}/reassign`, { method: 'POST', body: JSON.stringify({ assignees: [{ userId, isPrimary: true }], note: `Chuyển giao cho ${label}` }) })
+      if (res.ok) { showToast('Đã chuyển giao'); load() } else showToast(res.error || 'Lỗi')
+    } finally {
+      setBusy(false); submittingRef.current = false
+    }
   }
   const openEdit = () => {
     setEdit({ title: task.title, description: task.description || '', deadline: task.deadline ? task.deadline.slice(0, 10) : '', priority: task.priority })

@@ -678,7 +678,7 @@ export async function requestRedo(taskId: string, userId: string, reason: string
 }
 
 export async function reassignTask(taskId: string, userId: string, input: ReassignTaskInput) {
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true, status: true, resultData: true } })
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, projectId: true, deadline: true, status: true, resultData: true, createdBy: true } })
   if (!task) throw new Error('Không tìm thấy công việc')
   assertNotPendingRequest(task)
 
@@ -691,9 +691,10 @@ export async function reassignTask(taskId: string, userId: string, input: Reassi
     prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, toRole: resolved[0]?.role || null, toUserId: resolved[0]?.userId || null, reason: input.note } }),
   ])
   emitTaskUpdated(taskId, task.status).catch(() => {})
+  // "Người giao" GIỮ NGUYÊN theo người tạo việc gốc (task.createdBy) — không phải người thao tác reassign.
   const [project, creator] = await Promise.all([
     task.projectId ? prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } }) : null,
-    prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }),
+    prisma.user.findUnique({ where: { id: task.createdBy }, select: { fullName: true } }),
   ])
   await notifyAssignees(taskId, task.title, resolved, {
     projectCode: project?.projectCode, projectName: project?.projectName,
@@ -754,11 +755,12 @@ export async function editTaskAssignees(
   await prisma.taskHistory.create({ data: { taskId, action: 'REASSIGNED', byUserId: userId, reason: 'Chỉnh sửa người nhận' } })
   emitTaskUpdated(taskId, task.status).catch(() => {})
 
-  // Thông báo cho người mới được thêm
+  // Thông báo cho người mới được thêm.
+  // "Người giao" GIỮ NGUYÊN theo người tạo việc gốc (task.createdBy) — KHÔNG phải admin đang thao tác.
   if (toAdd.length) {
     const [project, creator] = await Promise.all([
       task.projectId ? prisma.project.findUnique({ where: { id: task.projectId }, select: { projectCode: true, projectName: true } }) : null,
-      prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }),
+      prisma.user.findUnique({ where: { id: task.createdBy }, select: { fullName: true } }),
     ])
     await notifyAssignees(taskId, task.title, toAdd, {
       projectCode: project?.projectCode, projectName: project?.projectName,
@@ -905,6 +907,35 @@ export async function resolveChangeRequest(
   return { ok: true }
 }
 
+// Khôi phục việc đã xóa mềm (CANCELLED) — CHỈ Quản trị hệ thống (R10).
+// Tính lại trạng thái theo tiến độ người nhận, gỡ khóa yêu cầu chỉnh sửa, thông báo các bên.
+export async function restoreTask(taskId: string, adminUserId: string, roleCode: string) {
+  if (roleCode !== 'R10') throw new Error('Chỉ Quản trị hệ thống (admin) được khôi phục việc')
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { assignees: true } })
+  if (!task) throw new Error('Không tìm thấy việc')
+  if (task.status !== TASK_STATUS.CANCELLED) throw new Error('Chỉ khôi phục được việc đã xóa (CANCELLED)')
+
+  const rows = task.assignees
+  const allDone = rows.length > 0 && rows.every((r) => r.done)
+  const newStatus = allDone ? TASK_STATUS.AWAITING_REVIEW : rows.some((r) => r.done) ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.OPEN
+
+  const rd = (task.resultData && typeof task.resultData === 'object') ? (task.resultData as Record<string, unknown>) : {}
+  const cr = getChangeRequest(task.resultData)
+  if (cr) {
+    await prisma.task.update({ where: { id: taskId }, data: { status: newStatus, resultData: { ...rd, changeRequest: { ...cr, status: 'REVERTED', revertedBy: adminUserId, revertedAt: new Date().toISOString() } } } })
+  } else {
+    await prisma.task.update({ where: { id: taskId }, data: { status: newStatus } })
+  }
+  await prisma.taskHistory.create({ data: { taskId, action: 'RESTORED', byUserId: adminUserId, reason: 'Khôi phục việc đã xóa' } })
+  emitTaskUpdated(taskId, TASK_STATUS.CANCELLED).catch(() => {})
+
+  const assigneeIds = rows.map((a) => a.userId).filter((x): x is string => !!x)
+  for (const uid of new Set([task.createdBy, ...assigneeIds])) {
+    await notifyUser(uid, 'Việc đã được khôi phục', `Việc "${task.title}" đã được Quản trị hệ thống khôi phục.`, taskId)
+  }
+  return { ok: true, status: newStatus }
+}
+
 export async function addComment(taskId: string, userId: string, content: string) {
   return prisma.taskHistory.create({ data: { taskId, action: 'COMMENT', byUserId: userId, reason: content } })
 }
@@ -967,6 +998,11 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
         { createdBy: userId },
       ],
     }
+  } else if (tab === 'cancelled') {
+    // Việc đã xóa mềm (CANCELLED). Admin (R10) xem tất cả để khôi phục; user khác chỉ thấy việc mình liên quan.
+    where = roleCode === 'R10'
+      ? { status: TASK_STATUS.CANCELLED }
+      : { status: TASK_STATUS.CANCELLED, OR: [{ createdBy: userId }, { assignees: myAssignee }] }
   } else {
     where = { status: pending, assignees: myAssignee }
   }
@@ -987,7 +1023,9 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
       },
       orderBy: tab === 'done'
         ? [{ completedAt: 'desc' }]
-        : [{ priority: 'desc' }, { deadline: 'asc' }, { createdAt: 'desc' }],
+        : tab === 'cancelled'
+          ? [{ updatedAt: 'desc' }]
+          : [{ priority: 'desc' }, { deadline: 'asc' }, { createdAt: 'desc' }],
       skip: (page - 1) * PAGE, take: PAGE,
     }),
   ])

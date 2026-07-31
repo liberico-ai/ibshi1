@@ -38,8 +38,10 @@ export function roleCapabilitiesFromStatic(roleCode: string): Set<string> {
     if (allowed && allowed.includes(roleCode)) out.add(cap.key)
   }
 
-  // Page (MENU_ITEMS.roles)
+  // Page (MENU_ITEMS.roles). R10 (Quản trị Hệ thống) xem MỌI trang — không lệ thuộc roles từng item.
+  // (Chỉ mở HIỂN THỊ/điều hướng; quyền hành động vẫn theo RBAC riêng bên trên.)
   for (const cap of PAGE_CAPABILITIES) {
+    if (roleCode === 'R10') { out.add(cap.key); continue }
     const menuKey = PAGE_TO_MENU_KEY[cap.key]
     const roles = MENU_ROLES[menuKey]
     if (roles === 'all' || (Array.isArray(roles) && roles.includes(roleCode))) out.add(cap.key)

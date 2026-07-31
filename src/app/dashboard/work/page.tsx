@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, Button, Badge, EmptyState, Pagination } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Inbox } from 'lucide-react'
@@ -33,6 +33,7 @@ const ST: Record<string, { l: string; variant: 'info' | 'success' | 'warning' | 
   AWAITING_REVIEW: { l: 'Chờ kết thúc', variant: 'warning' },
   RETURNED: { l: 'Bị trả lại', variant: 'danger' },
   DONE: { l: 'Hoàn thành', variant: 'success' },
+  CANCELLED: { l: 'Đã xóa', variant: 'default' },
 }
 
 const DAY_MS = 86400000
@@ -80,10 +81,14 @@ function reviewDaysLate(t: Task): number {
   return diff > 0 ? Math.ceil(diff / DAY_MS) : 0
 }
 
-type TabKey = 'assigned' | 'review' | 'created' | 'dept' | 'overdue' | 'done'
+type TabKey = 'assigned' | 'review' | 'created' | 'dept' | 'overdue' | 'done' | 'cancelled'
 
 export default function WorkInboxPage() {
   const router = useRouter()
+  const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.roleCode === 'R10'
+  const visibleTabs = isAdmin ? [...TABS, { key: 'cancelled', label: 'Đã xóa' }] : TABS
+  const [restoreBusy, setRestoreBusy] = useState<string | null>(null)
   const [tab, setTab] = useState<TabKey>('assigned')
   const [tasks, setTasks] = useState<Task[]>([])
   const [total, setTotal] = useState(0)
@@ -99,9 +104,10 @@ export default function WorkInboxPage() {
 
   useEffect(() => { apiFetch('/api/projects?limit=100').then((r) => { if (r.ok) setProjects(r.projects || []) }) }, [])
   const loadCounts = useCallback(() => {
-    Promise.all(TABS.map((t) => apiFetch(`/api/work/inbox?tab=${t.key}&page=1`).then((r) => ({ key: t.key, count: r.ok ? r.pagination?.total || 0 : 0 }))))
+    const keys = isAdmin ? [...TABS.map((t) => t.key), 'cancelled'] : TABS.map((t) => t.key)
+    Promise.all(keys.map((k) => apiFetch(`/api/work/inbox?tab=${k}&page=1`).then((r) => ({ key: k, count: r.ok ? r.pagination?.total || 0 : 0 }))))
       .then((results) => { const m: Record<string, number> = {}; results.forEach((r) => { m[r.key] = r.count }); setTabCounts(m) })
-  }, [])
+  }, [isAdmin])
   useEffect(() => { loadCounts() }, [loadCounts])
   const load = useCallback(() => {
     setLoading(true)
@@ -134,8 +140,15 @@ export default function WorkInboxPage() {
     if (res.ok) { setCrTask(null); setCrReason(''); load() } else notify(res.error || 'Lỗi gửi yêu cầu')
   }
 
-  const showCreator = tab === 'assigned' || tab === 'overdue'
-  const showAssignees = tab === 'created' || tab === 'dept' || tab === 'review' || tab === 'done'
+  const doRestore = async (t: Task) => {
+    setRestoreBusy(t.id)
+    const res = await apiFetch(`/api/work/tasks/${t.id}/restore`, { method: 'POST', body: '{}' })
+    setRestoreBusy(null)
+    if (res.ok) { notify('Đã khôi phục công việc', 'success'); load(); loadCounts() } else notify(res.error || 'Lỗi khôi phục', 'error')
+  }
+
+  const showCreator = tab === 'assigned' || tab === 'overdue' || tab === 'cancelled'
+  const showAssignees = tab === 'created' || tab === 'dept' || tab === 'review' || tab === 'done' || tab === 'cancelled'
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -147,7 +160,7 @@ export default function WorkInboxPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 flex-wrap">
-        {TABS.map((t) => {
+        {visibleTabs.map((t) => {
           const cnt = tabCounts[t.key]
           const active = tab === t.key
           const isOverdueTab = t.key === 'overdue'
@@ -252,6 +265,20 @@ export default function WorkInboxPage() {
                         style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: '#fff' }}>
                         ✎ Yêu cầu chỉnh sửa
                       </button>
+                    </div>
+                  )}
+                  {tab === 'cancelled' && (
+                    <div className="mt-2 flex items-center gap-3 flex-wrap">
+                      {t.resultData?.changeRequest?.reason && (
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Lý do xóa: <i>{t.resultData.changeRequest.reason}</i></span>
+                      )}
+                      {isAdmin && (
+                        <button onClick={(e) => { e.stopPropagation(); doRestore(t) }} disabled={restoreBusy === t.id}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer"
+                          style={{ border: '1px solid var(--success)', color: 'var(--success)', background: '#fff' }}>
+                          {restoreBusy === t.id ? 'Đang khôi phục...' : '↩ Khôi phục'}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

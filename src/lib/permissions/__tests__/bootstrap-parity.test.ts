@@ -13,6 +13,7 @@ const MENU_ROLES: Record<string, readonly string[] | 'all'> = Object.fromEntries
 
 function expectedByOldRule(roleCode: string, capKey: string): boolean {
   if (capKey.startsWith('page.')) {
+    if (roleCode === 'R10') return true   // Quản trị Hệ thống xem MỌI trang (chủ đích, không theo roles từng item)
     const roles = MENU_ROLES[PAGE_TO_MENU_KEY[capKey]]
     return roles === 'all' || (Array.isArray(roles) && roles.includes(roleCode))
   }

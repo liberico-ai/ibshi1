@@ -3,11 +3,12 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatCompactVND, formatCurrency, formatNumber } from '@/lib/utils'
+import ExecOverview from './ExecOverview'
 
 type Tab = 'overview' | 'projects' | 'financial' | 'production' | 'qc' | 'warehouse' | 'hr' | 'safety' | 'procurement'
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'overview', label: 'Tổng quan' },
+  { key: 'overview', label: 'Điều hành' },
   { key: 'projects', label: 'Dự án' },
   { key: 'financial', label: 'Tài chính' },
   { key: 'production', label: 'Sản xuất' },
@@ -24,6 +25,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
 
   const loadTab = useCallback(async (t: Tab) => {
+    if (t === 'overview') { setLoading(false); return }   // Tab "Điều hành" tự tải dữ liệu riêng
     setLoading(true)
     const apiType = t === 'projects' ? 'project-progress' : t
     const res = await apiFetch(`/api/reports?type=${apiType}`)
@@ -62,7 +64,7 @@ export default function ReportsPage() {
 
       {loading ? <Skeleton /> : (
         <>
-          {tab === 'overview' && <OverviewReport data={data} />}
+          {tab === 'overview' && <ExecOverview />}
           {tab === 'projects' && <ProjectsReport data={data} />}
           {tab === 'financial' && <FinancialReport data={data} />}
           {tab === 'production' && <ProductionReport data={data} />}
@@ -85,33 +87,6 @@ function KPI({ label, value, sub, color }: { label: string; value: string | numb
       <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{label}</p>
       <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>
     </div>
-  )
-}
-
-// ─── Overview ───
-function OverviewReport({ data }: { data: Record<string, unknown> }) {
-  const o = data.overview as Record<string, number> | undefined
-  if (!o) return <p style={{ color: 'var(--text-muted)' }}>Không có dữ liệu</p>
-  return (
-    <>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI label="Tổng dự án" value={o.projectCount} sub={`${o.activeProjects} đang chạy`} color="var(--primary)" />
-        <KPI label="Tasks hoàn thành" value={`${o.taskCompletionRate}%`} sub={`${o.completedTasks}/${o.totalTasks}`} color="#16a34a" />
-        <KPI label="Quá hạn" value={o.overdueTasks} sub="tasks overdue" color="#dc2626" />
-        <KPI label="WO đang chạy" value={o.activeWO} sub={`${o.openNCR} NCR mở`} color="#f59e0b" />
-      </div>
-      <div className="card p-5">
-        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Task Completion Rate</h3>
-        <div className="h-6 rounded-full overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
-          <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${o.taskCompletionRate}%`, background: 'linear-gradient(90deg, var(--primary), var(--accent))' }} />
-        </div>
-        <div className="flex justify-between mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-          <span>{o.completedTasks} completed</span>
-          <span className="font-bold" style={{ color: 'var(--accent)' }}>{o.taskCompletionRate}%</span>
-          <span>{o.totalTasks} total</span>
-        </div>
-      </div>
-    </>
   )
 }
 
