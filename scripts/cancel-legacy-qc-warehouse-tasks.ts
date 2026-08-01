@@ -11,7 +11,7 @@
  *       - Xoá 'P4.3'/'P4.4' khỏi nextCodes & gateCodes của MỌI step (mọi template).
  *       - Xoá gateCodes của chính step P4.3/P4.4 (để gate-driven spawn bỏ qua chúng).
  *       → Sau đó P4.3/P4.4 KHÔNG BAO GIỜ còn được spawn. (Không XOÁ record để tránh vướng FK.)
- *   (B) HUỶ MỀM các task P4.3/P4.4 đang mở còn sót (OPEN/IN_PROGRESS/RETURNED/AWAITING_REVIEW).
+ *   (B) Task P4.3/P4.4 đã sinh trước đó: GIỮ NGUYÊN (không huỷ, theo yêu cầu).
  *
  * AN TOÀN: mặc định DRY-RUN. Thêm --apply để ghi. Yêu cầu DATABASE_URL.
  *   npx tsx scripts/cancel-legacy-qc-warehouse-tasks.ts            # xem trước
@@ -22,7 +22,6 @@ import prisma from '../src/lib/db'
 
 const APPLY = process.argv.includes('--apply')
 const CODES = ['P4.3', 'P4.4']
-const OPEN_STATUSES = ['OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW']
 
 function without(arr: string[] | null | undefined): string[] {
   return (arr || []).filter((c) => !CODES.includes(c))
@@ -49,28 +48,9 @@ async function neutralizeTemplateSteps() {
   }
 }
 
-async function cancelOpenTasks() {
-  console.log('\n── (B) Huỷ mềm task P4.3/P4.4 đang mở ──')
-  const tasks = await prisma.task.findMany({
-    where: { taskType: { in: CODES }, status: { in: OPEN_STATUSES } },
-    select: { id: true, taskType: true, status: true, title: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  console.log(`Task đang mở: ${tasks.length}`)
-  for (const t of tasks) console.log(`  [${t.taskType}/${t.status}] ${t.title} (${t.id})`)
-  if (!APPLY) return
-  for (const t of tasks) {
-    await prisma.task.update({ where: { id: t.id }, data: { status: 'CANCELLED' } })
-    try {
-      await prisma.taskHistory.create({ data: { taskId: t.id, action: 'CANCELLED', byUserId: 'system', reason: 'Retire P4.3/P4.4 — chuyển sang luồng sidebar (Hàng về → QC → Kho)' } })
-    } catch { /* lịch sử không bắt buộc */ }
-  }
-  console.log(`✅ Đã huỷ mềm ${tasks.length} task.`)
-}
-
 async function main() {
   await neutralizeTemplateSteps()
-  await cancelOpenTasks()
+  console.log('\n── (B) Task P4.3/P4.4 đã sinh trước đó: GIỮ NGUYÊN (không huỷ). ──')
   if (!APPLY) console.log('\n⚠️  DRY-RUN — chưa ghi gì. Thêm --apply để thực thi thật.')
   else console.log('\n✅ HOÀN TẤT — P4.3/P4.4 đã về hưu; không còn spawn task mới.')
 }

@@ -7,6 +7,7 @@
 -- GỐC RỄ: task tự sinh do chainNextTemplateTasks đọc gate_codes/next_codes
 -- trong bảng template_steps (KHÔNG từ code). Phải xoá gate của P4.3 thì mới
 -- ngừng spawn. Bọc trong transaction — an toàn, có thể xem trước bằng ROLLBACK.
+-- CHỈ chặn spawn tương lai; task P4.3/P4.4 đã sinh trước đó GIỮ NGUYÊN.
 -- ============================================================================
 BEGIN;
 
@@ -25,26 +26,12 @@ SET next_codes = array_remove(array_remove(next_codes, 'P4.3'), 'P4.4'),
 WHERE code NOT IN ('P4.3', 'P4.4')
   AND (next_codes && ARRAY['P4.3','P4.4'] OR gate_codes && ARRAY['P4.3','P4.4']);
 
--- (B) Huỷ mềm task P4.3/P4.4 đang mở + ghi lịch sử (chỉ những task vừa huỷ)
-WITH cancelled AS (
-  UPDATE tasks
-  SET status = 'CANCELLED', updated_at = now()
-  WHERE task_type IN ('P4.3', 'P4.4')
-    AND status IN ('OPEN', 'IN_PROGRESS', 'RETURNED', 'AWAITING_REVIEW')
-  RETURNING id
-)
-INSERT INTO task_history (id, task_id, action, by_user_id, reason, created_at)
-SELECT gen_random_uuid()::text, id, 'CANCELLED', 'system',
-       'Retire P4.3/P4.4 — chuyển sang luồng sidebar (Hàng về → QC → Kho)', now()
-FROM cancelled;
+-- (B) Task P4.3/P4.4 đã sinh trước đó: GIỮ NGUYÊN, không huỷ (theo yêu cầu).
 
 -- ── KIỂM TRA trước khi COMMIT (phải trả 0 dòng thì mới sạch) ──
 -- SELECT code, next_codes, gate_codes FROM template_steps
 --   WHERE next_codes && ARRAY['P4.3','P4.4'] OR gate_codes && ARRAY['P4.3','P4.4']
 --      OR code IN ('P4.3','P4.4');
--- SELECT count(*) FROM tasks
---   WHERE task_type IN ('P4.3','P4.4')
---     AND status IN ('OPEN','IN_PROGRESS','RETURNED','AWAITING_REVIEW');
 
 COMMIT;
 -- Nếu muốn xem thử rồi hoàn tác: đổi COMMIT thành ROLLBACK.
