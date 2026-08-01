@@ -383,6 +383,7 @@ export async function recordDrawdownCashflow(
   return true
 }
 
+// P4.3/P4.4 vẫn liệt kê ở đây nhưng VÔ HẠI — 2 bước đã gỡ khỏi workflow (sidebar), không còn task để trigger.
 const BUDGET_RELEVANT_STEPS = new Set(['P3.1', 'P3.3', 'P3.4', 'P3.5', 'P3.6', 'P4.3', 'P4.4', 'P4.5'])
 const STOCK_RELEVANT_STEPS = new Set(['P3.4', 'P3.4A', 'P3.4B', 'P4.4', 'P4.5'])
 

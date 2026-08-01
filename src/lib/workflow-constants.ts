@@ -104,21 +104,13 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   // — luồng giải ngân chạy status-driven, không còn là bước workflow.
   // P4.2 (Thương mại theo dõi hàng về) đã chuyển sang tab sidebar "Nhận hàng" (Thương mại)
   // — TM xác nhận GRN ở sidebar, không còn là bước workflow.
-  'P4.3': {
-    code: 'P4.3', name: 'QC nghiệm thu chất lượng nhập kho', nameEn: 'QC Incoming Quality Inspection',
-    role: 'R09', gate: ['P3.6'], next: ['P4.4'], deadlineDays: 3, phase: 4,
-    rejectTo: 'P3.5', // QC fail → commercial sources a new supplier
-    // Dynamic: 1 task per PO. Created by api/grn POST when TM confirms first GRN for that PO.
-    // stepName: "Nghiệm thu hàng về theo PO {poCode}". resultData carries { poId, poCode }.
-  },
-  'P4.4': {
-    code: 'P4.4', name: 'Kho nghiệm thu số lượng và nhập kho', nameEn: 'Warehouse Quantity Check & Stock In',
-    role: 'R05', next: [], deadlineDays: 3, phase: 4,
-    // Dynamic: 1 task per PO. Created when its P4.3 (same PO) completes.
-  },
+  // P4.3 (QC nghiệm thu chất lượng nhập kho) & P4.4 (Kho nghiệm thu SL + nhập kho) ĐÃ GỠ khỏi workflow.
+  // Toàn bộ nhận hàng → nghiệm thu → nhập kho nay chạy ở SIDEBAR theo PO đã về:
+  //   api/grn "Hàng về" (TM) → api/qc nghiệm thu (QC) → api/warehouse/grn-stockin (Kho).
+  // Không còn tự sinh task P4.3/P4.4; gate của P4.5 cũng bỏ phụ thuộc P4.4.
   'P4.5': {
     code: 'P4.5', name: 'Kho đề nghị cấp vật tư cho PM và QLSX', nameEn: 'Warehouse Issue Material to PM & Production',
-    role: 'R05', gate: ['P4.4'], next: [], deadlineDays: 3, phase: 4,
+    role: 'R05', next: [], deadlineDays: 3, phase: 4,
   },
 
   // ── Phase 5: Sản xuất (BRD#26-31) ──

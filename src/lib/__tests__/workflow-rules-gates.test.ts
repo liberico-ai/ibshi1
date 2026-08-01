@@ -13,9 +13,9 @@ import { describe, it, expect } from 'vitest'
 import { WORKFLOW_RULES } from '../workflow-constants'
 
 describe('WORKFLOW_RULES — gate cho 7 bước mồ côi (R2-2)', () => {
+  // P4.3/P4.4 đã gỡ khỏi workflow (chuyển sang sidebar); P4.5 nay kích hoạt độc lập
+  // qua /api/tasks/activate nên không còn gate ['P4.4'].
   const expectedGates: Record<string, string[]> = {
-    'P4.3': ['P3.6'],
-    'P4.5': ['P4.4'],
     'P5.1': ['P4.5'],
     'P5.1A': ['P4.5'],
     'P5.1.1': ['P4.5'],

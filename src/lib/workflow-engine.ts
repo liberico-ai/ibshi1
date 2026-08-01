@@ -14,7 +14,7 @@ export type { WorkflowStep } from './workflow-constants'
 // ── Workflow Engine Core Functions (Server-only) ──
 
 const DYNAMIC_STEPS = [
-  'P4.3', 'P4.4',
+  // P4.3/P4.4 đã gỡ (chuyển sang sidebar theo PO)
   'P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A',
   // P4.5 (tạo per-request bởi api/tasks/[id]/daily-report) và P5.5 (AUTO-OPEN
   // theo khối lượng lũy kế trong api/tasks/[id]/weekly-acceptance) cũng có
@@ -99,42 +99,11 @@ export async function completeTask(
     await checkAndCreateP51(taskId)
   }
 
-  // Dynamic P4.4 creation — when a per-PO P4.3 (QC nghiệm thu CL) completes,
-  // spawn the matching per-PO P4.4 (Kho nghiệm thu SL + nhập kho) for the same PO.
-  if (task.taskType === 'P4.3') {
-    const rd = (resultData || task.resultData) as { poId?: string; poCode?: string } | null
-    if (rd?.poId && rd?.poCode) {
-      const existingP44 = await prisma.task.findFirst({
-        where: {
-          projectId: projectId,
-          taskType: 'P4.4',
-          resultData: { path: ['poId'], equals: rd.poId },
-        },
-        select: { id: true },
-      })
-      if (!existingP44) {
-        const p44Rule = WORKFLOW_RULES['P4.4']
-        const newP44 = await prisma.task.create({
-          data: {
-            projectId: projectId,
-            taskType: 'P4.4',
-            title: `Nhập kho theo PO ${rd.poCode}`,
-            description: `Stock-in for PO ${rd.poCode}`,
-            createdBy: userId,
-            status: TASK_STATUS.IN_PROGRESS,
-            startedAt: new Date(),
-            deadline: p44Rule?.deadlineDays
-              ? new Date(Date.now() + p44Rule.deadlineDays * 24 * 60 * 60 * 1000)
-              : null,
-            resultData: { poId: rd.poId, poCode: rd.poCode },
-          },
-        })
-        const p44Role = p44Rule?.role || 'R05'
-        const p44User = await resolveRoleToUser(p44Role, projectId)
-        await prisma.taskAssignee.create({ data: { taskId: newP44.id, role: p44Role, userId: p44User.id, isPrimary: true } })
-      }
-    }
-  }
+  // ── P4.3 → P4.4 đã NGỪNG (retired) ──
+  // Nghiệm thu chất lượng nhập kho (QC) và nhập kho (Kho) nay chạy HOÀN TOÀN ở sidebar,
+  // dựa trên PO đã về (xem: api/grn "Hàng về", api/qc nghiệm thu, api/warehouse/grn-stockin).
+  // Không còn tự sinh task P4.4 khi P4.3 hoàn thành. Task P4.3/P4.4 legacy được huỷ mềm
+  // bằng script scripts/cancel-legacy-qc-warehouse-tasks.ts.
 
   // Auto-create P5.3A when P5.1.1 (Yêu cầu nghiệm thu CL) completes
   if (task.taskType === 'P5.1.1') {

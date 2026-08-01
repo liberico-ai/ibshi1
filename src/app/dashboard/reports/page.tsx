@@ -4,12 +4,13 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatCompactVND, formatCurrency, formatNumber } from '@/lib/utils'
 import ExecOverview from './ExecOverview'
+import ProjectProgressTab from './ProjectProgressTab'
 
 type Tab = 'overview' | 'projects' | 'financial' | 'production' | 'qc' | 'warehouse' | 'hr' | 'safety' | 'procurement'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Điều hành' },
-  { key: 'projects', label: 'Dự án' },
+  { key: 'projects', label: 'Tiến độ dự án' },
   { key: 'financial', label: 'Tài chính' },
   { key: 'production', label: 'Sản xuất' },
   { key: 'qc', label: 'Chất lượng' },
@@ -25,9 +26,9 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
 
   const loadTab = useCallback(async (t: Tab) => {
-    if (t === 'overview') { setLoading(false); return }   // Tab "Điều hành" tự tải dữ liệu riêng
+    if (t === 'overview' || t === 'projects') { setLoading(false); return }   // Tab "Điều hành" / "Tiến độ dự án" tự tải
     setLoading(true)
-    const apiType = t === 'projects' ? 'project-progress' : t
+    const apiType = t
     const res = await apiFetch(`/api/reports?type=${apiType}`)
     if (res.ok) setData(res)
     // Also load KPI for HR tab
@@ -65,7 +66,7 @@ export default function ReportsPage() {
       {loading ? <Skeleton /> : (
         <>
           {tab === 'overview' && <ExecOverview />}
-          {tab === 'projects' && <ProjectsReport data={data} />}
+          {tab === 'projects' && <ProjectProgressTab />}
           {tab === 'financial' && <FinancialReport data={data} />}
           {tab === 'production' && <ProductionReport data={data} />}
           {tab === 'qc' && <QCReport data={data} />}
@@ -90,256 +91,6 @@ function KPI({ label, value, sub, color }: { label: string; value: string | numb
   )
 }
 
-// ─── Projects (P5.4 Weekly Volume Report) ───
-interface StageData {
-  name: string;
-  weeks: Record<string, number>;
-  total: number;
-  totalAssigned?: number;
-  totalProduced?: number;
-  totalRemaining?: number;
-}
-interface HangMucData {
-  name: string;
-  totalHm: number;
-  stages: StageData[];
-}
-interface ProjectData {
-  projectCode: string;
-  projectName: string;
-  totalProj: number;
-  hangMucs: HangMucData[];
-}
-
-function ProjectsReport({ data }: { data: Record<string, unknown> }) {
-  const customData = data.weeklyData as ProjectData[] | undefined
-  const customWeekKeys = data.weekKeys as string[] | undefined
-
-  const weeklyData: ProjectData[] = customData || []
-  const allWeekKeys = customWeekKeys || ['Tuần 1', 'Tuần 2', 'Tuần 3', 'Tuần 4']
-
-  // Week range picker state — default: last 4 weeks
-  const MAX_VISIBLE = 4
-  const [weekEnd, setWeekEnd] = useState(allWeekKeys.length)
-  const [weekStart, setWeekStart] = useState(Math.max(0, allWeekKeys.length - MAX_VISIBLE))
-
-  // Update range when data changes
-  React.useEffect(() => {
-    setWeekEnd(allWeekKeys.length)
-    setWeekStart(Math.max(0, allWeekKeys.length - MAX_VISIBLE))
-  }, [allWeekKeys.length])
-
-  const weekKeys = allWeekKeys.slice(weekStart, weekEnd)
-
-  // Accordion state — track expanded projects
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const toggle = (code: string) => {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      next.has(code) ? next.delete(code) : next.add(code)
-      return next
-    })
-  }
-  const expandAll = () => setExpanded(new Set(weeklyData.map(p => p.projectCode)))
-  const collapseAll = () => setExpanded(new Set())
-
-  return (
-    <div className="card overflow-hidden animate-fade-in shadow-sm border border-slate-200">
-      {/* HEADER */}
-      <div className="p-4 flex items-center justify-between flex-wrap gap-3" style={{ borderBottom: '1px solid var(--border)', background: '#f8fafc' }}>
-        <div>
-          <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <span style={{ color: '#f59e0b', fontSize: '1.2rem' }}></span>
-            Báo cáo Sản lượng Nghiệm thu (P5.4)
-          </h3>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Chi tiết theo Dự án {'>'} Hạng mục {'>'} Công đoạn. Dữ liệu từ khối lượng PM xác nhận.</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* WEEK RANGE PICKER */}
-          {allWeekKeys.length > MAX_VISIBLE && (
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="font-medium" style={{ color: 'var(--text-muted)' }}>Tuần:</span>
-              <select
-                className="input text-xs py-1 px-2 rounded-md"
-                style={{ background: 'white', border: '1px solid #e2e8f0', minWidth: 80 }}
-                value={weekStart}
-                onChange={e => setWeekStart(Number(e.target.value))}
-              >
-                {allWeekKeys.map((w, i) => (
-                  <option key={w} value={i}>{w}</option>
-                ))}
-              </select>
-              <span style={{ color: 'var(--text-muted)' }}>→</span>
-              <select
-                className="input text-xs py-1 px-2 rounded-md"
-                style={{ background: 'white', border: '1px solid #e2e8f0', minWidth: 80 }}
-                value={weekEnd}
-                onChange={e => setWeekEnd(Number(e.target.value))}
-              >
-                {allWeekKeys.map((w, i) => (
-                  <option key={w} value={i + 1}>{w}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {/* EXPAND/COLLAPSE */}
-          <button onClick={expanded.size > 0 ? collapseAll : expandAll} className="text-xs font-semibold px-2.5 py-1 rounded-md transition-colors" style={{ background: '#e2e8f0', color: '#475569' }}>
-            {expanded.size > 0 ? '▲ Thu gọn' : '▼ Mở tất cả'}
-          </button>
-          <button className="text-xs font-bold px-3 py-1.5 rounded-lg transition-transform hover:scale-105" style={{ background: '#0ea5e9', color: 'white' }}>
-            Tải xuống Excel
-          </button>
-        </div>
-      </div>
-
-      {/* TABLE */}
-      <div className="overflow-x-auto">
-        <table className="data-table" style={{ width: '100%', minWidth: '700px', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: '#1e293b', color: 'white' }}>
-              <th rowSpan={2} style={{ width: '30%', padding: '12px 16px', fontWeight: 600, verticalAlign: 'middle' }}>Cấu trúc Hình cây (WBS)</th>
-              {weekKeys.map(w => <th key={w} rowSpan={2} className="text-right" style={{ padding: '12px 8px', fontWeight: 600, verticalAlign: 'middle', fontSize: '0.75rem' }}>{w}</th>)}
-              <th className="text-center whitespace-nowrap" style={{ padding: '10px 16px 4px', fontWeight: 800, color: '#38bdf8', borderLeft: '1px solid #334155' }}>Nghiệm thu</th>
-              <th colSpan={3} className="text-center whitespace-nowrap" style={{ padding: '10px 16px 4px', fontWeight: 700, color: '#94a3b8', borderLeft: '1px solid #334155' }}>Tổng hợp khối lượng</th>
-            </tr>
-            <tr style={{ background: '#334155' }}>
-              <th className="text-right whitespace-nowrap" style={{ padding: '4px 16px 10px', fontWeight: 700, color: '#1e293b', background: '#e0f2fe', fontSize: '0.7rem', borderLeft: '1px solid #475569' }}>KL xác nhận (P5.4)</th>
-              <th className="text-right whitespace-nowrap" style={{ padding: '4px 16px 10px', fontWeight: 700, color: '#1e293b', background: '#f1f5f9', fontSize: '0.7rem', borderLeft: '1px solid #475569' }}>SL phân giao (WBS)</th>
-              <th className="text-right whitespace-nowrap" style={{ padding: '4px 16px 10px', fontWeight: 700, color: '#1e293b', background: '#dcfce7', fontSize: '0.7rem' }}>SL sản xuất (P5.1)</th>
-              <th className="text-right whitespace-nowrap" style={{ padding: '4px 16px 10px', fontWeight: 700, color: '#1e293b', background: '#fef9c3', fontSize: '0.7rem' }}>Còn lại cần TH</th>
-            </tr>
-          </thead>
-          <tbody>
-            {weeklyData.map((proj, i) => {
-              const isOpen = expanded.has(proj.projectCode)
-              return (
-                <React.Fragment key={proj.projectCode}>
-                  {/* DÒNG DỰ ÁN — clickable */}
-                  <tr
-                    onClick={() => toggle(proj.projectCode)}
-                    style={{ background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', borderTop: i > 0 ? '4px solid white' : 'none', cursor: 'pointer' }}
-                    className="hover:bg-slate-200 transition-colors"
-                  >
-                    <td colSpan={1} style={{ padding: '10px 16px' }}>
-                      <div className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--primary)' }}>
-                        <span className="transition-transform inline-block" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: '0.65rem', color: '#94a3b8' }}>▶</span>
-                        <span></span>
-                        {proj.projectCode} — <span style={{ color: 'var(--text-primary)' }}>{proj.projectName}</span>
-                        <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full" style={{ background: '#e0f2fe', color: '#0369a1' }}>{proj.hangMucs.reduce((s, h) => s + h.stages.length, 0)} công đoạn</span>
-                      </div>
-                    </td>
-                    {weekKeys.map(w => {
-                      const projSum = proj.hangMucs.reduce((sum: number, hm: HangMucData) => sum + hm.stages.reduce((s: number, stg: StageData) => s + (stg.weeks[w] || 0), 0), 0)
-                      return (
-                        <td key={w} className="text-right font-bold text-sm" style={{ background: projSum > 0 ? '#e0f2fe' : 'transparent', color: projSum > 0 ? '#0369a1' : 'var(--text-muted)', borderLeft: '1px solid #f1f5f9' }}>
-                          {projSum > 0 ? projSum.toLocaleString() : '-'}
-                        </td>
-                      )
-                    })}
-                    <td className="text-right font-extrabold text-sm whitespace-nowrap" style={{ color: '#0ea5e9', background: '#f8fafc', borderLeft: '2px solid white' }}>
-                      {proj.totalProj.toLocaleString()} kg
-                    </td>
-                    {(() => {
-                      const pAssigned = proj.hangMucs.reduce((sum, hm) => sum + hm.stages.reduce((s, stg) => s + (stg.totalAssigned || 0), 0), 0)
-                      const pProduced = proj.hangMucs.reduce((sum, hm) => sum + hm.stages.reduce((s, stg) => s + (stg.totalProduced || 0), 0), 0)
-                      const pRemaining = proj.hangMucs.reduce((sum, hm) => sum + hm.stages.reduce((s, stg) => s + (stg.totalRemaining || 0), 0), 0)
-                      return (
-                        <>
-                          <td className="text-right font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{pAssigned.toLocaleString()}</td>
-                          <td className="text-right font-bold text-sm" style={{ color: '#16a34a' }}>{pProduced.toLocaleString()}</td>
-                          <td className="text-right font-bold text-sm" style={{ color: pRemaining > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{pRemaining.toLocaleString()}</td>
-                        </>
-                      )
-                    })()}
-                  </tr>
-
-                  {/* CHI TIẾT — chỉ hiện khi mở */}
-                  {isOpen && proj.hangMucs.map((hm: HangMucData) => (
-                    <React.Fragment key={`${proj.projectCode}-${hm.name}`}>
-                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        <td colSpan={weekKeys.length + 5} style={{ padding: '6px 16px 6px 36px' }}>
-                          <div className="font-semibold text-xs text-slate-700 flex items-center">
-                            <span className="mr-2 text-slate-400">↳</span>
-                            <span className="px-2 py-0.5 rounded bg-slate-200 mr-2 text-[10px]">HẠNG MỤC</span>
-                            {hm.name}
-                          </div>
-                        </td>
-                      </tr>
-
-                      {hm.stages.map((stg: StageData, k: number) => (
-                        <tr key={stg.name} className="hover:bg-slate-50 transition-colors" style={{ borderBottom: k === hm.stages.length - 1 ? 'none' : '1px dotted #e2e8f0' }}>
-                          <td style={{ padding: '8px 16px 8px 64px' }}>
-                            <span className="text-xs font-medium" style={{ color: '#64748b' }}>
-                              <span className="mr-2 text-slate-300">▪</span>
-                              {stg.name}
-                            </span>
-                          </td>
-                          {weekKeys.map(w => {
-                            const val = stg.weeks[w] || 0
-                            const isHigh = val > 1000
-                            return (
-                              <td key={w} className="text-right text-xs" style={{ verticalAlign: 'middle' }}>
-                                {val > 0 ? (
-                                  <span className="inline-block px-2 py-0.5 rounded-full" style={{
-                                    background: isHigh ? '#dcfce7' : '#f1f5f9',
-                                    color: isHigh ? '#166534' : '#475569',
-                                    fontWeight: isHigh ? 700 : 600
-                                  }}>
-                                    {val.toLocaleString()} <span className="text-[9px] opacity-70">kg</span>
-                                  </span>
-                                ) : (
-                                  <span style={{ color: '#cbd5e1' }}>—</span>
-                                )}
-                              </td>
-                            )
-                          })}
-                          <td className="text-right text-xs font-semibold" style={{ color: '#64748b', borderLeft: '1px dotted #e2e8f0' }}>
-                            {stg.total.toLocaleString()}
-                          </td>
-                          <td className="text-right text-xs" style={{ color: 'var(--text-primary)' }}>{(stg.totalAssigned || 0).toLocaleString()}</td>
-                          <td className="text-right text-xs" style={{ color: '#16a34a' }}>{(stg.totalProduced || 0).toLocaleString()}</td>
-                          <td className="text-right text-xs font-semibold" style={{ color: (stg.totalRemaining || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{(stg.totalRemaining || 0).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </React.Fragment>
-              )
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{ background: '#f8fafc', borderTop: '2px solid #94a3b8' }}>
-              <td className="text-right text-sm font-bold p-4" style={{ color: 'var(--text-primary)' }}>TỔNG SẢN LƯỢNG NGHIỆM THU:</td>
-              {weekKeys.map(w => {
-                const sum = weeklyData.reduce((acc: number, proj: ProjectData) => acc + proj.hangMucs.reduce((s: number, hm: HangMucData) => s + hm.stages.reduce((st: number, stg: StageData) => st + (stg.weeks[w] || 0), 0), 0), 0)
-                return (
-                  <td key={w} className="text-right text-sm font-black p-4" style={{ color: '#0ea5e9' }}>
-                    {sum.toLocaleString()} <span className="text-xs">kg</span>
-                  </td>
-                )
-              })}
-              <td className="text-right text-base font-black p-4 whitespace-nowrap" style={{ color: '#0284c7', borderLeft: '2px solid #e2e8f0' }}>
-                {weeklyData.reduce((acc: number, proj: ProjectData) => acc + proj.totalProj, 0).toLocaleString()} <span className="text-xs">kg</span>
-              </td>
-              {(() => {
-                const totalAssigned = weeklyData.reduce((sum, proj) => sum + proj.hangMucs.reduce((hs, hm) => hs + hm.stages.reduce((ss, stg) => ss + (stg.totalAssigned || 0), 0), 0), 0)
-                const totalProduced = weeklyData.reduce((sum, proj) => sum + proj.hangMucs.reduce((hs, hm) => hs + hm.stages.reduce((ss, stg) => ss + (stg.totalProduced || 0), 0), 0), 0)
-                const totalRemaining = weeklyData.reduce((sum, proj) => sum + proj.hangMucs.reduce((hs, hm) => hs + hm.stages.reduce((ss, stg) => ss + (stg.totalRemaining || 0), 0), 0), 0)
-                return (
-                  <>
-                    <td className="text-right text-base font-bold p-4 whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{totalAssigned.toLocaleString()}</td>
-                    <td className="text-right text-base font-bold p-4 whitespace-nowrap" style={{ color: '#16a34a' }}>{totalProduced.toLocaleString()}</td>
-                    <td className="text-right text-base font-bold p-4 whitespace-nowrap" style={{ color: '#f59e0b' }}>{totalRemaining.toLocaleString()}</td>
-                  </>
-                )
-              })()}
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  )
-}
 
 // ─── Financial (TC-01 Budget Variance) ───
 function FinancialReport({ data }: { data: Record<string, unknown> }) {
