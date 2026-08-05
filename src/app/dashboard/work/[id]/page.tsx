@@ -14,6 +14,7 @@ import { formatDate, formatDateTime, formatShortDateTime } from '@/lib/utils'
 import { Badge, Button } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { confirmDialog } from '@/components/ui/Toast'
+import { isNotifyTask, notifyTaskInfo } from '@/lib/notify-tasks'
 
 
 interface DocFile { id: string; fileName: string; fileUrl: string }
@@ -109,10 +110,52 @@ export default function WorkDetailPage() {
   useEffect(() => { load() }, [load])
   useEffect(() => { apiFetch('/api/users').then((r) => { if (r.ok) setUsers(r.users || []) }) }, [])
 
-  // Task migrate (P*.x) giờ chạy trực tiếp trên /work/ — không redirect
+  // Task "THÔNG BÁO":
+  //  • mode 'dismiss' (ngoài chuỗi, vd P4.3/P4.4): mở lần đầu → tự đánh dấu đã đọc (ẩn khỏi Hộp việc).
+  //  • mode 'redirect' (trong chuỗi 32 bước): KHÔNG ẩn — giữ để nhắc; task tự DONE khi làm xong ở sidebar.
+  useEffect(() => {
+    const info = task ? notifyTaskInfo(task.taskType) : undefined
+    if (info?.mode === 'dismiss' && !task?.resultData?.dismissed) {
+      apiFetch(`/api/work/tasks/${id}/dismiss`, { method: 'POST', body: '{}' }).catch(() => {})
+    }
+  }, [task, id])
 
   if (loading) return <div className="p-6" style={{ color: 'var(--text-muted)' }}>Đang tải…</div>
   if (!task) return <div className="p-6">Không tìm thấy công việc</div>
+
+  // ── Task "THÔNG BÁO": không thao tác ở đây, chỉ là con trỏ sang tab sidebar tương ứng ──
+  const notifyInfo = notifyTaskInfo(task.taskType)
+  if (notifyInfo) {
+    const poCode = (task.resultData?.poCode as string) || ''
+    const notifyTarget = task.projectId
+      ? (notifyInfo.projectScoped ? `${notifyInfo.sidebar}/${task.projectId}`
+        : notifyInfo.projectQuery ? `${notifyInfo.sidebar}?${notifyInfo.projectQuery}=${task.projectId}`
+        : notifyInfo.sidebar)
+      : notifyInfo.sidebar
+    return (
+      <div className="max-w-xl mx-auto p-4 sm:p-6 animate-fade-in">
+        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/work')}>← Hộp việc</Button>
+        <div style={{ marginTop: 12, background: 'var(--bg-card, #fff)', border: '1px solid var(--border)', borderRadius: 16, padding: 24, boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', padding: '3px 10px', borderRadius: 999 }}>🔔 Thông báo</span>
+          <h1 style={{ fontSize: 18, fontWeight: 800, marginTop: 12, color: 'var(--text-primary)', lineHeight: 1.35 }}>{task.title}</h1>
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13.5, color: 'var(--text-muted)' }}>
+            {task.project && <div>Dự án: <b style={{ color: 'var(--text-secondary)' }}>{task.project.projectCode} — {task.project.projectName}</b></div>}
+            {poCode && <div>Đơn hàng: <b style={{ color: 'var(--text-secondary)' }}>{poCode}</b></div>}
+          </div>
+          <p style={{ marginTop: 14, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{notifyInfo.hint}</p>
+          <button onClick={() => router.push(notifyTarget)}
+            style={{ marginTop: 18, width: '100%', padding: '12px 16px', borderRadius: 12, border: 'none', background: 'var(--text-heading, #1e293b)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            Mở tab {notifyInfo.label} →
+          </button>
+          {notifyInfo.mode === 'dismiss' ? (
+            <p style={{ marginTop: 12, fontSize: 11.5, color: 'var(--text-muted)' }}>Thông báo này đã được đánh dấu <b>đã đọc</b> và sẽ không còn ở Hộp việc. Kết quả (Đạt/Không đạt) được ghi ở tab {notifyInfo.label}.</p>
+          ) : (
+            <p style={{ marginTop: 12, fontSize: 11.5, color: 'var(--text-muted)' }}>Hãy hoàn tất việc ở tab {notifyInfo.label}. Khi xong, bước này <b>tự hoàn thành</b> và quy trình chuyển tiếp; thông báo sẽ tự rời Hộp việc.</p>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   const myRow = task.assignees.find((a) => a.userId === user?.id) || task.assignees.find((a) => a.role === user?.roleCode)
   const isAssignee = !!myRow

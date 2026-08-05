@@ -231,6 +231,43 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Sinh task "THÔNG BÁO" P4.3 (QAQC nghiệm thu chất lượng hàng về) cho QC — 1 lần / PO.
+  // Đây chỉ là con trỏ sang tab Chất lượng; mở lần đầu sẽ tự đánh dấu đã đọc, KHÔNG thao
+  // tác/hoàn thành ở Công việc. Gán theo role R09/R09a (userId=null → mọi user QC đều thấy).
+  if (result.movements.length > 0) {
+    try {
+      const existed = await prisma.task.findFirst({
+        where: { taskType: 'P4.3', resultData: { path: ['poId'], equals: po.id } },
+        select: { id: true },
+      })
+      if (!existed) {
+        const t = await prisma.task.create({
+          data: {
+            projectId: po.projectId || null,
+            level: 2,
+            taskType: 'P4.3',
+            title: `QAQC nghiệm thu chất lượng hàng về — ${po.poCode}`,
+            description: `Đơn hàng ${po.poCode} đã về. Mở tab Chất lượng để nghiệm thu chất lượng vật tư.`,
+            priority: 'HIGH',
+            createdBy: user.userId,
+            assignedAt: new Date(),
+            status: 'OPEN',
+            resultData: { poId: po.id, poCode: po.poCode, notify: true },
+          },
+        })
+        await prisma.taskAssignee.createMany({
+          data: [
+            { taskId: t.id, role: 'R09', userId: null, isPrimary: true },
+            { taskId: t.id, role: 'R09a', userId: null, isPrimary: false },
+          ],
+        })
+        await prisma.taskHistory.create({ data: { taskId: t.id, action: 'CREATED', byUserId: user.userId } })
+      }
+    } catch (e) {
+      console.error('[GRN] spawn P4.3 notify task error:', e)
+    }
+  }
+
   return successResponse({
     message: `Đã nhận ${result.movements.length} mục`,
     movements: result.movements,

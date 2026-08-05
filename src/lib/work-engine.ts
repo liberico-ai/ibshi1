@@ -11,6 +11,10 @@ import { isResolved } from './utils'
 import { reverseBfsInclGate, expandRevisionRound, orphanFeeders, satisfiedForRound } from './revise-engine'
 import { getReviseTypeDef } from './revise-map'
 import { isEnabled } from './feature-flags'
+import { NOTIFY_TASK_MAP } from './notify-tasks'
+
+// Mã task "THÔNG BÁO" (con trỏ sang tab sidebar; đã đọc → set CANCELLED để ẩn khỏi hộp việc)
+const NOTIFY_TASK_TYPES = Object.keys(NOTIFY_TASK_MAP)
 
 // ── Dynamic Workflow engine (Phase 1) ──
 // Task động chạy song song WorkflowTask (legacy). Không đụng engine 36 bước.
@@ -491,6 +495,78 @@ export async function finalizeTask(taskId: string, userId: string) {
     (task as { resultData?: unknown }).resultData as Record<string, unknown> | null | undefined,
   )
   return { ok: true }
+}
+
+// ── Cách A: hoàn thành 1 bước quy trình 32 bước TỪ hành động ở tab sidebar ──
+// Khi việc của bước Pxx được LÀM XONG ở tab chuyên môn (vd duyệt dự toán, tạo dự án…),
+// gọi hàm này để đóng task quy trình tương ứng → gate mở → chuỗi tự sinh bước kế tiếp.
+// Task Công việc của bước đó chỉ là THÔNG BÁO; nó DONE ở đây (không phải khi vừa mở).
+// Tìm task OPEN/IN_PROGRESS/RETURNED của (projectId, stepCode) có templateStepId (là task cố định).
+// Idempotent: không có task đang mở của bước → trả { ok:false, reason:'no_task' } (bỏ qua êm).
+export async function completeStepTaskFromSidebar(
+  projectId: string,
+  stepCode: string,
+  userId: string,
+  resultData?: Record<string, unknown>,
+): Promise<{ ok: boolean; taskId?: string; reason?: string }> {
+  const task = await prisma.task.findFirst({
+    where: {
+      projectId,
+      taskType: stepCode,
+      templateStepId: { not: null },
+      status: { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS, TASK_STATUS.RETURNED] },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!task) return { ok: false, reason: 'no_task' }
+
+  const prevStatus = task.status
+  const templateStepId = (task as { templateStepId?: string | null }).templateStepId
+
+  await prisma.$transaction([
+    prisma.taskAssignee.updateMany({ where: { taskId: task.id, done: false }, data: { done: true, doneAt: new Date(), doneBy: userId } }),
+    prisma.task.update({ where: { id: task.id }, data: { status: TASK_STATUS.DONE, completedAt: new Date(), completedBy: userId, resultData: resultData ? mergeResultData(task.resultData, resultData) : undefined } }),
+    prisma.taskHistory.create({ data: { taskId: task.id, action: 'COMPLETED', byUserId: userId, reason: 'Hoàn thành từ tab chuyên môn (sidebar)' } }),
+    prisma.notification.create({ data: { userId: task.createdBy, title: `Hoàn thành: ${task.title}`, message: 'Bước quy trình đã được hoàn thành ở tab chuyên môn.', type: 'task_completed', linkUrl: `/dashboard/work/${task.id}` } }),
+  ])
+  emitTaskUpdated(task.id, prevStatus).catch(() => {})
+
+  const hookKeys = (task as { hookKeys?: string[] }).hookKeys
+  await runHooks(hookKeys, { projectId, userId, resultData }).catch((e) => console.error('[completeStepTaskFromSidebar] hooks:', e))
+  await maybeSyncEstimateToBudget(projectId, userId, resultData).catch((e) => console.error('[completeStepTaskFromSidebar] estimate sync:', e))
+  if (templateStepId) {
+    await chainNextTemplateTasks(task.id, projectId, templateStepId, userId, (task as { revisionRound?: number }).revisionRound ?? 0)
+      .catch((e) => console.error('[completeStepTaskFromSidebar] chain:', e))
+  }
+  return { ok: true, taskId: task.id }
+}
+
+// Cách A — TỪ CHỐI bước quy trình từ tab sidebar: task Pxx của dự án chuyển RETURNED + ghi lý do,
+// báo người nhận/tạo để xem lại. KHÔNG đụng chuỗi (không sinh bước kế). Idempotent tương tự.
+export async function returnStepTaskFromSidebar(
+  projectId: string,
+  stepCode: string,
+  userId: string,
+  reason: string,
+): Promise<{ ok: boolean; taskId?: string; reason?: string }> {
+  const task = await prisma.task.findFirst({
+    where: {
+      projectId,
+      taskType: stepCode,
+      templateStepId: { not: null },
+      status: { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS] },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!task) return { ok: false, reason: 'no_task' }
+  const prevStatus = task.status
+  await prisma.$transaction([
+    prisma.task.update({ where: { id: task.id }, data: { status: TASK_STATUS.RETURNED } }),
+    prisma.taskHistory.create({ data: { taskId: task.id, action: 'RETURNED', byUserId: userId, reason } }),
+    prisma.notification.create({ data: { userId: task.createdBy, title: `Bị trả lại: ${task.title}`, message: reason || 'Bước quy trình bị từ chối ở tab chuyên môn.', type: 'task_returned', linkUrl: `/dashboard/work/${task.id}` } }),
+  ])
+  emitTaskUpdated(task.id, prevStatus).catch(() => {})
+  return { ok: true, taskId: task.id }
 }
 
 // ── Admin status setter (briefing import / manual override) ──
@@ -1000,9 +1076,11 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
     }
   } else if (tab === 'cancelled') {
     // Việc đã xóa mềm (CANCELLED). Admin (R10) xem tất cả để khôi phục; user khác chỉ thấy việc mình liên quan.
+    // Loại task "THÔNG BÁO" (đã đọc → set CANCELLED) để không lẫn vào danh sách việc đã xóa.
+    const notCancelledNotify = { taskType: { notIn: NOTIFY_TASK_TYPES } }
     where = roleCode === 'R10'
-      ? { status: TASK_STATUS.CANCELLED }
-      : { status: TASK_STATUS.CANCELLED, OR: [{ createdBy: userId }, { assignees: myAssignee }] }
+      ? { status: TASK_STATUS.CANCELLED, ...notCancelledNotify }
+      : { status: TASK_STATUS.CANCELLED, ...notCancelledNotify, OR: [{ createdBy: userId }, { assignees: myAssignee }] }
   } else {
     where = { status: pending, assignees: myAssignee }
   }

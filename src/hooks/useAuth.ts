@@ -108,15 +108,24 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
   if (token) headers['Authorization'] = `Bearer ${token}`
 
   const res = await fetch(url, { ...options, headers })
-  const data = await res.json()
 
+  // Xử lý 401 TRƯỚC khi đọc body — 401 có thể trả body rỗng.
   if (res.status === 401) {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('ibs_token')
       sessionStorage.removeItem('ibs_user')
       window.location.href = '/login'
     }
+    return { ok: false, error: 'Phiên đăng nhập đã hết hạn' }
   }
 
-  return data
+  // Đọc body an toàn: body rỗng (server đang recompile, 204, 5xx không body)
+  // hoặc không phải JSON → trả object lỗi thay vì ném "Unexpected end of JSON input".
+  const text = await res.text()
+  if (!text) return { ok: res.ok, error: res.ok ? undefined : `Máy chủ không phản hồi (HTTP ${res.status})` }
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { ok: false, error: `Phản hồi không hợp lệ (HTTP ${res.status})` }
+  }
 }

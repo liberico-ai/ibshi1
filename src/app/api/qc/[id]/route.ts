@@ -105,6 +105,47 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    // Nghiệm thu vật tư ĐẠT → sinh task "THÔNG BÁO" P4.4 (Kho nghiệm thu KL + nhập kho) cho Kho —
+    // 1 lần / PO. Đây là con trỏ sang tab Kho (Nhập hàng GRN); mở lần đầu tự đánh dấu đã đọc.
+    if (status === 'PASSED' && inspection.type === 'material_incoming') {
+      try {
+        const poIds = ((inspection.resultData as { poIds?: string[] } | null)?.poIds) || []
+        if (poIds.length > 0) {
+          const pos = await prisma.purchaseOrder.findMany({ where: { id: { in: poIds } }, select: { id: true, poCode: true, projectId: true } })
+          for (const po of pos) {
+            const existed = await prisma.task.findFirst({
+              where: { taskType: 'P4.4', resultData: { path: ['poId'], equals: po.id } },
+              select: { id: true },
+            })
+            if (existed) continue
+            const t = await prisma.task.create({
+              data: {
+                projectId: po.projectId || null,
+                level: 2,
+                taskType: 'P4.4',
+                title: `Kho nghiệm thu khối lượng & nhập kho — ${po.poCode}`,
+                description: `Hàng của ${po.poCode} đã QC Đạt. Mở tab Kho để nghiệm thu khối lượng và nhập kho.`,
+                priority: 'HIGH',
+                createdBy: payload.userId,
+                assignedAt: new Date(),
+                status: 'OPEN',
+                resultData: { poId: po.id, poCode: po.poCode, notify: true },
+              },
+            })
+            await prisma.taskAssignee.createMany({
+              data: [
+                { taskId: t.id, role: 'R05', userId: null, isPrimary: true },
+                { taskId: t.id, role: 'R05a', userId: null, isPrimary: false },
+              ],
+            })
+            await prisma.taskHistory.create({ data: { taskId: t.id, action: 'CREATED', byUserId: payload.userId } })
+          }
+        }
+      } catch (e) {
+        console.error('[QC] spawn P4.4 notify task error:', e)
+      }
+    }
+
     return successResponse({ inspection }, `Biên bản đã ${status === 'PASSED' ? 'đạt' : status === 'FAILED' ? 'không đạt' : 'đạt có điều kiện'}`)
   } catch (err) {
     console.error('PUT /api/qc/:id error:', err)
