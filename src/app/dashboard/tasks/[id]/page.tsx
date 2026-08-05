@@ -10,6 +10,7 @@ import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
 import BomPrUploadUI from './components/BomPrUploadUI'
+import EstimateAmendCard from './components/EstimateAmendCard'
 import WeldPaintUploadUI from './components/WeldPaintUploadUI'
 import QuickCreateMaterialDialog from './components/QuickCreateMaterialDialog'
 import { resolveCodes } from './components/material-resolve-client'
@@ -2469,6 +2470,8 @@ export default function TaskDetailPage() {
             })()}
 
             {/* P1.2: Estimate Summary (upload Excel → show DT02 summary) */}
+            {task.stepCode === 'P1.2' && <EstimateAmendCard taskId={task.id} isDone={task.status === 'DONE'} onSaved={loadTask} />}
+
             {task.stepCode === 'P1.2' && (() => {
               const fmt = (v: number) => v > 0 ? formatCurrency(v) : '—'
               const contractVal = Number(task.project?.contractValue) || 0
@@ -4979,47 +4982,40 @@ export default function TaskDetailPage() {
             </div>
 
             {/* Previous Step Documents */}
-            {previousStepFiles.length > 0 && (
-              <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-                <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Tài liệu từ các bước trước</h3>
-                {previousStepFiles.map(step => (
-                  <div key={step.stepCode} style={{ marginBottom: 12 }}>
-                    <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                      {step.stepCode} — {step.stepName}
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {step.files.map(f => (
-                        <a
-                          key={f.id}
-                          href="#"
-                          onClick={(e) => { e.preventDefault(); openAuthedFile(f.id, f.fileName, f.mimeType) }}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '6px 10px', borderRadius: 8,
-                            background: 'var(--bg-secondary)', textDecoration: 'none',
-                            color: 'var(--text-primary)', fontSize: '0.85rem',
-                            border: '1px solid var(--border)', cursor: 'pointer',
-                          }}
-                        >
-                          <span style={{ fontSize: '1rem' }}>
-                            {f.mimeType?.includes('pdf') ? '' : f.mimeType?.includes('image') ? '' : f.mimeType?.includes('sheet') || f.fileName.match(/\.xlsx?$/) ? '' : ''}
-                          </span>
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {f.fileName}
-                          </span>
-                          {f.fileSize && (
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-                              {f.fileSize > 1048576 ? `${(f.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(f.fileSize / 1024)} KB`}
-                            </span>
-                          )}
-                          <span style={{ color: '#3b82f6', fontSize: '0.8rem', fontWeight: 600, flexShrink: 0 }}>Tải</span>
-                        </a>
-                      ))}
-                    </div>
+            {previousStepFiles.length > 0 && (() => {
+              const rows = previousStepFiles.flatMap(step => step.files.map(f => ({ ...f, stepCode: step.stepCode, stepName: step.stepName })))
+              return (
+                <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+                  <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Bằng chứng &amp; tài liệu các bước trước ({rows.length})</h3>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                          <th style={{ padding: '6px 8px', fontWeight: 600 }}>Tệp</th>
+                          <th style={{ padding: '6px 8px', fontWeight: 600 }}>Bước</th>
+                          <th style={{ padding: '6px 8px', fontWeight: 600 }}>Người</th>
+                          <th style={{ padding: '6px 8px', fontWeight: 600 }}>Phòng</th>
+                          <th style={{ padding: '6px 8px' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(f => (
+                          <tr key={f.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                            <td style={{ padding: '6px 8px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.fileName}>{f.fileName}</td>
+                            <td style={{ padding: '6px 8px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }} title={f.stepName}>{f.stepCode}</td>
+                            <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{f.uploadedByName || '—'}</td>
+                            <td style={{ padding: '6px 8px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{f.uploadedByDept || '—'}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                              <a href="#" onClick={(ev) => { ev.preventDefault(); openAuthedFile(f.id, f.fileName, f.mimeType) }} style={{ color: '#3b82f6', fontWeight: 600, textDecoration: 'none' }}>Tải</a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              )
+            })()}
 
             {/* Flexible features: assignees, meetings, subtasks, comments */}
             <FlexibleFeatures taskId={taskId} />

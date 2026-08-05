@@ -3,6 +3,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { getTaskById, assignTask } from '@/lib/task-engine'
 import { completeTask, processP45PartialIssue, WORKFLOW_RULES } from '@/lib/workflow-engine'
 import { resolveRoleToUser } from '@/lib/work-engine'
+import { ROLE_TO_DEPT, DEPT_NAME } from '@/lib/org-map'
 import prisma from '@/lib/db'
 import { cacheInvalidate, CACHE_KEYS } from '@/lib/cache'
 import { validateParams } from '@/lib/api-helpers'
@@ -579,12 +580,17 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
             OR: taskIds.map(tid => ({ entityId: { startsWith: tid } })),
           },
           {
+            // "Bằng chứng thực hiện" (entityId = `${taskId}_evidence`) — nay HIỆN sang bước sau.
+            entityType: 'TaskEvidence',
+            OR: taskIds.map(tid => ({ entityId: { startsWith: tid } })),
+          },
+          {
             entityType: 'Project',
             entityId: { startsWith: task.projectId },
           }
         ]
       },
-      select: { id: true, entityId: true, entityType: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true },
+      select: { id: true, entityId: true, entityType: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true, uploadedBy: true },
       orderBy: { createdAt: 'asc' },
     })
 
@@ -596,7 +602,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       if (f.entityType === 'Project' && p11Task) {
         if (!filesByTaskId.has(p11Task.id)) filesByTaskId.set(p11Task.id, [])
         filesByTaskId.get(p11Task.id)!.push(f)
-      } else if (f.entityType === 'Task') {
+      } else if (f.entityType === 'Task' || f.entityType === 'TaskEvidence') {
         const tid = f.entityId.split('_')[0]
         if (!filesByTaskId.has(tid)) filesByTaskId.set(tid, [])
         filesByTaskId.get(tid)!.push(f)
@@ -613,7 +619,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       if (docFileIds.length > 0) {
         const docFiles = await prisma.fileAttachment.findMany({
           where: { id: { in: docFileIds } },
-          select: { id: true, entityId: true, entityType: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true },
+          select: { id: true, entityId: true, entityType: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true, uploadedBy: true },
         })
         for (const dr of taskDocReqs) {
           const file = docFiles.find((f) => f.id === dr.fileAttachmentId)
@@ -625,15 +631,28 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       }
     }
 
+    // Phân giải Người upload → Tên + Phòng (cho bảng "Bằng chứng các bước trước")
+    const uploaderIds = [...new Set([...filesByTaskId.values()].flat().map(f => f.uploadedBy).filter(Boolean))]
+    const uploaders = uploaderIds.length
+      ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: { id: true, fullName: true, username: true, roleCode: true } })
+      : []
+    const uploaderById = new Map(uploaders.map(u => [u.id, u]))
+    const deptOf = (roleCode?: string | null) => (roleCode ? (DEPT_NAME[ROLE_TO_DEPT[roleCode]] || '') : '')
+
     previousStepFiles = otherTasks
       .filter(t => filesByTaskId.has(t.id))
       .map(t => ({
         stepCode: t.taskType,
         stepName: t.title,
-        files: filesByTaskId.get(t.id)!.map(f => ({
-          id: f.id, fileName: f.fileName, fileUrl: f.fileUrl,
-          fileSize: f.fileSize, mimeType: f.mimeType, createdAt: f.createdAt,
-        })),
+        files: filesByTaskId.get(t.id)!.map(f => {
+          const u = f.uploadedBy ? uploaderById.get(f.uploadedBy) : undefined
+          return {
+            id: f.id, fileName: f.fileName, fileUrl: f.fileUrl,
+            fileSize: f.fileSize, mimeType: f.mimeType, createdAt: f.createdAt,
+            uploadedByName: u ? (u.fullName || u.username || '') : '',
+            uploadedByDept: deptOf(u?.roleCode),
+          }
+        }),
       }))
   }
 

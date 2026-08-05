@@ -193,6 +193,8 @@ export interface PrevStepFile {
     fileSize: number | null
     mimeType: string | null
     createdAt: string | Date
+    uploadedByName?: string
+    uploadedByDept?: string
   }>
 }
 
