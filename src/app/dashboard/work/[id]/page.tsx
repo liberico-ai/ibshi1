@@ -100,6 +100,7 @@ export default function WorkDetailPage() {
   const [rejReason, setRejReason] = useState('')
   const [skipOpen, setSkipOpen] = useState(false)
   const [redoOpen, setRedoOpen] = useState(false)
+  const [amendMode, setAmendMode] = useState(false)   // mở khóa biểu mẫu để bổ sung/sửa trên task đã DONE
   const [editOpen, setEditOpen] = useState(false)
   const [edit, setEdit] = useState({ title: '', description: '', deadline: '', priority: 'NORMAL' })
   // Sửa người nhận (trong modal Sửa): chỉ bỏ/đổi được người CHƯA hoàn thành.
@@ -452,17 +453,32 @@ export default function WorkDetailPage() {
           - bước cố định (templateStepId != null), HOẶC
           - việc tạo tay có đính biểu mẫu (resultData.templateType != null).
           Việc động THUẦN (không cả hai) KHÔNG hiện — tránh lạc luồng. (Việc yêu cầu admin cũng ẩn.) */}
-      {!changeReqFor && !!(task.templateStepId || task.resultData?.templateType) && (
-        <TemplateSelector
-          taskId={id}
-          isEditable={(isAssignee || isCreator) && task.status !== 'DONE' && !locked}
-          projectCode={task.project?.projectCode}
-          project={task.project}
-          projectId={task.projectId || undefined}
-          taskTitle={task.title}
-          initialTemplate={(task.resultData?.templateType as string) as import('@/components/TemplateSelector').TemplateType || undefined}
-        />
-      )}
+      {!changeReqFor && !!(task.templateStepId || task.resultData?.templateType) && (() => {
+        const canAmend = (isAssignee || isCreator || isAdmin) && !locked
+        const editable = ((isAssignee || isCreator) && task.status !== 'DONE' && !locked) || (amendMode && canAmend)
+        return (
+          <div>
+            {task.status === 'DONE' && canAmend && (
+              <div className="mb-2 flex items-center gap-2 flex-wrap">
+                <button onClick={() => setAmendMode((v) => !v)} className="text-xs px-3 py-2 rounded-lg font-semibold"
+                  style={{ border: '1px solid #f59e0b', color: '#92400e', background: amendMode ? '#fde68a' : '#fffbeb', cursor: 'pointer' }}>
+                  {amendMode ? '✓ Xong — thoát chỉnh sửa' : '✎ Bổ sung / Chỉnh sửa biểu mẫu (đã DONE)'}
+                </button>
+                {amendMode && <span className="text-xs" style={{ color: '#92400e' }}>Đang mở khóa — sửa / nạp lại biểu mẫu; lưu sẽ tự đồng bộ (Ngân sách…). Xong bấm &quot;Xong&quot;.</span>}
+              </div>
+            )}
+            <TemplateSelector
+              taskId={id}
+              isEditable={editable}
+              projectCode={task.project?.projectCode}
+              project={task.project}
+              projectId={task.projectId || undefined}
+              taskTitle={task.title}
+              initialTemplate={(task.resultData?.templateType as string) as import('@/components/TemplateSelector').TemplateType || undefined}
+            />
+          </div>
+        )
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
       {/* ══ CỘT CHÍNH: tài liệu + trao đổi ══ */}

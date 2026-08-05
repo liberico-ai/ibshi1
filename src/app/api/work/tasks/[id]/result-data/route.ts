@@ -4,6 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { KEY_TO_FORM } from '@/lib/constants'
 import { can } from '@/lib/permissions/can'
 import { materializePrSafe } from '@/lib/pr-materialize'
+import { maybeSyncEstimateToBudget } from '@/lib/work-hooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,6 +63,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       WHERE "id" = ${id}`
     // Sinh/cập nhật PR (sau FF_PR_MATERIALIZE, mặc định TẮT). Không bao giờ throw.
     await materializePrSafe(id, payload.userId)
+
+    // Re-propagate: sửa dữ liệu DỰ TOÁN (kể cả trong "amend mode" trên task đã DONE)
+    // → đồng bộ lại Budget.planned ngay. Các bước sau đọc trực tiếp resultData nên tự cập nhật.
+    if (['totalMaterial', 'totalLabor', 'totalService', 'totalOverhead', 'totalEstimate'].includes(body.key)) {
+      try {
+        const t = await prisma.task.findUnique({ where: { id }, select: { projectId: true, resultData: true } })
+        await maybeSyncEstimateToBudget(t?.projectId || null, payload.userId, t?.resultData as Record<string, unknown>)
+      } catch (e) { console.error('[result-data] re-sync estimate:', e) }
+    }
+
     return successResponse({})
   } catch (err) {
     console.error('POST /api/work/tasks/[id]/result-data error:', err)

@@ -40,6 +40,20 @@ const TPL_COLOR: Record<string, string> = {
   WELD_PAINT: '#dc2626', BOM: '#059669', SUPPLIER_QUOTE: '#d97706',
 }
 
+// Biểu mẫu đã có dữ liệu chưa? (dựa trên các key trong resultData — khớp logic auto-detect)
+function templateHasData(v: NonNullable<TemplateType>, rd: Record<string, unknown>): boolean {
+  switch (v) {
+    case 'ESTIMATE': return !!(rd.totalEstimate || rd.dt02Detail)
+    case 'PR': return !!(rd.bomPr || rd.bomPrItems)
+    case 'BBH': return !!(rd.momSections || rd.momAttendants)
+    case 'WBS': return !!(rd.wbsItems || rd.milestones)
+    case 'WELD_PAINT': return !!(rd.weldData || rd.paintData)
+    case 'BOM': return !!(rd.bomItemsList)
+    case 'SUPPLIER_QUOTE': return !!(rd.supplierQuotes)
+    default: return false
+  }
+}
+
 export default function TemplateSelector({ taskId, isEditable, projectCode, project, projectId, taskTitle, initialTemplate }: Props) {
   const [selected, setSelected] = useState<TemplateType>(initialTemplate ?? null)
   const [loaded, setLoaded] = useState(false)
@@ -137,6 +151,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
           {TEMPLATES.map((t) => {
             const active = selected === t.value
             const color = TPL_COLOR[t.value] || '#2563eb'
+            const hasData = templateHasData(t.value, resultData)
             return (
               <button
                 key={t.value}
@@ -145,7 +160,10 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '12px 14px', borderRadius: 12,
-                  border: `1px solid ${active ? color : 'var(--border, #e2e8f0)'}`,
+                  // Dùng border theo từng cạnh (non-shorthand) để KHÔNG xung đột với borderLeft khi re-render.
+                  borderTop: `1px solid ${active ? color : 'var(--border, #e2e8f0)'}`,
+                  borderRight: `1px solid ${active ? color : 'var(--border, #e2e8f0)'}`,
+                  borderBottom: `1px solid ${active ? color : 'var(--border, #e2e8f0)'}`,
                   borderLeft: `4px solid ${color}`,
                   background: active ? `${color}12` : 'var(--surface, #ffffff)',
                   boxShadow: active ? `0 0 0 1px ${color}` : '0 1px 2px rgba(16,24,40,.04)',
@@ -163,7 +181,12 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
                   <div style={{ fontSize: '0.84rem', fontWeight: 600, color: active ? color : 'var(--text-primary)' }}>{t.label}</div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.desc}</div>
                 </div>
-                {active && <span style={{ fontSize: '0.9rem', color, marginLeft: 'auto', flexShrink: 0 }}>✓</span>}
+                <span style={{
+                  marginLeft: 'auto', flexShrink: 0, fontSize: '0.62rem', fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
+                  background: hasData ? '#dcfce7' : '#f1f5f9',
+                  color: hasData ? '#15803d' : '#94a3b8',
+                }}>{hasData ? '✓ Đã có' : 'Trống'}</span>
               </button>
             )
           })}
