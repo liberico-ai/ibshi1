@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { notify } from '@/components/ui/Toast'
+import WbsPlanCard from './WbsPlanCard'
 
 interface Milestone {
   id: string; name: string; nameEn: string; description: string | null; billingPercent: string;
@@ -79,6 +80,9 @@ export default function MilestonePage() {
         </div>
         <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm cột mốc</button>
       </div>
+
+      {/* P1.2A — Lập kế hoạch & WBS (hiện khi mở từ thông báo với ?project=) */}
+      <WbsPlanCard />
 
       {/* Form */}
       {showForm && (

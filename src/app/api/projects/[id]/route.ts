@@ -382,6 +382,29 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
     return successResponse({ ok: true }, `Khách hàng đã xác nhận nghiệm thu`)
   }
 
+  // ── P1.1B: BGĐ phê duyệt / từ chối TRIỂN KHAI dự án (Cách A — đóng/trả task quy trình) ──
+  if (body.action === 'APPROVE_KICKOFF' || body.action === 'REJECT_KICKOFF') {
+    if (payload.roleCode !== 'R01') {
+      return errorResponse('Chỉ BGĐ (R01) mới được duyệt triển khai dự án', 403)
+    }
+    const { completeStepTaskFromSidebar, returnStepTaskFromSidebar } = await import('@/lib/work-engine')
+    const { logAudit, getClientIP } = await import('@/lib/auth')
+
+    if (body.action === 'APPROVE_KICKOFF') {
+      const r = await completeStepTaskFromSidebar(id, 'P1.1B', payload.userId, { kickoffApprovedBy: payload.userId, kickoffApprovedAt: new Date().toISOString() })
+      if (!r.ok) return errorResponse('Không có bước P1.1B đang chờ duyệt cho dự án này', 422)
+      await logAudit(payload.userId, 'APPROVE_KICKOFF', 'Project', id, {}, getClientIP(req))
+      return successResponse({ ok: true }, 'Đã duyệt triển khai dự án — quy trình chuyển tiếp')
+    } else {
+      const reason = (body.reason || '').toString().trim()
+      if (!reason) return errorResponse('Cần nhập lý do từ chối', 422)
+      const r = await returnStepTaskFromSidebar(id, 'P1.1B', payload.userId, reason)
+      if (!r.ok) return errorResponse('Không có bước P1.1B đang chờ duyệt cho dự án này', 422)
+      await logAudit(payload.userId, 'REJECT_KICKOFF', 'Project', id, { reason }, getClientIP(req))
+      return successResponse({ ok: true }, 'Đã từ chối triển khai — trả lại kèm lý do')
+    }
+  }
+
   return errorResponse('Action không hợp lệ')
 })
 

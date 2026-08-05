@@ -63,6 +63,10 @@ export default function ProjectDetailPage() {
   const [assigningTask, setAssigningTask] = useState<Task | null>(null)
   const [closing, setClosing] = useState(false)
   const [applyingTpl, setApplyingTpl] = useState(false)
+  // P1.1B — BGĐ duyệt/từ chối triển khai
+  const [kickoffBusy, setKickoffBusy] = useState(false)
+  const [rejectingKickoff, setRejectingKickoff] = useState(false)
+  const [kickoffReason, setKickoffReason] = useState('')
   const [collapsedPhases, setCollapsedPhases] = useState<Set<number> | null>(null)
   const { user: currentUser } = useAuthStore()
 
@@ -104,6 +108,22 @@ export default function ProjectDetailPage() {
       notify(res.error || 'Lỗi đóng dự án')
     }
     setClosing(false)
+  }
+
+  async function handleApproveKickoff() {
+    setKickoffBusy(true)
+    const res = await apiFetch(`/api/projects/${params.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'APPROVE_KICKOFF' }) })
+    setKickoffBusy(false)
+    if (res.ok) { notify(res.message || 'Đã duyệt triển khai', 'success'); await reload() }
+    else notify(res.error || 'Lỗi duyệt triển khai', 'error')
+  }
+  async function handleRejectKickoff() {
+    if (!kickoffReason.trim()) { notify('Nhập lý do từ chối', 'error'); return }
+    setKickoffBusy(true)
+    const res = await apiFetch(`/api/projects/${params.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'REJECT_KICKOFF', reason: kickoffReason.trim() }) })
+    setKickoffBusy(false)
+    if (res.ok) { notify(res.message || 'Đã từ chối triển khai', 'success'); setRejectingKickoff(false); setKickoffReason(''); await reload() }
+    else notify(res.error || 'Lỗi từ chối', 'error')
   }
 
   async function handleApplyTemplate() {
@@ -548,6 +568,42 @@ export default function ProjectDetailPage() {
           )
         })}
       </div>
+
+      {/* P1.1B — BGĐ duyệt triển khai dự án (hiện khi có bước P1.1B đang chờ) */}
+      {(() => {
+        const kickoffStep = project.phases?.flatMap((p) => p.steps).find((s) => s.stepCode === 'P1.1B')
+        const pending = currentUser?.roleCode === 'R01' && !!kickoffStep && kickoffStep.status !== 'DONE' && !!kickoffStep.taskId
+        if (!pending) return null
+        return (
+          <div className="card p-5" style={{ maxWidth: 380, marginBottom: 16, border: '1px solid #f59e0b40', background: '#fffbeb' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>Phê duyệt triển khai dự án (P1.1B)</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>BGĐ duyệt để quy trình chuyển sang lập kế hoạch &amp; dự toán (P1.2A + P1.2).</p>
+            {!rejectingKickoff ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleApproveKickoff} disabled={kickoffBusy}
+                  className="flex-1 text-xs px-3 py-2.5 rounded-lg font-semibold" style={{ background: '#16a34a', color: '#fff', opacity: kickoffBusy ? 0.5 : 1 }}>
+                  ✓ Duyệt triển khai
+                </button>
+                <button onClick={() => setRejectingKickoff(true)} disabled={kickoffBusy}
+                  className="text-xs px-3 py-2.5 rounded-lg font-semibold" style={{ background: '#fff', color: '#dc2626', border: '1px solid #dc262640' }}>
+                  Từ chối
+                </button>
+              </div>
+            ) : (
+              <div>
+                <textarea value={kickoffReason} onChange={(e) => setKickoffReason(e.target.value)} rows={2}
+                  placeholder="Lý do từ chối triển khai…" className="input-field" style={{ width: '100%', fontSize: 13, marginBottom: 8 }} />
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setRejectingKickoff(false); setKickoffReason('') }} disabled={kickoffBusy}
+                    className="text-xs px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                  <button onClick={handleRejectKickoff} disabled={kickoffBusy || !kickoffReason.trim()}
+                    className="text-xs px-3 py-2 rounded-lg font-semibold" style={{ background: '#dc2626', color: '#fff', opacity: (kickoffBusy || !kickoffReason.trim()) ? 0.5 : 1 }}>Xác nhận từ chối</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Quick Actions */}
       {project.status !== 'CLOSED' && project.progress.percentage >= 90 && (
