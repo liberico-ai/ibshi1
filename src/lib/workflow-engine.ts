@@ -6,6 +6,7 @@ import { runValidationRules } from './validation-rules'
 import { notifyTaskActivated, notifyTaskRejected } from './telegram-notifications'
 import { resolveRoleToUser } from './work-engine'
 import { applyStockMovement } from './stock-ledger'
+import { stepFormGate } from './step-form-gate'
 
 // Re-export client-safe items for backward compatibility
 export { WORKFLOW_RULES, PHASE_LABELS, getWorkflowProgress } from './workflow-constants'
@@ -34,6 +35,10 @@ export async function completeTask(
   if (!task.projectId) throw new Error('Task has no projectId')
   if (task.status === TASK_STATUS.DONE) throw new Error('Task already completed')
   const projectId = task.projectId
+
+  // Gate biểu mẫu: chặn hoàn thành nếu bước cần dữ liệu parse mà chưa có (vd P1.2 dự toán).
+  const gateErr = stepFormGate(task.taskType, { ...((task.resultData as Record<string, unknown>) || {}), ...(resultData || {}) })
+  if (gateErr) throw new Error(gateErr)
 
   // Run TC validation rules before marking as done
   const validation = await runValidationRules(task.taskType, resultData, projectId)

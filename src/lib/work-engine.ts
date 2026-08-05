@@ -12,6 +12,7 @@ import { reverseBfsInclGate, expandRevisionRound, orphanFeeders, satisfiedForRou
 import { getReviseTypeDef } from './revise-map'
 import { isEnabled } from './feature-flags'
 import { NOTIFY_TASK_MAP } from './notify-tasks'
+import { stepFormGate } from './step-form-gate'
 
 // Mã task "THÔNG BÁO" (con trỏ sang tab sidebar; đã đọc → set CANCELLED để ẩn khỏi hộp việc)
 const NOTIFY_TASK_TYPES = Object.keys(NOTIFY_TASK_MAP)
@@ -302,6 +303,9 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
   assertNotPendingRequest(task)
   if (task.status === TASK_STATUS.DONE) throw new Error('Công việc đã hoàn thành')
   if (!isAssignee(task, userId, roleCode)) throw new Error('Bạn không phải người nhận công việc này')
+  // Gate biểu mẫu: chặn hoàn thành nếu bước cần dữ liệu parse mà chưa có (vd P1.2 dự toán).
+  const gateErr = stepFormGate(task.taskType, { ...((task.resultData as Record<string, unknown>) || {}), ...(input.resultData || {}) })
+  if (gateErr) throw new Error(gateErr)
   const prevStatus = task.status
 
   // ── Điều kiện hoàn thành (áp dụng cho MỌI task) ──
