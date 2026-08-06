@@ -15,7 +15,7 @@ interface Task {
   project: { projectCode: string; projectName: string } | null
   assigneeNames: string[]; createdByName: string; needsMyReview: boolean; _count: { children: number; docs: number }
   createdBy?: string
-  assignees?: { done: boolean }[]
+  assignees?: { done: boolean; userId?: string | null; role?: string | null }[]
   resultData?: { changeRequest?: { status: string; type: string; reason: string } } | null
 }
 interface Proj { id: string; projectCode: string; projectName: string }
@@ -209,7 +209,9 @@ export default function WorkInboxPage() {
             {tasks.map((t, idx) => {
               const st = t.blocked ? { l: 'Tắc', variant: 'warning' as const } : (ST[t.status] || ST.OPEN)
               const due = dueInfo(t.deadline, t.status)
-              const doerOver = isDoerOverdue(t)
+              // Quá hạn theo TỪNG NGƯỜI: nếu MÌNH đã hoàn thành phần của mình thì KHÔNG coi là quá hạn.
+              const myDoneHere = !!t.assignees?.some((a) => (a.userId === user?.id || a.role === user?.roleCode) && a.done)
+              const doerOver = isDoerOverdue(t) && !myDoneHere
               const revLate = isReviewLate(t)
               const revDays = reviewDaysLate(t)
               // Màu khung theo mức khẩn: quá hạn → đỏ; ưu tiên; rồi theo trạng thái.

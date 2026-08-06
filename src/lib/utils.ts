@@ -178,10 +178,11 @@ export function isCompletedLate(t: OverdueTask): boolean {
   return t.status === 'DONE' && !!t.deadline && !!t.completedAt && startOfDay(t.completedAt) > startOfDay(t.deadline)
 }
 
-export function overdueForUser(t: OverdueTask & { createdBy?: string; assignees?: { userId?: string | null; role?: string | null }[] }, userId: string, roleCode?: string): 'doer' | 'review' | null {
+export function overdueForUser(t: OverdueTask & { createdBy?: string; assignees?: { userId?: string | null; role?: string | null; done?: boolean }[] }, userId: string, roleCode?: string): 'doer' | 'review' | null {
   if (isOverdueForDoer(t)) {
-    const isAssignee = t.assignees?.some(a => a.userId === userId || a.role === roleCode)
-    if (isAssignee) return 'doer'
+    // Quá hạn theo TỪNG NGƯỜI: chỉ khi dòng người nhận của mình CHƯA hoàn thành (done !== true).
+    const myRow = t.assignees?.find(a => a.userId === userId) || t.assignees?.find(a => a.role === roleCode)
+    if (myRow && myRow.done !== true) return 'doer'
   }
   if (isLateForReview(t)) {
     if (t.createdBy === userId) return 'review'

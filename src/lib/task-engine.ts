@@ -276,34 +276,44 @@ export async function checkDeadlines() {
     where: whereOverdue(),
     include: {
       project: { select: { projectCode: true, projectName: true } },
-      assignees: { where: { isPrimary: true }, select: { userId: true } },
+      assignees: { select: { userId: true, done: true } },
     },
   })
 
   let created = 0
   for (const task of overdueTasks) {
-    const userId = task.assignees[0]?.userId
-    if (!userId) continue
     const linkUrl = `/dashboard/work/${task.id}`
 
-    // Chống trùng: nếu user đã có thông báo quá hạn CHƯA ĐỌC cho đúng việc này thì bỏ qua
-    // (chạy hằng ngày không spam lặp lại). Đọc rồi mà vẫn quá hạn thì nhắc lại 1 lần nữa.
-    const existing = await prisma.notification.findFirst({
-      where: { userId, type: 'deadline_overdue', linkUrl, isRead: false },
-      select: { id: true },
-    })
-    if (existing) continue
+    // Ai được nhắc quá hạn — TÍNH THEO TỪNG NGƯỜI:
+    //  • Trễ nghiệm thu (AWAITING_REVIEW) → NGƯỜI TẠO.
+    //  • Quá hạn thực thi (OPEN/IN_PROGRESS/RETURNED) → chỉ NGƯỜI NHẬN CHƯA hoàn thành (done=false).
+    //    Người đã xong phần của mình KHÔNG bị nhắc dù task còn chờ người khác.
+    const recipients = new Set<string>()
+    if (task.status === TASK_STATUS.AWAITING_REVIEW) {
+      if (task.createdBy) recipients.add(task.createdBy)
+    } else {
+      for (const a of task.assignees) if (a.userId && !a.done) recipients.add(a.userId)
+    }
 
-    await prisma.notification.create({
-      data: {
-        userId,
-        title: `Việc quá hạn: ${task.title}`,
-        message: `Việc trong dự án ${task.project?.projectCode || ''} đã quá hạn, cần xử lý sớm.`,
-        type: 'deadline_overdue',
-        linkUrl,
-      },
-    })
-    created++
+    for (const userId of recipients) {
+      // Chống trùng: đã có thông báo quá hạn CHƯA ĐỌC cho việc này → bỏ qua (không spam hằng ngày).
+      const existing = await prisma.notification.findFirst({
+        where: { userId, type: 'deadline_overdue', linkUrl, isRead: false },
+        select: { id: true },
+      })
+      if (existing) continue
+
+      await prisma.notification.create({
+        data: {
+          userId,
+          title: `Việc quá hạn: ${task.title}`,
+          message: `Việc trong dự án ${task.project?.projectCode || ''} đã quá hạn, cần xử lý sớm.`,
+          type: 'deadline_overdue',
+          linkUrl,
+        },
+      })
+      created++
+    }
   }
 
   return created

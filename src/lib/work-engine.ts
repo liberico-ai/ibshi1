@@ -1053,6 +1053,9 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
   const deptRoles = rolesInSameDept(roleCode)
   const pending = { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS, TASK_STATUS.RETURNED] }
   const myAssignee = { some: { OR: [{ userId }, { role: roleCode }] } }
+  // Quá hạn TÍNH THEO TỪNG NGƯỜI: chỉ khi dòng người nhận của mình CHƯA hoàn thành (done=false).
+  // Người đã xong phần của mình thì KHÔNG bị coi là quá hạn dù task còn chờ người khác.
+  const myAssigneeNotDone = { some: { OR: [{ userId }, { role: roleCode }], done: false } }
   let where: Record<string, unknown>
 
   if (tab === 'assigned') {
@@ -1066,7 +1069,7 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
   } else if (tab === 'overdue') {
     where = {
       OR: [
-        { ...whereDoerOverdue(), assignees: myAssignee },
+        { ...whereDoerOverdue(), assignees: myAssigneeNotDone },
         { ...whereReviewLate(), createdBy: userId },
       ],
     }

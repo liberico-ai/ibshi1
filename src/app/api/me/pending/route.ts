@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
   // Khớp đúng logic tab "assigned" của Hộp việc: assignee theo userId HOẶC role, status còn phải làm.
   const myAssignee = { some: { OR: [{ userId: user.userId }, { role: user.roleCode }] } }
   const pendingWhere = { status: { in: ['OPEN', 'IN_PROGRESS', 'RETURNED'] }, assignees: myAssignee }
-  const overdueWhere = { ...whereDoerOverdue(), assignees: myAssignee }
+  // Quá hạn theo TỪNG NGƯỜI: chỉ tính khi dòng người nhận của mình chưa hoàn thành (done=false).
+  const myAssigneeNotDone = { some: { OR: [{ userId: user.userId }, { role: user.roleCode }], done: false } }
+  const overdueWhere = { ...whereDoerOverdue(), assignees: myAssigneeNotDone }
 
   const [pending, urgentTasks] = await Promise.all([
     prisma.task.count({ where: pendingWhere }),
