@@ -6,6 +6,22 @@ import { formatNumber } from '@/lib/utils'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 export type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow }
 
+// Chuẩn hoá giá trị ngày từ Excel → 'yyyy-mm-dd' (cho <input type="date">).
+// Excel lưu ngày dạng SỐ SERIAL (vd 45919) → phải đổi; hỗ trợ cả dd/mm/yyyy và yyyy-mm-dd.
+function excelToISODate(v: unknown): string {
+  if (v == null || v === '') return ''
+  if (typeof v === 'number' && v > 20000 && v < 90000) {
+    // Serial Excel → UTC-midnight → yyyy-mm-dd (KHÔNG phụ thuộc XLSX.SSF vốn có thể bị tree-shake ở client)
+    const d = new Date(Math.round((v - 25569) * 86400000))
+    if (!isNaN(d.getTime())) return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+  }
+  const s = String(v).trim()
+  const m = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/)
+  if (m) { let [, dd, mm, yy] = m; if (yy.length === 2) yy = '20' + yy; return `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}` }
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  return ''
+}
+
 
 export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave, qcFailedAssignments, onCloneRework }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void; qcFailedAssignments?: any[]; onCloneRework?: (rowIdx: number, stageKey: string, teamIdx: number) => void }) {
   const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
@@ -219,7 +235,10 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
             Object.keys(colIndices).forEach(key => {
               const idx = colIndices[key as keyof typeof colIndices];
               if (idx >= 0 && rowData[idx] !== undefined && rowData[idx] !== null && rowData[idx] !== '') {
-                newRow[key as keyof WbsRow] = String(rowData[idx]).trim();
+                // Cột ngày: đổi serial Excel → yyyy-mm-dd; cột khác giữ nguyên chuỗi.
+                newRow[key as keyof WbsRow] = (key === 'batDau' || key === 'ketThuc')
+                  ? excelToISODate(rowData[idx])
+                  : String(rowData[idx]).trim();
               }
             });
             
