@@ -201,6 +201,7 @@ export const MENU_ITEMS = [
 
   // ── Project ──
   { key: 'projects', label: 'Dự án', labelEn: 'Projects', icon: 'FolderKanban', href: '/dashboard/projects', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a', 'R06', 'R06a', 'R07'], group: 'project' },
+  { key: 'estimates', label: 'Dự toán', labelEn: 'Estimates', icon: 'Calculator', href: '/dashboard/estimates', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'project' },
   { key: 'milestones', label: 'Cột mốc', labelEn: 'Milestones', icon: 'Target', href: '/dashboard/milestones', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'project' },
   { key: 'subcontracts', label: 'Thầu phụ', labelEn: 'Subcontracts', icon: 'Handshake', href: '/dashboard/subcontracts', roles: ['R01', 'R02', 'R02a', 'R07', 'R07a'], group: 'project' },
   { key: 'lessons', label: 'Bài học kinh nghiệm', labelEn: 'Lessons', icon: 'BookOpen', href: '/dashboard/lessons', roles: ['R01', 'R02', 'R02a'], group: 'project' },

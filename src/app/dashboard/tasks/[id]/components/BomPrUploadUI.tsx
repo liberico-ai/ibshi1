@@ -141,13 +141,16 @@ function parsePrExcel(data: any[][]): PrMaterialItem[] {
   const S = (v: unknown): string => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim())
   const N = (v: unknown): number => { const n = Number(v); return isNaN(n) ? 0 : n }
 
-  // Find header row: require BOTH "Item/STT" AND "Description/Chi tiết/Vật tư" to avoid noise rows
+  // Find header row: cần "Item/STT" + (Description HOẶC Profile/Vật tư).
+  // Mẫu Vật tư hàn/tiêu hao không có cột Description — tên VT nằm ở cột "Profile/Vật tư",
+  // nên chấp nhận header chỉ cần Item + Profile (tránh noise nhờ vẫn bắt buộc có Item).
   let headerIdx = -1
   for (let i = 0; i < Math.min(20, data.length); i++) {
     const row = data[i] || []
     const hasItem = row.some((c: any) => /\bitem\b|\bstt\b/i.test(S(c)))
     const hasDesc = row.some((c: any) => /description|chi ti[ếê]t|di[ễê]n gi[ảa]i/i.test(S(c)))
-    if (hasItem && hasDesc) { headerIdx = i; break }
+    const hasProfile = row.some((c: any) => /profile/i.test(S(c)))
+    if (hasItem && (hasDesc || hasProfile)) { headerIdx = i; break }
   }
   if (headerIdx < 0) return []
 
@@ -193,8 +196,9 @@ function parsePrExcel(data: any[][]): PrMaterialItem[] {
     if (!stt) continue
     if (isFooterRow(stt)) break
 
-    const description = cDesc >= 0 ? S(row[cDesc]) : ''
     const profile = cProfile >= 0 ? S(row[cProfile]) : ''
+    // Mẫu Vật tư hàn không có cột Description → lấy Profile/Vật tư làm mô tả.
+    const description = cDesc >= 0 ? S(row[cDesc]) : profile
     const grade = cGrade >= 0 ? S(row[cGrade]) : ''
     const type = cType >= 0 ? S(row[cType]) : ''
     const thickness = cThick >= 0 ? N(row[cThick]) : 0
@@ -227,8 +231,10 @@ function parsePrExcel(data: any[][]): PrMaterialItem[] {
     }
 
     // Final quantity: prefer Total Ordered, then last Current, then Net
-    const quantity = totalQty || curQty || netQty
+    let quantity = totalQty || curQty || netQty
     const weight = totalWeight || curWeight || netWeight
+    // Vật tư hàn/tiêu hao đo bằng kg: chỉ điền cột Weight, cột Q.Ty để trống → dùng weight làm SL.
+    if (quantity === 0 && weight > 0 && /kg/i.test(unit)) quantity = weight
     if (quantity === 0 && weight === 0) continue
 
     const cat = currentCategory || extractCategory(stt)
@@ -597,7 +603,7 @@ export default function BomPrUploadUI({ isEditable, bomPrData, onChange, project
             // Expand all categories
             setExpandedCats(new Set(parsed.map(i => i.category)))
           } else {
-            notify(`Không đọc được dữ liệu PR từ sheet "${sheetName}". Kiểm tra lại định dạng (cần có header với STT/Item, Description, Profile, Grade, Unit, Q.ty).`)
+            notify(`Không đọc được dữ liệu PR từ sheet "${sheetName}". Kiểm tra lại định dạng (cần header có cột STT/Item và (Description hoặc Profile/Vật tư), kèm Unit, Q.ty).`)
           }
         } catch (err) {
           console.error('PR Excel parse error:', err)

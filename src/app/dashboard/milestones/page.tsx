@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { notify } from '@/components/ui/Toast'
 import WbsPlanCard from './WbsPlanCard'
+
+// Khớp ALLOWED_ROLES của /api/milestones — chỉ các role này mới thêm/hoàn thành cột mốc.
+const MILESTONE_EDIT_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a']
 
 interface Milestone {
   id: string; name: string; nameEn: string; description: string | null; billingPercent: string;
@@ -25,6 +28,8 @@ export default function MilestonePage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [projectList, setProjectList] = useState<{ id: string; projectCode: string; projectName: string }[]>([])
+  const { user } = useAuthStore()
+  const canEditMilestone = !!user && MILESTONE_EDIT_ROLES.includes(user.roleCode)
 
   const load = () => {
     apiFetch('/api/milestones').then(res => {
@@ -78,7 +83,7 @@ export default function MilestonePage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Cột mốc & Thanh toán theo tiến độ</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{completedMs}/{totalMs} cột mốc hoàn thành</p>
         </div>
-        <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm cột mốc</button>
+        {canEditMilestone && <button onClick={openForm} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm cột mốc</button>}
       </div>
 
       {/* P1.2A — Lập kế hoạch & WBS (hiện khi mở từ thông báo với ?project=) */}
@@ -150,7 +155,7 @@ export default function MilestonePage() {
                     </span>
                   </td>
                   <td>
-                    {m.status !== 'COMPLETED' && (
+                    {m.status !== 'COMPLETED' && canEditMilestone && (
                       <button onClick={() => updateStatus(m.id, 'COMPLETED')} className="text-xs px-2 py-1 rounded font-medium" style={{ background: '#16a34a20', color: '#16a34a' }}>
                         ✓ Hoàn thành
                       </button>

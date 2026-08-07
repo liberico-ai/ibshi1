@@ -524,6 +524,10 @@ export async function completeStepTaskFromSidebar(
   })
   if (!task) return { ok: false, reason: 'no_task' }
 
+  // Gate biểu mẫu: chặn hoàn thành từ sidebar nếu bước cần dữ liệu parse mà chưa có (vd P1.2 dự toán).
+  const gateErr = stepFormGate(task.taskType, { ...((task.resultData as Record<string, unknown>) || {}), ...(resultData || {}) })
+  if (gateErr) return { ok: false, reason: gateErr }
+
   const prevStatus = task.status
   const templateStepId = (task as { templateStepId?: string | null }).templateStepId
 

@@ -1,71 +1,54 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify, confirmDialog } from '@/components/ui/Toast'
-import WbsTableUI from '@/app/dashboard/tasks/[id]/components/WbsTableUI'
+import EstimateUploadUI from '@/components/EstimateUploadUI'
 import StepTaskFeatures from '@/components/StepTaskFeatures'
 
-// P1.2A — Lập kế hoạch & WBS ở tab Cột mốc (Cách A).
-// Bê nguyên bản trong Công việc: WBS tool + Bằng chứng (biên bản kickoff/WBS) + Người nhận
-// + Trao đổi & lịch sử (StepTaskFeatures), Từ chối/trả lại, Bổ sung/Chỉnh sửa sau DONE.
-// Sửa WBS → lưu nháp task.resultData.wbsItems; "Hoàn thành" → đóng P1.2A → chuỗi tiếp P1.3.
-interface StepTask { id: string; status: string; resultData: Record<string, unknown>; canEdit: boolean }
+// P1.2 — Lập dự toán thi công (KTKH) ở tab Dự toán (Cách A).
+// Bê nguyên bản trong Công việc: DT01 read-only + Import DT02 → 4 tổng (tự re-sync Budget),
+// Bằng chứng + Người nhận + Trao đổi & lịch sử (StepTaskFeatures), Từ chối/trả lại, và
+// Bổ sung/Chỉnh sửa sau DONE. "Hoàn thành" → đóng P1.2 → chuỗi chuyển tiếp P1.3.
+interface ProjInfo { projectCode?: string; projectName?: string; clientName?: string; contractValue?: number }
+interface StepTask { id: string; status: string; resultData: Record<string, unknown>; canEdit: boolean; project: ProjInfo | null }
+type EstData = { totalMaterial?: number; totalLabor?: number; totalService?: number; totalOverhead?: number; totalEstimate?: number; dt02Detail?: string; estimateFileName?: string }
 const STATUS_LABEL: Record<string, string> = { OPEN: 'Chờ lập', IN_PROGRESS: 'Đang lập', RETURNED: 'Bị trả lại', DONE: 'Hoàn thành' }
 
-export default function WbsPlanCard() {
-  const [projectId, setProjectId] = useState('')
+export default function EstimatePlanCard({ projectId }: { projectId: string }) {
   const [task, setTask] = useState<StepTask | null>(null)
-  const [wbs, setWbs] = useState('')
   const [completing, setCompleting] = useState(false)
   const [amendMode, setAmendMode] = useState(false)
   const [rejOpen, setRejOpen] = useState(false)
   const [rejReason, setRejReason] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    setProjectId(new URLSearchParams(window.location.search).get('project') || '')
-  }, [])
 
   const loadTask = useCallback(() => {
     if (!projectId) { setTask(null); return }
-    apiFetch(`/api/work/step-task?projectId=${projectId}&stepCode=P1.2A`).then((r) => {
-      if (r.ok && r.task) {
-        setTask(r.task)
-        const w = r.task.resultData?.wbsItems
-        setWbs(typeof w === 'string' ? w : w ? JSON.stringify(w) : '')
-      } else setTask(null)
+    apiFetch(`/api/work/step-task?projectId=${projectId}&stepCode=P1.2`).then((r) => {
+      if (r.ok && r.task) setTask(r.task)
+      else setTask(null)
     })
   }, [projectId])
   useEffect(() => { loadTask() }, [loadTask])
   const reloadAll = () => { loadTask(); setReloadKey((k) => k + 1) }
 
-  const saveWbs = (val: string) => {
+  const onFieldChange = (key: string, value: unknown) => {
     if (!task) return
-    apiFetch(`/api/work/tasks/${task.id}/result-data`, {
-      method: 'POST',
-      body: JSON.stringify({ key: 'wbsItems', value: val ? JSON.parse(val) : null }),
-    }).catch(() => {})
-  }
-
-  const onWbsChange = (val: string) => {
-    setWbs(val)
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => saveWbs(val), 800)
+    setTask((t) => (t ? { ...t, resultData: { ...t.resultData, [key]: value } } : t))
+    apiFetch(`/api/work/tasks/${task.id}/result-data`, { method: 'POST', body: JSON.stringify({ key, value }) }).catch(() => {})
   }
 
   const handleComplete = async () => {
     if (!task) return
-    if (!(await confirmDialog('Hoàn thành lập kế hoạch & WBS (P1.2A)? Quy trình sẽ tiến tới bước duyệt kế hoạch & dự toán (P1.3).'))) return
+    if (!(await confirmDialog('Hoàn thành lập dự toán thi công (P1.2)? Quy trình sẽ tiến tới bước duyệt kế hoạch & dự toán (P1.3).'))) return
     setCompleting(true)
-    saveWbs(wbs) // lưu bản mới nhất trước khi đóng
     const res = await apiFetch('/api/work/step-task', {
       method: 'POST',
-      body: JSON.stringify({ projectId, stepCode: 'P1.2A', action: 'complete' }),
+      body: JSON.stringify({ projectId, stepCode: 'P1.2', action: 'complete' }),
     })
     setCompleting(false)
-    if (res.ok) { notify('Đã hoàn thành lập kế hoạch & WBS — quy trình chuyển tiếp', 'success'); reloadAll() }
+    if (res.ok) { notify('Đã hoàn thành lập dự toán — chuyển tiếp bước duyệt', 'success'); reloadAll() }
     else notify(res.error || 'Lỗi hoàn thành', 'error')
   }
 
@@ -76,35 +59,45 @@ export default function WbsPlanCard() {
     else notify(res.error || 'Lỗi trả lại', 'error')
   }
 
-  if (!projectId || !task) return null
+  if (!projectId) return null
+  if (!task) {
+    return (
+      <div className="card p-5 text-center" style={{ color: 'var(--text-muted)' }}>
+        Dự án này chưa có bước lập dự toán (P1.2).
+      </div>
+    )
+  }
 
   const isDone = task.status === 'DONE'
   const editable = task.canEdit && (!isDone || amendMode)
 
   return (
     <div className="space-y-4">
-      <div className="card p-5 space-y-3" style={{ border: '1px solid #f59e0b40', background: '#fffbeb' }}>
+      <div className="card p-5 space-y-4" style={{ border: '1px solid #f59e0b40', background: '#fffbeb' }}>
         <div className="flex justify-between items-center flex-wrap gap-2">
-          <h3 className="text-sm font-bold" style={{ color: '#92400e' }}>Lập kế hoạch & WBS (P1.2A)</h3>
+          <h3 className="text-sm font-bold" style={{ color: '#92400e' }}>Lập dự toán thi công (P1.2)</h3>
           <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: isDone ? '#16a34a20' : '#f59e0b20', color: isDone ? '#166534' : '#92400e' }}>
             {STATUS_LABEL[task.status] || task.status}
           </span>
         </div>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          Phân rã hạng mục (WBS), mốc thanh toán; tải biên bản kickoff ở mục Bằng chứng bên dưới. Xong thì bấm &quot;Hoàn thành &amp; chuyển tiếp&quot;.
-        </p>
 
+        {/* Sau DONE: toggle mở/đóng phần bổ sung — mở thì hiện upload, đóng thì thu lại (chỉ xem) */}
         {isDone && task.canEdit && (
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setAmendMode((v) => !v)} className="text-xs px-3 py-1.5 rounded-lg font-semibold self-start"
               style={{ background: amendMode ? '#fde68a' : '#fff7ed', color: '#c2410c', border: '1px solid #f59e0b' }}>
-              {amendMode ? 'Đóng' : '✎ Bổ sung / Chỉnh sửa WBS (kể cả đã DONE)'}
+              {amendMode ? 'Đóng' : '✎ Bổ sung / Chỉnh sửa dự toán (kể cả đã DONE)'}
             </button>
-            {amendMode && <span className="text-xs" style={{ color: '#92400e' }}>Đang mở — sửa/nạp lại WBS; lưu tự đồng bộ. Xong bấm &quot;Đóng&quot;.</span>}
+            {amendMode && (
+              <span className="text-xs" style={{ color: '#92400e' }}>
+                Đang mở — nạp lại file dự toán; lưu <b>tự đồng bộ Ngân sách/Dòng tiền</b>. Xong bấm &quot;Đóng&quot;.
+              </span>
+            )}
           </div>
         )}
 
-        <WbsTableUI isWbsEditable={editable} wbsItemsData={wbs} onChange={onWbsChange} />
+        {/* DT01 + DT02. Khi DONE & chưa mở bổ sung → chỉ xem (ẩn nút upload). Mở bổ sung → hiện upload */}
+        <EstimateUploadUI isEditable={editable} estimateData={task.resultData as EstData} project={task.project} onFieldChange={onFieldChange} />
 
         {!isDone && task.canEdit && (
           <div className="flex justify-between items-center flex-wrap gap-2">
@@ -120,7 +113,8 @@ export default function WbsPlanCard() {
         )}
         {rejOpen && !isDone && (
           <div className="space-y-2">
-            <textarea value={rejReason} onChange={(e) => setRejReason(e.target.value)} rows={2} placeholder="Lý do trả lại…" className="input-field text-sm w-full" />
+            <textarea value={rejReason} onChange={(e) => setRejReason(e.target.value)} rows={2} placeholder="Lý do trả lại…"
+              className="input-field text-sm w-full" />
             <div className="flex justify-end">
               <button onClick={handleReject} className="text-sm px-4 py-2 rounded-lg font-semibold" style={{ background: '#dc2626', color: '#fff' }}>Gửi trả lại</button>
             </div>
@@ -128,7 +122,7 @@ export default function WbsPlanCard() {
         )}
       </div>
 
-      {/* Người nhận + Bằng chứng (biên bản kickoff/WBS) + Trao đổi & lịch sử */}
+      {/* Người nhận + Bằng chứng + Trao đổi & lịch sử (ngang bản gốc) */}
       <StepTaskFeatures taskId={task.id} reloadKey={reloadKey} />
     </div>
   )

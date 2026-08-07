@@ -8,6 +8,9 @@ import { ROLES } from '@/lib/constants'
 import { getStepFormConfig } from '@/lib/step-form-configs'
 import { formatDate, formatCurrency, isTaskOverdue } from '@/lib/utils'
 import { notify, confirmDialog } from '@/components/ui/Toast'
+import StepApproveCard from './StepApproveCard'
+import PlanEstimatePreview from './PlanEstimatePreview'
+import StepTaskFeatures from '@/components/StepTaskFeatures'
 
 interface Task {
   id: string; stepCode: string; stepName: string; stepNameEn: string;
@@ -269,6 +272,68 @@ export default function ProjectDetailPage() {
           <p style={{ fontSize: '11px', opacity: 0.6, marginTop: '4px' }}>{doneTasks}/{totalTasks} tasks</p>
         </div>
       </div>
+
+      {/* ══ BƯỚC DUYỆT CHỜ XỬ LÝ (BGĐ, R01) — card như P1.3, đưa lên đầu, trên 4 ô Stats ══ */}
+      {currentUser?.roleCode === 'R01' && ([
+        { code: 'P1.3', title: 'Phê duyệt kế hoạch & dự toán (P1.3)', hint: 'BGĐ xem WBS + dự toán bên dưới rồi duyệt để quy trình chuyển sang Phase 2 (thiết kế, đề xuất VT…).', preview: true },
+        { code: 'P2.5', title: 'Phê duyệt KH sản xuất & dự toán chính thức (P2.5)', hint: 'BGĐ duyệt kế hoạch sản xuất và dự toán chính thức (sau điều chỉnh ở P2.4) để chuyển sang Phase 3. Xem bằng chứng bên dưới.', preview: false },
+        { code: 'P3.6', title: 'Phê duyệt báo giá nhà cung cấp (P3.6)', hint: 'BGĐ xem báo giá NCC (bằng chứng bên dưới) rồi duyệt để tiến hành đặt hàng (PO).', preview: false },
+        { code: 'P6.5', title: 'Phê duyệt đóng dự án (P6.5)', hint: 'BGĐ duyệt đóng dự án sau khi hoàn tất nghiệm thu/bàn giao (P6.1–P6.4).', preview: false },
+      ].map((a) => {
+        const step = project.phases?.flatMap((p) => p.steps).find((s) => s.stepCode === a.code)
+        if (!step || step.status === 'DONE' || !step.taskId) return null
+        return (
+          <StepApproveCard key={a.code} projectId={project.id} stepCode={a.code} title={a.title} hint={a.hint} onDone={reload}>
+            {a.preview ? <PlanEstimatePreview projectId={project.id} /> : null}
+          </StepApproveCard>
+        )
+      }))}
+
+      {/* P1.1B — BGĐ duyệt triển khai dự án (hiện khi có bước P1.1B đang chờ) */}
+      {(() => {
+        const kickoffStep = project.phases?.flatMap((p) => p.steps).find((s) => s.stepCode === 'P1.1B')
+        const pending = currentUser?.roleCode === 'R01' && !!kickoffStep && kickoffStep.status !== 'DONE' && !!kickoffStep.taskId
+        if (!pending) return null
+        return (
+          <div style={{ marginBottom: 4 }}>
+          <div className="card p-6" style={{ border: '1.5px solid #f59e0b', background: '#fffbeb' }}>
+            <div className="flex justify-between items-center flex-wrap gap-2" style={{ marginBottom: 4 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#92400e' }}>Phê duyệt triển khai dự án (P1.1B)</h3>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: '#f59e0b20', color: '#92400e' }}>
+                {kickoffStep.status === 'RETURNED' ? 'Bị trả lại' : 'Chờ duyệt'}
+              </span>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14 }}>BGĐ duyệt để quy trình chuyển sang lập kế hoạch &amp; dự toán (P1.2A + P1.2).</p>
+            {!rejectingKickoff ? (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={handleApproveKickoff} disabled={kickoffBusy}
+                  className="flex-1 text-sm px-4 py-3 rounded-lg font-bold" style={{ background: '#16a34a', color: '#fff', opacity: kickoffBusy ? 0.5 : 1 }}>
+                  ✓ Duyệt triển khai
+                </button>
+                <button onClick={() => setRejectingKickoff(true)} disabled={kickoffBusy}
+                  className="text-sm px-5 py-3 rounded-lg font-bold" style={{ background: '#fff', color: '#dc2626', border: '1px solid #dc262640' }}>
+                  Từ chối
+                </button>
+              </div>
+            ) : (
+              <div>
+                <textarea value={kickoffReason} onChange={(e) => setKickoffReason(e.target.value)} rows={2}
+                  placeholder="Lý do từ chối triển khai…" className="input-field" style={{ width: '100%', fontSize: 13, marginBottom: 8 }} />
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setRejectingKickoff(false); setKickoffReason('') }} disabled={kickoffBusy}
+                    className="text-xs px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
+                  <button onClick={handleRejectKickoff} disabled={kickoffBusy || !kickoffReason.trim()}
+                    className="text-xs px-3 py-2 rounded-lg font-semibold" style={{ background: '#dc2626', color: '#fff', opacity: (kickoffBusy || !kickoffReason.trim()) ? 0.5 : 1 }}>Xác nhận từ chối</button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <StepTaskFeatures taskId={kickoffStep.taskId || ''} />
+          </div>
+          </div>
+        )
+      })()}
 
       {/* Control Dashboard link — R01/R02/R03 */}
       {['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'].includes(currentUserRole) && (
@@ -568,42 +633,6 @@ export default function ProjectDetailPage() {
           )
         })}
       </div>
-
-      {/* P1.1B — BGĐ duyệt triển khai dự án (hiện khi có bước P1.1B đang chờ) */}
-      {(() => {
-        const kickoffStep = project.phases?.flatMap((p) => p.steps).find((s) => s.stepCode === 'P1.1B')
-        const pending = currentUser?.roleCode === 'R01' && !!kickoffStep && kickoffStep.status !== 'DONE' && !!kickoffStep.taskId
-        if (!pending) return null
-        return (
-          <div className="card p-5" style={{ maxWidth: 380, marginBottom: 16, border: '1px solid #f59e0b40', background: '#fffbeb' }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>Phê duyệt triển khai dự án (P1.1B)</h3>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>BGĐ duyệt để quy trình chuyển sang lập kế hoạch &amp; dự toán (P1.2A + P1.2).</p>
-            {!rejectingKickoff ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleApproveKickoff} disabled={kickoffBusy}
-                  className="flex-1 text-xs px-3 py-2.5 rounded-lg font-semibold" style={{ background: '#16a34a', color: '#fff', opacity: kickoffBusy ? 0.5 : 1 }}>
-                  ✓ Duyệt triển khai
-                </button>
-                <button onClick={() => setRejectingKickoff(true)} disabled={kickoffBusy}
-                  className="text-xs px-3 py-2.5 rounded-lg font-semibold" style={{ background: '#fff', color: '#dc2626', border: '1px solid #dc262640' }}>
-                  Từ chối
-                </button>
-              </div>
-            ) : (
-              <div>
-                <textarea value={kickoffReason} onChange={(e) => setKickoffReason(e.target.value)} rows={2}
-                  placeholder="Lý do từ chối triển khai…" className="input-field" style={{ width: '100%', fontSize: 13, marginBottom: 8 }} />
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  <button onClick={() => { setRejectingKickoff(false); setKickoffReason('') }} disabled={kickoffBusy}
-                    className="text-xs px-3 py-2 rounded-lg" style={{ border: '1px solid var(--border)' }}>Hủy</button>
-                  <button onClick={handleRejectKickoff} disabled={kickoffBusy || !kickoffReason.trim()}
-                    className="text-xs px-3 py-2 rounded-lg font-semibold" style={{ background: '#dc2626', color: '#fff', opacity: (kickoffBusy || !kickoffReason.trim()) ? 0.5 : 1 }}>Xác nhận từ chối</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )
-      })()}
 
       {/* Quick Actions */}
       {project.status !== 'CLOSED' && project.progress.percentage >= 90 && (

@@ -50,6 +50,44 @@ export const NOTIFY_TASK_MAP: Record<string, NotifyTaskInfo> = {
     mode: 'redirect',
     projectQuery: 'project',
   },
+  'P1.2': {
+    sidebar: '/dashboard/estimates',
+    label: 'Dự toán',
+    hint: 'KTKH mở tab Dự toán để nạp dự toán (Import Excel DT02 → 4 tổng chi phí) rồi hoàn thành.',
+    mode: 'redirect',
+    projectQuery: 'project',
+  },
+  'P1.3': {
+    sidebar: '/dashboard/projects',
+    label: 'Dự án',
+    hint: 'BGĐ mở dự án để xem kế hoạch (WBS) + dự toán rồi "Duyệt" (hoặc Từ chối kèm lý do).',
+    mode: 'redirect',
+    projectScoped: true,
+  },
+  // Phase 2 — BGĐ duyệt KH SX + dự toán chính thức (card ở trang Dự án như P1.3)
+  'P2.5': {
+    sidebar: '/dashboard/projects',
+    label: 'Dự án',
+    hint: 'BGĐ mở dự án để duyệt kế hoạch sản xuất & dự toán chính thức (hoặc Từ chối kèm lý do).',
+    mode: 'redirect',
+    projectScoped: true,
+  },
+  // Phase 3 — BGĐ duyệt báo giá NCC (card ở trang Dự án như P1.3)
+  'P3.6': {
+    sidebar: '/dashboard/projects',
+    label: 'Dự án',
+    hint: 'BGĐ mở dự án để duyệt báo giá nhà cung cấp (hoặc Từ chối kèm lý do).',
+    mode: 'redirect',
+    projectScoped: true,
+  },
+  // Phase 6 — BGĐ duyệt đóng dự án (card ở trang Dự án như P1.3)
+  'P6.5': {
+    sidebar: '/dashboard/projects',
+    label: 'Dự án',
+    hint: 'BGĐ mở dự án để duyệt đóng dự án (hoặc Từ chối kèm lý do).',
+    mode: 'redirect',
+    projectScoped: true,
+  },
 }
 
 export function isNotifyTask(taskType?: string | null): boolean {

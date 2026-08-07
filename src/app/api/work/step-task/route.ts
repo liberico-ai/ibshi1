@@ -13,11 +13,25 @@ export const dynamic = 'force-dynamic'
 
 const OPEN = ['OPEN', 'IN_PROGRESS', 'RETURNED']
 
+const STEP_TASK_SELECT = {
+  id: true, status: true, resultData: true, createdBy: true,
+  assignees: { select: { userId: true, role: true } },
+  project: { select: { projectCode: true, projectName: true, clientName: true, contractValue: true } },
+} as const
+
+// Ưu tiên task đang mở (để làm/hoàn thành). Nếu bước đã DONE, trả task DONE gần nhất
+// để card sidebar vẫn cho "Bổ sung / Chỉnh sửa" (amend) — ngang bản gốc trong Hộp việc.
 async function findActiveStepTask(projectId: string, stepCode: string) {
-  return prisma.task.findFirst({
+  const open = await prisma.task.findFirst({
     where: { projectId, taskType: stepCode, templateStepId: { not: null }, status: { in: OPEN } },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, status: true, resultData: true, createdBy: true, assignees: { select: { userId: true, role: true } } },
+    select: STEP_TASK_SELECT,
+  })
+  if (open) return open
+  return prisma.task.findFirst({
+    where: { projectId, taskType: stepCode, templateStepId: { not: null }, status: 'DONE' },
+    orderBy: { createdAt: 'desc' },
+    select: STEP_TASK_SELECT,
   })
 }
 
@@ -37,7 +51,10 @@ export async function GET(req: NextRequest) {
     const canEdit = task.createdBy === payload.userId
       || task.assignees.some((a) => a.userId === payload.userId || a.role === payload.roleCode)
       || ['R01', 'R10'].includes(payload.roleCode)
-    return successResponse({ task: { id: task.id, status: task.status, resultData: task.resultData || {}, canEdit } })
+    const project = task.project
+      ? { projectCode: task.project.projectCode, projectName: task.project.projectName, clientName: task.project.clientName, contractValue: task.project.contractValue ? Number(task.project.contractValue) : 0 }
+      : null
+    return successResponse({ task: { id: task.id, status: task.status, resultData: task.resultData || {}, canEdit, project } })
   } catch (err) {
     console.error('GET /api/work/step-task error:', err)
     return errorResponse('Lỗi hệ thống', 500)
@@ -56,6 +73,7 @@ export async function POST(req: NextRequest) {
 
     const task = await findActiveStepTask(projectId, stepCode)
     if (!task) return errorResponse('Không có bước đang mở cho dự án này', 422)
+    if (!OPEN.includes(task.status)) return errorResponse('Bước này đã hoàn thành', 422)
 
     const isParticipant = task.createdBy === payload.userId
       || task.assignees.some((a) => a.userId === payload.userId || a.role === payload.roleCode)
@@ -63,7 +81,7 @@ export async function POST(req: NextRequest) {
     if (!isParticipant) return errorResponse('Bạn không phải người phụ trách bước này', 403)
 
     const r = await completeStepTaskFromSidebar(projectId, stepCode, payload.userId, body.resultData)
-    if (!r.ok) return errorResponse('Không hoàn thành được bước này', 422)
+    if (!r.ok) return errorResponse(r.reason && r.reason !== 'no_task' ? r.reason : 'Không hoàn thành được bước này', 422)
     return successResponse({ taskId: r.taskId }, 'Đã hoàn thành bước — quy trình chuyển tiếp')
   } catch (err) {
     console.error('POST /api/work/step-task error:', err)

@@ -46,6 +46,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     const status = t.status === 'OPEN' || t.status === 'RETURNED' ? 'IN_PROGRESS' : t.status
     return {
       id: t.id,
+      templateStepId: t.templateStepId,
       stepCode: t.taskType,
       stepName: t.title,
       stepNameEn: rule?.nameEn || '',
@@ -141,8 +142,14 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       })
     }
 
-    // Find matching tasks (could be multiple for dynamic steps like P4.3)
-    const matchingTasks = tasks.filter(t => t.stepCode === stepCode)
+    // Find matching tasks (could be multiple for dynamic steps like P4.3).
+    // ĐỒNG BỘ: nếu có task TEMPLATE THẬT (templateStepId != null) thì CHỈ dùng chúng làm đại diện
+    // bước — để ấn vào bước ở trang Dự án luôn mở đúng task giữ biểu mẫu/dữ liệu, không bị task
+    // cùng nhãn taskType (tạo tay / giao ngoài quy trình) đè lên. Bước động (không có template
+    // task, vd P4.3 sinh theo PO) vẫn giữ nguyên: dùng toàn bộ task khớp nhãn.
+    const allMatches = tasks.filter(t => t.stepCode === stepCode)
+    const templateMatches = allMatches.filter(t => t.templateStepId)
+    const matchingTasks = templateMatches.length > 0 ? templateMatches : allMatches
 
     // Determine step status
     let status: 'DONE' | 'IN_PROGRESS' | 'RETURNED' | 'PENDING' = 'PENDING'
@@ -402,6 +409,32 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
       if (!r.ok) return errorResponse('Không có bước P1.1B đang chờ duyệt cho dự án này', 422)
       await logAudit(payload.userId, 'REJECT_KICKOFF', 'Project', id, { reason }, getClientIP(req))
       return successResponse({ ok: true }, 'Đã từ chối triển khai — trả lại kèm lý do')
+    }
+  }
+
+  // ── Duyệt / Từ chối 1 BƯỚC quy trình bất kỳ trên trang dự án (Cách A) — dùng chung cho
+  //    P1.3, P2.5, P3.6, P6.5… (BGĐ). body.stepCode xác định bước. ──
+  if (body.action === 'APPROVE_STEP' || body.action === 'REJECT_STEP') {
+    if (payload.roleCode !== 'R01') {
+      return errorResponse('Chỉ BGĐ (R01) mới được duyệt bước này', 403)
+    }
+    const stepCode = String(body.stepCode || '').trim()
+    if (!stepCode) return errorResponse('Thiếu stepCode', 400)
+    const { completeStepTaskFromSidebar, returnStepTaskFromSidebar } = await import('@/lib/work-engine')
+    const { logAudit, getClientIP } = await import('@/lib/auth')
+
+    if (body.action === 'APPROVE_STEP') {
+      const r = await completeStepTaskFromSidebar(id, stepCode, payload.userId, { approvedBy: payload.userId, approvedAt: new Date().toISOString() })
+      if (!r.ok) return errorResponse(r.reason && r.reason !== 'no_task' ? r.reason : `Không có bước ${stepCode} đang chờ duyệt cho dự án này`, 422)
+      await logAudit(payload.userId, 'APPROVE_STEP', 'Project', id, { stepCode }, getClientIP(req))
+      return successResponse({ ok: true }, 'Đã duyệt — quy trình chuyển tiếp')
+    } else {
+      const reason = (body.reason || '').toString().trim()
+      if (!reason) return errorResponse('Cần nhập lý do từ chối', 422)
+      const r = await returnStepTaskFromSidebar(id, stepCode, payload.userId, reason)
+      if (!r.ok) return errorResponse(`Không có bước ${stepCode} đang chờ duyệt cho dự án này`, 422)
+      await logAudit(payload.userId, 'REJECT_STEP', 'Project', id, { stepCode, reason }, getClientIP(req))
+      return successResponse({ ok: true }, 'Đã từ chối — trả lại kèm lý do')
     }
   }
 

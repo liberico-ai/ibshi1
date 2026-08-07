@@ -10,7 +10,6 @@ import { WORKFLOW_RULES, PHASE_LABELS } from '@/lib/workflow-constants'
 import * as XLSX from 'xlsx'
 import MultiFileUpload from '@/components/MultiFileUpload'
 import BomPrUploadUI from './components/BomPrUploadUI'
-import EstimateAmendCard from './components/EstimateAmendCard'
 import WeldPaintUploadUI from './components/WeldPaintUploadUI'
 import QuickCreateMaterialDialog from './components/QuickCreateMaterialDialog'
 import { resolveCodes } from './components/material-resolve-client'
@@ -2468,9 +2467,6 @@ export default function TaskDetailPage() {
                 </div>
               )
             })()}
-
-            {/* P1.2: Estimate Summary (upload Excel → show DT02 summary) */}
-            {task.stepCode === 'P1.2' && <EstimateAmendCard taskId={task.id} isDone={task.status === 'DONE'} onSaved={loadTask} />}
 
             {task.stepCode === 'P1.2' && (() => {
               const fmt = (v: number) => v > 0 ? formatCurrency(v) : '—'

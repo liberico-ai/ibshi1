@@ -15,7 +15,6 @@ import { Badge, Button } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { confirmDialog } from '@/components/ui/Toast'
 import { isNotifyTask, notifyTaskInfo } from '@/lib/notify-tasks'
-import EstimateAmendCard from '@/app/dashboard/tasks/[id]/components/EstimateAmendCard'
 
 
 interface DocFile { id: string; fileName: string; fileUrl: string }
@@ -422,8 +421,6 @@ export default function WorkDetailPage() {
         )}
         {task.description && <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>{task.description}</p>}
 
-        {/* Bổ sung/Chỉnh sửa dự toán (P1.2) — dùng được kể cả khi đã DONE, tự đồng bộ Budget */}
-        {task.taskType === 'P1.2' && <EstimateAmendCard taskId={id} isDone={task.status === 'DONE'} onSaved={load} />}
         <div className="flex flex-wrap gap-2 mt-3 text-xs items-center" style={{ color: 'var(--text-muted)' }}>
           <span className="font-semibold px-2.5 py-1 rounded-full" style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}40` }}>
             {STATUS_LABEL[task.status] || task.status}
