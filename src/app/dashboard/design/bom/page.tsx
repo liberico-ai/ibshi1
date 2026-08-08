@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, StatusBadge, Button, EmptyState, Modal, InputField, SelectField } from '@/components/ui'
 import { STATUS_COLORS } from '@/lib/design-tokens'
 import { Package } from 'lucide-react'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 
 interface BOM {
   id: string; bomCode: string; name: string; revision: string; status: string; createdAt: string;
@@ -90,6 +91,10 @@ export default function BOMPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Định mức vật tư" steps={[
+        { code: 'P2.1', title: 'Thiết kế bản vẽ & đề xuất VT chính', template: 'PR', nextHint: 'Bước Thiết kế (song song với P2.2/P2.3/P2.1A).' },
+        { code: 'P2.2', title: 'Đề xuất vật tư hàn & sơn', template: 'WELD_PAINT' },
+      ]} />
       <PageHeader
         title="Định mức vật tư (BOM)"
         subtitle="Danh mục vật tư theo dự án"

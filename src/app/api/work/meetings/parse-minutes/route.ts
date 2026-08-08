@@ -9,13 +9,18 @@ export const runtime = 'nodejs'
 // Ánh xạ trực tiếp tên phòng trong cột "Người thực hiện" → mã phòng theo org-map.ts
 const ACTION_BY_DEPT: { re: RegExp; dept: string }[] = [
   { re: /(phòng\s*)?d\.?a\b|dự án|quản lý dự án/i, dept: 'QLDA' },
-  { re: /(phòng\s*)?sx\b|sản xuất|thầu phụ|tổ\s/i, dept: 'SX' },
+  { re: /xưởng\s*hàn|(^|\s)hàn\b/i, dept: 'XH' },
+  { re: /xưởng\s*(pha\s*)?cắt|pha cắt|gia công cơ khí/i, dept: 'XPC' },
+  { re: /xưởng\s*hoàn thiện|hoàn thiện|sơn|làm sạch|đóng kiện/i, dept: 'XHT' },
+  { re: /(phòng\s*)?sx\b|sản xuất|thầu phụ|xưởng|chế tạo|gá lắp|tổ\s/i, dept: 'XCT1' },
   { re: /(phòng\s*)?(tk|thiết kế|kỹ thuật)\b/i, dept: 'TK' },
-  { re: /\bqc\b|qa\/qc|nghiệm thu|chất lượng/i, dept: 'QC' },
+  { re: /\bqc\b|qa\/qc|nghiệm thu|chất lượng/i, dept: 'QAQC' },
   { re: /(phòng\s*)?(tm|thương mại|kinh doanh|mua|cung ứng)\b/i, dept: 'KTKT' },
   { re: /(kinh tế|ktkt|ktkh|dự toán|bóc tách)/i, dept: 'KTKT' },
-  { re: /(kế toán|tckt|tài chính|kho|thủ kho|thanh toán)/i, dept: 'TCKT' },
-  { re: /(thiết bị|cơ giới|tbcg)\b/i, dept: 'TBCG' },
+  { re: /(kho|thủ kho|nhập kho|xuất kho)/i, dept: 'KHO' },
+  { re: /(kế toán|tckt|tài chính|thanh toán)/i, dept: 'TCKT' },
+  { re: /(nhân sự|hành chính|hcns)/i, dept: 'HCNS' },
+  { re: /(thiết bị|cơ giới|tbcg|trang thiết bị)\b/i, dept: 'TB' },
   { re: /(bgđ|ban giám đốc|giám đốc|phê duyệt)/i, dept: 'BGD' },
 ]
 

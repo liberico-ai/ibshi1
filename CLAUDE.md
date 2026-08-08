@@ -54,26 +54,34 @@ npx vitest run --reporter=verbose 2>&1 | tail -20                          # Che
 ### Role Codes
 R01=BGĐ, R02=PM, R02a=NV QLDA, R03=KTKH, R03a=NV KTKH, R04=Design, R04a=NV TK, R05=Warehouse, R05a=NV Kho, R06=Production, R06a=NV SX, R06b=Tổ trưởng SX, R07=Commercial, R07a=NV TM, R08=Finance, R08a=NV KT, R09=QC, R09a=Kiểm tra viên, R10=Admin, R11=NV HCNS (inactive), R12=NV EPC (0 user), R13=TP TBCG
 
-### Cơ cấu phòng ban (sau quy hoạch 2026-06, gộp KTKT 2026-07)
-9 phòng chuẩn, nguồn gốc: `ROLE_TO_DEPT` trong `src/lib/org-map.ts`.
+### Cơ cấu phòng ban (RÚT GỌN 2026-05: Sản xuất → 5 Xưởng)
+16 phòng/xưởng chuẩn, nguồn gốc: `DEPARTMENTS_V2` + `ROLE_TO_DEPT` trong `src/lib/org-map.ts`.
+**QUAN TRỌNG:** roleCode GIỮ NGUYÊN, việc route theo role như cũ. `ROLE_TO_DEPT` giờ chỉ là **phòng mặc định**; phòng THẬT của user lấy từ `User.departmentId` (gán theo "Bộ phận mới" HR).
 
-| Phòng | Code | Role trưởng | Role khác | Ghi chú |
-|-------|------|-------------|-----------|---------|
-| Ban Giám đốc | BGD | R01 | | |
-| CNTT & Dữ liệu | CNTT | R10 | | |
-| Phòng Kỹ thuật | TK | R04 | R04a | |
-| Kinh tế Kỹ thuật | KTKT | R03 | R03a, R07, R07a | Gộp KTKH + TM (2026-07). Giữ 4 roleCode — RBAC keyed by roleCode |
-| Quản lý Dự án | QLDA | R02 | R02a | |
-| Sản xuất | SX | R06 | R06a, R06b | Tổ TO-\* là dept con qua `Department.parentId` |
-| Tài chính KT & Kho | TCKT | R08 | R08a, R05, R05a | Gộp Kho + Kế toán |
-| QA/QC | QC | R09 | R09a | |
-| Thiết bị & Cơ giới | TBCG | R13 | | Mới tạo 2026-06 |
+| Khối | Phòng/Xưởng | Code | Role trưởng | Role khác | Ghi chú |
+|------|-------------|------|-------------|-----------|---------|
+| Quản trị | Ban Giám đốc | BGD | R01 | | |
+| Quản trị | CNTT & Dữ liệu | CNTT | R10 | | |
+| Gián tiếp | Bộ phận Kho | KHO | R05 | R05a | Tách khỏi TCKT |
+| Gián tiếp | Hành chính Nhân sự | HCNS | R11 | | Quay lại (18 người) |
+| Gián tiếp | Tài chính Kế toán | TCKT | R08 | R08a | Bỏ "& Kho" |
+| Gián tiếp | Kinh tế Kỹ thuật | KTKT | R03 | R03a, R07, R07a | Gộp KTKH + TM |
+| Trực tiếp | Phòng Dự án | QLDA | R02 | R02a | |
+| Trực tiếp | Phòng Thiết kế | TK | R04 | R04a | |
+| Trực tiếp | Phòng QAQC | QAQC | R09 | R09a | (đổi mã QC→QAQC) |
+| Trực tiếp | Trang thiết bị | TB | R13 | R13a | (đổi mã TBCG→TB) |
+| Trực tiếp | Xưởng Pha cắt | XPC | R06 | R06a, R06b | ← Tổ Pha cắt 2/3 + GCCK |
+| Trực tiếp | Xưởng Chế tạo 1 | XCT1 | R06 | R06a, R06b | ← Tổ gá lắp 1/4 |
+| Trực tiếp | Xưởng Chế tạo 2 | XCT2 | R06 | R06a, R06b | ← Tổ gá lắp 2/3/5 |
+| Trực tiếp | Xưởng Hàn | XH | R06 | R06a, R06b | ← Tổ hàn 1/2 |
+| Trực tiếp | Xưởng Hoàn thiện | XHT | R06 | R06a, R06b | ← Tổ tổng hợp + sơn |
+| Trực tiếp | Site Manager | SITEMGR | R06 | | |
 
-- Role cấp phó đã đổi tên "Phó X" → "Nhân viên X" (roleCode GIỮ NGUYÊN — RBAC keyed by roleCode).
-- R06b = Công nhân sản xuất (77 user, ở trong tổ TO-\*). R09a = Kiểm tra viên (giữ nguyên tên).
-- R11 = Nhân viên HCNS — phòng HCNS đã bỏ, 13 user inactive (dept=null). R12 = NV EPC (0 user, skip).
-- Công nhân tổ giữ `User.departmentId` = tổ (TO-HAN1, TO-PC2, …); tổ có `Department.parentId` = SX dept id.
-- Thêm phòng/role mới: khai vào `org-map.ts` (ROLE_TO_DEPT, DEPT_PRIMARY_ROLE, DEPARTMENTS_V2) + `constants.ts` (ROLES, ROLE_GROUP_PRIORITY, menu roles).
+- **Sản xuất (SX) + 12 tổ TO-\* đã bỏ** → thay bằng 5 Xưởng + SITEMGR. Record cũ (SX, tổ, QC, TBCG) giữ trong DB (orphan, không xóa cứng). Ánh xạ tổ→xưởng: `TEAM_TO_WORKSHOP` trong `org-map.ts`.
+- R06/R06a/R06b trải trên 5 xưởng — `ROLE_TO_DEPT[R06]=XCT1` chỉ là mặc định; phòng thật theo `User.departmentId`.
+- WorkOrder/JobCard/PieceRate: `teamCode` = **mã Xưởng** (XPC/XCT1/…). Dropdown "Xưởng" lấy từ `PRODUCTION_WORKSHOPS`.
+- Migration dữ liệu: `scripts/migrate-org-2026-05.mjs` (khớp Mã NV → "Bộ phận mới" → departmentId).
+- Thêm phòng/role mới: khai `org-map.ts` (DEPARTMENTS_V2, ROLE_TO_DEPT, DEPT_PRIMARY_ROLE) + `constants.ts` (DEPARTMENTS, ROLES, menu roles).
 
 ### API Response Pattern
 ```typescript

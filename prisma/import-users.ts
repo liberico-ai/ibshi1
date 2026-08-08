@@ -25,13 +25,13 @@ interface UserRecord {
 
 const USERS: UserRecord[] = [
   // ── Quản Lý Sản Xuất (SX) ──
-  { username: 'toanpd',    fullName: 'Phạm Đăng Toàn',      roleCode: 'R06',  userLevel: 1, deptCode: 'SX' },
-  { username: 'thangnc',   fullName: 'Nguyễn Công Thắng',    roleCode: 'R06a', userLevel: 2, deptCode: 'SX' },
-  { username: 'hiennm',    fullName: 'Nguyễn Minh Hiển',     roleCode: 'R06a', userLevel: 2, deptCode: 'SX' },
-  { username: 'tunt',      fullName: 'Nguyễn Tuấn Tú',       roleCode: 'R06a', userLevel: 2, deptCode: 'SX' },
-  { username: 'toanph',    fullName: 'Phạm Hồng Toàn',       roleCode: 'R06a', userLevel: 2, deptCode: 'SX' },
-  { username: 'hungtt',    fullName: 'Trần Thanh Hưng',       roleCode: 'R06a', userLevel: 2, deptCode: 'SX' },
-  { username: 'kienlt',    fullName: 'Lê Trọng Kiên',        roleCode: 'R06a', userLevel: 2, deptCode: 'SX' },
+  { username: 'toanpd',    fullName: 'Phạm Đăng Toàn',      roleCode: 'R06',  userLevel: 1, deptCode: 'XCT1' },
+  { username: 'thangnc',   fullName: 'Nguyễn Công Thắng',    roleCode: 'R06a', userLevel: 2, deptCode: 'XCT1' },
+  { username: 'hiennm',    fullName: 'Nguyễn Minh Hiển',     roleCode: 'R06a', userLevel: 2, deptCode: 'XCT1' },
+  { username: 'tunt',      fullName: 'Nguyễn Tuấn Tú',       roleCode: 'R06a', userLevel: 2, deptCode: 'XCT1' },
+  { username: 'toanph',    fullName: 'Phạm Hồng Toàn',       roleCode: 'R06a', userLevel: 2, deptCode: 'XCT1' },
+  { username: 'hungtt',    fullName: 'Trần Thanh Hưng',       roleCode: 'R06a', userLevel: 2, deptCode: 'XCT1' },
+  { username: 'kienlt',    fullName: 'Lê Trọng Kiên',        roleCode: 'R06a', userLevel: 2, deptCode: 'XCT1' },
 
   // ── Phòng Kinh Tế Kế Hoạch (KTKH) ──
   { username: 'samld',     fullName: 'Lê Đình Sâm',          roleCode: 'R03',  userLevel: 1, deptCode: 'KTKH' },
@@ -40,18 +40,18 @@ const USERS: UserRecord[] = [
   { username: 'ngoantt',   fullName: 'Trần Thị Ngoãn',       roleCode: 'R03a', userLevel: 2, deptCode: 'KTKH' }, // Fixed: R11 → R03a
 
   // ── Quản Lý Chất Lượng (QC) ──
-  { username: 'haitq',     fullName: 'Trần Quang Hải',       roleCode: 'R09',  userLevel: 1, deptCode: 'QC' },
-  { username: 'vietnh',    fullName: 'Nguyễn Hồng Việt',     roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'quynh',     fullName: 'Nguyễn Hoàng Quý',     roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'liendt',    fullName: 'Đỗ Thị Liên',          roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'vinhvq',    fullName: 'Vũ Quang Vinh',        roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'quynhdtx',  fullName: 'Đồng Thị Xuân Quỳnh',  roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'hungnd',    fullName: 'Nguyễn Duy Hùng',      roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'manhnd',    fullName: 'Nguyễn Duy Mạnh',      roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'dongnt',    fullName: 'Nguyễn Tiến Đông',     roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'tamnv',     fullName: 'Nguyễn Văn Tâm',       roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'thangnv',   fullName: 'Nguyễn Văn Thắng',     roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
-  { username: 'anhnq',     fullName: 'Nguyễn Quang Anh',     roleCode: 'R09a', userLevel: 2, deptCode: 'QC' },
+  { username: 'haitq',     fullName: 'Trần Quang Hải',       roleCode: 'R09',  userLevel: 1, deptCode: 'QAQC' },
+  { username: 'vietnh',    fullName: 'Nguyễn Hồng Việt',     roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'quynh',     fullName: 'Nguyễn Hoàng Quý',     roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'liendt',    fullName: 'Đỗ Thị Liên',          roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'vinhvq',    fullName: 'Vũ Quang Vinh',        roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'quynhdtx',  fullName: 'Đồng Thị Xuân Quỳnh',  roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'hungnd',    fullName: 'Nguyễn Duy Hùng',      roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'manhnd',    fullName: 'Nguyễn Duy Mạnh',      roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'dongnt',    fullName: 'Nguyễn Tiến Đông',     roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'tamnv',     fullName: 'Nguyễn Văn Tâm',       roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'thangnv',   fullName: 'Nguyễn Văn Thắng',     roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
+  { username: 'anhnq',     fullName: 'Nguyễn Quang Anh',     roleCode: 'R09a', userLevel: 2, deptCode: 'QAQC' },
 
   // ── Phòng Kế Toán (KT) — Fixed: R02/R02a → R08/R08a ──
   { username: 'doannd',    fullName: 'Nguyễn Đình Đoan',     roleCode: 'R08',  userLevel: 1, deptCode: 'KT' },
@@ -85,7 +85,7 @@ const USERS: UserRecord[] = [
   { username: 'tuanpm',    fullName: 'Phạm Minh Tuấn',       roleCode: 'R04',  userLevel: 1, deptCode: 'TK' }, // Fixed: R05 → R04
 
   // ── Tổ Sản Xuất (SX) ──
-  { username: 'trungdv',   fullName: 'Đặng Văn Trung',       roleCode: 'R06b', userLevel: 1, deptCode: 'SX' },
+  { username: 'trungdv',   fullName: 'Đặng Văn Trung',       roleCode: 'R06b', userLevel: 1, deptCode: 'XCT1' },
 
   // ── Quản Trị Hệ Thống — Fixed: R12 → R10 ──
   { username: 'toannd',    fullName: 'Nguyễn Đức Toàn',      roleCode: 'R10',  userLevel: 1, deptCode: 'BGD' }, // Fixed: R12 → R10

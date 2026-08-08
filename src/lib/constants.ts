@@ -20,23 +20,31 @@ export const ROLES = {
   R09a: { code: 'R09a', name: 'Kiểm tra viên', nameEn: 'Inspector' },
   R10: { code: 'R10', name: 'Quản trị Hệ thống', nameEn: 'System Admin' },
   R11: { code: 'R11', name: 'Nhân viên HCNS', nameEn: 'HR & Admin Staff' },
-  R13: { code: 'R13', name: 'Trưởng phòng Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical Head' },
-  R13a: { code: 'R13a', name: 'Nhân viên Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical Staff' },
+  R13: { code: 'R13', name: 'Trưởng phòng Trang thiết bị', nameEn: 'Equipment Head' },
+  R13a: { code: 'R13a', name: 'Nhân viên Trang thiết bị', nameEn: 'Equipment Staff' },
 } as const
 
 export type RoleCode = keyof typeof ROLES
 
 // ── Departments ──
+// Cơ cấu rút gọn 5/2026 — khớp DEPARTMENTS_V2 (org-map.ts). Nguồn chuẩn là org-map.
 export const DEPARTMENTS = [
   { code: 'BGD', name: 'Ban Giám đốc', nameEn: 'Board of Directors' },
-  { code: 'QLDA', name: 'Quản lý Dự án', nameEn: 'Project Management' },
-  { code: 'KTKT', name: 'Kinh tế Kỹ thuật', nameEn: 'Techno-Economics' },
-  { code: 'TK', name: 'Thiết kế', nameEn: 'Engineering' },
-  { code: 'SX', name: 'Sản xuất', nameEn: 'Production' },
-  { code: 'TCKT', name: 'Tài chính Kế toán & Kho', nameEn: 'Finance & Warehouse' },
-  { code: 'QC', name: 'QA/QC', nameEn: 'Quality Control' },
-  { code: 'TBCG', name: 'Thiết bị & Cơ giới', nameEn: 'Equipment & Mechanical' },
   { code: 'CNTT', name: 'CNTT & Dữ liệu', nameEn: 'IT & Data' },
+  { code: 'KHO', name: 'Bộ phận Kho', nameEn: 'Warehouse' },
+  { code: 'HCNS', name: 'Phòng Hành chính Nhân sự', nameEn: 'HR & Admin' },
+  { code: 'TCKT', name: 'Phòng Tài chính Kế toán', nameEn: 'Finance & Accounting' },
+  { code: 'KTKT', name: 'Phòng Kinh tế Kỹ thuật', nameEn: 'Techno-Economics' },
+  { code: 'QLDA', name: 'Phòng Dự án', nameEn: 'Project Management' },
+  { code: 'TK', name: 'Phòng Thiết kế', nameEn: 'Engineering' },
+  { code: 'QAQC', name: 'Phòng QAQC', nameEn: 'QA/QC' },
+  { code: 'TB', name: 'Phòng Trang thiết bị', nameEn: 'Equipment' },
+  { code: 'XPC', name: 'Xưởng Pha cắt', nameEn: 'Cutting Workshop' },
+  { code: 'XCT1', name: 'Xưởng Chế tạo số 1', nameEn: 'Fabrication Workshop 1' },
+  { code: 'XCT2', name: 'Xưởng Chế tạo số 2', nameEn: 'Fabrication Workshop 2' },
+  { code: 'XH', name: 'Xưởng Hàn', nameEn: 'Welding Workshop' },
+  { code: 'XHT', name: 'Xưởng Hoàn thiện', nameEn: 'Finishing Workshop' },
+  { code: 'SITEMGR', name: 'Site Manager', nameEn: 'Site Manager' },
 ] as const
 
 // ── Project Types (loại dự án — quyết định luồng) ──
@@ -136,7 +144,8 @@ export const FORM_EDIT_ROLES = {
   BBH: ['R01', 'R02', 'R02a'],
   WBS: ['R01', 'R02', 'R02a'],
   WELD_PAINT: ['R01', 'R02', 'R02a', 'R04', 'R04a'],
-  BOM: ['R01', 'R04', 'R04a'],
+  // + R05/R05a: Kho làm bước P2.3 (đề xuất vật tư tiêu hao) qua biểu mẫu BOM ở sidebar.
+  BOM: ['R01', 'R04', 'R04a', 'R05', 'R05a'],
   SUPPLIER_QUOTE: QUOTE_EDIT_ROLES as unknown as string[],
 } as const
 

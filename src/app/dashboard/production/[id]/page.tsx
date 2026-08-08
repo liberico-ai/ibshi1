@@ -118,7 +118,7 @@ export default function ProductionDetailPage() {
         </div>
 
         <div className="grid grid-cols-5 gap-4 mt-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-          <div><span className="text-xs" style={{ color: 'var(--text-muted)' }}>Tổ SX</span><p className="font-medium" style={{ color: 'var(--text-primary)' }}>{wo.teamCode}</p></div>
+          <div><span className="text-xs" style={{ color: 'var(--text-muted)' }}>Xưởng</span><p className="font-medium" style={{ color: 'var(--text-primary)' }}>{wo.teamCode}</p></div>
           <div><span className="text-xs" style={{ color: 'var(--text-muted)' }}>KH bắt đầu</span><p className="font-medium" style={{ color: 'var(--text-primary)' }}>{wo.plannedStart ? formatDate(wo.plannedStart) : '—'}</p></div>
           <div><span className="text-xs" style={{ color: 'var(--text-muted)' }}>KH kết thúc</span><p className="font-medium" style={{ color: 'var(--text-primary)' }}>{wo.plannedEnd ? formatDate(wo.plannedEnd) : '—'}</p></div>
           <div><span className="text-xs" style={{ color: 'var(--text-muted)' }}>TT bắt đầu</span><p className="font-medium" style={{ color: wo.actualStart ? '#16a34a' : 'var(--text-muted)' }}>{wo.actualStart ? formatDate(wo.actualStart) : '—'}</p></div>

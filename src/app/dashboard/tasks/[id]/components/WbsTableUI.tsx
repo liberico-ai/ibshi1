@@ -89,19 +89,22 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
     return true;
   };
 
+  // Cơ cấu 5/2026: gán công đoạn WBS theo XƯỞNG (bỏ tổ cũ).
+  //  Cắt/GCCK → Xưởng Pha cắt · Gá lắp/Tổ hợp → Xưởng Chế tạo 1/2 · Hàn → Xưởng Hàn
+  //  Làm sạch/Sơn/Bảo ôn/Đóng kiện/Giao hàng → Xưởng Hoàn thiện
   const teamsByStage: Record<string, string[]> = {
-    cutting: ['Tổ Cắt 1', 'Tổ Cắt 2', 'Tổ Cắt 3'],
-    machining: ['Tổ GCCK 1', 'Tổ GCCK 2'],
-    fitup: ['Tổ Gá 1', 'Tổ Gá 2', 'Tổ Gá 3'],
-    welding: ['Tổ Hàn 1', 'Tổ Hàn 2', 'Tổ Hàn 3', 'Tổ Hàn 4'],
-    tryAssembly: ['Tổ Tổ hợp 1', 'Tổ Tổ hợp 2'],
-    dismantle: ['Tổ Tháo dỡ 1', 'Tổ Tháo dỡ 2'],
-    blasting: ['Tổ Làm sạch 1', 'Tổ Làm sạch 2'],
-    painting: ['Tổ Sơn 1', 'Tổ Sơn 2'],
-    insulation: ['Tổ Bảo ôn 1'],
-    commissioning: ['Tổ Chạy thử 1'],
-    packing: ['Tổ Đóng kiện 1'],
-    delivery: ['Tổ Giao hàng 1'],
+    cutting: ['Xưởng Pha cắt'],
+    machining: ['Xưởng Pha cắt'],
+    fitup: ['Xưởng Chế tạo số 1', 'Xưởng Chế tạo số 2'],
+    welding: ['Xưởng Hàn'],
+    tryAssembly: ['Xưởng Chế tạo số 1', 'Xưởng Chế tạo số 2'],
+    dismantle: ['Xưởng Chế tạo số 1', 'Xưởng Chế tạo số 2'],
+    blasting: ['Xưởng Hoàn thiện'],
+    painting: ['Xưởng Hoàn thiện'],
+    insulation: ['Xưởng Hoàn thiện'],
+    commissioning: ['Xưởng Hoàn thiện'],
+    packing: ['Xưởng Hoàn thiện'],
+    delivery: ['Xưởng Hoàn thiện'],
   };
 
   const openAssignPanel = (ri: number, colKey: string) => {
@@ -492,7 +495,7 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                         </div>
                         {/* Table header */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.5fr 0.5fr 140px 100px', gap: 8, padding: '8px 12px 4px', background: '#fafafa' }}>
-                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tổ THỰC HIỆN</span>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>XƯỞNG THỰC HIỆN</span>
                           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>KHỐI LƯỢNG</span>
                           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>TỪ NGÀY</span>
                           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>ĐẾN NGÀY</span>
@@ -742,7 +745,7 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
         const totalKL = Number(row.khoiLuong) || 0;
         const assignedKL = tempAssigns.reduce((s, a) => s + (Number(a.volume) || 0), 0);
         const remaining = totalKL - assignedKL;
-        const teams = teamsByStage[assignCell.col] || [`Tổ ${stageCol?.label || ''} 1`];
+        const teams = teamsByStage[assignCell.col] || [`Xưởng ${stageCol?.label || ''}`];
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 10002, background: 'rgba(0,0,0,0.55)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '40px 24px', overflowY: 'auto' }} onClick={() => setAssignCell(null)}>
             <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 800, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
@@ -784,7 +787,7 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                   <div key={ai} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 0.8fr 0.8fr 32px', gap: 10, marginBottom: 8, alignItems: 'center' }}>
                     <select className="input" value={a.teamName} onChange={e => { const n = [...tempAssigns]; n[ai] = { ...n[ai], teamName: e.target.value }; setTempAssigns(n); }}
                       style={{ fontSize: '0.85rem', padding: '8px 10px' }}>
-                      <option value="">-- Chọn tổ --</option>
+                      <option value="">-- Chọn xưởng --</option>
                       {teams.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <input className="input" type="number" placeholder="0" value={a.volume}

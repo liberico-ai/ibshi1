@@ -128,10 +128,12 @@ export default function WorkDetailPage() {
   const notifyInfo = notifyTaskInfo(task.taskType)
   if (notifyInfo) {
     const poCode = (task.resultData?.poCode as string) || ''
+    // Kèm &step=<taskType> để trang đích (SidebarStepLanding) mở ĐÚNG card bước đó,
+    // không hiện lẫn các bước khác cùng trang (vd Định mức vật tư có cả P2.1 + P2.2).
     const notifyTarget = task.projectId
-      ? (notifyInfo.projectScoped ? `${notifyInfo.sidebar}/${task.projectId}`
-        : notifyInfo.projectQuery ? `${notifyInfo.sidebar}?${notifyInfo.projectQuery}=${task.projectId}`
-        : notifyInfo.sidebar)
+      ? (notifyInfo.projectScoped ? `${notifyInfo.sidebar}/${task.projectId}?step=${task.taskType}`
+        : notifyInfo.projectQuery ? `${notifyInfo.sidebar}?${notifyInfo.projectQuery}=${task.projectId}&step=${task.taskType}`
+        : `${notifyInfo.sidebar}?step=${task.taskType}`)
       : notifyInfo.sidebar
     return (
       <div className="max-w-xl mx-auto p-4 sm:p-6 animate-fade-in">

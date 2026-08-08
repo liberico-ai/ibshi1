@@ -7,6 +7,7 @@ import { formatCompactVND, formatCurrency, formatNumber } from '@/lib/utils'
 import { RBAC } from '@/lib/rbac-rules'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, StatCard, Card, Button, DataTable, type Column } from '@/components/ui'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ChevronRight, Package, AlertCircle, Banknote, ClipboardList, ShoppingCart } from 'lucide-react'
 
@@ -119,6 +120,9 @@ export default function WarehousePage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Kho" steps={[
+        { code: 'P2.3', title: 'Kho đề xuất vật tư tiêu hao', template: 'BOM' },
+      ]} />
       <PageHeader
         title="Quản lý Kho"
         subtitle={`${pagination.total} vật tư • ${materials.filter(m => m.lowStock).length} dưới mức tối thiểu`}

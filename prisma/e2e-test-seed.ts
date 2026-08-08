@@ -58,7 +58,7 @@ const STEP_TEST_DATA: Record<string, Record<string, unknown>> = {
   'P3.4A': { materialId: 'VT-001', quantityReceived: 45000, quality: 'pass', grnCode: 'GRN-E2E-001' },
   'P3.4B': { materialId: 'VT-KH-001', quantityReceived: 3000, quality: 'pass' },
   'P3.5': { inspectionType: 'Ngoại quan, kích thước, MTR', result: 'pass', inspectionNotes: 'Pass — E2E' },
-  'P4.1': { woCode: 'WO-E2E-001', jobCode: 'PC', teamCode: 'TO-PC2', assignedQty: 7800, startDate: new Date().toISOString().slice(0, 10), description: 'Pha cắt tôn E2E' },
+  'P4.1': { woCode: 'WO-E2E-001', jobCode: 'PC', teamCode: 'XPC', assignedQty: 7800, startDate: new Date().toISOString().slice(0, 10), description: 'Pha cắt tôn E2E' },
   'P4.2': { workOrderId: 'WO-E2E-001', materialId: 'VT-001', quantity: 7800 },
   'P4.3': { completedQty: 7800, manDays: 15, progressNotes: 'Gia công hoàn tất — E2E' },
   'P4.4': { completedQty: 7800, manDays: 10, progressNotes: 'Lắp ráp hoàn tất — E2E' },

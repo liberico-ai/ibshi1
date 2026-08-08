@@ -63,7 +63,7 @@ describe('buildLogWorkbookBuffer', () => {
       ({ dept, group, person, values: { 'Thời gian': '', 'Hành động': group, 'Phòng ban': dept } })
     const buf = buildLogWorkbookBuffer({
       headers: HEADERS,
-      rows: [rp('SX', 'LOGIN', 'NV01-An'), rp('SX', 'LOGIN', 'NV01-An'), rp('SX', 'CREATE', 'NV02-Binh')],
+      rows: [rp('XCT1', 'LOGIN', 'NV01-An'), rp('XCT1', 'LOGIN', 'NV01-An'), rp('XCT1', 'CREATE', 'NV02-Binh')],
       flat: false,
       groupColLabel: 'Hành động',
     })
@@ -80,8 +80,8 @@ describe('buildLogWorkbookBuffer', () => {
     const buf = buildLogWorkbookBuffer({
       headers: HEADERS,
       rows: [
-        row('SX', 'LOGIN'), row('SX', 'CREATE'),
-        row('QC', 'LOGIN'),
+        row('XCT1', 'LOGIN'), row('XCT1', 'CREATE'),
+        row('QAQC', 'LOGIN'),
         row(DEPT_UNKNOWN, 'LOGIN'),
       ],
       flat: false,
@@ -89,9 +89,9 @@ describe('buildLogWorkbookBuffer', () => {
     })
     const wb = XLSX.read(buf, { type: 'buffer' })
     expect(wb.SheetNames[0]).toBe('Tổng hợp')
-    // Sản xuất trước QA/QC (theo thứ tự DEPARTMENTS_V2), Khác cuối
-    expect(wb.SheetNames).toContain('Sản xuất')
-    expect(wb.SheetNames).toContain('QA/QC'.replace('/', ' ')) // '/' bị thay bằng space trong tên sheet
+    // Xưởng Chế tạo số 1 trước QAQC (theo thứ tự DEPARTMENTS_V2), Khác cuối
+    expect(wb.SheetNames).toContain('Xưởng Chế tạo số 1')
+    expect(wb.SheetNames).toContain('Phòng QAQC')
     expect(wb.SheetNames).toContain('Khác')
 
     // Tổng hợp có dòng TỔNG CỘNG = 4

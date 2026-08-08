@@ -64,7 +64,7 @@ export default function EquipmentPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Thiết bị & Cơ giới"
+        title="Trang thiết bị"
         subtitle={`${equipment.length} thiết bị`}
         actions={canEdit ? <Button variant="primary" onClick={() => setShowCreate(true)}>+ Thêm TB</Button> : undefined}
       />

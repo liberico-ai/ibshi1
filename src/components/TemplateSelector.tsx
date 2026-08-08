@@ -32,6 +32,9 @@ interface Props {
   projectId?: string
   taskTitle?: string
   initialTemplate?: TemplateType
+  // Khoá cứng 1 biểu mẫu (dùng cho card bước ở sidebar): ẩn lưới "Chọn biểu mẫu" +
+  // KHÔNG cho auto-detect từ resultData đè → mỗi bước chỉ dùng đúng biểu mẫu của nó.
+  lockedTemplate?: TemplateType
 }
 
 // Màu nhận diện từng biểu mẫu (chip + viền)
@@ -54,8 +57,8 @@ function templateHasData(v: NonNullable<TemplateType>, rd: Record<string, unknow
   }
 }
 
-export default function TemplateSelector({ taskId, isEditable, projectCode, project, projectId, taskTitle, initialTemplate }: Props) {
-  const [selected, setSelected] = useState<TemplateType>(initialTemplate ?? null)
+export default function TemplateSelector({ taskId, isEditable, projectCode, project, projectId, taskTitle, initialTemplate, lockedTemplate }: Props) {
+  const [selected, setSelected] = useState<TemplateType>(lockedTemplate ?? initialTemplate ?? null)
   const [loaded, setLoaded] = useState(false)
   const [resultData, setResultData] = useState<Record<string, unknown>>({})
   const roleCode = useAuthStore(s => s.user?.roleCode || '')
@@ -83,8 +86,11 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
         if (rd.wbsItems) setWbsData(String(rd.wbsItems))
         if (rd.milestones) setMilestonesData(String(rd.milestones))
         if (rd.bomItemsList) setBomItems(String(rd.bomItemsList))
-        // Auto-detect template: explicit > data-based > prop
-        if (rd.templateType) {
+        // Auto-detect template: explicit > data-based > prop.
+        // Nếu bị khoá (card bước sidebar) → giữ nguyên biểu mẫu khoá, KHÔNG đè theo dữ liệu cũ.
+        if (lockedTemplate) {
+          setSelected(lockedTemplate)
+        } else if (rd.templateType) {
           setSelected(rd.templateType as TemplateType)
         } else {
           const rc = useAuthStore.getState().user?.roleCode || ''
@@ -103,7 +109,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
       }
       setLoaded(true)
     }).catch(() => setLoaded(true))
-  }, [taskId])
+  }, [taskId, lockedTemplate])
 
   useEffect(() => { loadResultData() }, [loadResultData])
 
@@ -132,6 +138,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
 
   return (
     <div>
+      {!lockedTemplate && (
       <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
@@ -192,6 +199,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
           })}
         </div>
       </div>
+      )}
 
       {selected === 'ESTIMATE' && (
         <div style={{ marginTop: 12 }}>

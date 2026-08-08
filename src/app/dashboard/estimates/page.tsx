@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import EstimatePlanCard from './EstimatePlanCard'
+import StepWorkCard from '@/components/StepWorkCard'
 
 // Tab "Dự toán" (KTKH lập dự toán thi công — bước P1.2).
 // Vào từ thông báo với ?project=<id> (chọn sẵn dự án), hoặc tự chọn dự án ở dropdown.
@@ -33,9 +34,12 @@ export default function EstimatesPage() {
         </select>
       </div>
 
-      {projectId
-        ? <EstimatePlanCard projectId={projectId} />
-        : <div className="card p-8 text-center" style={{ color: 'var(--text-muted)' }}>Chọn một dự án để lập dự toán.</div>}
+      {projectId ? (
+        <div className="space-y-5">
+          <EstimatePlanCard projectId={projectId} />
+          <StepWorkCard projectId={projectId} stepCode="P2.4" title="KTKH điều chỉnh dự toán" initialTemplate="ESTIMATE" nextHint="Chuyển tiếp bước duyệt KH SX & dự toán chính thức (P2.5)." />
+        </div>
+      ) : <div className="card p-8 text-center" style={{ color: 'var(--text-muted)' }}>Chọn một dự án để lập dự toán.</div>}
     </div>
   )
 }

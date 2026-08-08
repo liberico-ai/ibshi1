@@ -1,8 +1,10 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, unauthorizedResponse } from '@/lib/auth'
+import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 
-// GET /api/production/teams — Team load cards (WO count + tons per TO-* department)
+// GET /api/production/teams — Workshop load cards (WO count + tons per XƯỞNG).
+// Cơ cấu 5/2026: sản xuất là 5 XƯỞNG (XPC/XCT1/XCT2/XH/XHT) thay 12 tổ TO-* cũ.
 export async function GET(req: NextRequest) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
@@ -10,13 +12,8 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const projectId = url.searchParams.get('projectId') || undefined
 
-  const sxDept = await prisma.department.findFirst({
-    where: { code: 'SX' },
-    select: { id: true },
-  })
-
   const teams = await prisma.department.findMany({
-    where: { parentId: sxDept?.id ?? 'NONE' },
+    where: { code: { in: PRODUCTION_WORKSHOPS.map((w) => w.code) } },
     orderBy: { code: 'asc' },
   })
 

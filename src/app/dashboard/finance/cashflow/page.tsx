@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import FinancePlanUploader from './components/FinancePlanUploader'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 import { formatDate, formatNumber } from '@/lib/utils'
 
 interface CashflowEntry {
@@ -89,6 +90,9 @@ export default function CashflowPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Dòng tiền" steps={[
+        { code: 'P2.1A', title: 'Lập kế hoạch dòng tiền', noTemplate: true },
+      ]} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Phương án & Dòng tiền dự án</h1>

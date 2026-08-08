@@ -64,6 +64,47 @@ export const NOTIFY_TASK_MAP: Record<string, NotifyTaskInfo> = {
     mode: 'redirect',
     projectScoped: true,
   },
+  // ── Phase 2 — các bước LÀM (redirect về sân của từng phòng, Cách A) ──
+  // P2.1 Thiết kế đề xuất VT chính (PR) — Định mức vật tư (Thiết kế)
+  'P2.1': {
+    sidebar: '/dashboard/design/bom',
+    label: 'Định mức vật tư',
+    hint: 'Thiết kế mở tab Định mức vật tư để lập bản vẽ + đề xuất VT chính (PR) rồi hoàn thành.',
+    mode: 'redirect',
+    projectQuery: 'project',
+  },
+  // P2.2 PM đề xuất vật tư hàn & sơn — Định mức vật tư
+  'P2.2': {
+    sidebar: '/dashboard/design/bom',
+    label: 'Định mức vật tư',
+    hint: 'PM mở tab Định mức vật tư để đề xuất vật tư hàn & sơn rồi hoàn thành.',
+    mode: 'redirect',
+    projectQuery: 'project',
+  },
+  // P2.3 Kho đề xuất vật tư tiêu hao — Kho
+  'P2.3': {
+    sidebar: '/dashboard/warehouse',
+    label: 'Kho',
+    hint: 'Kho mở tab Kho để đề xuất vật tư tiêu hao (tận dụng tồn) rồi hoàn thành.',
+    mode: 'redirect',
+    projectQuery: 'project',
+  },
+  // P2.1A Lập kế hoạch dòng tiền — Dòng tiền (Tài chính)
+  'P2.1A': {
+    sidebar: '/dashboard/finance/cashflow',
+    label: 'Dòng tiền',
+    hint: 'Tài chính mở tab Dòng tiền để lập kế hoạch dòng tiền (đính kèm bằng chứng) rồi hoàn thành.',
+    mode: 'redirect',
+    projectQuery: 'project',
+  },
+  // P2.4 KTKH điều chỉnh dự toán — Dự toán
+  'P2.4': {
+    sidebar: '/dashboard/estimates',
+    label: 'Dự toán',
+    hint: 'KTKH mở tab Dự toán để điều chỉnh dự toán (tổng hợp đề xuất VT) rồi hoàn thành.',
+    mode: 'redirect',
+    projectQuery: 'project',
+  },
   // Phase 2 — BGĐ duyệt KH SX + dự toán chính thức (card ở trang Dự án như P1.3)
   'P2.5': {
     sidebar: '/dashboard/projects',

@@ -35,7 +35,7 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 const BEARER_LABELS: Record<string, string> = {
   INTERNAL: 'Nội bộ', CUSTOMER: 'Khách trả', SUPPLIER: 'NCC chịu',
-  PRODUCTION_TEAM: 'Tổ SX', SITE_TBD: 'TBD (site)',
+  PRODUCTION_TEAM: 'Xưởng SX', SITE_TBD: 'TBD (site)',
 }
 const STAGE_LABELS: Record<string, string> = { CUTTING: 'Cắt', ASSEMBLY: 'Tổ hợp', WELDING: 'Hàn', PAINTING: 'Sơn', INSPECTION: 'QC' }
 const ECO_STATUS_VARIANT: Record<string, 'default' | 'info' | 'success' | 'warning' | 'danger'> = {

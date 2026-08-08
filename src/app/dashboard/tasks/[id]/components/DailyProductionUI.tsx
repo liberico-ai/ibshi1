@@ -162,7 +162,7 @@ export default function DailyProductionUI({ task, isActive }: DailyProductionUIP
         <thead>
           <tr style={{ background: '#f1f5f9' }}>
             <th style={{ padding: 12, textAlign: 'center', border: '1px solid #e2e8f0', width: '15%' }}>Công Đoạn</th>
-            <th style={{ padding: 12, textAlign: 'center', border: '1px solid #e2e8f0', width: '15%' }}>Tổ Thực Hiện</th>
+            <th style={{ padding: 12, textAlign: 'center', border: '1px solid #e2e8f0', width: '15%' }}>Xưởng Thực Hiện</th>
             <th style={{ padding: 12, textAlign: 'center', border: '1px solid #e2e8f0', width: '10%' }}>Tổng (kg)</th>
             <th style={{ padding: 12, textAlign: 'center', border: '1px solid #e2e8f0', width: '15%' }}>Lũy kế trước</th>
             <th style={{ padding: 12, textAlign: 'center', border: '1px solid #e2e8f0', background: isLocked ? '#f1f5f9' : '#ecfdf5', color: isLocked ? '#94a3b8' : '#047857', width: '25%' }}>Khối lượng Hôm Nay</th>

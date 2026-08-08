@@ -135,7 +135,7 @@ export default function JobCardsPage() {
                   </div>
                   <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
                     <span>WO: <span className="font-mono">{jc.workOrder.woCode}</span></span>
-                    <span>Tổ: {jc.teamCode}</span>
+                    <span>Xưởng: {jc.teamCode}</span>
                     {jc.manpower && <span>{jc.manpower} CN</span>}
                   </div>
                 </div>

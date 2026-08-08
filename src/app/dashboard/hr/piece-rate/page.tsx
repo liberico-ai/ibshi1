@@ -63,8 +63,8 @@ export default function PieceRatePage() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tổ SX</label>
-              <input value={form.teamCode} onChange={e => setForm({ ...form, teamCode: e.target.value })} className="input mt-1" placeholder="TO-01" />
+              <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Xưởng</label>
+              <input value={form.teamCode} onChange={e => setForm({ ...form, teamCode: e.target.value })} className="input mt-1" placeholder="XPC, XH..." />
             </div>
             <div>
               <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Loại công việc</label>
@@ -90,7 +90,7 @@ export default function PieceRatePage() {
 
       <div className="card overflow-hidden">
         <table className="data-table">
-          <thead><tr><th>Mã HĐ</th><th>Dự án</th><th>Tổ SX</th><th>Loại CV</th><th>Đơn giá</th><th>Đơn vị</th><th>Trạng thái</th></tr></thead>
+          <thead><tr><th>Mã HĐ</th><th>Dự án</th><th>Xưởng</th><th>Loại CV</th><th>Đơn giá</th><th>Đơn vị</th><th>Trạng thái</th></tr></thead>
           <tbody>
             {contracts.length === 0 ? (
               <tr><td colSpan={7} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có HĐ khoán</td></tr>

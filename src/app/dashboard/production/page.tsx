@@ -153,7 +153,7 @@ export default function ProductionPage() {
       {/* Team load cards */}
       {teams.length > 0 && (
         <div>
-          <label className="input-label mb-2">Tải theo tổ</label>
+          <label className="input-label mb-2">Tải theo xưởng</label>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
             {teams.map(t => (
               <div key={t.id} className="card p-3 text-center" style={{ borderTop: `3px solid ${t.activeWO > 0 ? SEMANTIC_COLORS.info.solid : 'var(--border-light)'}` }}>
@@ -185,7 +185,7 @@ export default function ProductionPage() {
               <th>Mã WO</th>
               <th>Piece-mark</th>
               <th>Mô tả</th>
-              <th>Tổ SX</th>
+              <th>Xưởng</th>
               <th>Dự án</th>
               <th>Trọng lượng</th>
               <th>Trạng thái</th>
@@ -319,14 +319,14 @@ function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
           <InputField label="Mã WO *" value={form.woCode} onChange={e => update('woCode', e.target.value)} placeholder="WO-2026-001" />
           <SelectField label="Dự án *" value={form.projectId} onChange={e => update('projectId', e.target.value)}
             options={[{ value: '', label: 'Chọn...' }, ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))]} />
-          <InputField label="Tổ SX *" value={form.teamCode} onChange={e => update('teamCode', e.target.value)} placeholder="TO-HAN1" />
+          <SelectField label="Xưởng *" value={form.teamCode}
+            onChange={e => { const code = e.target.value; const x = teams.find(t => t.code === code); setForm(f => ({ ...f, teamCode: code, departmentId: x?.id || '' })) }}
+            options={[{ value: '', label: 'Chọn xưởng...' }, ...teams.map(t => ({ value: t.code, label: `${t.code} — ${t.name}` }))]} />
         </div>
         <TextareaField label="Mô tả *" rows={2} value={form.description} onChange={e => update('description', e.target.value)} />
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <InputField label="Piece-mark" value={form.pieceMark} onChange={e => update('pieceMark', e.target.value)} placeholder="C1, B2..." />
           <InputField label="Trọng lượng (kg)" type="number" value={form.plannedWeight} onChange={e => update('plannedWeight', e.target.value)} />
-          <SelectField label="Phân về tổ" value={form.departmentId} onChange={e => update('departmentId', e.target.value)}
-            options={[{ value: '', label: 'Không chọn' }, ...teams.map(t => ({ value: t.id, label: `${t.code} — ${t.name}` }))]} />
           <InputField label="Ngày BĐ" type="date" value={form.plannedStart} onChange={e => update('plannedStart', e.target.value)} />
         </div>
       </div>

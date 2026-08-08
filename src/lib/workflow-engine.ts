@@ -623,7 +623,7 @@ async function runWorkflowHooks(
       // Legacy fallback logic for P4.1 Issue WO (if it still exists in other parts of the app)
       const woCode = (resultData?.woCode as string)
       if (woCode) {
-        const teamCode = (resultData?.teamCode as string) || 'TO-01'
+        const teamCode = (resultData?.teamCode as string) || 'XCT1'
         const description = (resultData?.description as string) || `Lệnh SX cho ${projCode}`
         await prisma.workOrder.create({
           data: {
