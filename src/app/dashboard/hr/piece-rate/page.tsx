@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 import { formatCurrency } from '@/lib/utils'
 import { notify } from '@/components/ui/Toast'
 
@@ -44,6 +45,9 @@ export default function PieceRatePage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Khoán lương" steps={[
+        { code: 'P5.5', title: 'Tổng hợp & tính lương khoán', noTemplate: true, nextHint: 'Chuyển tiếp Phase 6 (đóng dự án).' },
+      ]} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Hợp đồng Khoán</h1>

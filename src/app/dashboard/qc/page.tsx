@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch, openAuthedFile } from '@/hooks/useAuth'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 import { formatDate } from '@/lib/utils'
 import { SearchBar, Pagination } from '@/components/SearchPagination'
 import { PageHeader, KPICard, StatusBadge, Button, EmptyState, Modal, InputField, SelectField } from '@/components/ui'
@@ -91,6 +92,13 @@ export default function QCPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Chất lượng" steps={[
+        { code: 'P5.1.1', title: 'Yêu cầu nghiệm thu chất lượng hạng mục', noTemplate: true },
+        { code: 'P5.3A', title: 'QAQC nghiệm thu chất lượng hạng mục', noTemplate: true },
+        { code: 'P5.3', title: 'Nghiệm thu khối lượng tuần (QC)', noTemplate: true },
+        { code: 'P5.4', title: 'Nghiệm thu khối lượng tuần (PM)', noTemplate: true },
+        { code: 'P6.1', title: 'Tổng hợp hồ sơ chất lượng (Dossier)', noTemplate: true },
+      ]} />
       <PageHeader
         title="Quản lý Chất lượng (QC)"
         subtitle="Biên bản kiểm tra chất lượng"

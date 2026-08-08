@@ -13,6 +13,7 @@ import {
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Factory } from 'lucide-react'
 import { notify } from '@/components/ui/Toast'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
@@ -113,6 +114,13 @@ export default function ProductionPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Sản xuất" steps={[
+        { code: 'P3.3', title: 'Lập lệnh SX thầu phụ + đề nghị cấp VT', noTemplate: true },
+        { code: 'P3.4', title: 'Lập lệnh sản xuất nội bộ & thầu phụ', noTemplate: true },
+        { code: 'P5.1', title: 'Báo cáo khối lượng nội bộ theo ngày', noTemplate: true },
+        { code: 'P5.1A', title: 'Báo cáo khối lượng thầu phụ theo ngày', noTemplate: true },
+        { code: 'P5.2', title: 'Báo cáo khối lượng hoàn thành theo tuần', noTemplate: true },
+      ]} />
       <PageHeader
         title="Quản lý Sản xuất"
         subtitle={`${pagination.total} lệnh sản xuất`}

@@ -7,6 +7,7 @@ import { PageHeader, StatusBadge, Button, FilterBar, KPICard, EmptyState, InputF
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList } from 'lucide-react'
 import { notify, confirmDialog } from '@/components/ui/Toast'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 
 interface TrackingGroup {
   taskId: string
@@ -81,6 +82,9 @@ export default function ProcurementPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Mua hàng" steps={[
+        { code: 'P3.5', title: 'Thương mại tìm nhà cung cấp (báo giá)', template: 'SUPPLIER_QUOTE', nextHint: 'Chuyển tiếp BGĐ duyệt báo giá (P3.6).' },
+      ]} />
       <PageHeader
         title="Mua hàng"
         subtitle="Quản lý Đề nghị mua hàng (PR) & Thanh toán"

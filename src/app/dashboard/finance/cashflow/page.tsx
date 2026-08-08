@@ -66,10 +66,13 @@ export default function CashflowPage() {
     const res = await apiFetch('/api/projects/options')
     if (res.ok) {
       setProjects(res.projects || [])
+      // Vào từ thông báo P2.1A (redirect kèm ?project=) → chọn ĐÚNG dự án đó cho cả trang
+      // (Dashboard Phương án + Dự toán KTKH), khớp với card bước ở khối "Bước quy trình".
+      const urlPid = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('project') || '') : ''
       if (defaultPid) {
         setSelectedProjectId(defaultPid)
-      } else if (res.projects?.length > 0 && !selectedProjectId) {
-        setSelectedProjectId(res.projects[0].id)
+      } else if (!selectedProjectId) {
+        setSelectedProjectId(urlPid || (res.projects?.length > 0 ? res.projects[0].id : ''))
       }
     }
   }

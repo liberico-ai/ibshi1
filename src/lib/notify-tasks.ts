@@ -129,6 +129,31 @@ export const NOTIFY_TASK_MAP: Record<string, NotifyTaskInfo> = {
     mode: 'redirect',
     projectScoped: true,
   },
+
+  // ── Phase 3 (làm) — redirect về sân từng phòng, làm ở tab rồi Hoàn thành ──
+  'P3.1': { sidebar: '/dashboard/milestones', label: 'Cột mốc', hint: 'PM mở tab Cột mốc để điều chỉnh kế hoạch & đẩy tiến độ cấp hàng rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P3.3': { sidebar: '/dashboard/production', label: 'Sản xuất', hint: 'PM mở tab Sản xuất để lập lệnh SX cho thầu phụ + đề nghị cấp VT rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P3.4': { sidebar: '/dashboard/production', label: 'Sản xuất', hint: 'PM mở tab Sản xuất để lập lệnh sản xuất cho tổ nội bộ & thầu phụ rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P3.5': { sidebar: '/dashboard/warehouse/procurement', label: 'Mua hàng', hint: 'Thương mại mở tab Mua hàng để tìm NCC, nhập báo giá (biểu mẫu) rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+
+  // ── Phase 4 (làm) ──
+  'P4.5': { sidebar: '/dashboard/warehouse/material-issue', label: 'Cấp phát VT', hint: 'Kho mở tab Cấp phát vật tư để đề nghị cấp VT cho PM & QLSX rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+
+  // ── Phase 5 (làm) ──
+  'P5.1': { sidebar: '/dashboard/production', label: 'Sản xuất', hint: 'Tổ SX mở tab Sản xuất để báo cáo khối lượng nội bộ theo ngày rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P5.1A': { sidebar: '/dashboard/production', label: 'Sản xuất', hint: 'PM mở tab Sản xuất để báo cáo khối lượng thầu phụ theo ngày rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P5.1.1': { sidebar: '/dashboard/qc', label: 'Chất lượng', hint: 'Mở tab Chất lượng để yêu cầu nghiệm thu chất lượng hạng mục rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P5.3A': { sidebar: '/dashboard/qc', label: 'Chất lượng', hint: 'QAQC mở tab Chất lượng để nghiệm thu chất lượng hạng mục rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P5.2': { sidebar: '/dashboard/production', label: 'Sản xuất', hint: 'Tổ SX mở tab Sản xuất để báo cáo khối lượng hoàn thành theo tuần rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P5.3': { sidebar: '/dashboard/qc', label: 'Chất lượng', hint: 'QC mở tab Chất lượng để nghiệm thu khối lượng tuần rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P5.4': { sidebar: '/dashboard/qc', label: 'Chất lượng', hint: 'PM mở tab Chất lượng để nghiệm thu khối lượng tuần rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P5.5': { sidebar: '/dashboard/hr/piece-rate', label: 'Khoán lương', hint: 'KTKH mở tab Khoán lương để tổng hợp & tính lương khoán rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+
+  // ── Phase 6 (làm) ──
+  'P6.1': { sidebar: '/dashboard/qc', label: 'Chất lượng', hint: 'QC mở tab Chất lượng để tổng hợp hồ sơ chất lượng (Dossier) rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P6.2': { sidebar: '/dashboard/finance/settlement', label: 'Quyết toán', hint: 'Kế toán mở tab Quyết toán để quyết toán chi phí trực tiếp rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P6.3': { sidebar: '/dashboard/finance/settlement', label: 'Quyết toán', hint: 'KTKH mở tab Quyết toán để quyết toán tổng hợp (P&L) rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P6.4': { sidebar: '/dashboard/lessons', label: 'Bài học KN', hint: 'PM mở tab Bài học kinh nghiệm để tổ chức Lesson Learned rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
 }
 
 export function isNotifyTask(taskType?: string | null): boolean {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 import { formatCurrency } from '@/lib/utils'
 import { FINANCE_WRITE_ROLES } from '@/lib/constants'
 
@@ -114,6 +115,10 @@ export default function SettlementPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Quyết toán" steps={[
+        { code: 'P6.2', title: 'Quyết toán chi phí trực tiếp', noTemplate: true },
+        { code: 'P6.3', title: 'Quyết toán tổng hợp (P&L)', noTemplate: true },
+      ]} />
       <div>
         <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Quyết toán Tài chính Dự án</h1>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Phase 6.2 — Financial Settlement (bắt buộc APPROVED trước khi đóng dự án)</p>

@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { notify } from '@/components/ui/Toast'
 import WbsPlanCard from './WbsPlanCard'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 
 // Khớp ALLOWED_ROLES của /api/milestones — chỉ các role này mới thêm/hoàn thành cột mốc.
 const MILESTONE_EDIT_ROLES = ['R01', 'R02', 'R02a', 'R03', 'R03a']
@@ -88,6 +89,11 @@ export default function MilestonePage() {
 
       {/* P1.2A — Lập kế hoạch & WBS (hiện khi mở từ thông báo với ?project=) */}
       <WbsPlanCard />
+
+      {/* P3.1 — PM điều chỉnh kế hoạch (redirect từ thông báo với ?project=&step=P3.1) */}
+      <SidebarStepLanding heading="Bước quy trình — Cột mốc" steps={[
+        { code: 'P3.1', title: 'Điều chỉnh kế hoạch & đẩy tiến độ cấp hàng', noTemplate: true, nextHint: 'Chuyển tiếp Thương mại tìm NCC (P3.5).' },
+      ]} />
 
       {/* Form */}
       {showForm && (

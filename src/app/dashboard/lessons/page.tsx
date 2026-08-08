@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
+import SidebarStepLanding from '@/components/SidebarStepLanding'
 import { formatDate } from '@/lib/utils'
 import { notify } from '@/components/ui/Toast'
 
@@ -58,6 +59,9 @@ export default function LessonsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <SidebarStepLanding heading="Bước quy trình — Bài học kinh nghiệm" steps={[
+        { code: 'P6.4', title: 'Tổ chức Lesson Learned', noTemplate: true },
+      ]} />
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Bài học kinh nghiệm</h1>
