@@ -11,6 +11,7 @@ import { notify, confirmDialog } from '@/components/ui/Toast'
 import StepApproveCard from './StepApproveCard'
 import PlanEstimatePreview from './PlanEstimatePreview'
 import StepTaskFeatures from '@/components/StepTaskFeatures'
+import StepWorkCard from '@/components/StepWorkCard'
 
 interface Task {
   id: string; stepCode: string; stepName: string; stepNameEn: string;
@@ -272,6 +273,13 @@ export default function ProjectDetailPage() {
           <p style={{ fontSize: '11px', opacity: 0.6, marginTop: '4px' }}>{doneTasks}/{totalTasks} tasks</p>
         </div>
       </div>
+
+      {/* P1.1 — PM hoàn tất khởi tạo dự án ngay tại trang Dự án (thay vì làm ở Công việc) */}
+      {(() => {
+        const step = project.phases?.flatMap((p) => p.steps).find((s) => s.stepCode === 'P1.1')
+        if (!step || step.status === 'DONE' || !step.taskId) return null
+        return <StepWorkCard projectId={project.id} stepCode="P1.1" title="Khởi tạo dự án" noTemplate nextHint="Gửi BGĐ duyệt triển khai (P1.1B)." />
+      })()}
 
       {/* ══ BƯỚC DUYỆT CHỜ XỬ LÝ (BGĐ, R01) — card như P1.3, đưa lên đầu, trên 4 ô Stats ══ */}
       {currentUser?.roleCode === 'R01' && ([

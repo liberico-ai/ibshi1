@@ -36,6 +36,13 @@ export const NOTIFY_TASK_MAP: Record<string, NotifyTaskInfo> = {
   },
   // ── Quy trình 32 bước (mode 'redirect') — cắm dần theo từng Phase ──
   // Phase 1
+  'P1.1': {
+    sidebar: '/dashboard/projects',
+    label: 'Dự án',
+    hint: 'PM mở dự án để hoàn tất khởi tạo & gửi BGĐ duyệt triển khai (P1.1B).',
+    mode: 'redirect',
+    projectScoped: true,
+  },
   'P1.1B': {
     sidebar: '/dashboard/projects',
     label: 'Dự án',
