@@ -52,6 +52,9 @@ export default function StepWorkCard({ projectId, stepCode, title, initialTempla
   }
 
   if (!projectId || !task) return null
+  // Chỉ hiện card cho NGƯỜI PHỤ TRÁCH bước (assignee/creator/admin — canEdit từ API).
+  // Vd: tab Định mức vật tư có P2.1 (Thiết kế) + P2.2 (PM) → mỗi role chỉ thấy bước của mình.
+  if (!task.canEdit) return null
   const isDone = task.status === 'DONE'
   const editable = task.canEdit && (!isDone || amendMode)
 
