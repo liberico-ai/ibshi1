@@ -23,6 +23,17 @@ export async function fetchStepResult(
   projectId: string,
   stepCode: string,
 ): Promise<StepResult> {
+  // ƯU TIÊN task quy trình THẬT (templateStepId != null) — tránh đọc nhầm task
+  // trùng nhãn taskType do tạo tay/giao-ngoài-quy-trình (không chứa biểu mẫu).
+  // Ví dụ đã gặp: 2 task 'P2.1' — bản tạo tay DONE (chỉ có file, không bomPrItems)
+  // sắp trước theo completedAt → định giá vật tư đọc nhầm, ra 0. Đọc task template
+  // trước bảo đảm lấy đúng resultData (bomPrItems). Fallback bản cũ nếu không có.
+  const tpl = await prisma.task.findFirst({
+    where: { projectId, taskType: stepCode, templateStepId: { not: null } },
+    select: { resultData: true, status: true },
+    orderBy: { completedAt: 'desc' },
+  })
+  if (tpl) return tpl
   return prisma.task.findFirst({
     where: { projectId, taskType: stepCode },
     select: { resultData: true, status: true },
