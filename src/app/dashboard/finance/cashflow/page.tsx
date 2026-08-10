@@ -39,7 +39,10 @@ export default function CashflowPage() {
   const [projects, setProjects] = useState<any[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
   const [planDetails, setPlanDetails] = useState<any>(null)
+  const [planErr, setPlanErr] = useState<string>('') // 403 → báo "không có quyền" thay vì "chưa có kế hoạch" (gây hiểu nhầm)
   const [dttc, setDttc] = useState<any>(null) // Dự toán tài chính KTKH (read-only)
+  const [dttcErr, setDttcErr] = useState<string>('') // Lỗi tải DTTC (vd 403 không có quyền) — để KHÔNG kẹt "Đang tải"
+  const [dttcLoading, setDttcLoading] = useState<boolean>(false)
 
   useEffect(() => {
     if (activeTab === 'ENTRIES') loadData()
@@ -78,15 +81,26 @@ export default function CashflowPage() {
   }
 
   async function loadPlanDetails(projectId: string) {
-    setPlanDetails(null) // reset: dự án có thể CHƯA có plan → res.plan = null
+    setPlanDetails(null); setPlanErr('') // reset: dự án có thể CHƯA có plan → res.plan = null
     const res = await apiFetch(`/api/finance/cashflow/plan?projectId=${projectId}`)
-    if (res.ok) setPlanDetails(res.plan)
+    if (res.ok) { setPlanDetails(res.plan); return }
+    const raw = String(res.error || '')
+    if (/forbidden|not allowed|quyền/i.test(raw)) {
+      setPlanErr('Bạn không có quyền xem Phương án dòng tiền dự án. Chỉ BGĐ, PM, KTKH (R03/R03a) và Kế toán (R08/R08a) mới xem được.')
+    }
   }
 
   async function loadDttc(projectId: string) {
-    setDttc(null)
+    setDttc(null); setDttcErr(''); setDttcLoading(true)
     const res = await apiFetch(`/api/finance/cashflow/estimate?projectId=${projectId}`)
-    if (res.ok) setDttc({ estimate: res.estimate, budget: res.budget })
+    setDttcLoading(false)
+    if (res.ok) { setDttc({ estimate: res.estimate, budget: res.budget }); return }
+    // KHÔNG kẹt ở "Đang tải" nữa: 403 (role không được phép) → báo rõ; lỗi khác → hiện message.
+    const raw = String(res.error || '')
+    const noPerm = /forbidden|not allowed|quyền/i.test(raw)
+    setDttcErr(noPerm
+      ? 'Bạn không có quyền xem Dự toán tài chính (KTKH). Chỉ BGĐ, PM, KTKH (R03/R03a) và Kế toán (R08/R08a) mới xem được.'
+      : (raw || 'Không tải được dự toán tài chính'))
   }
 
   const fmt = (v: number) => formatNumber(v)
@@ -227,7 +241,12 @@ export default function CashflowPage() {
               )}
             </div>
 
-            {!planDetails ? (
+            {planErr ? (
+              <div className="text-center py-8 px-4">
+                <p className="text-sm font-semibold" style={{ color: '#b45309' }}>⚠ Không hiển thị được Phương án dòng tiền</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{planErr}</p>
+              </div>
+            ) : !planDetails ? (
               <div className="text-center py-8 space-y-2">
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Dự án chưa có kế hoạch dòng tiền (ProjectFinancePlan).</p>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -308,7 +327,12 @@ export default function CashflowPage() {
                 <span className="badge bg-gray-100 text-gray-600">Read-only</span>
               </div>
 
-              {!dttc ? (
+              {dttcErr ? (
+                <div className="text-center py-8 px-4">
+                  <p className="text-sm font-semibold" style={{ color: '#b45309' }}>⚠ Không hiển thị được Dự toán tài chính</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{dttcErr}</p>
+                </div>
+              ) : dttcLoading || !dttc ? (
                 <p className="text-center py-6 text-sm" style={{ color: 'var(--text-muted)' }}>Đang tải dự toán...</p>
               ) : (
                 <div className="space-y-5">
@@ -319,6 +343,7 @@ export default function CashflowPage() {
                         <tr>
                           <th>Nhóm</th>
                           <th className="text-right">Dự toán (planned)</th>
+                          <th className="text-right" title="Định giá BOM theo đơn giá kho/PO — chỉ tham chiếu, KHÔNG dùng làm dự toán vật tư">Định giá BOM (kho/PO)</th>
                           <th className="text-right">Đã cam kết (committed)</th>
                           <th className="text-right">Thực chi (actual)</th>
                           <th>Ghi chú</th>
@@ -329,14 +354,18 @@ export default function CashflowPage() {
                           <tr key={b.category}>
                             <td className="font-semibold">{BUDGET_GROUP_LABELS[b.category] || b.category}</td>
                             <td className="text-right font-mono font-medium">{fmt(Number(b.planned || 0))}</td>
+                            <td className="text-right font-mono" style={{ color: 'var(--text-muted)' }} title={b.bomNote || undefined}>
+                              {b.bomValuation == null ? '—' : fmt(Number(b.bomValuation || 0))}
+                            </td>
                             <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{fmt(Number(b.committed || 0))}</td>
                             <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>{fmt(Number(b.actual || 0))}</td>
-                            <td className="text-xs truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }}>{b.notes || '-'}</td>
+                            <td className="text-xs truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }}>{b.notes || b.bomNote || '-'}</td>
                           </tr>
                         ))}
                         <tr className="font-bold" style={{ background: 'var(--bg-primary)' }}>
                           <td>Tổng cộng</td>
                           <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.planned || 0), 0))}</td>
+                          <td className="text-right font-mono" style={{ color: 'var(--text-muted)' }}>{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.bomValuation || 0), 0))}</td>
                           <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.committed || 0), 0))}</td>
                           <td className="text-right font-mono">{fmt((dttc.budget || []).reduce((s: number, b: any) => s + Number(b.actual || 0), 0))}</td>
                           <td></td>

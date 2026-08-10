@@ -44,14 +44,33 @@ export async function GET(req: NextRequest) {
     })
     const byCategory = new Map(rows.map(r => [r.category, r]))
 
+    // Vật tư trong DỰ TOÁN tài chính KTKH lấy từ DỰ TOÁN (totalMaterial của P1.2), KHÔNG
+    // phải định giá BOM theo đơn giá kho. Định giá BOM (Budget.MATERIAL.planned do
+    // syncBOMtoBudget ghi) đưa sang cột RIÊNG `bomValuation` để vẫn theo dõi được.
+    const est = (estimate ?? {}) as Record<string, unknown>
+    const estMaterial = Number(est.totalMaterial) || 0
+
     const budget = BUDGET_CATEGORIES.map((category) => {
       const r = byCategory.get(category)
+      const committed = r ? Number(r.committed) : 0
+      const actual = r ? Number(r.actual) : 0
+      if (category === 'MATERIAL') {
+        return {
+          category,
+          planned: estMaterial,                       // Dự toán KTKH (totalMaterial)
+          committed, actual,
+          notes: null,
+          bomValuation: r ? Number(r.planned) : 0,    // Định giá BOM (kho/PO) — cột riêng
+          bomNote: r?.notes ?? null,
+        }
+      }
       return {
         category,
         planned: r ? Number(r.planned) : 0,
-        committed: r ? Number(r.committed) : 0,
-        actual: r ? Number(r.actual) : 0,
+        committed, actual,
         notes: r?.notes ?? null,
+        bomValuation: null,
+        bomNote: null,
       }
     })
 

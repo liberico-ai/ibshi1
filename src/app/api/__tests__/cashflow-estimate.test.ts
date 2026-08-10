@@ -35,9 +35,11 @@ beforeEach(() => {
     resultData: { totalMaterial: 100, totalLabor: 50, totalService: 10, totalOverhead: 5, totalEstimate: 165 },
     status: 'COMPLETED',
   } as never)
-  // Budget project-scoped 4 nhóm — chỉ có MATERIAL trong DB
+  // Budget project-scoped 4 nhóm — chỉ có MATERIAL trong DB.
+  // planned=300 = ĐỊNH GIÁ BOM (kho/PO) — KHÁC totalMaterial=100 (dự toán) để test chứng minh
+  // cột "Dự toán" của Vật tư lấy từ estimate, còn định giá BOM sang cột riêng bomValuation.
   prismaMock.budget.findMany.mockResolvedValue([
-    { category: 'MATERIAL', planned: 100, committed: 80, actual: 20, notes: 'từ BOM', month: null, year: null },
+    { category: 'MATERIAL', planned: 300, committed: 80, actual: 20, notes: 'từ BOM', month: null, year: null },
   ] as never)
 })
 
@@ -54,13 +56,16 @@ describe('GET /api/finance/cashflow/estimate', () => {
     // budget luôn đủ 4 nhóm (thiếu → 0)
     expect(body.budget).toHaveLength(4)
     const material = body.budget.find((b: any) => b.category === 'MATERIAL')
-    expect(material.planned).toBe(100)
+    expect(material.planned).toBe(100)          // = totalMaterial (dự toán KTKH), KHÔNG phải Budget.planned
+    expect(material.bomValuation).toBe(300)     // định giá BOM (kho/PO) → cột riêng
+    expect(material.bomNote).toBe('từ BOM')
+    expect(material.notes).toBeNull()
     expect(material.committed).toBe(80)
     expect(material.actual).toBe(20)
-    expect(material.notes).toBe('từ BOM')
     const labor = body.budget.find((b: any) => b.category === 'LABOR')
     expect(labor.planned).toBe(0) // không có trong DB → 0
     expect(labor.notes).toBeNull()
+    expect(labor.bomValuation).toBeNull() // chỉ MATERIAL mới có cột định giá BOM
     // Query đúng phạm vi dự án (month/year = null)
     expect(prismaMock.budget.findMany).toHaveBeenCalledWith({
       where: { projectId: PROJECT_ID, month: null, year: null },
