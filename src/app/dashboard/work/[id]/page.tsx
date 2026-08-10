@@ -124,9 +124,10 @@ export default function WorkDetailPage() {
   if (loading) return <div className="p-6" style={{ color: 'var(--text-muted)' }}>Đang tải…</div>
   if (!task) return <div className="p-6">Không tìm thấy công việc</div>
 
-  // ── Task "THÔNG BÁO": không thao tác ở đây, chỉ là con trỏ sang tab sidebar tương ứng ──
+  // ── Task "THÔNG BÁO": khi ĐANG MỞ → con trỏ sang tab sidebar để làm. Khi ĐÃ XONG
+  // (DONE/CANCELLED) → hiện FULL task detail ở "Đã xong" để TRUY VẾT / sửa / import lại. ──
   const notifyInfo = notifyTaskInfo(task.taskType)
-  if (notifyInfo) {
+  if (notifyInfo && task.status !== 'DONE' && task.status !== 'CANCELLED') {
     const poCode = (task.resultData?.poCode as string) || ''
     // Kèm &step=<taskType> để trang đích (SidebarStepLanding) mở ĐÚNG card bước đó,
     // không hiện lẫn các bước khác cùng trang (vd Định mức vật tư có cả P2.1 + P2.2).
