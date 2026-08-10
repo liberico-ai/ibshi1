@@ -95,6 +95,15 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   const existing = await prisma.workOrder.findUnique({ where: { woCode } })
   if (existing) return errorResponse(`Mã WO ${woCode} đã tồn tại`)
 
+  // teamCode = mã Xưởng (XPC/XCT1/…) từ dropdown. departmentId là FK tuỳ chọn: nếu FE không
+  // gửi (dropdown đọc từ hằng số PRODUCTION_WORKSHOPS), tự tra Department theo teamCode — có
+  // thì nối, DB chưa migrate tạo phòng xưởng thì để null (schema cho phép, WO vẫn tạo được).
+  let resolvedDeptId: string | null = departmentId || null
+  if (!resolvedDeptId) {
+    const dept = await prisma.department.findFirst({ where: { code: teamCode }, select: { id: true } })
+    resolvedDeptId = dept?.id ?? null
+  }
+
   const wo = await prisma.workOrder.create({
     data: {
       woCode,
@@ -106,7 +115,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
       pieceMark: pieceMark || null,
       bomVersionId: bomVersionId || null,
       plannedWeight: plannedWeight || null,
-      departmentId: departmentId || null,
+      departmentId: resolvedDeptId,
       createdBy: payload.userId,
     },
   })

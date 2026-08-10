@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
+import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 import { SearchBar } from '@/components/SearchPagination'
 import {
   PageHeader, Button, FilterBar, StatusBadge,
@@ -327,9 +328,12 @@ function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
           <InputField label="Mã WO *" value={form.woCode} onChange={e => update('woCode', e.target.value)} placeholder="WO-2026-001" />
           <SelectField label="Dự án *" value={form.projectId} onChange={e => update('projectId', e.target.value)}
             options={[{ value: '', label: 'Chọn...' }, ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))]} />
+          {/* Danh sách Xưởng LUÔN từ hằng số PRODUCTION_WORKSHOPS (5 xưởng) — không phụ thuộc DB đã
+              migrate tạo phòng xưởng hay chưa. Nếu teams (từ /production/teams) có id thì gắn kèm
+              departmentId cho FK; chưa có thì để trống, server tự tra theo teamCode. */}
           <SelectField label="Xưởng *" value={form.teamCode}
             onChange={e => { const code = e.target.value; const x = teams.find(t => t.code === code); setForm(f => ({ ...f, teamCode: code, departmentId: x?.id || '' })) }}
-            options={[{ value: '', label: 'Chọn xưởng...' }, ...teams.map(t => ({ value: t.code, label: `${t.code} — ${t.name}` }))]} />
+            options={[{ value: '', label: 'Chọn xưởng...' }, ...PRODUCTION_WORKSHOPS.map(w => ({ value: w.code, label: `${w.code} — ${w.name}` }))]} />
         </div>
         <TextareaField label="Mô tả *" rows={2} value={form.description} onChange={e => update('description', e.target.value)} />
         <div className="grid grid-cols-3 gap-3">
