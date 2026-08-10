@@ -61,84 +61,130 @@ export default function FinancePlanUploader({ onUploaded }: { onUploaded?: (proj
         const data = new Uint8Array(e.target?.result as ArrayBuffer)
         const workbook = XLSX.read(data, { type: 'array' })
         
-        // Use the first sheet or the specific one 
-        const sheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('dự toán') || n.toLowerCase().includes('dòng tiền')) || workbook.SheetNames[0]
+        // ── Mẫu chuẩn QT30-DT02 ("Dòng tiền dự án") ────────────────────────────────
+        // Ưu tiên sheet "Dòng tiền" (DT02); có dòng tiêu đề chứa các cột "Tháng N".
+        const sheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('dòng tiền'))
+          || workbook.SheetNames.find(n => n.toLowerCase().includes('dự toán'))
+          || workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
-        
-        // Parse raw matrix to easily get cells
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][]
-
-        if (!jsonData || jsonData.length < 15) {
-          throw new Error('Định dạng file không gian dòng tiền không hợp lệ (cần lớn hơn 15 dòng)')
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][]
+        if (!rows || rows.length < 10) {
+          throw new Error('File dòng tiền không hợp lệ (quá ít dòng).')
         }
 
-        // Bóc tách Master Data
-        const customerId = jsonData[4]?.[1] || '' // B5
-        const contractValue = parseFloat(jsonData[5]?.[1]?.toString().replace(/[^\d.-]/g, '')) || 0 // B6
+        const num = (v: any): number => {
+          if (typeof v === 'number') return v
+          const n = parseFloat(String(v ?? '').replace(/[^\d.-]/g, ''))
+          return isNaN(n) ? 0 : n
+        }
 
-        const budgetLines = []
-        const monthlyCashflows = []
+        // 1) Tìm DÒNG TIÊU ĐỀ: dòng chứa ≥3 ô "Tháng N" → xác định ĐÚNG các cột tháng (không đoán cột D).
+        let headerIdx = -1
+        const monthCols: { colIdx: number; m: number }[] = []
+        for (let r = 0; r < Math.min(rows.length, 25); r++) {
+          const found: { colIdx: number; m: number }[] = []
+          const row = rows[r] || []
+          for (let c = 0; c < row.length; c++) {
+            const mt = String(row[c]).match(/Tháng\s*(\d{1,2})/i)
+            if (mt) found.push({ colIdx: c, m: parseInt(mt[1], 10) })
+          }
+          if (found.length >= 3) { headerIdx = r; monthCols.push(...found); break }
+        }
+        if (headerIdx < 0) {
+          throw new Error('Không thấy dòng tiêu đề các cột "Tháng N" (mẫu QT30-DT02). Kiểm tra lại file.')
+        }
+
+        // Cột "Nội dung"/"Mã CP"/"Dự toán Kinh doanh" — dò theo tiêu đề, fallback vị trí mặc định.
+        const header = rows[headerIdx]
+        const col = (kw: string, dft: number) => {
+          const i = header.findIndex((h: any) => String(h).toLowerCase().includes(kw))
+          return i >= 0 ? i : dft
+        }
+        const nameCol = col('nội dung', 2)
+        const codeCol = col('mã cp', 1)
+        const budgetCol = col('dự toán', 5)
+
+        // 2) THÁNG lấy TỪ FILE; NĂM gối từ năm người dùng chọn (12 → 1 sang năm mới).
+        const [pickYear] = startMonth.split('-').map(Number)
+        let runYear = pickYear
+        let prevM: number | null = null
+        const monthMeta = monthCols.map(({ colIdx, m }) => {
+          if (prevM !== null && m < prevM) runYear++
+          prevM = m
+          return { colIdx, month: m, year: runYear }
+        })
+
+        // 3) Duyệt thân bảng: dòng NHÓM La Mã (I..VI) = dòng tiền RA theo tháng;
+        //    dòng CHI TIẾT (STT là số) = 1 dòng dự toán (tổng ở cột "Dự toán KD").
+        const ROMAN = /^(I|II|III|IV|V|VI|VII|VIII|IX|X)$/
+        const sectionOf = (name: string): string => {
+          const u = name.toUpperCase()
+          if (u.includes('VẬT TƯ')) return 'MATERIAL'
+          if (u.includes('NHÂN CÔNG')) return 'LABOUR'
+          if (u.includes('THUÊ NGOÀI') || u.includes('DỊCH VỤ')) return 'SERVICE'
+          if (u.includes('QUẢN LÝ')) return 'OVERHEAD'
+          if (u.includes('BẢO LÃNH')) return 'GUARANTEE'
+          if (u.includes('THUẾ')) return 'TAX'
+          return 'OTHER'
+        }
+
+        const budgetLines: any[] = []
+        const monthlyCashflows: any[] = []
         let currentSectionType = 'OTHER'
 
-        const [sYear, sMonth] = startMonth.split('-').map(Number)
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+          const row = rows[i]; if (!row) continue
+          const stt = String(row[0] ?? '').trim()
+          const name = String(row[nameCol] ?? '').trim()
+          if (!name) continue
+          if (/^A$/i.test(stt)) continue          // "A" = tổng dòng tiền ra (đã bằng Σ I..VI) → bỏ
+          if (/^B$/i.test(stt) || /^C$/i.test(stt)) break  // "B" dòng tiền vào / "C" chênh lệch → dừng phần chi ra
 
-        // Bóc tách Body (Từ Row 13 / Index 12 đổ đi theo tài liệu)
-        // Assume Col A: STT, B: Hạng mục, C: Tổng dự toán, D -> R: Dòng tiền các tháng
-        for (let i = 12; i < Math.min(jsonData.length, 200); i++) {
-          const row = jsonData[i]
-          const stt = row[0]?.toString()?.trim() || ''
-          let itemName = row[1]?.toString()?.trim() || ''
-          const totalBudgetRaw = row[2]?.toString()?.replace(/[^\d.-]/g, '')
-          const totalBudget = parseFloat(totalBudgetRaw) || 0
-
-          // Detect Section (Vật tư, Nhân công)
-          if (itemName.toUpperCase().includes('VẬT TƯ')) currentSectionType = 'MATERIAL'
-          else if (itemName.toUpperCase().includes('NHÂN CÔNG')) currentSectionType = 'LABOUR'
-          else if (itemName.toUpperCase().includes('THUÊ NGOÀI')) currentSectionType = 'SUBCONTRACT'
-          else if (itemName.toUpperCase().includes('CHI PHÍ KHÁC')) currentSectionType = 'OTHER'
-
-          if (!itemName || stt.match(/^[A-Z]+$/)) {
-            continue; // Skip group headers A, B, C, I, II
+          if (ROMAN.test(stt)) {
+            currentSectionType = sectionOf(name)
+            for (const mm of monthMeta) {
+              const val = num(row[mm.colIdx])
+              if (val > 0) monthlyCashflows.push({ month: mm.month, year: mm.year, amountVnd: val, category: name.substring(0, 30) })
+            }
+            continue
           }
-
-          // Generate budget line
-          const categoryCode = `${currentSectionType.substring(0,3)}-${i}`
-          
-          if (totalBudget > 0 || row.some((v: any, idx: number) => idx >= 3 && parseFloat(v))) {
-             budgetLines.push({
-               sectionType: currentSectionType,
-               categoryCode,
-               itemName: itemName.substring(0, 50),
-               unit: 'LS',
-               quantity: 1,
-               unitPrice: totalBudget,
-               totalBudget: totalBudget
-             })
-
-             // Detect month columns from D (idx 3) to Math.min(row.length, 20)
-             for (let j = 3; j < Math.min(row.length, 20); j++) {
-               const val = parseFloat(row[j]?.toString()?.replace(/[^\d.-]/g, ''))
-               if (val && !isNaN(val)) {
-                  // Calculate absolute month
-                  const offset = j - 3 // D is month 1 (offset 0)
-                  const targetDate = new Date(sYear, sMonth - 1 + offset, 1)
-                  monthlyCashflows.push({
-                    month: targetDate.getMonth() + 1,
-                    year: targetDate.getFullYear(),
-                    amountVnd: val,
-                    category: itemName.substring(0, 30),
-                  })
-               }
-             }
+          if (/^\d+(\.\d+)?$/.test(stt)) {
+            const total = num(row[budgetCol])
+            if (total > 0) {
+              budgetLines.push({
+                sectionType: currentSectionType,
+                categoryCode: String(row[codeCol] ?? '').trim() || `${currentSectionType.substring(0, 3)}-${i}`,
+                itemName: name.substring(0, 80),
+                unit: 'LS', quantity: 1, unitPrice: total, totalBudget: total,
+              })
+            }
           }
         }
+
+        if (monthlyCashflows.length === 0) {
+          throw new Error('Không đọc được dòng tiền theo tháng (các dòng nhóm I..VI trống). Kiểm tra lại mẫu file.')
+        }
+
+        // 4) Master data: Khách hàng, Scope, Giá trị HĐ (= tổng "Dòng tiền vào" B, fallback "Doanh thu").
+        const rowByLabel = (kw: string, labelCol = 1) =>
+          rows.find(r => String(r?.[labelCol] ?? '').toLowerCase().includes(kw))
+        const customerId = String(rowByLabel('khách hàng')?.[2] ?? '').trim()
+        const scopeDescription = String(rowByLabel('scope', 0)?.[1] ?? '').trim()
+        let contractValue = 0
+        for (const r of rows) {
+          if (/^B$/i.test(String(r?.[0] ?? '').trim()) && String(r?.[nameCol] ?? '').toLowerCase().includes('dòng tiền vào')) {
+            contractValue = num(r[budgetCol]); break
+          }
+        }
+        if (!contractValue) contractValue = num(rowByLabel('doanh thu')?.[2])
 
         const payload = {
           projectId: selectedProjectId,
-          customerId: customerId.toString().substring(0, 50),
+          customerId: customerId.substring(0, 50),
+          scopeDescription: scopeDescription.substring(0, 200) || undefined,
           contractValue,
           budgetLines,
-          monthlyCashflows
+          monthlyCashflows,
         }
 
         const res = await apiFetch('/api/finance/cashflow/plan', {
@@ -173,7 +219,7 @@ export default function FinancePlanUploader({ onUploaded }: { onUploaded?: (proj
           </select>
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: 'var(--text-secondary)' }}>Tháng bắt đầu dòng tiền (Tháng 1 ở cột D) *</label>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: 'var(--text-secondary)' }}>Tháng/năm của cột &quot;Tháng&quot; ĐẦU TIÊN trong file (để suy ra năm) *</label>
           <input type="month" className="input" value={startMonth} onChange={e => setStartMonth(e.target.value)} />
         </div>
       </div>
@@ -185,7 +231,7 @@ export default function FinancePlanUploader({ onUploaded }: { onUploaded?: (proj
           <p className="font-medium text-green-600 dark:text-green-400">Đã chọn: {file.name}</p>
         ) : (
           <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-            Kéo thả file Phương án Tài chính Excel (VOGT 095) vào đây, hoặc click để chọn file
+            Kéo thả file Phương án Tài chính Excel (mẫu QT30-DT02 — sheet &quot;Dòng tiền dự án&quot;) vào đây, hoặc click để chọn file
           </p>
         )}
       </div>
