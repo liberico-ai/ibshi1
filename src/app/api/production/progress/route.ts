@@ -21,18 +21,37 @@ export async function GET(req: NextRequest) {
     select: {
       id: true, woCode: true, pieceMark: true, status: true,
       plannedWeight: true, completedQty: true, earnedQty: true, teamCode: true,
-      departmentId: true,
+      departmentId: true, projectId: true,
       project: { select: { projectCode: true } },
     },
   })
 
-  const totalPieceMarks = workOrders.filter(w => w.pieceMark).length
-  const completedPieceMarks = workOrders.filter(w => w.pieceMark && w.status === 'COMPLETED').length
-  const earnedPieceMarks = workOrders.filter(w => w.pieceMark && (Number(w.earnedQty) || 0) > 0).length
+  // ── Gom nhóm theo HẠNG MỤC = (dự án + piece-mark) ────────────────────────────────────────────
+  // Nhiều WO cùng (dự án + piece-mark) là các CÔNG ĐOẠN (cắt/chế tạo/hoàn thiện…) làm cho CÙNG MỘT
+  // khối lượng vật chất → KHÔNG cộng dồn tấn. Mỗi nhóm tính MỘT LẦN, lấy giá trị đại diện = max
+  // (khối lượng các công đoạn vốn bằng nhau; completed/earned lấy công đoạn xa nhất → % không vượt 100).
+  // WO không có piece-mark: mỗi WO là 1 nhóm riêng (không gộp vì không biết có cùng hạng mục hay không).
+  type Grp = { planned: number; completed: number; earned: number; allCompleted: boolean; hasPieceMark: boolean }
+  const groups = new Map<string, Grp>()
+  for (const w of workOrders) {
+    const key = w.pieceMark ? `${w.projectId ?? ''}|${w.pieceMark}` : `wo:${w.id}`
+    const g = groups.get(key) ?? { planned: 0, completed: 0, earned: 0, allCompleted: true, hasPieceMark: !!w.pieceMark }
+    g.planned = Math.max(g.planned, Number(w.plannedWeight) || 0)
+    g.completed = Math.max(g.completed, Number(w.completedQty) || 0)
+    g.earned = Math.max(g.earned, Number(w.earnedQty) || 0)
+    g.allCompleted = g.allCompleted && w.status === 'COMPLETED'
+    groups.set(key, g)
+  }
+  const groupList = [...groups.values()]
+  const pmGroups = groupList.filter(g => g.hasPieceMark)
 
-  const totalKg = workOrders.reduce((s, w) => s + (Number(w.plannedWeight) || 0), 0)
-  const completedKg = workOrders.reduce((s, w) => s + (Number(w.completedQty) || 0), 0)
-  const earnedKg = workOrders.reduce((s, w) => s + (Number(w.earnedQty) || 0), 0)
+  const totalPieceMarks = pmGroups.length
+  const completedPieceMarks = pmGroups.filter(g => g.allCompleted).length  // hạng mục xong khi MỌI công đoạn đã COMPLETED
+  const earnedPieceMarks = pmGroups.filter(g => g.earned > 0).length
+
+  const totalKg = groupList.reduce((s, g) => s + g.planned, 0)
+  const completedKg = groupList.reduce((s, g) => s + g.completed, 0)
+  const earnedKg = groupList.reduce((s, g) => s + g.earned, 0)
 
   const totalTons = totalKg / 1000
   const completedTons = completedKg / 1000
