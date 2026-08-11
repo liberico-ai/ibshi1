@@ -505,23 +505,64 @@ export async function finalizeTask(taskId: string, userId: string) {
 // Khi việc của bước Pxx được LÀM XONG ở tab chuyên môn (vd duyệt dự toán, tạo dự án…),
 // gọi hàm này để đóng task quy trình tương ứng → gate mở → chuỗi tự sinh bước kế tiếp.
 // Task Công việc của bước đó chỉ là THÔNG BÁO; nó DONE ở đây (không phải khi vừa mở).
-// Tìm task OPEN/IN_PROGRESS/RETURNED của (projectId, stepCode) có templateStepId (là task cố định).
-// Idempotent: không có task đang mở của bước → trả { ok:false, reason:'no_task' } (bỏ qua êm).
+// ── Self-heal templateStepId cho task quy trình bị THIẾU link (data cũ/di trú) ──────────────
+// Một số task Pxx cũ có đúng taskType (nên vẫn hiện thông báo + gắn dự án) nhưng templateStepId=null
+// → cầu nối/complete sidebar (vốn đòi templateStepId ≠ null) không thấy, người dùng không vào làm được.
+// resolveTemplateStepId: suy bước mẫu đúng của DỰ ÁN theo taskType (khớp code hoặc taskType của TemplateStep).
+async function resolveTemplateStepId(projectId: string, stepCode: string): Promise<string | null> {
+  const anchor = await prisma.task.findFirst({
+    where: { projectId, templateStepId: { not: null } },
+    select: { templateStepId: true },
+  })
+  if (!anchor?.templateStepId) return null
+  const ts = await prisma.templateStep.findUnique({ where: { id: anchor.templateStepId }, select: { templateId: true } })
+  if (!ts?.templateId) return null
+  const step = await prisma.templateStep.findFirst({
+    where: { templateId: ts.templateId, OR: [{ code: stepCode }, { taskType: stepCode }] },
+    select: { id: true },
+  })
+  return step?.id ?? null
+}
+
+// ensureTemplateLink: nếu task đang thiếu templateStepId → nối lại vào bước mẫu đúng (idempotent).
+// Trả templateStepId sau khi (có thể) backfill; mutate luôn object để caller đọc được ngay.
+export async function ensureTemplateLink(
+  task: { id: string; projectId: string | null; taskType: string; templateStepId: string | null },
+): Promise<string | null> {
+  if (task.templateStepId || !task.projectId) return task.templateStepId ?? null
+  const resolved = await resolveTemplateStepId(task.projectId, task.taskType)
+  if (resolved) {
+    await prisma.task.update({ where: { id: task.id }, data: { templateStepId: resolved } })
+    task.templateStepId = resolved
+  }
+  return resolved
+}
+
+// Tìm task bước Pxx của dự án cho tab sidebar. ƯU TIÊN bản quy trình (templateStepId ≠ null) — tránh
+// vớ nhầm task trùng nhãn. Nếu dự án CHỈ có bản thiếu link → lấy bản đó + tự backfill để hiện & chạy tiếp.
+async function findSidebarStepTask(projectId: string, stepCode: string, statuses: string[]) {
+  const withTpl = await prisma.task.findFirst({
+    where: { projectId, taskType: stepCode, templateStepId: { not: null }, status: { in: statuses } },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (withTpl) return withTpl
+  const orphan = await prisma.task.findFirst({
+    where: { projectId, taskType: stepCode, status: { in: statuses } },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (orphan) await ensureTemplateLink(orphan as { id: string; projectId: string | null; taskType: string; templateStepId: string | null })
+  return orphan
+}
+
+// Tìm task OPEN/IN_PROGRESS/RETURNED của (projectId, stepCode). Ưu tiên bản có templateStepId; bản
+// thiếu link được tự nối lại (findSidebarStepTask). Idempotent: không có → { ok:false, reason:'no_task' }.
 export async function completeStepTaskFromSidebar(
   projectId: string,
   stepCode: string,
   userId: string,
   resultData?: Record<string, unknown>,
 ): Promise<{ ok: boolean; taskId?: string; reason?: string }> {
-  const task = await prisma.task.findFirst({
-    where: {
-      projectId,
-      taskType: stepCode,
-      templateStepId: { not: null },
-      status: { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS, TASK_STATUS.RETURNED] },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const task = await findSidebarStepTask(projectId, stepCode, [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS, TASK_STATUS.RETURNED])
   if (!task) return { ok: false, reason: 'no_task' }
 
   // Gate biểu mẫu: chặn hoàn thành từ sidebar nếu bước cần dữ liệu parse mà chưa có (vd P1.2 dự toán).
@@ -557,15 +598,7 @@ export async function returnStepTaskFromSidebar(
   userId: string,
   reason: string,
 ): Promise<{ ok: boolean; taskId?: string; reason?: string }> {
-  const task = await prisma.task.findFirst({
-    where: {
-      projectId,
-      taskType: stepCode,
-      templateStepId: { not: null },
-      status: { in: [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS] },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const task = await findSidebarStepTask(projectId, stepCode, [TASK_STATUS.OPEN, TASK_STATUS.IN_PROGRESS])
   if (!task) return { ok: false, reason: 'no_task' }
   const prevStatus = task.status
   await prisma.$transaction([
