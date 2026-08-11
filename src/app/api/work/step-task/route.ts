@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { completeStepTaskFromSidebar, ensureTemplateLink } from '@/lib/work-engine'
+import { completeStepTaskFromSidebar } from '@/lib/work-engine'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,15 +15,14 @@ const OPEN = ['OPEN', 'IN_PROGRESS', 'RETURNED']
 
 const STEP_TASK_SELECT = {
   id: true, status: true, resultData: true, createdBy: true,
-  projectId: true, taskType: true, templateStepId: true,
   assignees: { select: { userId: true, role: true } },
   project: { select: { projectCode: true, projectName: true, clientName: true, contractValue: true } },
 } as const
 
 // Ưu tiên task đang mở (để làm/hoàn thành). Nếu bước đã DONE, trả task DONE gần nhất
 // để card sidebar vẫn cho "Bổ sung / Chỉnh sửa" (amend) — ngang bản gốc trong Hộp việc.
-// ƯU TIÊN bản quy trình (templateStepId ≠ null). Nếu dự án chỉ có bản THIẾU link (task Pxx cũ:
-// đúng taskType nhưng templateStepId=null) → lấy bản đó + tự backfill để card hiện & hoàn thành được.
+// ƯU TIÊN bản do chuỗi sinh (templateStepId ≠ null) để tránh vớ nhầm task trùng nhãn; nếu dự án
+// CHỈ có task cùng taskType chưa gắn link (tạo tay/import) → VẪN trả về để VÙNG LÀM VIỆC hiện ra.
 async function findActiveStepTask(projectId: string, stepCode: string) {
   const pick = async (statuses: readonly string[]) => {
     const withTpl = await prisma.task.findFirst({
@@ -31,12 +30,10 @@ async function findActiveStepTask(projectId: string, stepCode: string) {
       orderBy: { createdAt: 'desc' }, select: STEP_TASK_SELECT,
     })
     if (withTpl) return withTpl
-    const orphan = await prisma.task.findFirst({
+    return prisma.task.findFirst({
       where: { projectId, taskType: stepCode, status: { in: [...statuses] } },
       orderBy: { createdAt: 'desc' }, select: STEP_TASK_SELECT,
     })
-    if (orphan) await ensureTemplateLink(orphan)
-    return orphan
   }
   return (await pick(OPEN)) || (await pick(['DONE']))
 }
