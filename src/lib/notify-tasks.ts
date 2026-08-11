@@ -170,3 +170,17 @@ export function isNotifyTask(taskType?: string | null): boolean {
 export function notifyTaskInfo(taskType?: string | null): NotifyTaskInfo | undefined {
   return taskType ? NOTIFY_TASK_MAP[taskType] : undefined
 }
+
+// Loại task quy trình tạo TỰ ĐỘNG bởi hệ thống/handler (KHÔNG qua spawnTemplateStep nên không có
+// templateStepId): P3.6 (BGĐ duyệt báo giá), P4.3/P4.4 (GRN/QC theo PO), P4.5 (xuất VT theo ngày),
+// P5.1/P5.1A (báo sản lượng theo ngày), P5.1.1 (yêu cầu nghiệm thu), P5.3A (QAQC nghiệm thu CL).
+const AUTO_FLOW_TYPES = new Set(['P3.6', 'P4.3', 'P4.4', 'P4.5', 'P5.1', 'P5.1A', 'P5.1.1', 'P5.3A'])
+
+// Task có phải do QUY TRÌNH sinh ra không → mới redirect vào sidebar. Task TẠO TAY (người dùng tự
+// tạo: không templateStepId, không do system, taskType không thuộc nhóm auto) → false → dù trùng
+// nhãn Pxx vẫn LÀM THẲNG ở tab Công việc (không đẩy sang sidebar).
+export function isFlowGeneratedTask(t: { taskType: string; templateStepId?: string | null; createdBy?: string | null }): boolean {
+  if (t.templateStepId) return true                                     // do chuỗi spawnTemplateStep sinh
+  if (t.createdBy === 'system' || t.createdBy === 'SYSTEM') return true  // activateTask/cron sinh
+  return AUTO_FLOW_TYPES.has(t.taskType)                                 // handler nghiệp vụ sinh (GRN/QC/…)
+}
