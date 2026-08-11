@@ -14,7 +14,7 @@ import { formatDate, formatDateTime, formatShortDateTime } from '@/lib/utils'
 import { Badge, Button } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { confirmDialog } from '@/components/ui/Toast'
-import { isNotifyTask, notifyTaskInfo, isFlowGeneratedTask } from '@/lib/notify-tasks'
+import { isNotifyTask, notifyTaskInfo } from '@/lib/notify-tasks'
 
 
 interface DocFile { id: string; fileName: string; fileUrl: string }
@@ -116,7 +116,7 @@ export default function WorkDetailPage() {
   //  • mode 'redirect' (trong chuỗi 32 bước): KHÔNG ẩn — giữ để nhắc; task tự DONE khi làm xong ở sidebar.
   useEffect(() => {
     const info = task ? notifyTaskInfo(task.taskType) : undefined
-    if (task && info?.mode === 'dismiss' && isFlowGeneratedTask(task) && !task.resultData?.dismissed) {
+    if (info?.mode === 'dismiss' && !task?.resultData?.dismissed) {
       apiFetch(`/api/work/tasks/${id}/dismiss`, { method: 'POST', body: '{}' }).catch(() => {})
     }
   }, [task, id])
@@ -126,10 +126,8 @@ export default function WorkDetailPage() {
 
   // ── Task "THÔNG BÁO": khi ĐANG MỞ → con trỏ sang tab sidebar để làm. Khi ĐÃ XONG
   // (DONE/CANCELLED) → hiện FULL task detail ở "Đã xong" để TRUY VẾT / sửa / import lại. ──
-  // CHỈ redirect task do QUY TRÌNH sinh (isFlowGeneratedTask). Task TẠO TAY dù trùng nhãn Pxx
-  // (vd "Q26.080 - Báo giá…", P3.5 giao tay) → KHÔNG redirect, làm thẳng ở Công việc bên dưới.
   const notifyInfo = notifyTaskInfo(task.taskType)
-  if (notifyInfo && isFlowGeneratedTask(task) && task.status !== 'DONE' && task.status !== 'CANCELLED') {
+  if (notifyInfo && task.status !== 'DONE' && task.status !== 'CANCELLED') {
     const poCode = (task.resultData?.poCode as string) || ''
     // Kèm &step=<taskType> để trang đích (SidebarStepLanding) mở ĐÚNG card bước đó,
     // không hiện lẫn các bước khác cùng trang (vd Định mức vật tư có cả P2.1 + P2.2).
