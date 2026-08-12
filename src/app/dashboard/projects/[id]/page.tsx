@@ -77,6 +77,7 @@ export default function ProjectDetailPage() {
   const canManageProject = ['R01', 'R02', 'R10'].includes(currentUser?.roleCode || '')
   const [editOpen, setEditOpen] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [editForm, setEditForm] = useState({ projectName: '', clientName: '', startDate: '', endDate: '', contractValue: '', description: '' })
 
   async function reload() {
@@ -115,6 +116,23 @@ export default function ProjectDetailPage() {
     setSavingEdit(false)
     if (res.ok) { notify('Đã cập nhật dự án', 'success'); setEditOpen(false); await reload() }
     else notify(res.error || 'Lỗi cập nhật dự án', 'error')
+  }
+
+  async function handleDeleteProject() {
+    if (!await confirmDialog('Xóa (mềm) dự án này? Dự án + toàn bộ công việc/tài liệu sẽ bị ẩn khỏi hệ thống. Có thể khôi phục lại sau.')) return
+    setDeleting(true)
+    const res = await apiFetch(`/api/projects/${params.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'SOFT_DELETE' }) })
+    setDeleting(false)
+    if (res.ok) { notify(res.message || 'Đã xóa dự án', 'success'); await reload() }
+    else notify(res.error || 'Lỗi xóa dự án', 'error')
+  }
+
+  async function handleRestoreProject() {
+    setDeleting(true)
+    const res = await apiFetch(`/api/projects/${params.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'RESTORE' }) })
+    setDeleting(false)
+    if (res.ok) { notify(res.message || 'Đã khôi phục dự án', 'success'); await reload() }
+    else notify(res.error || 'Lỗi khôi phục dự án', 'error')
   }
 
   useEffect(() => {
@@ -226,6 +244,24 @@ export default function ProjectDetailPage() {
   if (loading) return <div className="h-64 rounded-xl animate-pulse" style={{ background: 'var(--bg-card)' }} />
   if (!project) return <p style={{ color: 'var(--text-muted)' }}>Dự án không tồn tại</p>
 
+  // Dự án ĐÃ XÓA MỀM (status='DELETED') → ẩn toàn bộ bước/tài liệu, chỉ hiện trang "đã xóa" + khôi phục.
+  if (project.status === 'DELETED') return (
+    <div style={{ maxWidth: '640px', margin: '48px auto', textAlign: 'center' }}>
+      <div style={{ padding: '32px 28px', borderRadius: '16px', background: '#fef2f2', border: '1px solid #fecaca' }}>
+        <div style={{ fontSize: '32px', marginBottom: '8px' }}>🗑</div>
+        <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#b91c1c', textTransform: 'uppercase' as const }}>{project.projectCode}</p>
+        <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#7f1d1d', marginTop: '4px' }}>{project.projectName}</h1>
+        <p style={{ fontSize: '13.5px', color: '#b91c1c', marginTop: '12px', lineHeight: 1.5 }}>Dự án đã bị <b>xóa (mềm)</b> — đang được ẩn khỏi danh sách, bộ chọn dự án, Hộp việc và tài liệu. Toàn bộ dữ liệu vẫn được giữ và có thể khôi phục.</p>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '20px', flexWrap: 'wrap' }}>
+          <a href="/dashboard/projects" style={{ padding: '9px 18px', borderRadius: '9px', border: '1px solid #fecaca', color: '#b91c1c', textDecoration: 'none', fontWeight: 600, fontSize: '13px' }}>← Về danh sách dự án</a>
+          {canManageProject && (
+            <button onClick={handleRestoreProject} disabled={deleting} style={{ padding: '9px 18px', borderRadius: '9px', border: 'none', background: '#b91c1c', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: '13px', opacity: deleting ? 0.5 : 1 }}>↩ Khôi phục dự án</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   const currentUserRole = currentUser?.roleCode || ''
   const currentUserLevel = currentUser?.userLevel
   const canAssignLevel = currentUserLevel === 1 || ['R00', 'R01', 'R02'].includes(currentUserRole)
@@ -299,6 +335,9 @@ export default function ProjectDetailPage() {
             )}
             {canManageProject && (
               <button onClick={openEdit} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', cursor: 'pointer' }}>✎ Sửa thông tin</button>
+            )}
+            {canManageProject && (
+              <button onClick={handleDeleteProject} disabled={deleting} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 12px', borderRadius: '8px', background: 'rgba(220,38,38,0.2)', color: '#fecaca', border: '1px solid rgba(220,38,38,0.4)', cursor: 'pointer', opacity: deleting ? 0.5 : 1 }}>🗑 Xóa dự án</button>
             )}
           </div>
         </div>

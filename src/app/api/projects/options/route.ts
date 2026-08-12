@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   if (!user) return unauthorizedResponse()
 
   const projects = await prisma.project.findMany({
-    where: { status: { not: 'CLOSED' } },
+    where: { status: { notIn: ['CLOSED', 'DELETED'] } },
     select: { id: true, projectCode: true, projectName: true, status: true },
     orderBy: { projectCode: 'asc' },
   })

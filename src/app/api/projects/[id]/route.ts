@@ -358,6 +358,36 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
     )
   }
 
+  // ── XÓA MỀM: đánh dấu status='DELETED' (không xóa cứng, không thêm cột) ──
+  if (body.action === 'SOFT_DELETE') {
+    if (!['R01', 'R02', 'R10'].includes(payload.roleCode)) {
+      return errorResponse('Chỉ BGĐ (R01), PM (R02) hoặc Quản trị (R10) mới được xóa dự án', 403)
+    }
+    const existing = await prisma.project.findUnique({ where: { id }, select: { projectCode: true, status: true } })
+    if (!existing) return errorResponse('Dự án không tồn tại', 404)
+    if (existing.status === 'DELETED') return errorResponse('Dự án đã bị xóa trước đó', 422)
+    await prisma.project.update({ where: { id }, data: { status: 'DELETED' } })
+    const { logAudit, getClientIP } = await import('@/lib/auth')
+    await logAudit(payload.userId, 'SOFT_DELETE', 'Project', id, { fromStatus: existing.status }, getClientIP(req))
+    await Promise.all([cacheInvalidate(CACHE_KEYS.projects), cacheInvalidate(CACHE_KEYS.dashboard)])
+    return successResponse({ ok: true }, `Đã xóa (mềm) dự án ${existing.projectCode} — có thể khôi phục`)
+  }
+
+  // ── KHÔI PHỤC dự án đã xóa mềm (status='DELETED' → 'ACTIVE') ──
+  if (body.action === 'RESTORE') {
+    if (!['R01', 'R02', 'R10'].includes(payload.roleCode)) {
+      return errorResponse('Chỉ BGĐ (R01), PM (R02) hoặc Quản trị (R10) mới được khôi phục dự án', 403)
+    }
+    const existing = await prisma.project.findUnique({ where: { id }, select: { projectCode: true, status: true } })
+    if (!existing) return errorResponse('Dự án không tồn tại', 404)
+    if (existing.status !== 'DELETED') return errorResponse('Dự án này không ở trạng thái đã xóa', 422)
+    await prisma.project.update({ where: { id }, data: { status: 'ACTIVE' } })
+    const { logAudit, getClientIP } = await import('@/lib/auth')
+    await logAudit(payload.userId, 'RESTORE', 'Project', id, { toStatus: 'ACTIVE' }, getClientIP(req))
+    await Promise.all([cacheInvalidate(CACHE_KEYS.projects), cacheInvalidate(CACHE_KEYS.dashboard)])
+    return successResponse({ ok: true }, `Đã khôi phục dự án ${existing.projectCode}`)
+  }
+
   // P5.4: Client acceptance
   if (body.action === 'ACCEPT') {
     // Verify P5.3 (SAT) is DONE

@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
           orderBy: { createdAt: 'desc' },
           include: { user: { select: { username: true, fullName: true } } },
         }),
-        prisma.project.count(),
+        prisma.project.count({ where: { status: { not: 'DELETED' } } }),
         prisma.project.count({ where: { status: 'ACTIVE' } }),
       ])
 

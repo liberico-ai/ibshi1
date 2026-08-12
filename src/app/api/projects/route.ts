@@ -14,11 +14,15 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   const qResult = validateQuery(req.url, projectListQuerySchema)
   if (!qResult.success) return qResult.response
   const { page, limit, search, status } = qResult.data
+  // Xem dự án ĐÃ XÓA (mềm) để khôi phục — chỉ BGĐ/PM/Quản trị, khi ?deleted=1. Mặc định ẩn dự án đã xóa.
+  const showDeleted = new URL(req.url).searchParams.get('deleted') === '1' && ['R01', 'R02', 'R10'].includes(payload.roleCode)
 
-  const cacheKey = `projects:list:${payload.userId}:${status || ''}:${search}:${page}:${limit}`
+  const cacheKey = `projects:list:${payload.userId}:${status || ''}:${search}:${page}:${limit}:${showDeleted ? 'del' : ''}`
   const data = await withCache(cacheKey, 60, async () => {
     const where: Record<string, unknown> = {}
-    if (status) where.status = status
+    if (showDeleted) where.status = 'DELETED'
+    else if (status) where.status = status
+    else where.status = { not: 'DELETED' }  // "Tất cả" nhưng vẫn ẩn dự án đã xóa mềm
     if (search) {
       where.OR = [
         { projectCode: { contains: search, mode: 'insensitive' } },

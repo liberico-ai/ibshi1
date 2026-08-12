@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
     // ──── P-00: Overview ────
     if (type === 'overview') {
       const [projectCount, activeProjects, closedProjects, totalTasks, completedTasks, overdueTasks, activeWO, openNCR] = await Promise.all([
-        prisma.project.count(),
-        prisma.project.count({ where: { status: { not: 'CLOSED' } } }),
+        prisma.project.count({ where: { status: { not: 'DELETED' } } }),
+        prisma.project.count({ where: { status: { notIn: ['CLOSED', 'DELETED'] } } }),
         prisma.project.count({ where: { status: 'CLOSED' } }),
         prisma.task.count(),
         prisma.task.count({ where: { status: 'DONE' } }),

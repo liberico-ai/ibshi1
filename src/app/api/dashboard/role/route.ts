@@ -36,7 +36,7 @@ async function fetchRoleWidgets(user: { userId: string; roleCode: string }) {
     if (['R01', 'R02'].includes(role)) {
       // BGĐ / PM — project overview
       const [projects, overdueCount] = await Promise.all([
-        prisma.project.count({ where: { status: { not: 'CLOSED' } } }),
+        prisma.project.count({ where: { status: { notIn: ['CLOSED', 'DELETED'] } } }),
         prisma.task.count({ where: whereOverdue() }),
       ])
       widgets.activeProjects = projects
