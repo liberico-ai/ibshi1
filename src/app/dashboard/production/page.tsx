@@ -307,6 +307,7 @@ function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
 
   const submit = async () => {
     if (!form.woCode || !form.projectId || !form.description || !form.teamCode) return notify('Nhập đầy đủ')
+    if (form.plannedStart && form.plannedEnd && form.plannedEnd < form.plannedStart) return notify('Ngày kết thúc phải sau ngày bắt đầu')
     setSubmitting(true)
     const res = await apiFetch('/api/production', {
       method: 'POST',
@@ -336,10 +337,11 @@ function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
             options={[{ value: '', label: 'Chọn xưởng...' }, ...PRODUCTION_WORKSHOPS.map(w => ({ value: w.code, label: `${w.code} — ${w.name}` }))]} />
         </div>
         <TextareaField label="Mô tả *" rows={2} value={form.description} onChange={e => update('description', e.target.value)} />
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <InputField label="Piece-mark" value={form.pieceMark} onChange={e => update('pieceMark', e.target.value)} placeholder="C1, B2..." />
           <InputField label="Trọng lượng (kg)" type="number" value={form.plannedWeight} onChange={e => update('plannedWeight', e.target.value)} />
           <InputField label="Ngày BĐ" type="date" value={form.plannedStart} onChange={e => update('plannedStart', e.target.value)} />
+          <InputField label="Ngày KT" type="date" value={form.plannedEnd} min={form.plannedStart || undefined} onChange={e => update('plannedEnd', e.target.value)} />
         </div>
       </div>
       <div className="flex gap-3 mt-5">
