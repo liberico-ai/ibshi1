@@ -33,8 +33,8 @@ export async function GET(req: NextRequest) {
           orderBy: { createdAt: 'desc' },
           include: { user: { select: { username: true, fullName: true } } },
         }),
-        prisma.project.count({ where: { deletedAt: null } }),
-        prisma.project.count({ where: { status: 'ACTIVE', deletedAt: null } }),
+        prisma.project.count(),
+        prisma.project.count({ where: { status: 'ACTIVE' } }),
       ])
 
       // Resolve department names for dept grouping

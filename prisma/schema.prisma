@@ -74,7 +74,6 @@ model Project {
   description        String?
   createdAt          DateTime                 @default(now()) @map("created_at")
   updatedAt          DateTime                 @updatedAt @map("updated_at")
-  deletedAt          DateTime?                @map("deleted_at") // xóa mềm: set = ẩn dự án + task/tài liệu khỏi UI
   boms               BillOfMaterial[]
   budgets            Budget[]
   cashflows          CashflowEntry[]
@@ -117,7 +116,6 @@ model Project {
   @@index([status])
   @@index([pmUserId])
   @@index([saleCustomerId])
-  @@index([deletedAt])
   @@map("projects")
 }
 

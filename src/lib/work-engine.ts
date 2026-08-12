@@ -1100,8 +1100,6 @@ export async function getInbox(userId: string, roleCode: string, tab: string, pa
   const extra: Record<string, unknown>[] = []
   if (opts?.q?.trim()) extra.push({ title: { contains: opts.q.trim(), mode: 'insensitive' } })
   if (opts?.projectId) extra.push({ projectId: opts.projectId })
-  // Ẩn task/bước của dự án đã XÓA MỀM khỏi Hộp việc (giữ task không gắn dự án — vd việc tạo tay tự do).
-  extra.push({ OR: [{ projectId: null }, { project: { deletedAt: null } }] })
   if (extra.length) where = { AND: [where, ...extra] }
 
   const [total, tasks] = await Promise.all([

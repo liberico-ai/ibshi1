@@ -358,18 +358,6 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
     )
   }
 
-  // ── Khôi phục dự án đã xóa mềm (clear deleted_at) ──
-  if (body.action === 'RESTORE') {
-    if (!['R01', 'R02', 'R10'].includes(payload.roleCode)) {
-      return errorResponse('Chỉ BGĐ (R01), PM (R02) hoặc Quản trị (R10) mới được khôi phục dự án', 403)
-    }
-    const project = await prisma.project.update({ where: { id }, data: { deletedAt: null } })
-    const { logAudit, getClientIP } = await import('@/lib/auth')
-    await logAudit(payload.userId, 'RESTORE', 'Project', id, { deletedAt: null }, getClientIP(req))
-    await Promise.all([cacheInvalidate(CACHE_KEYS.projects), cacheInvalidate(CACHE_KEYS.dashboard)])
-    return successResponse({ project: { ...project, contractValue: project.contractValue?.toString() } }, `Đã khôi phục dự án ${project.projectCode}`)
-  }
-
   // P5.4: Client acceptance
   if (body.action === 'ACCEPT') {
     // Verify P5.3 (SAT) is DONE
@@ -451,29 +439,5 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
   }
 
   return errorResponse('Action không hợp lệ')
-})
-
-// DELETE /api/projects/[id] — XÓA MỀM dự án (set deleted_at). Dự án + task/bước + tài liệu liên quan
-// bị ẩn khỏi UI (lọc deletedAt ở list/options/overview/inbox). KHÔNG xóa cứng — khôi phục qua PATCH
-// action:'RESTORE'. Chỉ BGĐ (R01) / PM (R02) / Quản trị (R10).
-export const DELETE = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
-  const payload = await authenticateRequest(req)
-  if (!payload) return unauthorizedResponse()
-  const pResult = validateParams(await params, idParamSchema)
-  if (!pResult.success) return pResult.response
-  const { id } = pResult.data
-
-  if (!['R01', 'R02', 'R10'].includes(payload.roleCode)) {
-    return errorResponse('Chỉ BGĐ (R01), PM (R02) hoặc Quản trị (R10) mới được xóa dự án', 403)
-  }
-  const existing = await prisma.project.findUnique({ where: { id }, select: { projectCode: true, deletedAt: true } })
-  if (!existing) return errorResponse('Dự án không tồn tại', 404)
-  if (existing.deletedAt) return errorResponse('Dự án đã bị xóa trước đó', 422)
-
-  const project = await prisma.project.update({ where: { id }, data: { deletedAt: new Date() } })
-  const { logAudit, getClientIP } = await import('@/lib/auth')
-  await logAudit(payload.userId, 'SOFT_DELETE', 'Project', id, { deletedAt: project.deletedAt }, getClientIP(req))
-  await Promise.all([cacheInvalidate(CACHE_KEYS.projects), cacheInvalidate(CACHE_KEYS.dashboard)])
-  return successResponse({ ok: true }, `Đã xóa (mềm) dự án ${project.projectCode} — có thể khôi phục`)
 })
 
