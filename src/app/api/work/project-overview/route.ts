@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     if (!payload) return unauthorizedResponse()
 
     const projects = await prisma.project.findMany({
-      where: { status: { not: 'CANCELLED' } },
+      where: { status: { not: 'CANCELLED' }, deletedAt: null },
       select: { id: true },
       orderBy: { createdAt: 'desc' },
     })

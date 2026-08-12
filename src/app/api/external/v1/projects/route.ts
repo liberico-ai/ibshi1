@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   const { status, q, page, pageSize } = params.data
 
-  const where: Record<string, unknown> = {}
+  const where: Record<string, unknown> = { deletedAt: null }
   if (status === 'active') where.status = 'ACTIVE'
   if (q) {
     where.OR = [
