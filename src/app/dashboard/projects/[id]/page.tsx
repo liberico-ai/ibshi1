@@ -73,10 +73,48 @@ export default function ProjectDetailPage() {
   const [kickoffReason, setKickoffReason] = useState('')
   const [collapsedPhases, setCollapsedPhases] = useState<Set<number> | null>(null)
   const { user: currentUser } = useAuthStore()
+  // Sửa thông tin dự án — chỉ BGĐ (R01), PM (R02), Quản trị (R10). Dùng PUT sẵn có, KHÔNG đụng schema.
+  const canManageProject = ['R01', 'R02', 'R10'].includes(currentUser?.roleCode || '')
+  const [editOpen, setEditOpen] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editForm, setEditForm] = useState({ projectName: '', clientName: '', startDate: '', endDate: '', contractValue: '', description: '' })
 
   async function reload() {
     const res = await apiFetch(`/api/projects/${params.id}`)
     if (res.ok) setProject(res.project)
+  }
+
+  function openEdit() {
+    if (!project) return
+    setEditForm({
+      projectName: project.projectName || '',
+      clientName: project.clientName || '',
+      startDate: project.startDate ? project.startDate.slice(0, 10) : '',
+      endDate: project.endDate ? project.endDate.slice(0, 10) : '',
+      contractValue: project.contractValue ? String(project.contractValue) : '',
+      description: project.description || '',
+    })
+    setEditOpen(true)
+  }
+
+  async function handleSaveEdit() {
+    if (!editForm.projectName.trim() || !editForm.clientName.trim()) return notify('Nhập tên dự án và khách hàng', 'error')
+    if (editForm.startDate && editForm.endDate && editForm.endDate < editForm.startDate) return notify('Ngày kết thúc phải sau ngày bắt đầu', 'error')
+    setSavingEdit(true)
+    const res = await apiFetch(`/api/projects/${params.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        projectName: editForm.projectName.trim(),
+        clientName: editForm.clientName.trim(),
+        startDate: editForm.startDate || undefined,
+        endDate: editForm.endDate || undefined,
+        contractValue: editForm.contractValue !== '' ? editForm.contractValue : undefined,
+        description: editForm.description,
+      }),
+    })
+    setSavingEdit(false)
+    if (res.ok) { notify('Đã cập nhật dự án', 'success'); setEditOpen(false); await reload() }
+    else notify(res.error || 'Lỗi cập nhật dự án', 'error')
   }
 
   useEffect(() => {
@@ -255,9 +293,14 @@ export default function ProjectDetailPage() {
           <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', opacity: 0.6, textTransform: 'uppercase' as const }}>{project.projectCode}</span>
           <h1 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', marginTop: '4px', color: '#ffffff' }}>{project.projectName}</h1>
           <p style={{ fontSize: '14px', opacity: 0.7, marginTop: '4px', color: '#ffffff' }}>{project.clientName}{project.description ? ` — ${project.description}` : ''}</p>
-          {project.status === 'CLOSED' && (
-            <span style={{ display: 'inline-block', marginTop: '8px', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: 'rgba(22,163,74,0.2)', color: '#86efac' }}>ĐÃ ĐÓNG</span>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+            {project.status === 'CLOSED' && (
+              <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: 'rgba(22,163,74,0.2)', color: '#86efac' }}>ĐÃ ĐÓNG</span>
+            )}
+            {canManageProject && (
+              <button onClick={openEdit} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', cursor: 'pointer' }}>✎ Sửa thông tin</button>
+            )}
+          </div>
         </div>
         <div style={{ textAlign: 'center', flexShrink: 0, marginLeft: '24px' }}>
           <div style={{ position: 'relative', width: '88px', height: '88px' }}>
@@ -273,6 +316,45 @@ export default function ProjectDetailPage() {
           <p style={{ fontSize: '11px', opacity: 0.6, marginTop: '4px' }}>{doneTasks}/{totalTasks} tasks</p>
         </div>
       </div>
+
+      {/* Modal chỉnh sửa thông tin dự án (nối PUT /api/projects/[id] — không đụng schema) */}
+      {editOpen && (
+        <div onClick={() => setEditOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #14202e)', borderRadius: '14px', width: '100%', maxWidth: '560px', padding: '24px', boxShadow: '0 20px 60px -20px rgba(0,0,0,0.5)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 700 }}>Chỉnh sửa thông tin dự án</h3>
+              <button onClick={() => setEditOpen(false)} style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--text-muted, #64748b)', lineHeight: 1 }}>×</button>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', marginBottom: '16px' }}>Mã dự án <b>{project.projectCode}</b> không thể đổi.</p>
+            <div style={{ display: 'grid', gap: '13px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #475467)' }}>Tên dự án *
+                <input value={editForm.projectName} onChange={e => setEditForm(f => ({ ...f, projectName: e.target.value }))} style={{ padding: '9px 11px', borderRadius: '8px', border: '1px solid var(--border-light, #d3dbe4)', fontSize: '14px', background: 'var(--bg-primary, #fff)', color: 'inherit' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #475467)' }}>Khách hàng *
+                <input value={editForm.clientName} onChange={e => setEditForm(f => ({ ...f, clientName: e.target.value }))} style={{ padding: '9px 11px', borderRadius: '8px', border: '1px solid var(--border-light, #d3dbe4)', fontSize: '14px', background: 'var(--bg-primary, #fff)', color: 'inherit' }} />
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '13px' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #475467)' }}>Ngày bắt đầu
+                  <input type="date" value={editForm.startDate} onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))} style={{ padding: '9px 11px', borderRadius: '8px', border: '1px solid var(--border-light, #d3dbe4)', fontSize: '14px', background: 'var(--bg-primary, #fff)', color: 'inherit' }} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #475467)' }}>Ngày kết thúc
+                  <input type="date" min={editForm.startDate || undefined} value={editForm.endDate} onChange={e => setEditForm(f => ({ ...f, endDate: e.target.value }))} style={{ padding: '9px 11px', borderRadius: '8px', border: '1px solid var(--border-light, #d3dbe4)', fontSize: '14px', background: 'var(--bg-primary, #fff)', color: 'inherit' }} />
+                </label>
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #475467)' }}>Giá trị hợp đồng (VNĐ)
+                <input type="number" value={editForm.contractValue} onChange={e => setEditForm(f => ({ ...f, contractValue: e.target.value }))} style={{ padding: '9px 11px', borderRadius: '8px', border: '1px solid var(--border-light, #d3dbe4)', fontSize: '14px', background: 'var(--bg-primary, #fff)', color: 'inherit' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #475467)' }}>Mô tả
+                <textarea rows={3} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} style={{ padding: '9px 11px', borderRadius: '8px', border: '1px solid var(--border-light, #d3dbe4)', fontSize: '14px', background: 'var(--bg-primary, #fff)', color: 'inherit', resize: 'vertical' }} />
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditOpen(false)} style={{ padding: '9px 18px', borderRadius: '9px', border: '1px solid var(--border-light, #d3dbe4)', background: 'transparent', color: 'inherit', cursor: 'pointer', fontWeight: 600 }}>Hủy</button>
+              <button onClick={handleSaveEdit} disabled={savingEdit} style={{ padding: '9px 18px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', cursor: 'pointer', fontWeight: 600, opacity: savingEdit ? 0.6 : 1 }}>{savingEdit ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* P1.1 — PM hoàn tất khởi tạo dự án ngay tại trang Dự án (thay vì làm ở Công việc) */}
       {(() => {
