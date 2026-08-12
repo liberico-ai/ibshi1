@@ -7,14 +7,14 @@ import { PageHeader, Button, Badge, EmptyState, Pagination } from '@/components/
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Inbox } from 'lucide-react'
 import { notify } from '@/components/ui/Toast'
-import { isNotifyTask } from '@/lib/notify-tasks'
+import { isNotifyTask, isFlowGeneratedTask } from '@/lib/notify-tasks'
 
 interface Task {
   id: string; title: string; status: string; priority: string; deadline: string | null; taskType: string
   blocked: boolean; submittedAt: string | null
   project: { projectCode: string; projectName: string } | null
   assigneeNames: string[]; createdByName: string; needsMyReview: boolean; _count: { children: number; docs: number }
-  createdBy?: string
+  createdBy?: string; templateStepId?: string | null
   assignees?: { done: boolean; userId?: string | null; role?: string | null }[]
   resultData?: { changeRequest?: { status: string; type: string; reason: string } } | null
 }
@@ -241,7 +241,7 @@ export default function WorkInboxPage() {
                     <span className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
                       style={{ background: accent.bg, color: accent.solid }}>{rowNum}</span>
                     <div className="font-bold flex-1" style={{ color: 'var(--text-primary)', fontSize: 15, minWidth: 180, lineHeight: 1.35 }}>{t.title}</div>
-                    {isNotifyTask(t.taskType) && (
+                    {isNotifyTask(t.taskType) && isFlowGeneratedTask(t) && (
                       <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>🔔 Thông báo</span>
                     )}
                     {tab === 'review' && !revLate && <Badge variant="warning">Cần kết thúc</Badge>}
