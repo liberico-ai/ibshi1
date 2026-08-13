@@ -277,6 +277,18 @@ model Vendor {
   rating         Decimal?                  @default(0)
   isActive       Boolean                   @default(true) @map("is_active")
   notes          String?
+  // ── Bổ sung hồ sơ NCC (PORT Thương Mại — Module 1) — tất cả nullable, an toàn additive ──
+  shortName      String?                   @map("short_name")     // tên gọi tắt (VSAN, GNEE…)
+  taxCode        String?                   @map("tax_code")       // mã số thuế
+  city           String?
+  website        String?
+  contactTitle   String?                   @map("contact_title")  // chức danh người liên hệ
+  contactPhone   String?                   @map("contact_phone")
+  contactEmail   String?                   @map("contact_email")
+  vendorType     String?                   @default("DOMESTIC") @map("vendor_type") // DOMESTIC | IMPORT | MIXED
+  bank           String?                                          // ngân hàng
+  accountNo      String?                   @map("account_no")     // số TK (string vì có thể bắt đầu = 0)
+  blacklisted    Boolean                   @default(false)        // NCC bị chặn (bổ sung trạng thái BLACKLIST)
   createdAt      DateTime                  @default(now()) @map("created_at")
   updatedAt      DateTime                  @updatedAt @map("updated_at")
   invoices          Invoice[]

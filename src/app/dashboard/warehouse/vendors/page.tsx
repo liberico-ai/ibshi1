@@ -10,6 +10,10 @@ interface Vendor {
   email: string | null; phone: string | null; address: string | null;
   country: string; category: string; rating: number | string | null;
   isActive: boolean; notes: string | null; createdAt: string;
+  // Hồ sơ NCC bổ sung (Module 1)
+  shortName?: string | null; taxCode?: string | null; city?: string | null; website?: string | null;
+  contactTitle?: string | null; contactPhone?: string | null; contactEmail?: string | null;
+  vendorType?: string | null; bank?: string | null; accountNo?: string | null; blacklisted?: boolean;
 }
 
 const CATEGORY_MAP: Record<string, { label: string; icon: string; color: string }> = {
@@ -29,6 +33,7 @@ export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editVendor, setEditVendor] = useState<Vendor | null>(null)
   const [filterCat, setFilterCat] = useState('')
   const user = useAuthStore((s) => s.user)
 
@@ -113,6 +118,10 @@ export default function VendorsPage() {
                       <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                         style={{ background: '#fef2f2', color: '#dc2626' }}>Ngừng HĐ</span>
                     )}
+                    {v.blacklisted && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                        style={{ background: '#111827', color: '#fca5a5' }}>⛔ Blacklist</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="font-mono text-[11px]" style={{ color: 'var(--accent)' }}>{v.vendorCode}</span>
@@ -138,6 +147,9 @@ export default function VendorsPage() {
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {formatDate(v.createdAt)}
                   </p>
+                  {canManage && (
+                    <button onClick={() => setEditVendor(v)} className="mt-1.5 text-xs font-semibold" style={{ color: 'var(--accent)' }}>✎ Sửa</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -145,35 +157,40 @@ export default function VendorsPage() {
         })}
       </div>
 
-      {showForm && (
-        <CreateVendorModal
-          onClose={() => setShowForm(false)}
-          onCreated={() => { setShowForm(false); loadData() }}
+      {(showForm || editVendor) && (
+        <VendorModal
+          vendor={editVendor}
+          onClose={() => { setShowForm(false); setEditVendor(null) }}
+          onSaved={() => { setShowForm(false); setEditVendor(null); loadData() }}
         />
       )}
     </div>
   )
 }
 
-function CreateVendorModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function VendorModal({ vendor, onClose, onSaved }: { vendor?: Vendor | null; onClose: () => void; onSaved: () => void }) {
+  const isEdit = !!vendor
   const [form, setForm] = useState({
-    vendorCode: '', name: '', category: 'steel_supplier', country: 'VN',
-    contactName: '', email: '', phone: '', address: '', notes: '',
+    vendorCode: vendor?.vendorCode || '', name: vendor?.name || '', category: vendor?.category || 'steel_supplier', country: vendor?.country || 'VN',
+    contactName: vendor?.contactName || '', email: vendor?.email || '', phone: vendor?.phone || '', address: vendor?.address || '', notes: vendor?.notes || '',
+    shortName: vendor?.shortName || '', taxCode: vendor?.taxCode || '', city: vendor?.city || '', website: vendor?.website || '',
+    contactTitle: vendor?.contactTitle || '', contactPhone: vendor?.contactPhone || '', contactEmail: vendor?.contactEmail || '',
+    vendorType: vendor?.vendorType || 'DOMESTIC', bank: vendor?.bank || '', accountNo: vendor?.accountNo || '',
+    isActive: vendor?.isActive ?? true, blacklisted: vendor?.blacklisted ?? false,
   })
   const [submitting, setSubmitting] = useState(false)
 
-  const update = (field: string, value: string) => setForm({ ...form, [field]: value })
+  const update = (field: string, value: string | boolean) => setForm({ ...form, [field]: value })
 
   const submit = async () => {
     if (!form.vendorCode || !form.name) return notify('Nhập mã và tên NCC')
     setSubmitting(true)
-    const res = await apiFetch('/api/vendors', {
-      method: 'POST',
-      body: JSON.stringify(form),
-    })
+    const res = isEdit
+      ? await apiFetch(`/api/vendors/${vendor!.id}`, { method: 'PATCH', body: JSON.stringify(form) })
+      : await apiFetch('/api/vendors', { method: 'POST', body: JSON.stringify(form) })
     setSubmitting(false)
-    if (res.ok) onCreated()
-    else notify(res.error || 'Lỗi tạo NCC')
+    if (res.ok) { notify(isEdit ? 'Đã cập nhật NCC' : 'Đã thêm NCC', 'success'); onSaved() }
+    else notify(res.error || 'Lỗi lưu NCC')
   }
 
   const inputStyle = {
@@ -186,14 +203,14 @@ function CreateVendorModal({ onClose, onCreated }: { onClose: () => void; onCrea
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
       <div className="card p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in" style={{ background: 'var(--bg-card)' }}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Thêm Nhà cung cấp</h2>
+          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{isEdit ? 'Sửa Nhà cung cấp' : 'Thêm Nhà cung cấp'}</h2>
           <button onClick={onClose} className="text-xl" style={{ color: 'var(--text-muted)' }}>✕</button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
             <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Mã NCC *</label>
-            <input value={form.vendorCode} onChange={e => update('vendorCode', e.target.value)} placeholder="NCC-xxx" style={inputStyle} />
+            <input value={form.vendorCode} onChange={e => update('vendorCode', e.target.value)} disabled={isEdit} placeholder="NCC-xxx" style={{ ...inputStyle, opacity: isEdit ? 0.6 : 1 }} />
           </div>
           <div>
             <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Tên NCC *</label>
@@ -236,6 +253,72 @@ function CreateVendorModal({ onClose, onCreated }: { onClose: () => void; onCrea
           </div>
         </div>
 
+        {/* Hồ sơ NCC bổ sung (Module 1 PORT Thương Mại) */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Tên gọi tắt</label>
+            <input value={form.shortName} onChange={e => update('shortName', e.target.value)} placeholder="VSAN, GNEE…" style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Mã số thuế</label>
+            <input value={form.taxCode} onChange={e => update('taxCode', e.target.value)} placeholder="MST" style={inputStyle} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Loại NCC</label>
+            <select value={form.vendorType} onChange={e => update('vendorType', e.target.value)} style={inputStyle}>
+              <option value="DOMESTIC">Nội địa</option>
+              <option value="IMPORT">Nhập khẩu</option>
+              <option value="MIXED">Cả hai</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Thành phố</label>
+            <input value={form.city} onChange={e => update('city', e.target.value)} placeholder="Hải Phòng…" style={inputStyle} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Chức danh liên hệ</label>
+            <input value={form.contactTitle} onChange={e => update('contactTitle', e.target.value)} placeholder="Trưởng phòng KD…" style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Website</label>
+            <input value={form.website} onChange={e => update('website', e.target.value)} placeholder="https://…" style={inputStyle} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>SĐT liên hệ</label>
+            <input value={form.contactPhone} onChange={e => update('contactPhone', e.target.value)} placeholder="09x…" style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Email liên hệ</label>
+            <input value={form.contactEmail} onChange={e => update('contactEmail', e.target.value)} placeholder="lienhe@ncc.com" style={inputStyle} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Ngân hàng</label>
+            <input value={form.bank} onChange={e => update('bank', e.target.value)} placeholder="Techcombank - CN…" style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Số tài khoản</label>
+            <input value={form.accountNo} onChange={e => update('accountNo', e.target.value)} placeholder="0xxxxxxxx" style={inputStyle} />
+          </div>
+        </div>
+        {isEdit && (
+          <div className="flex gap-5 mb-5 items-center">
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+              <input type="checkbox" checked={form.isActive} onChange={e => update('isActive', e.target.checked)} /> Đang hoạt động
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: '#dc2626' }}>
+              <input type="checkbox" checked={form.blacklisted} onChange={e => update('blacklisted', e.target.checked)} /> Blacklist (chặn)
+            </label>
+          </div>
+        )}
+
         <div className="mb-5">
           <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Ghi chú</label>
           <textarea value={form.notes} onChange={e => update('notes', e.target.value)} rows={2}
@@ -248,7 +331,7 @@ function CreateVendorModal({ onClose, onCreated }: { onClose: () => void; onCrea
           <button onClick={submit} disabled={submitting}
             className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
             style={{ background: submitting ? '#94a3b8' : 'var(--accent)' }}>
-            {submitting ? 'Đang tạo...' : 'Thêm NCC'}
+            {submitting ? 'Đang lưu...' : (isEdit ? 'Lưu thay đổi' : 'Thêm NCC')}
           </button>
         </div>
       </div>

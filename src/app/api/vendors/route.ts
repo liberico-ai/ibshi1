@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
 
     const result = await validateBody(req, createVendorSchema)
     if (!result.success) return result.response
-    const { vendorCode, name, category, country, contactName, email, phone, address, notes } = result.data
+    const { vendorCode, name, category, country, contactName, email, phone, address, notes,
+      shortName, taxCode, city, website, contactTitle, contactPhone, contactEmail, vendorType, bank, accountNo } = result.data
 
     const existing = await prisma.vendor.findUnique({ where: { vendorCode } })
     if (existing) return errorResponse(`Mã NCC ${vendorCode} đã tồn tại`)
@@ -61,6 +62,17 @@ export async function POST(req: NextRequest) {
         phone: phone || null,
         address: address || null,
         notes: notes || null,
+        // Hồ sơ NCC bổ sung (Module 1)
+        shortName: shortName || null,
+        taxCode: taxCode || null,
+        city: city || null,
+        website: website || null,
+        contactTitle: contactTitle || null,
+        contactPhone: contactPhone || null,
+        contactEmail: contactEmail || null,
+        vendorType: vendorType || 'DOMESTIC',
+        bank: bank || null,
+        accountNo: accountNo || null,
       },
     })
 

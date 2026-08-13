@@ -103,6 +103,17 @@ export const createVendorSchema = z.object({
   country: z.string().default('VN'),
   category: z.string().min(1, 'Phân loại là bắt buộc'),
   notes: z.string().optional(),
+  // Hồ sơ NCC bổ sung (PORT Thương Mại — Module 1)
+  shortName: z.string().optional(),
+  taxCode: z.string().optional(),
+  city: z.string().optional(),
+  website: z.string().optional(),
+  contactTitle: z.string().optional(),
+  contactPhone: z.string().optional(),
+  contactEmail: z.string().email().optional().or(z.literal('')),
+  vendorType: z.enum(['DOMESTIC', 'IMPORT', 'MIXED']).optional(),
+  bank: z.string().optional(),
+  accountNo: z.string().optional(),
 })
 
 export type CreateVendorInput = z.infer<typeof createVendorSchema>
@@ -118,6 +129,18 @@ export const updateVendorSchema = z.object({
   rating: z.number().min(0).max(5).optional(),
   isActive: z.boolean().optional(),
   notes: z.string().optional(),
+  // Hồ sơ NCC bổ sung (PORT Thương Mại — Module 1)
+  shortName: z.string().optional(),
+  taxCode: z.string().optional(),
+  city: z.string().optional(),
+  website: z.string().optional(),
+  contactTitle: z.string().optional(),
+  contactPhone: z.string().optional(),
+  contactEmail: z.string().email().optional().or(z.literal('')),
+  vendorType: z.enum(['DOMESTIC', 'IMPORT', 'MIXED']).optional(),
+  bank: z.string().optional(),
+  accountNo: z.string().optional(),
+  blacklisted: z.boolean().optional(),
 })
 
 export type UpdateVendorInput = z.infer<typeof updateVendorSchema>
