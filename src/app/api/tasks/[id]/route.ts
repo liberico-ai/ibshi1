@@ -11,7 +11,7 @@ import { idParamSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
 import type { PrevStepFile } from '@/lib/types'
 import {
-  aggregateBomItems, fetchEstimateData, fetchSupplierData,
+  aggregateBomItems, getProjectPrDemand, fetchEstimateData, fetchSupplierData,
   fetchPoData, fetchPlanData, fetchStepResult, fetchAllMaterials, fetchAvailableInventory
 } from '@/lib/data-fetchers'
 import { USE_QUOTE_TABLES, syncQuoteGroups } from '@/lib/quote-sync'
@@ -126,7 +126,14 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   // Fallback: nếu không có workflow steps, lấy PR data từ parent/forwardedFrom/self resultData
   let previousStepData: Record<string, unknown> | null = null
   if (task.stepCode === 'P3.5') {
-    let allPrItems = await aggregateBomItems(task.projectId)
+    // [PORT Thương Mại] P3.5 lấy nhu cầu từ PR của dự án (khớp cột "Cần" của MCL, PR-driven).
+    // Dự án chưa có PR → fallback aggregateBomItems (giữ nguyên luồng cũ, không vỡ).
+    let allPrItems: Awaited<ReturnType<typeof aggregateBomItems>> = (await getProjectPrDemand(task.projectId)).map(r => ({
+      name: r.description, code: r.itemCode, spec: r.profile, quantity: String(r.quantity), unit: r.unit, source: 'PR' as const,
+    }))
+    if (allPrItems.length === 0) {
+      allPrItems = await aggregateBomItems(task.projectId)
+    }
 
     // Fallback: tìm bomPr từ parent → forwardedFrom → self resultData
     if (allPrItems.length === 0) {

@@ -278,7 +278,23 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
   }
 
   // PR reference table
-  const prItems = bomPrData ? (() => { try { return JSON.parse(bomPrData) } catch { return null } })() : null
+  // [PORT Thương Mại] Task P3.5 thường CHƯA có bomPr trong resultData → tự nạp nhu cầu mua theo PR
+  // của dự án (khớp cột "Cần" của MCL). CHỈ nạp khi bomPrData rỗng ⇒ không đụng luồng đã có bomPr.
+  const [prDemandJson, setPrDemandJson] = useState('')
+  useEffect(() => {
+    const hasBomPr = !!bomPrData && (() => {
+      try { const a = JSON.parse(bomPrData); return Array.isArray(a) && a.length > 0 } catch { return false }
+    })()
+    if (hasBomPr) return
+    let alive = true
+    apiFetch(`/api/work/tasks/${taskId}/pr-demand`).then(r => {
+      if (alive && r.ok && Array.isArray(r.items) && r.items.length > 0) setPrDemandJson(JSON.stringify(r.items))
+    })
+    return () => { alive = false }
+  }, [bomPrData, taskId])
+  const effectiveBomPrData = (bomPrData && bomPrData !== '[]') ? bomPrData : (prDemandJson || bomPrData)
+
+  const prItems = effectiveBomPrData ? (() => { try { return JSON.parse(effectiveBomPrData) } catch { return null } })() : null
   const [enriching, setEnriching] = useState(false)
   const [enrichMsg, setEnrichMsg] = useState('')
 
@@ -300,7 +316,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
       needToBuyQty: toQtyOrNull(it.needToBuyQty) ?? undefined,
       requiredDate: typeof it.requiredDate === 'string' ? it.requiredDate : undefined,
     }))
-  }, [bomPrData]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [effectiveBomPrData]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const compactPrItems = useMemo(() => {
     let items = parsedPrItems
@@ -318,7 +334,7 @@ export default function SupplierQuoteUI({ taskId, isEditable: isEditableProp, bo
 
   // Auto-enrich on mount when no item has availableQty yet
   useEffect(() => {
-    if (!bomPrData || parsedPrItems.length === 0) return
+    if (!effectiveBomPrData || parsedPrItems.length === 0) return
     if (parsedPrItems.some(p => p.availableQty !== undefined)) return
     const key = `enrich-${taskId}`
     if (sessionStorage.getItem(key)) return
@@ -1332,9 +1348,11 @@ function MaterialMatrix({ quotes, prItems }: { quotes: SupplierQuote[]; prItems:
 }
 
 // ── Sub-component: fetch & render files for review mode ──
-function ReviewFileList({ taskId, quoteId, savedFiles }: { taskId: string; quoteId: string; savedFiles: QuoteFile[] }) {
+function ReviewFileList({ taskId, quoteId, savedFiles }: { taskId: string; quoteId: string; savedFiles?: QuoteFile[] }) {
+  // Báo giá cũ/thiếu trường có thể không có `files` → default [] để không vỡ .map (fix crash review mode).
+  const safeSaved = savedFiles || []
   const [files, setFiles] = useState<{ id: string; fileName: string; fileUrl: string; kind: string }[]>(
-    savedFiles.map(f => ({ ...f }))
+    safeSaved.map(f => ({ ...f }))
   )
   const [loaded, setLoaded] = useState(false)
 
@@ -1343,7 +1361,7 @@ function ReviewFileList({ taskId, quoteId, savedFiles }: { taskId: string; quote
     apiFetch(`/api/upload?entityType=TaskQuote&entityId=${encodeURIComponent(`${taskId}_${quoteId}`)}`)
       .then(r => {
         if (r.ok && r.attachments?.length) {
-          const kindMap = new Map(savedFiles.map(f => [f.id, f.kind]))
+          const kindMap = new Map(safeSaved.map(f => [f.id, f.kind]))
           setFiles(r.attachments.map((a: { id: string; fileName: string; fileUrl: string }) => ({
             id: a.id, fileName: a.fileName, fileUrl: a.fileUrl, kind: kindMap.get(a.id) || 'Báo giá',
           })))

@@ -129,6 +129,61 @@ export async function aggregateBomItems(
   return allItems
 }
 
+// ── PR demand (PORT Thương Mại — nguồn nhu cầu mua theo PR cho P3.5) ──────────
+
+export interface PrDemandRow {
+  itemCode: string
+  description: string
+  profile: string
+  grade: string
+  unit: string
+  quantity: number
+  toBuyQty: number
+  materialGroupCode: string | null
+}
+
+/**
+ * Nhu cầu mua theo PR của dự án — nguồn PR-driven cho bước P3.5 (khớp cột "Cần" của MCL).
+ * Đọc PurchaseRequestItem của PR không CANCELLED/REJECTED (giống bộ lọc MCL), gộp theo mã.
+ * Trả RỖNG nếu dự án chưa có PR ⇒ caller tự fallback về aggregateBomItems (giữ luồng cũ, không vỡ).
+ */
+export async function getProjectPrDemand(projectId: string): Promise<PrDemandRow[]> {
+  const items = await prisma.purchaseRequestItem.findMany({
+    where: { purchaseRequest: { projectId, status: { notIn: ['CANCELLED', 'REJECTED'] } } },
+    select: {
+      itemCode: true, description: true, profile: true, grade: true, unit: true,
+      quantity: true, toBuyQty: true, materialGroupCode: true,
+      material: { select: { materialCode: true, name: true, unit: true } },
+    },
+  })
+  const map = new Map<string, PrDemandRow>()
+  for (const it of items) {
+    const itemCode = it.itemCode || it.material?.materialCode || ''
+    const description = it.description || it.material?.name || ''
+    if (!itemCode.trim() && !description.trim()) continue
+    const key = (itemCode || description).toLowerCase()
+    const qty = Number(it.quantity) || 0
+    const toBuy = it.toBuyQty != null ? Number(it.toBuyQty) : qty
+    const existing = map.get(key)
+    if (existing) {
+      existing.quantity += qty
+      existing.toBuyQty += toBuy
+    } else {
+      map.set(key, {
+        itemCode,
+        description,
+        profile: it.profile || '',
+        grade: it.grade || '',
+        unit: it.unit || it.material?.unit || '',
+        quantity: qty,
+        toBuyQty: toBuy,
+        materialGroupCode: it.materialGroupCode || null,
+      })
+    }
+  }
+  return Array.from(map.values())
+}
+
 // ── Estimate Data (P1.2) ────────────────────────────────────
 
 /**
