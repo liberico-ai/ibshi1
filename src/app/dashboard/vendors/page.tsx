@@ -33,6 +33,12 @@ export default function VendorPage() {
   const openEdit = (v: Vendor) => { setEditVendor(v); setShowForm(true) }
   const closeForm = () => { setShowForm(false); setEditVendor(null) }
 
+  // Đồng bộ "Loại": hợp {nhãn cứng đã biết} ∪ {loại THẬT trong data (từ stats)} → form/chip/nhãn luôn
+  // khớp dữ liệu (local hay prod), không cần đổi DB. Loại đã biết → nhãn đẹp; loại lạ → hiện thô (hoa đầu).
+  const allCats = Array.from(new Set([...Object.keys(catLabel), ...Object.keys(stats)])).filter(Boolean)
+  const labelOf = (c: string) => catLabel[c] || (c ? c.charAt(0).toUpperCase() + c.slice(1) : c)
+  const colorOf = (c: string) => catColor[c] || '#64748b'
+
   const load = () => {
     const url = filter ? `/api/vendors?category=${filter}` : '/api/vendors'
     apiFetch(url).then(res => {
@@ -81,10 +87,10 @@ export default function VendorPage() {
           style={{ background: !filter ? 'var(--accent)' : 'var(--surface-hover)', color: !filter ? '#fff' : 'var(--text-muted)' }}>
           Tất cả ({Object.values(stats).reduce((s, c) => s + c, 0)})
         </button>
-        {Object.entries(catLabel).map(([k, v]) => (
+        {allCats.map((k) => (
           <button key={k} onClick={() => setFilter(k)} className="text-xs px-3 py-1 rounded-full font-medium transition-all"
-            style={{ background: filter === k ? catColor[k] : 'var(--surface-hover)', color: filter === k ? '#fff' : 'var(--text-muted)' }}>
-            {v} ({stats[k] || 0})
+            style={{ background: filter === k ? colorOf(k) : 'var(--surface-hover)', color: filter === k ? '#fff' : 'var(--text-muted)' }}>
+            {labelOf(k)} ({stats[k] || 0})
           </button>
         ))}
       </div>
@@ -98,8 +104,7 @@ export default function VendorPage() {
             <input name="name" required placeholder="Tên NCC *" defaultValue={editVendor?.name || ''} className="input text-sm" />
             <select name="category" required defaultValue={editVendor?.category || ''} className="input text-sm">
               <option value="">— Loại *—</option>
-              {Object.entries(catLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              {editVendor?.category && !catLabel[editVendor.category] && <option value={editVendor.category}>{editVendor.category}</option>}
+              {allCats.map((k) => <option key={k} value={k}>{labelOf(k)}</option>)}
             </select>
             <input name="contactName" placeholder="Người liên hệ" defaultValue={editVendor?.contactName || ''} className="input text-sm" />
             <input name="shortName" placeholder="Tên gọi tắt" defaultValue={editVendor?.shortName || ''} className="input text-sm" />
@@ -155,7 +160,7 @@ export default function VendorPage() {
                   </div>
                   {v.address && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{v.address}</div>}
                 </td>
-                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${catColor[v.category]}20`, color: catColor[v.category] }}>{catLabel[v.category] || v.category}</span></td>
+                <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${colorOf(v.category)}20`, color: colorOf(v.category) }}>{labelOf(v.category)}</span></td>
                 <td>
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{v.contactName || '—'}</div>
                   {v.phone && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{v.phone}</div>}
