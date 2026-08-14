@@ -20,6 +20,13 @@ interface PrItem {
   itemCode: string | null
   description: string | null
   unit: string | null
+  // Cấu trúc PrDetail (PORT Thương Mại — Module 2), tất cả optional
+  materialGroupCode?: string | null
+  netWeight?: number | null
+  reqWeight?: number | null
+  toBuyQty?: number | null
+  toBuyWeight?: number | null
+  statusFlag?: string | null
 }
 
 // Độ phủ PO (P2-đợt2 B1) — summary từ list ?withCoverage=1, per-item từ /coverage
@@ -60,7 +67,7 @@ interface PurchaseRequest {
 
 interface PaginationData { page: number; limit: number; total: number; totalPages: number }
 
-const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05', 'R08', 'R08a']
+const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05', 'R07', 'R07a', 'R08', 'R08a']
 
 const STATUS_FILTERS = [
   { value: '', label: 'Tất cả' },
@@ -300,13 +307,17 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
               <thead>
                 <tr style={{ color: 'var(--text-muted)' }}>
                   <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 6 }}>Vật tư</th>
+                  <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 6, paddingLeft: 12 }}>Nhóm VT</th>
                   <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6 }}>Số lượng</th>
+                  <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 12 }}>Khối lượng (kg)</th>
+                  <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 12 }}>Cần mua</th>
                   {showCoverageCols && (
                     <>
                       <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Đã đặt PO</th>
                       <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Còn thiếu</th>
                     </>
                   )}
+                  <th style={{ textAlign: 'center', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Trạng thái</th>
                   <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Ghi chú</th>
                 </tr>
               </thead>
@@ -325,8 +336,19 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
                       </span>
                       {name}
                     </td>
+                    <td style={{ padding: '0.375rem 0 0.375rem 12px' }}>
+                      {item.materialGroupCode
+                        ? <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold" style={{ background: 'var(--surface-hover)', color: 'var(--text-muted)' }}>{item.materialGroupCode}</span>
+                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
                     <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0' }}>
                       {Number(item.quantity)} {unit}
+                    </td>
+                    <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0 0.375rem 12px', color: 'var(--text-muted)' }}>
+                      {(() => { const w = Number(item.reqWeight || item.netWeight || 0); return w > 0 ? w.toLocaleString('vi-VN') : '—' })()}
+                    </td>
+                    <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0 0.375rem 12px', fontWeight: 600 }}>
+                      {(() => { const b = item.toBuyQty != null && Number(item.toBuyQty) > 0 ? Number(item.toBuyQty) : Number(item.quantity); return `${b} ${unit}` })()}
                     </td>
                     {showCoverageCols && (
                       <>
@@ -346,6 +368,14 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
                         </td>
                       </>
                     )}
+                    <td style={{ textAlign: 'center', padding: '0.375rem 0 0.375rem 16px' }}>
+                      {(() => {
+                        const st = item.statusFlag || 'Chờ báo giá'
+                        const done = /xong|hoàn|đã mua|đã đặt/i.test(st)
+                        const color = done ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)'
+                        return <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: `${color}18`, color }}>{st}</span>
+                      })()}
+                    </td>
                     <td style={{ padding: '0.375rem 0 0.375rem 16px', color: 'var(--text-muted)' }}>{item.notes || ''}</td>
                   </tr>
                   )

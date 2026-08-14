@@ -6,6 +6,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateQuery, validateBody } from '@/lib/api-helpers'
 import { prListQuerySchema, createPurchaseRequestSchema } from '@/lib/schemas'
 import { fetchPoCoverageMap, computePrCoverage, type PrCoverageSummary } from '@/lib/pr-coverage'
+import { notifyPrCreatedForProject } from '@/lib/notify-pr'
 
 // GET /api/purchase-requests — List purchase requests
 export async function GET(req: NextRequest) {
@@ -100,8 +101,8 @@ export async function POST(req: NextRequest) {
     const payload = await authenticateRequest(req)
     if (!payload) return unauthorizedResponse()
 
-    // R02 (PM), R03 (KTKH), R05 (Kho), R08/R08a (Kế toán), R01 (BGĐ) can create PR
-    if (!['R01', 'R02', 'R03', 'R05', 'R08', 'R08a'].includes(payload.roleCode)) {
+    // R02 (PM), R03 (KTKH), R05 (Kho), R07/R07a (Thương mại — chủ mua hàng), R08/R08a (Kế toán), R01 (BGĐ) can create PR
+    if (!['R01', 'R02', 'R03', 'R05', 'R07', 'R07a', 'R08', 'R08a'].includes(payload.roleCode)) {
       return errorResponse('Bạn không có quyền tạo yêu cầu mua hàng', 403)
     }
 
@@ -117,6 +118,13 @@ export async function POST(req: NextRequest) {
     })
     const seq = lastPr ? parseInt(lastPr.prCode.split('-')[2]) + 1 : 1
     const prCode = `PR-${year}-${String(seq).padStart(3, '0')}`
+
+    // [Module 2] Auto-điền cấu trúc PrDetail từ Material (chỉ đọc): nhóm VT + cần mua = số lượng.
+    const matIds = [...new Set(items.map((i: { materialId: string }) => i.materialId).filter(Boolean))]
+    const mats = matIds.length
+      ? await prisma.material.findMany({ where: { id: { in: matIds } }, select: { id: true, groupCode: true } })
+      : []
+    const groupById = new Map(mats.map(m => [m.id, m.groupCode]))
 
     const pr = await prisma.purchaseRequest.create({
       data: {
@@ -136,6 +144,11 @@ export async function POST(req: NextRequest) {
             quantity: item.quantity,
             requiredDate: item.requiredDate ? new Date(item.requiredDate) : null,
             notes: item.notes,
+            // [Module 2] điền sẵn nhóm VT + cần mua (mặc định = số lượng, chưa trừ tồn)
+            materialGroupCode: groupById.get(item.materialId) || null,
+            netQty: item.quantity,
+            reqQty: item.quantity,
+            toBuyQty: item.quantity,
           })),
         },
       },
@@ -143,6 +156,12 @@ export async function POST(req: NextRequest) {
         project: { select: { projectCode: true, projectName: true } },
         items: { include: { material: { select: { materialCode: true, name: true, unit: true } } } },
       },
+    })
+
+    // [Module 3] Nhận PR vào dự án → báo Thương mại đi mua (không đụng flow 32 bước)
+    await notifyPrCreatedForProject({
+      prId: pr.id, prCode, projectId, itemCount: pr.items.length,
+      originLabel: originLabel || null, createdByUserId: payload.userId,
     })
 
     return successResponse({ purchaseRequest: pr }, `Yêu cầu mua hàng ${prCode} đã được tạo`, 201)

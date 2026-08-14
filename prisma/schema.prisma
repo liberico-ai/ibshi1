@@ -480,6 +480,20 @@ model PurchaseRequestItem {
   requiredDate    DateTime?       @map("required_date")
   specification   String?
   notes           String?
+  // ── Bổ sung cấu trúc PrDetail (PORT Thương Mại — Module 2) — nullable/default, additive an toàn ──
+  materialGroupCode    String?    @map("material_group_code")     // nhóm VT: VTC | VPK | VDK | VBP | VTH | VTS | VTP
+  materialSubGroupCode String?    @map("material_sub_group_code") // VTC01, VPK01…
+  unitWeight      Decimal?        @default(0) @map("unit_weight")  // kg/m² hoặc kg/m
+  netQty          Decimal?        @default(0) @map("net_qty")      // số lượng tinh (từ BOM)
+  netWeight       Decimal?        @default(0) @map("net_weight")   // = netQty * unitWeight
+  reqQty          Decimal?        @default(0) @map("req_qty")      // SL yêu cầu mua (có hệ số dự phòng)
+  reqWeight       Decimal?        @default(0) @map("req_weight")
+  remainQty       Decimal?        @default(0) @map("remain_qty")   // còn tồn kho từ trước
+  remainWeight    Decimal?        @default(0) @map("remain_weight")
+  toBuyQty        Decimal?        @default(0) @map("to_buy_qty")    // = reqQty - remainQty (CẦN MUA)
+  toBuyWeight     Decimal?        @default(0) @map("to_buy_weight")
+  statusFlag      String?         @default("Chờ báo giá") @map("status_flag") // trạng thái mua per-dòng
+  remarks         String?
   material        Material?       @relation(fields: [materialId], references: [id])
   purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 

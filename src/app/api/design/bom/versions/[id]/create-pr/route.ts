@@ -4,6 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { computeImpact } from '@/lib/bom-diff-engine'
 import type { ImpactLine } from '@/lib/bom-diff-engine'
 import { PR_EDIT_ROLES } from '@/lib/constants'
+import { notifyPrCreatedForProject } from '@/lib/notify-pr'
 
 /**
  * POST /api/design/bom/versions/:id/create-pr — ECO auto-apply (Đợt2-A)
@@ -112,6 +113,13 @@ export async function POST(
     const seq = lastPr ? parseInt(lastPr.prCode.split('-')[2]) + 1 : 1
     const prCode = `PR-${year}-${String(seq).padStart(3, '0')}`
 
+    // [Module 2] Auto-điền nhóm VT (chỉ đọc từ Material) + cần mua = qtyDelta.
+    const buyMatIds = [...new Set(buyLines.map(l => l.diffLine.materialId).filter(Boolean))]
+    const buyMats = buyMatIds.length
+      ? await prisma.material.findMany({ where: { id: { in: buyMatIds } }, select: { id: true, groupCode: true } })
+      : []
+    const buyGroupById = new Map(buyMats.map(m => [m.id, m.groupCode]))
+
     const pr = await prisma.purchaseRequest.create({
       data: {
         prCode,
@@ -129,6 +137,11 @@ export async function POST(
             quantity: l.diffLine.qtyDelta,
             bomVersionId: id,
             notes: l.suggestedAction,
+            // [Module 2] cấu trúc PrDetail: nhóm VT + cần mua (mặc định = qtyDelta)
+            materialGroupCode: buyGroupById.get(l.diffLine.materialId) || null,
+            netQty: l.diffLine.qtyDelta,
+            reqQty: l.diffLine.qtyDelta,
+            toBuyQty: l.diffLine.qtyDelta,
           })),
         },
       },
@@ -136,6 +149,12 @@ export async function POST(
         project: { select: { projectCode: true, projectName: true } },
         items: { include: { material: { select: { materialCode: true, name: true, unit: true } } } },
       },
+    })
+
+    // [Module 3] Nhận PR bổ sung vào dự án → báo Thương mại đi mua (không đụng flow 32 bước)
+    await notifyPrCreatedForProject({
+      prId: pr.id, prCode, projectId: version.bom.projectId, itemCount: buyLines.length,
+      originLabel: version.eco.ecoCode, createdByUserId: payload.userId,
     })
 
     return successResponse(

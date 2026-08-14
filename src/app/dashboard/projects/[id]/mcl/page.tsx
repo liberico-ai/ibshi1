@@ -206,7 +206,16 @@ export default function ProjectMclPage() {
                     <Td>{r.profile || '—'}</Td>
                     <Td>{r.grade || '—'}</Td>
                     <Td>{r.unit || '—'}</Td>
-                    <Td right>{num(r.needed)}</Td>
+                    <Td right>
+                      <div style={{ fontWeight: 600 }}>{num(r.needed)}</div>
+                      {(r.neededPr > 0 || r.neededBom > 0) && (
+                        <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                          {r.neededPr > 0 && <span title="Cần theo Đề nghị mua hàng (PR)" style={{ color: SEMANTIC_COLORS.info.solid }}>PR {num(r.neededPr)}</span>}
+                          {r.neededPr > 0 && r.neededBom > 0 && <span> · </span>}
+                          {r.neededBom > 0 && <span title="Cần theo BOM ACTIVE">BOM {num(r.neededBom)}</span>}
+                        </div>
+                      )}
+                    </Td>
                     <Td right>{num(r.ordered)}</Td>
                     <Td right>{num(r.received)}</Td>
                     <Td right>{num(r.onHand)}</Td>
@@ -225,7 +234,7 @@ export default function ProjectMclPage() {
       )}
 
       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-        Còn thiếu = Cần − Tồn − (Đã đặt − Đã về). Cần lấy từ PR (ưu tiên) hoặc BOM ACTIVE. Tồn = kho dùng chung + kho của dự án.
+        Còn thiếu = Cần − Tồn − (Đã đặt − Đã về). <b>Cần</b> = ưu tiên số theo <span style={{ color: SEMANTIC_COLORS.info.solid }}>PR</span> (Đề nghị mua hàng, gồm cả PR bổ sung ECO); vật tư nào chưa có PR thì lấy theo <b>BOM ACTIVE</b>. Dòng phụ tách rõ nguồn PR / BOM. Tồn = kho dùng chung + kho của dự án.
       </p>
     </div>
   )

@@ -141,7 +141,7 @@ function MaterialCombobox({
   )
 }
 
-const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05', 'R08', 'R08a']
+const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05', 'R07', 'R07a', 'R08', 'R08a']
 
 const URGENCY_OPTIONS = [
   { value: 'NORMAL', label: 'Bình thường' },
@@ -233,7 +233,7 @@ function CreatePrForm() {
       <div className="space-y-6 animate-fade-in">
         <PageHeader title="Tạo Đề nghị mua hàng" />
         <div className="card p-5" style={{ color: 'var(--text-muted)' }}>
-          Bạn không có quyền tạo yêu cầu mua hàng (chỉ BGĐ, PM, KTKH, Kho).
+          Bạn không có quyền tạo yêu cầu mua hàng (chỉ BGĐ, PM, KTKH, Kho, Thương mại, Kế toán).
         </div>
       </div>
     )
