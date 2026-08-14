@@ -81,16 +81,16 @@ export default function VendorPage() {
         <form onSubmit={handleSubmit} className="card p-5 space-y-3">
           <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Thêm nhà cung cấp</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <input name="vendorCode" required placeholder="Mã NCC *" className="input-field text-sm" />
-            <input name="name" required placeholder="Tên NCC *" className="input-field text-sm" />
-            <select name="category" required className="input-field text-sm">
+            <input name="vendorCode" required placeholder="Mã NCC *" className="input text-sm" />
+            <input name="name" required placeholder="Tên NCC *" className="input text-sm" />
+            <select name="category" required className="input text-sm">
               <option value="">— Loại *—</option>
               {Object.entries(catLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            <input name="contactName" placeholder="Người liên hệ" className="input-field text-sm" />
-            <input name="email" type="email" placeholder="Email" className="input-field text-sm" />
-            <input name="phone" placeholder="SĐT" className="input-field text-sm" />
-            <input name="address" placeholder="Địa chỉ" className="input-field text-sm col-span-2" />
+            <input name="contactName" placeholder="Người liên hệ" className="input text-sm" />
+            <input name="email" type="email" placeholder="Email" className="input text-sm" />
+            <input name="phone" placeholder="SĐT" className="input text-sm" />
+            <input name="address" placeholder="Địa chỉ" className="input text-sm col-span-2" />
           </div>
           <div className="flex gap-2">
             <button type="submit" className="btn-primary text-sm px-4 py-2 rounded-lg">Lưu</button>
