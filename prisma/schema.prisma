@@ -2392,6 +2392,7 @@ model BidQuoteItem {
   qtyPr                 Decimal  @default(0) @map("qty_pr")
   qtyToBuy              Decimal  @default(0) @map("qty_to_buy")
   estimateUnitPrice     Decimal  @default(0) @map("estimate_unit_price")
+  alreadyBoughtAmount   Decimal  @default(0) @map("already_bought_amount") // "Đã mua" (từ lịch sử/HĐ trước)
   selectedVendorName    String?  @map("selected_vendor_name") // NCC chọn cho dòng này (PER_ITEM)
   notes                 String?
   createdAt             DateTime @default(now()) @map("created_at")

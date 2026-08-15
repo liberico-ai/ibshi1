@@ -28,8 +28,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           orderBy: { itemOrder: 'asc' },
           select: {
             id: true, itemOrder: true, itemCode: true, itemName: true, profile: true, grade: true, uom: true,
-            qtyPr: true, qtyToBuy: true, estimateUnitPrice: true, selectedVendorName: true,
-            offers: { select: { vendorId: true, unitPrice: true, totalPrice: true, deliveryTerm: true, remarks: true } },
+            qtyPr: true, qtyToBuy: true, estimateUnitPrice: true, alreadyBoughtAmount: true,
+            selectedVendorName: true, notes: true,
+            offers: { select: { vendorId: true, scope: true, unitPrice: true, totalPrice: true, deliveryTerm: true, remarks: true } },
           },
         },
       },
@@ -49,11 +50,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       items: bid.items.map(it => ({
         id: it.id, itemOrder: it.itemOrder, itemCode: it.itemCode, itemName: it.itemName,
         profile: it.profile, grade: it.grade, uom: it.uom,
-        qtyToBuy: Number(it.qtyToBuy || 0), estimateUnitPrice: Number(it.estimateUnitPrice || 0),
-        selectedVendorName: it.selectedVendorName,
-        // ma trận: { [bidQuoteVendor.id]: {unitPrice,totalPrice,...} }
+        qtyToBuy: Number(it.qtyToBuy || 0), qtyPr: Number(it.qtyPr || 0),
+        estimateUnitPrice: Number(it.estimateUnitPrice || 0),
+        estimateTotal: Number(it.estimateUnitPrice || 0) * Number(it.qtyToBuy || 0),
+        alreadyBoughtAmount: Number(it.alreadyBoughtAmount || 0),
+        selectedVendorName: it.selectedVendorName, notes: it.notes,
+        // ma trận: { [bidQuoteVendor.id]: {scope,unitPrice,totalPrice,...} }
         offers: Object.fromEntries(it.offers.map(o => [o.vendorId, {
-          unitPrice: Number(o.unitPrice || 0), totalPrice: Number(o.totalPrice || 0),
+          scope: o.scope, unitPrice: Number(o.unitPrice || 0), totalPrice: Number(o.totalPrice || 0),
           deliveryTerm: o.deliveryTerm, remarks: o.remarks,
         }])),
       })),
