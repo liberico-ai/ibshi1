@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import * as XLSX from 'xlsx'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
 import { PageHeader, Button, Badge } from '@/components/ui'
@@ -233,6 +234,51 @@ function EnterQuoteModal({ bidId, items, onCancel, onSaved }: {
   const [vendorType, setVendorType] = useState('DOMESTIC')
   const [prices, setPrices] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  // Tải mẫu Excel: cột "Đơn giá" để trống cho NCC điền, khớp lại theo "Mã VT".
+  const downloadTemplate = () => {
+    const rows = items.map(it => ({
+      'Mã VT': it.itemCode || '', 'Tên': it.itemName || '', 'ĐVT': it.uom || '',
+      'SL mua': it.qtyToBuy, 'Đơn giá': '', 'Điều kiện giao': '', 'Ghi chú': '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = [{ wch: 16 }, { wch: 34 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 20 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'BaoGia')
+    XLSX.writeFile(wb, `MauBaoGia_${(vendorName || 'NCC').replace(/[^\w]/g, '')}.xlsx`)
+  }
+
+  // Import Excel: đọc dòng, khớp "Mã VT" (chuẩn hoá hoa/khoảng trắng) → điền Đơn giá.
+  const importExcel = async (file: File) => {
+    try {
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+      const norm = (s: string) => s.trim().toUpperCase().replace(/\s+/g, '')
+      const byCode = new Map(items.map(it => [norm(it.itemCode || ''), it.id]))
+      const pick = (r: Record<string, unknown>, keys: string[]) => {
+        for (const k of Object.keys(r)) { if (keys.some(t => norm(k) === norm(t))) return r[k] }
+        return ''
+      }
+      const toNum = (v: unknown) => typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, '')) || 0
+      const next = { ...prices }
+      let matched = 0, unmatched = 0
+      for (const r of rows) {
+        const code = norm(String(pick(r, ['Mã VT', 'Ma VT', 'itemCode', 'Mã'])))
+        const price = toNum(pick(r, ['Đơn giá', 'Don gia', 'unitPrice', 'Giá']))
+        if (!code) continue
+        const id = byCode.get(code)
+        if (id && price > 0) { next[id] = String(price); matched++ }
+        else if (price > 0) unmatched++
+      }
+      setPrices(next)
+      notify(matched > 0 ? `Đã khớp ${matched} dòng theo Mã VT${unmatched ? `, ${unmatched} dòng không khớp` : ''}` : 'Không khớp dòng nào — kiểm tra cột "Mã VT"/"Đơn giá"', matched > 0 ? 'success' : 'error')
+    } catch (e) {
+      console.error('importExcel error:', e)
+      notify('Không đọc được file Excel', 'error')
+    }
+  }
 
   const save = async () => {
     if (!vendorName.trim()) { notify('Nhập tên NCC', 'error'); return }
@@ -250,7 +296,14 @@ function EnterQuoteModal({ bidId, items, onCancel, onSaved }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }} onClick={onCancel}>
       <div className="card p-5 space-y-3" style={{ maxWidth: 720, width: '100%', maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Nhập báo giá NCC</h3>
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Nhập báo giá NCC</h3>
+          <div className="flex gap-2">
+            <button type="button" onClick={downloadTemplate} className="text-xs px-3 py-1.5 rounded-lg font-semibold" style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>⬇ Tải mẫu Excel</button>
+            <button type="button" onClick={() => fileRef.current?.click()} className="text-xs px-3 py-1.5 rounded-lg font-semibold" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }}>⬆ Import Excel (khớp Mã VT)</button>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={e => { const f = e.target.files?.[0]; if (f) importExcel(f); e.target.value = '' }} />
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <input value={vendorName} onChange={e => setVendorName(e.target.value)} placeholder="Tên NCC *" className="input text-sm" />
           <select value={vendorType} onChange={e => setVendorType(e.target.value)} className="input text-sm">

@@ -38,7 +38,8 @@ export async function GET(req: NextRequest) {
       grade: it.grade || '',
       uom: it.unit || it.material?.unit || '',
       reqQty: Number(it.quantity) || 0,
-      toBuyQty: it.toBuyQty != null ? Number(it.toBuyQty) : Number(it.quantity) || 0,
+      // toBuyQty=0 (PR cũ chưa auto-fill) → dùng quantity làm SL cần mua
+      toBuyQty: Number(it.toBuyQty) > 0 ? Number(it.toBuyQty) : Number(it.quantity) || 0,
       materialGroupCode: it.materialGroupCode || null,
       statusFlag: it.statusFlag || 'Chờ báo giá',
       prCode: it.purchaseRequest?.prCode || '',

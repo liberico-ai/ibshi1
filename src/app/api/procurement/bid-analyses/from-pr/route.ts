@@ -65,7 +65,8 @@ export async function POST(req: NextRequest) {
       grade: it.grade || '',
       uom: it.unit || it.material?.unit || '',
       reqQty: Number(it.quantity) || 0,
-      toBuyQty: it.toBuyQty != null ? Number(it.toBuyQty) : Number(it.quantity) || 0,
+      // toBuyQty mặc định DB = 0 (không null) → 0 thì dùng quantity (PR cũ chưa auto-fill Module 2)
+      toBuyQty: Number(it.toBuyQty) > 0 ? Number(it.toBuyQty) : Number(it.quantity) || 0,
     }))
     const finalSubject = subject || suggestSubject(norm.map(n => ({ itemName: n.itemName })), project.projectCode)
 
