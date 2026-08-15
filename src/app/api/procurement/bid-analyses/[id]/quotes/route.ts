@@ -23,7 +23,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       vendorId?: string; vendorName?: string; vendorType?: string; currency?: string; notes?: string
       items?: Array<{ itemId: string; unitPrice?: number; totalPrice?: number; deliveryTerm?: string; remarks?: string; scope?: string }>
     }
-    const { vendorId, vendorName, vendorType, currency, notes, items } = body
+    const { vendorId, vendorType, currency, notes, items } = body
+    const vendorName = (body.vendorName || '').trim() // chuẩn hoá: bỏ dấu cách thừa
     if (!vendorName) return errorResponse('Thiếu tên NCC (vendorName)', 400)
     if (!Array.isArray(items) || items.length === 0) return errorResponse('Cần ít nhất 1 dòng báo giá', 400)
 
@@ -40,8 +41,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (bad) return errorResponse(`Dòng ${bad.itemId} không thuộc BID này`, 400)
 
     const result = await prisma.$transaction(async (tx) => {
-      // find-or-create vendor theo (bidId, vendorName)
-      let vendor = await tx.bidQuoteVendor.findFirst({ where: { bidId, vendorName } })
+      // find-or-create vendor theo (bidId, tên NCC) — KHÔNG phân biệt hoa/thường → cùng NCC = 1 cột,
+      // không đẻ cột trùng do gõ khác kiểu chữ. NCC khác tên = cột riêng (để so sánh nhiều báo giá).
+      let vendor = await tx.bidQuoteVendor.findFirst({
+        where: { bidId, vendorName: { equals: vendorName, mode: 'insensitive' } },
+      })
       if (!vendor) {
         const maxOrder = await tx.bidQuoteVendor.aggregate({ where: { bidId }, _max: { vendorOrder: true } })
         vendor = await tx.bidQuoteVendor.create({
