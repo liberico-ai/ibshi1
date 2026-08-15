@@ -228,6 +228,7 @@ export const MENU_ITEMS = [
   { key: 'material-codes', label: 'Quản lý mã vật tư', labelEn: 'Material Codes', icon: 'Barcode', href: '/dashboard/warehouse/material-codes', roles: ['R01', 'R03', 'R03a', 'R05', 'R05a', 'R08', 'R08a', 'R10'], group: 'warehouse' },
   { key: 'procurement', label: 'Mua hàng', labelEn: 'Procurement', icon: 'ShoppingCart', href: '/dashboard/warehouse/procurement', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'purchase-requests', label: 'Đề nghị mua hàng', labelEn: 'PR', icon: 'FileInput', href: '/dashboard/warehouse/purchase-requests', roles: ['R01', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },
+  { key: 'bidding', label: 'Báo giá (RFQ)', labelEn: 'Bidding', icon: 'ClipboardList', href: '/dashboard/warehouse/bidding', roles: ['R01', 'R02', 'R07', 'R07a'], group: 'warehouse' },
   { key: 'purchase-orders', label: 'Đơn đặt hàng', labelEn: 'PO', icon: 'FileOutput', href: '/dashboard/warehouse/purchase-orders', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'movements', label: 'Xuất Nhập', labelEn: 'Movements', icon: 'ArrowLeftRight', href: '/dashboard/warehouse/movements', roles: ['R01', 'R05', 'R05a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'grn', label: 'Hàng về', labelEn: 'GRN', icon: 'PackageCheck', href: '/dashboard/warehouse/grn', roles: ['R01', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },

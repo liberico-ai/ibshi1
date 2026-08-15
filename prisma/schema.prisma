@@ -111,6 +111,7 @@ model Project {
   mrbReleases        MrbRelease[]
   settlement         ProjectSettlement?
   quoteGroups        QuoteGroup[]
+  bidAnalyses        BidAnalysis[]
   documents          ProjectDocument[]
 
   @@index([status])
@@ -297,6 +298,7 @@ model Vendor {
   purchaseContracts PurchaseContract[]
   subcontracts      SubcontractorContract[]
   drawdownLines     DrawdownBeneficiaryLine[]
+  bidQuoteVendors   BidQuoteVendor[]
 
   @@index([category])
   @@map("vendors")
@@ -495,6 +497,7 @@ model PurchaseRequestItem {
   statusFlag      String?         @default("Chờ báo giá") @map("status_flag") // trạng thái mua per-dòng
   remarks         String?
   material        Material?       @relation(fields: [materialId], references: [id])
+  bidQuoteItems   BidQuoteItem[]
   purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 
   @@index([prId])
@@ -2317,4 +2320,106 @@ model SupplierQuoteLine {
   @@unique([itemId, lineIndex])
   @@index([itemId])
   @@map("supplier_quote_lines")
+}
+
+// ══════════════════════════════════════════════════════════════
+// PORT Thương Mại (Commerce) — Cụm Đấu thầu / Báo giá (BidAnalysis)
+// Đợt 1: dùng chung Vendor / PurchaseRequestItem / Project của ERP.
+// Chọn NCC theo TỪNG DÒNG (selectionMode=PER_ITEM) như Commerce.
+// ══════════════════════════════════════════════════════════════
+
+model BidAnalysis {
+  id               String    @id @default(cuid())
+  projectId        String?   @map("project_id")
+  bidCode          String    @unique @map("bid_code") // BID-VPI095-2606-VTC-001
+  bidCodeProj      String?   @map("bid_code_proj")
+  bidCodeYymm      String?   @map("bid_code_yymm")
+  bidCodeMat       String?   @map("bid_code_mat")
+  bidCodeSeq       Int?      @map("bid_code_seq")
+  bidCodeVariant   String?   @map("bid_code_variant")
+  bidCodeUrgent    Boolean   @default(false) @map("bid_code_urgent")
+  subject          String?
+  bidDate          DateTime? @map("bid_date")
+  status           String    @default("OPEN") // OPEN|EVALUATING|SELECTED|CONTRACTED|CANCELLED
+  selectionMode    String    @default("PER_ITEM") @map("selection_mode") // PER_ITEM|PER_BID|PER_GROUP|AUTO_MIN_PRICE|MANUAL_WEIGHTED
+  selectedVendorId String?   @map("selected_vendor_id") // BidQuoteVendor.id được chọn (mode PER_BID)
+  sourceTaskId     String?   @map("source_task_id")     // nối task P3.5 (Đợt 6)
+  notes            String?
+  createdBy        String?   @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  project Project?         @relation(fields: [projectId], references: [id])
+  vendors BidQuoteVendor[]
+  items   BidQuoteItem[]
+
+  @@index([projectId])
+  @@index([bidCodeProj, bidCodeYymm])
+  @@map("bid_analyses")
+}
+
+model BidQuoteVendor {
+  id          String   @id @default(cuid())
+  bidId       String   @map("bid_id")
+  vendorId    String?  @map("vendor_id") // → Vendor ERP (Module 1)
+  vendorName  String   @map("vendor_name")
+  vendorType  String   @default("DOMESTIC") @map("vendor_type") // DOMESTIC|IMPORT
+  vendorOrder Int      @default(0) @map("vendor_order")
+  currency    String   @default("VND")
+  totalQuote  Decimal  @default(0) @map("total_quote")
+  isWinner    Boolean  @default(false) @map("is_winner")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  bid    BidAnalysis     @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  vendor Vendor?         @relation(fields: [vendorId], references: [id])
+  offers BidQuoteOffer[]
+
+  @@index([bidId])
+  @@map("bid_quote_vendors")
+}
+
+model BidQuoteItem {
+  id                    String   @id @default(cuid())
+  bidId                 String   @map("bid_id")
+  purchaseRequestItemId String?  @map("purchase_request_item_id") // → PurchaseRequestItem ERP (Module 2)
+  itemOrder             Int      @default(0) @map("item_order")
+  itemCode              String?  @map("item_code")
+  itemName              String?  @map("item_name")
+  profile               String?
+  grade                 String?
+  uom                   String?
+  qtyPr                 Decimal  @default(0) @map("qty_pr")
+  qtyToBuy              Decimal  @default(0) @map("qty_to_buy")
+  estimateUnitPrice     Decimal  @default(0) @map("estimate_unit_price")
+  selectedVendorName    String?  @map("selected_vendor_name") // NCC chọn cho dòng này (PER_ITEM)
+  notes                 String?
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  bid    BidAnalysis          @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  prItem PurchaseRequestItem? @relation(fields: [purchaseRequestItemId], references: [id])
+  offers BidQuoteOffer[]
+
+  @@index([bidId])
+  @@map("bid_quote_items")
+}
+
+model BidQuoteOffer {
+  id           String   @id @default(cuid())
+  itemId       String   @map("item_id")
+  vendorId     String   @map("vendor_id") // → BidQuoteVendor.id
+  unitPrice    Decimal  @default(0) @map("unit_price")
+  totalPrice   Decimal  @default(0) @map("total_price")
+  scope        String?
+  deliveryTerm String?  @map("delivery_term")
+  remarks      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  item   BidQuoteItem   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  vendor BidQuoteVendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, vendorId])
+  @@index([itemId])
+  @@index([vendorId])
+  @@map("bid_quote_offers")
 }
