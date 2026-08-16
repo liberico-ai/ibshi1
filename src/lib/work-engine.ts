@@ -1402,6 +1402,10 @@ export async function applyTemplate(
   // Bước 1: spawn ENTRY STEPS TRƯỚC. Gate check giữ nguyên như cũ (done-set tại thời điểm này).
   const doneAtEntry = await doneCodesForProject(steps, projectId)
   for (const es of entrySteps) {
+    // BỎ QUA entry MỒ CÔI: không gate + không nextCodes + không ai trỏ tới (nút cô lập do refactor
+    // P4.x → handler-spawned, vd P4.3/P4.4/P4.5). Các bước này do procurement-tracking/GRN tự sinh
+    // theo PO, KHÔNG auto-spawn khi áp template. Root thật (P1.1) tuy gateless nhưng CÓ nextCodes → vẫn spawn.
+    if ((es.gateCodes || []).length === 0 && ((es as unknown as TStep).nextCodes || []).length === 0) continue
     if ((es.gateCodes || []).every((g) => doneAtEntry.has(g))) {
       if (await spawnTemplateStep(es, projectId, byUser)) created++
     }
