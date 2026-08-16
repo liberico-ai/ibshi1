@@ -374,19 +374,27 @@ function ApproveTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
           <Button variant="primary" onClick={createPO} disabled={!summary || summary.summary.assignedItems === 0}>Tạo PO / HĐ</Button>
         </div>
         {detail.purchaseOrders.length > 0 && (
-          <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
-            <thead><tr style={{ color: 'var(--text-muted)' }}><th className="text-left px-2 py-1">Mã PO</th><th className="text-left px-2 py-1">NCC</th><th className="text-right px-2 py-1">Giá trị</th><th className="text-center px-2 py-1">Trạng thái</th></tr></thead>
-            <tbody>
-              {detail.purchaseOrders.map(po => (
-                <tr key={po.id} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td className="px-2 py-1 font-mono font-bold" style={{ color: 'var(--accent)' }}>{po.poCode}</td>
-                  <td className="px-2 py-1">{po.vendorName}</td>
-                  <td className="px-2 py-1 text-right font-mono">{fmtM(po.totalValue)}</td>
-                  <td className="px-2 py-1 text-center"><span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: po.status === 'PENDING' ? '#fef9c3' : '#dcfce7', color: po.status === 'PENDING' ? '#854d0e' : '#166534' }}>{po.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+              <thead><tr style={{ color: 'var(--text-muted)' }}><th className="text-left px-2 py-1">Mã PO</th><th className="text-left px-2 py-1">NCC</th><th className="text-right px-2 py-1">Giá trị</th><th className="text-center px-2 py-1">Trạng thái</th></tr></thead>
+              <tbody>
+                {detail.purchaseOrders.map(po => (
+                  <tr key={po.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td className="px-2 py-1 font-mono font-bold" style={{ color: 'var(--accent)' }}>{po.poCode}</td>
+                    <td className="px-2 py-1">{po.vendorName}</td>
+                    <td className="px-2 py-1 text-right font-mono">{fmtM(po.totalValue)}</td>
+                    <td className="px-2 py-1 text-center"><span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: po.status === 'PENDING' ? '#fef9c3' : '#dcfce7', color: po.status === 'PENDING' ? '#854d0e' : '#166534' }}>{po.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="text-[11px] flex flex-wrap gap-x-3 gap-y-1" style={{ color: 'var(--text-muted)' }}>
+              <span>Bước tiếp:</span>
+              <a href="/dashboard/warehouse/purchase-orders" className="underline" style={{ color: 'var(--accent)' }}>Duyệt PO (Đơn đặt hàng) →</a>
+              <a href="/dashboard/warehouse/grn" className="underline" style={{ color: 'var(--accent)' }}>Hàng về / Nhập kho (GRN) →</a>
+              <span>· duyệt PO xong sẽ nhận hàng + QC + nhập kho ở trang GRN, tự cập nhật Kho &amp; Ngân sách.</span>
+            </div>
+          </>
         )}
       </div>
     </div>
