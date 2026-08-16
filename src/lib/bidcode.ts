@@ -37,7 +37,13 @@ export function projShort(projectCode?: string | null): string {
   return projectCode.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
 }
 
-/** Suy nhóm VT: 1 nhóm→nhóm đó; đa nhóm >60% ưu thế→nhóm đó; còn lại→MIX; rỗng→ALL. */
+/** Mã nhóm hợp lệ cho segment MAT của bidCode = đúng 3 chữ IN HOA (VTC/VPK/MIX/ALL…). */
+const VALID_MAT = /^[A-Z]{3}$/
+/**
+ * Suy nhóm VT: 1 nhóm→nhóm đó; đa nhóm >60% ưu thế→nhóm đó; còn lại→MIX; rỗng→ALL.
+ * BẢO VỆ: nếu mã nhóm không phải 3 chữ IN HOA (vd taxonomy '4.1'/'8.7' của ERP) → quy về MIX,
+ * tránh sinh bidCode sai định dạng làm parseBidCode trả null (crash from-pr).
+ */
 export function deriveMatGroup(items: Array<{ materialGroupCode?: string | null }>): string {
   if (!items || items.length === 0) return 'ALL'
   const counts: Record<string, number> = {}
@@ -46,10 +52,11 @@ export function deriveMatGroup(items: Array<{ materialGroupCode?: string | null 
     counts[m] = (counts[m] || 0) + 1
   }
   const codes = Object.keys(counts)
-  if (codes.length === 1) return codes[0]
   const total = items.length
-  const top = codes.sort((a, b) => counts[b] - counts[a])[0]
-  return counts[top] / total > 0.6 ? top : 'MIX'
+  const picked = codes.length === 1
+    ? codes[0]
+    : (counts[codes.sort((a, b) => counts[b] - counts[a])[0]] / total > 0.6 ? codes.sort((a, b) => counts[b] - counts[a])[0] : 'MIX')
+  return VALID_MAT.test(picked) ? picked : 'MIX'
 }
 
 export function yymmOf(date = new Date()): string {
