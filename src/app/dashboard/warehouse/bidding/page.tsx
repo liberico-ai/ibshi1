@@ -13,6 +13,7 @@ interface PrItem { id: string; itemCode: string; itemName: string; profile: stri
 interface Vendor { id: string; vendorName: string; vendorType: string; currency: string; totalQuote: number; isWinner: boolean }
 interface Offer { scope?: string | null; unitPrice: number; totalPrice: number; deliveryTerm?: string | null; remarks?: string | null }
 interface BidItem { id: string; itemOrder: number; itemCode: string; itemName: string; profile: string; grade: string; uom: string; qtyToBuy: number; qtyPr: number; estimateTotal: number; alreadyBoughtAmount: number; selectedVendorName: string | null; notes: string | null; offers: Record<string, Offer> }
+interface StepTask { id: string; status: string; canEdit: boolean }
 interface BidPO { id: string; poCode: string; status: string; currency: string; totalValue: number; vendorName: string }
 interface BidDetail { bid: { id: string; bidCode: string; subject: string; status: string; selectionMode: string; matGroup: string | null; project?: { projectCode: string } | null }; vendors: Vendor[]; items: BidItem[]; purchaseOrders: BidPO[] }
 
@@ -45,13 +46,28 @@ export default function BiddingPage() {
   const [subject, setSubject] = useState('')
   const [showQuote, setShowQuote] = useState(false)
 
+  const [stepTasks, setStepTasks] = useState<{ p35: StepTask | null; p36: StepTask | null }>({ p35: null, p36: null })
+
   useEffect(() => { apiFetch('/api/projects?page=1&limit=100').then(r => { if (r.ok) setProjects(r.projects || []) }) }, [])
+  // Redirect từ bước P3.5/P3.6 mang ?project=<id> → tự chọn dự án
+  useEffect(() => { const p = new URLSearchParams(window.location.search).get('project'); if (p) setProjectId(p) }, [])
 
   const loadBids = useCallback(() => {
     if (!projectId) { setBids([]); return }
     apiFetch(`/api/procurement/bid-analyses?projectId=${projectId}`).then(r => { if (r.ok) setBids(r.bids || []) })
   }, [projectId])
-  useEffect(() => { loadBids(); setDetail(null) }, [loadBids])
+  const loadStepTasks = useCallback(() => {
+    if (!projectId) { setStepTasks({ p35: null, p36: null }); return }
+    Promise.all([
+      apiFetch(`/api/work/step-task?projectId=${projectId}&stepCode=P3.5`),
+      apiFetch(`/api/work/step-task?projectId=${projectId}&stepCode=P3.6`),
+    ]).then(([a, b]) => setStepTasks({ p35: a.ok ? a.task : null, p36: b.ok ? b.task : null }))
+  }, [projectId])
+  useEffect(() => { loadBids(); loadStepTasks(); setDetail(null) }, [loadBids, loadStepTasks])
+
+  const activeStep: 'P3.5' | 'P3.6' | null =
+    (stepTasks.p36?.canEdit && stepTasks.p36.status !== 'DONE') ? 'P3.6'
+    : (stepTasks.p35?.canEdit && stepTasks.p35.status !== 'DONE') ? 'P3.5' : null
 
   const openCreate = async () => {
     const r = await apiFetch(`/api/procurement/prs/items-for-bidding?projectId=${projectId}`)
@@ -69,7 +85,8 @@ export default function BiddingPage() {
     if (r.ok) setDetail({ bid: r.bid, vendors: r.vendors, items: r.items, purchaseOrders: r.purchaseOrders || [] })
     else notify(r.error || 'Lỗi tải BID', 'error')
   }, [])
-  const reloadDetail = () => { if (detail) { openDetail(detail.bid.id); loadBids() } }
+  const reloadDetail = () => { if (detail) openDetail(detail.bid.id); loadBids(); loadStepTasks() }
+  const reloadAll = () => { loadBids(); loadStepTasks(); setDetail(null) }
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -82,6 +99,10 @@ export default function BiddingPage() {
         </select>
         {projectId && <Button variant="primary" onClick={openCreate}>+ Tạo RFQ từ PR</Button>}
       </div>
+
+      {projectId && (
+        <StepBanner p35={stepTasks.p35} p36={stepTasks.p36} projectId={projectId} bids={bids} onDone={reloadAll} />
+      )}
 
       {projectId && (
         <div className="card overflow-hidden">
@@ -135,7 +156,7 @@ export default function BiddingPage() {
             ))}
           </div>
 
-          {tab === 'compare' ? <CompareTab detail={detail} onReload={reloadDetail} /> : <ApproveTab detail={detail} onReload={reloadDetail} />}
+          {tab === 'compare' ? <CompareTab detail={detail} onReload={reloadDetail} /> : <ApproveTab detail={detail} onReload={reloadDetail} activeStep={activeStep} />}
         </div>
       )}
 
@@ -237,7 +258,7 @@ function CompareTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
 // ══ Tab DUYỆT — chế độ + chọn NCC per-item + tổng hợp ══
 interface ApproveSummary { summary: { totalItems: number; assignedItems: number; pendingItems: number; totalApprovedValue: number; vendorCount: number }; byVendor: Array<{ vendorName: string; itemCount: number; totalValue: number; items: Array<{ itemCode: string; itemName: string; profile: string; grade: string; qtyToBuy: number; uom: string; unitPrice: number; totalPrice: number }> }> }
 
-function ApproveTab({ detail, onReload }: { detail: BidDetail; onReload: () => void }) {
+function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onReload: () => void; activeStep: 'P3.5' | 'P3.6' | null }) {
   const { vendors, items } = detail
   const [mode, setMode] = useState(detail.bid.selectionMode || 'PER_ITEM')
   const [summary, setSummary] = useState<ApproveSummary | null>(null)
@@ -364,7 +385,12 @@ function ApproveTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
         </div>
       )}
 
-      {/* Tạo PO / HĐ */}
+      {/* Tạo PO / HĐ — ẩn khi đang ở bước P3.5 (TM chỉ chọn NCC; PO tạo ở bước BGĐ duyệt P3.6) */}
+      {activeStep === 'P3.5' ? (
+        <p className="text-[11px] rounded-lg p-2.5" style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}>
+          Bạn đang ở bước <b>P3.5 (Thương mại)</b>: chỉ cần <b>chọn NCC</b> cho các dòng, rồi bấm <b>&quot;Hoàn thành tìm NCC&quot;</b> ở thẻ trên cùng để chuyển BGĐ duyệt. Việc <b>tạo PO</b> do BGĐ thực hiện ở bước P3.6.
+        </p>
+      ) : (
       <div className="rounded-lg p-3 space-y-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div className="flex justify-between items-center flex-wrap gap-2">
           <div>
@@ -397,6 +423,7 @@ function ApproveTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
           </>
         )}
       </div>
+      )}
     </div>
   )
 }
@@ -540,6 +567,76 @@ function EnterQuoteModal({ bidId, items, onCancel, onSaved }: { bidId: string; i
         </div>
         <div className="flex justify-end gap-2"><Button variant="outline" onClick={onCancel}>Huỷ</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Đang lưu…' : 'Lưu báo giá'}</Button></div>
       </div>
+    </div>
+  )
+}
+
+// ══ Thẻ bước quy trình (P3.5/P3.6) — dùng cầu step-task, không đụng workflow-engine ══
+function StepBanner({ p35, p36, projectId, bids, onDone }: { p35: StepTask | null; p36: StepTask | null; projectId: string; bids: BidRow[]; onDone: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [rejOpen, setRejOpen] = useState(false)
+  const [rejReason, setRejReason] = useState('')
+  const p36Active = p36 && p36.canEdit && p36.status !== 'DONE'
+  const p35Active = p35 && p35.canEdit && p35.status !== 'DONE'
+
+  const completeP35 = async () => {
+    if (!await confirmDialog('Hoàn thành bước "Tìm NCC" (P3.5)? Quy trình chuyển sang BGĐ duyệt (P3.6).')) return
+    setBusy(true)
+    const r = await apiFetch('/api/work/step-task', { method: 'POST', body: JSON.stringify({ projectId, stepCode: 'P3.5', action: 'complete' }) })
+    setBusy(false)
+    if (r.ok) { notify('Đã hoàn thành P3.5 — chuyển BGĐ duyệt', 'success'); onDone() } else notify(r.error || 'Lỗi hoàn thành', 'error')
+  }
+  const approveAndPO = async () => {
+    if (!await confirmDialog('BGĐ duyệt: TẠO PO cho các BID đã chọn NCC rồi hoàn thành bước P3.6?')) return
+    setBusy(true)
+    let created = 0
+    for (const b of bids) {
+      const r = await apiFetch(`/api/procurement/bid-analyses/${b.id}/create-po`, { method: 'POST', body: '{}' })
+      if (r.ok && Array.isArray(r.pos)) created += r.pos.filter((p: { existing?: boolean }) => !p.existing).length
+    }
+    const c = await apiFetch('/api/work/step-task', { method: 'POST', body: JSON.stringify({ projectId, stepCode: 'P3.6', action: 'complete' }) })
+    setBusy(false)
+    if (c.ok) { notify(`Đã tạo ${created} PO + hoàn thành P3.6`, 'success'); onDone() } else notify(c.error || 'Lỗi hoàn thành P3.6', 'error')
+  }
+  const reject = async () => {
+    if (!rejReason.trim() || !p36) { notify('Nhập lý do', 'error'); return }
+    setBusy(true)
+    const r = await apiFetch(`/api/work/tasks/${p36.id}/return`, { method: 'POST', body: JSON.stringify({ reason: rejReason.trim() }) })
+    setBusy(false)
+    if (r.ok) { notify('Đã trả lại bước P3.5', 'success'); setRejOpen(false); setRejReason(''); onDone() } else notify(r.error || 'Lỗi', 'error')
+  }
+
+  if (!p35Active && !p36Active) return null
+  return (
+    <div className="card p-4" style={{ border: '1px solid #6366f140', background: '#f5f3ff' }}>
+      {p36Active ? (
+        <div className="space-y-2">
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <div>
+              <span className="text-sm font-bold" style={{ color: '#4338ca' }}>⚙️ Bước P3.6 — BGĐ duyệt báo giá</span>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Xem tab So sánh/Duyệt. Bấm duyệt → hệ thống tạo PO (gom theo NCC) rồi chuyển bước tiếp.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setRejOpen(v => !v)}>Từ chối → trả P3.5</Button>
+              <Button variant="primary" onClick={approveAndPO} disabled={busy}>✓ BGĐ duyệt &amp; tạo PO</Button>
+            </div>
+          </div>
+          {rejOpen && (
+            <div className="flex gap-2">
+              <input value={rejReason} onChange={e => setRejReason(e.target.value)} placeholder="Lý do từ chối…" className="input text-sm flex-1" />
+              <Button variant="danger" onClick={reject} disabled={busy}>Gửi trả lại</Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <div>
+            <span className="text-sm font-bold" style={{ color: '#4338ca' }}>⚙️ Bước P3.5 — Thương mại tìm NCC</span>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tạo RFQ, nhập báo giá, chọn NCC cho các dòng (tab Duyệt). Xong bấm hoàn thành để BGĐ duyệt.</p>
+          </div>
+          <Button variant="primary" onClick={completeP35} disabled={busy}>✓ Hoàn thành tìm NCC → BGĐ duyệt</Button>
+        </div>
+      )}
     </div>
   )
 }

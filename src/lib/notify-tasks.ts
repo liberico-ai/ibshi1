@@ -120,13 +120,13 @@ export const NOTIFY_TASK_MAP: Record<string, NotifyTaskInfo> = {
     mode: 'redirect',
     projectScoped: true,
   },
-  // Phase 3 — BGĐ duyệt báo giá NCC (card ở trang Dự án như P1.3)
+  // Phase 3 — BGĐ duyệt báo giá NCC → làm ở tab Báo giá (xem so sánh + duyệt + tạo PO)
   'P3.6': {
-    sidebar: '/dashboard/projects',
-    label: 'Dự án',
-    hint: 'BGĐ mở dự án để duyệt báo giá nhà cung cấp (hoặc Từ chối kèm lý do).',
+    sidebar: '/dashboard/warehouse/bidding',
+    label: 'Báo giá',
+    hint: 'BGĐ mở tab Báo giá để xem so sánh, duyệt chọn NCC & tạo PO rồi hoàn thành (hoặc Từ chối kèm lý do).',
     mode: 'redirect',
-    projectScoped: true,
+    projectQuery: 'project',
   },
   // Phase 6 — BGĐ duyệt đóng dự án (card ở trang Dự án như P1.3)
   'P6.5': {
@@ -141,7 +141,7 @@ export const NOTIFY_TASK_MAP: Record<string, NotifyTaskInfo> = {
   'P3.1': { sidebar: '/dashboard/milestones', label: 'Cột mốc', hint: 'PM mở tab Cột mốc để điều chỉnh kế hoạch & đẩy tiến độ cấp hàng rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
   'P3.3': { sidebar: '/dashboard/production', label: 'Sản xuất', hint: 'PM mở tab Sản xuất để lập lệnh SX cho thầu phụ + đề nghị cấp VT rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
   'P3.4': { sidebar: '/dashboard/production', label: 'Sản xuất', hint: 'PM mở tab Sản xuất để lập lệnh sản xuất cho tổ nội bộ & thầu phụ rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
-  'P3.5': { sidebar: '/dashboard/warehouse/procurement', label: 'Mua hàng', hint: 'Thương mại mở tab Mua hàng để tìm NCC, nhập báo giá (biểu mẫu) rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
+  'P3.5': { sidebar: '/dashboard/warehouse/bidding', label: 'Báo giá', hint: 'Thương mại mở tab Báo giá: tạo RFQ từ PR, nhập báo giá NCC, chọn NCC rồi hoàn thành để BGĐ duyệt.', mode: 'redirect', projectQuery: 'project' },
 
   // ── Phase 4 (làm) ──
   'P4.5': { sidebar: '/dashboard/warehouse/material-issue', label: 'Cấp phát VT', hint: 'Kho mở tab Cấp phát vật tư để đề nghị cấp VT cho PM & QLSX rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
