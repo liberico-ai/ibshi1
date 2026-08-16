@@ -13,8 +13,8 @@ interface PS {
   lcDeadline: string | null; paymentMonth: string | null; status: string; paidDate: string | null; paidAmount: number | null; poCode: string | null; notes: string | null
 }
 const STATUS: Record<string, { label: string; color: 'default' | 'info' | 'success' | 'danger' }> = {
-  PLANNED: { label: 'Dự kiến', color: 'default' }, DUE: { label: 'Đến hạn', color: 'info' },
-  PAID: { label: 'Đã trả', color: 'success' }, OVERDUE: { label: 'Quá hạn', color: 'danger' },
+  PLANNED: { label: 'Kế hoạch', color: 'default' }, DUE: { label: 'Sắp đến hạn', color: 'info' },
+  PAID: { label: 'Đã thanh toán', color: 'success' }, OVERDUE: { label: 'Quá hạn', color: 'danger' },
 }
 const dt = (s: string | null) => (s ? formatDate(s) : '—')
 const isOverdue = (p: PS) => p.status !== 'PAID' && p.lcDeadline != null && new Date(p.lcDeadline) < new Date(new Date().toDateString())
@@ -70,18 +70,19 @@ export default function PaymentSchedulePage() {
           <div className="card overflow-x-auto">
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
               <thead><tr style={{ background: 'var(--bg-secondary)' }}>
-                <th className="text-left px-2 py-1.5">NCC</th><th className="text-left px-2 py-1.5">HĐ / PO</th><th className="text-right px-2 py-1.5">Giá trị</th>
+                <th className="text-center px-2 py-1.5">STT</th><th className="text-left px-2 py-1.5">NCC</th><th className="text-left px-2 py-1.5">HĐ / PO</th><th className="text-right px-2 py-1.5">Giá trị</th>
                 <th className="text-left px-2 py-1.5">PT thanh toán</th><th className="text-center px-2 py-1.5">Ngày ký</th><th className="text-center px-2 py-1.5">LC</th>
-                <th className="text-center px-2 py-1.5">ETD</th><th className="text-center px-2 py-1.5">ETA</th><th className="text-center px-2 py-1.5">Hạn LC</th>
-                <th className="text-center px-2 py-1.5">Tháng TT</th><th className="text-center px-2 py-1.5">Trạng thái</th><th></th>
+                <th className="text-center px-2 py-1.5">ETD</th><th className="text-center px-2 py-1.5">ETA</th><th className="text-center px-2 py-1.5">Doc</th><th className="text-center px-2 py-1.5">Hạn LC</th>
+                <th className="text-center px-2 py-1.5">Tháng TT</th><th className="text-center px-2 py-1.5">Trạng thái</th><th className="text-left px-2 py-1.5">Ghi chú</th><th></th>
               </tr></thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={12} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có dòng nào — bấm &quot;+ Thêm dòng&quot;</td></tr>
-                ) : rows.map(p => {
+                  <tr><td colSpan={15} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có dòng nào — bấm &quot;+ Thêm dòng&quot;</td></tr>
+                ) : rows.map((p, i) => {
                   const overdue = isOverdue(p)
                   return (
                     <tr key={p.id} style={{ borderTop: '1px solid var(--border)', background: overdue ? 'rgba(220,38,38,0.05)' : undefined }}>
+                      <td className="px-2 py-1 text-center" style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
                       <td className="px-2 py-1 font-semibold">{p.supplier}</td>
                       <td className="px-2 py-1">{p.saleContract || p.poCode || '—'}</td>
                       <td className="px-2 py-1 text-right font-mono">{formatCurrency(p.value)} <span style={{ color: 'var(--text-muted)' }}>{p.currency !== 'VND' ? p.currency : ''}</span></td>
@@ -90,6 +91,7 @@ export default function PaymentSchedulePage() {
                       <td className="px-2 py-1 text-center">{dt(p.lcDate)}</td>
                       <td className="px-2 py-1 text-center">{dt(p.etd)}</td>
                       <td className="px-2 py-1 text-center">{dt(p.eta)}</td>
+                      <td className="px-2 py-1 text-center">{dt(p.documentDate)}</td>
                       <td className="px-2 py-1 text-center" style={{ color: overdue ? '#dc2626' : undefined, fontWeight: overdue ? 700 : 400 }}>{dt(p.lcDeadline)}</td>
                       <td className="px-2 py-1 text-center">{p.paymentMonth || '—'}</td>
                       <td className="px-2 py-1 text-center">
@@ -98,6 +100,7 @@ export default function PaymentSchedulePage() {
                         </select>
                         {p.status === 'PAID' && p.paidDate && <div className="text-[10px] mt-0.5" style={{ color: '#166534' }}>{dt(p.paidDate)}</div>}
                       </td>
+                      <td className="px-2 py-1" style={{ color: 'var(--text-muted)', maxWidth: 160 }}>{p.notes || ''}</td>
                       <td className="px-2 py-1 text-right"><button onClick={() => del(p.id)} className="text-[11px]" style={{ color: '#dc2626' }}>Xoá</button></td>
                     </tr>
                   )
@@ -151,6 +154,7 @@ function AddModal({ projectId, onCancel, onSaved }: { projectId: string; onCance
           {fld('lcDeadline', 'Hạn LC', 'date')}
           {fld('documentDate', 'Ngày chứng từ', 'date')}
         </div>
+        {fld('notes', 'Ghi chú')}
         <div className="flex justify-end gap-2"><Button variant="outline" onClick={onCancel}>Huỷ</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Đang lưu…' : 'Lưu'}</Button></div>
       </div>
     </div>

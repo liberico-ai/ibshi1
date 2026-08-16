@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             id: true, itemCode: true, itemName: true, profile: true, grade: true, uom: true,
             qtyToBuy: true, selectedVendorName: true, purchaseRequestItemId: true,
             prItem: { select: { materialId: true } },
-            offers: { select: { vendorId: true, unitPrice: true } },
+            offers: { select: { vendorId: true, unitPrice: true, totalPrice: true } },
           },
         },
       },
@@ -41,18 +41,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (selected.length === 0) return errorResponse('Chưa chọn NCC cho dòng nào — vào tab Duyệt chọn NCC trước', 400)
 
     const bqvByName = new Map(bid.vendors.map(v => [v.vendorName.toLowerCase(), v]))
-    type G = { name: string; bqv: (typeof bid.vendors)[number]; items: Array<{ id: string; itemCode: string | null; itemName: string | null; profile: string | null; grade: string | null; uom: string | null; qtyToBuy: number; materialId: string | null; prItemId: string | null; unitPrice: number }> }
+    type G = { name: string; bqv: (typeof bid.vendors)[number]; items: Array<{ id: string; itemCode: string | null; itemName: string | null; profile: string | null; grade: string | null; uom: string | null; qtyToBuy: number; materialId: string | null; prItemId: string | null; unitPrice: number; linePrice: number }> }
     const groups = new Map<string, G>()
     for (const it of selected) {
       const bqv = bqvByName.get(it.selectedVendorName!.toLowerCase())
       if (!bqv) continue
       const offer = it.offers.find(o => o.vendorId === bqv.id)
+      const qty = Number(it.qtyToBuy || 0)
+      const unitPrice = Number(offer?.unitPrice || 0)
+      // Thành tiền: ưu tiên totalPrice đã lưu (có thể nhập tay) → khớp số BGĐ duyệt; else qty×đơn giá
+      const linePrice = Number(offer?.totalPrice || 0) > 0 ? Number(offer!.totalPrice) : qty * unitPrice
       const key = it.selectedVendorName!
       if (!groups.has(key)) groups.set(key, { name: key, bqv, items: [] })
       groups.get(key)!.items.push({
         id: it.id, itemCode: it.itemCode, itemName: it.itemName, profile: it.profile, grade: it.grade, uom: it.uom,
-        qtyToBuy: Number(it.qtyToBuy || 0), materialId: it.prItem?.materialId || null,
-        prItemId: it.purchaseRequestItemId || null, unitPrice: Number(offer?.unitPrice || 0),
+        qtyToBuy: qty, materialId: it.prItem?.materialId || null,
+        prItemId: it.purchaseRequestItemId || null, unitPrice, linePrice,
       })
     }
 
@@ -76,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         created.push({ poCode: ex.poCode, vendorName: g.name, totalValue: Number(ex.totalValue || 0), existing: true })
         continue
       }
-      const totalValue = g.items.reduce((s, it) => s + it.qtyToBuy * it.unitPrice, 0)
+      const totalValue = g.items.reduce((s, it) => s + it.linePrice, 0)
       const poCode = await nextPoCode()
       const po = await prisma.purchaseOrder.create({
         data: {
@@ -95,8 +99,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       created.push({ poCode: po.poCode, vendorName: g.name, totalValue: Math.round(totalValue) })
     }
 
-    // PR item đã ký HĐ + BID → CONTRACTED
-    const prIds = selected.map(it => it.purchaseRequestItemId).filter((x): x is string => !!x)
+    // PR item đã ký HĐ — CHỈ item thực sự vào PO (đã gom nhóm), bỏ item bị skip (NCC không khớp)
+    const prIds = [...groups.values()].flatMap(g => g.items.map(it => it.prItemId)).filter((x): x is string => !!x)
     if (prIds.length) await prisma.purchaseRequestItem.updateMany({ where: { id: { in: prIds } }, data: { statusFlag: 'Đã ký HĐ' } })
     await prisma.bidAnalysis.update({ where: { id }, data: { status: 'CONTRACTED' } })
 

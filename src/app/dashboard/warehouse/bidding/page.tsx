@@ -25,11 +25,11 @@ const STATUS_LABEL: Record<string, string> = {
 }
 // 5 chế độ chọn NCC (bám bid-status.ts của Commerce)
 const SELECTION_MODES = [
-  { key: 'PER_ITEM', label: 'Chọn NCC theo từng dòng', desc: 'Mỗi vật tư chọn NCC riêng (linh hoạt)', icon: '📋' },
-  { key: 'PER_BID', label: 'Chọn 1 NCC cho cả BID', desc: '1 NCC thắng toàn bộ vật tư', icon: '🛡️' },
-  { key: 'AUTO_MIN_PRICE', label: 'Tự động giá thấp nhất', desc: 'Hệ thống chọn đơn giá thấp nhất mỗi dòng', icon: '✨' },
-  { key: 'PER_GROUP', label: 'Chọn theo nhóm vật tư', desc: 'Mỗi nhóm 1 NCC (đang dùng chọn theo dòng)', icon: '🗂️' },
-  { key: 'MANUAL_WEIGHTED', label: 'Chấm điểm đa tiêu chí', desc: 'Giá + chất lượng + thanh toán (đang dùng chọn theo dòng)', icon: '📊' },
+  { key: 'PER_ITEM', label: 'Chọn NCC theo từng dòng', desc: 'Mỗi vật tư chọn NCC riêng (linh hoạt)', bestFor: 'Nhiều item cùng nhóm, giá biến động', icon: '📋' },
+  { key: 'PER_BID', label: 'Chọn 1 NCC cho cả BID', desc: '1 NCC thắng toàn bộ vật tư', bestFor: 'BID đơn giản, ít item, 1 nhóm', icon: '🛡️' },
+  { key: 'AUTO_MIN_PRICE', label: 'Tự động giá thấp nhất', desc: 'Hệ thống chọn đơn giá thấp nhất mỗi dòng', bestFor: 'Tiêu chuẩn, không ràng buộc NCC', icon: '✨' },
+  { key: 'PER_GROUP', label: 'Chọn theo nhóm vật tư', desc: 'Mỗi nhóm 1 NCC (đang dùng chọn theo dòng)', bestFor: '>10 item, >2 nhóm vật tư', icon: '🗂️' },
+  { key: 'MANUAL_WEIGHTED', label: 'Chấm điểm đa tiêu chí', desc: 'Giá + chất lượng + thanh toán (đang dùng chọn theo dòng)', bestFor: 'Giá trị lớn, đánh giá tổng thể', icon: '📊' },
 ]
 const fmtN = (n: number) => formatNumber(n)
 const fmtM = (n: number) => formatCurrency(n)
@@ -179,14 +179,16 @@ function CompareTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
       {/* Vendor summary cards */}
       {vendors.length > 0 && (
         <div className="flex gap-2 flex-wrap">
-          {vendors.map(v => (
+          {vendors.map(v => {
+            const nOffers = items.filter(it => (it.offers[v.id]?.unitPrice || 0) > 0).length
+            return (
             <div key={v.id} className="rounded-lg px-3 py-2" style={{ border: `1px solid ${v.isWinner ? '#16a34a' : 'var(--border)'}`, background: v.isWinner ? '#f0fdf4' : 'var(--surface)', minWidth: 150 }}>
               <div className="text-xs font-bold flex items-center gap-1" style={{ color: 'var(--text-primary)' }}>{v.isWinner && '🏆'}{v.vendorName}</div>
-              <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{v.vendorType === 'IMPORT' ? '🌏 Nhập khẩu' : '🇻🇳 Trong nước'} · {v.currency}</div>
+              <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{v.vendorType === 'IMPORT' ? '🌏 Nhập khẩu' : '🇻🇳 Trong nước'} · {v.currency} · <b>{nOffers}</b>/{items.length} dòng báo</div>
               <div className="text-xs font-mono font-semibold mt-0.5">{fmtM(v.totalQuote)}</div>
               {!v.isWinner && <button onClick={() => selectPerBid(v.id, v.vendorName)} className="text-[10px] mt-1 px-2 py-0.5 rounded font-semibold" style={{ border: '1px solid var(--accent)', color: 'var(--accent)' }}>Chọn NCC này (cả BID)</button>}
             </div>
-          ))}
+          )})}
         </div>
       )}
 
@@ -262,6 +264,7 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
   const { vendors, items } = detail
   const [mode, setMode] = useState(detail.bid.selectionMode || 'PER_ITEM')
   const [summary, setSummary] = useState<ApproveSummary | null>(null)
+  const [poBusy, setPoBusy] = useState(false)
 
   const loadSummary = useCallback(() => {
     apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/approval-summary`).then(r => { if (r.ok) setSummary({ summary: r.summary, byVendor: r.byVendor }) })
@@ -269,6 +272,11 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
   useEffect(() => { loadSummary() }, [loadSummary, items])
 
   const changeMode = async (m: string) => {
+    if (m === mode) return
+    // AUTO_MIN_PRICE ghi đè lựa chọn NCC hiện có → hỏi xác nhận
+    if (m === 'AUTO_MIN_PRICE' && (summary?.summary.assignedItems ?? 0) > 0) {
+      if (!await confirmDialog('Chế độ "Tự động giá thấp nhất" sẽ GHI ĐÈ các NCC đang chọn bằng NCC rẻ nhất mỗi dòng. Tiếp tục?')) return
+    }
     setMode(m)
     await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/selection-mode`, { method: 'PATCH', body: JSON.stringify({ selectionMode: m }) })
     if (m === 'AUTO_MIN_PRICE') {
@@ -281,8 +289,11 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
     if (r.ok) onReload(); else notify(r.error || 'Lỗi chọn NCC', 'error')
   }
   const createPO = async () => {
+    if (poBusy) return
     if (!await confirmDialog('Tạo PO từ các dòng đã duyệt? Mỗi NCC 1 đơn đặt hàng (PENDING — chờ duyệt ở Đơn đặt hàng).')) return
+    setPoBusy(true)
     const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/create-po`, { method: 'POST', body: '{}' })
+    setPoBusy(false)
     if (r.ok) { notify(r.message || 'Đã tạo PO', 'success'); onReload() } else notify(r.error || 'Lỗi tạo PO', 'error')
   }
 
@@ -293,9 +304,13 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
         <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>Chế độ chọn nhà cung cấp</div>
         <div className="flex gap-2 flex-wrap">
           {SELECTION_MODES.map(sm => (
-            <button key={sm.key} onClick={() => changeMode(sm.key)} className="rounded-lg px-3 py-2 text-left" style={{ border: `1px solid ${mode === sm.key ? 'var(--accent)' : 'var(--border)'}`, background: mode === sm.key ? 'var(--surface-hover)' : 'var(--surface)', maxWidth: 210 }}>
-              <div className="text-xs font-bold" style={{ color: mode === sm.key ? 'var(--accent)' : 'var(--text-primary)' }}>{sm.icon} {sm.label}</div>
+            <button key={sm.key} onClick={() => changeMode(sm.key)} className="rounded-lg px-3 py-2 text-left" style={{ border: `1px solid ${mode === sm.key ? 'var(--accent)' : 'var(--border)'}`, background: mode === sm.key ? 'var(--surface-hover)' : 'var(--surface)', maxWidth: 220 }}>
+              <div className="text-xs font-bold flex items-center gap-1" style={{ color: mode === sm.key ? 'var(--accent)' : 'var(--text-primary)' }}>
+                {sm.icon} {sm.label}
+                {mode === sm.key && <span className="text-[9px] px-1 rounded-full text-white" style={{ background: 'var(--accent)' }}>Đang dùng</span>}
+              </div>
               <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{sm.desc}</div>
+              <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Phù hợp: {sm.bestFor}</div>
             </button>
           ))}
         </div>
@@ -337,8 +352,9 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
                     const isMin = o && o.unitPrice > 0 && o.unitPrice === min
                     const isChosen = it.selectedVendorName && it.selectedVendorName.toLowerCase() === v.vendorName.toLowerCase()
                     return (
-                      <td key={v.id} className="px-2 py-1 text-right font-mono" style={{ background: isChosen ? '#dcfce7' : isMin ? '#fef9c3' : undefined, fontWeight: isChosen || isMin ? 700 : 400, color: isChosen ? '#166534' : isMin ? '#854d0e' : 'var(--text-primary)' }} title={o ? `${fmtN(o.unitPrice)}/đv × ${fmtN(it.qtyToBuy)} = ${fmtM(o.totalPrice)}` : ''}>
+                      <td key={v.id} className="px-2 py-1 text-right font-mono" style={{ background: isChosen ? '#dcfce7' : isMin ? '#fef9c3' : undefined, fontWeight: isChosen || isMin ? 700 : 400, color: isChosen ? '#166534' : isMin ? '#854d0e' : 'var(--text-primary)' }}>
                         {o && o.unitPrice > 0 ? fmtN(o.unitPrice) : '—'}
+                        {o && o.totalPrice > 0 && <div className="text-[10px] font-normal" style={{ color: 'var(--text-muted)' }}>{fmtM(o.totalPrice)}</div>}
                       </td>
                     )
                   })}
@@ -397,7 +413,7 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
             <div className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Tạo Đơn đặt hàng (PO) từ BID</div>
             <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Gom dòng theo NCC đã duyệt → mỗi NCC 1 PO (PENDING). Duyệt PO ở trang Đơn đặt hàng → cập nhật ngân sách.</div>
           </div>
-          <Button variant="primary" onClick={createPO} disabled={!summary || summary.summary.assignedItems === 0}>Tạo PO / HĐ</Button>
+          <Button variant="primary" onClick={createPO} disabled={poBusy || !summary || summary.summary.assignedItems === 0}>{poBusy ? 'Đang tạo…' : 'Tạo PO / HĐ'}</Button>
         </div>
         {detail.purchaseOrders.length > 0 && (
           <>
@@ -541,7 +557,7 @@ function EnterQuoteModal({ bidId, items, onCancel, onSaved }: { bidId: string; i
           <input value={vendorName} onChange={e => setVendorName(e.target.value)} placeholder="Tên NCC *" className="input text-sm" />
           <select value={vendorType} onChange={e => setVendorType(e.target.value)} className="input text-sm"><option value="DOMESTIC">Nội địa</option><option value="IMPORT">Nhập khẩu</option></select>
           <select value={currency} onChange={e => setCurrency(e.target.value)} className="input text-sm"><option value="VND">VND</option><option value="USD">USD</option></select>
-          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ghi chú" className="input text-sm" />
+          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ghi chú (điều kiện giao/thanh toán/hiệu lực…)" className="input text-sm md:col-span-1" />
         </div>
         <div className="overflow-x-auto" style={{ maxHeight: '52vh' }}>
           <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
@@ -558,7 +574,7 @@ function EnterQuoteModal({ bidId, items, onCancel, onSaved }: { bidId: string; i
                   <td className="px-2 py-1" style={{ color: 'var(--text-muted)' }}>{it.uom}</td>
                   <td className="px-2 py-1 text-right"><input type="number" value={r?.unitPrice || ''} onChange={e => setUnit(it.id, it.qtyToBuy, e.target.value)} className="input text-xs text-right" style={{ width: 100 }} placeholder="0" /></td>
                   <td className="px-2 py-1 text-right"><input type="number" value={r?.totalPrice || ''} onChange={e => setTotal(it.id, e.target.value)} className="input text-xs text-right" style={{ width: 110 }} placeholder="0" /></td>
-                  <td className="px-2 py-1 text-center"><select value={r?.scope || 'V'} onChange={e => setScope(it.id, e.target.value)} className="input text-xs" style={{ width: 56 }}><option value="V">V</option><option value="X">X</option></select></td>
+                  <td className="px-2 py-1 text-center"><select value={r?.scope || 'V'} onChange={e => setScope(it.id, e.target.value)} className="input text-xs" style={{ width: 56 }}><option value="V">V</option><option value="X">X</option><option value="">—</option></select></td>
                 </tr>
               ) })}
             </tbody>
@@ -589,14 +605,16 @@ function StepBanner({ p35, p36, projectId, bids, onDone }: { p35: StepTask | nul
   const approveAndPO = async () => {
     if (!await confirmDialog('BGĐ duyệt: TẠO PO cho các BID đã chọn NCC rồi hoàn thành bước P3.6?')) return
     setBusy(true)
-    let created = 0
+    let created = 0, total = 0
     for (const b of bids) {
       const r = await apiFetch(`/api/procurement/bid-analyses/${b.id}/create-po`, { method: 'POST', body: '{}' })
-      if (r.ok && Array.isArray(r.pos)) created += r.pos.filter((p: { existing?: boolean }) => !p.existing).length
+      if (r.ok && Array.isArray(r.pos)) { total += r.pos.length; created += r.pos.filter((p: { existing?: boolean }) => !p.existing).length }
     }
+    // Chặn đóng bước duyệt rỗng: chưa BID nào chọn NCC → không có PO → không hoàn thành P3.6
+    if (total === 0) { setBusy(false); notify('Chưa có BID nào chọn NCC — vào tab Duyệt chọn NCC trước khi duyệt', 'error'); return }
     const c = await apiFetch('/api/work/step-task', { method: 'POST', body: JSON.stringify({ projectId, stepCode: 'P3.6', action: 'complete' }) })
     setBusy(false)
-    if (c.ok) { notify(`Đã tạo ${created} PO + hoàn thành P3.6`, 'success'); onDone() } else notify(c.error || 'Lỗi hoàn thành P3.6', 'error')
+    if (c.ok) { notify(created > 0 ? `Đã tạo ${created} PO + hoàn thành P3.6` : `Đã hoàn thành P3.6 (${total} PO đã có)`, 'success'); onDone() } else notify(c.error || 'Lỗi hoàn thành P3.6', 'error')
   }
   const reject = async () => {
     if (!rejReason.trim() || !p36) { notify('Nhập lý do', 'error'); return }
