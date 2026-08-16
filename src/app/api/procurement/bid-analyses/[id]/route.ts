@@ -24,6 +24,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           orderBy: { vendorOrder: 'asc' },
           select: { id: true, vendorId: true, vendorName: true, vendorType: true, currency: true, totalQuote: true, isWinner: true },
         },
+        purchaseOrders: {
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, poCode: true, status: true, totalValue: true, currency: true, vendor: { select: { name: true } } },
+        },
         items: {
           orderBy: { itemOrder: 'asc' },
           select: {
@@ -46,6 +50,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       vendors: bid.vendors.map(v => ({
         id: v.id, vendorId: v.vendorId, vendorName: v.vendorName, vendorType: v.vendorType,
         currency: v.currency, totalQuote: Number(v.totalQuote || 0), isWinner: v.isWinner,
+      })),
+      purchaseOrders: bid.purchaseOrders.map(p => ({
+        id: p.id, poCode: p.poCode, status: p.status, currency: p.currency,
+        totalValue: Number(p.totalValue || 0), vendorName: p.vendor?.name || '',
       })),
       items: bid.items.map(it => ({
         id: it.id, itemOrder: it.itemOrder, itemCode: it.itemCode, itemName: it.itemName,

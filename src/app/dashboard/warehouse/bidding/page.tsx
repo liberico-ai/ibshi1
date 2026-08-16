@@ -13,7 +13,8 @@ interface PrItem { id: string; itemCode: string; itemName: string; profile: stri
 interface Vendor { id: string; vendorName: string; vendorType: string; currency: string; totalQuote: number; isWinner: boolean }
 interface Offer { scope?: string | null; unitPrice: number; totalPrice: number; deliveryTerm?: string | null; remarks?: string | null }
 interface BidItem { id: string; itemOrder: number; itemCode: string; itemName: string; profile: string; grade: string; uom: string; qtyToBuy: number; qtyPr: number; estimateTotal: number; alreadyBoughtAmount: number; selectedVendorName: string | null; notes: string | null; offers: Record<string, Offer> }
-interface BidDetail { bid: { id: string; bidCode: string; subject: string; status: string; selectionMode: string; matGroup: string | null; project?: { projectCode: string } | null }; vendors: Vendor[]; items: BidItem[] }
+interface BidPO { id: string; poCode: string; status: string; currency: string; totalValue: number; vendorName: string }
+interface BidDetail { bid: { id: string; bidCode: string; subject: string; status: string; selectionMode: string; matGroup: string | null; project?: { projectCode: string } | null }; vendors: Vendor[]; items: BidItem[]; purchaseOrders: BidPO[] }
 
 const STATUS_COLOR: Record<string, 'info' | 'warning' | 'success' | 'default' | 'danger'> = {
   OPEN: 'default', EVALUATING: 'info', SELECTED: 'warning', CONTRACTED: 'success', CANCELLED: 'danger',
@@ -65,7 +66,7 @@ export default function BiddingPage() {
   }
   const openDetail = useCallback(async (id: string) => {
     const r = await apiFetch(`/api/procurement/bid-analyses/${id}`)
-    if (r.ok) setDetail({ bid: r.bid, vendors: r.vendors, items: r.items })
+    if (r.ok) setDetail({ bid: r.bid, vendors: r.vendors, items: r.items, purchaseOrders: r.purchaseOrders || [] })
     else notify(r.error || 'Lỗi tải BID', 'error')
   }, [])
   const reloadDetail = () => { if (detail) { openDetail(detail.bid.id); loadBids() } }
@@ -258,6 +259,11 @@ function ApproveTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
     const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/items/${itemId}/select-vendor`, { method: 'PATCH', body: JSON.stringify({ vendorName: vendorName || null }) })
     if (r.ok) onReload(); else notify(r.error || 'Lỗi chọn NCC', 'error')
   }
+  const createPO = async () => {
+    if (!await confirmDialog('Tạo PO từ các dòng đã duyệt? Mỗi NCC 1 đơn đặt hàng (PENDING — chờ duyệt ở Đơn đặt hàng).')) return
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/create-po`, { method: 'POST', body: '{}' })
+    if (r.ok) { notify(r.message || 'Đã tạo PO', 'success'); onReload() } else notify(r.error || 'Lỗi tạo PO', 'error')
+  }
 
   return (
     <div className="space-y-4">
@@ -355,9 +361,34 @@ function ApproveTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
               </table>
             </div>
           ))}
-          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Duyệt xong → bước tạo PO/HĐ (Đợt 3) sẽ gom theo NCC tạo đơn đặt hàng.</p>
         </div>
       )}
+
+      {/* Tạo PO / HĐ */}
+      <div className="rounded-lg p-3 space-y-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <div>
+            <div className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Tạo Đơn đặt hàng (PO) từ BID</div>
+            <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Gom dòng theo NCC đã duyệt → mỗi NCC 1 PO (PENDING). Duyệt PO ở trang Đơn đặt hàng → cập nhật ngân sách.</div>
+          </div>
+          <Button variant="primary" onClick={createPO} disabled={!summary || summary.summary.assignedItems === 0}>Tạo PO / HĐ</Button>
+        </div>
+        {detail.purchaseOrders.length > 0 && (
+          <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+            <thead><tr style={{ color: 'var(--text-muted)' }}><th className="text-left px-2 py-1">Mã PO</th><th className="text-left px-2 py-1">NCC</th><th className="text-right px-2 py-1">Giá trị</th><th className="text-center px-2 py-1">Trạng thái</th></tr></thead>
+            <tbody>
+              {detail.purchaseOrders.map(po => (
+                <tr key={po.id} style={{ borderTop: '1px solid var(--border)' }}>
+                  <td className="px-2 py-1 font-mono font-bold" style={{ color: 'var(--accent)' }}>{po.poCode}</td>
+                  <td className="px-2 py-1">{po.vendorName}</td>
+                  <td className="px-2 py-1 text-right font-mono">{fmtM(po.totalValue)}</td>
+                  <td className="px-2 py-1 text-center"><span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: po.status === 'PENDING' ? '#fef9c3' : '#dcfce7', color: po.status === 'PENDING' ? '#854d0e' : '#166534' }}>{po.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   )
 }

@@ -519,6 +519,7 @@ model PurchaseOrder {
   deliveryDate DateTime?           @map("delivery_date")
   paymentTerms String?             @map("payment_terms")
   sourceTaskId String?             @map("source_task_id")
+  bidAnalysisId String?            @map("bid_analysis_id") // PORT TM: PO tạo từ BID nào (Đợt 3)
   contractId   String?             @map("contract_id")
   createdBy    String              @map("created_by")
   notes        String?
@@ -528,6 +529,7 @@ model PurchaseOrder {
   invoices     Invoice[]
   project      Project?            @relation(fields: [projectId], references: [id])
   vendor       Vendor              @relation(fields: [vendorId], references: [id])
+  bidAnalysis  BidAnalysis?        @relation(fields: [bidAnalysisId], references: [id])
   contract     PurchaseContract?   @relation(fields: [contractId], references: [id])
 
   @@index([projectId])
@@ -2349,9 +2351,10 @@ model BidAnalysis {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  project Project?         @relation(fields: [projectId], references: [id])
-  vendors BidQuoteVendor[]
-  items   BidQuoteItem[]
+  project        Project?         @relation(fields: [projectId], references: [id])
+  vendors        BidQuoteVendor[]
+  items          BidQuoteItem[]
+  purchaseOrders PurchaseOrder[]
 
   @@index([projectId])
   @@index([bidCodeProj, bidCodeYymm])
