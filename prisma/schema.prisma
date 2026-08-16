@@ -112,6 +112,7 @@ model Project {
   settlement         ProjectSettlement?
   quoteGroups        QuoteGroup[]
   bidAnalyses        BidAnalysis[]
+  paymentSchedules   PaymentSchedule[]
   documents          ProjectDocument[]
 
   @@index([status])
@@ -527,6 +528,7 @@ model PurchaseOrder {
   updatedAt    DateTime            @updatedAt @map("updated_at")
   items        PurchaseOrderItem[]
   invoices     Invoice[]
+  paymentSchedules PaymentSchedule[]
   project      Project?            @relation(fields: [projectId], references: [id])
   vendor       Vendor              @relation(fields: [vendorId], references: [id])
   bidAnalysis  BidAnalysis?        @relation(fields: [bidAnalysisId], references: [id])
@@ -2406,6 +2408,39 @@ model BidQuoteItem {
 
   @@index([bidId])
   @@map("bid_quote_items")
+}
+
+// PORT Thương Mại — Đợt 5: Lịch thanh toán (theo mốc LC/TT) cho PO/HĐ nhập khẩu & nội địa.
+model PaymentSchedule {
+  id              String    @id @default(cuid())
+  projectId       String?   @map("project_id")
+  purchaseOrderId String?   @map("purchase_order_id")
+  supplier        String
+  saleContract    String?   @map("sale_contract")
+  value           Decimal   @default(0)
+  currency        String    @default("VND")
+  paymentMethod   String?   @map("payment_method") // T/T | LC 100% | DP | ...
+  signDate        DateTime? @map("sign_date")
+  lcDate          DateTime? @map("lc_date")
+  etd             DateTime?
+  eta             DateTime?
+  documentDate    DateTime? @map("document_date")
+  lcDeadline      DateTime? @map("lc_deadline")
+  paymentMonth    String?   @map("payment_month")
+  status          String    @default("PLANNED") // PLANNED | DUE | PAID | OVERDUE
+  paidDate        DateTime? @map("paid_date")
+  paidAmount      Decimal?  @map("paid_amount")
+  notes           String?
+  createdBy       String?   @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  project       Project?       @relation(fields: [projectId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+
+  @@index([projectId])
+  @@index([purchaseOrderId])
+  @@map("payment_schedules")
 }
 
 model BidQuoteOffer {
