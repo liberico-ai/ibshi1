@@ -20,6 +20,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json().catch(() => ({})) as { vendorName?: string | null }
     const vendorName = body.vendorName ? String(body.vendorName).trim() : null
 
+    const ba = await prisma.bidAnalysis.findUnique({ where: { id }, select: { status: true } })
+    if (!ba) return errorResponse('Không tìm thấy BID', 404)
+    if (ba.status === 'CONTRACTED') return errorResponse('BID đã ký hợp đồng — không thể đổi lựa chọn NCC', 409)
+
     const item = await prisma.bidQuoteItem.findFirst({ where: { id: itemId, bidId: id }, select: { id: true } })
     if (!item) return errorResponse('Dòng không thuộc BID này', 404)
 

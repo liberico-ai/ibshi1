@@ -34,6 +34,21 @@ const SELECTION_MODES = [
 const fmtN = (n: number) => formatNumber(n)
 const fmtM = (n: number) => formatCurrency(n)
 
+// Đơn giá thấp nhất theo TỪNG loại tiền tệ cho 1 dòng — KHÔNG so VND với USD (tránh bôi vàng/chọn nhầm khi khác tệ).
+function minPriceByCurrency(offers: Record<string, Offer>, vendors: Vendor[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const v of vendors) {
+    const up = offers[v.id]?.unitPrice || 0
+    if (up > 0) { const c = v.currency || 'VND'; out[c] = out[c] === undefined ? up : Math.min(out[c], up) }
+  }
+  return out
+}
+// Ô có phải giá thấp nhất TRONG CÙNG loại tiền tệ của nó không.
+const isCheapestOffer = (o: Offer | undefined, v: Vendor, minByCur: Record<string, number>) =>
+  !!o && o.unitPrice > 0 && o.unitPrice === minByCur[v.currency || 'VND']
+// BID có trộn nhiều loại tiền tệ giữa các NCC không (để cảnh báo không so sánh trực tiếp).
+const hasMixedCurrency = (vendors: Vendor[]) => new Set(vendors.map(v => v.currency || 'VND')).size > 1
+
 export default function BiddingPage() {
   const [projects, setProjects] = useState<Proj[]>([])
   const [projectId, setProjectId] = useState('')
@@ -169,6 +184,7 @@ export default function BiddingPage() {
 // ══ Tab SO SÁNH — ma trận đầy đủ cột ══
 function CompareTab({ detail, onReload }: { detail: BidDetail; onReload: () => void }) {
   const { vendors, items } = detail
+  const mixed = hasMixedCurrency(vendors)
   const selectPerBid = async (vendorId: string, vendorName: string) => {
     if (!await confirmDialog(`Chọn ${vendorName} cho TOÀN BỘ dòng của BID này?`)) return
     const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/select-vendor`, { method: 'POST', body: JSON.stringify({ vendorId }) })
@@ -176,6 +192,11 @@ function CompareTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
   }
   return (
     <div className="space-y-3">
+      {mixed && (
+        <div className="text-xs rounded-lg px-3 py-2" style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}>
+          ⚠️ Các NCC báo giá <b>khác loại tiền tệ</b> ({[...new Set(vendors.map(v => v.currency || 'VND'))].join(', ')}). Giá thấp nhất được tô <b>theo TỪNG loại tiền tệ</b> — không so trực tiếp giữa các tệ. Cần quy đổi trước khi kết luận rẻ/đắt.
+        </div>
+      )}
       {/* Vendor summary cards */}
       {vendors.length > 0 && (
         <div className="flex gap-2 flex-wrap">
@@ -221,8 +242,7 @@ function CompareTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
           </thead>
           <tbody>
             {items.map(it => {
-              const prices = vendors.map(v => it.offers[v.id]?.unitPrice || 0).filter(p => p > 0)
-              const min = prices.length ? Math.min(...prices) : 0
+              const minByCur = minPriceByCurrency(it.offers, vendors)
               return (
                 <tr key={it.id} style={{ borderTop: '1px solid var(--border)' }}>
                   <td className="px-2 py-1 font-mono" style={{ color: 'var(--accent)' }}>{it.itemCode || '—'}</td>
@@ -235,7 +255,7 @@ function CompareTab({ detail, onReload }: { detail: BidDetail; onReload: () => v
                   <td className="px-2 py-1 text-right font-mono" style={{ color: 'var(--text-muted)' }}>{it.alreadyBoughtAmount > 0 ? fmtM(it.alreadyBoughtAmount) : '—'}</td>
                   {vendors.map(v => {
                     const o = it.offers[v.id]
-                    const isMin = o && o.unitPrice > 0 && o.unitPrice === min
+                    const isMin = isCheapestOffer(o, v, minByCur)
                     return (
                       <Fragment key={v.id}>
                         <td className="px-1 py-1 text-center border-l" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>{o?.scope || '—'}</td>
@@ -273,16 +293,21 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
 
   const changeMode = async (m: string) => {
     if (m === mode) return
-    // AUTO_MIN_PRICE ghi đè lựa chọn NCC hiện có → hỏi xác nhận
-    if (m === 'AUTO_MIN_PRICE' && (summary?.summary.assignedItems ?? 0) > 0) {
-      if (!await confirmDialog('Chế độ "Tự động giá thấp nhất" sẽ GHI ĐÈ các NCC đang chọn bằng NCC rẻ nhất mỗi dòng. Tiếp tục?')) return
+    // Đổi chế độ sẽ XÓA lựa chọn cũ (server reset) → cảnh báo nếu đang có dòng đã chọn.
+    if ((summary?.summary.assignedItems ?? 0) > 0) {
+      const msg = m === 'AUTO_MIN_PRICE'
+        ? 'Chế độ "Tự động giá thấp nhất" sẽ XÓA lựa chọn hiện tại rồi chọn NCC rẻ nhất mỗi dòng. Tiếp tục?'
+        : 'Đổi chế độ sẽ XÓA các NCC đang chọn của chế độ hiện tại. Tiếp tục?'
+      if (!await confirmDialog(msg)) return
     }
     setMode(m)
-    await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/selection-mode`, { method: 'PATCH', body: JSON.stringify({ selectionMode: m }) })
+    const pr = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/selection-mode`, { method: 'PATCH', body: JSON.stringify({ selectionMode: m }) })
+    if (!pr.ok) { notify(pr.error || 'Lỗi đổi chế độ', 'error'); onReload(); return }
     if (m === 'AUTO_MIN_PRICE') {
       const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/auto-select-min-price`, { method: 'POST', body: '{}' })
-      if (r.ok) { notify(r.message || 'Đã tự chọn', 'success'); onReload() }
+      if (r.ok) notify(r.message || 'Đã tự chọn', 'success')
     }
+    onReload() // phản ánh lựa chọn đã bị xóa (và auto nếu có)
   }
   const selectItem = async (itemId: string, vendorName: string) => {
     const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/items/${itemId}/select-vendor`, { method: 'PATCH', body: JSON.stringify({ vendorName: vendorName || null }) })
@@ -339,8 +364,7 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
           </tr></thead>
           <tbody>
             {items.map(it => {
-              const prices = vendors.map(v => it.offers[v.id]?.unitPrice || 0).filter(p => p > 0)
-              const min = prices.length ? Math.min(...prices) : 0
+              const minByCur = minPriceByCurrency(it.offers, vendors)
               return (
                 <tr key={it.id} style={{ borderTop: '1px solid var(--border)' }}>
                   <td className="px-2 py-1 font-mono" style={{ color: 'var(--accent)' }}>{it.itemCode || '—'}</td>
@@ -349,7 +373,7 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
                   <td className="px-2 py-1 text-right font-mono">{fmtN(it.qtyToBuy)} {it.uom}</td>
                   {vendors.map(v => {
                     const o = it.offers[v.id]
-                    const isMin = o && o.unitPrice > 0 && o.unitPrice === min
+                    const isMin = isCheapestOffer(o, v, minByCur)
                     const isChosen = it.selectedVendorName && it.selectedVendorName.toLowerCase() === v.vendorName.toLowerCase()
                     return (
                       <td key={v.id} className="px-2 py-1 text-right font-mono" style={{ background: isChosen ? '#dcfce7' : isMin ? '#fef9c3' : undefined, fontWeight: isChosen || isMin ? 700 : 400, color: isChosen ? '#166534' : isMin ? '#854d0e' : 'var(--text-primary)' }}>

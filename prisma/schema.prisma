@@ -24,6 +24,7 @@ model User {
   notifications  Notification[]
   department     Department?    @relation(fields: [departmentId], references: [id])
   welderJoints   WeldJoint[]    @relation("WelderJoints")
+  techComments   TechComment[]  @relation("TechCommentAuthor")
 
   @@index([roleCode])
   @@index([departmentId])
@@ -114,6 +115,7 @@ model Project {
   bidAnalyses        BidAnalysis[]
   paymentSchedules   PaymentSchedule[]
   documents          ProjectDocument[]
+  fabCategories      FabricationCategory[]
 
   @@index([status])
   @@index([pmUserId])
@@ -499,6 +501,8 @@ model PurchaseRequestItem {
   remarks         String?
   material        Material?       @relation(fields: [materialId], references: [id])
   bidQuoteItems   BidQuoteItem[]
+  fabAllocations  PurchaseRequestItemFabAllocation[]
+  techComments    TechComment[]
   purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 
   @@index([prId])
@@ -506,6 +510,69 @@ model PurchaseRequestItem {
   @@index([bomItemId])
   @@index([bomVersionId])
   @@map("purchase_request_items")
+}
+
+// ── Hạng mục chế tạo + Lưới phân bổ (PORT Thương Mại — Module Phân bổ chế tạo) ──
+// Hạng mục chế tạo = cụm/kết cấu giao hàng của DỰ ÁN (INLET-U1, SCR-U1, KCTC…),
+// KHÁC công đoạn WBS (cắt/hàn/sơn). Mỗi dự án có bộ hạng mục riêng.
+model FabricationCategory {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  code      String // INLET-U1 | SCR-U1 | KCTC | KCDK
+  name      String
+  sortOrder Int      @default(0) @map("sort_order")
+  ghiChu    String?  @map("ghi_chu")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project     Project                            @relation(fields: [projectId], references: [id])
+  allocations PurchaseRequestItemFabAllocation[]
+
+  @@unique([projectId, code])
+  @@index([projectId])
+  @@map("fabrication_categories")
+}
+
+// Ô lưới phân bổ: dòng = vật tư PR (PurchaseRequestItem), cột = hạng mục chế tạo.
+// Ô = số lượng · khối lượng · ngày cần vật tư tại công trường. Trần: SUM(qty) ≤ reqQty.
+model PurchaseRequestItemFabAllocation {
+  id                    String    @id @default(cuid())
+  prItemId              String    @map("pr_item_id")
+  fabricationCategoryId String    @map("fabrication_category_id")
+  qty                   Decimal   @default(0)
+  weight                Decimal   @default(0)
+  ngayCanTaiCongTruong  DateTime? @map("ngay_can_tai_cong_truong")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  prItem              PurchaseRequestItem @relation(fields: [prItemId], references: [id], onDelete: Cascade)
+  fabricationCategory FabricationCategory @relation(fields: [fabricationCategoryId], references: [id])
+
+  @@unique([prItemId, fabricationCategoryId])
+  @@index([prItemId])
+  @@index([fabricationCategoryId])
+  @@map("pr_item_fab_allocations")
+}
+
+// Làm rõ kỹ thuật (PORT Thương Mại — F2): thread trao đổi kỹ thuật per dòng vật tư PR.
+model TechComment {
+  id           String   @id @default(cuid())
+  prItemId     String   @map("pr_item_id")
+  authorId     String?  @map("author_id")
+  content      String
+  commentType  String   @default("NOTE") @map("comment_type") // QUESTION | ANSWER | SUBSTITUTION_REQUEST | APPROVAL | REJECTION | NOTE
+  threadStatus String?  @map("thread_status") // PENDING | IN_DISCUSSION | CLARIFIED | SUBSTITUTION_REQUESTED | APPROVED | REJECTED
+  tags         String? // JSON array chuỗi quick-tag
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  prItem PurchaseRequestItem @relation(fields: [prItemId], references: [id], onDelete: Cascade)
+  author User?               @relation("TechCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([prItemId])
+  @@index([authorId])
+  @@index([commentType])
+  @@map("tech_comments")
 }
 
 model PurchaseOrder {

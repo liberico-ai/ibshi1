@@ -41,6 +41,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (selected.length === 0) return errorResponse('Chưa chọn NCC cho dòng nào — vào tab Duyệt chọn NCC trước', 400)
 
     const bqvByName = new Map(bid.vendors.map(v => [v.vendorName.toLowerCase(), v]))
+
+    // Chốt chặn giá 0: dòng đã chọn NCC nhưng NCC đó KHÔNG có báo giá hợp lệ (đơn giá ≤ 0 VÀ thành tiền ≤ 0)
+    // → chặn tạo PO giá 0 (lỗi thầm lặng). Cho phép nhập tay thành tiền (totalPrice > 0) đè đơn giá.
+    const invalidLines: string[] = []
+    for (const it of selected) {
+      const bqv = bqvByName.get(it.selectedVendorName!.toLowerCase())
+      const offer = bqv ? it.offers.find(o => o.vendorId === bqv.id) : undefined
+      if (!offer || (!(Number(offer.unitPrice) > 0) && !(Number(offer.totalPrice) > 0))) {
+        invalidLines.push(`${it.itemCode || it.itemName || it.id} (NCC: ${it.selectedVendorName})`)
+      }
+    }
+    if (invalidLines.length) {
+      const head = invalidLines.slice(0, 8).join('; ')
+      const more = invalidLines.length > 8 ? ` …+${invalidLines.length - 8} dòng` : ''
+      return errorResponse(`Không thể tạo PO — ${invalidLines.length} dòng đã chọn NCC nhưng chưa có báo giá (>0): ${head}${more}. Vui lòng nhập báo giá hoặc bỏ chọn NCC cho các dòng này.`, 400)
+    }
     type G = { name: string; bqv: (typeof bid.vendors)[number]; items: Array<{ id: string; itemCode: string | null; itemName: string | null; profile: string | null; grade: string | null; uom: string | null; qtyToBuy: number; materialId: string | null; prItemId: string | null; unitPrice: number; linePrice: number }> }
     const groups = new Map<string, G>()
     for (const it of selected) {

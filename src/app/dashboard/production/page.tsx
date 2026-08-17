@@ -12,9 +12,10 @@ import {
   Pagination,
 } from '@/components/ui'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
-import { Factory } from 'lucide-react'
+import { Factory, Pencil } from 'lucide-react'
 import { notify } from '@/components/ui/Toast'
 import SidebarStepLanding from '@/components/SidebarStepLanding'
+import WoFromWbsModal from './WoFromWbsModal'
 
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
@@ -72,9 +73,12 @@ export default function ProductionPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [showFromBom, setShowFromBom] = useState(false)
+  const [showFromWbs, setShowFromWbs] = useState(false)
+  const [editWO, setEditWO] = useState<WorkOrder | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [filterProjectId, setFilterProjectId] = useState('')
 
   // Tạo LSX: chỉ PM (R02) + BGĐ (R01) — QLSX/Tổ trưởng không còn tạo
   const canCreate = ['R01', 'R02'].includes(user?.roleCode || '')
@@ -84,17 +88,19 @@ export default function ProductionPage() {
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     if (search) params.set('search', search)
+    if (filterProjectId) params.set('projectId', filterProjectId)
     params.set('page', String(page))
+    const projQs = filterProjectId ? `?projectId=${filterProjectId}` : ''
     const [woRes, teamRes, progRes] = await Promise.all([
       apiFetch(`/api/production?${params}`),
-      apiFetch('/api/production/teams'),
-      apiFetch('/api/production/progress'),
+      apiFetch(`/api/production/teams${projQs}`),
+      apiFetch(`/api/production/progress${projQs}`),
     ])
     if (woRes.ok) { setWorkOrders(woRes.workOrders); setPagination(woRes.pagination) }
     if (teamRes.ok) setTeams(teamRes.teams)
     if (progRes.ok) setProgress(progRes)
     setLoading(false)
-  }, [statusFilter, search, page])
+  }, [statusFilter, search, page, filterProjectId])
 
   const openCreate = async () => {
     const res = await apiFetch('/api/projects')
@@ -108,8 +114,15 @@ export default function ProductionPage() {
     setShowFromBom(true)
   }
 
-  useEffect(() => { setPage(1) }, [search, statusFilter])
+  const openFromWbs = async () => {
+    const res = await apiFetch('/api/projects')
+    if (res.ok) setProjects(res.projects)
+    setShowFromWbs(true)
+  }
+
+  useEffect(() => { setPage(1) }, [search, statusFilter, filterProjectId])
   useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { apiFetch('/api/projects').then(r => { if (r.ok) setProjects(r.projects || []) }) }, [])
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1,2,3].map(i => <div key={i} className="h-24 skeleton rounded-xl" />)}</div>
 
@@ -127,11 +140,22 @@ export default function ProductionPage() {
         subtitle={`${pagination.total} lệnh sản xuất`}
         actions={(canCreate || canGenerateFromBom) ? (
           <div className="flex gap-2">
+            {canGenerateFromBom && <Button variant="outline" onClick={openFromWbs}>Tạo WO từ WBS</Button>}
             {canGenerateFromBom && <Button variant="outline" onClick={openFromBom}>Sinh WO từ BOM</Button>}
             {canCreate && <Button variant="primary" onClick={openCreate}>+ Tạo WO</Button>}
           </div>
         ) : undefined}
       />
+
+      {/* Lọc theo dự án — áp cho KPI, thẻ xưởng và danh sách WO */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Lọc theo dự án:</label>
+        <select value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)} className="input text-sm" style={{ maxWidth: 360 }}>
+          <option value="">— Tất cả dự án —</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
+        </select>
+        {filterProjectId && <button onClick={() => setFilterProjectId('')} className="text-xs px-2 py-1 rounded" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>✕ Bỏ lọc</button>}
+      </div>
 
       {/* Progress summary */}
       {progress && (
@@ -199,11 +223,12 @@ export default function ProductionPage() {
               <th>Trọng lượng</th>
               <th>Trạng thái</th>
               <th>Ngày</th>
+              {canCreate && <th className="text-center">Sửa</th>}
             </tr>
           </thead>
           <tbody>
             {workOrders.length === 0 ? (
-              <tr><td colSpan={8}><EmptyState icon={<Factory />} title="Chưa có WO" /></td></tr>
+              <tr><td colSpan={canCreate ? 9 : 8}><EmptyState icon={<Factory />} title="Chưa có WO" /></td></tr>
             ) : workOrders.map(wo => {
               const weightPct = wo.plannedWeight && wo.completedQty ? Math.round((wo.completedQty / wo.plannedWeight) * 100) : 0
               return (
@@ -228,6 +253,11 @@ export default function ProductionPage() {
                   </td>
                   <td><StatusBadge category="production" status={wo.status} /></td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(wo.createdAt)}</td>
+                  {canCreate && (
+                    <td className="text-center" onClick={e => e.stopPropagation()}>
+                      <button type="button" onClick={() => setEditWO(wo)} title="Sửa WO" className="p-1.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><Pencil className="w-3.5 h-3.5" /></button>
+                    </td>
+                  )}
                 </tr>
               )
             })}
@@ -250,7 +280,65 @@ export default function ProductionPage() {
         onClose={() => setShowFromBom(false)}
         onDone={() => { setShowFromBom(false); loadData() }}
       />
+
+      <WoFromWbsModal
+        open={showFromWbs}
+        projects={projects}
+        onClose={() => setShowFromWbs(false)}
+        onIssued={loadData}
+      />
+
+      {editWO && <EditWOModal wo={editWO} teams={teams} onClose={() => setEditWO(null)} onSaved={() => { setEditWO(null); loadData() }} />}
     </div>
+  )
+}
+
+// ── Modal sửa thông tin WO (mô tả/xưởng/trọng lượng/ngày kế hoạch) ──
+function EditWOModal({ wo, teams, onClose, onSaved }: { wo: WorkOrder; teams: TeamLoad[]; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    description: wo.description || '', teamCode: wo.teamCode || '',
+    plannedWeight: wo.plannedWeight != null ? String(wo.plannedWeight) : '',
+    plannedStart: wo.plannedStart ? wo.plannedStart.slice(0, 10) : '', plannedEnd: wo.plannedEnd ? wo.plannedEnd.slice(0, 10) : '',
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const update = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }))
+
+  const submit = async () => {
+    if (!form.description.trim() || !form.teamCode) return notify('Nhập mô tả và xưởng')
+    if (form.plannedStart && form.plannedEnd && form.plannedEnd < form.plannedStart) return notify('Ngày kết thúc phải sau ngày bắt đầu')
+    setSubmitting(true)
+    const res = await apiFetch(`/api/production/${wo.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        description: form.description.trim(), teamCode: form.teamCode,
+        plannedWeight: form.plannedWeight ? Number(form.plannedWeight) : undefined,
+        plannedStart: form.plannedStart || '', plannedEnd: form.plannedEnd || '',
+      }),
+    })
+    setSubmitting(false)
+    if (res.ok) { notify(res.message || 'Đã cập nhật WO', 'success'); onSaved() } else notify(res.error || 'Lỗi cập nhật')
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Sửa WO ${wo.woCode}`} size="md">
+      <div className="space-y-3">
+        <TextareaField label="Mô tả *" rows={2} value={form.description} onChange={e => update('description', e.target.value)} />
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField label="Xưởng *" value={form.teamCode}
+            onChange={e => update('teamCode', e.target.value)}
+            options={[{ value: '', label: 'Chọn xưởng...' }, ...PRODUCTION_WORKSHOPS.map(w => ({ value: w.code, label: `${w.code} — ${w.name}` })), ...(teams.some(t => t.code === form.teamCode) || PRODUCTION_WORKSHOPS.some(w => w.code === form.teamCode) ? [] : [{ value: form.teamCode, label: form.teamCode }])]} />
+          <InputField label="Trọng lượng (kg)" type="number" value={form.plannedWeight} onChange={e => update('plannedWeight', e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <InputField label="Ngày BĐ" type="date" value={form.plannedStart} onChange={e => update('plannedStart', e.target.value)} />
+          <InputField label="Ngày KT" type="date" value={form.plannedEnd} min={form.plannedStart || undefined} onChange={e => update('plannedEnd', e.target.value)} />
+        </div>
+      </div>
+      <div className="flex gap-3 mt-5">
+        <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>
+        <Button variant="primary" className="flex-1" onClick={submit} loading={submitting}>Lưu</Button>
+      </div>
+    </Modal>
   )
 }
 

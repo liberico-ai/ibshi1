@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, unauthorizedResponse } from '@/lib/auth'
 import { STAGE_WEIGHTS, STAGES_ORDERED } from '@/lib/production-weights'
+import { stripWbsNotes } from '@/lib/wbs-parser'
 
 // GET /api/production/progress — Fabrication progress by tons + piece-marks + 5-stage bar
 export async function GET(req: NextRequest) {
@@ -45,11 +46,36 @@ export async function GET(req: NextRequest) {
   const groupList = [...groups.values()]
   const pmGroups = groupList.filter(g => g.hasPieceMark)
 
-  const totalPieceMarks = pmGroups.length
+  // Khi LỌC THEO DỰ ÁN: TỔNG TẤN + tổng hạng mục lấy theo WBS (tổng khối lượng các hạng mục import ở P1.2A),
+  // KHÔNG cộng dồn plannedWeight của WO. Không lọc dự án → giữ cách gộp theo WO như cũ.
+  let wbsTotalKg: number | null = null
+  let wbsPieceMarks: number | null = null
+  if (projectId) {
+    const planTask = await prisma.task.findFirst({ where: { projectId, taskType: 'P1.2A' }, select: { resultData: true }, orderBy: { createdAt: 'desc' } })
+    let wbsRows: Record<string, string>[] = []
+    if (planTask?.resultData) {
+      const pData = planTask.resultData as Record<string, unknown>
+      try { wbsRows = typeof pData.wbsItems === 'string' ? JSON.parse(pData.wbsItems) : ((pData.wbsItems as Record<string, string>[]) || []) } catch { wbsRows = [] }
+    }
+    const clean = stripWbsNotes(Array.isArray(wbsRows) ? wbsRows : [])
+    const klOf = (r: Record<string, string>) => Number(r.khoiLuong) || 0
+    const isUnitRow = (r: Record<string, string>) => /^\s*unit\b/i.test(String(r.hangMuc || ''))    // dòng TỔNG cấp UNIT
+    const isKhungKien = (r: Record<string, string>) => /khung ki[eệ]n/i.test(String(r.hangMuc || '')) // đóng kiện — không phải sản phẩm
+    const unitRows = clean.filter(r => isUnitRow(r) && klOf(r) > 0)
+    // TỔNG TẤN = tổng KL trên các dòng UNIT (số tổng có sẵn của file — đã loại Chế tạo khung kiện, không cộng dòng con).
+    // WBS không có dòng UNIT (danh sách phẳng) → fallback: cộng dòng có KL, bỏ Chế tạo khung kiện.
+    wbsTotalKg = unitRows.length > 0
+      ? unitRows.reduce((s, r) => s + klOf(r), 0)
+      : clean.filter(r => klOf(r) > 0 && !isKhungKien(r)).reduce((s, r) => s + klOf(r), 0)
+    // Số hạng mục SẢN PHẨM = dòng có KL, KHÔNG phải dòng UNIT, KHÔNG phải Chế tạo khung kiện.
+    wbsPieceMarks = clean.filter(r => klOf(r) > 0 && !isUnitRow(r) && !isKhungKien(r)).length
+  }
+
+  const totalPieceMarks = wbsPieceMarks ?? pmGroups.length
   const completedPieceMarks = pmGroups.filter(g => g.allCompleted).length  // hạng mục xong khi MỌI công đoạn đã COMPLETED
   const earnedPieceMarks = pmGroups.filter(g => g.earned > 0).length
 
-  const totalKg = groupList.reduce((s, g) => s + g.planned, 0)
+  const totalKg = wbsTotalKg ?? groupList.reduce((s, g) => s + g.planned, 0)
   const completedKg = groupList.reduce((s, g) => s + g.completed, 0)
   const earnedKg = groupList.reduce((s, g) => s + g.earned, 0)
 

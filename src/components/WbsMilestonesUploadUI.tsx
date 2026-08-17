@@ -1,8 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Fragment, type CSSProperties } from 'react'
 import * as XLSX from 'xlsx'
 import { formatNumber } from '@/lib/utils'
+import { parseWbsExcel, stripWbsNotes } from '@/lib/wbs-parser'
+
+// 17 công đoạn theo Form BCTH-IBSHI-QLDA-01 (đúng thứ tự file)
+const WBS_STAGES = [
+  { key: 'cutting', label: 'Cắt' }, { key: 'machining', label: 'GCCK' }, { key: 'fitup', label: 'Gá' },
+  { key: 'welding', label: 'Hàn' }, { key: 'tryAssembly', label: 'Tổ hợp thử' }, { key: 'dismantle', label: 'Tháo dỡ' },
+  { key: 'blasting', label: 'Làm sạch' }, { key: 'galvanize', label: 'Mạ' }, { key: 'repairAfterGalv', label: 'Sửa sau mạ' },
+  { key: 'painting', label: 'Sơn' }, { key: 'commissioning', label: 'Chạy thử' }, { key: 'insulation', label: 'Bảo ôn' },
+  { key: 'linerPainting', label: 'Sơn liner' }, { key: 'shippingAssembly', label: 'Lắp giao hàng' },
+  { key: 'khungKien', label: 'Khung kiện' }, { key: 'packing', label: 'Đóng kiện' }, { key: 'delivery', label: 'Giao hàng' },
+]
+const thP: CSSProperties = { padding: '4px 6px', textAlign: 'center', border: '1px solid #b7c9d4', fontWeight: 600, color: '#1f3a4d' }
+const tdP: CSSProperties = { padding: '3px 6px', border: '1px solid var(--border)', verticalAlign: 'top' }
 
 interface Milestone {
   name: string
@@ -23,12 +36,15 @@ interface Props {
 export default function WbsMilestonesUploadUI({ isEditable, wbsData, milestonesData, onWbsChange, onMilestonesChange, projectCode }: Props) {
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  const [wbsModalOpen, setWbsModalOpen] = useState(false)
 
   let wbsRows: Record<string, string>[] = []
   try {
     const parsed = wbsData ? JSON.parse(wbsData) : null
     if (Array.isArray(parsed)) wbsRows = parsed
   } catch { /* ignore */ }
+  // Dọn GHI CHÚ/chú giải/chữ ký khỏi bảng — kể cả dữ liệu CŨ đã lưu kèm ghi chú.
+  wbsRows = stripWbsNotes(wbsRows)
 
   let milestones: Milestone[] = []
   try {
@@ -48,50 +64,19 @@ export default function WbsMilestonesUploadUI({ isEditable, wbsData, milestonesD
         try {
           const wb = XLSX.read(evt.target?.result, { type: 'binary' })
           const ws = wb.Sheets[wb.SheetNames[0]]
+          // raw:true (mặc định) → ngày giữ dạng SERIAL để parser tự chuẩn hoá (không nhập nhằng dd/mm-mm/dd)
           const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' })
           if (jsonData.length < 2) { setError('File không có dữ liệu.'); return }
 
-          const keyMap: Record<string, string> = {
-            'stt': 'stt', 'no': 'stt',
-            'hạng mục': 'hangMuc', 'item': 'hangMuc', 'mô tả': 'hangMuc', 'description': 'hangMuc',
-            'đvt': 'dvt', 'unit': 'dvt',
-            'khối lượng': 'khoiLuong', 'kl': 'khoiLuong', 'qty': 'khoiLuong', 'volume': 'khoiLuong',
-            'phạm vi': 'phamVi', 'scope': 'phamVi',
-            'bắt đầu': 'batDau', 'start': 'batDau',
-            'kết thúc': 'ketThuc', 'end': 'ketThuc',
-            'khu vực': 'khuVuc', 'area': 'khuVuc',
-            'ghi chú': 'ghiChu', 'note': 'ghiChu', 'remark': 'ghiChu',
-          }
-
-          let headerIdx = 0, bestMatch = 0
-          for (let r = 0; r < Math.min(15, jsonData.length); r++) {
-            const row = jsonData[r] || []
-            const matchCount = row.filter(c => keyMap[String(c || '').trim().toLowerCase()]).length
-            if (matchCount > bestMatch) { bestMatch = matchCount; headerIdx = r }
-          }
-          if (bestMatch < 1) { setError('Không tìm thấy header hợp lệ (cần: STT, Hạng mục, KL...)'); return }
-
-          const headerRow = jsonData[headerIdx].map(h => String(h || '').trim().toLowerCase())
-          const colMapping = headerRow.map(h => keyMap[h] || '')
-          const imported: Record<string, string>[] = []
-
-          for (let i = headerIdx + 1; i < jsonData.length; i++) {
-            const rowData = jsonData[i]
-            if (!rowData || rowData.every(c => !c)) continue
-            const newRow: Record<string, string> = { stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', batDau: '', ketThuc: '', khuVuc: '', ghiChu: '' }
-            colMapping.forEach((key, ci) => {
-              if (key && rowData[ci] != null) newRow[key] = String(rowData[ci])
-            })
-            if (newRow.hangMuc || newRow.stt) imported.push(newRow)
-          }
-
+          // Parser mới: nhận Form BCTH-IBSHI-QLDA-01 (header đa tầng + 16 công đoạn) VÀ form cũ 9 cột.
+          const imported = parseWbsExcel(jsonData)
           if (imported.length > 0) {
             onWbsChange(JSON.stringify(imported))
             setSuccessMsg(`Đã import ${imported.length} hạng mục WBS`)
             setError('')
             setTimeout(() => setSuccessMsg(''), 3000)
           } else {
-            setError('Không có dòng dữ liệu hợp lệ.')
+            setError('Không tìm thấy dữ liệu WBS hợp lệ (cần cột STT + Hạng mục).')
           }
         } catch (err) {
           setError(`Lỗi đọc file: ${err instanceof Error ? err.message : 'không rõ'}`)
@@ -177,12 +162,31 @@ export default function WbsMilestonesUploadUI({ isEditable, wbsData, milestonesD
   }
 
   const exportWbsTemplate = () => {
-    const headers = ['STT', 'Hạng mục', 'ĐVT', 'Khối lượng', 'Phạm vi', 'Bắt đầu', 'Kết thúc', 'Khu vực', 'Ghi chú']
-    const data = wbsRows.length > 0
-      ? wbsRows.map(r => [r.stt, r.hangMuc, r.dvt, r.khoiLuong, r.phamVi, r.batDau, r.ketThuc, r.khuVuc, r.ghiChu])
-      : [['1', '', 'kg', '', 'IBS', '', '', '', '']]
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data])
-    ws['!cols'] = [{ wch: 6 }, { wch: 35 }, { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 20 }]
+    // Header 2 tầng theo Form BCTH-IBSHI-QLDA-01: cột cơ bản + 17 công đoạn (Đơn vị/Start/Finish)
+    const BASE: [string, string][] = [
+      ['STT', 'stt'], ['Tên hạng mục', 'hangMuc'], ['ĐVT', 'dvt'], ['Khối lượng (kg)', 'khoiLuong'],
+      ['Diện tích (m²)', 'dienTich'], ['Bảo ôn (m²)', 'baoOn'], ['Phạm vi (IBS HI)', 'phamVi'],
+      ['Thầu phụ', 'thauPhu'], ['Bắt đầu', 'batDau'], ['Kết thúc', 'ketThuc'],
+    ]
+    const TAIL: [string, string][] = [['Khu vực', 'khuVuc'], ['Ghi chú', 'ghiChu']]
+    const row1 = [...BASE.map(b => b[0]), ...WBS_STAGES.flatMap(s => [s.label, '', '']), ...TAIL.map(t => t[0])]
+    const row2 = [...BASE.map(b => b[0]), ...WBS_STAGES.flatMap(() => ['Đơn vị', 'Start', 'Finish']), ...TAIL.map(t => t[0])]
+    const src = wbsRows.length > 0 ? wbsRows : [{ stt: '1', dvt: 'kg', phamVi: 'IBS' } as Record<string, string>]
+    const body = src.map((r, i) => [
+      ...BASE.map(b => b[1] === 'stt' ? (r.stt || String(i + 1)) : (r[b[1]] || '')),
+      ...WBS_STAGES.flatMap(s => [r[s.key] || '', r[`${s.key}Start`] || '', r[`${s.key}Finish`] || '']),
+      ...TAIL.map(t => r[t[1]] || ''),
+    ])
+    const ws = XLSX.utils.aoa_to_sheet([row1, row2, ...body])
+    const merges: XLSX.Range[] = []
+    BASE.forEach((_, c) => merges.push({ s: { r: 0, c }, e: { r: 1, c } }))
+    const stageStart = BASE.length
+    WBS_STAGES.forEach((_, i) => { const c = stageStart + i * 3; merges.push({ s: { r: 0, c }, e: { r: 0, c: c + 2 } }) })
+    const tailStart = stageStart + WBS_STAGES.length * 3
+    TAIL.forEach((_, i) => merges.push({ s: { r: 0, c: tailStart + i }, e: { r: 1, c: tailStart + i } }))
+    ws['!merges'] = merges
+    ws['!cols'] = [{ wch: 5 }, { wch: 30 }, { wch: 6 }, { wch: 12 }, { wch: 10 }, { wch: 9 }, { wch: 13 }, { wch: 13 }, { wch: 11 }, { wch: 11 },
+    ...WBS_STAGES.flatMap(() => [{ wch: 7 }, { wch: 11 }, { wch: 11 }]), { wch: 12 }, { wch: 16 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'WBS')
 
@@ -218,32 +222,75 @@ export default function WbsMilestonesUploadUI({ isEditable, wbsData, milestonesD
           )}
         </div>
         {wbsRows.length > 0 ? (
-          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'auto', maxHeight: 360, fontSize: '0.82rem' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
-                  {['STT', 'Hạng mục', 'ĐVT', 'KL', 'Phạm vi', 'Bắt đầu', 'Kết thúc'].map(h => (
-                    <th key={h} style={{ padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>{h}</th>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-secondary)' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Đã có <b>{wbsRows.length}</b> hạng mục WBS · {WBS_STAGES.length} công đoạn</span>
+            <button type="button" onClick={() => setWbsModalOpen(true)} style={{ padding: '8px 22px', fontSize: '0.85rem', fontWeight: 700, background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', letterSpacing: '0.3px' }}>XEM chi tiết</button>
+          </div>
+        ) : (
+          <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Chưa có dữ liệu WBS. Upload file Excel để import.</div>
+        )}
+
+        {/* Modal XEM toàn màn hình — rộng, dễ nhìn (giống WbsTableUI) */}
+        {wbsModalOpen && wbsRows.length > 0 && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setWbsModalOpen(false) }}>
+            <div style={{ flex: 1, background: '#fff', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: '12px 20px', borderBottom: '2px solid #0ea5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: '#f0f9ff' }}>
+                <div><h2 style={{ margin: 0, fontSize: '1.05rem', color: '#0c4a6e' }}>WBS — Cơ cấu phân chia công việc</h2><span style={{ fontSize: '0.72rem', color: '#64748b' }}>{wbsRows.length} hạng mục</span></div>
+                <button type="button" onClick={() => setWbsModalOpen(false)} style={{ padding: '5px 14px', fontSize: '0.85rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>✕ Đóng</button>
+              </div>
+              <div style={{ flex: 1, overflow: 'auto', fontSize: '0.72rem' }}>
+                <table style={{ borderCollapse: 'collapse', whiteSpace: 'nowrap', width: 'max-content' }}>
+                  <thead>
+                <tr style={{ background: '#c7e2ef', position: 'sticky', top: 0, zIndex: 2 }}>
+                  {[['STT', 34], ['Hạng mục', 170], ['ĐVT', 40], ['KL', 70], ['DT (m²)', 60], ['Bảo ôn', 60], ['IBS HI', 46], ['Thầu phụ', 80], ['Bắt đầu', 78], ['Kết thúc', 78]].map(([h, w]) => (
+                    <th key={h as string} rowSpan={2} style={{ ...thP, width: w as number }}>{h}</th>
+                  ))}
+                  {WBS_STAGES.map(s => <th key={s.key} colSpan={3} style={{ ...thP, background: '#fde7e7', borderLeft: '2px solid #999' }}>{s.label}</th>)}
+                  <th rowSpan={2} style={{ ...thP, width: 90 }}>Khu vực</th>
+                  <th rowSpan={2} style={{ ...thP, width: 110 }}>Ghi chú</th>
+                </tr>
+                <tr style={{ background: '#dcecf5', position: 'sticky', top: 22, zIndex: 2 }}>
+                  {WBS_STAGES.map(s => (
+                    <Fragment key={s.key}>
+                      <th style={{ ...thP, borderLeft: '2px solid #999', fontWeight: 500, width: 58 }}>Đơn vị</th>
+                      <th style={{ ...thP, fontWeight: 500, width: 74 }}>Start</th>
+                      <th style={{ ...thP, fontWeight: 500, width: 74 }}>Finish</th>
+                    </Fragment>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {wbsRows.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{r.stt || i + 1}</td>
-                    <td style={{ padding: '4px 8px', fontWeight: 500 }}>{r.hangMuc}</td>
-                    <td style={{ padding: '4px 8px' }}>{r.dvt}</td>
-                    <td style={{ padding: '4px 8px', textAlign: 'right' }}>{r.khoiLuong ? formatNumber(r.khoiLuong) : ''}</td>
-                    <td style={{ padding: '4px 8px' }}>{r.phamVi}</td>
-                    <td style={{ padding: '4px 8px' }}>{r.batDau}</td>
-                    <td style={{ padding: '4px 8px' }}>{r.ketThuc}</td>
+                {wbsRows.map((r, i) => {
+                  // dòng tiêu đề nhóm (UNIT/công trình): không có KL, không ngày, không công đoạn
+                  const isGroup = !r.khoiLuong && !r.batDau && !r.dienTich && !r.cutting && !r.welding
+                  return (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: isGroup ? '#eef4f8' : undefined, fontWeight: isGroup ? 700 : 400 }}>
+                    <td style={{ ...tdP, color: 'var(--text-muted)' }}>{r.stt || i + 1}</td>
+                    <td style={{ ...tdP, fontWeight: 500 }}>{r.hangMuc}</td>
+                    <td style={tdP}>{r.dvt}</td>
+                    <td style={{ ...tdP, textAlign: 'right' }}>{r.khoiLuong ? formatNumber(r.khoiLuong) : ''}</td>
+                    <td style={{ ...tdP, textAlign: 'right' }}>{r.dienTich ? formatNumber(r.dienTich) : ''}</td>
+                    <td style={{ ...tdP, textAlign: 'right' }}>{r.baoOn ? formatNumber(r.baoOn) : ''}</td>
+                    <td style={tdP}>{r.phamVi || ''}</td>
+                    <td style={tdP}>{r.thauPhu || ''}</td>
+                    <td style={tdP}>{r.batDau || ''}</td>
+                    <td style={tdP}>{r.ketThuc || ''}</td>
+                    {WBS_STAGES.map(s => (
+                      <Fragment key={s.key}>
+                        <td style={{ ...tdP, borderLeft: '2px solid #ddd', textAlign: 'center', background: r[s.key] ? '#fff7f7' : undefined }}>{r[s.key] || ''}</td>
+                        <td style={{ ...tdP, color: 'var(--text-muted)' }}>{r[`${s.key}Start`] || ''}</td>
+                        <td style={{ ...tdP, color: 'var(--text-muted)' }}>{r[`${s.key}Finish`] || ''}</td>
+                      </Fragment>
+                    ))}
+                    <td style={tdP}>{r.khuVuc || ''}</td>
+                    <td style={tdP}>{r.ghiChu || ''}</td>
                   </tr>
-                ))}
+                )})}
               </tbody>
-            </table>
+                </table>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Chưa có dữ liệu WBS. Upload file Excel để import.</div>
         )}
       </div>
 

@@ -19,11 +19,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const bid = await prisma.bidAnalysis.findUnique({
       where: { id },
       select: {
+        status: true,
         vendors: { select: { id: true, vendorName: true } },
         items: { select: { id: true, offers: { select: { vendorId: true, unitPrice: true } } } },
       },
     })
     if (!bid) return errorResponse('Không tìm thấy BID', 404)
+    if (bid.status === 'CONTRACTED') return errorResponse('BID đã ký hợp đồng — không thể đổi lựa chọn NCC', 409)
     const nameById = new Map(bid.vendors.map(v => [v.id, v.vendorName]))
 
     let picked = 0

@@ -19,6 +19,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const body = await req.json().catch(() => ({})) as { vendorId?: string }
     if (!body.vendorId) return errorResponse('Thiếu vendorId', 400)
 
+    const ba = await prisma.bidAnalysis.findUnique({ where: { id }, select: { status: true } })
+    if (!ba) return errorResponse('Không tìm thấy BID', 404)
+    if (ba.status === 'CONTRACTED') return errorResponse('BID đã ký hợp đồng — không thể đổi lựa chọn NCC', 409)
+
     const vendor = await prisma.bidQuoteVendor.findFirst({
       where: { id: body.vendorId, bidId: id }, select: { id: true, vendorName: true },
     })

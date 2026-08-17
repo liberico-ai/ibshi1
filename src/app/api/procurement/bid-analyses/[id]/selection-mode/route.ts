@@ -15,8 +15,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params
     const body = await req.json().catch(() => ({})) as { selectionMode?: string }
     if (!body.selectionMode || !MODES.includes(body.selectionMode)) return errorResponse('selectionMode không hợp lệ', 400)
-    await prisma.bidAnalysis.update({ where: { id }, data: { selectionMode: body.selectionMode } })
-    return successResponse({ selectionMode: body.selectionMode })
+
+    const ba = await prisma.bidAnalysis.findUnique({ where: { id }, select: { status: true, selectionMode: true } })
+    if (!ba) return errorResponse('Không tìm thấy BID', 404)
+    if (ba.status === 'CONTRACTED') return errorResponse('BID đã ký hợp đồng — không thể đổi chế độ chọn', 409)
+    // Không đổi gì nếu cùng mode — tránh xóa oan lựa chọn hiện có.
+    if (ba.selectionMode === body.selectionMode) return successResponse({ selectionMode: body.selectionMode })
+
+    // Đổi mode → RESET lựa chọn của mode cũ (tránh rác chồng mode: vd PER_BID→PER_ITEM còn sót selectedVendorName).
+    await prisma.$transaction(async (tx) => {
+      await tx.bidQuoteItem.updateMany({ where: { bidId: id }, data: { selectedVendorName: null } })
+      await tx.bidQuoteVendor.updateMany({ where: { bidId: id }, data: { isWinner: false } })
+      await tx.bidAnalysis.update({
+        where: { id },
+        data: { selectionMode: body.selectionMode, selectedVendorId: null, status: ba.status === 'SELECTED' ? 'EVALUATING' : ba.status },
+      })
+    })
+    return successResponse({ selectionMode: body.selectionMode }, 'Đã đổi chế độ và xóa lựa chọn cũ')
   } catch (err) {
     console.error('PATCH selection-mode error:', err)
     return errorResponse('Lỗi đổi chế độ', 500)

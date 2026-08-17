@@ -26,13 +26,22 @@ export type WbsRow = Record<string, string>
 export const WBS_BASE_KEYS = [
   'stt', 'hangMuc', 'dvt', 'khoiLuong', 'phamVi', 'thauPhu',
   'batDau', 'ketThuc', 'trangThai', 'khuVuc', 'ghiChu',
+  // Bổ sung theo Form BCTH-IBSHI-QLDA-01 (Bảng KH tổng thể)
+  'dienTich', 'baoOn', 'tongNhanLuc',
 ] as const
 
 export const WBS_STAGE_KEYS = [
   'cutting', 'machining', 'fitup', 'welding', 'tryAssembly',
   'dismantle', 'blasting', 'painting', 'galvanize', 'insulation',
   'commissioning', 'khungKien', 'packing', 'delivery',
+  // Bổ sung 3 công đoạn của form mới
+  'repairAfterGalv', 'linerPainting', 'shippingAssembly',
 ] as const
+
+/** Mỗi công đoạn ngoài giá trị chính (stageKey = "Đơn vị"/đơn vị thực hiện) còn có Start/Finish:
+ *  row['{stage}Start'] / row['{stage}Finish'] (thêm mới, additive — không phá consumer cũ đọc row[stage]). */
+export const wbsStageStart = (k: string) => `${k}Start`
+export const wbsStageFinish = (k: string) => `${k}Finish`
 
 // ── Team Assignment / LSX ────────────────────────────────────
 

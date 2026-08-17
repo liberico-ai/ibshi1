@@ -3,28 +3,13 @@ import * as XLSX from 'xlsx';
 import {  } from "lucide-react";
 import type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow } from '@/lib/types'
 import { formatNumber } from '@/lib/utils'
+import { parseWbsExcel } from '@/lib/wbs-parser'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 export type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow }
 
-// Chuẩn hoá giá trị ngày từ Excel → 'yyyy-mm-dd' (cho <input type="date">).
-// Excel lưu ngày dạng SỐ SERIAL (vd 45919) → phải đổi; hỗ trợ cả dd/mm/yyyy và yyyy-mm-dd.
-function excelToISODate(v: unknown): string {
-  if (v == null || v === '') return ''
-  if (typeof v === 'number' && v > 20000 && v < 90000) {
-    // Serial Excel → UTC-midnight → yyyy-mm-dd (KHÔNG phụ thuộc XLSX.SSF vốn có thể bị tree-shake ở client)
-    const d = new Date(Math.round((v - 25569) * 86400000))
-    if (!isNaN(d.getTime())) return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
-  }
-  const s = String(v).trim()
-  const m = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/)
-  if (m) { let [, dd, mm, yy] = m; if (yy.length === 2) yy = '20' + yy; return `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}` }
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
-  return ''
-}
-
 
 export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave, qcFailedAssignments, onCloneRework }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void; qcFailedAssignments?: any[]; onCloneRework?: (rowIdx: number, stageKey: string, teamIdx: number) => void }) {
-  const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', painting: '', insulation: '', commissioning: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
+  const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', dienTich: '', baoOn: '', tongNhanLuc: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', galvanize: '', repairAfterGalv: '', painting: '', commissioning: '', insulation: '', linerPainting: '', shippingAssembly: '', khungKien: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
 
   let rows: WbsRow[] = [];
   try {
@@ -129,13 +114,17 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
   const removeRow = (i: number) => save(rows.filter((_, idx) => idx !== i));
   const update = (i: number, key: string, val: string) => { const n = [...rows]; n[i] = { ...n[i], [key]: val }; save(n); };
 
+  // 17 công đoạn theo Form BCTH-IBSHI-QLDA-01 (đúng thứ tự file)
   const subCols = [
     { key: 'cutting', label: 'Cắt' }, { key: 'machining', label: 'GCCK' },
     { key: 'fitup', label: 'Gá' }, { key: 'welding', label: 'Hàn' },
     { key: 'tryAssembly', label: 'Tổ hợp' }, { key: 'dismantle', label: 'Tháo dỡ' },
-    { key: 'blasting', label: 'Làm sạch' }, { key: 'painting', label: 'Sơn' },
-    { key: 'insulation', label: 'Bảo ôn' }, { key: 'commissioning', label: 'Chạy thử' },
-    { key: 'packing', label: 'Đóng kiện' }, { key: 'delivery', label: 'Giao hàng' },
+    { key: 'blasting', label: 'Làm sạch' }, { key: 'galvanize', label: 'Mạ' },
+    { key: 'repairAfterGalv', label: 'Sửa sau mạ' }, { key: 'painting', label: 'Sơn' },
+    { key: 'commissioning', label: 'Chạy thử' }, { key: 'insulation', label: 'Bảo ôn' },
+    { key: 'linerPainting', label: 'Sơn liner' }, { key: 'shippingAssembly', label: 'Lắp GH' },
+    { key: 'khungKien', label: 'Khung kiện' }, { key: 'packing', label: 'Đóng kiện' },
+    { key: 'delivery', label: 'Giao hàng' },
   ];
   
   const exportExcel = () => {
@@ -167,91 +156,10 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
           const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' });
           if (jsonData.length < 2) return;
 
-          let headerRowIndex = -1;
-          for (let r = 0; r < Math.min(jsonData.length, 20); r++) {
-            const rowStr = (jsonData[r] || []).map(String).join(' ').toLowerCase();
-            if (rowStr.includes('stt') || rowStr.includes('hạng mục') || rowStr.includes('tiến độ') || rowStr.includes('khối lượng') || rowStr.includes('công trình')) {
-              headerRowIndex = r;
-              break;
-            }
-          }
-          if (headerRowIndex === -1) headerRowIndex = 0;
-
-          const maxCols = Math.max(...jsonData.slice(headerRowIndex, headerRowIndex + 3).map(r => (r || []).length));
-          const headerRow = Array(maxCols).fill('');
-          for (let r = headerRowIndex; r < Math.min(jsonData.length, headerRowIndex + 3); r++) {
-            for (let c = 0; c < (jsonData[r] || []).length; c++) {
-              if (jsonData[r][c]) {
-                headerRow[c] = (headerRow[c] + ' ' + String(jsonData[r][c]).trim().toLowerCase()).trim();
-              }
-            }
-          }
-
-          const findColIndex = (keywords: string[]) => {
-            return headerRow.findIndex(h => keywords.some(kw => h.includes(kw)));
-          };
-
-          const colIndices = {
-            stt: findColIndex(['stt', 'no.', 'số tt']),
-            hangMuc: findColIndex(['hạng mục', 'công trình', 'description', 'tên']),
-            dvt: findColIndex(['đvt', 'unit']),
-            khoiLuong: findColIndex(['khối lượng', 'volume']),
-            phamVi: findColIndex(['ibs hi', 'phạm vi', 'scope']),
-            thauPhu: findColIndex(['thầu phụ', 'sub-contractor', 'name']),
-            batDau: findColIndex(['bắt đầu', 'start']),
-            ketThuc: findColIndex(['kết thúc', 'finish']),
-            trangThai: findColIndex(['trạng thái', 'status']),
-            cutting: findColIndex(['cắt', 'cutting']),
-            machining: findColIndex(['gcck', 'machining']),
-            fitup: findColIndex(['gá', 'fitup']),
-            welding: findColIndex(['hàn', 'welding']),
-            tryAssembly: findColIndex(['tổ hợp', 'try-assembly', 'tổ hợp']),
-            dismantle: findColIndex(['tháo dỡ', 'dismantle']),
-            blasting: findColIndex(['làm sạch', 'blasting']),
-            painting: findColIndex(['sơn', 'painting']),
-            insulation: findColIndex(['bảo ôn', 'insulation']),
-            commissioning: findColIndex(['chạy thử', 'commissioning']),
-            packing: findColIndex(['đóng kiện', 'packing']),
-            delivery: findColIndex(['giao hàng', 'delivery']),
-            khuVuc: findColIndex(['khu vực', 'area']),
-            ghiChu: findColIndex(['ghi chú', 'remark', 'ghi chú'])
-          };
-
-          const imported: WbsRow[] = [];
-          for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
-            const rowData = jsonData[i];
-            if (!rowData || rowData.length === 0) continue;
-            
-            const sttVal = colIndices.stt >= 0 && rowData[colIndices.stt] != null ? String(rowData[colIndices.stt]).trim() : '';
-            const hangMucVal = colIndices.hangMuc >= 0 && rowData[colIndices.hangMuc] != null ? String(rowData[colIndices.hangMuc]).trim() : '';
-            
-            if (!hangMucVal && !sttVal) continue;
-            
-            const sttLower = sttVal.toLowerCase();
-            const hangMucLower = hangMucVal.toLowerCase();
-            
-            if (sttLower === '(a)' || sttLower === 'stt' || sttLower.includes('sub-contractor') || sttLower === '(i-1)' || sttLower.includes('d-')) continue;
-            if (hangMucLower.includes('dự kiến nhà máy') || hangMucLower.includes('dự kiến') || hangMucLower.includes('ghi chú') || hangMucLower.includes('bcth-ibshi-qlda-01') || hangMucLower.includes('kế hoạch tổng thể')) continue;
-            if (hangMucLower === 'tổng nhân lực cần cho các dự án') continue;
-
-            const newRow = emptyRow();
-            Object.keys(colIndices).forEach(key => {
-              const idx = colIndices[key as keyof typeof colIndices];
-              if (idx >= 0 && rowData[idx] !== undefined && rowData[idx] !== null && rowData[idx] !== '') {
-                // Cột ngày: đổi serial Excel → yyyy-mm-dd; cột khác giữ nguyên chuỗi.
-                newRow[key as keyof WbsRow] = (key === 'batDau' || key === 'ketThuc')
-                  ? excelToISODate(rowData[idx])
-                  : String(rowData[idx]).trim();
-              }
-            });
-            
-            if (!newRow.stt) newRow.stt = String(imported.length + 1);
-            if (newRow.phamVi === '' && newRow.thauPhu !== '') {
-               newRow.phamVi = 'TP';
-            }
-
-            imported.push(newRow);
-          }
+          // Parser thống nhất (lib/wbs-parser): nhận Form BCTH-IBSHI-QLDA-01 ĐẦY ĐỦ — header đa tầng,
+          // 16 công đoạn (mỗi cái Đơn vị + Start + Finish), Diện tích/Bảo ôn/Nhân lực — VÀ form cũ 9 cột.
+          // Ngày để dạng SERIAL (raw:true) cho parser tự chuẩn hoá. Merge lên emptyRow để đủ mọi key.
+          const imported: WbsRow[] = parseWbsExcel(jsonData).map((r, i) => ({ ...emptyRow(), ...r, stt: String(r.stt || i + 1) }));
           if (imported.length > 0) {
             save(imported);
           } else {
@@ -351,9 +259,11 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                     <th rowSpan={2} style={{ ...thS, position: 'sticky', left: 40, zIndex: 5, width: 220, background: '#c7e2ef', textAlign: 'left' }}>TÊN HẠNG MỤC</th>
                     <th rowSpan={2} style={{ ...thS, width: 50 }}>ĐVT</th>
                     <th rowSpan={2} style={{ ...thS, width: 80 }}>KL</th>
+                    <th rowSpan={2} style={{ ...thS, width: 70 }}>DT (m²)</th>
+                    <th rowSpan={2} style={{ ...thS, width: 70 }}>Bảo ôn (m²)</th>
                     <th colSpan={2} style={{ ...thS, background: '#d0e8d0' }}>PHẠM VI</th>
                     <th colSpan={2} style={{ ...thS, background: '#e8ddd0' }}>TIẾN ĐỘ</th>
-                    <th colSpan={12} style={{ ...thS, background: '#fde7e7' }}>CHI TIẾT</th>
+                    <th colSpan={subCols.length} style={{ ...thS, background: '#fde7e7' }}>CHI TIẾT CÔNG ĐOẠN (đơn vị + tiến độ)</th>
                     <th rowSpan={2} style={{ ...thS, width: 100 }}>KHU VỰC</th>
                     <th rowSpan={2} style={{ ...thS, width: 120 }}>GHI CHÚ</th>
                     <th rowSpan={2} style={{ ...thS, width: 70 }}>TT</th>
@@ -377,6 +287,8 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                       <td style={{ ...tdS, position: 'sticky', left: 40, zIndex: 2, background: rowComplete ? '#bbf7d0' : ri % 2 === 0 ? frozenBg : '#eef4f8' }}><input className="input" value={row.hangMuc || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'hangMuc', e.target.value)} placeholder="Tên" style={{ ...inputS, fontWeight: 500 }} /></td>
                       <td style={tdS}><input className="input" value={row.dvt || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'dvt', e.target.value)} style={{ ...inputS, width: 50 }} /></td>
                       <td style={tdS}><input type="number" className="input" value={row.khoiLuong || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'khoiLuong', e.target.value)} style={{ ...inputS, textAlign: 'right' }} /></td>
+                      <td style={tdS}><input className="input" value={row.dienTich || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'dienTich', e.target.value)} style={{ ...inputS, textAlign: 'right' }} /></td>
+                      <td style={tdS}><input className="input" value={row.baoOn || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'baoOn', e.target.value)} style={{ ...inputS, textAlign: 'right' }} /></td>
                       <td style={tdS}><input className="input" value={row.phamVi || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'phamVi', e.target.value)} style={inputS} /></td>
                       <td style={tdS}><input className="input" value={row.thauPhu || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'thauPhu', e.target.value)} style={inputS} /></td>
                       <td style={tdS}>{!isWbsEditable && row.batDau ? <span style={{ fontSize: '0.72rem', padding: '3px 5px' }}>{fmtDate(row.batDau)}</span> : <input type="date" className="input" value={row.batDau || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'batDau', e.target.value)} style={inputS} />}</td>
@@ -412,7 +324,11 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                             </td>
                           );
                         }
-                        return <td key={c.key} style={tdS}><input className="input" value={cellVal} disabled={!isWbsEditable} onChange={e => update(ri, c.key, e.target.value)} style={inputS} /></td>;
+                        const sStart = row[`${c.key}Start`] || '', sFinish = row[`${c.key}Finish`] || '';
+                        return <td key={c.key} style={tdS}>
+                          <input className="input" value={cellVal} disabled={!isWbsEditable} onChange={e => update(ri, c.key, e.target.value)} style={inputS} placeholder="đơn vị" />
+                          {(sStart || sFinish) && <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textAlign: 'center', whiteSpace: 'nowrap', marginTop: 1 }} title={`${sStart} → ${sFinish}`}>{fmtDate(sStart)}→{fmtDate(sFinish)}</div>}
+                        </td>;
                       })}
                       <td style={tdS}><input className="input" value={row.khuVuc || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'khuVuc', e.target.value)} style={inputS} /></td>
                       <td style={tdS}><input className="input" value={row.ghiChu || ''} disabled={!isWbsEditable} onChange={e => update(ri, 'ghiChu', e.target.value)} style={inputS} /></td>

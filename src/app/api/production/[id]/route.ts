@@ -39,6 +39,40 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   })
 })
 
+// PATCH /api/production/:id — Sửa thông tin WO (mô tả, xưởng, trọng lượng, ngày kế hoạch). Chỉ PM/BGĐ.
+export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const payload = await authenticateRequest(req)
+  if (!payload) return unauthorizedResponse()
+  if (!['R01', 'R02'].includes(payload.roleCode)) return errorResponse('Không có quyền sửa WO', 403)
+
+  const pResult = validateParams(await params, idParamSchema)
+  if (!pResult.success) return pResult.response
+  const { id } = pResult.data
+
+  const wo = await prisma.workOrder.findUnique({ where: { id }, select: { id: true } })
+  if (!wo) return errorResponse('Không tìm thấy lệnh sản xuất', 404)
+
+  const body = await req.json().catch(() => ({})) as { description?: string; teamCode?: string; plannedWeight?: number | string; plannedStart?: string; plannedEnd?: string; pieceMark?: string }
+  const toDate = (v: unknown) => { const s = String(v ?? '').trim(); if (!s) return null; const d = new Date(s); return Number.isNaN(d.getTime()) ? null : d }
+  const data: Record<string, unknown> = {}
+  if (body.description !== undefined) data.description = String(body.description).trim()
+  if (body.pieceMark !== undefined) data.pieceMark = String(body.pieceMark).trim() || null
+  if (body.teamCode !== undefined) {
+    const tc = String(body.teamCode).trim()
+    data.teamCode = tc
+    const dept = tc && tc.toUpperCase() !== 'THAUPHU' ? await prisma.department.findFirst({ where: { code: tc }, select: { id: true } }) : null
+    data.departmentId = dept?.id || null
+  }
+  if (body.plannedWeight !== undefined) { const w = Number(body.plannedWeight); data.plannedWeight = Number.isFinite(w) && w > 0 ? w : null }
+  if (body.plannedStart !== undefined) data.plannedStart = toDate(body.plannedStart)
+  if (body.plannedEnd !== undefined) data.plannedEnd = toDate(body.plannedEnd)
+
+  if (Object.keys(data).length === 0) return errorResponse('Không có trường nào để cập nhật', 400)
+
+  const updated = await prisma.workOrder.update({ where: { id }, data, select: { id: true, woCode: true, description: true, teamCode: true, plannedWeight: true } })
+  return successResponse({ workOrder: { ...updated, plannedWeight: updated.plannedWeight ? Number(updated.plannedWeight) : null } }, `Đã cập nhật WO ${updated.woCode}`)
+})
+
 // PUT /api/production/:id — Update WO status (start, complete, cancel)
 export const PUT = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const payload = await authenticateRequest(req)
