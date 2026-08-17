@@ -2529,3 +2529,69 @@ model BidQuoteOffer {
   @@index([vendorId])
   @@map("bid_quote_offers")
 }
+
+// Danh mục "Báo cáo quản trị" — mô phỏng file BaoCaoQuanTri_IBS (sheet Chi tiết). Mỗi dòng = 1 báo cáo.
+model ManagementReport {
+  id         String   @id @default(cuid())
+  sortOrder  Int      @default(0) @map("sort_order") // STT theo file gốc
+  department String // Phòng / Ban
+  name       String // Tên báo cáo
+  owner      String? // Người phụ trách
+  dataSource String?  @map("data_source") // Nguồn dữ liệu
+  recipient  String? // Người nhận báo cáo
+  frequency  String? // Tần suất: Ngày/Tuần/Tháng/Quý/6 tháng/Năm/Đột xuất
+  note       String? // Ghi chú
+  autoKey    String?  @map("auto_key") // link tab báo cáo live trong ERP (nếu có nguồn tự sinh)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([department])
+  @@index([frequency])
+  @@map("management_reports")
+}
+
+// Một lần nhập bảng kê kế toán (export từ MISA). Gom các LedgerEntry để xem/xóa theo lô.
+model LedgerImportBatch {
+  id          String   @id @default(cuid())
+  fileName    String   @map("file_name")
+  note        String?
+  rowCount    Int      @default(0) @map("row_count")
+  matchedRows Int      @default(0) @map("matched_rows") // số dòng khớp được vụ việc → dự án
+  totalDebit  Decimal  @default(0) @map("total_debit")
+  totalCredit Decimal  @default(0) @map("total_credit")
+  importedBy  String   @map("imported_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  entries LedgerEntry[]
+
+  @@index([createdAt])
+  @@map("ledger_import_batches")
+}
+
+// 1 dòng bút toán từ bảng kê MISA. projectId quy chiếu MỀM từ cột "Vụ việc" (không FK — vụ việc lạ để null).
+model LedgerEntry {
+  id            String   @id @default(cuid())
+  batchId       String   @map("batch_id")
+  entryDate     DateTime @map("entry_date") // Ngày ct
+  docType       String?  @map("doc_type") // Mã ct (PX/PN/…)
+  docNo         String?  @map("doc_no") // Số ct
+  partnerCode   String?  @map("partner_code") // Mã khách
+  partnerName   String?  @map("partner_name") // Tên khách hàng
+  description   String? // Diễn giải
+  account       String // Tài khoản (TK)
+  contraAccount String?  @map("contra_account") // TK đối ứng
+  debit         Decimal  @default(0) // Phát sinh nợ
+  credit        Decimal  @default(0) // Phát sinh có
+  vuViec        String?  @map("vu_viec") // Vụ việc (giá trị gốc từ file)
+  projectId     String?  @map("project_id") // khớp từ vuViec → Project.projectCode (mềm, không FK)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  batch LedgerImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([projectId])
+  @@index([account])
+  @@index([vuViec])
+  @@map("ledger_entries")
+}
