@@ -151,9 +151,25 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
             <div style={{ flex: 1, overflow: 'auto', fontSize: '0.72rem' }}>
               <table style={{ borderCollapse: 'collapse', whiteSpace: 'nowrap', width: 'max-content' }}>
                 <thead>
-                  <tr style={{ background: '#c7e2ef', position: 'sticky', top: 0, zIndex: 2 }}>
-                    {[['STT', 34], ['Hạng mục', 180], ['ĐVT', 40], ['KL', 80]].map(([h, w]) => <th key={h as string} style={{ ...th, width: w as number }}>{h}</th>)}
-                    {WBS_STAGES.map(s => <th key={s.key} style={{ ...th, background: '#fde7e7', borderLeft: '2px solid #999', minWidth: 74 }}>{s.label}</th>)}
+                  {/* Tầng 1: cột cơ bản (gộp 2 dòng) + tên công đoạn (gộp 4 cột con) */}
+                  <tr style={{ background: '#c7e2ef' }}>
+                    {[['STT', 34], ['Hạng mục', 180], ['ĐVT', 40], ['KL', 80]].map(([h, w]) => (
+                      <th key={h as string} rowSpan={2} style={{ ...th, width: w as number, zIndex: 3, background: '#c7e2ef' }}>{h}</th>
+                    ))}
+                    {WBS_STAGES.map(s => (
+                      <th key={s.key} colSpan={4} style={{ ...th, zIndex: 3, background: '#fde7e7', borderLeft: '2px solid #999' }}>{s.label}</th>
+                    ))}
+                  </tr>
+                  {/* Tầng 2: 4 cột con mỗi công đoạn — KL · Đơn vị · Bắt đầu · Kết thúc (giống Excel + cột KL) */}
+                  <tr>
+                    {WBS_STAGES.map(s => (
+                      <Fragment key={s.key}>
+                        <th style={{ ...subTh, borderLeft: '2px solid #999' }}>KL</th>
+                        <th style={subTh}>Đơn vị</th>
+                        <th style={subTh}>BĐ</th>
+                        <th style={subTh}>KT</th>
+                      </Fragment>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -167,19 +183,30 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                         <td style={{ ...td, textAlign: 'right' }}>{r.khoiLuong ? formatNumber(r.khoiLuong) : ''}</td>
                         {WBS_STAGES.map(s => {
                           const val = String(r[s.key] || '').trim()
-                          if (!val) return <td key={s.key} style={{ ...td, borderLeft: '2px solid #ddd' }} />
+                          if (!val) return (
+                            <Fragment key={s.key}>
+                              <td style={{ ...td, borderLeft: '2px solid #999' }} /><td style={td} /><td style={td} /><td style={td} />
+                            </Fragment>
+                          )
                           const wc = woCodeFor(projectCode, String(r.hangMuc || `Dòng ${ri + 1}`).trim(), s.key, unitTagForRow(rows, ri), String(r.stt || '').trim())
                           const done = issued.has(wc)
                           const active = sel?.ri === ri && sel?.key === s.key
+                          // KL công đoạn = KL riêng của ô (nếu đã đặt) else KL cột trái (mặc định)
+                          const klStage = String(r[`${s.key}Weight`] || '').trim() || String(r.khoiLuong || '').trim()
                           return (
-                            <td key={s.key} style={{ ...td, borderLeft: '2px solid #ddd', padding: 2, textAlign: 'center' }}>
-                              <button type="button" onClick={() => selectCell(ri, s.key)}
-                                style={{ width: '100%', padding: '3px 4px', fontSize: '0.7rem', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-                                  border: active ? '2px solid #2563eb' : '1px solid transparent',
-                                  background: done ? '#d1fae5' : '#eff6ff', color: done ? '#166534' : '#1e40af' }}>
-                                {done ? '✓ ' : ''}{val}
-                              </button>
-                            </td>
+                            <Fragment key={s.key}>
+                              <td style={{ ...td, borderLeft: '2px solid #999', textAlign: 'right', color: 'var(--text-muted)' }}>{klStage ? formatNumber(klStage) : ''}</td>
+                              <td style={{ ...td, padding: 2, textAlign: 'center' }}>
+                                <button type="button" onClick={() => selectCell(ri, s.key)}
+                                  style={{ width: '100%', padding: '3px 4px', fontSize: '0.7rem', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+                                    border: active ? '2px solid #2563eb' : '1px solid transparent',
+                                    background: done ? '#d1fae5' : '#eff6ff', color: done ? '#166534' : '#1e40af' }}>
+                                  {done ? '✓ ' : ''}{val}
+                                </button>
+                              </td>
+                              <td style={{ ...td, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.66rem' }}>{fmtD(r[`${s.key}Start`])}</td>
+                              <td style={{ ...td, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.66rem' }}>{fmtD(r[`${s.key}Finish`])}</td>
+                            </Fragment>
                           )
                         })}
                       </tr>
@@ -241,7 +268,11 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
 }
 
 const th: CSSProperties = { padding: '4px 6px', textAlign: 'center', border: '1px solid #b7c9d4', fontWeight: 600, color: '#1f3a4d', position: 'sticky', top: 0 }
+// Tiêu đề cột con của công đoạn (tầng 2), dính dưới tầng 1.
+const subTh: CSSProperties = { padding: '2px 5px', textAlign: 'center', border: '1px solid #b7c9d4', fontWeight: 600, color: '#7a3a3a', background: '#fdecec', fontSize: '0.64rem', position: 'sticky', top: 25, zIndex: 1, minWidth: 46 }
 const td: CSSProperties = { padding: '3px 6px', border: '1px solid var(--border)', verticalAlign: 'middle' }
+// yyyy-mm-dd → dd/mm/yyyy (hiển thị gọn). Giá trị khác giữ nguyên.
+const fmtD = (v?: string) => { const s = String(v ?? '').trim(); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : s }
 const strong: CSSProperties = { fontWeight: 600, color: '#0f172a' }
 const inp: CSSProperties = { fontSize: '0.75rem', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 5, background: '#fff' }
 function Field({ label, children }: { label: string; children: ReactNode }) {
