@@ -5,7 +5,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 import { Modal, Button, SelectField } from '@/components/ui'
 import { formatNumber } from '@/lib/utils'
-import { WBS_STAGES, WBS_STAGE_LABEL, normWorkshop, woCodeFor } from '@/lib/wbs-wo'
+import { WBS_STAGES, WBS_STAGE_LABEL, normWorkshop, woCodeFor, pieceMarkFor, unitTagForRow } from '@/lib/wbs-wo'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 
 interface ProjectOption { id: string; projectCode: string; projectName: string }
@@ -25,17 +25,22 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
   const [sel, setSel] = useState<{ ri: number; key: string } | null>(null)
   const [edit, setEdit] = useState<Edit | null>(null)
   const [issuing, setIssuing] = useState(false)
-  const [klDecision, setKlDecision] = useState<{ oldKl: number; newKl: number; mode?: 'update'; siblings: Array<{ woCode: string; teamCode: string; plannedWeight: number; hasProduction: boolean }> } | null>(null)
 
   const reset = () => { setProjectId(''); setProjectCode(''); setRows([]); setIssued(new Set()); setViewOpen(false); setSel(null); setEdit(null) }
   const close = () => { reset(); onClose() }
 
-  // Chọn 1 ô công đoạn → khởi tạo giá trị sửa từ WBS (trọng lượng/xưởng/ngày)
+  // KL riêng của ô công đoạn (`{stageKey}Weight`), else KL cột trái (khoiLuong) làm mặc định
+  const stageWeight = (row: Row, key: string) => {
+    const s = String(row[`${key}Weight`] ?? '').trim()
+    return s || String(row.khoiLuong ?? '')
+  }
+
+  // Chọn 1 ô công đoạn → khởi tạo giá trị sửa từ WBS (trọng lượng riêng của ô/xưởng/ngày)
   const selectCell = (ri: number, key: string) => {
     setSel({ ri, key })
     const row = rows[ri] || {}
     const { teamCode, isSub } = normWorkshop(String(row[key] || ''))
-    const w = Number(row.khoiLuong)
+    const w = Number(stageWeight(row, key))
     setEdit({
       weight: Number.isFinite(w) && w > 0 ? String(w) : '',
       teamCode: WORKSHOP_CODES.includes(teamCode) ? teamCode : '',
@@ -61,12 +66,14 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
     const cellVal = String(row[key] || '').trim()
     const { teamCode, isSub } = normWorkshop(cellVal)
     const hangMuc = String(row.hangMuc || `Dòng ${ri + 1}`).trim()
-    const woCode = woCodeFor(projectCode, hangMuc, key)
-    const weight = Number(row.khoiLuong)
+    const unitTag = unitTagForRow(rows, ri)
+    const pieceMark = pieceMarkFor(hangMuc, unitTag)
+    const woCode = woCodeFor(projectCode, hangMuc, key, unitTag, String(row.stt || '').trim())
+    const weight = Number(stageWeight(row, key))
     return {
-      cellVal, teamCode, isSub, hangMuc, woCode,
+      cellVal, teamCode, isSub, hangMuc, pieceMark, woCode,
       stageLabel: WBS_STAGE_LABEL[key] || key,
-      description: `${hangMuc} — ${WBS_STAGE_LABEL[key] || key}${isSub ? ' (Thầu phụ)' : ''}`,
+      description: `${pieceMark} — ${WBS_STAGE_LABEL[key] || key}${isSub ? ' (Thầu phụ)' : ''}`,
       weight: Number.isFinite(weight) && weight > 0 ? weight : 0,
       start: row[`${key}Start`] || '', finish: row[`${key}Finish`] || '',
       already: issued.has(woCode),
@@ -78,25 +85,24 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
     if (wbs.ok) { setRows(Array.isArray(wbs.rows) ? wbs.rows : []); setIssued(new Set(wbs.issuedWoCodes || [])) }
   }
 
-  // klResolution: khi KL đổi + hạng mục đã có WO cũ → 'update'|'delete'. mode='update' = SỬA WO của ô này (thay vì tạo mới).
-  const doIssue = async (klResolution?: 'update' | 'delete', mode?: 'update') => {
+  // mode='update' = SỬA WO đã phát hành của ô này (thay vì tạo mới). KL độc lập theo công đoạn — không ảnh hưởng ô khác.
+  const doIssue = async (mode?: 'update') => {
     if (!sel || !edit) return
     if (!edit.teamCode && !edit.isSub) { notify('Chọn xưởng (hoặc đánh dấu Thầu phụ) trước', 'error'); return }
     setIssuing(true)
     const r = await apiFetch('/api/production/work-orders/from-wbs-cell', { method: 'POST', body: JSON.stringify({
       projectId, rowIndex: sel.ri, stageKey: sel.key,
-      teamCode: edit.teamCode, isSub: edit.isSub, weight: edit.weight, start: edit.start, finish: edit.finish, klResolution, mode,
+      teamCode: edit.teamCode, isSub: edit.isSub, weight: edit.weight, start: edit.start, finish: edit.finish, mode,
     }) })
     setIssuing(false)
     if (!r.ok) { notify(r.error || 'Lỗi', 'error'); return }
-    if (r.needsKlDecision) { setKlDecision({ oldKl: r.oldKl, newKl: r.newKl, siblings: r.siblings || [], mode }); return }
     if (r.existing) notify(r.message || 'Ô này đã phát hành WO trước đó', 'info')
     else notify(`✓ ${r.message || 'Thành công'}`, 'success')
-    setSel(null); setEdit(null); setKlDecision(null)
+    setSel(null); setEdit(null)
     await reloadWbs(); onIssued()
   }
   const issue = () => doIssue()
-  const updateWo = () => doIssue(undefined, 'update')
+  const updateWo = () => doIssue('update')
 
   // Xóa WO của ô đang chọn → ô mở lại (chặn nếu đã có SX phía server)
   const deleteWo = async () => {
@@ -162,7 +168,7 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                         {WBS_STAGES.map(s => {
                           const val = String(r[s.key] || '').trim()
                           if (!val) return <td key={s.key} style={{ ...td, borderLeft: '2px solid #ddd' }} />
-                          const wc = woCodeFor(projectCode, String(r.hangMuc || `Dòng ${ri + 1}`).trim(), s.key)
+                          const wc = woCodeFor(projectCode, String(r.hangMuc || `Dòng ${ri + 1}`).trim(), s.key, unitTagForRow(rows, ri), String(r.stt || '').trim())
                           const done = issued.has(wc)
                           const active = sel?.ri === ri && sel?.key === s.key
                           return (
@@ -189,8 +195,8 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(140px, auto))', gap: '8px 20px', fontSize: '0.78rem' }}>
                     <Field label="Mã WO"><span style={strong}>{info.woCode}</span></Field>
-                    <Field label="Piece-mark"><span style={strong}>{info.hangMuc}</span></Field>
-                    <Field label="Mô tả"><span style={strong}>{info.hangMuc} — {info.stageLabel}{edit.isSub ? ' (Thầu phụ)' : ''}</span></Field>
+                    <Field label="Piece-mark"><span style={strong}>{info.pieceMark}</span></Field>
+                    <Field label="Mô tả"><span style={strong}>{info.pieceMark} — {info.stageLabel}{edit.isSub ? ' (Thầu phụ)' : ''}</span></Field>
                     <Field label="Dự án"><span style={strong}>{projectCode}</span></Field>
                     <Field label="Trọng lượng (kg) ✎"><input type="number" value={edit.weight} onChange={e => setEdit({ ...edit, weight: e.target.value })} style={inp} placeholder="0" /></Field>
                     <Field label="Xưởng ✎">
@@ -223,41 +229,9 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                 <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: 6 }}>
                   {info.already
                     ? 'Ô này đã phát hành WO — sửa Trọng lượng/Xưởng/Ngày rồi bấm "Cập nhật WO" để ghi đè, hoặc "Xóa WO & mở lại ô". (Không xóa được nếu WO đã có báo cáo SX / cấp vật tư.)'
-                    : 'Sửa Trọng lượng/Xưởng/Ngày nếu cần rồi bấm "Phát hành WO" — ghi ngược vào WBS. KL là của CẢ hạng mục; nếu đổi KL khi hạng mục đã có WO phát hành, hệ thống sẽ hỏi cách xử lý.'}
+                    : 'Sửa Trọng lượng/Xưởng/Ngày nếu cần rồi bấm "Phát hành WO". KL lưu RIÊNG cho công đoạn này (mặc định = KL cột trái), sửa ở đây KHÔNG ảnh hưởng KL công đoạn khác.'}
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Banner quyết định khi đổi KL mà hạng mục đã có WO phát hành (KL cũ) */}
-      {klDecision && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9995, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setKlDecision(null) }}>
-          <div style={{ width: 560, maxWidth: '100%', background: '#fff', borderRadius: 12, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '14px 20px', borderBottom: '2px solid #f59e0b', background: '#fffbeb' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', color: '#92400e' }}>⚠️ Hạng mục đã có WO phát hành với KL cũ</h3>
-              <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#92400e' }}>
-                Bạn đang đổi khối lượng hạng mục từ <b>{formatNumber(klDecision.oldKl)}</b> → <b>{formatNumber(klDecision.newKl)}</b> kg. KL là của <b>cả hạng mục</b>, nên {klDecision.siblings.length} WO đã phát hành đang mang KL cũ:
-              </p>
-            </div>
-            <div style={{ padding: '12px 20px', maxHeight: 260, overflowY: 'auto' }}>
-              {klDecision.siblings.map(s => (
-                <div key={s.woCode} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ fontFamily: 'monospace', color: 'var(--accent)', flex: 1 }}>{s.woCode}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>{s.teamCode}</span>
-                  <span style={{ fontFamily: 'monospace' }}>KL {formatNumber(s.plannedWeight)}</span>
-                  {s.hasProduction && <span style={{ fontSize: '0.68rem', color: '#dc2626', background: '#fef2f2', padding: '1px 6px', borderRadius: 4 }}>đã có SX</span>}
-                </div>
-              ))}
-            </div>
-            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              <button type="button" onClick={() => setKlDecision(null)} style={{ padding: '8px 16px', fontSize: '0.8rem', border: '1px solid var(--border)', borderRadius: 8, background: '#fff', cursor: 'pointer' }}>Hủy</button>
-              <Button variant="danger" onClick={() => doIssue('delete', klDecision.mode)} loading={issuing} disabled={klDecision.siblings.some(s => s.hasProduction)}>Xóa các WO cũ &amp; mở lại ô</Button>
-              <Button variant="primary" onClick={() => doIssue('update', klDecision.mode)} loading={issuing}>Cập nhật KL cho các WO đó</Button>
-            </div>
-            {klDecision.siblings.some(s => s.hasProduction) && (
-              <div style={{ padding: '0 20px 12px', fontSize: '0.7rem', color: '#dc2626' }}>Có WO đã vào sản xuất — không xóa được. Chỉ có thể &quot;Cập nhật KL&quot;.</div>
             )}
           </div>
         </div>

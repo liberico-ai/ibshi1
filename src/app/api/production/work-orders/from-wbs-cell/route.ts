@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { WBS_STAGE_LABEL, normWorkshop, woCodeFor } from '@/lib/wbs-wo'
+import { WBS_STAGE_LABEL, normWorkshop, woCodeFor, pieceMarkFor, unitTagForRow } from '@/lib/wbs-wo'
 import { stripWbsNotes } from '@/lib/wbs-parser'
 import { Prisma } from '@prisma/client'
 
@@ -18,8 +18,6 @@ const toDate = (v: unknown): Date | null => {
 interface Body {
   projectId?: string; rowIndex?: number; stageKey?: string
   teamCode?: string; isSub?: boolean; weight?: number | string; start?: string; finish?: string
-  // Quyết định khi KL thay đổi mà hạng mục đã có WO phát hành trước: 'update' (đồng bộ KL) | 'delete' (xóa WO + mở lại ô).
-  klResolution?: 'update' | 'delete'
   // 'update' = SỬA WO đã phát hành của ô này (thay vì tạo mới). Mặc định: ô đã có WO → trả WO cũ.
   mode?: 'update'
 }
@@ -38,9 +36,10 @@ async function readWbs(projectId: string) {
 
 /**
  * POST /api/production/work-orders/from-wbs-cell
- * body: { projectId, rowIndex, stageKey, teamCode?, isSub?, weight?, start?, finish?, klResolution? }
- * Phát hành 1 WO từ 1 Ô công đoạn WBS. Sửa trọng lượng/xưởng/ngày → ghi ngược vào WBS (KL ghi CẢ dòng hạng mục).
- * KL đổi + hạng mục đã có WO phát hành (KL cũ) → trả needsKlDecision để client hỏi Sửa/Xóa; rồi gọi lại kèm klResolution.
+ * body: { projectId, rowIndex, stageKey, teamCode?, isSub?, weight?, start?, finish?, mode? }
+ * Phát hành 1 WO từ 1 Ô công đoạn WBS. Sửa trọng lượng/xưởng/ngày → ghi ngược vào WBS THEO Ô CÔNG ĐOẠN:
+ * KL lưu riêng `{stageKey}Weight` (độc lập từng công đoạn), xưởng lưu `{stageKey}`, ngày lưu `{stageKey}Start/Finish`.
+ * KL cột trái (khoiLuong) chỉ là tham chiếu/khởi tạo — KHÔNG bị ghi đè, không ảnh hưởng công đoạn khác.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -71,13 +70,21 @@ export async function POST(req: NextRequest) {
     const { teamCode, isSub } = normWorkshop(cellStr)
     if (!teamCode) return errorResponse(`Ô không xác định được xưởng: "${cellStr}"`, 400)
 
-    const weightNum = body.weight !== undefined && body.weight !== null && body.weight !== '' ? Number(body.weight) : Number(row.khoiLuong)
+    // KL ĐỘC LẬP THEO CÔNG ĐOẠN: ưu tiên override từ body, else KL riêng của ô (`{stageKey}Weight`),
+    // else KL cột trái của hạng mục (khoiLuong) làm mặc định/khởi tạo. KHÔNG ghi đè khoiLuong.
+    const stageWeightStr = String(row[`${stageKey}Weight`] ?? '').trim()
+    const baseWeight = stageWeightStr || String(row.khoiLuong ?? '')
+    const weightNum = body.weight !== undefined && body.weight !== null && body.weight !== '' ? Number(body.weight) : Number(baseWeight)
     const startStr = body.start !== undefined ? String(body.start || '').trim() : String(row[`${stageKey}Start`] || '')
     const finishStr = body.finish !== undefined ? String(body.finish || '').trim() : String(row[`${stageKey}Finish`] || '')
 
     const hangMuc = String(row.hangMuc ?? '').trim() || `Dòng ${rowIndex + 1}`
     const stageLabel = WBS_STAGE_LABEL[stageKey]
-    const woCode = woCodeFor(project.projectCode, hangMuc, stageKey)
+    // UNIT + STT của dòng → mỗi dòng WBS = 1 WO (không đụng nhau kể cả trùng piece-mark trong cùng UNIT).
+    const unitTag = unitTagForRow(rows, rowIndex)
+    const stt = String(row.stt ?? '').trim()
+    const pieceMark = pieceMarkFor(hangMuc, unitTag)
+    const woCode = woCodeFor(project.projectCode, hangMuc, stageKey, unitTag, stt)
 
     // Ô đã phát hành: mode='update' → SỬA WO đó; không thì trả WO cũ (client dùng DELETE để xóa/mở lại).
     const existing = await prisma.workOrder.findUnique({ where: { woCode }, select: { id: true, woCode: true } })
@@ -86,33 +93,12 @@ export async function POST(req: NextRequest) {
 
     const dept = teamCode !== 'THAUPHU' ? await prisma.department.findFirst({ where: { code: teamCode }, select: { id: true } }) : null
 
-    // ── XUNG ĐỘT KL: KL là của CẢ hạng mục. Sửa KL khác cũ + hạng mục đã có WO phát hành (KL cũ) → cần quyết định ──
-    const oldKl = Number(row.khoiLuong) || 0
-    const klChanged = Number.isFinite(weightNum) && weightNum > 0 && Math.abs(weightNum - oldKl) > 0.0001
-    let siblings: Array<{ id: string; woCode: string; teamCode: string; plannedWeight: number; hasProduction: boolean }> = []
-    if (klChanged) {
-      const sibs = await prisma.workOrder.findMany({
-        where: { projectId, pieceMark: hangMuc, woCode: { not: woCode } },
-        select: { id: true, woCode: true, teamCode: true, plannedWeight: true, _count: { select: { jobCards: true, materialIssues: true, deliveries: true } } },
-      })
-      siblings = sibs.filter(s => Math.abs(Number(s.plannedWeight ?? 0) - weightNum) > 0.0001)
-        .map(s => ({ id: s.id, woCode: s.woCode, teamCode: s.teamCode, plannedWeight: Number(s.plannedWeight ?? 0), hasProduction: (s._count.jobCards + s._count.materialIssues + s._count.deliveries) > 0 }))
-    }
-    const klRes = body.klResolution
-    if (siblings.length > 0 && !klRes) {
-      return successResponse({ needsKlDecision: true, oldKl, newKl: weightNum, siblings }, 'Cần xác nhận xử lý WO đã phát hành của hạng mục')
-    }
-    if (siblings.length > 0 && klRes === 'delete') {
-      const blocked = siblings.filter(s => s.hasProduction)
-      if (blocked.length) return errorResponse(`Không xóa được WO đã có báo cáo SX / cấp vật tư: ${blocked.map(s => s.woCode).join(', ')}. Hãy chọn "Cập nhật KL" thay vì xóa.`, 409)
-    }
-
-    // ── Ghi ngược WBS (KL ghi CẢ dòng hạng mục) ──
+    // ── Ghi ngược WBS: KL ghi RIÊNG cho ô công đoạn (`{stageKey}Weight`), KHÔNG đụng khoiLuong (cột trái = tham chiếu gốc) ──
     let newResultData: Record<string, unknown> | undefined
     if (planTask && fullRows[rowIndex] && String(fullRows[rowIndex].hangMuc || '').trim() === hangMuc) {
       const t = { ...fullRows[rowIndex] }
       t[stageKey] = cellStr
-      if (Number.isFinite(weightNum)) t.khoiLuong = String(weightNum)
+      if (Number.isFinite(weightNum)) t[`${stageKey}Weight`] = String(weightNum)
       t[`${stageKey}Start`] = startStr
       t[`${stageKey}Finish`] = finishStr
       const updated = [...fullRows]; updated[rowIndex] = t
@@ -120,7 +106,7 @@ export async function POST(req: NextRequest) {
     }
 
     const woData = {
-      description: `${hangMuc} — ${stageLabel}${isSub ? ' (Thầu phụ)' : ''}`,
+      description: `${pieceMark} — ${stageLabel}${isSub ? ' (Thầu phụ)' : ''}`,
       teamCode, woType: isSub ? 'EXTERNAL' : 'INTERNAL',
       plannedWeight: Number.isFinite(weightNum) && weightNum > 0 ? weightNum : null,
       plannedStart: toDate(startStr), plannedEnd: toDate(finishStr), departmentId: dept?.id || null,
@@ -128,16 +114,12 @@ export async function POST(req: NextRequest) {
     const wo = await prisma.$transaction(async (tx) => {
       const saved = isUpdate
         ? await tx.workOrder.update({ where: { id: existing!.id }, data: woData, select: { id: true, woCode: true, teamCode: true, description: true } })
-        : await tx.workOrder.create({ data: { woCode, projectId, pieceMark: hangMuc, createdBy: payload.userId, ...woData }, select: { id: true, woCode: true, teamCode: true, description: true } })
+        : await tx.workOrder.create({ data: { woCode, projectId, pieceMark, createdBy: payload.userId, ...woData }, select: { id: true, woCode: true, teamCode: true, description: true } })
       if (newResultData && planTask) await tx.task.update({ where: { id: planTask.id }, data: { resultData: newResultData as Prisma.InputJsonValue } })
-      // Đồng bộ KL cho các WO đã phát hành của hạng mục
-      if (siblings.length > 0 && klRes === 'update') await tx.workOrder.updateMany({ where: { id: { in: siblings.map(s => s.id) } }, data: { plannedWeight: weightNum } })
-      else if (siblings.length > 0 && klRes === 'delete') await tx.workOrder.deleteMany({ where: { id: { in: siblings.map(s => s.id) } } })
       return saved
     })
-    const extra = klRes === 'update' ? ` · cập nhật KL ${siblings.length} WO` : klRes === 'delete' ? ` · xóa ${siblings.length} WO cũ` : ''
     const verb = isUpdate ? 'Đã cập nhật' : 'Đã phát hành'
-    return successResponse({ workOrder: wo, updated: isUpdate, wbsUpdated: !!newResultData, klSynced: klRes === 'update' ? siblings.length : 0, klDeleted: klRes === 'delete' ? siblings.length : 0 }, `${verb} WO ${wo.woCode}${extra}`, isUpdate ? 200 : 201)
+    return successResponse({ workOrder: wo, updated: isUpdate, wbsUpdated: !!newResultData }, `${verb} WO ${wo.woCode}`, isUpdate ? 200 : 201)
   } catch (err) {
     console.error('POST from-wbs-cell error:', err)
     return errorResponse('Lỗi phát hành WO từ WBS', 500)
@@ -167,7 +149,7 @@ export async function DELETE(req: NextRequest) {
     if (!row) return errorResponse('Không tìm thấy hạng mục WBS', 404)
 
     const hangMuc = String(row.hangMuc ?? '').trim() || `Dòng ${rowIndex + 1}`
-    const woCode = woCodeFor(project.projectCode, hangMuc, stageKey)
+    const woCode = woCodeFor(project.projectCode, hangMuc, stageKey, unitTagForRow(rows, rowIndex), String(row.stt ?? '').trim())
     const wo = await prisma.workOrder.findUnique({ where: { woCode }, select: { id: true, _count: { select: { jobCards: true, materialIssues: true, deliveries: true } } } })
     if (!wo) return errorResponse('Ô này chưa phát hành WO', 404)
     if (wo._count.jobCards + wo._count.materialIssues + wo._count.deliveries > 0) return errorResponse('WO đã có báo cáo SX / cấp vật tư — không xóa được', 409)

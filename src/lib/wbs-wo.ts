@@ -14,7 +14,28 @@ export const WBS_STAGE_LABEL: Record<string, string> = Object.fromEntries(WBS_ST
 
 // woCode tất định cho 1 ô WBS (dùng chung FE + API để idempotent + đánh dấu ô đã phát hành).
 export const saniWo = (s: string) => String(s).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-export const woCodeFor = (projectCode: string, hangMuc: string, stageKey: string) => `WO-${projectCode}-${saniWo(hangMuc)}-${stageKey}`
+
+// Piece-mark có thể TRÙNG giữa các UNIT (VD MLI1645 ở cả UNIT 1 và UNIT 2 với KL khác nhau) →
+// woCode kèm UNIT + STT của dòng để MỖI DÒNG WBS = 1 WO (kể cả 2 dòng trùng tên trong cùng 1 UNIT).
+// unitTag/stt rỗng → bỏ đoạn đó (WBS phẳng cũ → mã tương thích).
+export const woCodeFor = (projectCode: string, hangMuc: string, stageKey: string, unitTag = '', stt = '') =>
+  `WO-${projectCode}-${unitTag ? saniWo(unitTag) + '-' : ''}${stt ? saniWo(stt) + '-' : ''}${saniWo(hangMuc)}-${stageKey}`
+
+// Piece-mark hiển thị/lưu kèm UNIT: "U1 / MLI1634 - Lot 1". Không có UNIT → giữ nguyên hạng mục.
+export const pieceMarkFor = (hangMuc: string, unitTag = '') => (unitTag ? `${unitTag} / ${hangMuc}` : hangMuc)
+
+/**
+ * UNIT của 1 dòng WBS = dòng "UNIT n" gần nhất phía trên (đi ngược từ rowIndex).
+ * Trả "U1"/"U2"… hoặc '' nếu WBS không chia UNIT. Dùng CHUNG FE + API để woCode nhất quán.
+ */
+export function unitTagForRow(rows: Record<string, string>[], rowIndex: number): string {
+  for (let i = Math.min(rowIndex, rows.length - 1); i >= 0; i--) {
+    const hm = String(rows[i]?.hangMuc || '').trim()
+    const m = hm.match(/^unit\s*0*(\d+)/i)
+    if (m) return `U${m[1]}`
+  }
+  return ''
+}
 
 const VALID_WORKSHOP = new Set(PRODUCTION_WORKSHOPS.map(w => w.code)) // XPC, XCT1, XCT2, XH, XHT
 

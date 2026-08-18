@@ -7,6 +7,8 @@ import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
 import { applyStockMovement } from '@/lib/stock-ledger'
+import { WBS_STAGES, unitTagForRow } from '@/lib/wbs-wo'
+import { Prisma } from '@prisma/client'
 
 // GET /api/production/:id — Work order detail + material issues
 export const GET = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -69,9 +71,55 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
 
   if (Object.keys(data).length === 0) return errorResponse('Không có trường nào để cập nhật', 400)
 
-  const updated = await prisma.workOrder.update({ where: { id }, data, select: { id: true, woCode: true, description: true, teamCode: true, plannedWeight: true } })
-  return successResponse({ workOrder: { ...updated, plannedWeight: updated.plannedWeight ? Number(updated.plannedWeight) : null } }, `Đã cập nhật WO ${updated.woCode}`)
+  const updated = await prisma.workOrder.update({
+    where: { id }, data,
+    select: { id: true, woCode: true, projectId: true, pieceMark: true, description: true, teamCode: true, woType: true, plannedWeight: true, plannedStart: true, plannedEnd: true },
+  })
+  // Ghi ngược trọng lượng/xưởng/ngày về đúng ô công đoạn WBS (nếu WO phát hành từ ô WBS)
+  const wbsSynced = await syncWbsFromWo(updated)
+  return successResponse({ workOrder: { ...updated, plannedWeight: updated.plannedWeight ? Number(updated.plannedWeight) : null }, wbsSynced }, `Đã cập nhật WO ${updated.woCode}${wbsSynced ? ' + WBS' : ''}`)
 })
+
+const WBS_STAGE_KEYS = WBS_STAGES.map(s => s.key)
+
+// Ghi ngược 1 WO về đúng ô công đoạn WBS (task P1.2A): KL riêng của ô, xưởng, ngày. Trả true nếu ghi được.
+// Khớp ô theo (UNIT + hạng mục) từ pieceMark ("U1 / MLI9999") + công đoạn từ đuôi woCode.
+async function syncWbsFromWo(wo: { projectId: string | null; woCode: string; pieceMark: string | null; teamCode: string; woType: string; plannedWeight: unknown; plannedStart: Date | null; plannedEnd: Date | null }): Promise<boolean> {
+  if (!wo.projectId) return false
+  const stageKey = WBS_STAGE_KEYS.find(k => wo.woCode.endsWith(`-${k}`))
+  if (!stageKey) return false
+  const pm = String(wo.pieceMark || '').trim()
+  let unitTag = '', hangMuc = pm
+  const slash = pm.indexOf(' / ')
+  if (slash >= 0) { const prefix = pm.slice(0, slash).trim(); if (/^U\d+$/i.test(prefix)) { unitTag = prefix.toUpperCase(); hangMuc = pm.slice(slash + 3).trim() } }
+  if (!hangMuc) return false
+
+  const task = await prisma.task.findFirst({ where: { projectId: wo.projectId, taskType: 'P1.2A' }, select: { id: true, resultData: true }, orderBy: { createdAt: 'desc' } })
+  if (!task?.resultData) return false
+  const data = task.resultData as Record<string, unknown>
+  let rows: Record<string, string>[] = []
+  try { rows = typeof data.wbsItems === 'string' ? JSON.parse(data.wbsItems) : (data.wbsItems as Record<string, string>[]) || [] } catch { return false }
+  if (!Array.isArray(rows)) return false
+
+  let idx = -1
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i]?.hangMuc || '').trim() === hangMuc && unitTagForRow(rows, i).toUpperCase() === unitTag) { idx = i; break }
+  }
+  if (idx < 0) return false
+
+  const cell = wo.woType === 'EXTERNAL'
+    ? (wo.teamCode && wo.teamCode.toUpperCase() !== 'THAUPHU' ? `${wo.teamCode} Thầu phụ` : 'Thầu phụ')
+    : (wo.teamCode || '')
+  const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '')
+  const t = { ...rows[idx] }
+  t[stageKey] = cell
+  if (wo.plannedWeight != null) t[`${stageKey}Weight`] = String(Number(wo.plannedWeight))
+  t[`${stageKey}Start`] = iso(wo.plannedStart)
+  t[`${stageKey}Finish`] = iso(wo.plannedEnd)
+  const nextRows = [...rows]; nextRows[idx] = t
+  await prisma.task.update({ where: { id: task.id }, data: { resultData: { ...data, wbsItems: JSON.stringify(nextRows) } as Prisma.InputJsonValue } })
+  return true
+}
 
 // PUT /api/production/:id — Update WO status (start, complete, cancel)
 export const PUT = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
