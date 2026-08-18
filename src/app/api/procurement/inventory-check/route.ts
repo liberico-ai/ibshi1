@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
+import { buildMaterialIndex, matchByAttributes, type MatStock } from '@/lib/material-match'
 
 export const dynamic = 'force-dynamic'
 const N = (v: unknown) => Number(v ?? 0)
@@ -41,21 +42,43 @@ export async function GET(req: NextRequest) {
       mats.forEach(m => byCode.set(m.materialCode, m))
     }
 
+    // Cầu nối THUỘC TÍNH: mã PR (theo dự án) ≠ mã kho → khớp theo tên + mác + độ dày/quy cách.
+    // Chỉ xây index khi còn dòng chưa khớp được bằng materialId/itemCode.
+    const needAttr = items.some(i => !i.material && (!i.itemCode || !byCode.has(i.itemCode)))
+    let attrIdx: Map<string, MatStock[]> | null = null
+    if (needAttr) {
+      const allMats = await prisma.material.findMany({ select: { materialCode: true, name: true, specification: true, grade: true, unit: true, currentStock: true, reservedStock: true } })
+      const stocks: MatStock[] = allMats.map(m => ({ materialCode: m.materialCode, name: m.name, specification: m.specification, grade: m.grade, unit: m.unit, available: Math.max(0, N(m.currentStock) - N(m.reservedStock)) }))
+      attrIdx = buildMaterialIndex(stocks)
+    }
+
     const rows = items.map(d => {
-      const mat = d.material || (d.itemCode ? byCode.get(d.itemCode) : undefined)
-      const available = mat ? Math.max(0, N(mat.currentStock) - N(mat.reservedStock)) : 0
+      const direct = d.material || (d.itemCode ? byCode.get(d.itemCode) : undefined)
+      let available = 0
+      let inventory: { currentStock: number; reservedStock: number; availableQty: number; matchedBy: string; matchedCodes?: string[] } | null = null
+      if (direct) {
+        available = Math.max(0, N(direct.currentStock) - N(direct.reservedStock))
+        inventory = { currentStock: N(direct.currentStock), reservedStock: N(direct.reservedStock), availableQty: available, matchedBy: d.material ? 'materialId' : 'itemCode' }
+      } else if (attrIdx) {
+        const am = matchByAttributes({ description: d.description, profile: d.profile, grade: d.grade }, attrIdx)
+        if (am) {
+          available = am.available
+          inventory = { currentStock: available, reservedStock: 0, availableQty: available, matchedBy: 'attributes', matchedCodes: am.materials.slice(0, 5).map(m => m.materialCode) }
+        }
+      }
       const reqQty = N(d.reqQty)
-      const stockStatus = !mat || available <= 0 ? 'NO_STOCK' : (available >= reqQty ? 'HAS_STOCK' : 'PARTIAL')
+      const stockStatus = !inventory || available <= 0 ? 'NO_STOCK' : (available >= reqQty ? 'HAS_STOCK' : 'PARTIAL')
       return {
         prDetailId: d.id, itemCode: d.itemCode || '', itemName: d.description || '', profile: d.profile || '', grade: d.grade || '', uom: d.unit || '',
         reqQty, remainQty: N(d.remainQty), toBuyQty: N(d.toBuyQty), materialGroupCode: d.materialGroupCode || '',
-        inventory: mat ? { currentStock: N(mat.currentStock), reservedStock: N(mat.reservedStock), availableQty: available } : null,
+        inventory,
         stockStatus, suggestedUseFromStock: Math.min(available, reqQty),
       }
     })
 
     const cnt = (s: string) => rows.filter(r => r.stockStatus === s).length
-    return successResponse({ prId, prCode: pr.prCode, summary: { total: rows.length, hasStock: cnt('HAS_STOCK'), partial: cnt('PARTIAL'), noStock: cnt('NO_STOCK') }, rows })
+    const matchedByAttr = rows.filter(r => r.inventory?.matchedBy === 'attributes').length
+    return successResponse({ prId, prCode: pr.prCode, summary: { total: rows.length, hasStock: cnt('HAS_STOCK'), partial: cnt('PARTIAL'), noStock: cnt('NO_STOCK'), matchedByAttr }, rows })
   } catch (err) {
     console.error('GET inventory-check error:', err)
     return errorResponse('Lỗi kiểm tra tồn kho', 500)

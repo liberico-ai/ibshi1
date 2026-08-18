@@ -8,9 +8,9 @@ import { PageHeader, Button } from '@/components/ui'
 import { formatNumber } from '@/lib/utils'
 
 // [PORT Thương Mại — F1] Kiểm tra tồn kho trước RFQ: soát tồn khả dụng → phân bổ dùng từ tồn → tính lại "cần mua".
-interface Inv { currentStock: number; reservedStock: number; availableQty: number }
+interface Inv { currentStock: number; reservedStock: number; availableQty: number; matchedBy?: string; matchedCodes?: string[] }
 interface Row { prDetailId: string; itemCode: string; itemName: string; profile: string; grade: string; uom: string; reqQty: number; remainQty: number; toBuyQty: number; inventory: Inv | null; stockStatus: string; suggestedUseFromStock: number }
-interface Summary { total: number; hasStock: number; partial: number; noStock: number }
+interface Summary { total: number; hasStock: number; partial: number; noStock: number; matchedByAttr?: number }
 interface PROpt { id: string; prCode: string; project?: { projectCode: string } | null }
 
 const ST: Record<string, { label: string; cls: string }> = {
@@ -79,6 +79,11 @@ export default function KiemTraTonKhoPage() {
             { label: 'Còn một phần', value: summary.partial, color: 'text-amber-600' },
             { label: 'Không tồn', value: summary.noStock, color: 'text-slate-500' },
           ].map(k => <div key={k.label} className="flex items-center gap-1.5"><span className={`text-lg font-bold ${k.color}`}>{k.value}</span><span className="text-xs text-slate-500">{k.label}</span></div>)}
+          {!!summary.matchedByAttr && (
+            <span className="text-xs" style={{ color: 'var(--warning)' }} title="Số dòng có mã PR khác hệ mã kho, đã khớp tồn theo tên + quy cách + mác (đánh dấu ≈)">
+              ≈ {summary.matchedByAttr} dòng khớp theo quy cách
+            </span>
+          )}
         </div>
       )}
 
@@ -109,7 +114,13 @@ export default function KiemTraTonKhoPage() {
                       <td className="px-2 py-1.5" style={{ color: 'var(--text-muted)' }}>{r.profile || '—'}{r.grade && ` / ${r.grade}`}</td>
                       <td className="px-2 py-1.5" style={{ color: 'var(--text-muted)' }}>{r.uom}</td>
                       <td className="px-2 py-1.5 text-right font-mono">{nn(r.reqQty)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono" style={{ color: avail > 0 ? '#16a34a' : 'var(--text-muted)' }}>{r.inventory ? nn(avail) : '—'}</td>
+                      <td className="px-2 py-1.5 text-right font-mono" style={{ color: avail > 0 ? '#16a34a' : 'var(--text-muted)' }}>
+                        {r.inventory ? nn(avail) : '—'}
+                        {r.inventory?.matchedBy === 'attributes' && (
+                          <span title={`Khớp theo tên + quy cách + mác (mã PR khác hệ mã kho)${r.inventory.matchedCodes?.length ? ` — mã kho: ${r.inventory.matchedCodes.join(', ')}` : ''}`}
+                            className="ml-1 cursor-help" style={{ color: 'var(--warning)' }}>≈</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 text-right">
                         <input type="number" value={edited[r.prDetailId] ?? ''} onChange={e => setUse(r.prDetailId, e.target.value)}
                           className="input text-xs text-right" style={{ width: 90, borderColor: (over || overReq) ? '#f59e0b' : undefined }}
