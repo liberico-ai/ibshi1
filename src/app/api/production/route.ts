@@ -6,6 +6,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateQuery } from '@/lib/api-helpers'
 import { searchFilterSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
+import { canManageProjectWo, notProjectPmError } from '@/lib/project-access'
 
 // GET /api/production — List work orders
 export const GET = withErrorHandler(async (req: NextRequest) => {
@@ -91,6 +92,11 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   if (!woCode || !projectId || !description || !teamCode) {
     return errorResponse('Thiếu: mã WO, dự án, mô tả, tổ SX')
   }
+
+  // Chỉ PM phụ trách dự án (hoặc BGĐ) mới tạo được WO cho dự án đó.
+  const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { pmUserId: true } })
+  if (!proj) return errorResponse('Không tìm thấy dự án', 404)
+  if (!canManageProjectWo(payload.roleCode, payload.userId, proj.pmUserId)) return errorResponse(notProjectPmError(proj.pmUserId), 403)
 
   const existing = await prisma.workOrder.findUnique({ where: { woCode } })
   if (existing) return errorResponse(`Mã WO ${woCode} đã tồn tại`)

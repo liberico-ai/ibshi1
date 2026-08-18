@@ -149,7 +149,7 @@ export default function ProjectsPage() {
 function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCreated: (p: Project) => void }) {
   const [form, setForm] = useState({
     projectCode: '', projectName: '', clientName: '', productType: 'pressure_vessel',
-    projectType: 'EXTERNAL_PROD',
+    projectType: 'EXTERNAL_PROD', pmUserId: '',
     contractValue: '', currency: 'VND', description: '', startDate: '', endDate: '',
   })
   const isProduction = form.projectType === 'EXTERNAL_PROD' || form.projectType === 'INTERNAL_PROD'
@@ -158,12 +158,18 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [draftId] = useState(() => `draft-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
+  const [pms, setPms] = useState<{ id: string; fullName: string; username: string }[]>([])
+
+  useEffect(() => {
+    apiFetch('/api/users').then(r => { if (r.ok) setPms((r.users || []).filter((u: { roleCode: string }) => u.roleCode === 'R02')) })
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     // Loại sản phẩm "Khác" → dùng giá trị nhập tay
     const productType = isOtherProduct ? customProductType.trim() : form.productType
     if (isOtherProduct && !productType) { setError('Nhập Loại sản phẩm (Khác)'); return }
+    if (!form.pmUserId) { setError('Chọn PM phụ trách dự án'); return }
     setError(''); setSubmitting(true)
 
     const res = await apiFetch('/api/projects', {
@@ -190,6 +196,12 @@ function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCrea
           <input className="input" placeholder="Tên dự án" value={form.projectName} onChange={(e) => setForm({ ...form, projectName: e.target.value })} required /></div>
         <div className="input-field"><label className="input-label">Khách hàng *</label>
           <input className="input" placeholder="Tên khách hàng" value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} required /></div>
+        <div className="input-field"><label className="input-label">PM phụ trách *</label>
+          <select className="input" value={form.pmUserId} onChange={(e) => setForm({ ...form, pmUserId: e.target.value })} required>
+            <option value="">— Chọn PM (Quản lý dự án) —</option>
+            {pms.map((u) => <option key={u.id} value={u.id}>{u.fullName} ({u.username})</option>)}
+          </select>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Người chịu trách nhiệm: nhận việc, tạo lệnh SX cho dự án này.</span></div>
         <div className="input-field"><label className="input-label">Loại dự án *</label>
           <select className="input" value={form.projectType} onChange={(e) => setForm({ ...form, projectType: e.target.value })}>
             {PROJECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}

@@ -21,6 +21,7 @@ export const createProjectSchema = z.object({
   endDate: z.string().optional(),
   description: z.string().optional(),
   draftId: z.string().optional(),
+  pmUserId: z.string().optional(), // PM phụ trách (bắt buộc ở UI; nếu trống → mặc định người tạo nếu là R02)
 })
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>

@@ -1,17 +1,18 @@
 'use client'
 
-import { useState, Fragment, type CSSProperties, type ReactNode } from 'react'
+import { useState, Fragment, type CSSProperties } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 import { Modal, Button, SelectField } from '@/components/ui'
 import { formatNumber } from '@/lib/utils'
-import { WBS_STAGES, WBS_STAGE_LABEL, normWorkshop, woCodeFor, pieceMarkFor, unitTagForRow } from '@/lib/wbs-wo'
+import { WBS_STAGES, WBS_STAGE_LABEL, woCodeFor, pieceMarkFor, unitTagForRow, allocTags, readAlloc } from '@/lib/wbs-wo'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 
 interface ProjectOption { id: string; projectCode: string; projectName: string }
 type Row = Record<string, string>
-type Edit = { weight: string; teamCode: string; isSub: boolean; start: string; finish: string }
+type AllocRow = { teamCode: string; isSub: boolean; weight: string; start: string; finish: string }
 const WORKSHOP_CODES = PRODUCTION_WORKSHOPS.map(w => w.code)
+const allocLabel = (a: { teamCode: string; isSub: boolean }) => (a.teamCode ? (a.isSub ? `${a.teamCode} TP` : a.teamCode) : 'Thầu phụ')
 
 export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
   open: boolean; projects: ProjectOption[]; onClose: () => void; onIssued: () => void
@@ -23,31 +24,20 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
   const [loading, setLoading] = useState(false)
   const [viewOpen, setViewOpen] = useState(false)
   const [sel, setSel] = useState<{ ri: number; key: string } | null>(null)
-  const [edit, setEdit] = useState<Edit | null>(null)
+  const [edit, setEdit] = useState<AllocRow[] | null>(null)
   const [issuing, setIssuing] = useState(false)
 
   const reset = () => { setProjectId(''); setProjectCode(''); setRows([]); setIssued(new Set()); setViewOpen(false); setSel(null); setEdit(null) }
   const close = () => { reset(); onClose() }
 
-  // KL riêng của ô công đoạn (`{stageKey}Weight`), else KL cột trái (khoiLuong) làm mặc định
-  const stageWeight = (row: Row, key: string) => {
-    const s = String(row[`${key}Weight`] ?? '').trim()
-    return s || String(row.khoiLuong ?? '')
-  }
-
-  // Chọn 1 ô công đoạn → khởi tạo giá trị sửa từ WBS (trọng lượng riêng của ô/xưởng/ngày)
+  // Chọn 1 ô công đoạn → nạp danh sách phân giao xưởng (mỗi xưởng: KL + ngày riêng)
   const selectCell = (ri: number, key: string) => {
     setSel({ ri, key })
     const row = rows[ri] || {}
-    const { teamCode, isSub } = normWorkshop(String(row[key] || ''))
-    const w = Number(stageWeight(row, key))
-    setEdit({
-      weight: Number.isFinite(w) && w > 0 ? String(w) : '',
-      teamCode: WORKSHOP_CODES.includes(teamCode) ? teamCode : '',
-      isSub,
-      start: String(row[`${key}Start`] || '').slice(0, 10),
-      finish: String(row[`${key}Finish`] || '').slice(0, 10),
-    })
+    const list = readAlloc(row, key)
+    setEdit(list.length
+      ? list.map(a => ({ teamCode: WORKSHOP_CODES.includes(a.teamCode) ? a.teamCode : '', isSub: a.isSub, weight: a.weight, start: String(a.start || '').slice(0, 10), finish: String(a.finish || '').slice(0, 10) }))
+      : [{ teamCode: '', isSub: false, weight: String(row.khoiLuong || ''), start: '', finish: '' }])
   }
 
   const pickProject = async (id: string) => {
@@ -60,24 +50,20 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
     else notify(r.error || 'Lỗi tải WBS', 'error')
   }
 
-  // Thông tin 1 ô công đoạn (giống các cột bảng WO)
+  // Thông tin 1 ô công đoạn: danh sách phân giao + trạng thái phát hành từng xưởng
   const cellInfo = (ri: number, key: string) => {
     const row = rows[ri] || {}
-    const cellVal = String(row[key] || '').trim()
-    const { teamCode, isSub } = normWorkshop(cellVal)
     const hangMuc = String(row.hangMuc || `Dòng ${ri + 1}`).trim()
     const unitTag = unitTagForRow(rows, ri)
+    const stt = String(row.stt || '').trim()
     const pieceMark = pieceMarkFor(hangMuc, unitTag)
-    const woCode = woCodeFor(projectCode, hangMuc, key, unitTag, String(row.stt || '').trim())
-    const weight = Number(stageWeight(row, key))
-    return {
-      cellVal, teamCode, isSub, hangMuc, pieceMark, woCode,
-      stageLabel: WBS_STAGE_LABEL[key] || key,
-      description: `${pieceMark} — ${WBS_STAGE_LABEL[key] || key}${isSub ? ' (Thầu phụ)' : ''}`,
-      weight: Number.isFinite(weight) && weight > 0 ? weight : 0,
-      start: row[`${key}Start`] || '', finish: row[`${key}Finish`] || '',
-      already: issued.has(woCode),
-    }
+    const list = readAlloc(row, key)
+    const tags = allocTags(list)
+    const allocs = list.map((a, i) => {
+      const wc = woCodeFor(projectCode, hangMuc, key, unitTag, stt, tags[i])
+      return { ...a, klShow: String(a.weight || '').trim() || String(row.khoiLuong || ''), woCode: wc, done: issued.has(wc) }
+    })
+    return { hangMuc, pieceMark, stageLabel: WBS_STAGE_LABEL[key] || key, allocs, anyIssued: allocs.some(a => a.done), allIssued: allocs.length > 0 && allocs.every(a => a.done) }
   }
 
   const reloadWbs = async () => {
@@ -85,35 +71,34 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
     if (wbs.ok) { setRows(Array.isArray(wbs.rows) ? wbs.rows : []); setIssued(new Set(wbs.issuedWoCodes || [])) }
   }
 
-  // mode='update' = SỬA WO đã phát hành của ô này (thay vì tạo mới). KL độc lập theo công đoạn — không ảnh hưởng ô khác.
-  const doIssue = async (mode?: 'update') => {
+  // Áp danh sách phân giao xưởng → mỗi xưởng 1 WO (tạo/cập nhật + xóa xưởng đã bỏ)
+  const applyWo = async () => {
     if (!sel || !edit) return
-    if (!edit.teamCode && !edit.isSub) { notify('Chọn xưởng (hoặc đánh dấu Thầu phụ) trước', 'error'); return }
+    const clean = edit.filter(a => a.teamCode || a.isSub)
+    if (clean.length === 0) { notify('Chọn ít nhất 1 xưởng (hoặc đánh dấu Thầu phụ)', 'error'); return }
     setIssuing(true)
-    const r = await apiFetch('/api/production/work-orders/from-wbs-cell', { method: 'POST', body: JSON.stringify({
-      projectId, rowIndex: sel.ri, stageKey: sel.key,
-      teamCode: edit.teamCode, isSub: edit.isSub, weight: edit.weight, start: edit.start, finish: edit.finish, mode,
-    }) })
+    const r = await apiFetch('/api/production/work-orders/from-wbs-cell', { method: 'POST', body: JSON.stringify({ projectId, rowIndex: sel.ri, stageKey: sel.key, allocations: clean }) })
     setIssuing(false)
     if (!r.ok) { notify(r.error || 'Lỗi', 'error'); return }
-    if (r.existing) notify(r.message || 'Ô này đã phát hành WO trước đó', 'info')
-    else notify(`✓ ${r.message || 'Thành công'}`, 'success')
-    setSel(null); setEdit(null)
-    await reloadWbs(); onIssued()
+    notify(`✓ ${r.message || 'Thành công'}`, 'success')
+    setSel(null); setEdit(null); await reloadWbs(); onIssued()
   }
-  const issue = () => doIssue()
-  const updateWo = () => doIssue('update')
 
-  // Xóa WO của ô đang chọn → ô mở lại (chặn nếu đã có SX phía server)
+  // Xóa TẤT CẢ WO của ô đang chọn → ô mở lại (chặn nếu đã có SX phía server)
   const deleteWo = async () => {
-    if (!sel || !info) return
-    if (!await confirmDialog(`Xóa WO của ô này (${info.woCode})? Ô sẽ mở lại để phát hành lại.`)) return
+    if (!sel) return
+    if (!await confirmDialog('Xóa tất cả WO của ô này? Ô sẽ mở lại để phát hành lại.')) return
     setIssuing(true)
     const r = await apiFetch('/api/production/work-orders/from-wbs-cell', { method: 'DELETE', body: JSON.stringify({ projectId, rowIndex: sel.ri, stageKey: sel.key }) })
     setIssuing(false)
     if (r.ok) { notify(r.message || 'Đã xóa WO', 'success'); setSel(null); setEdit(null); await reloadWbs(); onIssued() }
     else notify(r.error || 'Lỗi xóa WO', 'error')
   }
+
+  // thao tác dòng phân giao
+  const setAlloc = (i: number, patch: Partial<AllocRow>) => setEdit(e => (e ? e.map((a, idx) => (idx === i ? { ...a, ...patch } : a)) : e))
+  const addAlloc = () => setEdit(e => [...(e || []), { teamCode: '', isSub: false, weight: '', start: '', finish: '' }])
+  const removeAlloc = (i: number) => setEdit(e => (e && e.length > 1 ? e.filter((_, idx) => idx !== i) : e))
 
   const info = sel ? cellInfo(sel.ri, sel.key) : null
 
@@ -182,30 +167,28 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                         <td style={td}>{r.dvt}</td>
                         <td style={{ ...td, textAlign: 'right' }}>{r.khoiLuong ? formatNumber(r.khoiLuong) : ''}</td>
                         {WBS_STAGES.map(s => {
-                          const val = String(r[s.key] || '').trim()
-                          if (!val) return (
+                          const ci = cellInfo(ri, s.key)
+                          if (!ci.allocs.length) return (
                             <Fragment key={s.key}>
                               <td style={{ ...td, borderLeft: '2px solid #999' }} /><td style={td} /><td style={td} /><td style={td} />
                             </Fragment>
                           )
-                          const wc = woCodeFor(projectCode, String(r.hangMuc || `Dòng ${ri + 1}`).trim(), s.key, unitTagForRow(rows, ri), String(r.stt || '').trim())
-                          const done = issued.has(wc)
                           const active = sel?.ri === ri && sel?.key === s.key
-                          // KL công đoạn = KL riêng của ô (nếu đã đặt) else KL cột trái (mặc định)
-                          const klStage = String(r[`${s.key}Weight`] || '').trim() || String(r.khoiLuong || '').trim()
+                          const bg = ci.allIssued ? '#d1fae5' : ci.anyIssued ? '#fef9c3' : '#eff6ff'
+                          const fg = ci.allIssued ? '#166534' : ci.anyIssued ? '#854d0e' : '#1e40af'
+                          const line: CSSProperties = { lineHeight: '1.5', whiteSpace: 'nowrap' }
                           return (
                             <Fragment key={s.key}>
-                              <td style={{ ...td, borderLeft: '2px solid #999', textAlign: 'right', color: 'var(--text-muted)' }}>{klStage ? formatNumber(klStage) : ''}</td>
+                              <td style={{ ...td, borderLeft: '2px solid #999', textAlign: 'right', color: 'var(--text-muted)' }}>{ci.allocs.map((a, i) => <div key={i} style={line}>{a.klShow ? formatNumber(a.klShow) : ''}</div>)}</td>
                               <td style={{ ...td, padding: 2, textAlign: 'center' }}>
                                 <button type="button" onClick={() => selectCell(ri, s.key)}
                                   style={{ width: '100%', padding: '3px 4px', fontSize: '0.7rem', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-                                    border: active ? '2px solid #2563eb' : '1px solid transparent',
-                                    background: done ? '#d1fae5' : '#eff6ff', color: done ? '#166534' : '#1e40af' }}>
-                                  {done ? '✓ ' : ''}{val}
+                                    border: active ? '2px solid #2563eb' : '1px solid transparent', background: bg, color: fg }}>
+                                  {ci.allocs.map((a, i) => <div key={i} style={line}>{a.done ? '✓ ' : ''}{allocLabel(a)}</div>)}
                                 </button>
                               </td>
-                              <td style={{ ...td, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.66rem' }}>{fmtD(r[`${s.key}Start`])}</td>
-                              <td style={{ ...td, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.66rem' }}>{fmtD(r[`${s.key}Finish`])}</td>
+                              <td style={{ ...td, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.66rem' }}>{ci.allocs.map((a, i) => <div key={i} style={line}>{fmtD(a.start)}</div>)}</td>
+                              <td style={{ ...td, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.66rem' }}>{ci.allocs.map((a, i) => <div key={i} style={line}>{fmtD(a.finish)}</div>)}</td>
                             </Fragment>
                           )
                         })}
@@ -216,47 +199,48 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
               </table>
             </div>
 
-            {/* Panel ô đang chọn — SỬA được Trọng lượng/Xưởng/Ngày trước khi phát hành (✎). Lưu → ghi ngược vào WBS. */}
+            {/* Panel ô đang chọn — phân giao 1 công đoạn cho NHIỀU xưởng (mỗi xưởng KL + ngày riêng → 1 WO) */}
             {info && edit && (
-              <div style={{ flexShrink: 0, borderTop: '2px solid #0ea5e9', background: '#f8fafc', padding: '12px 20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(140px, auto))', gap: '8px 20px', fontSize: '0.78rem' }}>
-                    <Field label="Mã WO"><span style={strong}>{info.woCode}</span></Field>
-                    <Field label="Piece-mark"><span style={strong}>{info.pieceMark}</span></Field>
-                    <Field label="Mô tả"><span style={strong}>{info.pieceMark} — {info.stageLabel}{edit.isSub ? ' (Thầu phụ)' : ''}</span></Field>
-                    <Field label="Dự án"><span style={strong}>{projectCode}</span></Field>
-                    <Field label="Trọng lượng (kg) ✎"><input type="number" value={edit.weight} onChange={e => setEdit({ ...edit, weight: e.target.value })} style={inp} placeholder="0" /></Field>
-                    <Field label="Xưởng ✎">
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <select value={edit.teamCode} onChange={e => setEdit({ ...edit, teamCode: e.target.value })} style={{ ...inp, width: 88 }}>
-                          <option value="">—</option>
-                          {WORKSHOP_CODES.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <label style={{ fontSize: '0.72rem', display: 'flex', gap: 3, alignItems: 'center', cursor: info.already ? 'default' : 'pointer' }}>
-                          <input type="checkbox" checked={edit.isSub} onChange={e => setEdit({ ...edit, isSub: e.target.checked })} /> Thầu phụ
-                        </label>
-                      </div>
-                    </Field>
-                    <Field label="Bắt đầu ✎"><input type="date" value={edit.start} onChange={e => setEdit({ ...edit, start: e.target.value })} style={inp} /></Field>
-                    <Field label="Kết thúc ✎"><input type="date" value={edit.finish} min={edit.start || undefined} onChange={e => setEdit({ ...edit, finish: e.target.value })} style={inp} /></Field>
-                    <Field label="Trạng thái"><span style={strong}>{info.already ? 'Đã phát hành' : 'Sẽ tạo (Chờ vật tư)'}</span></Field>
+              <div style={{ flexShrink: 0, borderTop: '2px solid #0ea5e9', background: '#f8fafc', padding: '10px 20px', maxHeight: '46vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <div style={{ fontSize: '0.82rem' }}>
+                    <span style={strong}>{info.pieceMark} — {info.stageLabel}</span>
+                    <span style={{ color: '#64748b', marginLeft: 12 }}>Dự án: {projectCode}</span>
+                    <span style={{ marginLeft: 12, color: info.anyIssued ? '#166534' : '#64748b' }}>
+                      {info.anyIssued ? `Đã phát hành ${info.allocs.filter(a => a.done).length}/${info.allocs.length} xưởng` : 'Chưa phát hành'}
+                    </span>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <button type="button" onClick={() => { setSel(null); setEdit(null) }} style={{ padding: '8px 16px', fontSize: '0.8rem', border: '1px solid var(--border)', borderRadius: 8, background: '#fff', cursor: 'pointer' }}>Bỏ chọn</button>
-                    {info.already ? (
-                      <>
-                        <Button variant="danger" onClick={deleteWo} loading={issuing}>Xóa WO &amp; mở lại ô</Button>
-                        <Button variant="primary" onClick={updateWo} loading={issuing}>Cập nhật WO</Button>
-                      </>
-                    ) : (
-                      <Button variant="primary" onClick={issue} loading={issuing}>Phát hành WO</Button>
-                    )}
+                    {info.anyIssued && <Button variant="danger" onClick={deleteWo} loading={issuing}>Xóa tất cả &amp; mở lại</Button>}
+                    <Button variant="primary" onClick={applyWo} loading={issuing}>{info.anyIssued ? 'Cập nhật WO' : 'Phát hành WO'}</Button>
                   </div>
                 </div>
+                <table style={{ borderCollapse: 'collapse', fontSize: '0.76rem', maxWidth: 760 }}>
+                  <thead><tr style={{ color: '#64748b' }}>
+                    <th style={pTh}>Xưởng</th><th style={pTh}>Thầu phụ</th><th style={pTh}>Trọng lượng (kg)</th><th style={pTh}>Bắt đầu</th><th style={pTh}>Kết thúc</th><th style={{ ...pTh, width: 30 }} />
+                  </tr></thead>
+                  <tbody>
+                    {edit.map((a, i) => (
+                      <tr key={i}>
+                        <td style={pTd}>
+                          <select value={a.teamCode} onChange={e => setAlloc(i, { teamCode: e.target.value })} style={{ ...inp, width: 104 }}>
+                            <option value="">— (thầu phụ)</option>
+                            {WORKSHOP_CODES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ ...pTd, textAlign: 'center' }}><input type="checkbox" checked={a.isSub} onChange={e => setAlloc(i, { isSub: e.target.checked })} /></td>
+                        <td style={pTd}><input type="number" value={a.weight} onChange={e => setAlloc(i, { weight: e.target.value })} style={{ ...inp, width: 116 }} placeholder="0" /></td>
+                        <td style={pTd}><input type="date" value={a.start} onChange={e => setAlloc(i, { start: e.target.value })} style={inp} /></td>
+                        <td style={pTd}><input type="date" value={a.finish} min={a.start || undefined} onChange={e => setAlloc(i, { finish: e.target.value })} style={inp} /></td>
+                        <td style={{ ...pTd, textAlign: 'center' }}>{edit.length > 1 && <button type="button" onClick={() => removeAlloc(i)} title="Bỏ xưởng" style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1 }}>×</button>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button type="button" onClick={addAlloc} style={{ marginTop: 6, padding: '4px 12px', fontSize: '0.76rem', border: '1px dashed #2563eb', borderRadius: 6, background: '#eff6ff', color: '#1e40af', cursor: 'pointer', fontWeight: 600 }}>+ Thêm xưởng</button>
                 <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: 6 }}>
-                  {info.already
-                    ? 'Ô này đã phát hành WO — sửa Trọng lượng/Xưởng/Ngày rồi bấm "Cập nhật WO" để ghi đè, hoặc "Xóa WO & mở lại ô". (Không xóa được nếu WO đã có báo cáo SX / cấp vật tư.)'
-                    : 'Sửa Trọng lượng/Xưởng/Ngày nếu cần rồi bấm "Phát hành WO". KL lưu RIÊNG cho công đoạn này (mặc định = KL cột trái), sửa ở đây KHÔNG ảnh hưởng KL công đoạn khác.'}
+                  1 công đoạn có thể chia cho nhiều xưởng — mỗi xưởng nhập KL &amp; thời gian riêng, mỗi xưởng tạo 1 WO. KL cột trái chỉ là tham chiếu (không ép).
                 </div>
               </div>
             )}
@@ -275,6 +259,6 @@ const td: CSSProperties = { padding: '3px 6px', border: '1px solid var(--border)
 const fmtD = (v?: string) => { const s = String(v ?? '').trim(); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : s }
 const strong: CSSProperties = { fontWeight: 600, color: '#0f172a' }
 const inp: CSSProperties = { fontSize: '0.75rem', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 5, background: '#fff' }
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <div><div style={{ fontSize: '0.66rem', color: '#64748b', marginBottom: 2 }}>{label}</div>{children}</div>
-}
+// Bảng phân giao xưởng trong panel
+const pTh: CSSProperties = { padding: '2px 8px', textAlign: 'left', fontWeight: 600, fontSize: '0.7rem' }
+const pTd: CSSProperties = { padding: '2px 8px' }

@@ -7,7 +7,8 @@ import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
 import { applyStockMovement } from '@/lib/stock-ledger'
-import { WBS_STAGES, unitTagForRow } from '@/lib/wbs-wo'
+import { WBS_STAGES, unitTagForRow, readAlloc, allocTags, allocCellStr } from '@/lib/wbs-wo'
+import { canManageProjectWo, notProjectPmError } from '@/lib/project-access'
 import { Prisma } from '@prisma/client'
 
 // GET /api/production/:id — Work order detail + material issues
@@ -51,8 +52,9 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
   if (!pResult.success) return pResult.response
   const { id } = pResult.data
 
-  const wo = await prisma.workOrder.findUnique({ where: { id }, select: { id: true } })
+  const wo = await prisma.workOrder.findUnique({ where: { id }, select: { id: true, project: { select: { pmUserId: true } } } })
   if (!wo) return errorResponse('Không tìm thấy lệnh sản xuất', 404)
+  if (!canManageProjectWo(payload.roleCode, payload.userId, wo.project?.pmUserId)) return errorResponse(notProjectPmError(wo.project?.pmUserId), 403)
 
   const body = await req.json().catch(() => ({})) as { description?: string; teamCode?: string; plannedWeight?: number | string; plannedStart?: string; plannedEnd?: string; pieceMark?: string }
   const toDate = (v: unknown) => { const s = String(v ?? '').trim(); if (!s) return null; const d = new Date(s); return Number.isNaN(d.getTime()) ? null : d }
@@ -82,11 +84,15 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
 
 const WBS_STAGE_KEYS = WBS_STAGES.map(s => s.key)
 
-// Ghi ngược 1 WO về đúng ô công đoạn WBS (task P1.2A): KL riêng của ô, xưởng, ngày. Trả true nếu ghi được.
-// Khớp ô theo (UNIT + hạng mục) từ pieceMark ("U1 / MLI9999") + công đoạn từ đuôi woCode.
+// Ghi ngược 1 WO về đúng ô công đoạn WBS (task P1.2A): cập nhật ĐÚNG dòng phân giao xưởng của WO đó
+// trong {stageKey}Alloc. Khớp ô theo (UNIT + hạng mục) từ pieceMark, công đoạn + xưởng từ woCode.
 async function syncWbsFromWo(wo: { projectId: string | null; woCode: string; pieceMark: string | null; teamCode: string; woType: string; plannedWeight: unknown; plannedStart: Date | null; plannedEnd: Date | null }): Promise<boolean> {
   if (!wo.projectId) return false
-  const stageKey = WBS_STAGE_KEYS.find(k => wo.woCode.endsWith(`-${k}`))
+  // woCode: ...-{stageKey}-{teamTag}. Tách teamTag (đoạn cuối) rồi tìm stageKey ở phần còn lại.
+  const lastDash = wo.woCode.lastIndexOf('-')
+  const teamTag = wo.woCode.slice(lastDash + 1)
+  const rest = wo.woCode.slice(0, lastDash)
+  const stageKey = WBS_STAGE_KEYS.find(k => rest.endsWith(`-${k}`))
   if (!stageKey) return false
   const pm = String(wo.pieceMark || '').trim()
   let unitTag = '', hangMuc = pm
@@ -107,15 +113,24 @@ async function syncWbsFromWo(wo: { projectId: string | null; woCode: string; pie
   }
   if (idx < 0) return false
 
-  const cell = wo.woType === 'EXTERNAL'
-    ? (wo.teamCode && wo.teamCode.toUpperCase() !== 'THAUPHU' ? `${wo.teamCode} Thầu phụ` : 'Thầu phụ')
-    : (wo.teamCode || '')
+  const list = readAlloc(rows[idx], stageKey)
+  const tags = allocTags(list)
+  const ai = tags.findIndex(t => t === teamTag)
+  if (ai < 0) return false // không tìm thấy dòng phân giao tương ứng
   const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '')
+  list[ai] = {
+    ...list[ai],
+    teamCode: wo.teamCode && wo.teamCode.toUpperCase() !== 'THAUPHU' ? wo.teamCode : '',
+    isSub: wo.woType === 'EXTERNAL',
+    weight: wo.plannedWeight != null ? String(Number(wo.plannedWeight)) : '',
+    start: iso(wo.plannedStart), finish: iso(wo.plannedEnd),
+  }
   const t = { ...rows[idx] }
-  t[stageKey] = cell
-  if (wo.plannedWeight != null) t[`${stageKey}Weight`] = String(Number(wo.plannedWeight))
-  t[`${stageKey}Start`] = iso(wo.plannedStart)
-  t[`${stageKey}Finish`] = iso(wo.plannedEnd)
+  t[`${stageKey}Alloc`] = JSON.stringify(list)
+  t[stageKey] = allocCellStr(list[0])
+  t[`${stageKey}Weight`] = list[0].weight
+  t[`${stageKey}Start`] = list[0].start
+  t[`${stageKey}Finish`] = list[0].finish
   const nextRows = [...rows]; nextRows[idx] = t
   await prisma.task.update({ where: { id: task.id }, data: { resultData: { ...data, wbsItems: JSON.stringify(nextRows) } as Prisma.InputJsonValue } })
   return true

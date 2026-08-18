@@ -16,13 +16,51 @@ export const WBS_STAGE_LABEL: Record<string, string> = Object.fromEntries(WBS_ST
 export const saniWo = (s: string) => String(s).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
 // Piece-mark có thể TRÙNG giữa các UNIT (VD MLI1645 ở cả UNIT 1 và UNIT 2 với KL khác nhau) →
-// woCode kèm UNIT + STT của dòng để MỖI DÒNG WBS = 1 WO (kể cả 2 dòng trùng tên trong cùng 1 UNIT).
-// unitTag/stt rỗng → bỏ đoạn đó (WBS phẳng cũ → mã tương thích).
-export const woCodeFor = (projectCode: string, hangMuc: string, stageKey: string, unitTag = '', stt = '') =>
-  `WO-${projectCode}-${unitTag ? saniWo(unitTag) + '-' : ''}${stt ? saniWo(stt) + '-' : ''}${saniWo(hangMuc)}-${stageKey}`
+// woCode kèm UNIT + STT của dòng để MỖI DÒNG WBS = 1 WO. teamTag thêm XƯỞNG để 1 ô công đoạn
+// chia cho nhiều xưởng → mỗi xưởng 1 WO riêng (VD ...-cutting-XPC, ...-cutting-XCT1).
+// unitTag/stt/teamTag rỗng → bỏ đoạn đó (tương thích mã cũ).
+export const woCodeFor = (projectCode: string, hangMuc: string, stageKey: string, unitTag = '', stt = '', teamTag = '') =>
+  `WO-${projectCode}-${unitTag ? saniWo(unitTag) + '-' : ''}${stt ? saniWo(stt) + '-' : ''}${saniWo(hangMuc)}-${stageKey}${teamTag ? '-' + saniWo(teamTag) : ''}`
 
 // Piece-mark hiển thị/lưu kèm UNIT: "U1 / MLI1634 - Lot 1". Không có UNIT → giữ nguyên hạng mục.
 export const pieceMarkFor = (hangMuc: string, unitTag = '') => (unitTag ? `${unitTag} / ${hangMuc}` : hangMuc)
+
+// ── Phân giao 1 ô công đoạn cho NHIỀU xưởng (mỗi xưởng: KL + ngày riêng → 1 WO riêng) ──
+export interface StageAlloc { teamCode: string; isSub: boolean; weight: string; start: string; finish: string }
+
+// Tag CƠ SỞ theo xưởng trong 1 ô: 'XPC' | 'XPCTP' (XPC thầu phụ) | 'TP' (thầu phụ thuần).
+export const allocTag = (a: { teamCode?: string; isSub?: boolean }) => saniWo(`${a.teamCode || ''}${a.isSub ? 'TP' : ''}`) || 'TP'
+
+// Tag phân biệt WO cho CẢ danh sách phân giao — CHO PHÉP TRÙNG xưởng: lần xuất hiện thứ 2 trở đi
+// thêm số ('XPC', 'XPC2', 'XPC3'…) để mỗi dòng vẫn ra 1 WO riêng. Lần đầu giữ tag cơ sở (tương thích).
+export function allocTags(list: { teamCode?: string; isSub?: boolean }[]): string[] {
+  const seen = new Map<string, number>()
+  return list.map((a) => {
+    const base = allocTag(a)
+    const n = (seen.get(base) || 0) + 1
+    seen.set(base, n)
+    return n === 1 ? base : `${base}${n}`
+  })
+}
+
+// Chuỗi ô công đoạn ({stageKey}) từ 1 alloc — để tương thích code đọc {stageKey} trực tiếp.
+export const allocCellStr = (a: { teamCode?: string; isSub?: boolean }) =>
+  a.isSub ? (a.teamCode ? `${a.teamCode} Thầu phụ` : 'Thầu phụ') : (a.teamCode || '')
+
+// Đọc danh sách phân giao của 1 ô: ưu tiên {stageKey}Alloc (JSON), else legacy {stageKey}(+Weight/Start/Finish).
+export function readAlloc(row: Record<string, string>, stageKey: string): StageAlloc[] {
+  const raw = row[`${stageKey}Alloc`]
+  if (raw) {
+    try {
+      const a = JSON.parse(raw)
+      if (Array.isArray(a) && a.length) return a.map((e) => ({ teamCode: String(e.teamCode || ''), isSub: !!e.isSub, weight: String(e.weight ?? ''), start: String(e.start ?? ''), finish: String(e.finish ?? '') }))
+    } catch { /* rơi xuống legacy */ }
+  }
+  const val = String(row[stageKey] || '').trim()
+  if (!val) return []
+  const { teamCode, isSub } = normWorkshop(val)
+  return [{ teamCode: teamCode === 'THAUPHU' ? '' : teamCode, isSub, weight: String(row[`${stageKey}Weight`] || '').trim() || String(row.khoiLuong || '').trim(), start: String(row[`${stageKey}Start`] || ''), finish: String(row[`${stageKey}Finish`] || '') }]
+}
 
 /**
  * UNIT của 1 dòng WBS = dòng "UNIT n" gần nhất phía trên (đi ngược từ rowIndex).

@@ -96,10 +96,17 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   if (!result.success) return result.response
   const { projectCode, projectName, clientName, productType, projectType,
           contractValue, currency, startDate, endDate, description,
-          draftId } = result.data
+          draftId, pmUserId: pmUserIdIn } = result.data
 
   const existing = await prisma.project.findUnique({ where: { projectCode } })
   if (existing) return errorResponse(`Mã dự án ${projectCode} đã tồn tại`)
+
+  // PM phụ trách BẮT BUỘC là 1 QLDA (R02). Ưu tiên lựa chọn; nếu không gửi → mặc định người tạo (chỉ khi họ là R02).
+  const pmCandidate = String(pmUserIdIn || '').trim() || (payload.roleCode === 'R02' ? payload.userId : '')
+  if (!pmCandidate) return errorResponse('Phải chọn PM phụ trách (Quản lý dự án) cho dự án', 400)
+  const pm = await prisma.user.findUnique({ where: { id: pmCandidate }, select: { id: true, roleCode: true, isActive: true } })
+  if (!pm || !pm.isActive) return errorResponse('PM phụ trách không hợp lệ / đã vô hiệu', 400)
+  if (pm.roleCode !== 'R02') return errorResponse('PM phụ trách phải là Quản lý dự án (R02)', 400)
 
   const project = await prisma.project.create({
     data: {
@@ -112,7 +119,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
       currency: currency || 'VND',
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
-      pmUserId: payload.userId,
+      pmUserId: pm.id,
       description,
     },
   })

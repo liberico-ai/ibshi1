@@ -1311,8 +1311,10 @@ async function spawnTemplateStep(
       deadline: step.deadlineDays ? new Date(Date.now() + step.deadlineDays * 86400000) : null,
     },
   })
+  let stepUserId: string | undefined
   if (step.roleCode) {
     const stepUser = await resolveRoleToUser(step.roleCode, projectId, step.code)
+    stepUserId = stepUser.id
     await prisma.taskAssignee.create({ data: { taskId: t.id, role: step.roleCode, userId: stepUser.id, isPrimary: true } })
   }
   await prisma.taskHistory.create({ data: { taskId: t.id, action: 'CREATED', byUserId: byUser, toRole: step.roleCode } })
@@ -1320,7 +1322,8 @@ async function spawnTemplateStep(
     prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } }),
     prisma.user.findUnique({ where: { id: byUser }, select: { fullName: true } }),
   ])
-  await notifyAssignees(t.id, t.title, step.roleCode ? [{ role: step.roleCode }] : [], {
+  // Thông báo cho ĐÚNG người đã resolve (PM phụ trách) — KHÔNG nở role → toàn bộ PM.
+  await notifyAssignees(t.id, t.title, step.roleCode ? [{ role: step.roleCode, userId: stepUserId }] : [], {
     projectCode: project?.projectCode, projectName: project?.projectName,
     createdByName: creator?.fullName, deadline: t.deadline,
   })
