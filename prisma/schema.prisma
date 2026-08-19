@@ -2416,6 +2416,10 @@ model BidAnalysis {
   selectedVendorId String?   @map("selected_vendor_id") // BidQuoteVendor.id được chọn (mode PER_BID)
   sourceTaskId     String?   @map("source_task_id")     // nối task P3.5 (Đợt 6)
   notes            String?
+  // Giải trình MSDT/đấu thầu (khớp Commerce): mã cũ tự do + file giải trình gốc (PDF/Excel) đã ký.
+  legacyBidCode    String?   @map("legacy_bid_code") // VD "MSDT 401 - VPI-113 - Bulong"
+  sourceFileName   String?   @map("source_file_name") // tên file gốc
+  sourceFilePath   String?   @map("source_file_path") // URL public để tải lại (/uploads/...)
   createdBy        String?   @map("created_by")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
