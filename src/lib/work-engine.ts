@@ -66,6 +66,16 @@ export async function resolveRoleToUser(roleCode: string, projectId?: string | n
     }
   }
 
+  // Role R02 (PM) của 1 dự án → ƯU TIÊN PM PHỤ TRÁCH (pmUserId), KHÔNG rơi về "trưởng phòng R02 mặc định".
+  // (Đặt trước bước tìm-R02-chung; nếu chưa gán PM thì mới xuống các bước dưới.)
+  if (roleCode === 'R02' && projectId) {
+    const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { pmUserId: true } })
+    if (proj?.pmUserId) {
+      const pm = await prisma.user.findUnique({ where: { id: proj.pmUserId }, select: { id: true, fullName: true, isActive: true } })
+      if (pm?.isActive) return { id: pm.id, fullName: pm.fullName }
+    }
+  }
+
   const exact = await prisma.user.findFirst({
     where: { roleCode, isActive: true },
     orderBy: [{ userLevel: 'asc' }, { createdAt: 'asc' }],
@@ -143,7 +153,7 @@ function rolesInSameDept(roleCode?: string | null): string[] {
 async function notifyAssignees(
   taskId: string, title: string,
   assignees: { role?: string | null; userId?: string | null }[],
-  opts?: { projectCode?: string; projectName?: string; createdByName?: string; deadline?: Date | null },
+  opts?: { projectCode?: string; projectName?: string; createdByName?: string; deadline?: Date | null; skipTelegram?: boolean },
 ) {
   const userIds = new Set<string>()
   for (const a of assignees) {
@@ -165,6 +175,8 @@ async function notifyAssignees(
       })),
     })
   } catch (e) { console.error('notifyAssignees DB error:', e, { taskId, userIds: [...userIds] }) }
+
+  if (opts?.skipTelegram) return // VD task P1.1 "Tạo dự án": PM xử lý inline, không bắn Telegram
 
   // Telegram group notification
   try {
@@ -1323,9 +1335,10 @@ async function spawnTemplateStep(
     prisma.user.findUnique({ where: { id: byUser }, select: { fullName: true } }),
   ])
   // Thông báo cho ĐÚNG người đã resolve (PM phụ trách) — KHÔNG nở role → toàn bộ PM.
+  // P1.1 "Tạo dự án": tắt Telegram (PM xác nhận inline trên trang dự án; tránh noti "giao việc" thừa).
   await notifyAssignees(t.id, t.title, step.roleCode ? [{ role: step.roleCode, userId: stepUserId }] : [], {
     projectCode: project?.projectCode, projectName: project?.projectName,
-    createdByName: creator?.fullName, deadline: t.deadline,
+    createdByName: creator?.fullName, deadline: t.deadline, skipTelegram: step.code === 'P1.1',
   })
   return true
 }

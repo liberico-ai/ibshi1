@@ -35,7 +35,9 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
 
   const oldPm = project.pmUserId
 
-  // Chuyển task đang mở của dự án (role R02) về PM mới
+  // Chuyển TẤT CẢ task đang mở của dự án thuộc PHÒNG DỰ ÁN (role R02 = PM, R02a = NV QLDA) về PM mới.
+  // → không còn giao cho "trưởng phòng mặc định" hay gán linh tinh.
+  const QLDA_ROLES = ['R02', 'R02a']
   const openTasks = await prisma.task.findMany({
     where: { projectId: id, status: { notIn: ['DONE', 'CANCELLED', 'CLOSED'] } },
     select: { id: true },
@@ -45,11 +47,11 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
   await prisma.$transaction(async (tx) => {
     await tx.project.update({ where: { id }, data: { pmUserId } })
     if (taskIds.length) {
-      await tx.taskAssignee.updateMany({ where: { taskId: { in: taskIds }, role: 'R02' }, data: { userId: pmUserId } })
+      await tx.taskAssignee.updateMany({ where: { taskId: { in: taskIds }, role: { in: QLDA_ROLES } }, data: { userId: pmUserId } })
     }
   })
 
-  const reassigned = taskIds.length ? await prisma.taskAssignee.count({ where: { taskId: { in: taskIds }, role: 'R02', userId: pmUserId } }) : 0
+  const reassigned = taskIds.length ? await prisma.taskAssignee.count({ where: { taskId: { in: taskIds }, role: { in: QLDA_ROLES }, userId: pmUserId } }) : 0
   await logAudit(payload.userId, 'ASSIGN_PM', 'Project', id, { from: oldPm, to: pmUserId }, getClientIP(req))
 
   return successResponse(
