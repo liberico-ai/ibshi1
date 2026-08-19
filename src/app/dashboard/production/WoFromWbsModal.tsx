@@ -12,7 +12,8 @@ interface ProjectOption { id: string; projectCode: string; projectName: string }
 type Row = Record<string, string>
 type AllocRow = { teamCode: string; isSub: boolean; weight: string; start: string; finish: string }
 const WORKSHOP_CODES = PRODUCTION_WORKSHOPS.map(w => w.code)
-const allocLabel = (a: { teamCode: string; isSub: boolean }) => (a.teamCode ? (a.isSub ? `${a.teamCode} TP` : a.teamCode) : 'Thầu phụ')
+// Nhãn hiển thị ô: ưu tiên giá trị gốc từ file (raw, VD "XHAN"/"N/A"); else theo mã xưởng đã chuẩn hoá.
+const allocLabel = (a: { teamCode: string; isSub: boolean; raw?: string }) => (a.raw ? a.raw : (a.teamCode ? (a.isSub ? `${a.teamCode} TP` : a.teamCode) : 'Thầu phụ'))
 
 export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
   open: boolean; projects: ProjectOption[]; onClose: () => void; onIssued: () => void

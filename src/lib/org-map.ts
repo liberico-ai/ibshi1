@@ -1,5 +1,5 @@
 // Cơ cấu tổ chức RÚT GỌN (hiệu lực tháng 5/2026): Phòng Sản xuất + 12 tổ TO-* được
-// thay bằng 5 XƯỞNG (XPC/XCT1/XCT2/XH/XHT) + Site Manager; Kho tách khỏi TCKT; HCNS quay lại.
+// thay bằng 5 XƯỞNG (XPC/XCT1/XCT2/XHAN/XHT) + Site Manager; Kho tách khỏi TCKT; HCNS quay lại.
 // LƯU Ý: roleCode GIỮ NGUYÊN, việc vẫn route theo role. ROLE_TO_DEPT giờ chỉ là PHÒNG MẶC ĐỊNH
 // cho user mới — phòng THẬT của mỗi user lấy từ User.departmentId (đã gán theo "Bộ phận mới").
 
@@ -22,7 +22,7 @@ export const DEPARTMENTS_V2: DeptDef[] = [
   { code: 'XPC', name: 'Xưởng Pha cắt' },
   { code: 'XCT1', name: 'Xưởng Chế tạo số 1' },
   { code: 'XCT2', name: 'Xưởng Chế tạo số 2' },
-  { code: 'XH', name: 'Xưởng Hàn' },
+  { code: 'XHAN', name: 'Xưởng Hàn' },
   { code: 'XHT', name: 'Xưởng Hoàn thiện' },
   { code: 'SITEMGR', name: 'Site Manager' },
 ]
@@ -32,7 +32,7 @@ export const PRODUCTION_WORKSHOPS: DeptDef[] = [
   { code: 'XPC', name: 'Xưởng Pha cắt' },
   { code: 'XCT1', name: 'Xưởng Chế tạo số 1' },
   { code: 'XCT2', name: 'Xưởng Chế tạo số 2' },
-  { code: 'XH', name: 'Xưởng Hàn' },
+  { code: 'XHAN', name: 'Xưởng Hàn' },
   { code: 'XHT', name: 'Xưởng Hoàn thiện' },
 ]
 
@@ -41,7 +41,7 @@ export const TEAM_TO_WORKSHOP: Record<string, string> = {
   'TO-PC2': 'XPC', 'TO-PC3': 'XPC', 'TO-GCCK': 'XPC',
   'TO-GL1': 'XCT1', 'TO-GL4': 'XCT1',
   'TO-GL2': 'XCT2', 'TO-GL3': 'XCT2', 'TO-GL5': 'XCT2',
-  'TO-HAN1': 'XH', 'TO-HAN2': 'XH',
+  'TO-HAN1': 'XHAN', 'TO-HAN2': 'XHAN',
   'TO-TH': 'XHT', 'TO-SON': 'XHT',
   'TO-CG': 'TB', // Tổ cơ giới → Phòng Trang thiết bị
 }
@@ -79,7 +79,7 @@ export function rolesOfDept(deptCode: string): string[] {
 export const DEPT_PRIMARY_ROLE: Record<string, string> = {
   BGD: 'R01', CNTT: 'R10', KHO: 'R05', HCNS: 'R11', TCKT: 'R08', KTKT: 'R03',
   QLDA: 'R02', TK: 'R04', QAQC: 'R09', TB: 'R13',
-  XPC: 'R06', XCT1: 'R06', XCT2: 'R06', XH: 'R06', XHT: 'R06', SITEMGR: 'R06',
+  XPC: 'R06', XCT1: 'R06', XCT2: 'R06', XHAN: 'R06', XHT: 'R06', SITEMGR: 'R06',
 }
 
 export const DEPT_KEYWORDS: Record<string, string[]> = {
@@ -95,7 +95,7 @@ export const DEPT_KEYWORDS: Record<string, string[]> = {
   CNTT: ['phần mềm', 'ibs one', 'dữ liệu', 'hệ thống', 'cntt', 'automation', 'ai'],
   // Sản xuất tách theo xưởng
   XPC: ['pha cắt', 'cắt', 'cnc', 'plasma', 'laser', 'gia công cơ khí', 'khoan'],
-  XH: ['hàn', 'que hàn', 'thợ hàn'],
+  XHAN: ['hàn', 'que hàn', 'thợ hàn'],
   XHT: ['sơn', 'làm sạch', 'phun hạt mài', 'đóng kiện', 'hoàn thiện', 'bảo ôn'],
   XCT1: ['chế tạo', 'gá lắp', 'tổ hợp', 'thợ sắt', 'sản xuất', 'lệnh sản xuất', 'lsx', 'thi công', 'job card', 'phiếu công việc'],
 }

@@ -73,7 +73,7 @@ R01=BGĐ, R02=PM, R02a=NV QLDA, R03=KTKH, R03a=NV KTKH, R04=Design, R04a=NV TK, 
 | Trực tiếp | Xưởng Pha cắt | XPC | R06 | R06a, R06b | ← Tổ Pha cắt 2/3 + GCCK |
 | Trực tiếp | Xưởng Chế tạo 1 | XCT1 | R06 | R06a, R06b | ← Tổ gá lắp 1/4 |
 | Trực tiếp | Xưởng Chế tạo 2 | XCT2 | R06 | R06a, R06b | ← Tổ gá lắp 2/3/5 |
-| Trực tiếp | Xưởng Hàn | XH | R06 | R06a, R06b | ← Tổ hàn 1/2 |
+| Trực tiếp | Xưởng Hàn | XHAN | R06 | R06a, R06b | ← Tổ hàn 1/2 (đổi mã XH→XHAN 2026-08) |
 | Trực tiếp | Xưởng Hoàn thiện | XHT | R06 | R06a, R06b | ← Tổ tổng hợp + sơn |
 | Trực tiếp | Site Manager | SITEMGR | R06 | | |
 

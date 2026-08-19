@@ -26,7 +26,7 @@ export const woCodeFor = (projectCode: string, hangMuc: string, stageKey: string
 export const pieceMarkFor = (hangMuc: string, unitTag = '') => (unitTag ? `${unitTag} / ${hangMuc}` : hangMuc)
 
 // ── Phân giao 1 ô công đoạn cho NHIỀU xưởng (mỗi xưởng: KL + ngày riêng → 1 WO riêng) ──
-export interface StageAlloc { teamCode: string; isSub: boolean; weight: string; start: string; finish: string }
+export interface StageAlloc { teamCode: string; isSub: boolean; weight: string; start: string; finish: string; raw?: string }
 
 // Tag CƠ SỞ theo xưởng trong 1 ô: 'XPC' | 'XPCTP' (XPC thầu phụ) | 'TP' (thầu phụ thuần).
 export const allocTag = (a: { teamCode?: string; isSub?: boolean }) => saniWo(`${a.teamCode || ''}${a.isSub ? 'TP' : ''}`) || 'TP'
@@ -59,7 +59,8 @@ export function readAlloc(row: Record<string, string>, stageKey: string): StageA
   const val = String(row[stageKey] || '').trim()
   if (!val) return []
   const { teamCode, isSub } = normWorkshop(val)
-  return [{ teamCode: teamCode === 'THAUPHU' ? '' : teamCode, isSub, weight: String(row[`${stageKey}Weight`] || '').trim() || String(row.khoiLuong || '').trim(), start: String(row[`${stageKey}Start`] || ''), finish: String(row[`${stageKey}Finish`] || '') }]
+  // raw = giá trị gốc trong file (VD "XHAN", "N/A") để hiển thị đúng, không suy diễn thành "Thầu phụ".
+  return [{ teamCode: teamCode === 'THAUPHU' ? '' : teamCode, isSub, raw: val.replace(/\s+/g, ' '), weight: String(row[`${stageKey}Weight`] || '').trim() || String(row.khoiLuong || '').trim(), start: String(row[`${stageKey}Start`] || ''), finish: String(row[`${stageKey}Finish`] || '') }]
 }
 
 /**
@@ -76,6 +77,8 @@ export function unitTagForRow(rows: Record<string, string>[], rowIndex: number):
 }
 
 const VALID_WORKSHOP = new Set(PRODUCTION_WORKSHOPS.map(w => w.code)) // XPC, XCT1, XCT2, XH, XHT
+// Biến thể mã xưởng cũ/lạ trong file Excel → mã chuẩn. Mã Xưởng Hàn nay là "XHAN"; "XH" cũ vẫn nhận.
+const WORKSHOP_ALIAS: Record<string, string> = { XH: 'XHAN', XUONGHAN: 'XHAN' }
 
 /**
  * Chuẩn hóa giá trị ô công đoạn WBS (VD "XPC", "XCT-1", "Thầu phụ", "XCT-1\nThầu phụ") → mã xưởng + cờ thầu phụ.
@@ -90,6 +93,7 @@ export function normWorkshop(raw: unknown): { teamCode: string; isSub: boolean }
   for (const tok of s.split(/[\s/]+/)) {
     const code = tok.toUpperCase().replace(/[^A-Z0-9]/g, '')
     if (VALID_WORKSHOP.has(code)) { teamCode = code; break }
+    if (WORKSHOP_ALIAS[code]) { teamCode = WORKSHOP_ALIAS[code]; break } // XHAN → XH…
   }
   if (!teamCode) teamCode = isSub ? 'THAUPHU' : ''
   return { teamCode, isSub }

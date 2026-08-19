@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 // Ánh xạ trực tiếp tên phòng trong cột "Người thực hiện" → mã phòng theo org-map.ts
 const ACTION_BY_DEPT: { re: RegExp; dept: string }[] = [
   { re: /(phòng\s*)?d\.?a\b|dự án|quản lý dự án/i, dept: 'QLDA' },
-  { re: /xưởng\s*hàn|(^|\s)hàn\b/i, dept: 'XH' },
+  { re: /xưởng\s*hàn|(^|\s)hàn\b/i, dept: 'XHAN' },
   { re: /xưởng\s*(pha\s*)?cắt|pha cắt|gia công cơ khí/i, dept: 'XPC' },
   { re: /xưởng\s*hoàn thiện|hoàn thiện|sơn|làm sạch|đóng kiện/i, dept: 'XHT' },
   { re: /(phòng\s*)?sx\b|sản xuất|thầu phụ|xưởng|chế tạo|gá lắp|tổ\s/i, dept: 'XCT1' },

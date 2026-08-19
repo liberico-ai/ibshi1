@@ -42,7 +42,7 @@ export const DEPARTMENTS = [
   { code: 'XPC', name: 'Xưởng Pha cắt', nameEn: 'Cutting Workshop' },
   { code: 'XCT1', name: 'Xưởng Chế tạo số 1', nameEn: 'Fabrication Workshop 1' },
   { code: 'XCT2', name: 'Xưởng Chế tạo số 2', nameEn: 'Fabrication Workshop 2' },
-  { code: 'XH', name: 'Xưởng Hàn', nameEn: 'Welding Workshop' },
+  { code: 'XHAN', name: 'Xưởng Hàn', nameEn: 'Welding Workshop' },
   { code: 'XHT', name: 'Xưởng Hoàn thiện', nameEn: 'Finishing Workshop' },
   { code: 'SITEMGR', name: 'Site Manager', nameEn: 'Site Manager' },
 ] as const
