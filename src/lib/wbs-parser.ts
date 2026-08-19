@@ -110,28 +110,47 @@ export function parseWbsExcel(rows: unknown[][]): WbsRow[] {
   }
   if (anchor < 0) return []
 
-  // 2. Xác định dòng dữ liệu bắt đầu = dòng đầu tiên sau anchor có STT là SỐ
+  // 2. Xác định dòng dữ liệu bắt đầu.
+  //   Form đa tầng (BCTH-IBSHI-QLDA-01) có dòng "lá" chứa 'Đơn vị/Start/Finish' cho từng công đoạn,
+  //   và dòng lá này thường TRÙNG với dòng đánh số cột (1,2,3…) ở các cột cơ bản. Vì ô STT của nó = "1"
+  //   nên heuristic "STT là số" sẽ DỪNG NHẦM ngay tại dòng lá → cắt mất tầng công đoạn → phân giao xưởng trống.
+  //   → Ưu tiên: nếu có dòng lá (≥3 ô Đơn vị/Start/Finish) trong 8 dòng đầu sau anchor, coi đó là dòng
+  //   header CUỐI và dữ liệu bắt đầu NGAY SAU nó. Không có dòng lá → về heuristic "STT là số" (form cũ 1 tầng).
+  const leafCount = (row: string[]) => row.reduce((n, c) => n + (leaf(c) ? 1 : 0), 0)
+  let leafRow = -1, leafMax = 2 // cần ≥3 ô lá (một dòng lá công đoạn có ~18×3); tránh nhầm dòng chỉ có Start/Finish tổng
+  for (let r = anchor; r < Math.min(anchor + 8, grid.length); r++) {
+    const cnt = leafCount(grid[r])
+    if (cnt > leafMax) { leafMax = cnt; leafRow = r }
+  }
   let dataStart = anchor + 1
-  for (let r = anchor + 1; r < grid.length; r++) {
-    if (/^\d+([.,]\d+)?$/.test(norm(grid[r][sttCol]))) { dataStart = r; break }
+  if (leafRow >= 0) {
+    dataStart = leafRow + 1
+  } else {
+    for (let r = anchor + 1; r < grid.length; r++) {
+      if (/^\d+([.,]\d+)?$/.test(norm(grid[r][sttCol]))) { dataStart = r; break }
+    }
   }
   const headerRows = grid.slice(anchor, dataStart).map(ffill)
   const ncol = Math.max(...headerRows.map(r => r.length), 0)
 
-  // 3. Map từng cột → key
+  // 3. Map từng cột → key — HOÀN TOÀN theo NHÃN, không theo vị trí cột/số tầng.
+  //   Thêm/bớt/đổi chỗ cột, thêm/bớt/đổi thứ tự dòng header đều không sao: mỗi cột tự nhận diện qua chữ.
   const colKey: string[] = []
   for (let c = 0; c < ncol; c++) {
     const tiers = headerRows.map(hr => hr[c] || '')
-    // tầng "tên công đoạn" = tầng áp chót (ngay trên leaf) khi có ≥3 tầng; nếu 2 tầng thì tầng trên
-    const stageTier = headerRows.length >= 3 ? tiers[tiers.length - 2] : (headerRows.length === 2 ? tiers[0] : '')
-    const leafTier = tiers[tiers.length - 1]
-    const st = stageOf(stageTier)
-    const lf = leaf(leafTier)
+    // Công đoạn = có BẤT KỲ tầng nào khớp tên công đoạn (Cắt/Hàn/GCCK…) VÀ có BẤT KỲ tầng nào là ô lá
+    // (Đơn vị/Start/Finish). Quét mọi tầng → không phụ thuộc form có mấy tầng hay tầng nào nằm trên.
+    // Cột số lượng "Bảo ôn/Sơn/Mạ (m2)" cũng chứa chữ công đoạn nhưng KHÔNG có ô lá → rơi về cột cơ bản.
+    let st: string | null = null, lf = ''
+    for (const t of tiers) { if (!st) { const s = stageOf(t); if (s) st = s } if (!lf) lf = leaf(t) }
     if (st && lf) {
       colKey[c] = lf === 'unit' ? st : `${st}${lf === 'start' ? 'Start' : 'Finish'}`
     } else {
-      // cột cơ bản: ghép mọi tầng rồi khớp (ưu tiên tầng cụ thể nhất)
-      colKey[c] = baseKeyOf([...tiers].reverse().join(' ')) || baseKeyOf(tiers.join(' '))
+      // Cột cơ bản: khớp theo TỪNG tầng, ưu tiên tầng CỤ THỂ NHẤT (lá → gốc). Tránh header cha bị
+      // forward-fill (VD "Phạm vi/Scope" phủ lên cột "Sub-Contractor") nuốt nhãn con của cột.
+      let bk = ''
+      for (let t = tiers.length - 1; t >= 0 && !bk; t--) bk = baseKeyOf(tiers[t])
+      colKey[c] = bk || baseKeyOf(tiers.join(' '))
     }
   }
 
@@ -145,7 +164,8 @@ export function parseWbsExcel(rows: unknown[][]): WbsRow[] {
     const row: WbsRow = { stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', khuVuc: '', ghiChu: '' }
     for (let c = 0; c < ncol; c++) {
       const k = colKey[c]; if (!k) continue
-      let val = String(rowArr[c] ?? '').trim(); if (!val) continue
+      // Gộp xuống dòng trong ô (VD "XPC\nThầu phụ") về 1 dòng → khớp mã xưởng/ngày downstream không lệch.
+      let val = String(rowArr[c] ?? '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim(); if (!val) continue
       if (isDateKey(k)) val = toISODate(val)
       row[k] = val
     }
