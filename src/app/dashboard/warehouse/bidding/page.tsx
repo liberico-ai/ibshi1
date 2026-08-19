@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, Fragment } from 'react'
 import * as XLSX from 'xlsx'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify, confirmDialog } from '@/components/ui/Toast'
@@ -12,10 +12,11 @@ interface BidRow { id: string; bidCode: string; subject: string; status: string;
 interface PrItem { id: string; itemCode: string; itemName: string; profile: string; grade: string; uom: string; toBuyQty: number; materialGroupCode: string | null; prCode: string }
 interface Vendor { id: string; vendorName: string; vendorType: string; currency: string; totalQuote: number; isWinner: boolean }
 interface Offer { scope?: string | null; unitPrice: number; totalPrice: number; deliveryTerm?: string | null; remarks?: string | null }
-interface BidItem { id: string; itemOrder: number; itemCode: string; itemName: string; profile: string; grade: string; uom: string; qtyToBuy: number; qtyPr: number; estimateTotal: number; alreadyBoughtAmount: number; selectedVendorName: string | null; notes: string | null; offers: Record<string, Offer> }
+interface BidItem { id: string; itemOrder: number; itemCode: string; itemName: string; profile: string; grade: string; uom: string; qtyToBuy: number; qtyPr: number; estimateTotal: number; alreadyBoughtAmount: number; selectedVendorName: string | null; notes: string | null; offers: Record<string, Offer>; groupCode?: string; groupLabel?: string }
 interface StepTask { id: string; status: string; canEdit: boolean }
 interface BidPO { id: string; poCode: string; status: string; currency: string; totalValue: number; vendorName: string }
-interface BidDetail { bid: { id: string; bidCode: string; subject: string; status: string; selectionMode: string; matGroup: string | null; project?: { projectCode: string } | null }; vendors: Vendor[]; items: BidItem[]; purchaseOrders: BidPO[] }
+interface WeightCriteria { price?: number; quality?: number; paymentTerms?: number }
+interface BidDetail { bid: { id: string; bidCode: string; subject: string; status: string; selectionMode: string; matGroup: string | null; project?: { projectCode: string } | null; legacyBidCode?: string | null; sourceFileName?: string | null; sourceFilePath?: string | null; weightingCriteria?: WeightCriteria | null }; vendors: Vendor[]; items: BidItem[]; purchaseOrders: BidPO[] }
 
 const STATUS_COLOR: Record<string, 'info' | 'warning' | 'success' | 'default' | 'danger'> = {
   OPEN: 'default', EVALUATING: 'info', SELECTED: 'warning', CONTRACTED: 'success', CANCELLED: 'danger',
@@ -28,9 +29,15 @@ const SELECTION_MODES = [
   { key: 'PER_ITEM', label: 'Chọn NCC theo từng dòng', desc: 'Mỗi vật tư chọn NCC riêng (linh hoạt)', bestFor: 'Nhiều item cùng nhóm, giá biến động', icon: '📋' },
   { key: 'PER_BID', label: 'Chọn 1 NCC cho cả BID', desc: '1 NCC thắng toàn bộ vật tư', bestFor: 'BID đơn giản, ít item, 1 nhóm', icon: '🛡️' },
   { key: 'AUTO_MIN_PRICE', label: 'Tự động giá thấp nhất', desc: 'Hệ thống chọn đơn giá thấp nhất mỗi dòng', bestFor: 'Tiêu chuẩn, không ràng buộc NCC', icon: '✨' },
-  { key: 'PER_GROUP', label: 'Chọn theo nhóm vật tư', desc: 'Mỗi nhóm 1 NCC (đang dùng chọn theo dòng)', bestFor: '>10 item, >2 nhóm vật tư', icon: '🗂️' },
-  { key: 'MANUAL_WEIGHTED', label: 'Chấm điểm đa tiêu chí', desc: 'Giá + chất lượng + thanh toán (đang dùng chọn theo dòng)', bestFor: 'Giá trị lớn, đánh giá tổng thể', icon: '📊' },
+  { key: 'PER_GROUP', label: 'Chọn theo nhóm vật tư', desc: 'Mỗi nhóm vật tư 1 NCC', bestFor: '>10 item, >2 nhóm vật tư', icon: '🗂️' },
+  { key: 'MANUAL_WEIGHTED', label: 'Chấm điểm đa tiêu chí', desc: 'Giá + chất lượng + thanh toán (trọng số)', bestFor: 'Giá trị lớn, đánh giá tổng thể', icon: '📊' },
 ]
+// Gợi ý chế độ theo số item + số nhóm (bám Commerce suggestSelectionMode).
+function suggestSelectionMode(itemsCount: number, uniqueGroups: number): string {
+  if (itemsCount < 10) return 'PER_BID'
+  if (uniqueGroups > 2) return 'PER_GROUP'
+  return 'PER_ITEM'
+}
 const fmtN = (n: number) => formatNumber(n)
 const fmtM = (n: number) => formatCurrency(n)
 
@@ -103,6 +110,22 @@ export default function BiddingPage() {
   const reloadDetail = () => { if (detail) openDetail(detail.bid.id); loadBids(); loadStepTasks() }
   const reloadAll = () => { loadBids(); loadStepTasks(); setDetail(null) }
 
+  // File GIẢI TRÌNH đã ký — đính kèm ngay vào đợt BID (khớp Commerce, không cần trang riêng)
+  const attachGiaiTrinh = async (file: File) => {
+    if (!detail) return
+    if (file.size > 25 * 1024 * 1024) { notify('File quá lớn (>25MB)', 'error'); return }
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
+    const fd = new FormData(); fd.append('file', file)
+    const r = await fetch(`/api/procurement/bid-analyses/${detail.bid.id}/source-file`, { method: 'POST', body: fd, headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(x => x.json()).catch(() => ({ ok: false, error: 'Lỗi mạng' }))
+    if (r.ok) { notify('Đã đính kèm giải trình', 'success'); reloadDetail() } else notify(r.error || 'Lỗi đính kèm', 'error')
+  }
+  const removeGiaiTrinh = async () => {
+    if (!detail || !(await confirmDialog('Gỡ file giải trình khỏi đợt BID này?'))) return
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/source-file`, { method: 'DELETE' })
+    if (r.ok) { notify('Đã gỡ giải trình', 'success'); reloadDetail() } else notify(r.error || 'Lỗi gỡ', 'error')
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       <PageHeader title="Báo giá / Đấu thầu (RFQ)" subtitle="Tạo RFQ từ PR → nhập báo giá NCC → so sánh → duyệt chọn NCC" />
@@ -157,6 +180,23 @@ export default function BiddingPage() {
                 <Badge variant={STATUS_COLOR[detail.bid.status] || 'default'}>{STATUS_LABEL[detail.bid.status] || detail.bid.status}</Badge>
               </h3>
               <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{detail.bid.subject} · Dự án {detail.bid.project?.projectCode || '—'} · Nhóm {detail.bid.matGroup || '—'}</p>
+              {/* File GIẢI TRÌNH đã ký (MSDT) — đính kèm/tải ngay tại đây */}
+              <div className="flex items-center gap-2 mt-1.5 text-xs">
+                <span style={{ color: 'var(--text-secondary)' }}>📄 Giải trình MSDT:</span>
+                {detail.bid.sourceFilePath ? (
+                  <>
+                    <a href={detail.bid.sourceFilePath} target="_blank" rel="noreferrer" className="font-semibold" style={{ color: 'var(--accent)' }}>{detail.bid.sourceFileName || 'Tải file'}</a>
+                    <label className="cursor-pointer" style={{ color: 'var(--text-muted)' }} title="Thay file khác">✏️ Đổi
+                      <input type="file" accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) attachGiaiTrinh(f); e.currentTarget.value = '' }} />
+                    </label>
+                    <button onClick={removeGiaiTrinh} style={{ color: 'var(--danger)' }} title="Gỡ file">🗑 Gỡ</button>
+                  </>
+                ) : (
+                  <label className="cursor-pointer font-semibold" style={{ color: 'var(--accent)' }}>+ Đính kèm PDF đã ký
+                    <input type="file" accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) attachGiaiTrinh(f); e.currentTarget.value = '' }} />
+                  </label>
+                )}
+              </div>
             </div>
             <div className="flex gap-2">
               <Button variant="primary" onClick={() => setShowQuote(true)}>+ Nhập báo giá NCC</Button>
@@ -282,6 +322,8 @@ interface ApproveSummary { summary: { totalItems: number; assignedItems: number;
 
 function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onReload: () => void; activeStep: 'P3.5' | 'P3.6' | null }) {
   const { vendors, items } = detail
+  const uniqueGroups = new Set(items.map(it => it.groupCode || 'KHAC')).size || 1
+  const suggested = suggestSelectionMode(items.length, uniqueGroups)
   const [mode, setMode] = useState(detail.bid.selectionMode || 'PER_ITEM')
   const [summary, setSummary] = useState<ApproveSummary | null>(null)
   const [poBusy, setPoBusy] = useState(false)
@@ -302,12 +344,8 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
     }
     setMode(m)
     const pr = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/selection-mode`, { method: 'PATCH', body: JSON.stringify({ selectionMode: m }) })
-    if (!pr.ok) { notify(pr.error || 'Lỗi đổi chế độ', 'error'); onReload(); return }
-    if (m === 'AUTO_MIN_PRICE') {
-      const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/auto-select-min-price`, { method: 'POST', body: '{}' })
-      if (r.ok) notify(r.message || 'Đã tự chọn', 'success')
-    }
-    onReload() // phản ánh lựa chọn đã bị xóa (và auto nếu có)
+    if (!pr.ok) { notify(pr.error || 'Lỗi đổi chế độ', 'error') }
+    onReload() // phản ánh lựa chọn của mode cũ đã bị xóa; thao tác cụ thể nằm ở panel của mode mới
   }
   const selectItem = async (itemId: string, vendorName: string) => {
     const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/items/${itemId}/select-vendor`, { method: 'PATCH', body: JSON.stringify({ vendorName: vendorName || null }) })
@@ -326,20 +364,29 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
     <div className="space-y-4">
       {/* Chế độ chọn NCC */}
       <div>
-        <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>Chế độ chọn nhà cung cấp</div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+            Chế độ chọn nhà cung cấp · {items.length} item · {uniqueGroups} nhóm · gợi ý: <span className="font-mono font-bold" style={{ color: 'var(--accent)' }}>{SELECTION_MODES.find(m => m.key === suggested)?.label || suggested}</span>
+          </div>
+          {mode !== suggested && <button onClick={() => changeMode(suggested)} className="text-[11px] px-2 py-0.5 rounded font-bold" style={{ background: 'var(--surface-hover)', color: 'var(--accent)' }}>Dùng gợi ý</button>}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {SELECTION_MODES.map(sm => (
-            <button key={sm.key} onClick={() => changeMode(sm.key)} className="rounded-lg px-3 py-2 text-left" style={{ border: `1px solid ${mode === sm.key ? 'var(--accent)' : 'var(--border)'}`, background: mode === sm.key ? 'var(--surface-hover)' : 'var(--surface)', maxWidth: 220 }}>
-              <div className="text-xs font-bold flex items-center gap-1" style={{ color: mode === sm.key ? 'var(--accent)' : 'var(--text-primary)' }}>
+            <button key={sm.key} onClick={() => changeMode(sm.key)} className="rounded-lg px-3 py-2 text-left" style={{ border: `2px solid ${mode === sm.key ? 'var(--accent)' : 'var(--border)'}`, background: mode === sm.key ? 'var(--surface-hover)' : 'var(--surface)' }}>
+              <div className="text-xs font-bold flex items-center gap-1 flex-wrap" style={{ color: mode === sm.key ? 'var(--accent)' : 'var(--text-primary)' }}>
                 {sm.icon} {sm.label}
                 {mode === sm.key && <span className="text-[9px] px-1 rounded-full text-white" style={{ background: 'var(--accent)' }}>Đang dùng</span>}
+                {sm.key === suggested && mode !== sm.key && <span className="text-[9px] px-1 rounded-full" style={{ background: 'var(--surface-hover)', color: 'var(--accent)' }}>Gợi ý</span>}
               </div>
               <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{sm.desc}</div>
-              <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Phù hợp: {sm.bestFor}</div>
+              <div className="text-[10px] mt-0.5 italic" style={{ color: 'var(--text-muted)' }}>Phù hợp: {sm.bestFor}</div>
             </button>
           ))}
         </div>
       </div>
+
+      {/* Panel riêng theo chế độ (PER_ITEM thao tác trực tiếp ở bảng dưới) */}
+      <ModePanel mode={mode} detail={detail} summary={summary} onReload={onReload} />
 
       {/* Summary stats */}
       {summary && (
@@ -465,6 +512,195 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
       </div>
       )}
     </div>
+  )
+}
+
+// ══ Panel thao tác riêng theo chế độ chọn NCC ══
+function ModePanel({ mode, detail, onReload }: { mode: string; detail: BidDetail; summary: ApproveSummary | null; onReload: () => void }) {
+  if (mode === 'PER_BID') return <PerBidPanel detail={detail} onReload={onReload} />
+  if (mode === 'PER_GROUP') return <PerGroupPanel detail={detail} onReload={onReload} />
+  if (mode === 'AUTO_MIN_PRICE') return <AutoMinPricePanel detail={detail} onReload={onReload} />
+  if (mode === 'MANUAL_WEIGHTED') return <WeightedPanel detail={detail} onReload={onReload} />
+  return null // PER_ITEM: thao tác trực tiếp ở bảng từng dòng bên dưới
+}
+
+function KhungChon({ tieuDe, moTa, children }: { tieuDe: string; moTa: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg p-3 space-y-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <div>
+        <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{tieuDe}</div>
+        <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{moTa}</div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+// PER_BID — giao cả gói cho 1 NCC
+function PerBidPanel({ detail, onReload }: { detail: BidDetail; onReload: () => void }) {
+  const assign = async (v: Vendor) => {
+    if (v.isWinner) return
+    if (!await confirmDialog(`Giao TOÀN BỘ ${detail.items.length} dòng cho ${v.vendorName}?`)) return
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/select-vendor`, { method: 'POST', body: JSON.stringify({ vendorId: v.id }) })
+    if (r.ok) { notify(r.message || 'Đã giao cả gói', 'success'); onReload() } else notify(r.error || 'Lỗi', 'error')
+  }
+  return (
+    <KhungChon tieuDe="Chọn 1 NCC cho toàn bộ BID" moTa="1 nhà cung cấp thắng tất cả vật tư trong gói này.">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+        {detail.vendors.map(v => (
+          <div key={v.id} className="rounded-lg p-2.5 flex flex-col gap-1" style={{ border: `1px solid ${v.isWinner ? '#16a34a' : 'var(--border)'}`, background: v.isWinner ? '#f0fdf4' : 'var(--surface)' }}>
+            <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{v.vendorName}</div>
+            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{v.vendorType === 'IMPORT' ? 'Nhập khẩu' : 'Trong nước'} · {v.currency}</div>
+            <div className="text-xs font-mono font-bold mb-1" style={{ color: '#166534' }}>{fmtM(v.totalQuote)}</div>
+            <Button variant={v.isWinner ? 'outline' : 'primary'} size="sm" onClick={() => assign(v)} disabled={v.isWinner}>{v.isWinner ? '✓ Đang chọn' : 'Giao cả gói cho NCC này'}</Button>
+          </div>
+        ))}
+      </div>
+    </KhungChon>
+  )
+}
+
+// PER_GROUP — mỗi nhóm vật tư 1 NCC
+function PerGroupPanel({ detail, onReload }: { detail: BidDetail; onReload: () => void }) {
+  const groups = useMemo(() => {
+    const m = new Map<string, { code: string; label: string; items: BidItem[] }>()
+    for (const it of detail.items) {
+      const code = it.groupCode || 'KHAC'
+      if (!m.has(code)) m.set(code, { code, label: it.groupLabel || code, items: [] })
+      m.get(code)!.items.push(it)
+    }
+    return [...m.values()]
+  }, [detail.items])
+  const pick = async (groupCode: string, vendorName: string) => {
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/group-selection`, { method: 'POST', body: JSON.stringify({ groupCode, vendorName: vendorName || null }) })
+    if (r.ok) { notify(r.message || 'Đã gán', 'success'); onReload() } else notify(r.error || 'Lỗi', 'error')
+  }
+  return (
+    <KhungChon tieuDe="Chọn nhà cung cấp theo nhóm vật tư" moTa="Mỗi nhóm vật tư gán 1 NCC — áp cho tất cả dòng trong nhóm.">
+      <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+        <thead><tr style={{ color: 'var(--text-muted)' }}><th className="text-left px-2 py-1">Nhóm vật tư</th><th className="text-right px-2 py-1">Số dòng</th><th className="text-left px-2 py-1">Đã gán</th><th className="text-left px-2 py-1" style={{ minWidth: 180 }}>NCC cho cả nhóm</th></tr></thead>
+        <tbody>
+          {groups.map(g => {
+            const assigned = g.items.filter(it => it.selectedVendorName)
+            const distinct = new Set(assigned.map(it => it.selectedVendorName))
+            const cur = distinct.size === 1 ? ([...distinct][0] || '') : ''
+            return (
+              <tr key={g.code} style={{ borderTop: '1px solid var(--border)' }}>
+                <td className="px-2 py-1 font-semibold">{g.label}</td>
+                <td className="px-2 py-1 text-right font-mono">{g.items.length}</td>
+                <td className="px-2 py-1" style={{ color: 'var(--text-muted)' }}>{assigned.length}/{g.items.length}{distinct.size > 1 && <span style={{ color: '#b45309' }}> ({distinct.size} NCC khác nhau)</span>}</td>
+                <td className="px-2 py-1">
+                  <select value={cur} onChange={e => pick(g.code, e.target.value)} className="input text-xs" style={{ minWidth: 170 }}>
+                    <option value="">— Chọn NCC —</option>
+                    {detail.vendors.map(v => <option key={v.id} value={v.vendorName}>{v.vendorName}</option>)}
+                  </select>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </KhungChon>
+  )
+}
+
+// AUTO_MIN_PRICE — chạy chọn tự động
+function AutoMinPricePanel({ detail, onReload }: { detail: BidDetail; onReload: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const usable = detail.items.filter(it => detail.vendors.some(v => (it.offers[v.id]?.unitPrice || 0) > 0)).length
+  const run = async () => {
+    if (busy) return
+    if (!await confirmDialog('Chạy chọn tự động? Lựa chọn thủ công hiện có sẽ bị ghi đè theo đơn giá thấp nhất mỗi dòng.')) return
+    setBusy(true)
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/auto-select-min-price`, { method: 'POST', body: '{}' })
+    setBusy(false)
+    if (r.ok) { notify(r.message || 'Đã chọn tự động', 'success'); onReload() } else notify(r.error || 'Lỗi', 'error')
+  }
+  return (
+    <KhungChon tieuDe="Tự động chọn nhà cung cấp rẻ nhất" moTa="Mỗi dòng chọn NCC có đơn giá thấp nhất (>0). Dòng không có báo giá sẽ bỏ trống.">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Dòng có báo giá dùng được: <b style={{ color: 'var(--text-primary)' }}>{usable}/{detail.items.length}</b>{hasMixedCurrency(detail.vendors) && <span style={{ color: '#b45309' }}> · BID trộn nhiều loại tiền tệ</span>}</span>
+        <Button variant="primary" size="sm" onClick={run} disabled={busy || usable === 0}>{busy ? 'Đang chạy…' : 'Chạy chọn tự động'}</Button>
+      </div>
+    </KhungChon>
+  )
+}
+
+// MANUAL_WEIGHTED — chấm điểm theo trọng số
+type ScoreRow = { gia: string; chatLuong: string; thanhToan: string; overall: number }
+function WeightedPanel({ detail, onReload }: { detail: BidDetail; onReload: () => void }) {
+  const w = { price: detail.bid.weightingCriteria?.price ?? 0.5, quality: detail.bid.weightingCriteria?.quality ?? 0.3, paymentTerms: detail.bid.weightingCriteria?.paymentTerms ?? 0.2 }
+  const [scores, setScores] = useState<Record<string, ScoreRow>>({})
+  const [savingName, setSavingName] = useState('')
+
+  const load = useCallback(async () => {
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/vendor-scores`)
+    if (r.ok) {
+      const map: Record<string, ScoreRow> = {}
+      for (const s of (r.scores || []) as Array<{ vendorName: string; priceScore: number; qualityScore: number; paymentScore: number; overallScore: number }>) {
+        map[s.vendorName] = { gia: String(s.priceScore), chatLuong: String(s.qualityScore), thanhToan: String(s.paymentScore), overall: s.overallScore }
+      }
+      setScores(map)
+    }
+  }, [detail.bid.id])
+  useEffect(() => { load() }, [load])
+
+  const setField = (name: string, k: 'gia' | 'chatLuong' | 'thanhToan', val: string) =>
+    setScores(p => ({ ...p, [name]: { ...(p[name] || { gia: '', chatLuong: '', thanhToan: '', overall: 0 }), [k]: val } }))
+  const liveOverall = (name: string): number | null => {
+    const s = scores[name]; if (!s) return null
+    return Number(s.gia || 0) * w.price + Number(s.chatLuong || 0) * w.quality + Number(s.thanhToan || 0) * w.paymentTerms
+  }
+  const save = async (v: Vendor) => {
+    const s = scores[v.vendorName] || { gia: '', chatLuong: '', thanhToan: '' }
+    setSavingName(v.vendorName)
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/vendor-scores`, { method: 'POST', body: JSON.stringify({ vendorName: v.vendorName, priceScore: Number(s.gia || 0), qualityScore: Number(s.chatLuong || 0), paymentScore: Number(s.thanhToan || 0) }) })
+    setSavingName('')
+    if (r.ok) { notify(r.message || 'Đã chấm điểm', 'success'); load() } else notify(r.error || 'Lỗi', 'error')
+  }
+  const ranked = detail.vendors.map(v => ({ v, overall: scores[v.vendorName]?.overall ?? -1 })).filter(x => x.overall >= 0).sort((a, b) => b.overall - a.overall)
+  const top = ranked[0]
+  const assignTop = async () => {
+    if (!top) return
+    if (!await confirmDialog(`Giao cả gói cho ${top.v.vendorName} (cao điểm nhất: ${top.overall.toFixed(1)})?`)) return
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/select-vendor`, { method: 'POST', body: JSON.stringify({ vendorId: top.v.id }) })
+    if (r.ok) { notify(r.message || 'Đã giao', 'success'); onReload() } else notify(r.error || 'Lỗi', 'error')
+  }
+  return (
+    <KhungChon tieuDe="Chấm điểm nhà cung cấp theo trọng số" moTa={`Cho điểm 0–100 mỗi tiêu chí. Điểm tổng = Giá ${Math.round(w.price * 100)}% + Chất lượng ${Math.round(w.quality * 100)}% + Thanh toán ${Math.round(w.paymentTerms * 100)}%. Chấm xong giao cả gói cho NCC cao điểm nhất.`}>
+      <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+        <thead><tr style={{ color: 'var(--text-muted)' }}>
+          <th className="text-left px-2 py-1">Nhà cung cấp</th>
+          <th className="text-center px-2 py-1">Giá ({Math.round(w.price * 100)}%)</th>
+          <th className="text-center px-2 py-1">Chất lượng ({Math.round(w.quality * 100)}%)</th>
+          <th className="text-center px-2 py-1">Thanh toán ({Math.round(w.paymentTerms * 100)}%)</th>
+          <th className="text-right px-2 py-1">Điểm tổng</th><th />
+        </tr></thead>
+        <tbody>
+          {detail.vendors.map(v => {
+            const s = scores[v.vendorName] || { gia: '', chatLuong: '', thanhToan: '' }
+            const ov = liveOverall(v.vendorName)
+            const isTop = !!top && top.v.id === v.id
+            return (
+              <tr key={v.id} style={{ borderTop: '1px solid var(--border)' }}>
+                <td className="px-2 py-1 font-semibold">{isTop && '★ '}{v.vendorName}</td>
+                {(['gia', 'chatLuong', 'thanhToan'] as const).map(k => (
+                  <td key={k} className="px-2 py-1 text-center"><input type="number" min={0} max={100} value={s[k]} onChange={e => setField(v.vendorName, k, e.target.value)} className="input text-xs text-center" style={{ width: 64 }} /></td>
+                ))}
+                <td className="px-2 py-1 text-right font-mono font-bold" style={{ color: isTop ? '#166534' : 'var(--text-primary)' }}>{ov !== null ? ov.toFixed(1) : '—'}</td>
+                <td className="px-2 py-1 text-right"><Button variant="outline" size="sm" onClick={() => save(v)} disabled={savingName === v.vendorName}>{savingName === v.vendorName ? '…' : 'Lưu điểm'}</Button></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {top && (
+        <div className="flex items-center justify-between flex-wrap gap-2 rounded-lg p-2" style={{ background: '#f0fdf4', border: '1px solid #86efac' }}>
+          <span className="text-xs" style={{ color: '#166534' }}>Cao điểm nhất: <b>{top.v.vendorName}</b> ({top.overall.toFixed(1)} điểm)</span>
+          <Button variant="primary" size="sm" onClick={assignTop}>Giao cả gói cho NCC này</Button>
+        </div>
+      )}
+    </KhungChon>
   )
 }
 

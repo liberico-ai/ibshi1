@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { groupCodeOf, groupLabelOf } from '@/lib/material-group'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       select: {
         id: true, bidCode: true, subject: true, status: true, selectionMode: true,
         bidCodeMat: true, bidCodeUrgent: true, bidDate: true, notes: true,
+        legacyBidCode: true, sourceFileName: true, sourceFilePath: true, weightingCriteria: true,
         project: { select: { id: true, projectCode: true, projectName: true } },
         vendors: {
           orderBy: { vendorOrder: 'asc' },
@@ -46,6 +48,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         id: bid.id, bidCode: bid.bidCode, subject: bid.subject, status: bid.status,
         selectionMode: bid.selectionMode, matGroup: bid.bidCodeMat, urgent: bid.bidCodeUrgent,
         bidDate: bid.bidDate, notes: bid.notes, project: bid.project,
+        legacyBidCode: bid.legacyBidCode, sourceFileName: bid.sourceFileName, sourceFilePath: bid.sourceFilePath,
+        weightingCriteria: bid.weightingCriteria,
       },
       vendors: bid.vendors.map(v => ({
         id: v.id, vendorId: v.vendorId, vendorName: v.vendorName, vendorType: v.vendorType,
@@ -58,6 +62,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       items: bid.items.map(it => ({
         id: it.id, itemOrder: it.itemOrder, itemCode: it.itemCode, itemName: it.itemName,
         profile: it.profile, grade: it.grade, uom: it.uom,
+        groupCode: groupCodeOf(it), groupLabel: groupLabelOf(groupCodeOf(it)),
         qtyToBuy: Number(it.qtyToBuy || 0), qtyPr: Number(it.qtyPr || 0),
         estimateUnitPrice: Number(it.estimateUnitPrice || 0),
         estimateTotal: Number(it.estimateUnitPrice || 0) * Number(it.qtyToBuy || 0),

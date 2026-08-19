@@ -24,8 +24,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Đổi mode → RESET lựa chọn của mode cũ (tránh rác chồng mode: vd PER_BID→PER_ITEM còn sót selectedVendorName).
     await prisma.$transaction(async (tx) => {
-      await tx.bidQuoteItem.updateMany({ where: { bidId: id }, data: { selectedVendorName: null } })
+      await tx.bidQuoteItem.updateMany({ where: { bidId: id }, data: { selectedVendorName: null, selectedAt: null, selectedBy: null } })
       await tx.bidQuoteVendor.updateMany({ where: { bidId: id }, data: { isWinner: false } })
+      await tx.bidGroupSelection.deleteMany({ where: { bidAnalysisId: id } })
+      await tx.bidVendorScore.deleteMany({ where: { bidAnalysisId: id } })
       await tx.bidAnalysis.update({
         where: { id },
         data: { selectionMode: body.selectionMode, selectedVendorId: null, status: ba.status === 'SELECTED' ? 'EVALUATING' : ba.status },

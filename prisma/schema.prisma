@@ -2416,6 +2416,10 @@ model BidAnalysis {
   selectedVendorId String?   @map("selected_vendor_id") // BidQuoteVendor.id được chọn (mode PER_BID)
   sourceTaskId     String?   @map("source_task_id")     // nối task P3.5 (Đợt 6)
   notes            String?
+  // Chấm điểm đa tiêu chí (MANUAL_WEIGHTED): trọng số {"price":0.5,"quality":0.3,"paymentTerms":0.2}
+  weightingCriteria Json?    @map("weighting_criteria")
+  approvedBy       String?   @map("approved_by")  // ai chốt NCC
+  approvedAt       DateTime? @map("approved_at")
   // Giải trình MSDT/đấu thầu (khớp Commerce): mã cũ tự do + file giải trình gốc (PDF/Excel) đã ký.
   legacyBidCode    String?   @map("legacy_bid_code") // VD "MSDT 401 - VPI-113 - Bulong"
   sourceFileName   String?   @map("source_file_name") // tên file gốc
@@ -2424,14 +2428,54 @@ model BidAnalysis {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  project        Project?         @relation(fields: [projectId], references: [id])
-  vendors        BidQuoteVendor[]
-  items          BidQuoteItem[]
-  purchaseOrders PurchaseOrder[]
+  project         Project?             @relation(fields: [projectId], references: [id])
+  vendors         BidQuoteVendor[]
+  items           BidQuoteItem[]
+  purchaseOrders  PurchaseOrder[]
+  groupSelections BidGroupSelection[]
+  vendorScores    BidVendorScore[]
 
   @@index([projectId])
   @@index([bidCodeProj, bidCodeYymm])
+  @@index([selectionMode])
   @@map("bid_analyses")
+}
+
+// PER_GROUP — mỗi nhóm vật tư (materialSubGroupCode) chọn 1 NCC (áp xuống selectedVendorName cấp dòng).
+model BidGroupSelection {
+  id                   String   @id @default(cuid())
+  bidAnalysisId        String   @map("bid_analysis_id")
+  materialSubGroupCode String   @map("material_sub_group_code")
+  selectedVendorName   String   @map("selected_vendor_name")
+  selectedAt           DateTime @default(now()) @map("selected_at")
+  selectedBy           String?  @map("selected_by")
+  notes                String?
+
+  bid BidAnalysis @relation(fields: [bidAnalysisId], references: [id], onDelete: Cascade)
+
+  @@unique([bidAnalysisId, materialSubGroupCode])
+  @@index([bidAnalysisId])
+  @@map("bid_group_selections")
+}
+
+// MANUAL_WEIGHTED — chấm điểm từng NCC (0-100) theo 3 tiêu chí; overallScore = tổng có trọng số (tính ở server).
+model BidVendorScore {
+  id            String   @id @default(cuid())
+  bidAnalysisId String   @map("bid_analysis_id")
+  vendorName    String   @map("vendor_name")
+  priceScore    Float    @default(0) @map("price_score")
+  qualityScore  Float    @default(0) @map("quality_score")
+  paymentScore  Float    @default(0) @map("payment_score")
+  overallScore  Float    @default(0) @map("overall_score")
+  scoredAt      DateTime @default(now()) @map("scored_at")
+  scoredBy      String?  @map("scored_by")
+  notes         String?
+
+  bid BidAnalysis @relation(fields: [bidAnalysisId], references: [id], onDelete: Cascade)
+
+  @@unique([bidAnalysisId, vendorName])
+  @@index([bidAnalysisId])
+  @@map("bid_vendor_scores")
 }
 
 model BidQuoteVendor {
@@ -2469,7 +2513,9 @@ model BidQuoteItem {
   qtyToBuy              Decimal  @default(0) @map("qty_to_buy")
   estimateUnitPrice     Decimal  @default(0) @map("estimate_unit_price")
   alreadyBoughtAmount   Decimal  @default(0) @map("already_bought_amount") // "Đã mua" (từ lịch sử/HĐ trước)
-  selectedVendorName    String?  @map("selected_vendor_name") // NCC chọn cho dòng này (PER_ITEM)
+  selectedVendorName    String?  @map("selected_vendor_name") // NCC chọn cho dòng này — NGUỒN SỰ THẬT cho create-po
+  selectedAt            DateTime? @map("selected_at")
+  selectedBy            String?  @map("selected_by")
   notes                 String?
   createdAt             DateTime @default(now()) @map("created_at")
 
