@@ -15,6 +15,7 @@ export default function FabCategoriesPage() {
   const [cats, setCats] = useState<Cat[]>([])
   const [form, setForm] = useState({ code: '', name: '', sortOrder: '', ghiChu: '' })
   const [editing, setEditing] = useState<Cat | null>(null)
+  const [importResult, setImportResult] = useState<{ soDongNhan: number; soDongNhap: number; soDongBoQua: number; loi: Array<{ dong: number; ly_do: string }> } | null>(null)
 
   useEffect(() => { apiFetch('/api/projects?page=1&limit=100').then(r => { if (r.ok) setProjects(r.projects || []) }) }, [])
 
@@ -56,7 +57,8 @@ export default function FabCategoriesPage() {
       if (raw.length === 0) { notify('File không có dòng nào', 'error'); return }
       const rows = raw.map(r => ({ code: r['Mã hạng mục'], name: r['Tên hạng mục'], sortOrder: r['Thứ tự'], ghiChu: r['Ghi chú'] }))
       const r = await apiFetch(`/api/procurement/fab-categories/import?projectId=${projectId}`, { method: 'POST', body: JSON.stringify({ rows }) })
-      if (r.ok) { notify(r.message || 'Đã nhập', 'success'); load() } else notify(r.error || 'Lỗi nhập', 'error')
+      if (r.ok) { notify(r.message || 'Đã nhập', 'success'); setImportResult({ soDongNhan: r.soDongNhan, soDongNhap: r.soDongNhap, soDongBoQua: r.soDongBoQua, loi: r.loi || [] }); load() }
+      else { setImportResult(null); notify(r.error || 'Lỗi nhập', 'error') }
     } catch (e) { console.error(e); notify('Không đọc được file Excel', 'error') }
   }
 
@@ -79,6 +81,33 @@ export default function FabCategoriesPage() {
           </div>
         )}
       </div>
+
+      {/* Panel kết quả nhập file (chi tiết dòng bỏ qua + lỗi) */}
+      {importResult && (
+        <div className="card p-4 space-y-2" style={{ borderLeft: `3px solid ${importResult.soDongBoQua ? '#f59e0b' : '#16a34a'}` }}>
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Kết quả nhập file</div>
+            <button onClick={() => setImportResult(null)} className="text-xs" style={{ color: 'var(--text-muted)' }}>✕ Ẩn</button>
+          </div>
+          <div className="flex gap-4 text-xs flex-wrap">
+            <span>Đọc: <b className="font-mono">{importResult.soDongNhan}</b></span>
+            <span style={{ color: '#166534' }}>Đã nhập: <b className="font-mono">{importResult.soDongNhap}</b></span>
+            <span style={{ color: importResult.soDongBoQua ? '#b45309' : 'var(--text-muted)' }}>Bỏ qua: <b className="font-mono">{importResult.soDongBoQua}</b></span>
+          </div>
+          {importResult.loi.length > 0 && (
+            <div className="mt-1 max-h-40 overflow-y-auto rounded-lg" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+              <table className="w-full text-[11px]">
+                <thead><tr style={{ color: '#92400e' }}><th className="text-left px-2 py-1" style={{ width: 60 }}>Dòng</th><th className="text-left px-2 py-1">Lý do bỏ qua</th></tr></thead>
+                <tbody>
+                  {importResult.loi.map((l, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid #fde68a' }}><td className="px-2 py-0.5 font-mono" style={{ color: '#b45309' }}>{l.dong}</td><td className="px-2 py-0.5" style={{ color: '#78350f' }}>{l.ly_do}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {projectId && (
         <div className="card p-5 space-y-4">

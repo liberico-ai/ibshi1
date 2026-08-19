@@ -28,6 +28,8 @@ export default function FabAllocationPage() {
   const [edits, setEdits] = useState<Record<string, Edit>>({})
   const [limit, setLimit] = useState(80)
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+  const [statusF, setStatusF] = useState<'all' | 'un' | 'done'>('all')
 
   useEffect(() => { apiFetch('/api/projects?page=1&limit=100').then(r => { if (r.ok) setProjects(r.projects || []) }) }, [])
 
@@ -74,6 +76,18 @@ export default function FabAllocationPage() {
 
   const dirtyCount = Object.keys(edits).length
 
+  // Lọc theo tìm kiếm + trạng thái phân bổ (dựa trên tồn phân bổ đã lưu tongQty)
+  const filteredItems = (grid?.items || []).filter(row => {
+    if (statusF === 'un' && row.tongQty > 0) return false
+    if (statusF === 'done' && !(row.tongQty > 0)) return false
+    const q = search.trim().toLowerCase()
+    if (q) {
+      const hay = `${row.itemCode || ''} ${row.profile || ''} ${row.grade || ''} ${row.itemName || ''} ${row.prCode || ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+
   return (
     <div className="space-y-5 animate-fade-in">
       <PageHeader title="Phân bổ chế tạo" subtitle="Phân bổ vật tư PR cho từng hạng mục chế tạo của dự án — SL · khối lượng · ngày cần tại công trường" />
@@ -100,6 +114,17 @@ export default function FabAllocationPage() {
             <span>Trần mỗi vật tư = <b>SL yêu cầu mua (reqQty)</b>; tổng phân bổ không vượt trần.</span>
           </div>
 
+          {/* Tìm kiếm + lọc trạng thái */}
+          <div className="flex gap-2 items-center flex-wrap">
+            <input value={search} onChange={e => { setSearch(e.target.value); setLimit(80) }} placeholder="Tìm mã VT / quy cách / mác / phiếu…" className="input text-xs" style={{ maxWidth: 280 }} />
+            <div className="flex gap-1">
+              {([['all', 'Tất cả'], ['un', 'Chưa phân bổ'], ['done', 'Đã phân bổ']] as const).map(([k, l]) => (
+                <button key={k} onClick={() => { setStatusF(k); setLimit(80) }} className="text-[11px] px-2.5 py-1 rounded-lg font-semibold" style={{ border: `1px solid ${statusF === k ? 'var(--accent)' : 'var(--border)'}`, color: statusF === k ? 'var(--accent)' : 'var(--text-muted)', background: statusF === k ? 'var(--surface-hover)' : 'var(--surface)' }}>{l}</button>
+              ))}
+            </div>
+            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{filteredItems.length}/{grid.items.length} vật tư</span>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', width: '100%' }}>
           <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
             <table style={{ borderCollapse: 'collapse', whiteSpace: 'nowrap', width: 'max-content', fontSize: '0.72rem' }}>
@@ -121,7 +146,7 @@ export default function FabAllocationPage() {
                 </tr>
               </thead>
               <tbody>
-                {grid.items.slice(0, limit).map(row => {
+                {filteredItems.slice(0, limit).map(row => {
                   const tong = rowTong(row)
                   const conLai = row.reqQty - tong
                   const vuot = row.reqQty > 0 && tong > row.reqQty + 0.001
@@ -154,10 +179,10 @@ export default function FabAllocationPage() {
             </table>
           </div>
           </div>
-          {grid.items.length > limit && (
+          {filteredItems.length > limit && (
             <div className="text-center">
               <button onClick={() => setLimit(l => l + 120)} className="text-xs px-4 py-1.5 rounded-lg font-semibold" style={{ border: '1px solid var(--border)', color: 'var(--accent)' }}>
-                Xem thêm ({grid.items.length - limit} vật tư còn lại)
+                Xem thêm ({filteredItems.length - limit} vật tư còn lại)
               </button>
             </div>
           )}
