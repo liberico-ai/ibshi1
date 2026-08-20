@@ -27,7 +27,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const item = await prisma.bidQuoteItem.findFirst({ where: { id: itemId, bidId: id }, select: { id: true } })
     if (!item) return errorResponse('Dòng không thuộc BID này', 404)
 
-    await prisma.bidQuoteItem.update({ where: { id: itemId }, data: { selectedVendorName: vendorName } })
+    // Validate NCC phải thuộc BID (chặn gán tên NCC lạ vào dòng).
+    if (vendorName) {
+      const ok = await prisma.bidQuoteVendor.findFirst({ where: { bidId: id, vendorName }, select: { id: true } })
+      if (!ok) return errorResponse('NCC không thuộc BID này', 400)
+    }
+    await prisma.bidQuoteItem.update({ where: { id: itemId }, data: { selectedVendorName: vendorName, selectedAt: vendorName ? new Date() : null, selectedBy: vendorName ? payload.userId : null } })
     await prisma.bidAnalysis.updateMany({ where: { id, status: 'OPEN' }, data: { status: 'EVALUATING' } })
     return successResponse({ itemId, selectedVendorName: vendorName })
   } catch (err) {

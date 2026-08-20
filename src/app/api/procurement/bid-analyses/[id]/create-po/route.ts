@@ -37,7 +37,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
     if (!bid) return errorResponse('Không tìm thấy BID', 404)
 
-    const selected = bid.items.filter(it => it.selectedVendorName)
+    // Bỏ dòng placeholder (ghi chú/người đề nghị/ký) — không tạo PO cho dòng không phải vật tư (khớp Commerce).
+    const PLACEHOLDER = /^(ghi ch[úu]|ng[ưu][ờo]i [đd][ềe] ngh[ịi]|note|remarks|k[ýy] t[êe]n|signature)/i
+    const selected = bid.items.filter(it => it.selectedVendorName && !PLACEHOLDER.test(String(it.itemName || '').trim()))
     if (selected.length === 0) return errorResponse('Chưa chọn NCC cho dòng nào — vào tab Duyệt chọn NCC trước', 400)
 
     const bqvByName = new Map(bid.vendors.map(v => [v.vendorName.toLowerCase(), v]))

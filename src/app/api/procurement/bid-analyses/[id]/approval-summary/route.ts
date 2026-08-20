@@ -43,7 +43,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       const vId = vendorIdByName.get(it.selectedVendorName.toLowerCase())
       const offer = vId ? it.offers.find(o => o.vendorId === vId) : undefined
       const unitPrice = Number(offer?.unitPrice || 0)
-      const totalPrice = Number(offer?.totalPrice || 0)
+      // Thành tiền: ưu tiên totalPrice đã lưu; thiếu thì tính đơn giá × SL (khớp Commerce, tránh ra 0).
+      const totalPrice = Number(offer?.totalPrice) > 0 ? Number(offer!.totalPrice) : unitPrice * Number(it.qtyToBuy || 0)
       totalApprovedValue += totalPrice
       const key = it.selectedVendorName
       if (!groups.has(key)) groups.set(key, { vendorName: key, itemCount: 0, totalValue: 0, items: [] })
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         totalItems: bid.items.length, assignedItems, pendingItems: bid.items.length - assignedItems,
         totalApprovedValue, vendorCount: groups.size,
       },
-      byVendor: [...groups.values()],
+      byVendor: [...groups.values()].sort((a, b) => b.totalValue - a.totalValue),
     })
   } catch (err) {
     console.error('GET approval-summary error:', err)
