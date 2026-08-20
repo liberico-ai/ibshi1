@@ -2509,6 +2509,18 @@ model BidAnalysis {
   @@map("bid_analyses")
 }
 
+// Alert Center — đánh dấu "đã xử lý" cho 1 dòng đối soát BID↔Mua↔Hóa đơn (canonicalKey = projectId|vendorId).
+model AlertResolution {
+  id           String   @id @default(cuid())
+  canonicalKey String   @unique @map("canonical_key")
+  resolvedBy   String   @map("resolved_by")
+  resolvedAt   DateTime @default(now()) @map("resolved_at")
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("alert_resolutions")
+}
+
 // PER_GROUP — mỗi nhóm vật tư (materialSubGroupCode) chọn 1 NCC (áp xuống selectedVendorName cấp dòng).
 model BidGroupSelection {
   id                   String   @id @default(cuid())
