@@ -6,6 +6,7 @@ import { apiFetch } from '@/hooks/useAuth'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 import { PageHeader, Button, Badge } from '@/components/ui'
 import { formatCurrency, formatNumber, formatDate } from '@/lib/utils'
+import { parseQuoteExcel, matchQuoteLinesToPr } from '@/lib/quote-parser'
 
 interface Proj { id: string; projectCode: string; projectName: string }
 interface BidRow { id: string; bidCode: string; subject: string; status: string; matGroup: string | null; urgent: boolean; itemCount: number; vendorCount: number; totalValue: number; projectCode: string; bidDate: string | null }
@@ -771,24 +772,44 @@ function EnterQuoteModal({ bidId, items, onCancel, onSaved }: { bidId: string; i
   const importExcel = async (file: File) => {
     try {
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' }); const ws = wb.Sheets[wb.SheetNames[0]]
-      const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
-      const norm = (s: string) => s.trim().toUpperCase().replace(/\s+/g, '')
-      const byCode = new Map(items.map(it => [norm(it.itemCode || ''), it]))
-      const pick = (r: Record<string, unknown>, keys: string[]) => { for (const k of Object.keys(r)) { if (keys.some(t => norm(k) === norm(t))) return r[k] } return '' }
-      const toNum = (v: unknown) => typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, '')) || 0
       const next = { ...rows }; let matched = 0, unmatched = 0
-      for (const r of raw) {
-        const code = norm(String(pick(r, ['Mã VT', 'Ma VT', 'itemCode'])))
-        const unit = toNum(pick(r, ['Đơn giá', 'Don gia', 'unitPrice']))
-        const tot = toNum(pick(r, ['Thành tiền', 'Thanh tien', 'totalPrice']))
-        const scope = String(pick(r, ['Phạm vi', 'Pham vi', 'scope']) || 'V')
-        if (!code) continue
-        const it = byCode.get(code)
-        if (it && unit > 0) { next[it.id] = { unitPrice: String(unit), totalPrice: String(tot > 0 ? tot : Math.round(unit * it.qtyToBuy)), scope: scope || 'V', manual: tot > 0 }; matched++ }
-        else if (unit > 0) unmatched++
+
+      // 1) Ưu tiên parser IBS chuẩn: đọc template báo giá song ngữ (header dò tự động, cột 2 ngôn ngữ),
+      //    khớp dòng ↔ vật tư BID theo mã/quy cách/mác (không phụ thuộc STT).
+      const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
+      const lines = parseQuoteExcel(grid)
+      if (lines.length > 0) {
+        const prShape = items.map(it => ({ stt: it.itemCode || '', code: it.itemCode || '', description: it.itemName || '', profile: it.profile || '', grade: it.grade || '', unit: it.uom || '', qty: it.qtyToBuy }))
+        for (const l of matchQuoteLinesToPr(lines, prShape)) {
+          if (l.unitPrice <= 0) continue
+          if (l.matchedPrIndex == null || l.matchedPrIndex < 0) { unmatched++; continue }
+          const it = items[l.matchedPrIndex]
+          next[it.id] = { unitPrice: String(l.unitPrice), totalPrice: String(l.amount > 0 ? l.amount : Math.round(l.unitPrice * it.qtyToBuy)), scope: 'V', manual: l.amount > 0 }
+          matched++
+        }
       }
+
+      // 2) Fallback: sheet phẳng (header dòng đầu, cột "Mã VT"/"Đơn giá") — khớp theo mã.
+      if (matched === 0) {
+        const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+        const norm = (s: string) => s.trim().toUpperCase().replace(/\s+/g, '')
+        const byCode = new Map(items.map(it => [norm(it.itemCode || ''), it]))
+        const pick = (r: Record<string, unknown>, keys: string[]) => { for (const k of Object.keys(r)) { if (keys.some(t => norm(k) === norm(t))) return r[k] } return '' }
+        const toNum = (v: unknown) => typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, '')) || 0
+        for (const r of raw) {
+          const code = norm(String(pick(r, ['Mã VT', 'Ma VT', 'itemCode'])))
+          const unit = toNum(pick(r, ['Đơn giá', 'Don gia', 'unitPrice']))
+          const tot = toNum(pick(r, ['Thành tiền', 'Thanh tien', 'totalPrice']))
+          const scope = String(pick(r, ['Phạm vi', 'Pham vi', 'scope']) || 'V')
+          if (!code) continue
+          const it = byCode.get(code)
+          if (it && unit > 0) { next[it.id] = { unitPrice: String(unit), totalPrice: String(tot > 0 ? tot : Math.round(unit * it.qtyToBuy)), scope: scope || 'V', manual: tot > 0 }; matched++ }
+          else if (unit > 0) unmatched++
+        }
+      }
+
       setRows(next)
-      notify(matched > 0 ? `Đã khớp ${matched} dòng theo Mã VT${unmatched ? `, ${unmatched} không khớp` : ''}` : 'Không khớp dòng nào — kiểm tra cột "Mã VT"/"Đơn giá"', matched > 0 ? 'success' : 'error')
+      notify(matched > 0 ? `Đã khớp ${matched} dòng báo giá${unmatched ? `, ${unmatched} dòng không khớp vật tư BID` : ''}` : 'Không khớp dòng nào — kiểm tra file có cột Đơn giá + quy cách/mác khớp với BID', matched > 0 ? 'success' : 'error')
     } catch (e) { console.error(e); notify('Không đọc được file Excel', 'error') }
   }
 
