@@ -5,8 +5,9 @@ import { apiFetch } from '@/hooks/useAuth'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 import { Modal, Button, SelectField } from '@/components/ui'
 import { formatNumber } from '@/lib/utils'
-import { WBS_STAGES, WBS_STAGE_LABEL, woCodeFor, pieceMarkFor, unitTagForRow, allocTags, readAlloc } from '@/lib/wbs-wo'
+import { WBS_STAGES, WBS_STAGE_LABEL, woCodeFor, pieceMarkFor, unitTagForRow, allocTags, readAlloc, stageBaseQty, stageUnit } from '@/lib/wbs-wo'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
+import WoMaterialPanel from './WoMaterialPanel'
 
 interface ProjectOption { id: string; projectCode: string; projectName: string }
 type Row = Record<string, string>
@@ -27,6 +28,11 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
   const [sel, setSel] = useState<{ ri: number; key: string } | null>(null)
   const [edit, setEdit] = useState<AllocRow[] | null>(null)
   const [issuing, setIssuing] = useState(false)
+  // WO đang mở panel vật tư (chỉ mở được cho dòng xưởng ĐÃ phát hành — cần woId để gắn đề nghị)
+  const [matWo, setMatWo] = useState<{ id: string; woCode: string; title: string } | null>(null)
+  // số dòng vật tư đã lập theo woCode → hiện ngay trên nút, khỏi phải mở ra xem
+  const [matCount, setMatCount] = useState<Record<string, number>>({})
+  const [woIds, setWoIds] = useState<Record<string, string>>({})
 
   const reset = () => { setProjectId(''); setProjectCode(''); setRows([]); setIssued(new Set()); setViewOpen(false); setSel(null); setEdit(null) }
   const close = () => { reset(); onClose() }
@@ -38,7 +44,7 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
     const list = readAlloc(row, key)
     setEdit(list.length
       ? list.map(a => ({ teamCode: WORKSHOP_CODES.includes(a.teamCode) ? a.teamCode : '', isSub: a.isSub, weight: a.weight, start: String(a.start || '').slice(0, 10), finish: String(a.finish || '').slice(0, 10) }))
-      : [{ teamCode: '', isSub: false, weight: String(row.khoiLuong || ''), start: '', finish: '' }])
+      : [{ teamCode: '', isSub: false, weight: stageBaseQty(row, key).value, start: '', finish: '' }])
   }
 
   const pickProject = async (id: string) => {
@@ -47,7 +53,7 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
     setLoading(true)
     const r = await apiFetch(`/api/production/wbs?projectId=${id}`)
     setLoading(false)
-    if (r.ok) { setRows(Array.isArray(r.rows) ? r.rows : []); setProjectCode(r.projectCode || ''); setIssued(new Set(r.issuedWoCodes || [])) }
+    if (r.ok) { setRows(Array.isArray(r.rows) ? r.rows : []); setProjectCode(r.projectCode || ''); applyIssued(r) }
     else notify(r.error || 'Lỗi tải WBS', 'error')
   }
 
@@ -62,14 +68,23 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
     const tags = allocTags(list)
     const allocs = list.map((a, i) => {
       const wc = woCodeFor(projectCode, hangMuc, key, unitTag, stt, tags[i])
-      return { ...a, klShow: String(a.weight || '').trim() || String(row.khoiLuong || ''), woCode: wc, done: issued.has(wc) }
+      return { ...a, klShow: String(a.weight || '').trim() || stageBaseQty(row, key).value, unit: stageUnit(key), woCode: wc, done: issued.has(wc) }
     })
     return { hangMuc, pieceMark, stageLabel: WBS_STAGE_LABEL[key] || key, allocs, anyIssued: allocs.some(a => a.done), allIssued: allocs.length > 0 && allocs.every(a => a.done) }
   }
 
+  // Nạp trạng thái phát hành + id WO + số dòng vật tư đã lập, từ một phản hồi /api/production/wbs
+  const applyIssued = (r: { issuedWoCodes?: string[]; issuedWos?: { id: string; woCode: string; materialCount: number }[] }) => {
+    setIssued(new Set(r.issuedWoCodes || []))
+    const ids: Record<string, string> = {}
+    const counts: Record<string, number> = {}
+    for (const w of r.issuedWos || []) { ids[w.woCode] = w.id; counts[w.woCode] = w.materialCount }
+    setWoIds(ids); setMatCount(counts)
+  }
+
   const reloadWbs = async () => {
     const wbs = await apiFetch(`/api/production/wbs?projectId=${projectId}`)
-    if (wbs.ok) { setRows(Array.isArray(wbs.rows) ? wbs.rows : []); setIssued(new Set(wbs.issuedWoCodes || [])) }
+    if (wbs.ok) { setRows(Array.isArray(wbs.rows) ? wbs.rows : []); applyIssued(wbs) }
   }
 
   // Áp danh sách phân giao xưởng → mỗi xưởng 1 WO (tạo/cập nhật + xóa xưởng đã bỏ)
@@ -102,6 +117,7 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
   const removeAlloc = (i: number) => setEdit(e => (e && e.length > 1 ? e.filter((_, idx) => idx !== i) : e))
 
   const info = sel ? cellInfo(sel.ri, sel.key) : null
+  const selUnit = sel ? stageUnit(sel.key) : 'kg'
 
   return (
     <>
@@ -150,7 +166,7 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                   <tr>
                     {WBS_STAGES.map(s => (
                       <Fragment key={s.key}>
-                        <th style={{ ...subTh, borderLeft: '2px solid #999' }}>KL</th>
+                        <th style={{ ...subTh, borderLeft: '2px solid #999', color: stageUnit(s.key) === 'm²' ? '#7c3aed' : undefined }}>KL {stageUnit(s.key) === 'm²' ? '(m²)' : '(kg)'}</th>
                         <th style={subTh}>Đơn vị</th>
                         <th style={subTh}>BĐ</th>
                         <th style={subTh}>KT</th>
@@ -206,6 +222,7 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
                   <div style={{ fontSize: '0.82rem' }}>
                     <span style={strong}>{info.pieceMark} — {info.stageLabel}</span>
+                    <span style={{ marginLeft: 8, fontSize: '0.72rem', fontWeight: 700, color: selUnit === 'm²' ? '#7c3aed' : '#0f172a' }}>· tính theo {selUnit}</span>
                     <span style={{ color: '#64748b', marginLeft: 12 }}>Dự án: {projectCode}</span>
                     <span style={{ marginLeft: 12, color: info.anyIssued ? '#166534' : '#64748b' }}>
                       {info.anyIssued ? `Đã phát hành ${info.allocs.filter(a => a.done).length}/${info.allocs.length} xưởng` : 'Chưa phát hành'}
@@ -219,7 +236,7 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                 </div>
                 <table style={{ borderCollapse: 'collapse', fontSize: '0.76rem', maxWidth: 760 }}>
                   <thead><tr style={{ color: '#64748b' }}>
-                    <th style={pTh}>Xưởng</th><th style={pTh}>Thầu phụ</th><th style={pTh}>Trọng lượng (kg)</th><th style={pTh}>Bắt đầu</th><th style={pTh}>Kết thúc</th><th style={{ ...pTh, width: 30 }} />
+                    <th style={pTh}>Xưởng</th><th style={pTh}>Thầu phụ</th><th style={{ ...pTh, color: selUnit === 'm²' ? '#7c3aed' : undefined }}>{selUnit === 'm²' ? 'Diện tích (m²)' : 'Trọng lượng (kg)'}</th><th style={pTh}>Bắt đầu</th><th style={pTh}>Kết thúc</th><th style={pTh}>Vật tư cần cấp</th><th style={{ ...pTh, width: 30 }} />
                   </tr></thead>
                   <tbody>
                     {edit.map((a, i) => (
@@ -234,6 +251,22 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                         <td style={pTd}><input type="number" value={a.weight} onChange={e => setAlloc(i, { weight: e.target.value })} style={{ ...inp, width: 116 }} placeholder="0" /></td>
                         <td style={pTd}><input type="date" value={a.start} onChange={e => setAlloc(i, { start: e.target.value })} style={inp} /></td>
                         <td style={pTd}><input type="date" value={a.finish} min={a.start || undefined} onChange={e => setAlloc(i, { finish: e.target.value })} style={inp} /></td>
+                        {/* Đề nghị cấp vật tư gắn theo WO → chỉ mở được sau khi dòng xưởng này đã phát hành */}
+                        <td style={pTd}>
+                          {(() => {
+                            const woCode = info.allocs[i]?.woCode
+                            const woId = woCode ? woIds[woCode] : undefined
+                            const n = woCode ? (matCount[woCode] || 0) : 0
+                            if (!woId) return <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Phát hành WO trước</span>
+                            return (
+                              <button type="button"
+                                onClick={() => setMatWo({ id: woId, woCode, title: `${info.pieceMark} — ${info.stageLabel} · ${a.teamCode || 'Thầu phụ'}` })}
+                                style={{ padding: '3px 10px', fontSize: '0.72rem', fontWeight: 700, borderRadius: 6, cursor: 'pointer', border: `1px solid ${n > 0 ? '#16a34a' : '#8b5cf6'}`, background: n > 0 ? '#dcfce7' : '#f5f3ff', color: n > 0 ? '#166534' : '#6d28d9' }}>
+                                {n > 0 ? `Vật tư (${n})` : '+ Vật tư'}
+                              </button>
+                            )
+                          })()}
+                        </td>
                         <td style={{ ...pTd, textAlign: 'center' }}>{edit.length > 1 && <button type="button" onClick={() => removeAlloc(i)} title="Bỏ xưởng" style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1 }}>×</button>}</td>
                       </tr>
                     ))}
@@ -242,11 +275,20 @@ export default function WoFromWbsModal({ open, projects, onClose, onIssued }: {
                 <button type="button" onClick={addAlloc} style={{ marginTop: 6, padding: '4px 12px', fontSize: '0.76rem', border: '1px dashed #2563eb', borderRadius: 6, background: '#eff6ff', color: '#1e40af', cursor: 'pointer', fontWeight: 600 }}>+ Thêm xưởng</button>
                 <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: 6 }}>
                   1 công đoạn có thể chia cho nhiều xưởng — mỗi xưởng nhập KL &amp; thời gian riêng, mỗi xưởng tạo 1 WO. KL cột trái chỉ là tham chiếu (không ép).
+                  <br />Phát hành WO xong thì bấm <b>+ Vật tư</b> để lập danh mục cần cấp — Kho sẽ thấy phiếu theo đúng lệnh này, cấp đủ thì WO tự mở.
                 </div>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {matWo && (
+        <WoMaterialPanel
+          woId={matWo.id} woCode={matWo.woCode} title={matWo.title}
+          onClose={() => setMatWo(null)}
+          onSaved={(n) => setMatCount(c => ({ ...c, [matWo.woCode]: n }))}
+        />
       )}
     </>
   )

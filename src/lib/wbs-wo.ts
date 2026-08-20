@@ -12,6 +12,19 @@ export const WBS_STAGES: { key: string; label: string }[] = [
 ]
 export const WBS_STAGE_LABEL: Record<string, string> = Object.fromEntries(WBS_STAGES.map(s => [s.key, s.label]))
 
+// Công đoạn tính theo DIỆN TÍCH (m²) thay vì khối lượng (kg) — nguồn số lấy từ cột tương ứng của dòng WBS.
+// Bảo ôn → cột "baoOn" (m²); Sơn / Sơn liner / Làm sạch → cột "dienTich" (m²).
+export const AREA_STAGES: Record<string, 'baoOn' | 'dienTich'> = {
+  insulation: 'baoOn', painting: 'dienTich', linerPainting: 'dienTich', blasting: 'dienTich',
+}
+// Giá trị cơ sở + đơn vị của 1 công đoạn cho 1 dòng WBS (kg cho gia công, m² cho bảo ôn/sơn/làm sạch).
+export function stageBaseQty(row: Record<string, string>, stageKey: string): { value: string; unit: string } {
+  const areaField = AREA_STAGES[stageKey]
+  if (areaField) return { value: String(row[areaField] || ''), unit: 'm²' }
+  return { value: String(row.khoiLuong || ''), unit: 'kg' }
+}
+export const stageUnit = (stageKey: string): string => (AREA_STAGES[stageKey] ? 'm²' : 'kg')
+
 // woCode tất định cho 1 ô WBS (dùng chung FE + API để idempotent + đánh dấu ô đã phát hành).
 export const saniWo = (s: string) => String(s).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
