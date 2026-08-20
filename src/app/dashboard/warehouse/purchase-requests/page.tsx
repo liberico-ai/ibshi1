@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import * as XLSX from 'xlsx'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate } from '@/lib/utils'
 import { Pagination } from '@/components/SearchPagination'
-import { PageHeader, StatusBadge, Button, EmptyState, FilterBar } from '@/components/ui'
+import { PageHeader, StatusBadge, Button, EmptyState, FilterBar, Modal, InputField, SelectField } from '@/components/ui'
+import { notify } from '@/components/ui/Toast'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList } from 'lucide-react'
 
@@ -136,6 +138,7 @@ export default function PurchaseRequestsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(1)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [showImport, setShowImport] = useState(false)
 
   const loadData = useCallback(async () => {
     const params = new URLSearchParams()
@@ -169,11 +172,14 @@ export default function PurchaseRequestsPage() {
         title="Đề nghị mua hàng (PR)"
         subtitle="Danh sách yêu cầu mua vật tư — có truy vết nguồn ECO/NCR"
         actions={canCreate ? (
-          <Button variant="primary" onClick={() => router.push('/dashboard/warehouse/purchase-requests/new')}>
-            + Tạo PR
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowImport(true)}>⬆ Nhập PR (Excel)</Button>
+            <Button variant="primary" onClick={() => router.push('/dashboard/warehouse/purchase-requests/new')}>+ Tạo PR</Button>
+          </div>
         ) : undefined}
       />
+
+      {showImport && <ImportPrModal onClose={() => setShowImport(false)} onDone={() => { setShowImport(false); loadData() }} />}
 
       <FilterBar filters={STATUS_FILTERS} value={statusFilter} onChange={setStatusFilter} />
 
@@ -386,5 +392,52 @@ function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: bool
         </tr>
       )}
     </>
+  )
+}
+
+// Modal nhập PR từ Excel: chọn dự án + mã PR (tùy chọn) + file → tạo 1 PR + nhiều dòng vật tư.
+function ImportPrModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [projects, setProjects] = useState<Array<{ id: string; projectCode: string; projectName: string }>>([])
+  const [projectId, setProjectId] = useState('')
+  const [prCode, setPrCode] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { apiFetch('/api/projects?page=1&limit=100').then(r => { if (r.ok) setProjects(r.projects || []) }) }, [])
+
+  const submit = async () => {
+    if (!projectId) return notify('Chọn dự án', 'error')
+    if (!file) return notify('Chọn file Excel', 'error')
+    setBusy(true)
+    try {
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+      const pick = (r: Record<string, unknown>, ...ks: string[]) => { for (const k of ks) if (r[k] !== undefined && r[k] !== '') return r[k]; return '' }
+      const rows = raw.map(r => ({
+        itemCode: pick(r, 'Mã VT', 'Mã', 'itemCode'), matCode: pick(r, 'Mã kho', 'matCode'), description: pick(r, 'Mô tả', 'Tên vật tư', 'description'),
+        profile: pick(r, 'Quy cách', 'Profile', 'profile'), grade: pick(r, 'Mác', 'Grade', 'grade'), unit: pick(r, 'ĐVT', 'unit'),
+        materialGroupCode: pick(r, 'Nhóm', 'materialGroupCode'), materialSubGroupCode: pick(r, 'Nhóm con', 'materialSubGroupCode'),
+        unitWeight: pick(r, 'U.KL', 'unitWeight'), netQty: pick(r, 'Net SL', 'netQty'), reqQty: pick(r, 'SL', 'Số lượng', 'reqQty', 'quantity'),
+        remainQty: pick(r, 'Tồn', 'remainQty'),
+      }))
+      if (rows.length === 0) { notify('File không có dòng nào', 'error'); setBusy(false); return }
+      const res = await apiFetch('/api/purchase-requests/import', { method: 'POST', body: JSON.stringify({ projectId, prCode: prCode.trim() || undefined, rows }) })
+      setBusy(false)
+      if (res.ok) { notify(res.message || 'Đã nhập PR', 'success'); onDone() } else notify(res.error || 'Lỗi nhập', 'error')
+    } catch (e) { console.error(e); setBusy(false); notify('Không đọc được file Excel', 'error') }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Nhập PR từ Excel" size="md" actions={<Button variant="primary" onClick={submit} loading={busy}>Nhập</Button>}>
+      <div className="space-y-3">
+        <SelectField label="Dự án *" value={projectId} onChange={e => setProjectId(e.target.value)}
+          options={[{ value: '', label: '— Chọn dự án —' }, ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))]} />
+        <InputField label="Mã PR (để trống → tự sinh)" value={prCode} onChange={e => setPrCode(e.target.value)} placeholder="VD: PR-090-01" />
+        <div>
+          <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>File Excel *</label>
+          <input type="file" accept=".xlsx,.xls" onChange={e => setFile(e.target.files?.[0] || null)} className="text-xs block mt-1" />
+          <div className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>Cột: Mã VT · Mã kho · Mô tả · Quy cách · Mác · ĐVT · SL · Tồn …</div>
+        </div>
+      </div>
+    </Modal>
   )
 }
