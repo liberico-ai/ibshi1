@@ -8,7 +8,7 @@ import { notify, confirmDialog } from '@/components/ui/Toast'
 export type { TeamAssign, CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, WbsRow }
 
 
-export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave, qcFailedAssignments, onCloneRework }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void; qcFailedAssignments?: any[]; onCloneRework?: (rowIdx: number, stageKey: string, teamIdx: number) => void }) {
+export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode, onIssueLSX, onRequestMaterial, lsxStatus, cellAssignments, onAssign, lsxIssuedDetails, onIssueSingleTeam, materialRequests, onUpdateMaterials, onRequestIssue, onSave, stepFilter, qcFailedAssignments, onCloneRework }: { isWbsEditable: boolean; wbsItemsData: any; onChange?: (val: string) => void; mode?: 'default' | 'lsx'; onIssueLSX?: (rowIndex: number, row: Record<string, string>) => void; onRequestMaterial?: (rowIndex: number, row: Record<string, string>) => void; lsxStatus?: Record<number, { lsx?: boolean; vt?: boolean }>; cellAssignments?: CellAssignMap; onAssign?: (rowIdx: number, colKey: string, assigns: TeamAssign[]) => void; lsxIssuedDetails?: LsxIssuedMap; onIssueSingleTeam?: (rowIdx: number, colKey: string, teamIdx: number) => void; materialRequests?: MaterialReqMap; onUpdateMaterials?: (rowIdx: number, stageKey: string, teamIdx: number, items: MaterialReqItem[]) => void; onRequestIssue?: (rowIdx: number, stageKey: string, teamIdx: number, matIdx: number, material: MaterialReqItem) => Promise<void>; onSave?: () => void; stepFilter?: string; qcFailedAssignments?: any[]; onCloneRework?: (rowIdx: number, stageKey: string, teamIdx: number) => void }) {
   const emptyRow = (): WbsRow => ({ stt: '', hangMuc: '', dvt: 'kg', khoiLuong: '', dienTich: '', baoOn: '', tongNhanLuc: '', phamVi: 'IBS', thauPhu: '', batDau: '', ketThuc: '', trangThai: '', cutting: '', machining: '', fitup: '', welding: '', tryAssembly: '', dismantle: '', blasting: '', galvanize: '', repairAfterGalv: '', painting: '', commissioning: '', insulation: '', linerPainting: '', shippingAssembly: '', khungKien: '', packing: '', delivery: '', khuVuc: '', ghiChu: '' });
 
   let rows: WbsRow[] = [];
@@ -30,7 +30,7 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
     return `${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')}/${dt.getFullYear()}`;
   };
 
-  const [assignCell, setAssignCell] = useState<{ ri: number; col: string } | null>(null);
+  const [assignCell, setAssignCell] = useState<{ ri: number; col: string; savedFull?: boolean } | null>(null);
   const [tempAssigns, setTempAssigns] = useState<TeamAssign[]>([]);
   const [tempMaterials, setTempMaterials] = useState<MaterialReqItem[]>([]);
   const [dncRow, setDncRow] = useState<{ idx: number; row: Record<string, string>; stageKey: string; teamIdx: number; teamVolume: number } | null>(null);
@@ -94,8 +94,13 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
 
   const openAssignPanel = (ri: number, colKey: string) => {
     const existing = cellAssignments?.[ri]?.[colKey];
+    // Khoá "Lưu phân giao" nếu ô ĐÃ lưu đủ khối lượng (≥ KL hạng mục). Chốt tại lúc MỞ panel để
+    // lần lưu đầu/lưu thiếu vẫn sửa được; chỉ ô đã phân giao đủ 100% mới khoá.
+    const savedKL = (existing || []).reduce((s, a) => s + (Number(a.volume) || 0), 0);
+    const rowKL = Number(rows[ri]?.khoiLuong) || 0;
+    const savedFull = !!(existing && existing.length > 0 && rowKL > 0 && savedKL >= rowKL);
     setTempAssigns(existing && existing.length > 0 ? JSON.parse(JSON.stringify(existing)) : [{ teamName: '', volume: '', startDate: '', endDate: '' }]);
-    setAssignCell({ ri, col: colKey });
+    setAssignCell({ ri, col: colKey, savedFull });
   };
 
   const saveAssign = () => {
@@ -126,7 +131,29 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
     { key: 'khungKien', label: 'Khung kiện' }, { key: 'packing', label: 'Đóng kiện' },
     { key: 'delivery', label: 'Giao hàng' },
   ];
-  
+
+  // ── Định tuyến P3.3 vs P3.4 theo giá trị ô công đoạn (nơi làm việc) ──
+  // Ô chứa "IBS" (kể cả "IBS TP Giang Sơn" = thầu phụ làm TẠI xưởng IBS) → thuộc P3.4;
+  // ô ghi tên thầu phụ khác (mang ra ngoài làm) → thuộc P3.3. "N/A" = công đoạn không áp dụng.
+  // Cùng quy tắc này được dùng lại ở báo cáo ngày (ô IBS → P5.1, còn lại → P5.1A).
+  const _isIBS = (val: string) => (val || '').trim().toUpperCase().includes('IBS');
+  const _isEmpty = (val: string) => !(val || '').trim();
+  const _isNA = (val: string) => (val || '').trim().toUpperCase() === 'N/A';
+  const isRowVisibleForStep = (row: WbsRow): boolean => {
+    if (!stepFilter || (stepFilter !== 'P3.3' && stepFilter !== 'P3.4')) return true;
+    const nonEmptyCells = subCols.filter(c => !_isEmpty(row[c.key] || ''));
+    if (nonEmptyCells.length === 0) return true;
+    if (stepFilter === 'P3.4') return nonEmptyCells.some(c => _isIBS(row[c.key] || ''));
+    return nonEmptyCells.some(c => !_isIBS(row[c.key] || ''));
+  };
+  const isCellActiveForStep = (cellVal: string): boolean => {
+    if (!stepFilter || (stepFilter !== 'P3.3' && stepFilter !== 'P3.4')) return true;
+    if (_isEmpty(cellVal)) return true;
+    if (_isNA(cellVal)) return false;
+    if (stepFilter === 'P3.4') return _isIBS(cellVal);
+    return !_isIBS(cellVal);
+  };
+
   const exportExcel = () => {
     const headers = ['STT', 'Tên hạng mục', 'ĐVT', 'Khối lượng', 'Phạm vi', 'Thầu phụ', 'Bắt đầu', 'Kết thúc', 'Trạng thái', ...subCols.map(c => c.label), 'Khu vực TC', 'Ghi chú'];
     const data = rows.map(r => [
@@ -175,7 +202,12 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
     input.click();
   };
 
-  const totalKL = rows.reduce((s, r) => s + (Number(r.khoiLuong) || 0), 0);
+  // Tổng lấy Ở DÒNG DỰ ÁN (số lớn nhất = dòng tổng đầu bảng), KHÔNG cộng dồn unit/item → tránh nhân đôi.
+  // Phân biệt rõ: KL (kg) vs Diện tích/Bảo ôn (m²) — không gộp m² vào kg.
+  const maxOf = (k: string) => rows.reduce((m, r) => Math.max(m, Number((r as Record<string, unknown>)[k]) || 0), 0);
+  const totalKL = maxOf('khoiLuong');
+  const totalDT = maxOf('dienTich');
+  const totalBaoOn = maxOf('baoOn');
   const doneCount = rows.filter(r => (r.trangThai || '').toLowerCase().includes('done')).length;
   const ongoingCount = rows.filter(r => (r.trangThai || '').toLowerCase().includes('ongoing')).length;
 
@@ -208,6 +240,14 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
             <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>{totalKL > 1000 ? `${(totalKL / 1000).toFixed(1)}t` : `${formatNumber(totalKL)}`}</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Tổng KL (kg)</div>
           </div>
+          {totalDT > 0 && <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0891b2' }}>{formatNumber(totalDT)}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Diện tích (m²)</div>
+          </div>}
+          {totalBaoOn > 0 && <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#7c3aed' }}>{formatNumber(totalBaoOn)}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Bảo ôn (m²)</div>
+          </div>}
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#16a34a' }}>{doneCount}</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Done</div>
@@ -280,6 +320,7 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                 </thead>
                 <tbody>
                   {rows.map((row, ri) => {
+                    if (!isRowVisibleForStep(row)) return null;
                     const rowComplete = mode === 'lsx' && isRowComplete(ri, row);
                     return (
                     <tr key={ri} style={{ background: rowComplete ? '#dcfce7' : ri % 2 === 0 ? '#fff' : '#f8fafc' }}>
@@ -300,6 +341,15 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                         const totalKL = Number(row.khoiLuong) || 0;
                         const assignedKL = assigns.reduce((s, a) => s + (Number(a.volume) || 0), 0);
                         if (mode === 'lsx' && cellVal) {
+                          // Ô thuộc bước KHÁC (vd đang ở P3.4 mà ô ghi tên thầu phụ ngoài) hoặc "N/A"
+                          // → hiện mờ, gạch ngang, không bấm được. Vẫn cho THẤY để PM biết ai làm.
+                          if (!isCellActiveForStep(cellVal)) {
+                            return (
+                              <td key={c.key} style={{ ...tdS }}>
+                                <div style={{ ...inputS, textAlign: 'center', color: '#9ca3af', cursor: 'not-allowed', background: '#e5e7eb', fontWeight: 600, border: '1px solid #d1d5db', borderRadius: 5, padding: '3px 5px', textDecoration: 'line-through', opacity: 0.7 }}>{cellVal}</div>
+                              </td>
+                            );
+                          }
                           // 3 states: full (green), partial (blue), none (yellow)
                           const isFull = assignCount > 0 && assignedKL >= totalKL;
                           const isPartial = assignCount > 0 && assignedKL < totalKL;
@@ -430,7 +480,9 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                           const maxAllowed = teamVol * (limitPct / 100);
                           const atLimit = teamMatTotal >= maxAllowed && teamVol > 0;
                           const hasMats = teamMatCount > 0;
-                          const canIssue = hasMats && !issued && !qcFailed && !isCloned;
+                          // Không bắt buộc phải lập DNC vật tư mới được phát hành LSX — công đoạn
+                          // không cần cấp VT (vd thuê ngoài trọn gói) vẫn phát hành được.
+                          const canIssue = !issued && !qcFailed && !isCloned;
                           return (
                             <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.5fr 0.5fr 140px 100px', gap: 8, padding: '8px 12px', alignItems: 'center', background: qcFailed ? '#fef2f2' : isCloned ? '#f1f5f9' : ti % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', opacity: isCloned ? 0.6 : 1 }}>
                               <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{team.teamName || `Tổ ${ti + 1}`} {isCloned ? '(Đã Rework)' : ''}</span>
@@ -440,18 +492,22 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                               <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 {!qcFailed ? (
                                   <button type="button" disabled={!canIssue || isCloned}
-                                    title={!hasMats ? 'Cần lập DNC Vật tư' : issued ? 'Đã phát hành' : 'Phát hành LSX'}
+                                    title={issued ? 'Đã phát hành' : hasMats ? 'Phát hành LSX' : 'Phát hành LSX (chưa lập DNC vật tư)'}
                                     onClick={() => onIssueSingleTeam?.(idx, stage.key, ti)}
                                     style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: (canIssue && !isCloned) ? 'pointer' : 'default', background: issued ? '#d1fae5' : canIssue ? '#f59e0b' : '#e2e8f0', color: issued ? '#16a34a' : canIssue ? '#fff' : '#94a3b8', transition: 'all 0.2s' }}>
-                                    {issued ? 'Đã PH' : !hasMats ? 'Phát hành' : 'Phát hành'}
+                                    {issued ? 'Đã PH' : 'Phát hành'}
                                   </button>
                                 ) : (
                                   <>
                                     <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 800 }}>FAIL</div>
-                                    <button type="button" onClick={async () => { if(await confirmDialog('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
-                                      style={{ padding: '4px 8px', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
-                                      Tạo Rework
-                                    </button>
+                                    {!isCloned ? (
+                                      <button type="button" onClick={async () => { if(await confirmDialog('Tạo LSX bù (Rework)? Thao tác này sẽ tự động copy VT và KL sang 1 hạng mục mới.')) onCloneRework?.(idx, stage.key, ti); }}
+                                        style={{ padding: '4px 8px', fontSize: '0.7rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
+                                        Tạo Rework
+                                      </button>
+                                    ) : (
+                                      <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Đã tạo Rework bù</div>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -618,8 +674,11 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                       {m.name.trim() && (m.code || '').trim() && Number(m.quantity) > 0 ? (
                         <button type="button" disabled={m.requested}
                           onClick={async () => {
-                            const n = [...tempMaterials]; n[mi] = { ...n[mi], requested: true }; setTempMaterials(n);
-                            await onRequestIssue?.(idx, stageKey, teamIdx, mi, m);
+                            // Trim tên/mã trước khi gửi: mã VT có khoảng trắng thừa sẽ không khớp
+                            // tồn kho ở bước Kho cấp phát (so khớp materialCode chính xác).
+                            const trimmedItem = { ...m, name: m.name.trim(), code: (m.code || '').trim(), requested: true };
+                            const n = [...tempMaterials]; n[mi] = trimmedItem; setTempMaterials(n);
+                            await onRequestIssue?.(idx, stageKey, teamIdx, mi, trimmedItem);
                           }}
                           style={{ padding: '4px 8px', fontSize: '0.72rem', fontWeight: 700, borderRadius: 5, border: 'none', cursor: m.requested ? 'default' : 'pointer', background: m.requested ? '#d1fae5' : '#f59e0b', color: m.requested ? '#16a34a' : '#fff', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
                           {m.requested ? 'Đã ĐNC' : 'Đề nghị cấp'}
@@ -642,7 +701,7 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#f1f5f9', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Hủy</button>
                 <button type="button" disabled={overLimit || filledCount === 0}
                   onClick={() => {
-                    const valid = tempMaterials.filter(m => m.name.trim());
+                    const valid = tempMaterials.filter(m => m.name.trim()).map(m => ({ ...m, name: m.name.trim(), code: (m.code || '').trim() }));
                     onUpdateMaterials?.(idx, stageKey, teamIdx, valid);
                     setDncRow(null);
                   }}
@@ -736,9 +795,10 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
               <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10, background: '#fafafa' }}>
                 <button type="button" onClick={() => setAssignCell(null)}
                   style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#f1f5f9', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Hủy</button>
-                <button type="button" onClick={saveAssign}
-                  style={{ padding: '10px 24px', fontSize: '0.9rem', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                  Lưu phân giao
+                <button type="button" onClick={saveAssign} disabled={assignCell.savedFull}
+                  title={assignCell.savedFull ? 'Hạng mục đã phân giao đủ khối lượng — đã khóa' : 'Lưu phân giao'}
+                  style={{ padding: '10px 24px', fontSize: '0.9rem', background: assignCell.savedFull ? '#e2e8f0' : '#0ea5e9', color: assignCell.savedFull ? '#94a3b8' : '#fff', border: 'none', borderRadius: 8, cursor: assignCell.savedFull ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+                  {assignCell.savedFull ? 'Đã phân giao đủ' : 'Lưu phân giao'}
                 </button>
               </div>
             </div>
