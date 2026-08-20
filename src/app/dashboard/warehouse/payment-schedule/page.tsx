@@ -44,6 +44,9 @@ export default function PaymentSchedulePage() {
 
   const totalValue = rows.reduce((s, r) => s + r.value, 0)
   const totalPaid = rows.filter(r => r.status === 'PAID').reduce((s, r) => s + r.value, 0)
+  const unpaid = rows.filter(r => r.status !== 'PAID')
+  const nccCanTT = new Set(unpaid.map(r => r.supplier)).size
+  const thangCanTT = new Set(unpaid.map(r => r.paymentMonth).filter(Boolean)).size
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -59,7 +62,7 @@ export default function PaymentSchedulePage() {
       {projectId && (
         <>
           <div className="flex gap-2 flex-wrap">
-            {[['Số dòng', String(rows.length)], ['Tổng giá trị', formatCurrency(totalValue)], ['Đã trả', formatCurrency(totalPaid)], ['Còn lại', formatCurrency(totalValue - totalPaid)]].map(([l, v], i) => (
+            {[['Số dòng', String(rows.length)], ['Tổng giá trị', formatCurrency(totalValue)], ['Đã trả', formatCurrency(totalPaid)], ['Còn lại', formatCurrency(totalValue - totalPaid)], ['NCC cần TT', String(nccCanTT)], ['Số tháng cần TT', String(thangCanTT)]].map(([l, v], i) => (
               <div key={i} className="rounded-lg px-3 py-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)', minWidth: 130 }}>
                 <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{l}</div>
                 <div className="text-sm font-bold font-mono" style={{ color: i === 2 ? '#166534' : 'var(--text-primary)' }}>{v}</div>

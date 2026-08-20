@@ -29,6 +29,8 @@ export default function VendorPage() {
   const [showForm, setShowForm] = useState(false)
   const [editVendor, setEditVendor] = useState<Vendor | null>(null)
   const [filter, setFilter] = useState('')
+  const [typeF, setTypeF] = useState<'all' | 'DOMESTIC' | 'IMPORT' | 'MIXED'>('all')
+  const [statusF, setStatusF] = useState<'all' | 'active' | 'blacklist'>('all')
 
   const openEdit = (v: Vendor) => { setEditVendor(v); setShowForm(true) }
   const closeForm = () => { setShowForm(false); setEditVendor(null) }
@@ -71,12 +73,19 @@ export default function VendorPage() {
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-xl" />)}</div>
 
+  const shownVendors = vendors.filter(v => {
+    if (typeF !== 'all' && (v.vendorType || 'DOMESTIC') !== typeF) return false
+    if (statusF === 'active' && (!v.isActive || v.blacklisted)) return false
+    if (statusF === 'blacklist' && !v.blacklisted) return false
+    return true
+  })
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Nhà cung cấp</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{vendors.length} nhà cung cấp</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{shownVendors.length}/{vendors.length} nhà cung cấp</p>
         </div>
         <button onClick={() => { setEditVendor(null); setShowForm(v => editVendor ? true : !v) }} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm NCC</button>
       </div>
@@ -93,6 +102,22 @@ export default function VendorPage() {
             {labelOf(k)} ({stats[k] || 0})
           </button>
         ))}
+      </div>
+
+      {/* Lọc theo loại NK/nội địa + trạng thái */}
+      <div className="flex gap-4 flex-wrap items-center text-xs">
+        <div className="flex gap-1 items-center">
+          <span style={{ color: 'var(--text-muted)' }}>Loại:</span>
+          {([['all', 'Tất cả'], ['DOMESTIC', 'Nội địa'], ['IMPORT', 'Nhập khẩu'], ['MIXED', 'Cả hai']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setTypeF(k)} className="px-2.5 py-1 rounded-full font-medium" style={{ background: typeF === k ? 'var(--accent)' : 'var(--surface-hover)', color: typeF === k ? '#fff' : 'var(--text-muted)' }}>{l}</button>
+          ))}
+        </div>
+        <div className="flex gap-1 items-center">
+          <span style={{ color: 'var(--text-muted)' }}>Trạng thái:</span>
+          {([['all', 'Tất cả'], ['active', 'Đang hoạt động'], ['blacklist', 'Blacklist']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setStatusF(k)} className="px-2.5 py-1 rounded-full font-medium" style={{ background: statusF === k ? (k === 'blacklist' ? '#111827' : 'var(--accent)') : 'var(--surface-hover)', color: statusF === k ? '#fff' : 'var(--text-muted)' }}>{l}</button>
+          ))}
+        </div>
       </div>
 
       {/* Form */}
@@ -147,9 +172,9 @@ export default function VendorPage() {
             </tr>
           </thead>
           <tbody>
-            {vendors.length === 0 ? (
+            {shownVendors.length === 0 ? (
               <tr><td colSpan={8} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Chưa có NCC</td></tr>
-            ) : vendors.map(v => (
+            ) : shownVendors.map(v => (
               <tr key={v.id}>
                 <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{v.vendorCode}</span></td>
                 <td>

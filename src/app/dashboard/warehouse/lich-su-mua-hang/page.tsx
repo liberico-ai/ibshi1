@@ -20,6 +20,41 @@ const fmt = (n: number | null | undefined, c = 'VND') => !n ? '—' : (c === 'VN
 const fmtDate = (d: string | null | undefined) => !d ? '—' : new Date(d).toLocaleDateString('vi-VN')
 const fmtQty = (n: number, uom?: string) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 }) + (uom ? ' ' + uom : '')
 
+// Biểu đồ xu hướng đơn giá theo thời gian (SVG, khớp Commerce PriceTrendChart)
+function PriceTrendChart({ txns }: { txns: Tx[] }) {
+  const pts = txns.filter(t => t.orderDate && t.unitPrice > 0)
+    .map(t => ({ t: new Date(t.orderDate as string).getTime(), p: t.unitPrice, v: t.vendorName, d: t.orderDate as string }))
+    .sort((a, b) => a.t - b.t)
+  if (pts.length < 2) return null
+  const W = 600, H = 120, padL = 8, padR = 8, padT = 12, padB = 16
+  const ts = pts.map(p => p.t), ps = pts.map(p => p.p)
+  const tMin = Math.min(...ts), tMax = Math.max(...ts), pMin = Math.min(...ps), pMax = Math.max(...ps)
+  const x = (t: number) => padL + (tMax === tMin ? 0.5 : (t - tMin) / (tMax - tMin)) * (W - padL - padR)
+  const y = (p: number) => padT + (pMax === pMin ? 0.5 : 1 - (p - pMin) / (pMax - pMin)) * (H - padT - padB)
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.p).toFixed(1)}`).join(' ')
+  const area = `${line} L${x(tMax).toFixed(1)},${H - padB} L${x(tMin).toFixed(1)},${H - padB} Z`
+  const last = pts[pts.length - 1]
+  return (
+    <div>
+      <div className="text-[11px] font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>Xu hướng đơn giá theo thời gian ({pts.length} mốc)</div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 110, display: 'block' }} preserveAspectRatio="none">
+        <path d={area} fill="var(--accent)" opacity="0.08" />
+        <path d={line} fill="none" stroke="var(--accent)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+        {pts.map((p, i) => (
+          <circle key={i} cx={x(p.t)} cy={y(p.p)} r={i === pts.length - 1 ? 3.5 : 2.2} fill={i === pts.length - 1 ? '#166534' : 'var(--accent)'}>
+            <title>{fmtDate(p.d)} · {fmt(p.p)} · {p.v}</title>
+          </circle>
+        ))}
+      </svg>
+      <div className="flex justify-between text-[10px]" style={{ color: 'var(--text-muted)' }}>
+        <span>{fmtDate(pts[0].d)} · thấp {fmt(pMin)}</span>
+        <span>Gần nhất: <b style={{ color: '#166534' }}>{fmt(last.p)}</b> ({fmtDate(last.d)})</span>
+        <span>cao {fmt(pMax)}</span>
+      </div>
+    </div>
+  )
+}
+
 export default function LichSuMuaHangPage() {
   const sp = useSearchParams()
   const [input, setInput] = useState(sp.get('itemCodes') || '')
@@ -96,6 +131,8 @@ export default function LichSuMuaHangPage() {
                 </table>
               </div>
             )}
+
+            <PriceTrendChart txns={item.transactions} />
 
             <div>
               <div className="text-xs font-semibold text-slate-600 mb-1">Chi tiết giao dịch ({item.transactions.length})</div>
