@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
-import { notify } from '@/components/ui/Toast'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 interface Vendor {
@@ -13,6 +13,7 @@ interface Vendor {
   shortName?: string | null; taxCode?: string | null; city?: string | null; website?: string | null;
   contactTitle?: string | null; contactPhone?: string | null; contactEmail?: string | null;
   vendorType?: string | null; bank?: string | null; accountNo?: string | null; blacklisted?: boolean;
+  contractCount?: number; totalValue?: number;
   _count: { purchaseOrders: number; invoices: number; subcontracts: number }
 }
 
@@ -42,6 +43,13 @@ export default function VendorPage() {
     if (res.ok) { notify(res.message || 'Đã seed', 'success'); load() } else notify(res.error || 'Lỗi seed', 'error')
   }
 
+  const delVendor = async (v: Vendor) => {
+    const linked = v._count.purchaseOrders + (v.contractCount || 0) + v._count.invoices + v._count.subcontracts
+    const msg = linked > 0 ? `NCC "${v.name}" đã có ${linked} giao dịch — Ngừng hoạt động?` : `Xoá hẳn NCC "${v.name}"?`
+    if (!(await confirmDialog(msg))) return
+    const res = await apiFetch(`/api/vendors/${v.id}${linked > 0 ? '' : '?hard=1'}`, { method: 'DELETE' })
+    if (res.ok) { notify(res.message || 'Đã xử lý', 'success'); load() } else notify(res.error || 'Lỗi xoá', 'error')
+  }
   const openEdit = (v: Vendor) => { setEditVendor(v); setShowForm(true) }
   const closeForm = () => { setShowForm(false); setEditVendor(null) }
 
@@ -207,6 +215,7 @@ export default function VendorPage() {
                     {!v.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: '#fef2f2', color: '#dc2626' }}>Ngừng HĐ</span>}
                   </div>
                   {v.address && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{v.address}</div>}
+                  {((v.contractCount || 0) > 0 || (v.totalValue || 0) > 0) && <div className="text-[11px]" style={{ color: '#166534' }}>{v.contractCount ? `${v.contractCount} HĐ · ` : ''}{formatCurrency(v.totalValue || 0)}</div>}
                 </td>
                 <td><span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${colorOf(v.category)}20`, color: colorOf(v.category) }}>{labelOf(v.category)}</span></td>
                 <td>
@@ -218,7 +227,8 @@ export default function VendorPage() {
                 <td className="text-center"><span className="text-xs font-bold">{v._count.subcontracts}</span></td>
                 <td className="text-right whitespace-nowrap">
                   <button onClick={() => setDetailId(v.id)} className="text-xs font-semibold mr-3" style={{ color: 'var(--text-secondary)' }}>Chi tiết</button>
-                  <button onClick={() => openEdit(v)} className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>✎ Sửa</button>
+                  <button onClick={() => openEdit(v)} className="text-xs font-semibold mr-3" style={{ color: 'var(--accent)' }}>✎ Sửa</button>
+                  <button onClick={() => delVendor(v)} className="text-xs font-semibold" style={{ color: 'var(--danger)' }}>Xoá</button>
                 </td>
               </tr>
             ))}

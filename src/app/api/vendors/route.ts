@@ -18,15 +18,19 @@ export async function GET(req: NextRequest) {
     const vendors = await prisma.vendor.findMany({
       where,
       include: {
-        _count: { select: { purchaseOrders: true, invoices: true, subcontracts: true } },
+        _count: { select: { purchaseOrders: true, invoices: true, subcontracts: true, purchaseContracts: true } },
       },
       orderBy: { vendorCode: 'asc' },
     })
 
+    // Tổng giá trị đã giao dịch mỗi NCC = Σ giá trị PO (không tính PO huỷ/từ chối).
+    const poVals = await prisma.purchaseOrder.groupBy({ by: ['vendorId'], _sum: { totalValue: true }, where: { status: { notIn: ['CANCELLED', 'REJECTED'] } } })
+    const valueByVendor = new Map(poVals.map(p => [p.vendorId, Number(p._sum.totalValue || 0)]))
+
     const stats = await prisma.vendor.groupBy({ by: ['category'], _count: true })
 
     return successResponse({
-      vendors,
+      vendors: vendors.map(v => ({ ...v, contractCount: v._count.purchaseContracts, totalValue: valueByVendor.get(v.id) || 0 })),
       total: vendors.length,
       stats: stats.reduce((acc, s) => ({ ...acc, [s.category]: s._count }), {} as Record<string, number>),
     })

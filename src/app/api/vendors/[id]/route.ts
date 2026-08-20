@@ -40,6 +40,31 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
+// DELETE /api/vendors/[id]?hard=1 — ngừng NCC (mặc định: isActive=false); ?hard=1 xoá cứng nếu chưa phát sinh PO/HĐ.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const payload = await authenticateRequest(req)
+    if (!payload) return unauthorizedResponse()
+    if (!requireRoles(payload.roleCode, ['R01', 'R07', 'R10'])) return errorResponse('Không có quyền xoá NCC', 403)
+    const { id } = await params
+    const v = await prisma.vendor.findUnique({ where: { id }, select: { id: true, _count: { select: { purchaseOrders: true, purchaseContracts: true, invoices: true, subcontracts: true } } } })
+    if (!v) return errorResponse('Nhà cung cấp không tồn tại', 404)
+
+    const hard = new URL(req.url).searchParams.get('hard') === '1'
+    const linked = v._count.purchaseOrders + v._count.purchaseContracts + v._count.invoices + v._count.subcontracts
+    if (hard) {
+      if (linked > 0) return errorResponse(`Không thể xoá cứng — NCC đã có ${linked} giao dịch (PO/HĐ/hóa đơn). Dùng "ngừng hoạt động".`, 409)
+      await prisma.vendor.delete({ where: { id } })
+      return successResponse({ id }, 'Đã xoá NCC')
+    }
+    await prisma.vendor.update({ where: { id }, data: { isActive: false } })
+    return successResponse({ id }, 'Đã ngừng hoạt động NCC')
+  } catch (err) {
+    console.error('DELETE /api/vendors/[id] error:', err)
+    return errorResponse('Lỗi xoá NCC', 500)
+  }
+}
+
 // PATCH /api/vendors/[id] — Sửa hồ sơ NCC (bổ sung MST/ngân hàng/loại NCC/contact… + blacklist).
 // Cho phép user bổ sung dần các field mới (Module 1 PORT Thương Mại). Chỉ BGĐ/PM/Thương mại/Quản trị.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

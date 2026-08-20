@@ -51,7 +51,7 @@ const GROUPS: Group[] = [
     { h: 'SL', w: 66, r: true, get: r => <b>{nn(r.toBuyQty)}</b> }, { h: 'KL', w: 70, r: true, get: r => <b>{nn(r.toBuyWeight)}</b> },
   ] },
   { key: 'dom', label: 'Vật tư trong nước (DOM)', bg: '#dcfce7', cols: [
-    { h: 'Số HĐ', w: 120, get: r => r.dom.contractNo ? <a href="/dashboard/warehouse/hop-dong" style={{ color: 'var(--accent)' }}>{r.dom.contractNo}</a> : '' },
+    { h: 'Số HĐ', w: 120, get: r => r.dom.contractNo ? <a href={`/dashboard/warehouse/hop-dong?contractNo=${encodeURIComponent(r.dom.contractNo.split(',')[0].trim())}`} style={{ color: 'var(--accent)' }}>{r.dom.contractNo}</a> : '' },
     { h: 'NCC', w: 130, get: r => r.dom.vendor },
     { h: 'Spec HĐ', w: 110, get: r => r.dom.spec },
     { h: 'SL', w: 66, r: true, get: r => nn(r.dom.qty) }, { h: 'KL', w: 70, r: true, get: r => nn(r.dom.weight) },
@@ -67,7 +67,7 @@ const GROUPS: Group[] = [
     { h: 'KL Acc', w: 72, r: true, get: r => nn(r.dom.qcAcceptedWeight) }, { h: 'KQ', w: 70, get: r => r.dom.qcResult },
   ] },
   { key: 'imp', label: 'Mua sắm nước ngoài (IMP)', bg: '#e0e7ff', cols: [
-    { h: 'Số HĐ', w: 120, get: r => r.imp.contractNo ? <a href="/dashboard/warehouse/hop-dong" style={{ color: 'var(--accent)' }}>{r.imp.contractNo}</a> : '' },
+    { h: 'Số HĐ', w: 120, get: r => r.imp.contractNo ? <a href={`/dashboard/warehouse/hop-dong?contractNo=${encodeURIComponent(r.imp.contractNo.split(',')[0].trim())}`} style={{ color: 'var(--accent)' }}>{r.imp.contractNo}</a> : '' },
     { h: 'NCC', w: 130, get: r => r.imp.vendor },
     { h: 'SL', w: 66, r: true, get: r => nn(r.imp.qty) }, { h: 'KL', w: 70, r: true, get: r => nn(r.imp.weight) },
     { h: 'Ngày ký', w: 84, get: r => dt(r.imp.signedDate) },
