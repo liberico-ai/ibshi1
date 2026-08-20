@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true, contractCode: true, contractType: true, tradeType: true, title: true, value: true, currency: true,
         signedDate: true, effectiveDate: true, arrivedDate: true, status: true, createdAt: true,
+        vendorCountry: true, exportPort: true, importLcDate: true, cifDate: true, paymentDate: true, customsDate: true, qcInvitationDate: true,
         vendor: { select: { name: true } },
         project: { select: { projectCode: true, projectName: true } },
         orders: { select: { id: true, poCode: true, status: true, totalValue: true } },
@@ -46,10 +47,12 @@ export async function GET(req: NextRequest) {
       itemCount: c._count.items,
       poCount: c.orders.length, poTotal: c.orders.reduce((s, o) => s + N(o.totalValue), 0),
       orders: c.orders.map(o => ({ id: o.id, poCode: o.poCode, status: o.status, totalValue: N(o.totalValue) })),
+      // Mốc logistics nhập khẩu (hiện khi mở rộng HĐ nhập khẩu).
+      logistics: { vendorCountry: c.vendorCountry, exportPort: c.exportPort, lcDate: c.importLcDate, cifDate: c.cifDate, paymentDate: c.paymentDate, customsDate: c.customsDate, arrivedDate: c.arrivedDate, qcInvitationDate: c.qcInvitationDate },
     }))
 
     const cnt = (s: string) => data.filter(d => d.status === s).length
-    const summary = { total: data.length, draft: cnt('DRAFT'), active: cnt('ACTIVE'), completed: cnt('COMPLETED'), cancelled: cnt('CANCELLED'), totalValue: data.reduce((s, d) => s + d.value, 0) }
+    const summary = { total: data.length, draft: cnt('DRAFT'), active: cnt('ACTIVE'), completed: cnt('COMPLETED'), cancelled: cnt('CANCELLED'), totalValue: data.reduce((s, d) => s + d.value, 0), dom: data.filter(d => d.tradeType !== 'IMPORT').length, imp: data.filter(d => d.tradeType === 'IMPORT').length }
 
     return successResponse({ summary, contracts: data, total: data.length })
   } catch (err) {

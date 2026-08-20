@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
@@ -15,6 +16,7 @@ interface Contract {
   id: string; contractCode: string; contractType: string; tradeType?: string | null; title: string; value: number; currency: string
   signedDate: string | null; effectiveDate: string | null; arrivedDate?: string | null; status: string
   vendorName: string; projectCode: string | null; projectName: string; itemCount?: number; poCount: number; poTotal: number; orders: PO[]
+  logistics?: { vendorCountry: string | null; exportPort: string | null; lcDate: string | null; cifDate: string | null; paymentDate: string | null; customsDate: string | null; arrivedDate: string | null; qcInvitationDate: string | null }
 }
 interface Summary { total: number; draft: number; active: number; completed: number; cancelled: number; totalValue: number }
 
@@ -36,6 +38,11 @@ export default function HopDongPage() {
   const [status, setStatus] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [items, setItems] = useState<Record<string, CItem[]>>({})
+  const [tradeF, setTradeF] = useState<'all' | 'DOMESTIC' | 'IMPORT'>('all')
+  const [search, setSearch] = useState('')
+  const sp = useSearchParams()
+  // Deep-link ?contractNo= (từ màn Theo dõi mua hàng) → tự lọc theo số HĐ.
+  useEffect(() => { const cn = sp.get('contractNo'); if (cn) setSearch(cn) }, [sp])
 
   const fetchItems = useCallback(async (id: string) => {
     const r = await apiFetch(`/api/purchase-contracts/${id}/items`)
@@ -72,6 +79,13 @@ export default function HopDongPage() {
 
   const toggle = (id: string) => setExpanded(p => { const n = new Set(p); if (n.has(id)) { n.delete(id) } else { n.add(id); if (!items[id]) fetchItems(id) } return n })
 
+  const shownContracts = contracts.filter(c => {
+    if (tradeF !== 'all' && (c.tradeType || 'DOMESTIC') !== tradeF) return false
+    const q = search.trim().toLowerCase()
+    if (q && !`${c.contractCode} ${c.vendorName}`.toLowerCase().includes(q)) return false
+    return true
+  })
+
   return (
     <div className="space-y-4 animate-fade-in">
       <PageHeader title="Hợp đồng" subtitle="Danh sách hợp đồng mua hàng toàn hệ thống — tra cứu, lọc theo NCC / loại / trạng thái. Tạo & sửa HĐ ở trang dự án." />
@@ -79,7 +93,12 @@ export default function HopDongPage() {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Tìm theo nhà cung cấp…" className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/30" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm số HĐ / nhà cung cấp…" className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/30" />
+        </div>
+        <div className="flex gap-1">
+          {([['all', 'Tất cả'], ['DOMESTIC', 'Nội địa'], ['IMPORT', 'Nhập khẩu']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setTradeF(k)} className="text-xs px-2.5 py-1.5 rounded-lg font-semibold" style={{ border: `1px solid ${tradeF === k ? 'var(--accent)' : 'var(--border)'}`, color: tradeF === k ? 'var(--accent)' : 'var(--text-muted)', background: tradeF === k ? 'var(--surface-hover)' : 'var(--surface)' }}>{l}</button>
+          ))}
         </div>
         <select value={type} onChange={e => setType(e.target.value)} className="input text-sm" style={{ maxWidth: 180 }}>
           <option value="">— Loại HĐ —</option>
@@ -89,7 +108,7 @@ export default function HopDongPage() {
           <option value="">— Trạng thái —</option>
           {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        {(vendor || type || status) && <button onClick={() => { setVendor(''); setType(''); setStatus('') }} className="text-xs px-2 py-1 rounded" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>✕ Bỏ lọc</button>}
+        {(vendor || type || status || tradeF !== 'all' || search) && <button onClick={() => { setVendor(''); setType(''); setStatus(''); setTradeF('all'); setSearch('') }} className="text-xs px-2 py-1 rounded" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>✕ Bỏ lọc</button>}
       </div>
 
       {summary && (
@@ -105,7 +124,7 @@ export default function HopDongPage() {
       )}
 
       {loading && <div className="text-center py-12 text-slate-400 text-sm">Đang tải…</div>}
-      {!loading && contracts.length === 0 && <div className="text-center py-16 text-slate-400 text-sm">Chưa có hợp đồng nào{(vendor || type || status) ? ' khớp bộ lọc' : ''}. Tạo hợp đồng ở trang dự án (Đơn đặt hàng → Hợp đồng).</div>}
+      {!loading && shownContracts.length === 0 && <div className="text-center py-16 text-slate-400 text-sm">Chưa có hợp đồng nào{(vendor || type || status) ? ' khớp bộ lọc' : ''}. Tạo hợp đồng ở trang dự án (Đơn đặt hàng → Hợp đồng).</div>}
 
       {contracts.length > 0 && (
         <div className="card overflow-hidden">
@@ -118,7 +137,7 @@ export default function HopDongPage() {
                 ))}
               </tr></thead>
               <tbody>
-                {contracts.map(c => {
+                {shownContracts.map(c => {
                   const st = STATUS[c.status] || STATUS.DRAFT
                   const open = expanded.has(c.id)
                   return (
@@ -143,6 +162,17 @@ export default function HopDongPage() {
                         <tr style={{ background: 'var(--bg-secondary)' }}>
                           <td></td>
                           <td colSpan={9} className="px-2 py-2 space-y-3">
+                            {/* Mốc logistics nhập khẩu (chỉ HĐ nhập khẩu) */}
+                            {c.tradeType === 'IMPORT' && c.logistics && (
+                              <div className="rounded-lg p-2" style={{ background: '#eef2ff', border: '1px solid #c7d2fe' }}>
+                                <div className="text-[11px] font-semibold mb-1" style={{ color: '#4338ca' }}>Tiến trình nhập khẩu</div>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]" style={{ color: '#3730a3' }}>
+                                  {([['Quốc gia NCC', c.logistics.vendorCountry], ['Cảng xuất', c.logistics.exportPort], ['Mở L/C', c.logistics.lcDate && formatDate(c.logistics.lcDate)], ['CIF', c.logistics.cifDate && formatDate(c.logistics.cifDate)], ['Ngày TT', c.logistics.paymentDate && formatDate(c.logistics.paymentDate)], ['Hải quan', c.logistics.customsDate && formatDate(c.logistics.customsDate)], ['Hàng về', c.logistics.arrivedDate && formatDate(c.logistics.arrivedDate)], ['Mời QC', c.logistics.qcInvitationDate && formatDate(c.logistics.qcInvitationDate)]] as const).map(([l, v]) => (
+                                    <span key={l}>{l}: <b>{v || '—'}</b></span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {/* Dòng chi tiết hợp đồng */}
                             <div>
                               <div className="flex items-center justify-between mb-1">
