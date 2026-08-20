@@ -239,6 +239,7 @@ export const MENU_ITEMS = [
   { key: 'movements', label: 'Xuất Nhập', labelEn: 'Movements', icon: 'ArrowLeftRight', href: '/dashboard/warehouse/movements', roles: ['R01', 'R05', 'R05a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'grn', label: 'Hàng về', labelEn: 'GRN', icon: 'PackageCheck', href: '/dashboard/warehouse/grn', roles: ['R01', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'payment-schedule', label: 'Lịch thanh toán', labelEn: 'Payment', icon: 'CalendarCheck', href: '/dashboard/warehouse/payment-schedule', roles: ['R01', 'R02', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },
+  { key: 'theo-doi-mua-hang', label: 'Theo dõi mua hàng', labelEn: 'Purchase Tracking', icon: 'FileSpreadsheet', href: '/dashboard/warehouse/theo-doi-mua-hang', roles: ['R01', 'R02', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a', 'R10'], group: 'warehouse' },
   { key: 'material-issue', label: 'Cấp phát vật tư', labelEn: 'Mat Issue', icon: 'PackageMinus', href: '/dashboard/warehouse/material-issue', roles: ['R01', 'R05', 'R05a', 'R06', 'R06a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'vendors', label: 'Nhà cung cấp', labelEn: 'Vendors', icon: 'Building', href: '/dashboard/vendors', roles: ['R01', 'R02', 'R02a', 'R07', 'R07a'], group: 'warehouse' },
 

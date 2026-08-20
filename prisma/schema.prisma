@@ -498,6 +498,8 @@ model PurchaseRequestItem {
   toBuyQty        Decimal?        @default(0) @map("to_buy_qty")    // = reqQty - remainQty (CẦN MUA)
   toBuyWeight     Decimal?        @default(0) @map("to_buy_weight")
   statusFlag      String?         @default("Chờ báo giá") @map("status_flag") // trạng thái mua per-dòng
+  matCode         String?         @map("mat_code")        // "Mã kho" (anh Huyến) — mã tra tồn kho/kế toán
+  matCodeSource   String?         @map("mat_code_source") // NOI_MAY_CHUA_DUYET | PHONG_TM_DUYET
   remarks         String?
   material        Material?       @relation(fields: [materialId], references: [id])
   bidQuoteItems   BidQuoteItem[]
