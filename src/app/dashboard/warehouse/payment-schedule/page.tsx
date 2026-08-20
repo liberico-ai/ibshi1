@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import * as XLSX from 'xlsx'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 import { PageHeader, Button, Badge } from '@/components/ui'
@@ -41,6 +42,28 @@ export default function PaymentSchedulePage() {
     const r = await apiFetch(`/api/procurement/payment-schedules/${id}`, { method: 'DELETE' })
     if (r.ok) load(); else notify(r.error || 'Lỗi', 'error')
   }
+  const importPS = async (file: File) => {
+    try {
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+      const pick = (r: Record<string, unknown>, ...keys: string[]) => { for (const k of keys) if (r[k] !== undefined && r[k] !== '') return r[k]; return '' }
+      const rows = raw.map(r => ({
+        supplier: pick(r, 'NCC', 'Nhà cung cấp', 'supplier'),
+        saleContract: pick(r, 'Số HĐ', 'Hợp đồng', 'saleContract'),
+        value: pick(r, 'Giá trị', 'Value', 'value'),
+        currency: pick(r, 'Tiền tệ', 'Currency', 'currency'),
+        paymentMethod: pick(r, 'Hình thức', 'Phương thức', 'paymentMethod'),
+        signDate: pick(r, 'Ngày ký', 'signDate'), lcDate: pick(r, 'Ngày LC', 'lcDate'),
+        etd: pick(r, 'ETD', 'etd'), eta: pick(r, 'ETA', 'eta'),
+        documentDate: pick(r, 'Ngày CT', 'Ngày chứng từ', 'documentDate'),
+        lcDeadline: pick(r, 'Hạn TT', 'Hạn LC', 'lcDeadline'),
+        paymentMonth: pick(r, 'Tháng TT', 'paymentMonth'), notes: pick(r, 'Ghi chú', 'notes'),
+      }))
+      if (rows.length === 0) { notify('File không có dòng nào', 'error'); return }
+      const res = await apiFetch('/api/procurement/payment-schedules/import', { method: 'POST', body: JSON.stringify({ projectId, rows }) })
+      if (res.ok) { notify(res.message || 'Đã nhập', 'success'); load() } else notify(res.error || 'Lỗi nhập', 'error')
+    } catch (e) { console.error(e); notify('Không đọc được file Excel (cần cột "NCC" + "Giá trị")', 'error') }
+  }
 
   const totalValue = rows.reduce((s, r) => s + r.value, 0)
   const totalPaid = rows.filter(r => r.status === 'PAID').reduce((s, r) => s + r.value, 0)
@@ -57,6 +80,12 @@ export default function PaymentSchedulePage() {
           {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
         </select>
         {projectId && <Button variant="primary" onClick={() => setShowAdd(true)}>+ Thêm dòng</Button>}
+        {projectId && (
+          <label className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} title='Cột: NCC · Số HĐ · Giá trị · Tiền tệ · Hình thức · Ngày ký · ETD · ETA · Hạn TT · Tháng TT'>
+            ⬆ Nhập Excel
+            <input type="file" accept=".xlsx,.xls" hidden onChange={e => { const f = e.target.files?.[0]; if (f) importPS(f); e.currentTarget.value = '' }} />
+          </label>
+        )}
       </div>
 
       {projectId && (
