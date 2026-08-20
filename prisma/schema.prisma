@@ -503,6 +503,7 @@ model PurchaseRequestItem {
   bidQuoteItems   BidQuoteItem[]
   fabAllocations  PurchaseRequestItemFabAllocation[]
   techComments    TechComment[]
+  contractItems   PurchaseContractItem[]
   purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 
   @@index([prId])
@@ -627,17 +628,82 @@ model PurchaseContract {
   status        String          @default("DRAFT") // DRAFT | ACTIVE | COMPLETED | CANCELLED
   signedFileId  String?         @map("signed_file_id") // FK mềm → FileAttachment.id
   notes         String?
+  // Thương mại chi tiết (khớp Commerce): loại giao dịch + mốc logistics nhập khẩu.
+  tradeType        String?      @map("trade_type")       // DOMESTIC | IMPORT (tách khỏi contractType HDMB/HDKT)
+  vendorCountry    String?      @map("vendor_country")
+  exportPort       String?      @map("export_port")
+  importLcDate     DateTime?    @map("import_lc_date")   // ngày mở L/C
+  cifDate          DateTime?    @map("cif_date")         // CIF cảng đến
+  paymentDate      DateTime?    @map("payment_date")
+  customsDate      DateTime?    @map("customs_date")     // thông quan
+  arrivedDate      DateTime?    @map("arrived_date")     // hàng thực về
+  qcInvitationDate DateTime?    @map("qc_invitation_date") // mời QC
   createdBy     String          @map("created_by")
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
   project       Project?        @relation(fields: [projectId], references: [id])
   vendor        Vendor          @relation(fields: [vendorId], references: [id])
   orders        PurchaseOrder[]
+  items         PurchaseContractItem[]
 
   @@index([projectId])
   @@index([vendorId])
   @@index([status])
   @@map("purchase_contracts")
+}
+
+// Dòng chi tiết hợp đồng (khớp Commerce ContractDetail): vật tư · SL/KL · đơn giá · giao hàng.
+model PurchaseContractItem {
+  id              String   @id @default(cuid())
+  contractId      String   @map("contract_id")
+  prItemId        String?  @map("pr_item_id")
+  materialId      String?  @map("material_id")
+  itemCode        String?  @map("item_code")
+  description     String?
+  unit            String?
+  actualProfile   String?  @map("actual_profile") // quy cách thực tế theo HĐ
+  actualGrade     String?  @map("actual_grade")
+  contractQty     Decimal  @default(0) @map("contract_qty")
+  contractWeight  Decimal  @default(0) @map("contract_weight")
+  unitPriceNoVat  Decimal  @default(0) @map("unit_price_no_vat")
+  currency        String   @default("VND")
+  vatRate         Decimal  @default(10) @map("vat_rate")
+  totalNoVat      Decimal  @default(0) @map("total_no_vat")
+  totalWithVat    Decimal  @default(0) @map("total_with_vat")
+  deliveredQty    Decimal  @default(0) @map("delivered_qty")
+  deliveredWeight Decimal  @default(0) @map("delivered_weight")
+  handoverDate    DateTime? @map("handover_date")
+  lineStatus      String   @default("PENDING") @map("line_status") // PENDING | PARTIAL_DELIVERY | DELIVERED
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  contract    PurchaseContract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  prItem      PurchaseRequestItem? @relation(fields: [prItemId], references: [id])
+  inspections ContractInspection[]
+
+  @@index([contractId])
+  @@index([prItemId])
+  @@map("purchase_contract_items")
+}
+
+// Nghiệm thu QC theo dòng hợp đồng (nội địa / nhập khẩu).
+model ContractInspection {
+  id              String   @id @default(cuid())
+  contractItemId  String   @map("contract_item_id")
+  inspectionType  String   @default("DOMESTIC") @map("inspection_type") // DOMESTIC | IMPORT
+  reportNo        String?  @map("report_no")
+  inspectionDate  DateTime? @map("inspection_date")
+  inspectedQty    Decimal  @default(0) @map("inspected_qty")
+  inspectedWeight Decimal  @default(0) @map("inspected_weight")
+  acceptedQty     Decimal  @default(0) @map("accepted_qty")
+  acceptedWeight  Decimal  @default(0) @map("accepted_weight")
+  result          String?
+  remarks         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  contractItem PurchaseContractItem @relation(fields: [contractItemId], references: [id], onDelete: Cascade)
+
+  @@index([contractItemId])
+  @@map("contract_inspections")
 }
 
 model PurchaseOrderItem {

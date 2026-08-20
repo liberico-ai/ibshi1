@@ -30,18 +30,20 @@ export async function GET(req: NextRequest) {
       where,
       orderBy: [{ signedDate: 'desc' }, { createdAt: 'desc' }],
       select: {
-        id: true, contractCode: true, contractType: true, title: true, value: true, currency: true,
-        signedDate: true, effectiveDate: true, status: true, createdAt: true,
+        id: true, contractCode: true, contractType: true, tradeType: true, title: true, value: true, currency: true,
+        signedDate: true, effectiveDate: true, arrivedDate: true, status: true, createdAt: true,
         vendor: { select: { name: true } },
         project: { select: { projectCode: true, projectName: true } },
         orders: { select: { id: true, poCode: true, status: true, totalValue: true } },
+        _count: { select: { items: true } },
       },
     })
 
     const data = contracts.map(c => ({
-      id: c.id, contractCode: c.contractCode, contractType: c.contractType, title: c.title,
-      value: N(c.value), currency: c.currency, signedDate: c.signedDate, effectiveDate: c.effectiveDate, status: c.status,
+      id: c.id, contractCode: c.contractCode, contractType: c.contractType, tradeType: c.tradeType, title: c.title,
+      value: N(c.value), currency: c.currency, signedDate: c.signedDate, effectiveDate: c.effectiveDate, arrivedDate: c.arrivedDate, status: c.status,
       vendorName: c.vendor?.name || '—', projectCode: c.project?.projectCode || null, projectName: c.project?.projectName || '',
+      itemCount: c._count.items,
       poCount: c.orders.length, poTotal: c.orders.reduce((s, o) => s + N(o.totalValue), 0),
       orders: c.orders.map(o => ({ id: o.id, poCode: o.poCode, status: o.status, totalValue: N(o.totalValue) })),
     }))
