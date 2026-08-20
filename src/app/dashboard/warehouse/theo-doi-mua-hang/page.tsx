@@ -87,7 +87,7 @@ const GROUPS: Group[] = [
   { key: 'tong', label: 'Tổng đã mua & So sánh', bg: '#fed7aa', cols: [
     { h: 'ĐM SL', w: 70, r: true, get: r => <b>{nn(r.boughtQty)}</b> }, { h: 'ĐM KL', w: 72, r: true, get: r => <b>{nn(r.boughtWeight)}</b> },
     { h: 'Chênh SL', w: 76, r: true, get: r => <span style={{ color: r.diffQty > 0.001 ? '#dc2626' : r.diffQty < -0.001 ? '#854d0e' : '#166534' }}>{nn(r.diffQty)}</span> },
-    { h: 'KQ Mua', w: 66, get: r => { const k = KET[r.ket]; return <span style={{ background: k.bg, color: k.tx, padding: '1px 6px', borderRadius: 999, fontWeight: 700, fontSize: 10 }}>{k.label}</span> } },
+    { h: 'KQ Mua', w: 66, get: r => { const k = KET[r.ket]; return k ? <span style={{ background: k.bg, color: k.tx, padding: '1px 6px', borderRadius: 999, fontWeight: 700, fontSize: 10 }}>{k.label}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span> } },
   ] },
 ]
 

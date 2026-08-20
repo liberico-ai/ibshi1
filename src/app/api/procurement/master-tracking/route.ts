@@ -37,6 +37,9 @@ export async function GET(req: NextRequest) {
     const grp = (cis: CI[]) => {
       const qty = cis.reduce((s, c) => s + N(c.contractQty), 0)
       const weight = cis.reduce((s, c) => s + N(c.contractWeight), 0)
+      // "Đã mua" = ưu tiên đã giao (deliveredQty), thiếu thì lấy theo HĐ (contractQty) — khớp Commerce.
+      const bought = cis.reduce((s, c) => s + (N(c.deliveredQty) > 0 ? N(c.deliveredQty) : N(c.contractQty)), 0)
+      const boughtW = cis.reduce((s, c) => s + (N(c.deliveredWeight) > 0 ? N(c.deliveredWeight) : N(c.contractWeight)), 0)
       const total = cis.reduce((s, c) => s + N(c.totalNoVat), 0)
       const deliveredQty = cis.reduce((s, c) => s + N(c.deliveredQty), 0)
       const deliveredWeight = cis.reduce((s, c) => s + N(c.deliveredWeight), 0)
@@ -47,7 +50,7 @@ export async function GET(req: NextRequest) {
         vendor: [...new Set(cis.map(c => c.contract.vendor?.name).filter(Boolean))].join(', '),
         signedDate: first?.signedDate || null,
         spec: [...new Set(cis.map(c => c.actualProfile).filter(Boolean))].join(', '),
-        qty, weight, unitPrice: qty > 0 ? total / qty : N(cis[0]?.unitPriceNoVat), total,
+        qty, weight, bought, boughtW, unitPrice: N(cis[0]?.unitPriceNoVat) || (qty > 0 ? total / qty : 0), total,
         currency: cis[0]?.currency || 'VND',
         deliveredQty, deliveredWeight,
         handoverDate: cis.map(c => c.handoverDate).filter(Boolean).sort().slice(-1)[0] || null,
@@ -66,12 +69,14 @@ export async function GET(req: NextRequest) {
     const rows = items.map(it => {
       const dom = grp(it.contractItems.filter(c => c.contract.tradeType !== 'IMPORT'))
       const imp = grp(it.contractItems.filter(c => c.contract.tradeType === 'IMPORT'))
-      const boughtQty = dom.qty + imp.qty
-      const boughtWeight = dom.weight + imp.weight
+      const boughtQty = dom.bought + imp.bought
+      const boughtWeight = dom.boughtW + imp.boughtW
       const reqQty = N(it.reqQty)
-      const diffQty = reqQty - boughtQty
-      const diffWeight = N(it.reqWeight) - boughtWeight
-      const ket = diffQty > 0.001 ? 'THIEU' : diffQty < -0.001 ? 'THUA' : 'DU'
+      // Chênh lệch = ĐÃ MUA − YÊU CẦU (dương = Thừa, âm = Thiếu) — khớp Commerce. Ngưỡng dung sai 0.5.
+      // Dòng CHƯA MUA gì (bought=0) → KQ để trống "—", không gán "Thiếu" oan.
+      const diffQty = boughtQty - reqQty
+      const diffWeight = boughtWeight - N(it.reqWeight)
+      const ket = boughtQty <= 0.001 ? '' : diffQty < -0.5 ? 'THIEU' : diffQty > 0.5 ? 'THUA' : 'DU'
       return {
         id: it.id, prCode: it.purchaseRequest?.prCode || null, groupCode: it.materialSubGroupCode || it.materialGroupCode || 'KHAC',
         itemCode: it.itemCode, matCode: it.matCode, matCodeSource: it.matCodeSource, description: it.description,

@@ -37,7 +37,10 @@ export async function GET(req: NextRequest) {
     const rows = details.map(d => {
       const comments = d.techComments || []
       const latest = comments[comments.length - 1] || null
-      const threadStatus = comments.length === 0 ? 'PENDING' : (latest?.threadStatus || 'PENDING')
+      // Trạng thái thread = comment MỚI NHẤT CÓ trạng thái (không phải comment cuối theo nghĩa đen)
+      // → 1 GHI CHÚ (NOTE, không trạng thái) ở cuối KHÔNG kéo CLARIFIED/APPROVED tụt về PENDING.
+      const withStatus = [...comments].reverse().find(c => c.threadStatus)
+      const threadStatus = withStatus?.threadStatus || 'PENDING'
       const mapC = (c: (typeof comments)[number]) => ({
         id: c.id, content: c.content, commentType: c.commentType, threadStatus: c.threadStatus, tags: c.tags,
         authorId: c.authorId, authorName: c.author?.fullName || 'Không rõ', authorRole: c.author?.roleCode || '',
