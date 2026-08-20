@@ -4,6 +4,42 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { updateVendorSchema } from '@/lib/schemas'
 
+export const dynamic = 'force-dynamic'
+
+// GET /api/vendors/[id] — Hồ sơ NCC + lịch sử giao dịch (PO) + thống kê (số PO, tổng giá trị).
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const payload = await authenticateRequest(req)
+    if (!payload) return unauthorizedResponse()
+    const { id } = await params
+    const vendor = await prisma.vendor.findUnique({
+      where: { id },
+      include: {
+        purchaseOrders: {
+          orderBy: { orderDate: 'desc' }, take: 50,
+          select: { id: true, poCode: true, orderDate: true, status: true, totalValue: true, currency: true, project: { select: { projectCode: true, projectName: true } }, _count: { select: { items: true } } },
+        },
+        _count: { select: { purchaseOrders: true, invoices: true, subcontracts: true, purchaseContracts: true } },
+      },
+    })
+    if (!vendor) return errorResponse('Nhà cung cấp không tồn tại', 404)
+
+    const totalValue = vendor.purchaseOrders.reduce((s, p) => s + Number(p.totalValue || 0), 0)
+    const { purchaseOrders, ...profile } = vendor
+    return successResponse({
+      vendor: profile,
+      stats: { poCount: vendor._count.purchaseOrders, contractCount: vendor._count.purchaseContracts, invoiceCount: vendor._count.invoices, subcontractCount: vendor._count.subcontracts, totalValue },
+      transactions: purchaseOrders.map(p => ({
+        id: p.id, poCode: p.poCode, orderDate: p.orderDate, status: p.status, itemCount: p._count.items,
+        totalValue: Number(p.totalValue || 0), currency: p.currency, projectCode: p.project?.projectCode || '', projectName: p.project?.projectName || '',
+      })),
+    })
+  } catch (err) {
+    console.error('GET /api/vendors/[id] error:', err)
+    return errorResponse('Lỗi hệ thống', 500)
+  }
+}
+
 // PATCH /api/vendors/[id] — Sửa hồ sơ NCC (bổ sung MST/ngân hàng/loại NCC/contact… + blacklist).
 // Cho phép user bổ sung dần các field mới (Module 1 PORT Thương Mại). Chỉ BGĐ/PM/Thương mại/Quản trị.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

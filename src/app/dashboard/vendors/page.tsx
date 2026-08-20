@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 interface Vendor {
   id: string; vendorCode: string; name: string; contactName: string | null; email: string | null;
@@ -31,6 +32,15 @@ export default function VendorPage() {
   const [filter, setFilter] = useState('')
   const [typeF, setTypeF] = useState<'all' | 'DOMESTIC' | 'IMPORT' | 'MIXED'>('all')
   const [statusF, setStatusF] = useState<'all' | 'active' | 'blacklist'>('all')
+  const [detailId, setDetailId] = useState<string | null>(null)
+  const [seeding, setSeeding] = useState(false)
+
+  const seedVendors = async () => {
+    setSeeding(true)
+    const res = await apiFetch('/api/vendors/seed', { method: 'POST' })
+    setSeeding(false)
+    if (res.ok) { notify(res.message || 'Đã seed', 'success'); load() } else notify(res.error || 'Lỗi seed', 'error')
+  }
 
   const openEdit = (v: Vendor) => { setEditVendor(v); setShowForm(true) }
   const closeForm = () => { setShowForm(false); setEditVendor(null) }
@@ -87,7 +97,20 @@ export default function VendorPage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Nhà cung cấp</h1>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{shownVendors.length}/{vendors.length} nhà cung cấp</p>
         </div>
-        <button onClick={() => { setEditVendor(null); setShowForm(v => editVendor ? true : !v) }} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm NCC</button>
+        <div className="flex gap-2">
+          <button onClick={seedVendors} disabled={seeding} className="btn-secondary text-sm px-4 py-2 rounded-lg">{seeding ? 'Đang seed…' : '⟳ Seed từ đấu thầu'}</button>
+          <button onClick={() => { setEditVendor(null); setShowForm(v => editVendor ? true : !v) }} className="btn-primary text-sm px-4 py-2 rounded-lg">+ Thêm NCC</button>
+        </div>
+      </div>
+
+      {/* KPI tổng quan */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {([['Tổng NCC', vendors.length], ['Đang hoạt động', vendors.filter(v => v.isActive && !v.blacklisted).length], ['Nhập khẩu', vendors.filter(v => v.vendorType === 'IMPORT').length], ['Blacklist', vendors.filter(v => v.blacklisted).length]] as const).map(([l, v], i) => (
+          <div key={i} className="rounded-lg px-3 py-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{l}</div>
+            <div className="text-lg font-bold" style={{ color: i === 3 && v > 0 ? '#dc2626' : 'var(--text-primary)' }}>{v}</div>
+          </div>
+        ))}
       </div>
 
       {/* Category filter chips */}
@@ -193,11 +216,87 @@ export default function VendorPage() {
                 <td className="text-center"><span className="text-xs font-bold">{v._count.purchaseOrders}</span></td>
                 <td className="text-center"><span className="text-xs font-bold">{v._count.invoices}</span></td>
                 <td className="text-center"><span className="text-xs font-bold">{v._count.subcontracts}</span></td>
-                <td className="text-right"><button onClick={() => openEdit(v)} className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>✎ Sửa</button></td>
+                <td className="text-right whitespace-nowrap">
+                  <button onClick={() => setDetailId(v.id)} className="text-xs font-semibold mr-3" style={{ color: 'var(--text-secondary)' }}>Chi tiết</button>
+                  <button onClick={() => openEdit(v)} className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>✎ Sửa</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+      {detailId && <VendorDetailDrawer id={detailId} onClose={() => setDetailId(null)} />}
+    </div>
+  )
+}
+
+interface VDetail {
+  vendor: { vendorCode: string; name: string; category: string; vendorType?: string | null; taxCode?: string | null; contactName?: string | null; phone?: string | null; email?: string | null; address?: string | null; bank?: string | null; accountNo?: string | null; isActive: boolean; blacklisted?: boolean; notes?: string | null }
+  stats: { poCount: number; contractCount: number; invoiceCount: number; subcontractCount: number; totalValue: number }
+  transactions: Array<{ id: string; poCode: string; orderDate: string | null; status: string; itemCount: number; totalValue: number; currency: string; projectCode: string }>
+}
+function VendorDetailDrawer({ id, onClose }: { id: string; onClose: () => void }) {
+  const [d, setD] = useState<VDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => { apiFetch(`/api/vendors/${id}`).then(r => { if (r.ok) setD({ vendor: r.vendor, stats: r.stats, transactions: r.transactions }); setLoading(false) }) }, [id])
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(15,23,42,0.4)' }} onClick={onClose}>
+      <div className="h-full w-full max-w-lg overflow-y-auto p-5 space-y-4" style={{ background: 'var(--surface)' }} onClick={e => e.stopPropagation()}>
+        {loading ? <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Đang tải…</div> : !d ? <div className="text-sm">Không tải được</div> : (
+          <>
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>{d.vendor.name}
+                  {d.vendor.blacklisted && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: '#111827', color: '#fca5a5' }}>Blacklist</span>}
+                  {!d.vendor.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: '#fef2f2', color: '#dc2626' }}>Ngừng HĐ</span>}
+                </div>
+                <div className="text-xs font-mono" style={{ color: 'var(--accent)' }}>{d.vendor.vendorCode} · {d.vendor.vendorType === 'IMPORT' ? 'Nhập khẩu' : d.vendor.vendorType === 'MIXED' ? 'Cả hai' : 'Nội địa'}</div>
+              </div>
+              <button onClick={onClose} className="text-sm" style={{ color: 'var(--text-muted)' }}>✕ Đóng</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {d.vendor.taxCode && <div>MST: <b>{d.vendor.taxCode}</b></div>}
+              {d.vendor.contactName && <div>Liên hệ: <b>{d.vendor.contactName}</b></div>}
+              {d.vendor.phone && <div>SĐT: <b>{d.vendor.phone}</b></div>}
+              {d.vendor.email && <div>Email: <b>{d.vendor.email}</b></div>}
+              {d.vendor.bank && <div>NH: <b>{d.vendor.bank}</b></div>}
+              {d.vendor.accountNo && <div>STK: <b>{d.vendor.accountNo}</b></div>}
+              {d.vendor.address && <div className="col-span-2">ĐC: {d.vendor.address}</div>}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {[['Đơn hàng (PO)', d.stats.poCount], ['Hợp đồng', d.stats.contractCount], ['Tổng giá trị', formatCurrency(d.stats.totalValue)]].map(([l, v], i) => (
+                <div key={i} className="rounded-lg px-2.5 py-1.5" style={{ background: 'var(--bg-secondary)' }}>
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{l}</div>
+                  <div className="text-sm font-bold font-mono" style={{ color: i === 2 ? '#166534' : 'var(--text-primary)' }}>{v}</div>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>Lịch sử giao dịch ({d.transactions.length})</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                  <thead><tr style={{ color: 'var(--text-muted)' }}><th className="text-left px-2 py-1">Mã PO</th><th className="text-left px-2 py-1">Dự án</th><th className="text-right px-2 py-1">Dòng</th><th className="text-right px-2 py-1">Giá trị</th><th className="text-left px-2 py-1">Ngày</th><th className="text-center px-2 py-1">TT</th></tr></thead>
+                  <tbody>
+                    {d.transactions.length === 0 ? <tr><td colSpan={6} className="text-center py-4" style={{ color: 'var(--text-muted)' }}>Chưa có giao dịch</td></tr>
+                      : d.transactions.map(t => (
+                        <tr key={t.id} style={{ borderTop: '1px solid var(--border)' }}>
+                          <td className="px-2 py-1 font-mono font-semibold" style={{ color: 'var(--accent)' }}>{t.poCode}</td>
+                          <td className="px-2 py-1" style={{ color: 'var(--text-muted)' }}>{t.projectCode}</td>
+                          <td className="px-2 py-1 text-right font-mono">{t.itemCount}</td>
+                          <td className="px-2 py-1 text-right font-mono">{formatCurrency(t.totalValue)}</td>
+                          <td className="px-2 py-1" style={{ color: 'var(--text-muted)' }}>{t.orderDate ? formatDate(t.orderDate) : '—'}</td>
+                          <td className="px-2 py-1 text-center"><span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>{t.status}</span></td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
