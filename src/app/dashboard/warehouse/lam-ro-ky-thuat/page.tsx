@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
-import { PageHeader } from '@/components/ui'
+import { PageHeader, Button } from '@/components/ui'
 import { X, MessageSquare, Search, Send, ArrowRightLeft, History } from 'lucide-react'
 import PurchaseHistoryPanel from '@/components/PurchaseHistoryPanel'
 
@@ -195,6 +195,7 @@ function SkuCard({ row, onOpen, onOpenHistory, onQuickStatus }: { row: Row; onOp
 const FILTERS = [
   { id: 'ALL', label: 'Tất cả' }, { id: 'PENDING', label: 'Chưa làm rõ' }, { id: 'IN_DISCUSSION', label: 'Đang trao đổi' },
   { id: 'SUBSTITUTION_REQUESTED', label: 'Xin chuyển đổi' }, { id: 'CLARIFIED', label: 'Đã làm rõ' },
+  { id: 'APPROVED', label: 'Đã duyệt' }, { id: 'REJECTED', label: 'Từ chối' },
 ]
 
 export default function LamRoKyThuatPage() {
@@ -250,6 +251,11 @@ export default function LamRoKyThuatPage() {
           <option value="">— Chọn phiếu yêu cầu (PR) —</option>
           {prs.map(p => <option key={p.id} value={p.id}>{p.prCode}{p.project?.projectCode ? ` — ${p.project.projectCode}` : ''}</option>)}
         </select>
+        {prId && summary && (
+          <Button variant={summary.readyForRFQ > 0 ? 'primary' : 'outline'} onClick={() => { window.location.href = '/dashboard/warehouse/bidding' }} disabled={summary.readyForRFQ === 0}>
+            Tạo RFQ ({summary.readyForRFQ}/{summary.total} SKU sẵn sàng) →
+          </Button>
+        )}
       </div>
 
       {summary && (
@@ -260,6 +266,7 @@ export default function LamRoKyThuatPage() {
             { label: 'Đang trao đổi', value: summary.inDiscussion, color: 'text-violet-600' },
             { label: 'Xin chuyển đổi', value: summary.substitutionRequested, color: 'text-amber-600' },
             { label: 'Từ chối', value: summary.rejected, color: 'text-red-500' },
+            { label: 'Sẵn sàng RFQ', value: summary.readyForRFQ, color: 'text-blue-600' },
           ].map(k => <div key={k.label} className="flex items-center gap-1.5"><span className={`text-lg font-bold ${k.color}`}>{k.value}</span><span className="text-xs text-slate-500">{k.label}</span></div>)}
         </div>
       )}
