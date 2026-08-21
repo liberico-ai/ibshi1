@@ -8,7 +8,10 @@ const N = (v: unknown) => Number(v ?? 0)
 /**
  * GET /api/procurement/purchase-history?itemCodes=A,B  (hoặc itemCode=A)
  * [PORT Thương Mại — F3] Lịch sử mua theo itemCode + phân tích vendor/giá (bám getPurchaseHistory).
- * Nguồn ibshi1: PurchaseOrderItem + PurchaseOrder.
+ * Nguồn ibshi1: GỘP 2 nguồn — PurchaseOrderItem (đơn đặt hàng) + PurchaseContractItem (HĐ đã ký).
+ * HĐ đã ký là "mua thực tế" (khớp Commerce dùng ContractDetail); PO là đơn chờ duyệt.
+ * 2 luồng ghi tách biệt (HĐ qua Theo dõi mua hàng, PO qua BID→create-po) nên hầu như
+ * không trùng; mỗi giao dịch gắn cờ source ('HĐ' | 'PO') để phân biệt trên UI.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -19,27 +22,61 @@ export async function GET(req: NextRequest) {
     if (itemCodes.length === 0) return errorResponse('Thiếu itemCodes', 400)
     if (itemCodes.length > 50) return errorResponse('Tối đa 50 mã VT mỗi lần', 400)
 
-    const items = await prisma.purchaseOrderItem.findMany({
-      where: { itemCode: { in: itemCodes } },
-      orderBy: { purchaseOrder: { orderDate: 'desc' } },
-      select: {
-        id: true, itemCode: true, description: true, profile: true, grade: true, unit: true, quantity: true, unitPrice: true, receivedQty: true,
-        purchaseOrder: { select: { poCode: true, orderDate: true, currency: true, status: true, vendor: { select: { name: true } }, project: { select: { projectCode: true, projectName: true } } } },
-      },
-    })
+    const [poItems, ctItems] = await Promise.all([
+      prisma.purchaseOrderItem.findMany({
+        where: { itemCode: { in: itemCodes } },
+        orderBy: { purchaseOrder: { orderDate: 'desc' } },
+        select: {
+          id: true, itemCode: true, description: true, profile: true, grade: true, unit: true, quantity: true, unitPrice: true, receivedQty: true,
+          purchaseOrder: { select: { poCode: true, orderDate: true, currency: true, status: true, vendor: { select: { name: true } }, project: { select: { projectCode: true, projectName: true } } } },
+        },
+      }),
+      prisma.purchaseContractItem.findMany({
+        where: { itemCode: { in: itemCodes } },
+        select: {
+          id: true, prItemId: true, itemCode: true, description: true, actualProfile: true, actualGrade: true, unit: true,
+          contractQty: true, unitPriceNoVat: true, currency: true, deliveredQty: true, lineStatus: true,
+          contract: { select: { contractCode: true, signedDate: true, effectiveDate: true, createdAt: true, status: true, vendor: { select: { name: true } }, project: { select: { projectCode: true, projectName: true } } } },
+        },
+      }),
+    ])
 
     const byCode = new Map<string, { itemCode: string; itemName: string; profile: string; grade: string; uom: string; transactions: Array<Record<string, unknown>> }>()
-    for (const it of items) {
+    const ensure = (code: string, seed: { itemName?: string; profile?: string; grade?: string; uom?: string }) => {
+      if (!byCode.has(code)) byCode.set(code, { itemCode: code, itemName: seed.itemName || '', profile: seed.profile || '', grade: seed.grade || '', uom: seed.uom || '', transactions: [] })
+      return byCode.get(code)!
+    }
+
+    // Nguồn 1: Hợp đồng đã ký (mua thực tế).
+    for (const it of ctItems) {
       const code = it.itemCode || ''
       if (!code) continue
-      if (!byCode.has(code)) byCode.set(code, { itemCode: code, itemName: it.description || '', profile: it.profile || '', grade: it.grade || '', uom: it.unit || '', transactions: [] })
-      byCode.get(code)!.transactions.push({
-        id: it.id, poCode: it.purchaseOrder.poCode, vendorName: it.purchaseOrder.vendor?.name || 'Không rõ',
+      const g = ensure(code, { itemName: it.description || '', profile: it.actualProfile || '', grade: it.actualGrade || '', uom: it.unit || '' })
+      const date = it.contract.signedDate || it.contract.effectiveDate || it.contract.createdAt
+      g.transactions.push({
+        id: it.id, source: 'HĐ', poCode: it.contract.contractCode, vendorName: it.contract.vendor?.name || 'Không rõ',
+        orderDate: date, qty: N(it.contractQty), unitPrice: N(it.unitPriceNoVat), currency: it.currency,
+        totalNoVAT: N(it.contractQty) * N(it.unitPriceNoVat), status: it.lineStatus || it.contract.status, receivedQty: N(it.deliveredQty),
+        projectCode: it.contract.project?.projectCode || '', projectName: it.contract.project?.projectName || '',
+      })
+    }
+
+    // Nguồn 2: Đơn đặt hàng (PO).
+    for (const it of poItems) {
+      const code = it.itemCode || ''
+      if (!code) continue
+      const g = ensure(code, { itemName: it.description || '', profile: it.profile || '', grade: it.grade || '', uom: it.unit || '' })
+      g.transactions.push({
+        id: it.id, source: 'PO', poCode: it.purchaseOrder.poCode, vendorName: it.purchaseOrder.vendor?.name || 'Không rõ',
         orderDate: it.purchaseOrder.orderDate, qty: N(it.quantity), unitPrice: N(it.unitPrice), currency: it.purchaseOrder.currency,
         totalNoVAT: N(it.quantity) * N(it.unitPrice), status: it.purchaseOrder.status, receivedQty: N(it.receivedQty),
         projectCode: it.purchaseOrder.project?.projectCode || '', projectName: it.purchaseOrder.project?.projectName || '',
       })
     }
+
+    // Sắp xếp giao dịch mỗi mã theo ngày giảm dần (gộp 2 nguồn).
+    const nd = (d: unknown) => (d ? new Date(d as string).getTime() : 0)
+    for (const g of byCode.values()) g.transactions.sort((a, b) => nd(b.orderDate) - nd(a.orderDate))
 
     const data = [...byCode.values()].map(item => {
       const txs = item.transactions

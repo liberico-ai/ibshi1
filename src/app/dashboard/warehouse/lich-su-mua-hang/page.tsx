@@ -8,7 +8,7 @@ import { PageHeader, Button } from '@/components/ui'
 import { Search } from 'lucide-react'
 
 // [PORT Thương Mại — F3] Tra cứu lịch sử mua hàng theo mã vật tư (giá/NCC/GD trong quá khứ).
-interface Tx { id: string; poCode: string; vendorName: string; orderDate: string | null; qty: number; unitPrice: number; currency: string; totalNoVAT: number; status: string; projectCode: string; projectName: string }
+interface Tx { id: string; source?: 'HĐ' | 'PO'; poCode: string; vendorName: string; orderDate: string | null; qty: number; unitPrice: number; currency: string; totalNoVAT: number; status: string; projectCode: string; projectName: string }
 interface Vendor { vendorName: string; txCount: number; totalQty: number; totalValue: number; avgPrice: number; minPrice: number; maxPrice: number }
 interface Item {
   itemCode: string; itemName: string; profile: string; grade: string; uom: string
@@ -139,7 +139,7 @@ export default function LichSuMuaHangPage() {
               <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border)' }}>
                 <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                   <thead><tr style={{ background: 'var(--bg-secondary)' }}>
-                    <th className="text-left px-2 py-1.5">Ngày</th><th className="text-left px-2 py-1.5">Mã PO</th><th className="text-left px-2 py-1.5">NCC</th>
+                    <th className="text-left px-2 py-1.5">Ngày</th><th className="text-left px-2 py-1.5">Chứng từ</th><th className="text-left px-2 py-1.5">NCC</th>
                     <th className="text-right px-2 py-1.5">SL</th><th className="text-right px-2 py-1.5">Đơn giá</th><th className="text-right px-2 py-1.5">Thành tiền</th>
                     <th className="text-left px-2 py-1.5">Dự án</th><th className="text-left px-2 py-1.5">TT</th>
                   </tr></thead>
@@ -147,7 +147,10 @@ export default function LichSuMuaHangPage() {
                     {item.transactions.map(t => (
                       <tr key={t.id} style={{ borderTop: '1px solid var(--border)' }}>
                         <td className="px-2 py-1 whitespace-nowrap">{fmtDate(t.orderDate)}</td>
-                        <td className="px-2 py-1 font-mono" style={{ color: 'var(--accent)' }}>{t.poCode}</td>
+                        <td className="px-2 py-1 whitespace-nowrap">
+                          {t.source && <span className="mr-1 px-1 py-0.5 rounded text-[10px] font-semibold" style={{ background: t.source === 'HĐ' ? '#dcfce7' : '#e0e7ff', color: t.source === 'HĐ' ? '#166534' : '#3730a3' }}>{t.source}</span>}
+                          <span className="font-mono" style={{ color: 'var(--accent)' }}>{t.poCode}</span>
+                        </td>
                         <td className="px-2 py-1">{t.vendorName}</td>
                         <td className="px-2 py-1 text-right font-mono">{fmtQty(t.qty, item.uom)}</td>
                         <td className="px-2 py-1 text-right font-mono">{fmt(t.unitPrice, t.currency)}</td>
