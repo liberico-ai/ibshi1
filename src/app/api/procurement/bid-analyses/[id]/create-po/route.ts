@@ -19,6 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!payload) return unauthorizedResponse()
     if (!CAN.includes(payload.roleCode)) return errorResponse('Không có quyền tạo PO', 403)
     const { id } = await params
+    const body = await req.json().catch(() => ({})) as { confirmOverBudget?: boolean }
 
     const bid = await prisma.bidAnalysis.findUnique({
       where: { id },
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         items: {
           select: {
             id: true, itemCode: true, itemName: true, profile: true, grade: true, uom: true,
-            qtyToBuy: true, selectedVendorName: true, purchaseRequestItemId: true,
+            qtyToBuy: true, selectedVendorName: true, purchaseRequestItemId: true, estimateUnitPrice: true,
             prItem: { select: { materialId: true } },
             offers: { select: { vendorId: true, unitPrice: true, totalPrice: true } },
           },
@@ -58,6 +59,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const head = invalidLines.slice(0, 8).join('; ')
       const more = invalidLines.length > 8 ? ` …+${invalidLines.length - 8} dòng` : ''
       return errorResponse(`Không thể tạo PO — ${invalidLines.length} dòng đã chọn NCC nhưng chưa có báo giá (>0): ${head}${more}. Vui lòng nhập báo giá hoặc bỏ chọn NCC cho các dòng này.`, 400)
+    }
+
+    // Gate 2 (khớp Commerce generatePO): so tổng báo giá NCC được chọn với DỰ TOÁN.
+    // Vượt > 2% → cần BGĐ (R01) duyệt (gửi lại confirmOverBudget=true). Chỉ tính trên dòng CÓ dự toán.
+    const OVER_BUDGET_THRESHOLD = 0.02
+    let estTotal = 0, quoteTotal = 0
+    for (const it of selected) {
+      const est = Number(it.estimateUnitPrice || 0)
+      if (!(est > 0)) continue // dòng không có dự toán → không đối chiếu
+      const bqv = bqvByName.get(it.selectedVendorName!.toLowerCase())
+      const offer = bqv ? it.offers.find(o => o.vendorId === bqv.id) : undefined
+      const qty = Number(it.qtyToBuy || 0)
+      const quoteLine = Number(offer?.totalPrice || 0) > 0 ? Number(offer!.totalPrice) : qty * Number(offer?.unitPrice || 0)
+      estTotal += est * qty
+      quoteTotal += quoteLine
+    }
+    const inflation = estTotal > 0 ? (quoteTotal - estTotal) / estTotal : 0
+    if (estTotal > 0 && inflation > OVER_BUDGET_THRESHOLD) {
+      const pct = (inflation * 100).toFixed(1)
+      if (!(payload.roleCode === 'R01' && body.confirmOverBudget === true)) {
+        const canApprove = payload.roleCode === 'R01'
+        await logAudit(payload.userId, 'PO_OVER_BUDGET_BLOCKED', 'BidAnalysis', id, { bidCode: bid.bidCode, estTotal: Math.round(estTotal), quoteTotal: Math.round(quoteTotal), inflationPct: pct }, getClientIP(req))
+        return errorResponse(
+          `Giá mua vượt dự toán ${pct}% (dự toán ${Math.round(estTotal).toLocaleString('vi-VN')} → báo giá ${Math.round(quoteTotal).toLocaleString('vi-VN')}, ngưỡng 2%). ${canApprove ? 'BGĐ xác nhận để tiếp tục.' : 'Cần BGĐ (R01) duyệt vượt dự toán trước khi tạo PO.'}`,
+          canApprove ? 409 : 403,
+        )
+      }
+      // R01 đã xác nhận vượt dự toán — ghi vết duyệt.
+      await logAudit(payload.userId, 'PO_OVER_BUDGET_APPROVED', 'BidAnalysis', id, { bidCode: bid.bidCode, estTotal: Math.round(estTotal), quoteTotal: Math.round(quoteTotal), inflationPct: pct }, getClientIP(req))
     }
     type G = { name: string; bqv: (typeof bid.vendors)[number]; items: Array<{ id: string; itemCode: string | null; itemName: string | null; profile: string | null; grade: string | null; uom: string | null; qtyToBuy: number; materialId: string | null; prItemId: string | null; unitPrice: number; linePrice: number }> }
     const groups = new Map<string, G>()

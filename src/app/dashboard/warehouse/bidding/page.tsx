@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef, Fragment } from 'react'
 import * as XLSX from 'xlsx'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 import { PageHeader, Button, Badge } from '@/components/ui'
 import { formatCurrency, formatNumber, formatDate } from '@/lib/utils'
@@ -335,6 +335,7 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
   const [mode, setMode] = useState(detail.bid.selectionMode || 'PER_ITEM')
   const [summary, setSummary] = useState<ApproveSummary | null>(null)
   const [poBusy, setPoBusy] = useState(false)
+  const roleCode = useAuthStore(s => s.user?.roleCode)
 
   const loadSummary = useCallback(() => {
     apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/approval-summary`).then(r => { if (r.ok) setSummary({ summary: r.summary, byVendor: r.byVendor }) })
@@ -364,6 +365,18 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
     if (!await confirmDialog('Tạo PO từ các dòng đã duyệt? Mỗi NCC 1 đơn đặt hàng (PENDING — chờ duyệt ở Đơn đặt hàng).')) return
     setPoBusy(true)
     const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/create-po`, { method: 'POST', body: '{}' })
+    // Gate 2: giá vượt dự toán > 2%. BGĐ (R01) có thể xác nhận vượt để tiếp tục.
+    if (!r.ok && /vượt dự toán/i.test(r.error || '')) {
+      if (roleCode === 'R01' && await confirmDialog(`${r.error}\n\nBGĐ xác nhận DUYỆT VƯỢT DỰ TOÁN và tạo PO?`)) {
+        const r2 = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/create-po`, { method: 'POST', body: JSON.stringify({ confirmOverBudget: true }) })
+        setPoBusy(false)
+        if (r2.ok) { notify(r2.message || 'Đã tạo PO (duyệt vượt dự toán)', 'success'); onReload() } else notify(r2.error || 'Lỗi tạo PO', 'error')
+        return
+      }
+      setPoBusy(false)
+      notify(r.error || 'Giá vượt dự toán — cần BGĐ duyệt', 'error')
+      return
+    }
     setPoBusy(false)
     if (r.ok) { notify(r.message || 'Đã tạo PO', 'success'); onReload() } else notify(r.error || 'Lỗi tạo PO', 'error')
   }
