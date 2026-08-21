@@ -10,7 +10,7 @@ const num = (v: unknown) => Number(v ?? 0)
  * GET /api/procurement/fab-allocations?projectId=...
  * [PORT Thương Mại] Toàn bộ dữ liệu dựng lưới phân bổ chế tạo (bám getProjectFabAllocations).
  * Dòng = vật tư PR (PurchaseRequestItem), cột = hạng mục chế tạo của DỰ ÁN, ô = SL·KL·ngày cần tại CT.
- * Lưu ý ibshi1: chưa có nguồn "ngày hàng thực về" (arrivedDate) → tạm bỏ tiến độ ngày-về.
+ * Tiến độ ngày-về: lấy từ HĐ (PurchaseContractItem → contract.arrivedDate) so với ngày cần tại CT.
  */
 export async function GET(req: NextRequest) {
   try {
