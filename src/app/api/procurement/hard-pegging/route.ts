@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles, logAudit, getClientIP } from '@/lib/auth'
 
@@ -6,6 +7,20 @@ export const dynamic = 'force-dynamic'
 const N = (v: unknown) => Number(v ?? 0)
 // Kho + Thương mại + KTKH + PM/BGĐ/Admin được giữ tồn.
 const CAN = ['R01', 'R02', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R10']
+
+// Chạy transaction Serializable + retry khi Postgres báo write-conflict/deadlock (Prisma P2034).
+// Cần thiết vì giữ/nhả tồn là read-modify-write trên reservedStock: nếu không cô lập, 2 request
+// đồng thời trên cùng material (hoặc cùng dòng PR) có thể ghi đè → reservedStock vượt tồn thực / âm.
+async function runSerializable<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(fn, { isolationLevel: 'Serializable' })
+    } catch (e) {
+      if (attempt < 3 && e && typeof e === 'object' && 'code' in e && (e as { code?: string }).code === 'P2034') continue
+      throw e
+    }
+  }
+}
 
 /**
  * Hard Pegging (PORT Thương Mại — Gate 3 allocateStock): giữ CỨNG tồn kho cho nhu cầu 1 dòng PR.
@@ -71,7 +86,7 @@ export async function POST(req: NextRequest) {
     }
     if (!materialId) return errorResponse('Dòng PR chưa liên kết mã kho — không giữ tồn được', 400)
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await runSerializable(async (tx) => {
       const mat = await tx.material.findUnique({ where: { id: materialId! }, select: { currentStock: true, reservedStock: true } })
       if (!mat) throw new Error('MATERIAL_NOT_FOUND')
       const existing = await tx.hardPegging.findUnique({ where: { prItemId }, select: { quantity: true, status: true } })
@@ -79,8 +94,11 @@ export async function POST(req: NextRequest) {
       // Tồn khả dụng cho phần TĂNG THÊM = currentStock − reservedStock (reserved đã gồm phần đang giữ của chính dòng này).
       const availableForMore = Math.max(0, N(mat.currentStock) - N(mat.reservedStock))
       const reqQty = N(prItem.reqQty)
-      // Mục tiêu giữ: quantity yêu cầu, else giữ đủ nhu cầu = min(khả-dụng+đang-giữ, reqQty).
-      const target = body.quantity != null ? Math.max(0, N(body.quantity)) : Math.min(currentPegged + availableForMore, reqQty > 0 ? reqQty : currentPegged + availableForMore)
+      // Mục tiêu giữ: quantity yêu cầu; else giữ đủ nhu cầu = min(khả-dụng+đang-giữ, reqQty).
+      // reqQty ≤ 0 (chưa có nhu cầu) mà không truyền quantity → KHÔNG giữ (target 0), tránh giữ sạch kho.
+      const target = body.quantity != null
+        ? Math.max(0, N(body.quantity))
+        : (reqQty > 0 ? Math.min(currentPegged + availableForMore, reqQty) : 0)
       const delta = target - currentPegged
       if (delta > availableForMore + 1e-6) {
         return { blocked: true, availableForMore, currentPegged, target } as const
@@ -101,6 +119,9 @@ export async function POST(req: NextRequest) {
     await logAudit(user.userId, 'HARD_PEG_ALLOCATE', 'PurchaseRequestItem', prItemId, { materialId, target: result.target, delta: result.delta }, getClientIP(req))
     return successResponse({ prItemId, materialId, quantity: result.target, availableAfter: result.availableAfter }, `Đã giữ cứng ${result.target.toLocaleString('vi-VN')} cho dòng PR`)
   } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2034') {
+      return errorResponse('Đang có thao tác giữ/nhả tồn khác trên vật tư này — vui lòng thử lại', 409)
+    }
     console.error('POST hard-pegging error:', err)
     return errorResponse('Lỗi giữ tồn', 500)
   }
@@ -114,7 +135,7 @@ export async function DELETE(req: NextRequest) {
     const prItemId = req.nextUrl.searchParams.get('prItemId') || ''
     if (!prItemId) return errorResponse('Thiếu prItemId', 400)
 
-    const released = await prisma.$transaction(async (tx) => {
+    const released = await runSerializable(async (tx) => {
       const peg = await tx.hardPegging.findUnique({ where: { prItemId }, select: { materialId: true, quantity: true, status: true } })
       if (!peg || peg.status !== 'ACTIVE' || N(peg.quantity) <= 0) return { qty: 0 }
       await tx.material.update({ where: { id: peg.materialId }, data: { reservedStock: { decrement: N(peg.quantity) } } })
@@ -125,6 +146,9 @@ export async function DELETE(req: NextRequest) {
     await logAudit(user.userId, 'HARD_PEG_RELEASE', 'PurchaseRequestItem', prItemId, { materialId: released.materialId, qty: released.qty }, getClientIP(req))
     return successResponse({ prItemId, released: released.qty }, `Đã nhả ${released.qty.toLocaleString('vi-VN')} tồn giữ cứng`)
   } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2034') {
+      return errorResponse('Đang có thao tác giữ/nhả tồn khác trên vật tư này — vui lòng thử lại', 409)
+    }
     console.error('DELETE hard-pegging error:', err)
     return errorResponse('Lỗi nhả tồn', 500)
   }
