@@ -103,6 +103,15 @@ export default function BiddingPage() {
     if (r.ok) { notify(`Đã tạo ${r.bidCode}`, 'success'); setShowCreate(false); loadBids() }
     else notify(r.error || 'Lỗi tạo RFQ', 'error')
   }
+  // Tạo hàng loạt: gom dòng đã chọn (hoặc tất cả nếu chưa chọn) theo nhóm vật tư → mỗi nhóm 1 RFQ.
+  const createRfqBulkByGroup = async () => {
+    const ids = [...picked]
+    const msg = ids.length ? `Gom ${ids.length} dòng đã chọn theo nhóm vật tư, mỗi nhóm tạo 1 RFQ?` : 'Chưa chọn dòng — gom TẤT CẢ dòng PR chưa vào BID theo nhóm vật tư, mỗi nhóm 1 RFQ?'
+    if (!await confirmDialog(msg)) return
+    const r = await apiFetch('/api/procurement/bid-analyses/from-pr-bulk-by-group', { method: 'POST', body: JSON.stringify({ projectId, prItemIds: ids.length ? ids : undefined }) })
+    if (r.ok) { notify(r.message || `Đã tạo ${r.bids?.length || 0} RFQ theo nhóm`, 'success'); setShowCreate(false); loadBids() }
+    else notify(r.error || 'Lỗi tạo RFQ hàng loạt', 'error')
+  }
   const openDetail = useCallback(async (id: string) => {
     const r = await apiFetch(`/api/procurement/bid-analyses/${id}`)
     if (r.ok) setDetail({ bid: r.bid, vendors: r.vendors, items: r.items, purchaseOrders: r.purchaseOrders || [] })
@@ -223,7 +232,7 @@ export default function BiddingPage() {
         </div>
       )}
 
-      {showCreate && <CreateRfqModal items={prItems} picked={picked} setPicked={setPicked} subject={subject} setSubject={setSubject} onCancel={() => setShowCreate(false)} onCreate={createRfq} />}
+      {showCreate && <CreateRfqModal items={prItems} picked={picked} setPicked={setPicked} subject={subject} setSubject={setSubject} onCancel={() => setShowCreate(false)} onCreate={createRfq} onCreateBulk={createRfqBulkByGroup} />}
       {showQuote && detail && <EnterQuoteModal bidId={detail.bid.id} items={detail.items} onCancel={() => setShowQuote(false)} onSaved={() => { setShowQuote(false); reloadDetail() }} />}
     </div>
   )
@@ -726,11 +735,14 @@ function WeightedPanel({ detail, onReload }: { detail: BidDetail; onReload: () =
 }
 
 // ══ Modal: tạo RFQ từ PR item ══
-function CreateRfqModal({ items, picked, setPicked, subject, setSubject, onCancel, onCreate }: {
-  items: PrItem[]; picked: Set<string>; setPicked: (s: Set<string>) => void; subject: string; setSubject: (s: string) => void; onCancel: () => void; onCreate: () => void
+function CreateRfqModal({ items, picked, setPicked, subject, setSubject, onCancel, onCreate, onCreateBulk }: {
+  items: PrItem[]; picked: Set<string>; setPicked: (s: Set<string>) => void; subject: string; setSubject: (s: string) => void; onCancel: () => void; onCreate: () => void; onCreateBulk: () => void
 }) {
   const toggle = (id: string) => { const n = new Set(picked); if (n.has(id)) n.delete(id); else n.add(id); setPicked(n) }
   const allChecked = items.length > 0 && picked.size === items.length
+  // Số nhóm vật tư trong tập sẽ gom (đã chọn, hoặc tất cả nếu chưa chọn) — để gợi ý nút bulk.
+  const scope = picked.size ? items.filter(i => picked.has(i.id)) : items
+  const groupCount = new Set(scope.map(i => i.materialGroupCode || 'KHAC')).size
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }} onClick={onCancel}>
       <div className="card p-5 space-y-3" style={{ maxWidth: 900, width: '100%', maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
@@ -760,9 +772,13 @@ function CreateRfqModal({ items, picked, setPicked, subject, setSubject, onCance
             </table>
           </div>
         )}
-        <div className="flex justify-between items-center">
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Đã chọn {picked.size}/{items.length}</span>
-          <div className="flex gap-2"><Button variant="outline" onClick={onCancel}>Huỷ</Button><Button variant="primary" onClick={onCreate} disabled={picked.size === 0}>Tạo RFQ</Button></div>
+        <div className="flex justify-between items-center gap-2 flex-wrap">
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Đã chọn {picked.size}/{items.length}{items.length > 0 && ` · ${groupCount} nhóm vật tư`}</span>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onCancel}>Huỷ</Button>
+            <Button variant="outline" onClick={onCreateBulk} disabled={items.length === 0} title="Gom theo nhóm vật tư — mỗi nhóm 1 RFQ riêng">Tạo theo nhóm ({groupCount})</Button>
+            <Button variant="primary" onClick={onCreate} disabled={picked.size === 0}>Tạo 1 RFQ</Button>
+          </div>
         </div>
       </div>
     </div>
