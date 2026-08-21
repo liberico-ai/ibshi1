@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
         reqQty: true, reqWeight: true, toBuyQty: true, requiredDate: true,
         purchaseRequest: { select: { id: true, prCode: true } },
         fabAllocations: { select: { fabricationCategoryId: true, qty: true, weight: true, ngayCanTaiCongTruong: true } },
+        // Ngày hàng thực về = từ HĐ (PurchaseContractItem → contract.arrivedDate) để đo tiến độ.
+        contractItems: { select: { contract: { select: { arrivedDate: true, contractCode: true } } } },
       },
       orderBy: [{ purchaseRequest: { prCode: 'asc' } }, { itemCode: 'asc' }],
     })
@@ -52,8 +54,15 @@ export async function GET(req: NextRequest) {
         if (a.ngayCanTaiCongTruong && (!ngayCanSomNhat || a.ngayCanTaiCongTruong < ngayCanSomNhat)) ngayCanSomNhat = a.ngayCanTaiCongTruong
       }
       const reqQty = num(d.reqQty)
+      // Hàng về: HĐ có arrivedDate; "về đủ" khi mọi dòng HĐ đã có ngày về. ngayHangVe = mốc muộn nhất.
+      const cis = d.contractItems || []
+      const arrived = cis.map(c => c.contract.arrivedDate).filter((x): x is Date => !!x)
+      const ngayHangVe = arrived.length ? arrived.reduce((m, x) => (x > m ? x : m)) : null
       return {
         prItemId: d.id,
+        soDongHD: cis.length,
+        soDongDaVe: arrived.length,
+        ngayHangVe: cis.length > 0 && arrived.length === cis.length ? ngayHangVe : (arrived.length ? ngayHangVe : null),
         prId: d.purchaseRequest?.id ?? null,
         prCode: d.purchaseRequest?.prCode ?? null,
         itemCode: d.itemCode,

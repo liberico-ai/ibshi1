@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, Fragment, type CSSProperties } from '
 import { apiFetch } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
 import { PageHeader, Button } from '@/components/ui'
-import { formatNumber } from '@/lib/utils'
+import { formatNumber, formatDate } from '@/lib/utils'
 
 interface Proj { id: string; projectCode: string; projectName: string }
 interface Cat { id: string; code: string; name: string; sortOrder: number }
@@ -13,7 +13,26 @@ interface Row {
   prItemId: string; prCode: string | null; itemCode: string | null; itemName: string | null
   profile: string | null; grade: string | null; uom: string | null
   reqQty: number; toBuyQty: number; tongQty: number; conLai: number; vuotTran: boolean; khongCoTran: boolean
+  ngayCanSomNhat: string | null; ngayHangVe: string | null; soDongHD: number; soDongDaVe: number
   o: Record<string, Cell>
+}
+
+// Tiến độ: so ngày cần tại công trường với ngày hàng thực về (khớp Commerce).
+function tienDo(r: Row): { label: string; color: string } | null {
+  if (!r.ngayCanSomNhat) return null
+  const day = 86400000, today = new Date(new Date().toDateString()).getTime()
+  const can = new Date(r.ngayCanSomNhat).getTime()
+  const veDu = r.soDongHD > 0 && r.soDongDaVe === r.soDongHD && r.ngayHangVe
+  if (veDu) {
+    const ve = new Date(r.ngayHangVe!).getTime(); const dd = Math.round((can - ve) / day)
+    if (dd > 0) return { label: `Về sớm ${dd} ngày`, color: '#166534' }
+    if (dd < 0) return { label: `Về muộn ${-dd} ngày`, color: '#dc2626' }
+    return { label: 'Về đúng hạn', color: '#166534' }
+  }
+  const dd = Math.round((can - today) / day)
+  if (dd < 0) return { label: `Quá hạn ${-dd} ngày`, color: '#dc2626' }
+  if (dd === 0) return { label: 'Cần hôm nay', color: '#b45309' }
+  return { label: `Còn ${dd} ngày`, color: '#64748b' }
 }
 interface Grid { duAn: { projectCode: string; projectName: string }; hangMucs: Cat[]; soVatTu: number; soHangMuc: number; soODaPhanBo: number; items: Row[] }
 
@@ -130,7 +149,7 @@ export default function FabAllocationPage() {
             <table style={{ borderCollapse: 'collapse', whiteSpace: 'nowrap', width: 'max-content', fontSize: '0.72rem' }}>
               <thead>
                 <tr style={{ background: '#c7e2ef', position: 'sticky', top: 0, zIndex: 2 }}>
-                  {[['Phiếu', 90], ['Mã VT', 110], ['Quy cách / Mác', 140], ['ĐVT', 44], ['SL cần mua', 78], ['Đã phân bổ', 80], ['Còn lại', 78]].map(([h, w]) => (
+                  {[['Phiếu', 90], ['Mã VT', 110], ['Quy cách / Mác', 140], ['ĐVT', 44], ['SL cần mua', 78], ['Đã phân bổ', 80], ['Còn lại', 78], ['Tiến độ (ngày về)', 130]].map(([h, w]) => (
                     <th key={h as string} rowSpan={2} style={{ ...th, width: w as number }}>{h}</th>
                   ))}
                   {grid.hangMucs.map(c => <th key={c.id} colSpan={3} style={{ ...th, background: '#fde7e7', borderLeft: '2px solid #999' }} title={c.name}>{c.code}</th>)}
@@ -159,6 +178,18 @@ export default function FabAllocationPage() {
                       <td style={{ ...td, textAlign: 'right', fontFamily: 'monospace' }}>{row.reqQty ? nn(row.reqQty) : <span style={{ color: '#d97706' }} title="Chưa có SL yêu cầu mua — không có trần">0</span>}</td>
                       <td style={{ ...td, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: vuot ? '#dc2626' : 'var(--text-primary)' }}>{nn(tong)}</td>
                       <td style={{ ...td, textAlign: 'right', fontFamily: 'monospace', color: conLai < -0.001 ? '#dc2626' : 'var(--text-muted)' }}>{nn(conLai)}</td>
+                      <td style={{ ...td, fontSize: '0.68rem' }}>
+                        {(() => {
+                          const t = tienDo(row)
+                          if (!t) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+                          return (
+                            <span title={`Ngày cần: ${row.ngayCanSomNhat ? formatDate(row.ngayCanSomNhat) : '—'}${row.ngayHangVe ? ` · Hàng về: ${formatDate(row.ngayHangVe)}` : ''}${row.soDongHD ? ` · HĐ về ${row.soDongDaVe}/${row.soDongHD} dòng` : ' · chưa có HĐ'}`}>
+                              <span style={{ color: t.color, fontWeight: 600 }}>{t.label}</span>
+                              {row.soDongHD > 0 && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({row.soDongDaVe}/{row.soDongHD})</span>}
+                            </span>
+                          )
+                        })()}
+                      </td>
                       {grid.hangMucs.map(c => {
                         const e = cellOf(row, c.id)
                         const has = !!(e.qty || e.weight || e.ngay)
