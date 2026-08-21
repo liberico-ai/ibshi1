@@ -201,6 +201,13 @@ export default function BiddingPage() {
             </div>
             <div className="flex gap-2">
               <Button variant="primary" onClick={() => setShowQuote(true)}>+ Nhập báo giá NCC</Button>
+              {detail.bid.status !== 'CONTRACTED' && detail.bid.status !== 'CANCELLED' && (
+                <Button variant="outline" onClick={async () => {
+                  if (!await confirmDialog(`Hủy đợt báo giá ${detail.bid.bidCode}? (không thể tạo PO sau khi hủy)`)) return
+                  const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}`, { method: 'DELETE' })
+                  if (r.ok) { notify(r.message || 'Đã hủy BID', 'success'); reloadAll() } else notify(r.error || 'Lỗi hủy', 'error')
+                }}>Hủy BID</Button>
+              )}
               <Button variant="outline" onClick={() => setDetail(null)}>Đóng</Button>
             </div>
           </div>

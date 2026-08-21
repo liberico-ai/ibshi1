@@ -1,9 +1,29 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles, logAudit, getClientIP } from '@/lib/auth'
 import { groupCodeOf, groupLabelOf } from '@/lib/material-group'
 
 export const dynamic = 'force-dynamic'
+const CAN = ['R01', 'R02', 'R07', 'R07a', 'R10']
+
+// DELETE /api/procurement/bid-analyses/[id] — hủy BID (status=CANCELLED). Chặn nếu đã ký HĐ.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const payload = await authenticateRequest(req)
+    if (!payload) return unauthorizedResponse()
+    if (!requireRoles(payload.roleCode, CAN)) return errorResponse('Không có quyền hủy BID', 403)
+    const { id } = await params
+    const ba = await prisma.bidAnalysis.findUnique({ where: { id }, select: { status: true, bidCode: true } })
+    if (!ba) return errorResponse('Không tìm thấy BID', 404)
+    if (ba.status === 'CONTRACTED') return errorResponse('BID đã ký hợp đồng — không thể hủy', 409)
+    await prisma.bidAnalysis.update({ where: { id }, data: { status: 'CANCELLED' } })
+    await logAudit(payload.userId, 'CANCEL_BID', 'BidAnalysis', id, { bidCode: ba.bidCode }, getClientIP(req))
+    return successResponse({ id }, `Đã hủy BID ${ba.bidCode}`)
+  } catch (err) {
+    console.error('DELETE bid-analyses/[id] error:', err)
+    return errorResponse('Lỗi hủy BID', 500)
+  }
+}
 
 /**
  * GET /api/procurement/bid-analyses/[id]

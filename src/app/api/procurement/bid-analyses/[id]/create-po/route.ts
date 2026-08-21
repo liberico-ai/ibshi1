@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
-import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
 import { nextPoCode } from '@/lib/po-code'
 
 export const dynamic = 'force-dynamic'
@@ -123,6 +123,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await prisma.bidAnalysis.update({ where: { id }, data: { status: 'CONTRACTED' } })
 
     const newCount = created.filter(c => !c.existing).length
+    await logAudit(payload.userId, 'CREATE_PO_FROM_BID', 'BidAnalysis', id, { bidCode: bid.bidCode, pos: created.map(c => c.poCode), newCount }, getClientIP(req))
     return successResponse({ pos: created }, `Đã tạo ${newCount} PO (PENDING — chờ duyệt ở Đơn đặt hàng)`, 201)
   } catch (err) {
     console.error('POST create-po (from bid) error:', err)
