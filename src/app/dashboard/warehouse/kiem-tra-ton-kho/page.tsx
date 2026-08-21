@@ -32,7 +32,8 @@ export default function KiemTraTonKhoPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [historyItem, setHistoryItem] = useState<{ itemCode: string; itemName: string } | null>(null)
-  const [stockResult, setStockResult] = useState<{ updated: number; soKhongThayMa: number; notFound: string[] } | null>(null)
+  const [stockResult, setStockResult] = useState<{ updated: number; created?: number; soKhongThayMa: number; notFound: string[] } | null>(null)
+  const [createMissing, setCreateMissing] = useState(false)
 
   const importStock = async (file: File) => {
     try {
@@ -42,10 +43,12 @@ export default function KiemTraTonKhoPage() {
       const rows = raw.map(r => ({
         materialCode: r['Mã kho'] ?? r['Mã vật tư'] ?? r['Mã'] ?? r['materialCode'] ?? r['Code'],
         stock: r['Tồn'] ?? r['Tồn kho'] ?? r['Số lượng'] ?? r['SL'] ?? r['stock'],
+        materialName: r['Tên vật tư'] ?? r['Tên'] ?? r['Diễn giải'] ?? r['Name'],
+        unit: r['ĐVT'] ?? r['Đơn vị'] ?? r['Đơn vị tính'] ?? r['Unit'],
       }))
       if (rows.length === 0) { notify('File không có dòng nào', 'error'); return }
-      const res = await apiFetch('/api/procurement/inventory-check/import-stock', { method: 'POST', body: JSON.stringify({ rows }) })
-      if (res.ok) { notify(res.message || 'Đã nhập tồn', 'success'); setStockResult({ updated: res.updated, soKhongThayMa: res.soKhongThayMa, notFound: res.notFound || [] }); load() }
+      const res = await apiFetch('/api/procurement/inventory-check/import-stock', { method: 'POST', body: JSON.stringify({ rows, createMissing }) })
+      if (res.ok) { notify(res.message || 'Đã nhập tồn', 'success'); setStockResult({ updated: res.updated, created: res.created, soKhongThayMa: res.soKhongThayMa, notFound: res.notFound || [] }); load() }
       else notify(res.error || 'Lỗi nhập tồn', 'error')
     } catch (e) { console.error(e); notify('Không đọc được file Excel (cần cột "Mã kho" + "Tồn")', 'error') }
   }
@@ -89,15 +92,20 @@ export default function KiemTraTonKhoPage() {
           {prs.map(p => <option key={p.id} value={p.id}>{p.prCode}{p.project?.projectCode ? ` — ${p.project.projectCode}` : ''}</option>)}
         </select>
         {rows.length > 0 && <Button variant="primary" onClick={save} disabled={saving || !dirty}>{saving ? 'Đang lưu…' : `Lưu phân bổ tồn${dirty ? '' : ' (chưa đổi)'}`}</Button>}
-        <label className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} title='File Excel có cột "Mã kho" và "Tồn"'>
+        <label className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} title='File Excel có cột "Mã kho" + "Tồn" (tùy chọn "Tên vật tư", "ĐVT")'>
           ⬆ Nhập tồn từ Excel
           <input type="file" accept=".xlsx,.xls" hidden onChange={e => { const f = e.target.files?.[0]; if (f) importStock(f); e.currentTarget.value = '' }} />
+        </label>
+        <label className="text-xs flex items-center gap-1.5 cursor-pointer" style={{ color: 'var(--text-muted)' }} title="Mã chưa có trong danh mục sẽ được tạo mã tạm (chờ chuẩn hóa)">
+          <input type="checkbox" checked={createMissing} onChange={e => setCreateMissing(e.target.checked)} />
+          Tạo mã tạm nếu chưa có
         </label>
       </div>
 
       {stockResult && (
         <div className="card p-3 text-xs flex items-center gap-4 flex-wrap" style={{ borderLeft: `3px solid ${stockResult.soKhongThayMa ? '#f59e0b' : '#16a34a'}` }}>
           <span style={{ color: '#166534' }}>Đã cập nhật tồn: <b>{stockResult.updated}</b> mã</span>
+          {(stockResult.created ?? 0) > 0 && <span style={{ color: '#3730a3' }}>Tạo mã tạm: <b>{stockResult.created}</b></span>}
           {stockResult.soKhongThayMa > 0 && <span style={{ color: '#b45309' }}>Không có trong danh mục: <b>{stockResult.soKhongThayMa}</b> ({stockResult.notFound.slice(0, 10).join(', ')}{stockResult.notFound.length > 10 ? '…' : ''})</span>}
           <button onClick={() => setStockResult(null)} style={{ color: 'var(--text-muted)' }}>✕</button>
         </div>
