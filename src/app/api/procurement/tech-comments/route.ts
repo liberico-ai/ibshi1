@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    const rows = details.map(d => {
+    const allRows = details.map(d => {
       const comments = d.techComments || []
       const latest = comments[comments.length - 1] || null
       // Trạng thái thread = comment MỚI NHẤT CÓ trạng thái (không phải comment cuối theo nghĩa đen)
@@ -55,19 +55,25 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    // Chỉ hiện dòng CÓ trao đổi (thread). Dòng chưa có → tạo qua form "Nêu yêu cầu" (prLines).
+    const rows = allRows.filter(r => r.commentCount > 0)
+    const prLines = allRows.map(r => ({ prDetailId: r.prDetailId, itemCode: r.itemCode, itemName: r.itemName, profile: r.profile, grade: r.grade, hasThread: r.commentCount > 0 }))
+
     const cnt = (s: string) => rows.filter(r => r.threadStatus === s).length
+    const openIssues = cnt('IN_DISCUSSION') + cnt('SUBSTITUTION_REQUESTED') + cnt('REJECTED')
     const summary = {
-      total: rows.length,
-      pending: rows.filter(r => r.threadStatus === 'PENDING' && r.commentCount === 0).length,
+      total: allRows.length,       // tổng dòng vật tư của PR
+      raised: rows.length,         // số dòng đã có yêu cầu làm rõ
       inDiscussion: cnt('IN_DISCUSSION'),
       clarified: cnt('CLARIFIED'),
       substitutionRequested: cnt('SUBSTITUTION_REQUESTED'),
       approved: cnt('APPROVED'),
       rejected: cnt('REJECTED'),
-      readyForRFQ: rows.filter(r => ['CLARIFIED', 'APPROVED', 'PENDING'].includes(r.threadStatus)).length,
+      openIssues,
+      readyForRFQ: allRows.length - openIssues, // sẵn sàng RFQ = tổng − còn vướng
     }
 
-    return successResponse({ prId, prCode: pr.prCode, summary, rows })
+    return successResponse({ prId, prCode: pr.prCode, summary, rows, prLines })
   } catch (err) {
     console.error('GET tech-comments error:', err)
     return errorResponse('Lỗi tải làm rõ kỹ thuật', 500)

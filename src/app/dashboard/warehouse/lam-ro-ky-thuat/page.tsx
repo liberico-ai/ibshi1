@@ -4,14 +4,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
-import { PageHeader, Button } from '@/components/ui'
+import { PageHeader, Button, Modal, SelectField, TextareaField } from '@/components/ui'
 import { X, MessageSquare, Search, Send, ArrowRightLeft, History } from 'lucide-react'
 import PurchaseHistoryPanel from '@/components/PurchaseHistoryPanel'
 
 // [PORT Thương Mại — F2] Làm rõ kỹ thuật: thread trao đổi kỹ thuật per dòng vật tư PR.
 interface Comment { id: string; content: string; commentType: string; threadStatus: string | null; tags: string | null; authorId: string | null; authorName: string; authorRole: string; createdAt: string }
 interface Row { prDetailId: string; itemCode: string; itemName: string; profile: string; grade: string; uom: string; reqQty: number; toBuyQty: number; urgency: string; commentCount: number; threadStatus: string; latestComment: Comment | null; comments: Comment[] }
-interface Summary { total: number; pending: number; inDiscussion: number; clarified: number; substitutionRequested: number; approved: number; rejected: number; readyForRFQ: number }
+interface Summary { total: number; raised: number; openIssues: number; inDiscussion: number; clarified: number; substitutionRequested: number; approved: number; rejected: number; readyForRFQ: number }
+interface PrLine { prDetailId: string; itemCode: string; itemName: string; profile: string; grade: string; hasThread: boolean }
 interface PROpt { id: string; prCode: string; project?: { projectCode: string } | null }
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string; border: string }> = {
@@ -209,15 +210,17 @@ export default function LamRoKyThuatPage() {
   const [search, setSearch] = useState('')
   const [panel, setPanel] = useState<Row | null>(null)
   const [historyItem, setHistoryItem] = useState<{ itemCode: string; itemName: string } | null>(null)
+  const [prLines, setPrLines] = useState<PrLine[]>([])
+  const [showRaise, setShowRaise] = useState(false)
 
   useEffect(() => { apiFetch('/api/purchase-requests?limit=100').then(r => { if (r.ok) setPrs(r.purchaseRequests || []) }) }, [])
 
   const load = useCallback(async () => {
-    if (!prId) { setRows([]); setSummary(null); return }
+    if (!prId) { setRows([]); setSummary(null); setPrLines([]); return }
     setLoading(true)
     const r = await apiFetch(`/api/procurement/tech-comments?prId=${prId}`)
     setLoading(false)
-    if (r.ok) { setRows(r.rows || []); setSummary(r.summary || null) } else notify(r.error || 'Lỗi tải', 'error')
+    if (r.ok) { setRows(r.rows || []); setSummary(r.summary || null); setPrLines(r.prLines || []) } else notify(r.error || 'Lỗi tải', 'error')
   }, [prId])
   useEffect(() => { load() }, [load])
 
@@ -251,12 +254,15 @@ export default function LamRoKyThuatPage() {
           <option value="">— Chọn phiếu yêu cầu (PR) —</option>
           {prs.map(p => <option key={p.id} value={p.id}>{p.prCode}{p.project?.projectCode ? ` — ${p.project.projectCode}` : ''}</option>)}
         </select>
+        {prId && <Button variant="outline" onClick={() => setShowRaise(true)}>+ Nêu yêu cầu làm rõ</Button>}
         {prId && summary && (
           <Button variant={summary.readyForRFQ > 0 ? 'primary' : 'outline'} onClick={() => { window.location.href = '/dashboard/warehouse/bidding' }} disabled={summary.readyForRFQ === 0}>
             Tạo RFQ ({summary.readyForRFQ}/{summary.total} SKU sẵn sàng) →
           </Button>
         )}
       </div>
+
+      {showRaise && <RaiseModal prLines={prLines.filter(l => !l.hasThread)} onClose={() => setShowRaise(false)} onDone={() => { setShowRaise(false); load() }} />}
 
       {summary && (
         <div className="flex flex-wrap items-center gap-4">
@@ -294,5 +300,32 @@ export default function LamRoKyThuatPage() {
       {panel && <TechPanel row={panel} onClose={() => setPanel(null)} onUpdated={reloadAndSync} />}
       {historyItem && <PurchaseHistoryPanel itemCode={historyItem.itemCode} itemName={historyItem.itemName} onClose={() => setHistoryItem(null)} />}
     </div>
+  )
+}
+
+// Form "Nêu yêu cầu làm rõ": chọn 1 dòng PR CHƯA có trao đổi + loại + nội dung → tạo thread mới.
+function RaiseModal({ prLines, onClose, onDone }: { prLines: PrLine[]; onClose: () => void; onDone: () => void }) {
+  const [prDetailId, setPrDetailId] = useState('')
+  const [commentType, setCommentType] = useState('QUESTION')
+  const [content, setContent] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    if (!prDetailId) return notify('Chọn dòng vật tư', 'error')
+    if (!content.trim()) return notify('Nhập nội dung yêu cầu', 'error')
+    setBusy(true)
+    const r = await apiFetch(`/api/procurement/tech-comments/${prDetailId}`, { method: 'POST', body: JSON.stringify({ content: content.trim(), commentType, threadStatus: 'IN_DISCUSSION' }) })
+    setBusy(false)
+    if (r.ok) { notify('Đã nêu yêu cầu làm rõ', 'success'); onDone() } else notify(r.error || 'Lỗi', 'error')
+  }
+  return (
+    <Modal open onClose={onClose} title="Nêu yêu cầu làm rõ kỹ thuật" size="md" actions={<Button variant="primary" onClick={submit} loading={busy}>Gửi yêu cầu</Button>}>
+      <div className="space-y-3">
+        <SelectField label="Dòng vật tư (chưa có trao đổi) *" value={prDetailId} onChange={e => setPrDetailId(e.target.value)}
+          options={[{ value: '', label: prLines.length ? '— Chọn dòng vật tư —' : 'Mọi dòng đã có trao đổi' }, ...prLines.map(l => ({ value: l.prDetailId, label: `${l.itemCode || l.itemName}${l.profile ? ` · ${l.profile}` : ''}${l.grade ? ` / ${l.grade}` : ''}` }))]} />
+        <SelectField label="Loại yêu cầu" value={commentType} onChange={e => setCommentType(e.target.value)}
+          options={[{ value: 'QUESTION', label: 'Hỏi / làm rõ' }, { value: 'SUBSTITUTION_REQUEST', label: 'Xin chuyển đổi vật tư' }, { value: 'NOTE', label: 'Ghi chú' }]} />
+        <TextareaField label="Nội dung *" rows={4} value={content} onChange={e => setContent(e.target.value)} placeholder="Mô tả điểm cần làm rõ / đề xuất chuyển đổi…" />
+      </div>
+    </Modal>
   )
 }
