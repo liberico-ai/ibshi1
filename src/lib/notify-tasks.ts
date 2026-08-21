@@ -156,6 +156,10 @@ export const NOTIFY_TASK_MAP: Record<string, NotifyTaskInfo> = {
   'P5.4': { sidebar: '/dashboard/qc', label: 'Chất lượng', hint: 'PM mở tab Chất lượng để nghiệm thu khối lượng tuần rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
   'P5.5': { sidebar: '/dashboard/hr/piece-rate', label: 'Khoán lương', hint: 'KTKH mở tab Khoán lương để tổng hợp & tính lương khoán rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
 
+  // ── Duyệt phiếu đề nghị cấp vật tư (ngoài 36 bước — theo phiếu, không theo dự án) ──
+  'MR-PM': { sidebar: '/dashboard/production/material-approval', label: 'Duyệt cấp vật tư', hint: 'PM mở tab Duyệt cấp vật tư để duyệt phiếu của xưởng (hoặc trả lại kèm lý do).', mode: 'redirect' },
+  'MR-BOD': { sidebar: '/dashboard/production/material-approval', label: 'Duyệt cấp vật tư', hint: 'BGĐ mở tab Duyệt cấp vật tư để duyệt phiếu PM đã thông qua — duyệt xong Kho mới cấp được.', mode: 'redirect' },
+
   // ── Phase 6 (làm) ──
   'P6.1': { sidebar: '/dashboard/qc', label: 'Chất lượng', hint: 'QC mở tab Chất lượng để tổng hợp hồ sơ chất lượng (Dossier) rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
   'P6.2': { sidebar: '/dashboard/finance/settlement', label: 'Quyết toán', hint: 'Kế toán mở tab Quyết toán để quyết toán chi phí trực tiếp rồi hoàn thành.', mode: 'redirect', projectQuery: 'project' },
@@ -174,7 +178,7 @@ export function notifyTaskInfo(taskType?: string | null): NotifyTaskInfo | undef
 // Loại task quy trình tạo TỰ ĐỘNG bởi hệ thống/handler (KHÔNG qua spawnTemplateStep nên không có
 // templateStepId): P3.6 (BGĐ duyệt báo giá), P4.3/P4.4 (GRN/QC theo PO), P4.5 (xuất VT theo ngày),
 // P5.1/P5.1A (báo sản lượng theo ngày), P5.1.1 (yêu cầu nghiệm thu), P5.3A (QAQC nghiệm thu CL).
-const AUTO_FLOW_TYPES = new Set(['P3.6', 'P4.3', 'P4.4', 'P4.5', 'P5.1', 'P5.1A', 'P5.1.1', 'P5.3A'])
+const AUTO_FLOW_TYPES = new Set(['P3.6', 'P4.3', 'P4.4', 'P4.5', 'P5.1', 'P5.1A', 'P5.1.1', 'P5.3A', 'MR-PM', 'MR-BOD'])
 
 // Task có phải do QUY TRÌNH sinh ra không → mới redirect vào sidebar. Task TẠO TAY (người dùng tự
 // tạo qua "Tạo mới": createdBy là người thật, không templateStepId, taskType không thuộc nhóm auto)

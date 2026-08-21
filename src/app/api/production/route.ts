@@ -7,6 +7,10 @@ import { validateQuery } from '@/lib/api-helpers'
 import { searchFilterSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
 import { canManageProjectWo, notProjectPmError } from '@/lib/project-access'
+import { WO_MATERIAL_REQUEST_ROLES } from '@/lib/wo-materials'
+
+// Vai trò bị giới hạn xem lệnh theo xưởng của mình (dùng chung danh sách với quyền đề nghị vật tư).
+const WORKSHOP_SCOPED_ROLES: string[] = WO_MATERIAL_REQUEST_ROLES
 
 // GET /api/production — List work orders
 export const GET = withErrorHandler(async (req: NextRequest) => {
@@ -30,6 +34,29 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
       { description: { contains: search, mode: 'insensitive' } },
       { pieceMark: { contains: search, mode: 'insensitive' } },
     ]
+  }
+
+  // ── Xưởng chỉ thấy LỆNH CỦA XƯỞNG MÌNH ──
+  // Quản đốc/nhân viên/tổ trưởng (R06/R06a/R06b) bị giới hạn theo phòng của tài khoản.
+  // Lệnh giao thầu phụ làm ngoài (không gắn xưởng) VẪN HIỆN để xưởng theo dõi; riêng phần đề nghị
+  // vật tư cho thầu phụ thì chưa mở (xem canWorkshopEditWo) — chờ chốt hướng xử lý.
+  // BGĐ / PM / KTKH / Admin vẫn thấy toàn bộ.
+  let scope: { departmentId: string; code: string; name: string } | null = null
+  let scopeMissing = false
+  if (WORKSHOP_SCOPED_ROLES.includes(payload.roleCode)) {
+    const me = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { department: { select: { id: true, code: true, name: true } } },
+    })
+    if (me?.department) {
+      scope = { departmentId: me.department.id, code: me.department.code, name: me.department.name }
+      where.AND = [{ OR: [{ departmentId: me.department.id }, { departmentId: null }] }]
+    } else {
+      // Tài khoản xưởng chưa gắn phòng → chỉ còn thấy lệnh không thuộc xưởng nào, kèm cờ báo để
+      // giao diện nhắc gắn phòng (im lặng cho thấy hết là hở quyền).
+      scopeMissing = true
+      where.AND = [{ departmentId: null }]
+    }
   }
 
   const [total, workOrders] = await Promise.all([
@@ -72,6 +99,7 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
 
   return successResponse({
     workOrders: result,
+    scope, scopeMissing,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   })
 })

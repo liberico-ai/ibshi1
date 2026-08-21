@@ -118,6 +118,9 @@ export async function POST(req: NextRequest) {
     }
 
     let created = 0, updatedN = 0
+    // id + mã WO của từng dòng phân giao (theo đúng thứ tự allocations) → FE gắn đề nghị
+    // cấp vật tư vào đúng WO ngay sau khi phát hành.
+    const woRefs: { index: number; id: string; woCode: string; teamCode: string }[] = []
     await prisma.$transaction(async (tx) => {
       for (let i = 0; i < allocs.length; i++) {
         const a = allocs[i]
@@ -129,8 +132,14 @@ export async function POST(req: NextRequest) {
           plannedStart: toDate(a.start), plannedEnd: toDate(a.finish), departmentId: a.teamCode ? deptByCode.get(a.teamCode) || null : null,
         }
         const ex = await tx.workOrder.findUnique({ where: { woCode: codes[i] }, select: { id: true } })
-        if (ex) { await tx.workOrder.update({ where: { id: ex.id }, data: woData }); updatedN++ }
-        else { await tx.workOrder.create({ data: { woCode: codes[i], projectId, pieceMark, createdBy: payload.userId, ...woData } }); created++ }
+        if (ex) {
+          await tx.workOrder.update({ where: { id: ex.id }, data: woData }); updatedN++
+          woRefs.push({ index: i, id: ex.id, woCode: codes[i], teamCode: woData.teamCode })
+        } else {
+          const nw = await tx.workOrder.create({ data: { woCode: codes[i], projectId, pieceMark, createdBy: payload.userId, ...woData }, select: { id: true } })
+          created++
+          woRefs.push({ index: i, id: nw.id, woCode: codes[i], teamCode: woData.teamCode })
+        }
       }
       if (delIds.length) await tx.workOrder.deleteMany({ where: { id: { in: delIds } } })
       if (newResultData && planTask) await tx.task.update({ where: { id: planTask.id }, data: { resultData: newResultData as Prisma.InputJsonValue } })
@@ -139,7 +148,7 @@ export async function POST(req: NextRequest) {
     const extra = delIds.length ? ` · xóa ${delIds.length} WO xưởng đã bỏ` : ''
     const blockedMsg = blocked.length ? ` (${blocked.length} WO đã có SX không xóa được)` : ''
     return successResponse(
-      { total: allocs.length, created, updated: updatedN, deleted: delIds.length, blocked: blocked.map(w => w.woCode), wbsUpdated: !!newResultData },
+      { total: allocs.length, created, updated: updatedN, deleted: delIds.length, blocked: blocked.map(w => w.woCode), wbsUpdated: !!newResultData, workOrders: woRefs },
       `Đã áp ${allocs.length} phân giao (tạo ${created}, cập nhật ${updatedN})${extra}${blockedMsg}`,
       created > 0 && updatedN === 0 ? 201 : 200,
     )

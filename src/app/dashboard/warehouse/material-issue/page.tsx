@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import SidebarStepLanding from '@/components/SidebarStepLanding'
+import WoIssueSection from './WoIssueSection'
 import { Badge, Button, Card } from '@/components/ui'
 import { formatDate, formatNumber, getUrgencyLabel } from '@/lib/utils'
 import { Clock, ChevronDown, ChevronUp } from 'lucide-react'
@@ -261,6 +262,10 @@ export default function MaterialIssuePage() {
       <SidebarStepLanding heading="Bước quy trình — Cấp phát vật tư" steps={[
         { code: 'P4.5', title: 'Kho đề nghị cấp vật tư cho PM & QLSX', noTemplate: true },
       ]} />
+
+      {/* Luồng MỚI: cấp theo lệnh sản xuất (WO). Khối P4.5 bên dưới là luồng cũ theo từng
+          dòng vật tư — giữ để xử nốt các yêu cầu đang dở, không dùng cho lệnh mới. */}
+      <WoIssueSection />
       {/* SECTION 1: YÊU CẦU CẤP PHÁT (PENDING TASKS) */}
       <section className="space-y-4">
         <div>

@@ -304,8 +304,8 @@ const P3_1: StepFormConfig = {
 const P3_3: StepFormConfig = {
   stepCode: 'P3.3',
   formType: 'input',
-  title: 'PM lập lệnh SX cho thầu phụ và đề nghị cấp VT',
-  description: 'PM tạo lệnh SX cho tổ thầu phụ với thông tin công việc, khối lượng và tiến độ. Đồng thời lập đề nghị cấp VT.',
+  title: 'PM lập LSX & đề nghị cấp VT — phần thuê ngoài (thầu phụ làm ngoài IBS)',
+  description: 'PM (R02) lập LSX cho các ô công đoạn giao THẦU PHỤ LÀM NGOÀI (ô WBS ghi tên thầu phụ, không phải "IBS"), kèm đề nghị cấp VT cho từng tổ. Phần làm tại xưởng IBS thuộc bước P3.4.',
   fields: [
     { key: 'subconTeam', label: 'Tên tổ thầu phụ', labelEn: 'Subcontractor Team', type: 'text', required: true },
     { key: 'jobName', label: 'Tên công việc', labelEn: 'Job Name', type: 'text', required: true },
@@ -327,8 +327,8 @@ const P3_3: StepFormConfig = {
 const P3_4: StepFormConfig = {
   stepCode: 'P3.4',
   formType: 'input',
-  title: 'Quản lý SX lập lệnh sản xuất cho tổ nội bộ và thầu phụ',
-  description: 'R06 lập Lệnh sản xuất cho tổ nội bộ và các ô có thầu phụ làm tại nhà máy IBS (ví dụ "IBS TP Giang Sơn"). Sổ lệnh được hệ thống tự động tạo. Nhập danh sách chi tiết nội dung công việc cần phân giao.',
+  title: 'PM lập LSX & đề nghị cấp VT — phần làm tại IBS (tổ nội bộ + thầu phụ tại xưởng)',
+  description: 'PM (R02) lập Lệnh sản xuất cho các ô công đoạn LÀM TẠI NHÀ MÁY IBS — tổ nội bộ và cả thầu phụ làm tại xưởng IBS (ô WBS ghi "IBS" hoặc "IBS TP Giang Sơn"), kèm đề nghị cấp VT. Sổ lệnh được hệ thống tự động tạo. Phần thuê ngoài thuộc bước P3.3.',
   fields: [
     { key: 'woNumber', label: 'Sổ lệnh', labelEn: 'WO Number', type: 'readonly', fullWidth: false },
     { key: 'estimateRef', label: 'Dự toán', labelEn: 'Estimate Ref', type: 'text', required: true },

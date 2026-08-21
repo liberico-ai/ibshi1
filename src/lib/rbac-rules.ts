@@ -5,8 +5,11 @@ export const RBAC = {
   // QC: Giám đốc (R01), Tp QC (R09a), QC (R09), Admin (R00)
   QC_ACTION: ['R01', 'R09', 'R09a', 'R00'],
   
-  // Kho: Giám đốc (R01), Thủ kho (R05), Kế toán (R08/R08a), Admin (R00)
-  STORE_ACTION: ['R01', 'R05', 'R08', 'R08a', 'R00'],
+  // Kho: Giám đốc (R01), Thủ kho (R05), NV Kho (R05a), Kế toán (R08/R08a), Admin (R00)
+  // R05a bị thiếu từ đầu — trong khi menu "Cấp phát vật tư"/"Xuất Nhập" vốn đã mở cho R05a
+  // (MENU_ITEMS) và nhân viên kho chính là người xuất hàng. Thiếu nó thì NV Kho mở được trang
+  // nhưng bấm xuất kho bị chặn 403.
+  STORE_ACTION: ['R01', 'R05', 'R05a', 'R08', 'R08a', 'R00'],
   
   // Mua hàng (Duyệt PR): Giám đốc (R01), PM (R02), Admin (R00)
   PR_APPROVAL: ['R01', 'R02', 'R00'],

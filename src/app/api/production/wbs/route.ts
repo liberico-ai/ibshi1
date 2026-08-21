@@ -34,11 +34,32 @@ export async function GET(req: NextRequest) {
     }
     rows = stripWbsNotes(rows) // bỏ ghi chú/chú giải/chữ ký (dữ liệu cũ có thể lưu kèm)
 
-    // Danh sách woCode đã phát hành của dự án → FE đánh dấu ô đã có WO.
-    const pos = await prisma.workOrder.findMany({ where: { projectId }, select: { woCode: true } })
+    // WO đã phát hành của dự án → FE đánh dấu ô đã có WO, và cần id để gắn đề nghị cấp vật tư.
+    const pos = await prisma.workOrder.findMany({
+      where: { projectId },
+      select: { id: true, woCode: true },
+    })
     const issuedWoCodes = pos.map(p => p.woCode)
 
-    return successResponse({ projectCode: project.projectCode, count: rows.length, rows, issuedWoCodes })
+    // Số dòng vật tư đã lập cho từng WO (hiện ngay trên nút "Vật tư"). Tách khỏi truy vấn trên và
+    // bọc try/catch: nếu chưa chạy migration bảng work_order_material_requests thì CHỈ mất con số
+    // này, WBS vẫn tải bình thường — không kéo sập cả màn phát hành WO.
+    let matCount: Record<string, number> = {}
+    try {
+      const grouped = await prisma.workOrderMaterialRequest.groupBy({
+        by: ['workOrderId'],
+        where: { workOrderId: { in: pos.map(p => p.id) } },
+        _count: { _all: true },
+      })
+      const byId = new Map(grouped.map(g => [g.workOrderId, g._count._all]))
+      matCount = Object.fromEntries(pos.map(p => [p.woCode, byId.get(p.id) || 0]))
+    } catch (e) {
+      console.warn('[production/wbs] chưa đọc được đề nghị vật tư (migration?):', (e as Error).message)
+      matCount = {}
+    }
+    const issuedWos = pos.map(p => ({ id: p.id, woCode: p.woCode, materialCount: matCount[p.woCode] || 0 }))
+
+    return successResponse({ projectCode: project.projectCode, count: rows.length, rows, issuedWoCodes, issuedWos })
   } catch (err) {
     console.error('GET production/wbs error:', err)
     return errorResponse('Lỗi tải WBS dự án', 500)

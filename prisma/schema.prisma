@@ -42,6 +42,7 @@ model Department {
   employees            Employee[]
   users                User[]
   workOrders           WorkOrder[]
+  materialRequestOrders MaterialRequestOrder[]
   equipment            Equipment[]
   equipmentAssignments EquipmentAssignment[]
   toolboxTalks         ToolboxTalk[]
@@ -101,6 +102,7 @@ model Project {
   timesheets         Timesheet[]
   wbsNodes           WbsNode[]
   workOrders         WorkOrder[]
+  materialRequestOrders MaterialRequestOrder[]
   dynamicTasks       Task[]                   @relation("ProjectDynamicTasks")
   meetings           Meeting[]                @relation("ProjectMeetings")
   loanContracts      LoanContract[]
@@ -847,8 +849,41 @@ model WorkOrder {
 // (MaterialIssue) nên không trả lời được "WO này cần bao nhiêu, còn thiếu bao nhiêu".
 // PM lập khi phát hành WO từ ô WBS: dòng gợi ý từ BOM theo piece-mark (source=BOM)
 // hoặc thêm tay ngoài BOM (source=MANUAL). Kho cấp đủ toàn bộ → WO tự mở (PENDING_MATERIAL→OPEN).
+// PHIẾU đề nghị cấp vật tư — một lần Xưởng gửi duyệt = một phiếu, gồm nhiều lệnh sản xuất.
+// Duyệt tuần tự: Xưởng lập (DRAFT) → PENDING_PM → PENDING_BOD → APPROVED. Kho CHỈ thấy phiếu
+// APPROVED. PM/BGĐ trả lại → REJECTED (kèm lý do), xưởng sửa rồi gửi lại.
+model MaterialRequestOrder {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  projectId     String    @map("project_id")
+  departmentId  String?   @map("department_id")   // xưởng lập phiếu
+  status        String    @default("DRAFT")       // DRAFT | PENDING_PM | PENDING_BOD | APPROVED | REJECTED
+  notes         String?
+  createdBy     String    @map("created_by")
+  submittedAt   DateTime? @map("submitted_at")
+  pmApprovedBy  String?   @map("pm_approved_by")
+  pmApprovedAt  DateTime? @map("pm_approved_at")
+  bodApprovedBy String?   @map("bod_approved_by")
+  bodApprovedAt DateTime? @map("bod_approved_at")
+  rejectedBy    String?   @map("rejected_by")
+  rejectedAt    DateTime? @map("rejected_at")
+  rejectReason  String?   @map("reject_reason")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project    Project                    @relation(fields: [projectId], references: [id])
+  department Department?                @relation(fields: [departmentId], references: [id])
+  items      WorkOrderMaterialRequest[]
+
+  @@index([projectId])
+  @@index([departmentId])
+  @@index([status])
+  @@map("material_request_orders")
+}
+
 model WorkOrderMaterialRequest {
   id          String    @id @default(cuid())
+  requestId   String?   @map("request_id")   // phiếu chứa dòng này (null = dữ liệu trước khi có phiếu)
   workOrderId String    @map("work_order_id")
   materialId  String    @map("material_id")
   quantity    Decimal
@@ -858,10 +893,13 @@ model WorkOrderMaterialRequest {
   createdBy   String    @map("created_by")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
+  request     MaterialRequestOrder? @relation(fields: [requestId], references: [id], onDelete: Cascade)
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   material    Material  @relation(fields: [materialId], references: [id])
 
-  @@unique([workOrderId, materialId])
+  // Cùng một mã vật tư có thể xin lại ở ĐỢT SAU cho cùng lệnh → khoá theo (phiếu, lệnh, vật tư)
+  @@unique([requestId, workOrderId, materialId])
+  @@index([requestId])
   @@index([workOrderId])
   @@index([materialId])
   @@map("work_order_material_requests")

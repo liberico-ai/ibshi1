@@ -16,6 +16,7 @@ import { Factory, Pencil } from 'lucide-react'
 import { notify } from '@/components/ui/Toast'
 import SidebarStepLanding from '@/components/SidebarStepLanding'
 import WoFromWbsModal from './WoFromWbsModal'
+import WoMaterialRequestModal from './WoMaterialRequestModal'
 
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
@@ -83,6 +84,27 @@ export default function ProductionPage() {
   // Tạo LSX: chỉ PM (R02) + BGĐ (R01) — QLSX/Tổ trưởng không còn tạo
   const canCreate = ['R01', 'R02'].includes(user?.roleCode || '')
   const canGenerateFromBom = ['R01', 'R02'].includes(user?.roleCode || '')
+  // Đề nghị cấp vật tư là việc của XƯỞNG (PM chỉ phát hành WO) — khớp WO_MATERIAL_REQUEST_ROLES ở server
+  const canRequestMaterial = ['R06', 'R06a', 'R06b'].includes(user?.roleCode || '')
+
+  const [selected, setSelected] = useState<string[]>([])
+  const [matWoIds, setMatWoIds] = useState<string[] | null>(null)
+  // Máy chủ giới hạn danh sách theo xưởng của tài khoản (R06/R06a/R06b) — hiện lại cho người dùng biết
+  const [scope, setScope] = useState<{ departmentId: string; code: string; name: string } | null>(null)
+  const [scopeMissing, setScopeMissing] = useState(false)
+  // Đặt vật tư được khi: lệnh chưa hoàn thành/hủy VÀ thuộc một xưởng nội bộ.
+  // Lệnh giao thầu phụ làm ngoài (không gắn xưởng) vẫn hiện để theo dõi, nhưng chưa mở đề nghị
+  // vật tư — chờ chốt hướng riêng.
+  const isSubcontract = (wo: WorkOrder) => !wo.departmentId
+  const canSelect = (wo: WorkOrder) => !['COMPLETED', 'CANCELLED'].includes(wo.status) && !isSubcontract(wo)
+  const matHint = (wo: WorkOrder) =>
+    isSubcontract(wo) ? 'Lệnh thầu phụ — chưa mở đề nghị vật tư'
+      : ['COMPLETED', 'CANCELLED'].includes(wo.status) ? 'Lệnh đã hoàn thành/hủy'
+        : 'Đề nghị cấp vật tư cho lệnh này'
+  const selectable = workOrders.filter(canSelect)
+  // Gợi ý BOM/PR lấy theo dự án ⟹ chỉ gộp được các lệnh cùng một dự án
+  const selectedWos = workOrders.filter(w => selected.includes(w.id))
+  const multiProject = new Set(selectedWos.map(w => w.project?.projectCode)).size > 1
 
   const loadData = useCallback(async () => {
     const params = new URLSearchParams()
@@ -96,7 +118,10 @@ export default function ProductionPage() {
       apiFetch(`/api/production/teams${projQs}`),
       apiFetch(`/api/production/progress${projQs}`),
     ])
-    if (woRes.ok) { setWorkOrders(woRes.workOrders); setPagination(woRes.pagination) }
+    if (woRes.ok) {
+      setWorkOrders(woRes.workOrders); setPagination(woRes.pagination)
+      setScope(woRes.scope || null); setScopeMissing(!!woRes.scopeMissing)
+    }
     if (teamRes.ok) setTeams(teamRes.teams)
     if (progRes.ok) setProgress(progRes)
     setLoading(false)
@@ -122,7 +147,15 @@ export default function ProductionPage() {
 
   useEffect(() => { setPage(1) }, [search, statusFilter, filterProjectId])
   useEffect(() => { loadData() }, [loadData])
-  useEffect(() => { apiFetch('/api/projects').then(r => { if (r.ok) setProjects(r.projects || []) }) }, [])
+  useEffect(() => {
+    apiFetch('/api/projects').then(r => {
+      if (r.ok) setProjects(r.projects || [])
+      // Mở từ thông báo bước quy trình (?project=…&step=P3.4) → chọn sẵn dự án để vùng làm việc
+      // LSX hiện ra ngay, khỏi phải chọn lại trong dropdown.
+      const p = new URLSearchParams(window.location.search).get('project')
+      if (p) setFilterProjectId(p)
+    })
+  }, [])
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1,2,3].map(i => <div key={i} className="h-24 skeleton rounded-xl" />)}</div>
 
@@ -146,6 +179,17 @@ export default function ProductionPage() {
           </div>
         ) : undefined}
       />
+
+      {scope && (
+        <div className="text-xs rounded-lg px-3 py-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+          Đang xem lệnh sản xuất của <b>{scope.name} ({scope.code})</b>, kèm lệnh giao thầu phụ làm ngoài — lệnh thầu phụ chỉ để theo dõi, chưa mở đề nghị vật tư.
+        </div>
+      )}
+      {scopeMissing && (
+        <div className="text-xs rounded-lg px-3 py-2" style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}>
+          Tài khoản của bạn chưa được gán xưởng nên chỉ thấy lệnh thầu phụ. Báo quản trị gán phòng/xưởng cho tài khoản để thấy lệnh của xưởng mình.
+        </div>
+      )}
 
       {/* Lọc theo dự án — áp cho KPI, thẻ xưởng và danh sách WO */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -210,11 +254,33 @@ export default function ProductionPage() {
         actions={<div className="w-96"><SearchBar value={search} onChange={setSearch} placeholder="Tìm mã WO, piece-mark..." /></div>}
       />
 
+      {/* Thanh thao tác khi chọn nhiều lệnh — lập đề nghị vật tư chung một lượt */}
+      {canRequestMaterial && selected.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3"
+          style={{ border: '1px solid #8b5cf640', background: '#f5f3ff' }}>
+          <span className="text-sm font-semibold" style={{ color: '#6d28d9' }}>Đã chọn {selected.length} lệnh</span>
+          {multiProject && <span className="text-xs" style={{ color: '#b45309' }}>Chọn lẫn nhiều dự án — chỉ gộp được các lệnh cùng một dự án</span>}
+          <div className="flex-1" />
+          <button onClick={() => setSelected([])} className="text-xs px-3 py-1.5 rounded-lg"
+            style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>Bỏ chọn</button>
+          <Button variant="primary" disabled={multiProject} onClick={() => setMatWoIds(selected)}>
+            Đề nghị cấp vật tư ({selected.length} lệnh)
+          </Button>
+        </div>
+      )}
+
       {/* WO table */}
       <div className="dt-wrapper">
         <table className="data-table">
           <thead>
             <tr>
+              {canRequestMaterial && (
+                <th style={{ width: 32 }}>
+                  <input type="checkbox" title="Chọn tất cả lệnh đang hiện"
+                    checked={selectable.length > 0 && selected.length === selectable.length}
+                    onChange={e => setSelected(e.target.checked ? selectable.map(w => w.id) : [])} />
+                </th>
+              )}
               <th>Mã WO</th>
               <th>Piece-mark</th>
               <th>Mô tả</th>
@@ -223,16 +289,24 @@ export default function ProductionPage() {
               <th>Trọng lượng</th>
               <th>Trạng thái</th>
               <th>Ngày</th>
+              {canRequestMaterial && <th className="text-center">Vật tư</th>}
               {canCreate && <th className="text-center">Sửa</th>}
             </tr>
           </thead>
           <tbody>
             {workOrders.length === 0 ? (
-              <tr><td colSpan={canCreate ? 9 : 8}><EmptyState icon={<Factory />} title="Chưa có WO" /></td></tr>
+              <tr><td colSpan={11}><EmptyState icon={<Factory />} title="Chưa có WO" /></td></tr>
             ) : workOrders.map(wo => {
               const weightPct = wo.plannedWeight && wo.completedQty ? Math.round((wo.completedQty / wo.plannedWeight) * 100) : 0
               return (
                 <tr key={wo.id} className="cursor-pointer hover:bg-[var(--bg-hover)]" onClick={() => router.push(`/dashboard/production/${wo.id}`)}>
+                  {canRequestMaterial && (
+                    <td onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" disabled={!canSelect(wo)} checked={selected.includes(wo.id)}
+                        title={canSelect(wo) ? 'Chọn để lập đề nghị vật tư chung' : matHint(wo)}
+                        onChange={e => setSelected(s => (e.target.checked ? [...s, wo.id] : s.filter(x => x !== wo.id)))} />
+                    </td>
+                  )}
                   <td><span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>{wo.woCode}</span></td>
                   <td>{wo.pieceMark ? <span className="font-mono text-xs">{wo.pieceMark}</span> : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                   <td className="text-xs max-w-[200px] truncate">{wo.description}</td>
@@ -253,6 +327,16 @@ export default function ProductionPage() {
                   </td>
                   <td><StatusBadge category="production" status={wo.status} /></td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(wo.createdAt)}</td>
+                  {canRequestMaterial && (
+                    <td className="text-center" onClick={e => e.stopPropagation()}>
+                      <button type="button" disabled={!canSelect(wo)} onClick={() => setMatWoIds([wo.id])}
+                        title={matHint(wo)}
+                        className="text-[11px] px-2 py-1 rounded font-semibold"
+                        style={{ border: '1px solid #8b5cf6', background: '#f5f3ff', color: '#6d28d9', opacity: canSelect(wo) ? 1 : 0.4, cursor: canSelect(wo) ? 'pointer' : 'not-allowed' }}>
+                        {isSubcontract(wo) ? 'Thầu phụ' : 'Vật tư'}
+                      </button>
+                    </td>
+                  )}
                   {canCreate && (
                     <td className="text-center" onClick={e => e.stopPropagation()}>
                       <button type="button" onClick={() => setEditWO(wo)} title="Sửa WO" className="p-1.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><Pencil className="w-3.5 h-3.5" /></button>
@@ -265,6 +349,14 @@ export default function ProductionPage() {
         </table>
       </div>
       <Pagination page={pagination.page} totalPages={pagination.totalPages} onPageChange={setPage} />
+
+      {matWoIds && (
+        <WoMaterialRequestModal
+          woIds={matWoIds}
+          onClose={() => setMatWoIds(null)}
+          onSaved={() => { setSelected([]); loadData() }}
+        />
+      )}
 
       <CreateWOModal
         open={showCreate}

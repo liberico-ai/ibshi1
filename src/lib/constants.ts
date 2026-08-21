@@ -248,6 +248,7 @@ export const MENU_ITEMS = [
   { key: 'production', label: 'Sản xuất', labelEn: 'Production', icon: 'Factory', href: '/dashboard/production', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R06b'], group: 'production' },
   { key: 'jobcards', label: 'Phiếu công việc', labelEn: 'Job Cards', icon: 'Clipboard', href: '/dashboard/production/job-cards', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R06b'], group: 'production' },
   { key: 'workshops', label: 'Phân xưởng', labelEn: 'Workshops', icon: 'Wrench', href: '/dashboard/production/workshops', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a'], group: 'production' },
+  { key: 'mat-approval', label: 'Duyệt cấp vật tư', labelEn: 'Material Approval', icon: 'ClipboardCheck', href: '/dashboard/production/material-approval', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R06b', 'R10'], group: 'production' },
   { key: 'weldmap', label: 'Weld Map', labelEn: 'Weld Map', icon: 'Flame', href: '/dashboard/production/weld-map', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R06b', 'R09', 'R09a'], group: 'production' },
   { key: 'delivery', label: 'Giao hàng (→Logistics)', labelEn: 'Delivery (→Logistics)', icon: 'Truck', href: '/dashboard/delivery', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'], group: 'logistics' },
   { key: 'packing-lists', label: 'Packing List', labelEn: 'Packing Lists', icon: 'Package', href: '/dashboard/logistics/packing-lists', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'], group: 'logistics' },

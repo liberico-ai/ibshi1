@@ -7,6 +7,10 @@ const cspScriptSrc = isDev
 const cspConnectSrc = isDev
   ? "'self' ws://localhost:3000"
   : "'self'"
+// DEV: overlay/devtools của Next tự nạp font Geist riêng (/__nextjs_font/*.woff2) từ một ngữ cảnh
+// blob/shadow — 'self' ở đó không khớp origin trang nên bị chặn, log đỏ hàng chục dòng trong console.
+// Nới data:/blob: CHỈ ở dev; PROD vẫn chặt 'self' (overlay không tồn tại trong bản build).
+const cspFontSrc = isDev ? "'self' data: blob:" : "'self'"
 
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -14,7 +18,7 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-XSS-Protection', value: '0' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
-  { key: 'Content-Security-Policy', value: `default-src 'self'; script-src ${cspScriptSrc}; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob:; font-src 'self'; connect-src ${cspConnectSrc}; frame-ancestors 'none'` },
+  { key: 'Content-Security-Policy', value: `default-src 'self'; script-src ${cspScriptSrc}; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob:; font-src ${cspFontSrc}; connect-src ${cspConnectSrc}; frame-ancestors 'none'` },
   ...(process.env.NODE_ENV === 'production'
     ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }]
     : []),

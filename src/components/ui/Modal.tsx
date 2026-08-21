@@ -10,9 +10,12 @@ interface ModalProps {
   actions?: ReactNode
   size?: 'sm' | 'md' | 'lg'
   className?: string
+  /** Đặt cao hơn khi modal mở CHỒNG lên một lớp phủ khác (vd panel Vật tư mở trên màn xem WBS,
+   *  lớp đó đặt inline z-index 9990). Bỏ trống thì dùng z-index 1000 của .modal-overlay. */
+  overlayZIndex?: number
 }
 
-function Modal({ open, onClose, title, children, actions, size = 'md', className = '' }: ModalProps) {
+function Modal({ open, onClose, title, children, actions, size = 'md', className = '', overlayZIndex }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,7 +36,8 @@ function Modal({ open, onClose, title, children, actions, size = 'md', className
   const widths = { sm: 400, md: 560, lg: 760 }
 
   return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="modal-overlay" style={overlayZIndex ? { zIndex: overlayZIndex } : undefined}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div
         ref={ref}
         className={`modal-panel animate-fade-in-scale ${className}`}

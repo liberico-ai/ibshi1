@@ -54,15 +54,17 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       delivery: 'Giao hàng', commissioning: 'Chạy thử',
     }
 
-    // Kiểm tra xem Kho đã xuất vật tư (P4.5 DONE) cho dự án này chưa
-    const p45DoneCount = await prisma.task.count({
-      where: {
-        projectId: task.projectId,
-        taskType: 'P4.5',
-        status: 'DONE'
-      }
-    })
-    const warehouseHasIssued = p45DoneCount > 0
+    // Kho đã cấp vật tư cho dự án chưa — chấp nhận CẢ HAI luồng:
+    //   • luồng cũ: có task P4.5 hoàn thành
+    //   • luồng theo lệnh sản xuất: có WO đã ra khỏi trạng thái "Chờ vật tư" (cấp đủ → tự mở)
+    // Thiếu vế thứ hai thì PM cấp vật tư theo WO xong tổ SX vẫn không báo được sản lượng.
+    const [p45DoneCount, issuedWoCount] = await Promise.all([
+      prisma.task.count({ where: { projectId: task.projectId, taskType: 'P4.5', status: 'DONE' } }),
+      prisma.workOrder.count({
+        where: { projectId: task.projectId!, status: { notIn: ['PENDING_MATERIAL', 'CANCELLED'] } },
+      }),
+    ])
+    const warehouseHasIssued = p45DoneCount > 0 || issuedWoCount > 0
 
     const uniqueLsxItemsMap = new Map()
 

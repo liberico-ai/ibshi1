@@ -76,12 +76,18 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
     code: 'P3.1', name: 'PM điều chỉnh kế hoạch và đẩy tiến độ cấp hàng', nameEn: 'PM Adjust Plan & Push Material Schedule',
     role: 'R02', next: ['P3.5'], deadlineDays: 3, phase: 3,
   },
+  // P3.3 vs P3.4 chia theo NƠI LÀM, đọc từ giá trị ô công đoạn trong WBS (xem isRowVisibleForStep
+  // ở tasks/[id]/page.tsx): ô chứa "IBS" (kể cả "IBS TP <tên>" = thầu phụ làm TẠI xưởng IBS) → P3.4;
+  // ô ghi tên thầu phụ khác (mang ra ngoài làm) → P3.3. Cùng quy tắc dùng lại ở báo cáo ngày
+  // (ô IBS → P5.1, còn lại → P5.1A). CẢ HAI bước đều có phần đề nghị cấp VT → sinh task P4.5.
   'P3.3': {
-    code: 'P3.3', name: 'PM lập lệnh SX cho thầu phụ và đề nghị cấp VT', nameEn: 'PM Subcontractor WO & Material Request',
+    code: 'P3.3', name: 'PM lập LSX & đề nghị cấp VT — phần thuê ngoài (thầu phụ làm ngoài IBS)',
+    nameEn: 'PM Outsourced WO & Material Request',
     role: 'R02', next: [], deadlineDays: 5, phase: 3,
   },
   'P3.4': {
-    code: 'P3.4', name: 'PM lập lệnh sản xuất cho tổ nội bộ và thầu phụ', nameEn: 'PM Create Internal & Subcontractor WO',
+    code: 'P3.4', name: 'PM lập LSX & đề nghị cấp VT — phần làm tại IBS (tổ nội bộ + thầu phụ tại xưởng)',
+    nameEn: 'PM In-house WO & Material Request',
     role: 'R02', next: [], deadlineDays: 5, phase: 3,
   },
   'P3.5': {
