@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, Fragment, type CSSProperties } from 'react'
+import * as XLSX from 'xlsx'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/ui'
@@ -112,6 +113,25 @@ export default function TheoDoiMuaHangPage() {
   useEffect(() => { load() }, [load])
 
   const toggleGrp = (k: string) => setCollapsed(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n })
+
+  // "Cập nhật mua sắm": đọc file Excel → cập nhật PR (tồn/trạng thái) + tạo dòng HĐ DOM/IMP + QC.
+  const updateProcurement = async (file: File) => {
+    if (!projectId) { notify('Chọn dự án trước', 'error'); return }
+    try {
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+      const pk = (r: Record<string, unknown>, ...ks: string[]) => { for (const k of ks) if (r[k] !== undefined && r[k] !== '') return r[k]; return '' }
+      const rows = raw.map(r => ({
+        itemCode: pk(r, 'Mã VT', 'Mã', 'itemCode'), matCode: pk(r, 'Mã kho', 'matCode'), remainQty: pk(r, 'Tồn', 'remainQty'),
+        domContractNo: pk(r, 'Số HĐ TN', 'HĐ trong nước'), domVendor: pk(r, 'NCC TN'), domQty: pk(r, 'SL TN'), domWeight: pk(r, 'KL TN'), domPrice: pk(r, 'Đơn giá TN'), domDelivered: pk(r, 'Đã giao TN'), domHandoverDate: pk(r, 'Ngày HĐ TN', 'Bàn giao TN'), domQcReport: pk(r, 'QC TN'), domQcResult: pk(r, 'KQ QC TN'),
+        impContractNo: pk(r, 'Số HĐ NK', 'HĐ nhập khẩu'), impVendor: pk(r, 'NCC NK'), impQty: pk(r, 'SL NK'), impWeight: pk(r, 'KL NK'), impPrice: pk(r, 'Đơn giá NK'), impDelivered: pk(r, 'Đã giao NK'),
+        impCountry: pk(r, 'Quốc gia'), impExportPort: pk(r, 'Cảng xuất'), impLcDate: pk(r, 'Ngày L/C', 'LC'), impCifDate: pk(r, 'CIF'), impPaymentDate: pk(r, 'Ngày TT'), impCustomsDate: pk(r, 'Hải quan'), impArrivedDate: pk(r, 'Hàng về'), impQcInvitation: pk(r, 'Mời QC'), impQcReport: pk(r, 'QC NK'), impQcResult: pk(r, 'KQ QC NK'),
+      }))
+      if (rows.length === 0) { notify('File không có dòng nào', 'error'); return }
+      const res = await apiFetch('/api/procurement/master-tracking/update', { method: 'POST', body: JSON.stringify({ projectId, rows }) })
+      if (res.ok) { notify(res.message || 'Đã cập nhật', 'success'); load() } else notify(res.error || 'Lỗi cập nhật', 'error')
+    } catch (e) { console.error(e); notify('Không đọc được file Excel', 'error') }
+  }
   const filtered = rows.filter(r => {
     const q = search.trim().toLowerCase(); if (!q) return true
     return `${r.itemCode || ''} ${r.matCode || ''} ${r.description || ''} ${r.profile || ''} ${r.dom.contractNo} ${r.imp.contractNo}`.toLowerCase().includes(q)
@@ -129,6 +149,12 @@ export default function TheoDoiMuaHangPage() {
           {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
         </select>
         {rows.length > 0 && <input value={search} onChange={e => { setSearch(e.target.value); setLimit(100) }} placeholder="Tìm mã VT / mã kho / số HĐ…" className="input text-sm" style={{ maxWidth: 260 }} />}
+        {projectId && (
+          <label className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} title='Cột: Mã VT · Tồn · Số HĐ TN/NK · NCC · SL · Đơn giá · Đã giao · mốc NK …'>
+            ⬆ Cập nhật mua sắm
+            <input type="file" accept=".xlsx,.xls" hidden onChange={e => { const f = e.target.files?.[0]; if (f) updateProcurement(f); e.currentTarget.value = '' }} />
+          </label>
+        )}
         {summary && (
           <div className="flex gap-3 text-xs">
             <span>Tổng: <b>{summary.total}</b></span>
