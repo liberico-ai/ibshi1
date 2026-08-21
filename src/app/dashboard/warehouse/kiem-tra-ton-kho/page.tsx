@@ -11,7 +11,7 @@ import PurchaseHistoryPanel from '@/components/PurchaseHistoryPanel'
 
 // [PORT Thương Mại — F1] Kiểm tra tồn kho trước RFQ: soát tồn khả dụng → phân bổ dùng từ tồn → tính lại "cần mua".
 interface Inv { currentStock: number; reservedStock: number; availableQty: number; matchedBy?: string; matchedCodes?: string[] }
-interface Row { prDetailId: string; itemCode: string; itemName: string; profile: string; grade: string; uom: string; reqQty: number; remainQty: number; toBuyQty: number; inventory: Inv | null; stockStatus: string; suggestedUseFromStock: number }
+interface Row { prDetailId: string; itemCode: string; itemName: string; profile: string; grade: string; uom: string; reqQty: number; remainQty: number; toBuyQty: number; inventory: Inv | null; stockStatus: string; suggestedUseFromStock: number; pegMaterialId: string | null; peggedQty: number }
 interface Summary { total: number; hasStock: number; partial: number; noStock: number; matchedByAttr?: number }
 interface PROpt { id: string; prCode: string; project?: { projectCode: string } | null }
 
@@ -82,6 +82,21 @@ export default function KiemTraTonKhoPage() {
     if (r.ok) { notify(r.message || 'Đã lưu phân bổ tồn', 'success'); load() } else notify(r.error || 'Lỗi lưu', 'error')
   }
 
+  const [pegBusy, setPegBusy] = useState<string | null>(null)
+  // Giữ cứng tồn khả dụng cho dòng PR (mặc định giữ đủ nhu cầu) → tăng reservedStock, chống PR khác lấy mất.
+  const pegRow = async (r: Row) => {
+    setPegBusy(r.prDetailId)
+    const res = await apiFetch('/api/procurement/hard-pegging', { method: 'POST', body: JSON.stringify({ prItemId: r.prDetailId }) })
+    setPegBusy(null)
+    if (res.ok) { notify(res.message || 'Đã giữ tồn', 'success'); load() } else notify(res.error || 'Lỗi giữ tồn', 'error')
+  }
+  const releaseRow = async (r: Row) => {
+    setPegBusy(r.prDetailId)
+    const res = await apiFetch(`/api/procurement/hard-pegging?prItemId=${encodeURIComponent(r.prDetailId)}`, { method: 'DELETE' })
+    setPegBusy(null)
+    if (res.ok) { notify(res.message || 'Đã nhả tồn', 'success'); load() } else notify(res.error || 'Lỗi nhả tồn', 'error')
+  }
+
   return (
     <div className="space-y-4 animate-fade-in">
       <PageHeader title="Kiểm tra tồn kho" subtitle="Soát tồn khả dụng cho từng dòng vật tư PR → phân bổ dùng từ tồn → tính lại số cần mua (trước khi RFQ)" />
@@ -135,7 +150,7 @@ export default function KiemTraTonKhoPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead><tr style={{ background: 'var(--bg-secondary)' }}>
-                {['Mã VT', 'Tên vật tư', 'Quy cách / Mác', 'ĐVT', 'SL yêu cầu', 'Tồn khả dụng', 'Dùng từ tồn ✎', 'Cần mua', 'Trạng thái'].map(h => (
+                {['Mã VT', 'Tên vật tư', 'Quy cách / Mác', 'ĐVT', 'SL yêu cầu', 'Tồn khả dụng', 'Dùng từ tồn ✎', 'Cần mua', 'Giữ cứng', 'Trạng thái'].map(h => (
                   <th key={h} className="px-2 py-2 text-left font-semibold" style={{ borderBottom: '1px solid var(--border)' }}>{h}</th>
                 ))}
               </tr></thead>
@@ -167,6 +182,14 @@ export default function KiemTraTonKhoPage() {
                           title={over ? 'Dùng vượt tồn khả dụng' : overReq ? 'Dùng vượt số yêu cầu' : ''} placeholder="0" />
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono font-semibold">{nn(toBuy)}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-right">
+                        {r.peggedQty > 0 && <span className="mr-1.5 font-mono font-semibold" style={{ color: '#3730a3' }} title="Đang giữ cứng cho dòng này">🔒 {nn(r.peggedQty)}</span>}
+                        {r.pegMaterialId ? (
+                          r.peggedQty > 0
+                            ? <button onClick={() => releaseRow(r)} disabled={pegBusy === r.prDetailId} className="text-[11px] font-semibold" style={{ color: '#b45309' }} title="Nhả tồn đang giữ">Nhả</button>
+                            : <button onClick={() => pegRow(r)} disabled={pegBusy === r.prDetailId || (r.inventory?.availableQty ?? 0) <= 0} className="text-[11px] font-semibold" style={{ color: (r.inventory?.availableQty ?? 0) > 0 ? '#166534' : 'var(--text-muted)' }} title={(r.inventory?.availableQty ?? 0) > 0 ? 'Giữ cứng tồn khả dụng cho dòng này' : 'Không còn tồn khả dụng'}>Giữ</button>
+                        ) : <span className="text-[11px]" style={{ color: 'var(--text-muted)' }} title="Chưa liên kết mã kho xác định">—</span>}
+                      </td>
                       <td className="px-2 py-1.5 whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${st.cls}`}>{st.label}</span>
                         {r.itemCode && <button onClick={() => setHistoryItem({ itemCode: r.itemCode, itemName: r.itemName })} className="ml-2 text-[11px] font-medium" style={{ color: 'var(--accent)' }} title="Lịch sử mua hàng">🕘 Lịch sử</button>}

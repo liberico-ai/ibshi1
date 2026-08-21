@@ -116,6 +116,7 @@ model Project {
   paymentSchedules   PaymentSchedule[]
   documents          ProjectDocument[]
   fabCategories      FabricationCategory[]
+  hardPeggings       HardPegging[]
 
   @@index([status])
   @@index([pmUserId])
@@ -342,10 +343,12 @@ model Material {
   stocks         MaterialStock[]
   bomItems       BomItem[]
   materialIssues MaterialIssue[]
+  woMaterialReqs WorkOrderMaterialRequest[]
   millCerts      MillCertificate[]
   poItems        PurchaseOrderItem[]
   prItems        PurchaseRequestItem[]
   stockMovements StockMovement[]
+  hardPeggings   HardPegging[]
 
   @@index([category])
   @@index([specification])
@@ -506,6 +509,7 @@ model PurchaseRequestItem {
   fabAllocations  PurchaseRequestItemFabAllocation[]
   techComments    TechComment[]
   contractItems   PurchaseContractItem[]
+  hardPegging     HardPegging?
   purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 
   @@index([prId])
@@ -513,6 +517,32 @@ model PurchaseRequestItem {
   @@index([bomItemId])
   @@index([bomVersionId])
   @@map("purchase_request_items")
+}
+
+// ── Hard Pegging: giữ cứng tồn kho theo nhu cầu PR (PORT Thương Mại — Gate 3 allocateStock) ──
+// Giữ tồn = tăng Material.reservedStock; tồn khả dụng = currentStock − reservedStock.
+// 1 dòng PR có tối đa 1 bản ghi (unique prItemId); release → status RELEASED, quantity 0, hoàn reserved.
+model HardPegging {
+  id           String   @id @default(cuid())
+  prItemId     String   @unique @map("pr_item_id")
+  materialId   String   @map("material_id")
+  projectId    String?  @map("project_id")
+  quantity     Decimal  @default(0) // đang giữ cứng (0 khi đã release)
+  status       String   @default("ACTIVE") // ACTIVE | RELEASED
+  note         String?
+  allocatedBy  String   @map("allocated_by")
+  allocatedAt  DateTime @default(now()) @map("allocated_at")
+  releasedBy   String?  @map("released_by")
+  releasedAt   DateTime? @map("released_at")
+
+  prItem       PurchaseRequestItem @relation(fields: [prItemId], references: [id], onDelete: Cascade)
+  material     Material            @relation(fields: [materialId], references: [id])
+  project      Project?            @relation(fields: [projectId], references: [id])
+
+  @@index([materialId])
+  @@index([projectId])
+  @@index([status])
+  @@map("hard_peggings")
 }
 
 // ── Hạng mục chế tạo + Lưới phân bổ (PORT Thương Mại — Module Phân bổ chế tạo) ──
@@ -792,6 +822,7 @@ model WorkOrder {
   deliveries            DeliveryRecord[]
   jobCards              JobCard[]
   materialIssues        MaterialIssue[]
+  materialRequests      WorkOrderMaterialRequest[]
   weldJoints            WeldJoint[]
   packingListItems      PackingListItem[]
   equipmentAssignments  EquipmentAssignment[]
@@ -810,6 +841,30 @@ model WorkOrder {
   @@index([departmentId])
   @@index([pieceMark])
   @@map("work_orders")
+}
+
+// Vật tư ĐỀ NGHỊ CẤP cho 1 lệnh sản xuất (WO). Trước đây hệ chỉ lưu được "đã cấp"
+// (MaterialIssue) nên không trả lời được "WO này cần bao nhiêu, còn thiếu bao nhiêu".
+// PM lập khi phát hành WO từ ô WBS: dòng gợi ý từ BOM theo piece-mark (source=BOM)
+// hoặc thêm tay ngoài BOM (source=MANUAL). Kho cấp đủ toàn bộ → WO tự mở (PENDING_MATERIAL→OPEN).
+model WorkOrderMaterialRequest {
+  id          String    @id @default(cuid())
+  workOrderId String    @map("work_order_id")
+  materialId  String    @map("material_id")
+  quantity    Decimal
+  unit        String
+  source      String    @default("MANUAL") // BOM | MANUAL
+  notes       String?
+  createdBy   String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  material    Material  @relation(fields: [materialId], references: [id])
+
+  @@unique([workOrderId, materialId])
+  @@index([workOrderId])
+  @@index([materialId])
+  @@map("work_order_material_requests")
 }
 
 model MaterialIssue {

@@ -29,16 +29,17 @@ export async function GET(req: NextRequest) {
       orderBy: { itemCode: 'asc' },
       select: {
         id: true, itemCode: true, description: true, profile: true, grade: true, unit: true,
-        reqQty: true, remainQty: true, toBuyQty: true, materialGroupCode: true,
-        material: { select: { currentStock: true, reservedStock: true, materialCode: true } },
+        reqQty: true, remainQty: true, toBuyQty: true, materialGroupCode: true, materialId: true,
+        material: { select: { id: true, currentStock: true, reservedStock: true, materialCode: true } },
+        hardPegging: { select: { quantity: true, status: true } },
       },
     })
 
     // Vật tư chưa link materialId → thử khớp itemCode ↔ materialCode
     const codes = [...new Set(items.filter(i => !i.material && i.itemCode).map(i => i.itemCode!))]
-    const byCode = new Map<string, { currentStock: unknown; reservedStock: unknown }>()
+    const byCode = new Map<string, { id: string; currentStock: unknown; reservedStock: unknown }>()
     if (codes.length) {
-      const mats = await prisma.material.findMany({ where: { materialCode: { in: codes } }, select: { materialCode: true, currentStock: true, reservedStock: true } })
+      const mats = await prisma.material.findMany({ where: { materialCode: { in: codes } }, select: { id: true, materialCode: true, currentStock: true, reservedStock: true } })
       mats.forEach(m => byCode.set(m.materialCode, m))
     }
 
@@ -68,11 +69,15 @@ export async function GET(req: NextRequest) {
       }
       const reqQty = N(d.reqQty)
       const stockStatus = !inventory || available <= 0 ? 'NO_STOCK' : (available >= reqQty ? 'HAS_STOCK' : 'PARTIAL')
+      // Giữ tồn: chỉ cho phép khi có mã kho xác định (materialId hoặc itemCode→1 mã). Match thuộc tính không đủ chắc.
+      const pegMaterialId = d.materialId || (d.itemCode ? byCode.get(d.itemCode)?.id ?? null : null)
+      const peggedQty = d.hardPegging && d.hardPegging.status === 'ACTIVE' ? N(d.hardPegging.quantity) : 0
       return {
         prDetailId: d.id, itemCode: d.itemCode || '', itemName: d.description || '', profile: d.profile || '', grade: d.grade || '', uom: d.unit || '',
         reqQty, remainQty: N(d.remainQty), toBuyQty: N(d.toBuyQty), materialGroupCode: d.materialGroupCode || '',
         inventory,
         stockStatus, suggestedUseFromStock: Math.min(available, reqQty),
+        pegMaterialId, peggedQty,
       }
     })
 
