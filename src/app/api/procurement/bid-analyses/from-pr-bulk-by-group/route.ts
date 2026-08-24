@@ -26,6 +26,13 @@ export async function POST(req: NextRequest) {
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, projectCode: true } })
     if (!project) return errorResponse('Dự án không tồn tại', 404)
 
+    // Nối các BID ↔ task P3.5 để truy vết (ưu tiên task đang mở).
+    const p35 = await prisma.task.findFirst({
+      where: { projectId, taskType: 'P3.5' },
+      orderBy: [{ completedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }],
+      select: { id: true },
+    })
+
     // PR item của đúng dự án + chưa vào BID nào (lọc thêm theo prItemIds nếu có).
     const items = await prisma.purchaseRequestItem.findMany({
       where: {
@@ -36,7 +43,7 @@ export async function POST(req: NextRequest) {
       select: {
         id: true, itemCode: true, description: true, profile: true, grade: true, unit: true,
         quantity: true, toBuyQty: true, materialGroupCode: true,
-        material: { select: { materialCode: true, name: true, unit: true } },
+        material: { select: { materialCode: true, name: true, unit: true, unitPrice: true } },
       },
     })
     if (items.length === 0) return errorResponse('Không có PR item hợp lệ (có thể đã đưa vào BID khác)', 400)
@@ -65,12 +72,13 @@ export async function POST(req: NextRequest) {
         profile: it.profile || '', grade: it.grade || '', uom: it.unit || it.material?.unit || '',
         reqQty: Number(it.quantity) || 0,
         toBuyQty: Number(it.toBuyQty) > 0 ? Number(it.toBuyQty) : Number(it.quantity) || 0,
+        estimateUnitPrice: Number(it.material?.unitPrice) || 0,
       }))
       const subject = suggestSubject(norm.map(n => ({ itemName: n.itemName })), project.projectCode)
       const bid = await prisma.$transaction(async (tx) => {
         const newBid = await tx.bidAnalysis.create({
           data: {
-            projectId: project.id, bidCode: gen.code,
+            projectId: project.id, bidCode: gen.code, sourceTaskId: p35?.id || null,
             bidCodeProj: parsed.proj, bidCodeYymm: parsed.yymm, bidCodeMat: parsed.matGroup,
             bidCodeSeq: parsed.seq, bidCodeVariant: parsed.variant, bidCodeUrgent: parsed.urgent,
             subject, bidDate: new Date(), status: 'OPEN', selectionMode: 'PER_GROUP',
@@ -79,7 +87,7 @@ export async function POST(req: NextRequest) {
               create: norm.map((n, i) => ({
                 purchaseRequestItemId: n.id, itemOrder: i + 1,
                 itemCode: n.itemCode, itemName: n.itemName, profile: n.profile, grade: n.grade, uom: n.uom,
-                qtyPr: n.reqQty, qtyToBuy: n.toBuyQty,
+                qtyPr: n.reqQty, qtyToBuy: n.toBuyQty, estimateUnitPrice: n.estimateUnitPrice,
               })),
             },
           },

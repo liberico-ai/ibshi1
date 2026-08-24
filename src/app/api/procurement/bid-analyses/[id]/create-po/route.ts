@@ -112,6 +112,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const existingPos = await prisma.purchaseOrder.findMany({ where: { bidAnalysisId: id }, select: { poCode: true, vendorId: true, totalValue: true } })
     const existingByVendor = new Map(existingPos.map(p => [p.vendorId, p]))
 
+    // Nối PO ↔ task P3.6 (BGĐ duyệt) để truy vết (ưu tiên task đang mở).
+    const p36 = await prisma.task.findFirst({
+      where: { projectId: bid.projectId, taskType: 'P3.6' },
+      orderBy: [{ completedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }],
+      select: { id: true },
+    })
+
     const created: Array<{ poCode: string; vendorName: string; totalValue: number; existing?: boolean }> = []
     let idx = 0
     for (const g of groups.values()) {
@@ -134,7 +141,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         data: {
           poCode, vendorId: erpVendorId, projectId: bid.projectId, status: 'PENDING',
           currency: g.bqv.currency || 'VND', orderDate: new Date(), createdBy: payload.userId,
-          bidAnalysisId: id, notes: `Từ BID ${bid.bidCode}`, totalValue: Math.round(totalValue),
+          bidAnalysisId: id, sourceTaskId: p36?.id || null, notes: `Từ BID ${bid.bidCode}`, totalValue: Math.round(totalValue),
           items: {
             create: g.items.map(it => ({
               materialId: it.materialId, itemCode: it.itemCode, description: it.itemName,

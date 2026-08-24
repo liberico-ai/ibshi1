@@ -13,6 +13,7 @@ import { getReviseTypeDef } from './revise-map'
 import { isEnabled } from './feature-flags'
 import { NOTIFY_TASK_MAP } from './notify-tasks'
 import { stepFormGate } from './step-form-gate'
+import { procurementStepGate } from './procurement-step-gate'
 
 // Mã task "THÔNG BÁO" (con trỏ sang tab sidebar; đã đọc → set CANCELLED để ẩn khỏi hộp việc)
 const NOTIFY_TASK_TYPES = Object.keys(NOTIFY_TASK_MAP)
@@ -318,6 +319,9 @@ export async function completeTask(taskId: string, userId: string, roleCode: str
   // Gate biểu mẫu: chặn hoàn thành nếu bước cần dữ liệu parse mà chưa có (vd P1.2 dự toán).
   const gateErr = stepFormGate(task.taskType, { ...((task.resultData as Record<string, unknown>) || {}), ...(input.resultData || {}) })
   if (gateErr) throw new Error(gateErr)
+  // Gate cứng mua sắm: P3.5 cần đã chọn NCC, P3.6 cần đã tạo PO.
+  const procErr = await procurementStepGate(task.taskType, task.projectId)
+  if (procErr) throw new Error(procErr)
   const prevStatus = task.status
 
   // ── Điều kiện hoàn thành (áp dụng cho MỌI task) ──
@@ -548,6 +552,9 @@ export async function completeStepTaskFromSidebar(
   // Gate biểu mẫu: chặn hoàn thành từ sidebar nếu bước cần dữ liệu parse mà chưa có (vd P1.2 dự toán).
   const gateErr = stepFormGate(task.taskType, { ...((task.resultData as Record<string, unknown>) || {}), ...(resultData || {}) })
   if (gateErr) return { ok: false, reason: gateErr }
+  // Gate cứng mua sắm: P3.5 cần đã chọn NCC, P3.6 cần đã tạo PO.
+  const procErr = await procurementStepGate(task.taskType, projectId)
+  if (procErr) return { ok: false, reason: procErr }
 
   const prevStatus = task.status
   const templateStepId = (task as { templateStepId?: string | null }).templateStepId
