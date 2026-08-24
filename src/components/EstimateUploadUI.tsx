@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import * as XLSX from 'xlsx'
 import { formatCurrency, formatNumber } from '@/lib/utils'
+import { parseEstimateSheets, type EstimateParseResult, type SheetMap, type Row } from '@/lib/estimate-parser'
 
 interface ProjectInfo {
   projectCode?: string
@@ -32,6 +33,10 @@ interface Props {
 export default function EstimateUploadUI({ isEditable, project, estimateData, onFieldChange }: Props) {
   const [successMsg, setSuccessMsg] = useState('')
   const [error, setError] = useState('')
+  // Xem trước kết quả đọc file trước khi ghi số vào form
+  const [preview, setPreview] = useState<EstimateParseResult | null>(null)
+  const [sheets, setSheets] = useState<SheetMap | null>(null)
+  const [fileName, setFileName] = useState('')
 
   const totalMat = Number(estimateData?.totalMaterial) || 0
   const totalLab = Number(estimateData?.totalLabor) || 0
@@ -51,6 +56,8 @@ export default function EstimateUploadUI({ isEditable, project, estimateData, on
     if (Array.isArray(parsed)) dt02Rows = parsed
   } catch { /* ignore */ }
 
+  // Chọn file → PHÂN TÍCH rồi hiện xem trước; chỉ ghi vào form khi người dùng bấm xác nhận.
+  // (Trước đây ghi thẳng, đọc sai sheet là số 0 lọt vào form mà không ai biết.)
   const importEstimateExcel = () => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -62,64 +69,44 @@ export default function EstimateUploadUI({ isEditable, project, estimateData, on
       reader.onload = (evt) => {
         try {
           const wb = XLSX.read(evt.target?.result, { type: 'binary' })
-          const sheetNames = wb.SheetNames
-          const dt02Name = sheetNames.find(s => s.toLowerCase().includes('dt02'))
-          if (!dt02Name) {
-            setError('Không tìm thấy sheet DT02 trong file Excel.')
-            return
+          const map: SheetMap = {}
+          for (const n of wb.SheetNames) {
+            map[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '' }) as Row[]
           }
-          const ws = wb.Sheets[dt02Name]
-          const data: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
-
-          let matTotal = 0, labTotal = 0, svcTotal = 0, ovhTotal = 0, grandTotal = 0
-          const detailRows: { maCP: string; noiDung: string; giaTri: number }[] = []
-
-          for (const row of data) {
-            if (!row || row.length < 4) continue
-            const stt = String(row[0] || '').trim()
-            const content = String(row[2] || '').trim()
-            const value = Number(row[3]) || 0
-
-            if (stt === 'I') { matTotal = value; detailRows.push({ maCP: 'I', noiDung: content || 'Chi phí vật tư', giaTri: value }) }
-            else if (stt === 'II') { labTotal = value; detailRows.push({ maCP: 'II', noiDung: content || 'Chi phí nhân công', giaTri: value }) }
-            else if (stt === 'III') { svcTotal = value; detailRows.push({ maCP: 'III', noiDung: content || 'Chi phí dịch vụ', giaTri: value }) }
-            else if (stt === 'IV') { ovhTotal = value; detailRows.push({ maCP: 'IV', noiDung: content || 'Chi phí chung', giaTri: value }) }
-            if (/^\d+$/.test(stt) && value > 0) {
-              detailRows.push({ maCP: String(row[1] || stt), noiDung: content, giaTri: value })
-            }
-          }
-
-          for (const row of data) {
-            if (!row) continue
-            const content = String(row[2] || '').toLowerCase()
-            if (content.includes('tổng hợp') || content.includes('tổng chi phí')) {
-              grandTotal = Number(row[3]) || 0
-            }
-          }
-          if (!grandTotal) grandTotal = matTotal + labTotal + svcTotal + ovhTotal
-
-          if (grandTotal > 0) {
-            onFieldChange('totalMaterial', matTotal)
-            onFieldChange('totalLabor', labTotal)
-            onFieldChange('totalService', svcTotal)
-            onFieldChange('totalOverhead', ovhTotal)
-            onFieldChange('totalEstimate', grandTotal)
-            onFieldChange('dt02Detail', JSON.stringify(detailRows))
-            onFieldChange('estimateFileName', file.name)
-            setSuccessMsg(`Đã import dự toán: ${fmt(grandTotal)} từ ${sheetNames.length} sheets`)
-            setError('')
-            setTimeout(() => setSuccessMsg(''), 4000)
-          } else {
-            setError('Không đọc được dữ liệu DT02. Kiểm tra file Excel có đúng định dạng.')
-          }
+          setSheets(map)
+          setFileName(file.name)
+          setPreview(parseEstimateSheets(map))
+          setError('')
         } catch (err) {
-          console.error('Import DT02 Excel error:', err)
+          console.error('Import dự toán Excel error:', err)
           setError(`Lỗi đọc file Excel: ${err instanceof Error ? err.message : 'không rõ'}`)
         }
       }
       reader.readAsBinaryString(file)
     }
     input.click()
+  }
+
+  /** Đọc lại theo sheet người dùng tự chọn (khi máy đoán sai). */
+  const reparse = (sheetName: string) => {
+    if (!sheets) return
+    setPreview(parseEstimateSheets(sheets, { sheetName }))
+  }
+
+  /** Chốt: ghi các số đã xem trước vào form. */
+  const applyPreview = () => {
+    if (!preview?.ok) return
+    const t = preview.totals
+    onFieldChange('totalMaterial', t.material)
+    onFieldChange('totalLabor', t.labor)
+    onFieldChange('totalService', t.service)
+    onFieldChange('totalOverhead', t.overhead)
+    onFieldChange('totalEstimate', t.grand)
+    onFieldChange('dt02Detail', JSON.stringify(preview.detailRows))
+    onFieldChange('estimateFileName', fileName)
+    setSuccessMsg(`Đã nhận dự toán ${fmt(t.grand)} từ sheet "${preview.sheetName}"`)
+    setPreview(null); setSheets(null)
+    setTimeout(() => setSuccessMsg(''), 5000)
   }
 
   const exportTemplate = () => {
@@ -196,7 +183,7 @@ export default function EstimateUploadUI({ isEditable, project, estimateData, on
       <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #7c3aed' }}>
         <h3 style={{ margin: '0 0 10px', fontSize: '0.95rem', color: '#7c3aed' }}>Excel Dự toán thi công</h3>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px' }}>
-          Upload file Excel dự toán (8 sheets: Cover, DT01-DT07). Hệ thống tự động đọc DT02 để hiển thị tổng hợp chi phí.
+          Upload file Excel dự toán. Hệ thống tự tìm bảng tổng hợp theo nội dung (không phụ thuộc tên sheet), hiện số để bạn xem trước rồi mới ghi vào form.
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={exportTemplate}
@@ -210,6 +197,50 @@ export default function EstimateUploadUI({ isEditable, project, estimateData, on
             </button>
           )}
         </div>
+        {/* XEM TRƯỚC kết quả đọc file — chỉ ghi vào form khi người dùng xác nhận.
+            Máy đoán sai sheet thì chọn tay ngay tại đây, không phải sửa file Excel. */}
+        {preview && (
+          <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 10, border: `1px solid ${preview.ok ? '#a7f3d0' : '#fecaca'}`, background: preview.ok ? '#ecfdf5' : '#fef2f2' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: '0.85rem', color: preview.ok ? '#047857' : '#991b1b' }}>
+                {preview.ok ? `Đọc được từ sheet "${preview.sheetName}"` : preview.reason === 'NO_NUMBERS'
+                  ? `Sheet "${preview.sheetName}" chưa có số — mở bằng Excel nhập rồi lưu lại, hoặc chọn sheet khác`
+                  : 'Chưa nhận ra bảng tổng hợp — chọn sheet bên dưới'}
+              </strong>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fileName}</span>
+            </div>
+
+            {preview.ok && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, margin: '10px 0' }}>
+                {([['Vật tư', preview.totals.material], ['Nhân công', preview.totals.labor], ['Dịch vụ', preview.totals.service], ['Chi phí chung', preview.totals.overhead], ['TỔNG', preview.totals.grand]] as const).map(([label, v]) => (
+                  <div key={label} style={{ padding: '6px 10px', background: '#fff', borderRadius: 6, border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{label}</div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: label === 'TỔNG' ? '#047857' : 'var(--text-primary)' }}>{fmt(v)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {preview.warnings.map((w, i) => (
+              <div key={i} style={{ fontSize: '0.75rem', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 10px', marginBottom: 6 }}>{w}</div>
+            ))}
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+              <select value={preview.sheetName || ''} onChange={e => reparse(e.target.value)} className="input" style={{ fontSize: '0.78rem', padding: '4px 8px', maxWidth: 260 }}>
+                <option value="">— Chọn sheet tổng hợp —</option>
+                {preview.candidates.map(c => <option key={c.name} value={c.name}>{c.name}{c.score > 0 ? ` (điểm ${c.score})` : ''}</option>)}
+              </select>
+              <div style={{ flex: 1 }} />
+              <button type="button" onClick={() => { setPreview(null); setSheets(null) }}
+                style={{ padding: '6px 14px', fontSize: '0.78rem', border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: 'pointer' }}>Hủy</button>
+              <button type="button" onClick={applyPreview} disabled={!preview.ok}
+                style={{ padding: '6px 14px', fontSize: '0.78rem', border: 'none', borderRadius: 6, background: preview.ok ? '#059669' : '#e2e8f0', color: preview.ok ? '#fff' : '#94a3b8', cursor: preview.ok ? 'pointer' : 'not-allowed', fontWeight: 700 }}>
+                Dùng số này
+              </button>
+            </div>
+          </div>
+        )}
+
         {estimateData?.estimateFileName && (
           <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>File đã upload: <strong>{String(estimateData.estimateFileName)}</strong></span>

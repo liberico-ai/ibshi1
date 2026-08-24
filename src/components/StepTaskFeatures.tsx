@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { apiFetch, useAuthStore, openAuthedFile } from '@/hooks/useAuth'
 import { ROLES } from '@/lib/constants'
 import MultiFileUpload from '@/components/MultiFileUpload'
+import TaskHandoff from '@/components/TaskHandoff'
 import { formatDateTime, formatShortDateTime } from '@/lib/utils'
 
 // Bộ tính năng chung của MỘT task, để nhúng vào các card ở sidebar (Cách A) sao cho
@@ -53,6 +54,10 @@ export default function StepTaskFeatures({ taskId, reloadKey = 0 }: { taskId: st
   const isAssignee = !!myRow
   const myDone = !!myRow?.done
   const canUploadEvidence = isAssignee && !myDone && task.status !== 'DONE'
+  // Chuyển giao: người đang nhận (chưa xong), hoặc người giao khi việc bị trả lại
+  // — khớp đúng điều kiện đang dùng ở màn Hộp việc work/[id].
+  const canHandoff = (isAssignee && !myDone && task.status !== 'DONE')
+    || (task.createdBy === user?.id && task.status === 'RETURNED')
   const evidence = task.evidenceFiles || []
 
   return (
@@ -70,7 +75,12 @@ export default function StepTaskFeatures({ taskId, reloadKey = 0 }: { taskId: st
             </span>
           ))}
         </div>
-        <div className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Việc chỉ hoàn thành khi tất cả người nhận đã xong.</div>
+        <div className="flex items-center justify-between gap-2 flex-wrap mt-2">
+          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Việc chỉ hoàn thành khi tất cả người nhận đã xong.</div>
+          {/* Chuyển giao ngay tại card sidebar — trước đây phải quay về Hộp việc mới giao lại được.
+              Hiện cho người đang nhận (chưa xong) và cho người giao khi việc bị trả lại. */}
+          {canHandoff && <TaskHandoff taskId={task.id} onDone={load} />}
+        </div>
       </div>
 
       {/* Bằng chứng thực hiện */}
