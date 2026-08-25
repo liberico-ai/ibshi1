@@ -122,7 +122,7 @@ export async function maybeMaterializePr(taskId: string, actorUserId: string): P
 
   const existing = await prisma.purchaseRequest.findUnique({
     where: { sourceTaskId: taskId },
-    select: { id: true, prCode: true, status: true },
+    select: { id: true, prCode: true, status: true, revNo: true },
   })
 
   // KHÔNG ghi đè PR đã rời khỏi nháp (đã duyệt/đã ra PO) — sửa task không được phá PR đã duyệt.
@@ -134,12 +134,22 @@ export async function maybeMaterializePr(taskId: string, actorUserId: string): P
   const itemsData = lines.map(toItemData)
 
   if (existing) {
-    // Upsert: thay toàn bộ dòng (task sửa rồi lưu lại → PR cập nhật, không nhân bản)
+    // #5 — Rev PR: trước khi ghi đè, CHỤP dòng hiện tại thành 1 revision (giữ lịch sử), rồi tăng revNo.
+    const currentItems = await prisma.purchaseRequestItem.findMany({ where: { prId: existing.id } })
     await prisma.$transaction([
+      // snapshot bản đang có dưới revNo hiện tại
+      prisma.purchaseRequestRevision.create({
+        data: {
+          prId: existing.id, revNo: existing.revNo,
+          itemsSnapshot: JSON.parse(JSON.stringify(currentItems)),
+          lineCount: currentItems.length,
+          note: `Ảnh chụp trước khi cập nhật từ task ${taskId}`, changedBy: actorUserId || null,
+        },
+      }),
       prisma.purchaseRequestItem.deleteMany({ where: { prId: existing.id } }),
       prisma.purchaseRequest.update({
         where: { id: existing.id },
-        data: { items: { create: itemsData } },
+        data: { items: { create: itemsData }, revNo: { increment: 1 } },
       }),
     ])
     return { materialized: true, created: false, prId: existing.id, prCode: existing.prCode, lineCount: itemsData.length }

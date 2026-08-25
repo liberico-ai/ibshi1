@@ -485,15 +485,36 @@ model PurchaseRequest {
   // Nối luồng Task → PR. UNIQUE ⟹ 1 task sinh tối đa 1 PR (materialize idempotent,
   // chạy lại không nhân bản). @unique đã tự tạo index → không cần @@index riêng.
   sourceTaskId String?              @unique @map("source_task_id")
+  // #5 — Rev PR (khớp Commerce docNo/revNo): mỗi lần task nguồn đổi & materialize lại → tăng revNo + lưu snapshot.
+  docNo       String?               @map("doc_no")   // số hiệu tài liệu/bản vẽ nguồn (nếu có)
+  revNo       Int                   @default(0) @map("rev_no")
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
   items       PurchaseRequestItem[]
+  revisions   PurchaseRequestRevision[]
   project     Project               @relation(fields: [projectId], references: [id])
 
   @@index([projectId])
   @@index([status])
   @@index([originType, originId])
   @@map("purchase_requests")
+}
+
+// #5 — Lịch sử phiên bản PR: snapshot dòng mỗi lần PR bị ghi đè (materialize lại từ task nguồn).
+model PurchaseRequestRevision {
+  id          String   @id @default(cuid())
+  prId        String   @map("pr_id")
+  revNo       Int      @map("rev_no")
+  itemsSnapshot Json   @map("items_snapshot") // ảnh chụp toàn bộ dòng tại thời điểm rev
+  lineCount   Int      @default(0) @map("line_count")
+  note        String?
+  changedBy   String?  @map("changed_by")
+  changedAt   DateTime @default(now()) @map("changed_at")
+  pr          PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+
+  @@unique([prId, revNo])
+  @@index([prId])
+  @@map("purchase_request_revisions")
 }
 
 model PurchaseRequestItem {

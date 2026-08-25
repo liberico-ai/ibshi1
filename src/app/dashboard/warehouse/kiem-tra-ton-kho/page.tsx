@@ -82,6 +82,15 @@ export default function KiemTraTonKhoPage() {
     if (r.ok) { notify(r.message || 'Đã lưu phân bổ tồn', 'success'); load() } else notify(r.error || 'Lỗi lưu', 'error')
   }
 
+  // #5 — xem lịch sử rev của PR đang chọn.
+  const [revData, setRevData] = useState<{ prCode: string; currentRev: number; currentLineCount: number; revisions: Array<{ revNo: number; lineCount: number; changedAt: string; note: string | null; sampleItems: Array<{ itemCode: string | null; description: string | null; quantity: number | null; unit: string | null }> }> } | null>(null)
+  const [revOpen, setRevOpen] = useState(false)
+  const loadRev = async () => {
+    if (!prId) return
+    const r = await apiFetch(`/api/purchase-requests/${prId}/revisions`)
+    if (r.ok) { setRevData(r as never); setRevOpen(true) } else notify(r.error || 'Lỗi tải rev', 'error')
+  }
+
   const [pegBusy, setPegBusy] = useState<string | null>(null)
   // Giữ cứng tồn khả dụng cho dòng PR (mặc định giữ đủ nhu cầu) → tăng reservedStock, chống PR khác lấy mất.
   const pegRow = async (r: Row) => {
@@ -106,6 +115,7 @@ export default function KiemTraTonKhoPage() {
           <option value="">— Chọn phiếu yêu cầu (PR) —</option>
           {prs.map(p => <option key={p.id} value={p.id}>{p.prCode}{p.project?.projectCode ? ` — ${p.project.projectCode}` : ''}</option>)}
         </select>
+        {prId && <button onClick={loadRev} className="text-xs px-3 py-1.5 rounded-lg font-semibold" style={{ border: '1px solid #9333ea', color: '#7e22ce', background: '#faf5ff' }} title="Xem lịch sử các lần rev của PR này">🕘 Lịch sử rev</button>}
         {rows.length > 0 && <Button variant="primary" onClick={save} disabled={saving || !dirty}>{saving ? 'Đang lưu…' : `Lưu phân bổ tồn${dirty ? '' : ' (chưa đổi)'}`}</Button>}
         <label className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} title='File Excel có cột "Mã kho" + "Tồn" (tùy chọn "Tên vật tư", "ĐVT")'>
           ⬆ Nhập tồn từ Excel
@@ -204,6 +214,48 @@ export default function KiemTraTonKhoPage() {
       )}
 
       {historyItem && <PurchaseHistoryPanel itemCode={historyItem.itemCode} itemName={historyItem.itemName} onClose={() => setHistoryItem(null)} />}
+
+      {revOpen && revData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }} onClick={() => setRevOpen(false)}>
+          <div className="card p-5 space-y-3" style={{ maxWidth: 720, width: '100%', maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Lịch sử rev — {revData.prCode} <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>(hiện tại: Rev {revData.currentRev} · {revData.currentLineCount} dòng)</span></h3>
+              <button onClick={() => setRevOpen(false)} style={{ color: 'var(--text-muted)' }}>✕</button>
+            </div>
+            {revData.revisions.length === 0
+              ? <p className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>Chưa có phiên bản cũ nào — PR chưa bị cập nhật lại lần nào (mới ở Rev {revData.currentRev}).</p>
+              : (
+                <div className="space-y-3">
+                  {revData.revisions.map(rv => (
+                    <div key={rv.revNo} className="rounded-lg p-2" style={{ border: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-bold" style={{ color: '#7e22ce' }}>Rev {rv.revNo}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{rv.lineCount} dòng · {new Date(rv.changedAt).toLocaleString('vi-VN')}</span>
+                      </div>
+                      {rv.note && <div className="text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>{rv.note}</div>}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+                          <thead><tr style={{ color: 'var(--text-muted)' }}><th className="text-left px-1">Mã VT</th><th className="text-left px-1">Mô tả</th><th className="text-right px-1">SL</th><th className="text-left px-1">ĐVT</th></tr></thead>
+                          <tbody>
+                            {rv.sampleItems.map((it, i) => (
+                              <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                                <td className="px-1 font-mono" style={{ color: 'var(--accent)' }}>{it.itemCode || '—'}</td>
+                                <td className="px-1 max-w-[240px] truncate" title={it.description || ''}>{it.description || '—'}</td>
+                                <td className="px-1 text-right font-mono">{it.quantity != null ? formatNumber(Number(it.quantity)) : '—'}</td>
+                                <td className="px-1">{it.unit || ''}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {rv.lineCount > rv.sampleItems.length && <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>…+{rv.lineCount - rv.sampleItems.length} dòng nữa</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
