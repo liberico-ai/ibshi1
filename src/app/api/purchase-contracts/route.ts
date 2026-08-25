@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true, contractCode: true, contractType: true, tradeType: true, title: true, value: true, currency: true,
         signedDate: true, effectiveDate: true, arrivedDate: true, status: true, createdAt: true,
+        paymentTerms: true, paymentTermsStatus: true, ptFinanceBy: true, ptFinanceAt: true, ptKtktBy: true, ptKtktAt: true, ptBodBy: true, ptBodAt: true, ptRejectReason: true,
         vendorCountry: true, exportPort: true, importLcDate: true, cifDate: true, paymentDate: true, customsDate: true, qcInvitationDate: true,
         vendor: { select: { name: true } },
         project: { select: { projectCode: true, projectName: true } },
@@ -49,6 +50,9 @@ export async function GET(req: NextRequest) {
       orders: c.orders.map(o => ({ id: o.id, poCode: o.poCode, status: o.status, totalValue: N(o.totalValue) })),
       // Mốc logistics nhập khẩu (hiện khi mở rộng HĐ nhập khẩu).
       logistics: { vendorCountry: c.vendorCountry, exportPort: c.exportPort, lcDate: c.importLcDate, cifDate: c.cifDate, paymentDate: c.paymentDate, customsDate: c.customsDate, arrivedDate: c.arrivedDate, qcInvitationDate: c.qcInvitationDate },
+      // B7 — duyệt điều kiện thanh toán (3 chữ ký).
+      paymentTerms: c.paymentTerms || null,
+      paymentApproval: { status: c.paymentTermsStatus, financeAt: c.ptFinanceAt, ktktAt: c.ptKtktAt, bodAt: c.ptBodAt, rejectReason: c.ptRejectReason },
     }))
 
     const cnt = (s: string) => data.filter(d => d.status === s).length

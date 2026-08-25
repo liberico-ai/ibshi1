@@ -25,6 +25,7 @@ model User {
   department     Department?    @relation(fields: [departmentId], references: [id])
   welderJoints   WeldJoint[]    @relation("WelderJoints")
   techComments   TechComment[]  @relation("TechCommentAuthor")
+  projectPms     ProjectPm[]
 
   @@index([roleCode])
   @@index([departmentId])
@@ -72,6 +73,8 @@ model Project {
   status             String                   @default("ACTIVE")
   startDate          DateTime?                @map("start_date")
   endDate            DateTime?                @map("end_date")
+  // PM ĐẦU MỐI — dùng làm người nhận mặc định khi chuỗi tự sinh task vai R02.
+  // Danh sách PM ĐẦY ĐỦ nằm ở bảng project_pms; mọi PM trong đó NGANG QUYỀN nhau.
   pmUserId           String?                  @map("pm_user_id")
   description        String?
   createdAt          DateTime                 @default(now()) @map("created_at")
@@ -120,10 +123,32 @@ model Project {
   fabCategories      FabricationCategory[]
   hardPeggings       HardPegging[]
 
+  projectPms         ProjectPm[]
+
   @@index([status])
   @@index([pmUserId])
   @@index([saleCustomerId])
   @@map("projects")
+}
+
+// PM phụ trách dự án — NHIỀU người, NGANG QUYỀN nhau.
+// Bất kỳ PM nào trong danh sách đều thao tác và hoàn thành việc của dự án được; không cần
+// cả nhóm cùng bấm xong. Project.pmUserId chỉ còn là PM ĐẦU MỐI (người nhận mặc định khi
+// chuỗi tự sinh task vai R02) — vẫn phải nằm trong danh sách này.
+model ProjectPm {
+  id         String   @id @default(cuid())
+  projectId  String   @map("project_id")
+  userId     String   @map("user_id")
+  isLead     Boolean  @default(false) @map("is_lead")   // đầu mối nhận task tự sinh
+  assignedBy String?  @map("assigned_by")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_pms")
 }
 
 model ProjectSubmission {
@@ -672,6 +697,17 @@ model PurchaseContract {
   customsDate      DateTime?    @map("customs_date")     // thông quan
   arrivedDate      DateTime?    @map("arrived_date")     // hàng thực về
   qcInvitationDate DateTime?    @map("qc_invitation_date") // mời QC
+  // B7 — Duyệt điều kiện thanh toán HĐ: 3 chữ ký Kế toán (R08) + Trưởng KTKT/Mr Sâm (R03) + BGĐ (R01).
+  paymentTermsStatus String    @default("DRAFT") @map("payment_terms_status") // DRAFT | PENDING | APPROVED | REJECTED
+  ptFinanceBy   String?         @map("pt_finance_by")
+  ptFinanceAt   DateTime?       @map("pt_finance_at")
+  ptKtktBy      String?         @map("pt_ktkt_by")
+  ptKtktAt      DateTime?       @map("pt_ktkt_at")
+  ptBodBy       String?         @map("pt_bod_by")
+  ptBodAt       DateTime?       @map("pt_bod_at")
+  ptRejectBy    String?         @map("pt_reject_by")
+  ptRejectAt    DateTime?       @map("pt_reject_at")
+  ptRejectReason String?        @map("pt_reject_reason")
   createdBy     String          @map("created_by")
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")

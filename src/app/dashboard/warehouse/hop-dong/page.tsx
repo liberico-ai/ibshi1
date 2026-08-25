@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
-import { apiFetch } from '@/hooks/useAuth'
-import { notify } from '@/components/ui/Toast'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
+import { notify, confirmDialog } from '@/components/ui/Toast'
 import { PageHeader, Button } from '@/components/ui'
 import { formatCurrency, formatDate, formatNumber } from '@/lib/utils'
 import { Search, ChevronRight, ChevronDown } from 'lucide-react'
@@ -17,6 +17,8 @@ interface Contract {
   signedDate: string | null; effectiveDate: string | null; arrivedDate?: string | null; status: string
   vendorName: string; projectCode: string | null; projectName: string; itemCount?: number; poCount: number; poTotal: number; orders: PO[]
   logistics?: { vendorCountry: string | null; exportPort: string | null; lcDate: string | null; cifDate: string | null; paymentDate: string | null; customsDate: string | null; arrivedDate: string | null; qcInvitationDate: string | null }
+  paymentTerms?: string | null
+  paymentApproval?: { status: string; financeAt: string | null; ktktAt: string | null; bodAt: string | null; rejectReason: string | null }
 }
 interface Summary { total: number; draft: number; active: number; completed: number; cancelled: number; totalValue: number }
 
@@ -40,6 +42,7 @@ export default function HopDongPage() {
   const [items, setItems] = useState<Record<string, CItem[]>>({})
   const [tradeF, setTradeF] = useState<'all' | 'DOMESTIC' | 'IMPORT'>('all')
   const [search, setSearch] = useState('')
+  const roleCode = useAuthStore(s => s.user?.roleCode)
   const sp = useSearchParams()
   // Deep-link ?contractNo= (từ màn Theo dõi mua hàng) → tự lọc theo số HĐ.
   useEffect(() => { const cn = sp.get('contractNo'); if (cn) setSearch(cn) }, [sp])
@@ -76,6 +79,20 @@ export default function HopDongPage() {
     if (r.ok) { setContracts(r.contracts || []); setSummary(r.summary || null) } else notify(r.error || 'Lỗi tải', 'error')
   }, [vendor, type, status])
   useEffect(() => { load() }, [load])
+
+  // B7 — trình/ký/từ chối điều kiện thanh toán HĐ.
+  const ptAction = async (id: string, action: 'submit' | 'approve' | 'reject') => {
+    let reason: string | undefined
+    if (action === 'reject') { const s = window.prompt('Lý do từ chối điều kiện thanh toán:'); if (!s) return; reason = s }
+    if (action === 'submit' && !await confirmDialog('Trình duyệt điều kiện thanh toán HĐ này (cần đủ 3 chữ ký: Kế toán, Trưởng KTKT, BGĐ)?')) return
+    const r = await apiFetch(`/api/purchase-contracts/${id}/payment-approval`, { method: 'POST', body: JSON.stringify({ action, reason }) })
+    if (r.ok) { notify(r.message || 'Đã cập nhật', 'success'); load() } else notify(r.error || 'Lỗi', 'error')
+  }
+  const canSign = (slot: 'finance' | 'ktkt' | 'bod') =>
+    (slot === 'finance' && (roleCode === 'R08' || roleCode === 'R08a')) ||
+    (slot === 'ktkt' && roleCode === 'R03') ||
+    (slot === 'bod' && roleCode === 'R01')
+  const canSubmit = ['R07', 'R07a', 'R01', 'R10'].includes(roleCode || '')
 
   const toggle = (id: string) => setExpanded(p => { const n = new Set(p); if (n.has(id)) { n.delete(id) } else { n.add(id); if (!items[id]) fetchItems(id) } return n })
 
@@ -173,6 +190,40 @@ export default function HopDongPage() {
                                 </div>
                               </div>
                             )}
+                            {/* B7 — Duyệt điều kiện thanh toán (3 chữ ký) */}
+                            {(() => {
+                              const pa = c.paymentApproval
+                              const stt = pa?.status || 'DRAFT'
+                              const badge: Record<string, { l: string; bg: string; tx: string }> = {
+                                DRAFT: { l: 'Chưa trình', bg: '#f1f5f9', tx: '#64748b' },
+                                PENDING: { l: 'Chờ duyệt', bg: '#fffbeb', tx: '#b45309' },
+                                APPROVED: { l: 'Đã duyệt đủ 3 chữ ký', bg: '#ecfdf5', tx: '#166534' },
+                                REJECTED: { l: 'Bị từ chối', bg: '#fef2f2', tx: '#dc2626' },
+                              }
+                              const b = badge[stt] || badge.DRAFT
+                              const sign = (at: string | null | undefined) => at ? `✅ ${formatDate(at)}` : '⏳ chờ'
+                              return (
+                                <div className="rounded-lg p-2" style={{ background: '#fafafa', border: '1px solid var(--border)' }}>
+                                  <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+                                    <span className="text-[11px] font-semibold text-slate-600">Điều kiện thanh toán <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: b.bg, color: b.tx }}>{b.l}</span></span>
+                                    <div className="flex gap-1.5">
+                                      {(stt === 'DRAFT' || stt === 'REJECTED') && canSubmit && <button onClick={() => ptAction(c.id, 'submit')} className="text-[11px] font-semibold px-2 py-0.5 rounded" style={{ border: '1px solid #4f46e5', color: '#4f46e5' }}>Trình duyệt</button>}
+                                      {stt === 'PENDING' && (['finance', 'ktkt', 'bod'] as const).some(canSign) && <>
+                                        <button onClick={() => ptAction(c.id, 'approve')} className="text-[11px] font-semibold px-2 py-0.5 rounded" style={{ background: '#166534', color: '#fff' }}>✓ Ký duyệt</button>
+                                        <button onClick={() => ptAction(c.id, 'reject')} className="text-[11px] font-semibold px-2 py-0.5 rounded" style={{ border: '1px solid #dc2626', color: '#dc2626' }}>Từ chối</button>
+                                      </>}
+                                    </div>
+                                  </div>
+                                  <div className="text-[11px] mb-1" style={{ color: 'var(--text-secondary)' }}>{c.paymentTerms || <span style={{ color: 'var(--text-muted)' }}>(chưa nhập điều kiện thanh toán — sửa ở nút Sửa HĐ)</span>}</div>
+                                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                    <span>Kế toán: <b>{sign(pa?.financeAt)}</b></span>
+                                    <span>Trưởng KTKT (Mr Sâm): <b>{sign(pa?.ktktAt)}</b></span>
+                                    <span>BGĐ: <b>{sign(pa?.bodAt)}</b></span>
+                                    {stt === 'REJECTED' && pa?.rejectReason && <span style={{ color: '#dc2626' }}>Lý do: {pa.rejectReason}</span>}
+                                  </div>
+                                </div>
+                              )
+                            })()}
                             {/* Dòng chi tiết hợp đồng */}
                             <div>
                               <div className="flex items-center justify-between mb-1">
