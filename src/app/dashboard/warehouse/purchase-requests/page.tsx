@@ -1,397 +1,175 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { formatDate } from '@/lib/utils'
-import { Pagination } from '@/components/SearchPagination'
-import { PageHeader, StatusBadge, Button, EmptyState, FilterBar, Modal, InputField, SelectField } from '@/components/ui'
+import { PageHeader, Button, Modal, InputField, SelectField } from '@/components/ui'
 import { notify } from '@/components/ui/Toast'
-import { SEMANTIC_COLORS } from '@/lib/design-tokens'
-import { ClipboardList } from 'lucide-react'
+import { formatNumber } from '@/lib/utils'
 
-interface PrItem {
-  id: string
-  materialId: string | null
-  quantity: number
-  notes: string | null
-  material: { materialCode: string; name: string; unit: string } | null
-  // Snapshot (dòng chưa khớp mã vật tư — materialId null): hiển thị thay cho material
-  itemCode: string | null
-  description: string | null
-  unit: string | null
-  // Cấu trúc PrDetail (PORT Thương Mại — Module 2), tất cả optional
-  materialGroupCode?: string | null
-  netWeight?: number | null
-  reqWeight?: number | null
-  toBuyQty?: number | null
-  toBuyWeight?: number | null
-  statusFlag?: string | null
+// Lưới VẬT TƯ phẳng (item-centric) — mọi dòng PR của nhiều dự án trên 1 bảng cuộn ngang, gộp theo nhóm VT.
+// (Khớp trang /mua-hang của Commerce.)
+interface Row {
+  id: string; projectCode: string; projectId: string | null; prCode: string; revNo: number; prStatus: string
+  itemCode: string; matCode: string; description: string; profile: string; grade: string; uom: string
+  qty: number; weightTon: number; toBuyQty: number; groupCode: string; groupLabel: string
 }
+interface Summary { totalItems: number; totalWeightTon: number; groupCount: number; projectCount: number; revCount: number; projects: Array<{ code: string; count: number }> }
 
-// Độ phủ PO (P2-đợt2 B1) — summary từ list ?withCoverage=1, per-item từ /coverage
-interface PrCoverageSummary {
-  totalItems: number
-  coveredItems: number
-  shortageItems: number
-  coveragePct: number
-  fullyCovered: boolean
+const PR_ST: Record<string, { l: string; bg: string; tx: string }> = {
+  DRAFT: { l: 'Nháp', bg: '#f1f5f9', tx: '#64748b' }, PENDING: { l: 'Chờ duyệt', bg: '#fffbeb', tx: '#b45309' },
+  APPROVED: { l: 'Đã duyệt', bg: '#ecfdf5', tx: '#166534' }, REJECTED: { l: 'Từ chối', bg: '#fef2f2', tx: '#dc2626' },
 }
-
-interface PrItemCoverage {
-  materialId: string
-  needed: number
-  covered: number
-  shortage: number
-  isCovered: boolean
-}
-
-interface PurchaseRequest {
-  id: string
-  prCode: string
-  status: string
-  urgency: string
-  notes: string | null
-  originType: 'ECO' | 'NCR' | null
-  originId: string | null
-  originLabel: string | null
-  createdAt: string
-  project: { projectCode: string; projectName: string }
-  items: PrItem[]
-  itemCount: number
-  coverage?: PrCoverageSummary | null
-  // Bước 5 — truy vết nguồn: task đã sinh ra PR + PO đã tạo từ cùng task
-  sourceTask: { id: string; title: string } | null
-  relatedPo: { id: string; poCode: string; status: string } | null
-}
-
-interface PaginationData { page: number; limit: number; total: number; totalPages: number }
-
-const CAN_CREATE_ROLES = ['R01', 'R02', 'R03', 'R05', 'R07', 'R07a', 'R08', 'R08a']
-
-const STATUS_FILTERS = [
-  { value: '', label: 'Tất cả' },
-  { value: 'SUBMITTED', label: 'Đã gửi' },
-  { value: 'APPROVED', label: 'Đã duyệt' },
-  { value: 'REJECTED', label: 'Từ chối' },
-  { value: 'CONVERTED', label: 'Đã chuyển PO' },
+const COLS: Array<{ k: string; label: string; w: number; num?: boolean }> = [
+  { k: 'projectCode', label: 'Dự án', w: 120 },
+  { k: 'itemCode', label: 'Item / STT', w: 110 },
+  { k: 'matCode', label: 'Mã kho', w: 130 },
+  { k: 'description', label: 'Description / Chi tiết', w: 200 },
+  { k: 'profile', label: 'Profile / Vật tư', w: 200 },
+  { k: 'grade', label: 'Grade / Mác', w: 170 },
+  { k: 'uom', label: 'ĐVT', w: 60 },
+  { k: 'qty', label: 'SL', w: 90, num: true },
+  { k: 'weightTon', label: 'Tấn', w: 90, num: true },
+  { k: 'toBuyQty', label: 'Cần mua', w: 90, num: true },
+  { k: 'revNo', label: 'Rev', w: 60, num: true },
+  { k: 'prCode', label: 'Mã PR', w: 110 },
+  { k: 'prStatus', label: 'TT PR', w: 100 },
 ]
 
-const URGENCY_LABELS: Record<string, string> = {
-  NORMAL: 'Bình thường', URGENT: 'Gấp', CRITICAL: 'Rất gấp',
-}
-
-// Route trang nguồn để click ngược từ badge
-const ORIGIN_ROUTE: Record<string, string> = {
-  ECO: '/dashboard/design/eco',
-  NCR: '/dashboard/qc/ncr',
-}
-
-/** Badge "Từ ECO-xxx" / "Từ NCR-xxx" — Đợt 2D truy vết nguồn PR */
-function OriginBadge({ pr }: { pr: PurchaseRequest }) {
-  if (!pr.originType) return null
-  const label = `Từ ${pr.originLabel || `${pr.originType}`}`
-  const href = ORIGIN_ROUTE[pr.originType]
-  const style: React.CSSProperties = {
-    background: pr.originType === 'NCR' ? SEMANTIC_COLORS.danger.bg : SEMANTIC_COLORS.info.bg,
-    color: pr.originType === 'NCR' ? SEMANTIC_COLORS.danger.solid : SEMANTIC_COLORS.info.solid,
-    fontSize: 'var(--text-2xs)',
-    fontWeight: 700,
-  }
-  if (!href) return <span className="badge" style={style}>{label}</span>
-  return (
-    <Link href={href} onClick={e => e.stopPropagation()} className="badge" style={style} title={`Xem trang ${pr.originType}`}>
-      {label}
-    </Link>
-  )
-}
-
-/** Badge "Thiếu PO x%" màu cam — PR APPROVED nhưng PO chưa phủ đủ (P2-đợt2 B1) */
-function CoverageBadge({ pr }: { pr: PurchaseRequest }) {
-  if (pr.status !== 'APPROVED' || !pr.coverage || pr.coverage.fullyCovered) return null
-  const missingPct = 100 - pr.coverage.coveragePct
-  return (
-    <span
-      className="badge"
-      title={`${pr.coverage.coveredItems}/${pr.coverage.totalItems} dòng vật tư đã có PO phủ đủ — mở rộng để xem chi tiết`}
-      style={{
-        background: SEMANTIC_COLORS.warning.bg,
-        color: SEMANTIC_COLORS.warning.solid,
-        fontSize: 'var(--text-2xs)',
-        fontWeight: 700,
-        marginLeft: 6,
-      }}
-    >
-      Thiếu PO {missingPct}%
-    </span>
-  )
-}
-
-export default function PurchaseRequestsPage() {
+export default function PurchaseRequestGridPage() {
   const router = useRouter()
-  const user = useAuthStore(s => s.user)
-  const [prs, setPrs] = useState<PurchaseRequest[]>([])
-  const [pagination, setPagination] = useState<PaginationData>({ page: 1, limit: 20, total: 0, totalPages: 0 })
+  const roleCode = useAuthStore(s => s.user?.roleCode)
+  const canCreate = ['R01', 'R03', 'R03a', 'R04', 'R04a', 'R07', 'R07a', 'R10'].includes(roleCode || '')
+  const [rows, setRows] = useState<Row[]>([])
+  const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState('')
-  const [page, setPage] = useState(1)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [projectId, setProjectId] = useState('')
+  const [statusF, setStatusF] = useState('')
+  const [search, setSearch] = useState('')
+  const [projects, setProjects] = useState<Array<{ id: string; projectCode: string; projectName: string }>>([])
   const [showImport, setShowImport] = useState(false)
 
-  const loadData = useCallback(async () => {
-    const params = new URLSearchParams()
-    if (statusFilter) params.set('status', statusFilter)
-    params.set('page', String(page))
-    params.set('withCoverage', '1') // badge "Thiếu PO" cho PR APPROVED
-    const res = await apiFetch(`/api/purchase-requests?${params}`)
-    if (res.ok) {
-      setPrs(res.purchaseRequests || [])
-      setPagination(res.pagination)
-    }
+  const load = useCallback(async () => {
+    setLoading(true)
+    const qs = new URLSearchParams()
+    if (projectId) qs.set('projectId', projectId)
+    if (statusF) qs.set('status', statusF)
+    const r = await apiFetch(`/api/procurement/pr-items?${qs}`)
     setLoading(false)
-  }, [statusFilter, page])
+    if (r.ok) { setRows(r.rows || []); setSummary(r.summary || null) } else notify(r.error || 'Lỗi tải', 'error')
+  }, [projectId, statusF])
+  useEffect(() => { load() }, [load])
+  useEffect(() => { apiFetch('/api/projects?page=1&limit=100').then(r => { if (r.ok) setProjects(r.projects || []) }) }, [])
 
-  useEffect(() => { setPage(1) }, [statusFilter])
-  useEffect(() => { loadData() }, [loadData])
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? rows.filter(r => [r.itemCode, r.matCode, r.description, r.profile, r.grade, r.prCode].some(v => (v || '').toLowerCase().includes(q))) : rows
+  }, [rows, search])
 
-  const canCreate = CAN_CREATE_ROLES.includes(user?.roleCode || '')
+  // Gộp theo nhóm vật tư (giữ thứ tự nhóm xuất hiện).
+  const groups = useMemo(() => {
+    const m = new Map<string, { label: string; items: Row[] }>()
+    for (const r of shown) {
+      if (!m.has(r.groupCode)) m.set(r.groupCode, { label: r.groupLabel, items: [] })
+      m.get(r.groupCode)!.items.push(r)
+    }
+    return [...m.entries()]
+  }, [shown])
 
-  if (loading) {
-    return (
-      <div className="space-y-4 animate-fade-in">
-        {[1, 2, 3].map(i => <div key={i} className="h-20 skeleton rounded-xl" />)}
-      </div>
-    )
+  const fmtTon = (n: number) => n ? n.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : ''
+  const cell = (r: Row, k: string) => {
+    if (k === 'weightTon') return fmtTon(r.weightTon)
+    if (k === 'qty' || k === 'toBuyQty') return r[k] ? formatNumber(r[k as 'qty']) : ''
+    if (k === 'revNo') return `R${r.revNo}`
+    if (k === 'prStatus') { const s = PR_ST[r.prStatus] || PR_ST.DRAFT; return <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: s.bg, color: s.tx }}>{s.l}</span> }
+    return (r as unknown as Record<string, string>)[k] || (['description', 'profile', 'grade'].includes(k) ? '' : '—')
   }
+  const minW = COLS.reduce((s, c) => s + c.w, 0)
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader
-        title="Đề nghị mua hàng (PR)"
-        subtitle="Danh sách yêu cầu mua vật tư — có truy vết nguồn ECO/NCR"
-        actions={canCreate ? (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowImport(true)}>⬆ Nhập PR (Excel)</Button>
-            <Button variant="primary" onClick={() => router.push('/dashboard/warehouse/purchase-requests/new')}>+ Tạo PR</Button>
-          </div>
-        ) : undefined}
-      />
+    <div className="space-y-3 animate-fade-in">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <PageHeader title="Yêu cầu mua (PR)" subtitle="Lưới vật tư — toàn bộ dòng PR của các dự án, gộp theo nhóm vật tư" />
+        <div className="flex gap-2">
+          {canCreate && <Button variant="outline" onClick={() => setShowImport(true)}>⬆ Nhập PR (Excel)</Button>}
+          {canCreate && <Button variant="primary" onClick={() => router.push('/dashboard/warehouse/purchase-requests/new')}>+ Tạo PR</Button>}
+        </div>
+      </div>
 
-      {showImport && <ImportPrModal onClose={() => setShowImport(false)} onDone={() => { setShowImport(false); loadData() }} />}
-
-      <FilterBar filters={STATUS_FILTERS} value={statusFilter} onChange={setStatusFilter} />
-
-      {prs.length === 0 ? (
-        <EmptyState
-          icon={<ClipboardList />}
-          title="Chưa có đề nghị mua hàng nào"
-          description={canCreate ? 'Bấm "+ Tạo PR" để tạo yêu cầu mua vật tư' : undefined}
-        />
-      ) : (
-        <div className="dt-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Mã PR</th>
-                <th>Dự án</th>
-                <th>Trạng thái</th>
-                <th>Ưu tiên</th>
-                <th>Nguồn</th>
-                <th className="text-right">Số dòng VT</th>
-                <th>Ngày tạo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {prs.map(pr => (
-                <PrRow
-                  key={pr.id}
-                  pr={pr}
-                  expanded={expandedId === pr.id}
-                  onToggle={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
-                />
-              ))}
-            </tbody>
-          </table>
+      {/* Thanh tổng hợp + chip dự án */}
+      {summary && (
+        <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs" style={{ color: 'var(--text-muted)' }}>
+          <span><b style={{ color: 'var(--text-primary)' }}>{formatNumber(summary.totalItems)}</b> mã vật tư</span>
+          <span><b style={{ color: 'var(--text-primary)' }}>{fmtTon(summary.totalWeightTon)}</b> tấn</span>
+          <span><b style={{ color: 'var(--text-primary)' }}>{summary.groupCount}</b> nhóm</span>
+          <span><b style={{ color: 'var(--text-primary)' }}>{summary.projectCount}</b> dự án</span>
+          <span><b style={{ color: 'var(--text-primary)' }}>{summary.revCount}</b> phiên bản PR</span>
+          <span className="flex gap-1.5 flex-wrap">
+            {summary.projects.slice(0, 8).map(p => (
+              <button key={p.code} onClick={() => setProjectId(projects.find(x => x.projectCode === p.code)?.id || '')}
+                className="px-2 py-0.5 rounded-full text-[11px] font-mono" style={{ background: 'var(--surface-hover)', border: '1px solid var(--border)', color: 'var(--accent)' }}>{p.code} <b>{p.count}</b></button>
+            ))}
+          </span>
         </div>
       )}
 
-      {pagination.totalPages > 1 && (
-        <Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} onPageChange={setPage} />
-      )}
+      {/* Bộ lọc */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select value={projectId} onChange={e => setProjectId(e.target.value)} className="input text-sm" style={{ maxWidth: 260 }}>
+          <option value="">— Tất cả dự án —</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode}</option>)}
+        </select>
+        <select value={statusF} onChange={e => setStatusF(e.target.value)} className="input text-sm">
+          <option value="">Mọi trạng thái</option><option value="DRAFT">Nháp</option><option value="PENDING">Chờ duyệt</option><option value="APPROVED">Đã duyệt</option><option value="REJECTED">Từ chối</option>
+        </select>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm mã / mã kho / mô tả / profile / mã PR…" className="input text-sm" style={{ maxWidth: 320 }} />
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{shown.length} dòng</span>
+      </div>
+
+      {loading ? <div className="text-center py-16 text-slate-400 text-sm">Đang tải lưới vật tư…</div>
+        : shown.length === 0 ? <div className="text-center py-16 text-slate-400 text-sm">Không có dòng vật tư PR nào.</div>
+          : (
+            <div className="card p-0 overflow-hidden">
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', width: 'max-content', minWidth: minW, fontSize: '.72rem', whiteSpace: 'nowrap' }}>
+                  <thead>
+                    <tr style={{ background: '#c7e2ef', position: 'sticky', top: 0, zIndex: 2 }}>
+                      {COLS.map(c => <th key={c.k} style={{ width: c.w, minWidth: c.w, padding: '8px 10px', textAlign: c.num ? 'right' : 'left', borderBottom: '1px solid var(--border)', fontWeight: 700, color: '#12212e' }}>{c.label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groups.map(([code, g]) => (
+                      <Fragment key={code}>
+                        <tr style={{ background: 'var(--bg-secondary)' }}>
+                          <td colSpan={COLS.length} style={{ padding: '5px 10px', fontWeight: 700, color: 'var(--text-secondary)', borderTop: '1px solid var(--border)' }}>
+                            {g.label || code} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— {g.items.length} mã · {fmtTon(g.items.reduce((s, x) => s + x.weightTon, 0))} tấn</span>
+                          </td>
+                        </tr>
+                        {g.items.map(r => (
+                          <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
+                            {COLS.map(c => (
+                              <td key={c.k} style={{ padding: '5px 10px', textAlign: c.num ? 'right' : 'left', fontFamily: ['matCode', 'itemCode', 'qty', 'weightTon', 'toBuyQty', 'prCode'].includes(c.k) ? 'monospace' : undefined, color: c.k === 'matCode' || c.k === 'prCode' ? 'var(--accent)' : c.k === 'grade' ? '#166534' : undefined, maxWidth: c.w, overflow: 'hidden', textOverflow: 'ellipsis' }} title={typeof cell(r, c.k) === 'string' ? String(cell(r, c.k)) : ''}>
+                                {cell(r, c.k)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+      <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+        Duyệt PR & giữ tồn ở <Link href="/dashboard/warehouse/kiem-tra-ton-kho" className="underline" style={{ color: 'var(--accent)' }}>Kiểm tra tồn kho</Link> · tách RFQ ở <Link href="/dashboard/warehouse/bidding" className="underline" style={{ color: 'var(--accent)' }}>Báo giá</Link>.
+      </div>
+
+      {showImport && <ImportPrModal onClose={() => setShowImport(false)} onDone={() => { setShowImport(false); load() }} />}
     </div>
-  )
-}
-
-function PrRow({ pr, expanded, onToggle }: { pr: PurchaseRequest; expanded: boolean; onToggle: () => void }) {
-  // Per-item coverage — chỉ fetch khi expand PR APPROVED (lazy, 1 lần)
-  const [itemCoverage, setItemCoverage] = useState<Record<string, PrItemCoverage> | null>(null)
-  useEffect(() => {
-    if (!expanded || pr.status !== 'APPROVED' || itemCoverage) return
-    apiFetch(`/api/purchase-requests/${pr.id}/coverage`).then(res => {
-      if (res.ok) {
-        const map: Record<string, PrItemCoverage> = {}
-        for (const it of (res.items || []) as PrItemCoverage[]) map[it.materialId] = it
-        setItemCoverage(map)
-      }
-    })
-  }, [expanded, pr.id, pr.status, itemCoverage])
-
-  const showCoverageCols = expanded && pr.status === 'APPROVED' && itemCoverage !== null
-
-  return (
-    <>
-      <tr className="cursor-pointer" onClick={onToggle}>
-        <td>
-          <span className="font-mono text-xs font-bold" style={{ color: 'var(--accent)' }}>
-            {expanded ? '▼' : '▶'} {pr.prCode}
-          </span>
-        </td>
-        <td>
-          <span style={{ color: 'var(--text-primary)' }}>{pr.project.projectCode}</span>
-          <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>{pr.project.projectName}</span>
-        </td>
-        <td><StatusBadge category="pr" status={pr.status} /><CoverageBadge pr={pr} /></td>
-        <td className="text-xs" style={{ color: pr.urgency === 'NORMAL' ? 'var(--text-secondary)' : SEMANTIC_COLORS.danger.solid }}>
-          {URGENCY_LABELS[pr.urgency] || pr.urgency}
-        </td>
-        <td><OriginBadge pr={pr} /></td>
-        <td className="text-right font-mono">{pr.itemCount ?? pr.items.length}</td>
-        <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{formatDate(pr.createdAt)}</td>
-      </tr>
-
-      {expanded && (
-        <tr style={{ background: 'var(--bg-section-alt)' }}>
-          <td colSpan={7} style={{ padding: '1rem 1.5rem' }}>
-            {/* Chi tiết PR: nguồn phát sinh + danh sách vật tư */}
-            {pr.originType && (
-              <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>
-                Nguồn phát sinh: <OriginBadge pr={pr} />{' '}
-                <span className="font-mono" style={{ color: 'var(--text-muted)' }}>
-                  ({pr.originType} — {pr.originLabel || pr.originId})
-                </span>
-              </p>
-            )}
-            {pr.notes && (
-              <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>Ghi chú: {pr.notes}</p>
-            )}
-            {/* Bước 5 — truy vết: task nguồn + PO liên quan (cùng sourceTaskId) */}
-            {(pr.sourceTask || pr.relatedPo) && (
-              <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                {pr.sourceTask && (
-                  <span>
-                    Task nguồn:{' '}
-                    <Link href={`/dashboard/tasks/${pr.sourceTask.id}`} style={{ color: 'var(--accent)', fontWeight: 600 }} onClick={e => e.stopPropagation()}>
-                      {pr.sourceTask.title} ↗
-                    </Link>
-                  </span>
-                )}
-                {pr.relatedPo && (
-                  <span>
-                    PO liên quan:{' '}
-                    <Link href="/dashboard/warehouse/purchase-orders" className="font-mono" style={{ color: 'var(--accent)', fontWeight: 600 }} onClick={e => e.stopPropagation()}>
-                      {pr.relatedPo.poCode} ↗
-                    </Link>
-                    <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({pr.relatedPo.status})</span>
-                  </span>
-                )}
-              </p>
-            )}
-            {pr.status === 'APPROVED' && pr.coverage && (
-              <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>
-                Độ phủ PO:{' '}
-                <span style={{ fontWeight: 700, color: pr.coverage.fullyCovered ? SEMANTIC_COLORS.info.solid : SEMANTIC_COLORS.warning.solid }}>
-                  {pr.coverage.coveredItems}/{pr.coverage.totalItems} dòng vật tư đã đủ ({pr.coverage.coveragePct}%)
-                </span>
-                <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-                  — tính theo PO cùng dự án, không tính PO nháp/hủy/từ chối
-                </span>
-              </p>
-            )}
-            <table style={{ width: '100%', fontSize: 'var(--text-xs)' }}>
-              <thead>
-                <tr style={{ color: 'var(--text-muted)' }}>
-                  <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 6 }}>Vật tư</th>
-                  <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 6, paddingLeft: 12 }}>Nhóm VT</th>
-                  <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6 }}>Số lượng</th>
-                  <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 12 }}>Khối lượng (kg)</th>
-                  <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 12 }}>Cần mua</th>
-                  {showCoverageCols && (
-                    <>
-                      <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Đã đặt PO</th>
-                      <th style={{ textAlign: 'right', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Còn thiếu</th>
-                    </>
-                  )}
-                  <th style={{ textAlign: 'center', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Trạng thái</th>
-                  <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 6, paddingLeft: 16 }}>Ghi chú</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pr.items.map(item => {
-                  const cov = showCoverageCols && item.materialId ? itemCoverage?.[item.materialId] : undefined
-                  // Dòng chưa khớp mã vật tư (materialId null) → dùng snapshot itemCode/description
-                  const code = item.material?.materialCode || item.itemCode || '—'
-                  const name = item.material?.name || item.description || 'Vật tư chưa khớp mã'
-                  const unit = item.material?.unit || item.unit || ''
-                  return (
-                  <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '0.375rem 0' }}>
-                      <span className="font-mono" style={{ color: 'var(--accent)', fontWeight: 600, marginRight: 8 }}>
-                        {code}
-                      </span>
-                      {name}
-                    </td>
-                    <td style={{ padding: '0.375rem 0 0.375rem 12px' }}>
-                      {item.materialGroupCode
-                        ? <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold" style={{ background: 'var(--surface-hover)', color: 'var(--text-muted)' }}>{item.materialGroupCode}</span>
-                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                    </td>
-                    <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0' }}>
-                      {Number(item.quantity)} {unit}
-                    </td>
-                    <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0 0.375rem 12px', color: 'var(--text-muted)' }}>
-                      {(() => { const w = Number(item.reqWeight || item.netWeight || 0); return w > 0 ? w.toLocaleString('vi-VN') : '—' })()}
-                    </td>
-                    <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0 0.375rem 12px', fontWeight: 600 }}>
-                      {(() => { const b = item.toBuyQty != null && Number(item.toBuyQty) > 0 ? Number(item.toBuyQty) : Number(item.quantity); return `${b} ${unit}` })()}
-                    </td>
-                    {showCoverageCols && (
-                      <>
-                        <td className="font-mono" style={{ textAlign: 'right', padding: '0.375rem 0 0.375rem 16px' }}>
-                          {cov ? cov.covered : '—'}
-                        </td>
-                        <td
-                          className="font-mono"
-                          style={{
-                            textAlign: 'right',
-                            padding: '0.375rem 0 0.375rem 16px',
-                            fontWeight: cov && cov.shortage > 0 ? 700 : 400,
-                            color: cov && cov.shortage > 0 ? SEMANTIC_COLORS.warning.solid : 'var(--text-muted)',
-                          }}
-                        >
-                          {cov ? (cov.shortage > 0 ? cov.shortage : 'Đủ') : '—'}
-                        </td>
-                      </>
-                    )}
-                    <td style={{ textAlign: 'center', padding: '0.375rem 0 0.375rem 16px' }}>
-                      {(() => {
-                        const st = item.statusFlag || 'Chờ báo giá'
-                        const done = /xong|hoàn|đã mua|đã đặt/i.test(st)
-                        const color = done ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)'
-                        return <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: `${color}18`, color }}>{st}</span>
-                      })()}
-                    </td>
-                    <td style={{ padding: '0.375rem 0 0.375rem 16px', color: 'var(--text-muted)' }}>{item.notes || ''}</td>
-                  </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </td>
-        </tr>
-      )}
-    </>
   )
 }
 
