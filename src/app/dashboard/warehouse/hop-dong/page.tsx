@@ -93,6 +93,18 @@ export default function HopDongPage() {
     (slot === 'ktkt' && roleCode === 'R03') ||
     (slot === 'bod' && roleCode === 'R01')
   const canSubmit = ['R07', 'R07a', 'R01', 'R10'].includes(roleCode || '')
+  const canQc = ['R01', 'R05', 'R05a', 'R07', 'R07a', 'R09', 'R09a', 'R10'].includes(roleCode || '')
+
+  // B9 — mời QC / ghi nghiệm thu.
+  const qcInvite = async (id: string) => {
+    const r = await apiFetch(`/api/purchase-contracts/${id}/qc`, { method: 'POST', body: JSON.stringify({ action: 'invite' }) })
+    if (r.ok) { notify(r.message || 'Đã mời QC', 'success'); load() } else notify(r.error || 'Lỗi', 'error')
+  }
+  const qcInspect = async (id: string, contractItemId: string, result: 'PASS' | 'FAIL') => {
+    if (result === 'FAIL' && !await confirmDialog('Ghi nghiệm thu KHÔNG ĐẠT cho dòng này?')) return
+    const r = await apiFetch(`/api/purchase-contracts/${id}/qc`, { method: 'POST', body: JSON.stringify({ action: 'inspect', contractItemId, result }) })
+    if (r.ok) { notify(r.message || 'Đã ghi nghiệm thu', 'success'); fetchItems(id) } else notify(r.error || 'Lỗi', 'error')
+  }
 
   const toggle = (id: string) => setExpanded(p => { const n = new Set(p); if (n.has(id)) { n.delete(id) } else { n.add(id); if (!items[id]) fetchItems(id) } return n })
 
@@ -226,12 +238,15 @@ export default function HopDongPage() {
                             })()}
                             {/* Dòng chi tiết hợp đồng */}
                             <div>
-                              <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
                                 <span className="text-[11px] font-semibold text-slate-600">Dòng chi tiết hợp đồng ({items[c.id]?.length ?? '…'})</span>
-                                <label className="text-[11px] px-2 py-1 rounded cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} onClick={e => e.stopPropagation()} title='Cột: Mã VT · Mô tả · ĐVT · Quy cách · Mác · SL · KL · Đơn giá'>
-                                  ⬆ Nhập dòng từ Excel
-                                  <input type="file" accept=".xlsx,.xls" hidden onClick={e => e.stopPropagation()} onChange={e => { const f = e.target.files?.[0]; if (f) importItems(c.id, f); e.currentTarget.value = '' }} />
-                                </label>
+                                <div className="flex items-center gap-1.5">
+                                  {canQc && <button onClick={() => qcInvite(c.id)} className="text-[11px] px-2 py-1 rounded font-semibold" style={{ border: '1px solid #9333ea', color: '#7e22ce', background: '#faf5ff' }} title={c.logistics?.qcInvitationDate ? `Đã mời QC: ${formatDate(c.logistics.qcInvitationDate)}` : 'Mời QC nghiệm thu HĐ'}>{c.logistics?.qcInvitationDate ? '🔬 Đã mời QC' : '🔬 Mời QC'}</button>}
+                                  <label className="text-[11px] px-2 py-1 rounded cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} onClick={e => e.stopPropagation()} title='Cột: Mã VT · Mô tả · ĐVT · Quy cách · Mác · SL · KL · Đơn giá'>
+                                    ⬆ Nhập dòng từ Excel
+                                    <input type="file" accept=".xlsx,.xls" hidden onClick={e => e.stopPropagation()} onChange={e => { const f = e.target.files?.[0]; if (f) importItems(c.id, f); e.currentTarget.value = '' }} />
+                                  </label>
+                                </div>
                               </div>
                               {!items[c.id] ? <div className="text-[11px] text-slate-400">Đang tải…</div>
                                 : items[c.id].length === 0 ? <div className="text-[11px] text-slate-400">Chưa có dòng chi tiết — nhập từ Excel.</div>
@@ -253,7 +268,21 @@ export default function HopDongPage() {
                                               <td className="px-2 py-1 text-right font-mono">{formatNumber(it.unitPriceNoVat)} <span style={{ color: 'var(--text-muted)' }}>{it.currency !== 'VND' ? it.currency : ''}</span></td>
                                               <td className="px-2 py-1 text-right font-mono font-semibold" style={{ color: '#166534' }}>{fmtM(it.totalNoVat)}</td>
                                               <td className="px-2 py-1 text-right font-mono">{formatNumber(it.deliveredQty)}</td>
-                                              <td className="px-2 py-1 text-center">{it.inspections.length > 0 ? <span title={it.inspections.map(q => `${q.type}: ${q.result || '—'}`).join(' · ')}>✓{it.inspections.length}</span> : '—'}</td>
+                                              <td className="px-2 py-1 text-center whitespace-nowrap">
+                                                {it.inspections.length > 0 && (() => {
+                                                  const last = it.inspections[it.inspections.length - 1]
+                                                  const ok = /pass|đạt/i.test(last.result || '')
+                                                  const fail = /fail|không/i.test(last.result || '')
+                                                  return <span title={it.inspections.map(q => `${q.type}: ${q.result || '—'} (${q.acceptedQty})`).join(' · ')} style={{ color: ok ? '#166534' : fail ? '#dc2626' : '#b45309', fontWeight: 700 }}>{ok ? '✓ Đạt' : fail ? '✗ K.đạt' : '◐ 1 phần'}{it.inspections.length > 1 ? ` (${it.inspections.length})` : ''}</span>
+                                                })()}
+                                                {canQc && it.inspections.length === 0 && (
+                                                  <span className="inline-flex gap-1">
+                                                    <button onClick={() => qcInspect(c.id, it.id, 'PASS')} className="text-[10px] px-1 rounded font-bold" style={{ background: '#166534', color: '#fff' }} title="Nghiệm thu Đạt">Đạt</button>
+                                                    <button onClick={() => qcInspect(c.id, it.id, 'FAIL')} className="text-[10px] px-1 rounded font-bold" style={{ border: '1px solid #dc2626', color: '#dc2626' }} title="Không đạt">✗</button>
+                                                  </span>
+                                                )}
+                                                {(!canQc && it.inspections.length === 0) ? '—' : null}
+                                              </td>
                                               <td className="px-2 py-1"><span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600">{it.lineStatus}</span></td>
                                             </tr>
                                           ))}

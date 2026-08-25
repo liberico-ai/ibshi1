@@ -389,6 +389,15 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
     setPoBusy(false)
     if (r.ok) { notify(r.message || 'Đã tạo PO', 'success'); onReload() } else notify(r.error || 'Lỗi tạo PO', 'error')
   }
+  // B6 — Thành hợp đồng: mỗi PO → 1 HĐ (DRAFT) + gắn PO. Đi tiếp bước duyệt điều kiện thanh toán.
+  const createContracts = async () => {
+    if (poBusy) return
+    if (!await confirmDialog('Tạo hợp đồng từ các PO của BID này? Mỗi PO thành 1 HĐ (DRAFT) để duyệt điều kiện thanh toán.')) return
+    setPoBusy(true)
+    const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/create-contracts`, { method: 'POST', body: '{}' })
+    setPoBusy(false)
+    if (r.ok) { notify(r.message || 'Đã tạo hợp đồng', 'success'); onReload() } else notify(r.error || 'Lỗi tạo hợp đồng', 'error')
+  }
 
   return (
     <div className="space-y-4">
@@ -531,8 +540,13 @@ function ApproveTab({ detail, onReload, activeStep }: { detail: BidDetail; onRel
                 ))}
               </tbody>
             </table>
+            <div className="flex items-center justify-between flex-wrap gap-2 pt-1" style={{ borderTop: '1px dashed var(--border)' }}>
+              <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Thành hợp đồng: mỗi PO → 1 HĐ (DRAFT) để duyệt điều kiện thanh toán (B7).</div>
+              <Button variant="outline" onClick={createContracts} disabled={poBusy}>Tạo hợp đồng từ PO</Button>
+            </div>
             <div className="text-[11px] flex flex-wrap gap-x-3 gap-y-1" style={{ color: 'var(--text-muted)' }}>
               <span>Bước tiếp:</span>
+              <a href="/dashboard/warehouse/hop-dong" className="underline" style={{ color: 'var(--accent)' }}>Hợp đồng (duyệt điều kiện TT) →</a>
               <a href="/dashboard/warehouse/purchase-orders" className="underline" style={{ color: 'var(--accent)' }}>Duyệt PO (Đơn đặt hàng) →</a>
               <a href="/dashboard/warehouse/grn" className="underline" style={{ color: 'var(--accent)' }}>Hàng về / Nhập kho (GRN) →</a>
               <span>· duyệt PO xong sẽ nhận hàng + QC + nhập kho ở trang GRN, tự cập nhật Kho &amp; Ngân sách.</span>
