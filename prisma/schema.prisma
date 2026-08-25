@@ -2791,11 +2791,28 @@ model BidAnalysis {
   purchaseOrders  PurchaseOrder[]
   groupSelections BidGroupSelection[]
   vendorScores    BidVendorScore[]
+  milestones      ProcurementMilestone[]
 
   @@index([projectId])
   @@index([bidCodeProj, bidCodeYymm])
   @@index([selectionMode])
   @@map("bid_analyses")
+}
+
+// #6 — Ghi nhận thời điểm 15 mốc quy trình mua sắm (record-only, KHÔNG enforce deadline).
+model ProcurementMilestone {
+  id             String   @id @default(cuid())
+  bidAnalysisId  String   @map("bid_analysis_id")
+  milestoneNo    Int      @map("milestone_no") // 1..15 theo QT19 PHA B
+  occurredAt     DateTime @map("occurred_at")
+  note           String?
+  recordedBy     String   @map("recorded_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  bidAnalysis    BidAnalysis @relation(fields: [bidAnalysisId], references: [id], onDelete: Cascade)
+
+  @@unique([bidAnalysisId, milestoneNo])
+  @@index([bidAnalysisId])
+  @@map("procurement_milestones")
 }
 
 // Alert Center — đánh dấu "đã xử lý" cho 1 dòng đối soát BID↔Mua↔Hóa đơn (canonicalKey = projectId|vendorId).

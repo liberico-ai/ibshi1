@@ -229,6 +229,8 @@ export default function BiddingPage() {
           </div>
 
           {tab === 'compare' ? <CompareTab detail={detail} onReload={reloadDetail} /> : <ApproveTab detail={detail} onReload={reloadDetail} activeStep={activeStep} />}
+
+          <MilestonesPanel bidId={detail.bid.id} />
         </div>
       )}
 
@@ -984,6 +986,52 @@ function StepBanner({ p35, p36, projectId, bids, onDone }: { p35: StepTask | nul
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tạo RFQ, nhập báo giá, chọn NCC cho các dòng (tab Duyệt). Xong bấm hoàn thành để BGĐ duyệt.</p>
           </div>
           <Button variant="primary" onClick={completeP35} disabled={busy}>✓ Hoàn thành tìm NCC → BGĐ duyệt</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// #6 — Panel ghi nhận thời điểm 15 mốc quy trình mua sắm (record-only).
+interface MItem { no: number; label: string; phase: string; occurredAt: string | null; note: string | null }
+function MilestonesPanel({ bidId }: { bidId: string }) {
+  const [open, setOpen] = useState(false)
+  const [items, setItems] = useState<MItem[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const roleCode = useAuthStore(s => s.user?.roleCode)
+  const canRecord = ['R01', 'R02', 'R07', 'R07a', 'R10'].includes(roleCode || '')
+  const load = useCallback(async () => {
+    const r = await apiFetch(`/api/procurement/bid-analyses/${bidId}/milestones`)
+    if (r.ok) { setItems(r.milestones || []); setLoaded(true) }
+  }, [bidId])
+  useEffect(() => { if (open && !loaded) load() }, [open, loaded, load])
+  const rec = async (no: number, clear = false) => {
+    const r = clear
+      ? await apiFetch(`/api/procurement/bid-analyses/${bidId}/milestones?milestoneNo=${no}`, { method: 'DELETE' })
+      : await apiFetch(`/api/procurement/bid-analyses/${bidId}/milestones`, { method: 'POST', body: JSON.stringify({ milestoneNo: no }) })
+    if (r.ok) { notify(r.message || 'Đã cập nhật', 'success'); load() } else notify(r.error || 'Lỗi', 'error')
+  }
+  const doneCount = items.filter(m => m.occurredAt).length
+  return (
+    <div className="rounded-lg mt-3" style={{ border: '1px solid var(--border)' }}>
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+        <span>🕒 Mốc thời gian quy trình (15 mốc){loaded ? ` — đã ghi ${doneCount}/15` : ''}</span>
+        <span>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-1">
+          {!loaded ? <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Đang tải…</div>
+            : items.map(m => (
+              <div key={m.no} className="flex items-center justify-between gap-2 text-[11px] py-0.5" style={{ borderTop: m.no > 1 ? '1px dashed var(--border)' : 'none' }}>
+                <span><b>{m.no}.</b> {m.label} <span style={{ color: 'var(--text-muted)' }}>· {m.phase}</span></span>
+                <span className="flex items-center gap-2 flex-none">
+                  {m.occurredAt ? <b style={{ color: '#166534' }}>✓ {formatDate(m.occurredAt)}</b> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  {canRecord && (m.occurredAt
+                    ? <button onClick={() => rec(m.no, true)} style={{ color: 'var(--text-muted)' }} title="Xoá mốc">✕</button>
+                    : <button onClick={() => rec(m.no)} className="font-semibold" style={{ color: 'var(--accent)' }}>Ghi</button>)}
+                </span>
+              </div>
+            ))}
         </div>
       )}
     </div>
