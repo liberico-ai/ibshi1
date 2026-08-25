@@ -41,12 +41,18 @@ export async function POST(req: NextRequest) {
         purchaseRequest: { projectId },
       },
       select: {
-        id: true, itemCode: true, description: true, profile: true, grade: true, unit: true,
+        id: true, prId: true, itemCode: true, description: true, profile: true, grade: true, unit: true,
         quantity: true, toBuyQty: true, materialGroupCode: true,
         material: { select: { materialCode: true, name: true, unit: true, unitPrice: true } },
       },
     })
     if (items.length === 0) return errorResponse('Không có PR item hợp lệ (có thể đã đưa vào BID khác)', 400)
+
+    // QT19 bước 3: chỉ tách RFQ từ PR đã DUYỆT.
+    const prIds2 = [...new Set(items.map(i => i.prId))]
+    const parentPrs = await prisma.purchaseRequest.findMany({ where: { id: { in: prIds2 } }, select: { prCode: true, status: true } })
+    const notApproved = parentPrs.filter(p => p.status !== 'APPROVED')
+    if (notApproved.length) return errorResponse(`PR chưa được duyệt — duyệt trước khi tách RFQ: ${notApproved.map(p => `${p.prCode} (${p.status})`).join(', ')}`, 409)
 
     // Gom theo nhóm vật tư (groupCodeOf — khớp chế độ PER_GROUP).
     const groups = new Map<string, typeof items>()

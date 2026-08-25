@@ -122,6 +122,7 @@ model Project {
   documents          ProjectDocument[]
   fabCategories      FabricationCategory[]
   hardPeggings       HardPegging[]
+  paymentRequests    PaymentRequest[]
 
   projectPms         ProjectPm[]
 
@@ -321,6 +322,11 @@ model Vendor {
   bank           String?                                          // ngân hàng
   accountNo      String?                   @map("account_no")     // số TK (string vì có thể bắt đầu = 0)
   blacklisted    Boolean                   @default(false)        // NCC bị chặn (bổ sung trạng thái BLACKLIST)
+  // WIP-09 — ASL (Approved Supplier List): NCC phải được duyệt vào ASL mới được mua.
+  aslStatus      String                    @default("NONE") @map("asl_status") // NONE | TRIAL | APPROVED | SUSPENDED | REMOVED
+  aslApprovedAt  DateTime?                 @map("asl_approved_at")
+  aslApprovedBy  String?                   @map("asl_approved_by")
+  trialCount     Int                       @default(0) @map("trial_count") // số lần mua thử (cần 3 để vào ASL)
   createdAt      DateTime                  @default(now()) @map("created_at")
   updatedAt      DateTime                  @updatedAt @map("updated_at")
   invoices          Invoice[]
@@ -330,9 +336,98 @@ model Vendor {
   subcontracts      SubcontractorContract[]
   drawdownLines     DrawdownBeneficiaryLine[]
   bidQuoteVendors   BidQuoteVendor[]
+  evaluations       SupplierEvaluation[]
+  violations        SupplierViolation[]
+  paymentRequests   PaymentRequest[]
 
   @@index([category])
+  @@index([aslStatus])
   @@map("vendors")
+}
+
+// WIP-09 — Đánh giá NCC (8 tiêu chí) để xét vào ASL. Điểm 0-5 cho các tiêu chí định lượng.
+model SupplierEvaluation {
+  id                  String   @id @default(cuid())
+  vendorId            String   @map("vendor_id")
+  evaluatedBy         String   @map("evaluated_by")
+  evaluatedAt         DateTime @default(now()) @map("evaluated_at")
+  scoreContactPrice   Int      @default(0) @map("score_contact_price")   // liên hệ được & giá cạnh tranh
+  scoreQuality        Int      @default(0) @map("score_quality")         // chất lượng dịch vụ
+  scoreDelivery       Int      @default(0) @map("score_delivery")        // giao hàng & độ tin cậy
+  scoreExclusive      Int      @default(0) @map("score_exclusive")       // nguồn độc quyền
+  isCustomerDesignated Boolean @default(false) @map("is_customer_designated") // NCC do khách chỉ định
+  hasIso9001          Boolean  @default(false) @map("has_iso9001")       // có ISO 9001/tương đương
+  sampleEvalPassed    Boolean  @default(false) @map("sample_eval_passed")// đánh giá hàng mẫu đạt
+  scoreAttitude       Int      @default(0) @map("score_attitude")        // thái độ
+  overallResult       String   @default("PENDING") @map("overall_result") // PASS | FAIL | PENDING
+  decision            String?  // TO_ASL | REJECT
+  note                String?
+  createdAt           DateTime @default(now()) @map("created_at")
+  vendor              Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@map("supplier_evaluations")
+}
+
+// WIP-09 (F09) — Sổ theo dõi NCC vi phạm.
+model SupplierViolation {
+  id          String   @id @default(cuid())
+  vendorId    String   @map("vendor_id")
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+  description String
+  severity    String   @default("MINOR") // MINOR | MAJOR | CRITICAL
+  status      String   @default("OPEN")  // OPEN | RESOLVED
+  resolvedAt  DateTime? @map("resolved_at")
+  resolvedBy  String?   @map("resolved_by")
+  note        String?
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@index([status])
+  @@map("supplier_violations")
+}
+
+// QT19 bước 10-11 — Phiếu đề nghị thanh toán (FIN-F01) + duyệt 3 chữ ký (QLDA → TP.TM/KTT → GĐ dự án).
+model PaymentRequest {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  projectId    String?  @map("project_id")
+  contractId   String?  @map("contract_id")
+  vendorId     String   @map("vendor_id")
+  amount       Decimal  @default(0)
+  currency     String   @default("VND")
+  description  String?
+  status       String   @default("DRAFT") // DRAFT | PENDING | APPROVED | REJECTED | PAID
+  // Đủ 4 chứng từ (QT19 §bước 10). File đính kèm qua FileAttachment (entityId=paymentRequestId).
+  hasDocContract  Boolean @default(false) @map("has_doc_contract")   // đơn hàng/HĐ/báo giá
+  hasDocInvoice   Boolean @default(false) @map("has_doc_invoice")    // hoá đơn
+  hasDocVendorReq Boolean @default(false) @map("has_doc_vendor_req") // YCTT của NCC
+  hasDocHandover  Boolean @default(false) @map("has_doc_handover")   // biên bản/phiếu giao có ký
+  // 3 chữ ký duyệt.
+  qldaBy       String?  @map("qlda_by")
+  qldaAt       DateTime? @map("qlda_at")
+  tmkttBy      String?  @map("tmktt_by")
+  tmkttAt      DateTime? @map("tmktt_at")
+  gddaBy       String?  @map("gdda_by")
+  gddaAt       DateTime? @map("gdda_at")
+  rejectBy     String?  @map("reject_by")
+  rejectAt     DateTime? @map("reject_at")
+  rejectReason String?  @map("reject_reason")
+  paidAt       DateTime? @map("paid_at")
+  paidBy       String?  @map("paid_by")
+  createdBy    String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  vendor       Vendor            @relation(fields: [vendorId], references: [id])
+  project      Project?          @relation(fields: [projectId], references: [id])
+  contract     PurchaseContract? @relation(fields: [contractId], references: [id])
+
+  @@index([projectId])
+  @@index([vendorId])
+  @@index([status])
+  @@map("payment_requests")
 }
 
 model MaterialGroup {
@@ -488,6 +583,10 @@ model PurchaseRequest {
   // #5 — Rev PR (khớp Commerce docNo/revNo): mỗi lần task nguồn đổi & materialize lại → tăng revNo + lưu snapshot.
   docNo       String?               @map("doc_no")   // số hiệu tài liệu/bản vẽ nguồn (nếu có)
   revNo       Int                   @default(0) @map("rev_no")
+  // QT19 bước 3 — Phê duyệt yêu cầu mua: PR phải APPROVED mới được tách RFQ. status: DRAFT|PENDING|APPROVED|REJECTED.
+  submittedAt DateTime?             @map("submitted_at")
+  prRejectReason String?            @map("pr_reject_reason")
+  prRejectedBy String?              @map("pr_rejected_by")
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
   items       PurchaseRequestItem[]
@@ -736,6 +835,7 @@ model PurchaseContract {
   vendor        Vendor          @relation(fields: [vendorId], references: [id])
   orders        PurchaseOrder[]
   items         PurchaseContractItem[]
+  paymentRequests PaymentRequest[]
 
   @@index([projectId])
   @@index([vendorId])

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const prId = req.nextUrl.searchParams.get('prId')
     if (!prId) return errorResponse('Thiếu prId', 400)
 
-    const pr = await prisma.purchaseRequest.findUnique({ where: { id: prId }, select: { prCode: true } })
+    const pr = await prisma.purchaseRequest.findUnique({ where: { id: prId }, select: { prCode: true, status: true } })
     if (!pr) return errorResponse('Không tìm thấy PR', 404)
 
     const items = await prisma.purchaseRequestItem.findMany({
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
 
     const cnt = (s: string) => rows.filter(r => r.stockStatus === s).length
     const matchedByAttr = rows.filter(r => r.inventory?.matchedBy === 'attributes').length
-    return successResponse({ prId, prCode: pr.prCode, summary: { total: rows.length, hasStock: cnt('HAS_STOCK'), partial: cnt('PARTIAL'), noStock: cnt('NO_STOCK'), matchedByAttr }, rows })
+    return successResponse({ prId, prCode: pr.prCode, prStatus: pr.status, summary: { total: rows.length, hasStock: cnt('HAS_STOCK'), partial: cnt('PARTIAL'), noStock: cnt('NO_STOCK'), matchedByAttr }, rows })
   } catch (err) {
     console.error('GET inventory-check error:', err)
     return errorResponse('Lỗi kiểm tra tồn kho', 500)

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
-import { apiFetch } from '@/hooks/useAuth'
+import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
 import { PageHeader, Button } from '@/components/ui'
 import { formatNumber } from '@/lib/utils'
@@ -28,6 +28,8 @@ export default function KiemTraTonKhoPage() {
   const [prId, setPrId] = useState(sp.get('prId') || '')
   const [rows, setRows] = useState<Row[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [prStatus, setPrStatus] = useState<string>('')
+  const roleCode = useAuthStore(s => s.user?.roleCode)
   const [edited, setEdited] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -56,13 +58,13 @@ export default function KiemTraTonKhoPage() {
   useEffect(() => { apiFetch('/api/purchase-requests?limit=100').then(r => { if (r.ok) setPrs(r.purchaseRequests || []) }) }, [])
 
   const load = useCallback(async () => {
-    if (!prId) { setRows([]); setSummary(null); setEdited({}); return }
+    if (!prId) { setRows([]); setSummary(null); setEdited({}); setPrStatus(''); return }
     setLoading(true)
     const r = await apiFetch(`/api/procurement/inventory-check?prId=${prId}`)
     setLoading(false)
     if (r.ok) {
       const rr: Row[] = r.rows || []
-      setRows(rr); setSummary(r.summary || null)
+      setRows(rr); setSummary(r.summary || null); setPrStatus(r.prStatus || '')
       // Khởi tạo "dùng từ tồn": ưu tiên remainQty đã lưu, else gợi ý = min(tồn, yêu cầu)
       const init: Record<string, string> = {}
       rr.forEach(x => { init[x.prDetailId] = String(x.remainQty > 0 ? x.remainQty : x.suggestedUseFromStock) })
@@ -90,6 +92,15 @@ export default function KiemTraTonKhoPage() {
     const r = await apiFetch(`/api/purchase-requests/${prId}/revisions`)
     if (r.ok) { setRevData(r as never); setRevOpen(true) } else notify(r.error || 'Lỗi tải rev', 'error')
   }
+  // QT19 bước 3 — trình/duyệt/từ chối PR.
+  const prAction = async (action: 'submit' | 'approve' | 'reject') => {
+    if (!prId) return
+    let reason: string | undefined
+    if (action === 'reject') { const s = window.prompt('Lý do từ chối PR:'); if (!s) return; reason = s }
+    const r = await apiFetch(`/api/purchase-requests/${prId}/approve`, { method: 'POST', body: JSON.stringify({ action, reason }) })
+    if (r.ok) { notify(r.message || 'Đã cập nhật', 'success'); load() } else notify(r.error || 'Lỗi', 'error')
+  }
+  const canApprovePr = ['R07', 'R02', 'R01', 'R10'].includes(roleCode || '')
 
   const [pegBusy, setPegBusy] = useState<string | null>(null)
   // Giữ cứng tồn khả dụng cho dòng PR (mặc định giữ đủ nhu cầu) → tăng reservedStock, chống PR khác lấy mất.
@@ -115,6 +126,16 @@ export default function KiemTraTonKhoPage() {
           <option value="">— Chọn phiếu yêu cầu (PR) —</option>
           {prs.map(p => <option key={p.id} value={p.id}>{p.prCode}{p.project?.projectCode ? ` — ${p.project.projectCode}` : ''}</option>)}
         </select>
+        {prId && prStatus && (() => {
+          const b: Record<string, { l: string; bg: string; tx: string }> = { DRAFT: { l: 'Nháp', bg: '#f1f5f9', tx: '#64748b' }, PENDING: { l: 'Chờ duyệt', bg: '#fffbeb', tx: '#b45309' }, APPROVED: { l: 'Đã duyệt', bg: '#ecfdf5', tx: '#166534' }, REJECTED: { l: 'Bị từ chối', bg: '#fef2f2', tx: '#dc2626' } }
+          const s = b[prStatus] || b.DRAFT
+          return <span className="text-xs px-2 py-1 rounded-lg font-bold" style={{ background: s.bg, color: s.tx }} title="Trạng thái duyệt PR (QT19 bước 3)">PR: {s.l}</span>
+        })()}
+        {prId && (prStatus === 'DRAFT' || prStatus === 'REJECTED') && <button onClick={() => prAction('submit')} className="text-xs px-3 py-1.5 rounded-lg font-semibold" style={{ border: '1px solid #4f46e5', color: '#4f46e5' }}>Trình duyệt PR</button>}
+        {prId && prStatus === 'PENDING' && canApprovePr && <>
+          <button onClick={() => prAction('approve')} className="text-xs px-3 py-1.5 rounded-lg font-semibold" style={{ background: '#166534', color: '#fff' }}>✓ Duyệt PR</button>
+          <button onClick={() => prAction('reject')} className="text-xs px-3 py-1.5 rounded-lg font-semibold" style={{ border: '1px solid #dc2626', color: '#dc2626' }}>Từ chối</button>
+        </>}
         {prId && <button onClick={loadRev} className="text-xs px-3 py-1.5 rounded-lg font-semibold" style={{ border: '1px solid #9333ea', color: '#7e22ce', background: '#faf5ff' }} title="Xem lịch sử các lần rev của PR này">🕘 Lịch sử rev</button>}
         {rows.length > 0 && <Button variant="primary" onClick={save} disabled={saving || !dirty}>{saving ? 'Đang lưu…' : `Lưu phân bổ tồn${dirty ? '' : ' (chưa đổi)'}`}</Button>}
         <label className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} title='File Excel có cột "Mã kho" + "Tồn" (tùy chọn "Tên vật tư", "ĐVT")'>
