@@ -26,8 +26,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const action = String(body.action || '')
 
-    const contract = await prisma.purchaseContract.findUnique({ where: { id }, select: { id: true, contractCode: true, tradeType: true, qcInvitationDate: true } })
+    const contract = await prisma.purchaseContract.findUnique({ where: { id }, select: { id: true, contractCode: true, tradeType: true, qcInvitationDate: true, mtcStatus: true } })
     if (!contract) return errorResponse('Không tìm thấy hợp đồng', 404)
+
+    // #5 QT19 bước 6 — Chấp nhận / từ chối MTC (QLCL).
+    if (action === 'mtcAccept') {
+      await prisma.purchaseContract.update({ where: { id }, data: { mtcStatus: 'ACCEPTED', mtcAcceptedBy: user.userId, mtcAcceptedAt: new Date(), mtcRejectReason: null } })
+      await logAudit(user.userId, 'CONTRACT_MTC_ACCEPT', 'PurchaseContract', id, { contractCode: contract.contractCode }, getClientIP(req))
+      return successResponse({ id, mtcStatus: 'ACCEPTED' }, 'Đã chấp nhận MTC — cho phép nghiệm thu/xuất hàng')
+    }
+    if (action === 'mtcReject') {
+      const reason = String(body.remarks || '').trim() || 'MTC không đạt'
+      await prisma.purchaseContract.update({ where: { id }, data: { mtcStatus: 'REJECTED', mtcRejectReason: reason, mtcAcceptedBy: null, mtcAcceptedAt: null } })
+      await logAudit(user.userId, 'CONTRACT_MTC_REJECT', 'PurchaseContract', id, { contractCode: contract.contractCode, reason }, getClientIP(req))
+      return successResponse({ id, mtcStatus: 'REJECTED' }, 'Đã từ chối MTC (NCC nộp lại)')
+    }
 
     if (action === 'invite') {
       await prisma.purchaseContract.update({ where: { id }, data: { qcInvitationDate: contract.qcInvitationDate || new Date() } })
@@ -40,6 +53,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!contractItemId) return errorResponse('Thiếu contractItemId', 400)
       const result = String(body.result || 'PASS').toUpperCase()
       if (!['PASS', 'FAIL', 'PARTIAL'].includes(result)) return errorResponse('result phải là PASS | FAIL | PARTIAL', 400)
+      // #5 gate: nghiệm thu Đạt/Một-phần cần MTC đã được chấp nhận (QT19 bước 6 trước bước 9).
+      if (result !== 'FAIL' && contract.mtcStatus !== 'ACCEPTED') {
+        return errorResponse('Chưa chấp nhận MTC — QLCL cần "Chấp nhận MTC" trước khi nghiệm thu Đạt', 409)
+      }
       // Dòng phải thuộc HĐ này.
       const item = await prisma.purchaseContractItem.findFirst({
         where: { id: contractItemId, contractId: id },

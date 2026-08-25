@@ -123,6 +123,7 @@ model Project {
   fabCategories      FabricationCategory[]
   hardPeggings       HardPegging[]
   paymentRequests    PaymentRequest[]
+  goodsReceipts      GoodsReceipt[]
 
   projectPms         ProjectPm[]
 
@@ -428,6 +429,38 @@ model PaymentRequest {
   @@index([vendorId])
   @@index([status])
   @@map("payment_requests")
+}
+
+// QT25 — Phiếu nhận hàng (LOG-F12): 6 bước nhận hàng + giữ riêng hàng hư + đóng tem + SLA ≤ 5 ngày làm việc.
+model GoodsReceipt {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  contractId     String?  @map("contract_id")
+  projectId      String?  @map("project_id")
+  vendorName     String?  @map("vendor_name")
+  arrivedDate    DateTime? @map("arrived_date")   // hàng đến (mốc bắt đầu tính SLA)
+  receivedDate   DateTime @default(now()) @map("received_date")
+  receivedBy     String   @map("received_by")
+  // QT25 §3 các bước kiểm.
+  packingChecked Boolean  @default(false) @map("packing_checked") // kiểm phiếu đóng gói & chứng từ giao
+  qtyChecked     Boolean  @default(false) @map("qty_checked")     // kiểm số lượng
+  hasDamage      Boolean  @default(false) @map("has_damage")      // có hư hỏng
+  damageHold     Boolean  @default(false) @map("damage_hold")     // GIỮ RIÊNG tới khi xử lý
+  damageNote     String?  @map("damage_note")
+  tagged         Boolean  @default(false) @map("tagged")          // đóng tem nhận hàng & nhận dạng
+  notifiedProd   Boolean  @default(false) @map("notified_prod")   // báo QLSX/QLDA
+  slaDeadline    DateTime? @map("sla_deadline")                   // arrivedDate + 5 ngày làm việc
+  withinSla      Boolean? @map("within_sla")
+  status         String   @default("DRAFT") // DRAFT | COMPLETED
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  contract       PurchaseContract? @relation(fields: [contractId], references: [id])
+  project        Project?          @relation(fields: [projectId], references: [id])
+
+  @@index([contractId])
+  @@index([projectId])
+  @@map("goods_receipts")
 }
 
 model MaterialGroup {
@@ -817,6 +850,11 @@ model PurchaseContract {
   customsDate      DateTime?    @map("customs_date")     // thông quan
   arrivedDate      DateTime?    @map("arrived_date")     // hàng thực về
   qcInvitationDate DateTime?    @map("qc_invitation_date") // mời QC
+  // #5 — Chấp nhận MTC (QT19 bước 6): QLCL duyệt MTC/chứng chỉ nhà máy đạt mới cho nghiệm thu/xuất.
+  mtcStatus        String       @default("PENDING") @map("mtc_status") // PENDING | ACCEPTED | REJECTED
+  mtcAcceptedBy    String?      @map("mtc_accepted_by")
+  mtcAcceptedAt    DateTime?    @map("mtc_accepted_at")
+  mtcRejectReason  String?      @map("mtc_reject_reason")
   // B7 — Duyệt điều kiện thanh toán HĐ: 3 chữ ký Kế toán (R08) + Trưởng KTKT/Mr Sâm (R03) + BGĐ (R01).
   paymentTermsStatus String    @default("DRAFT") @map("payment_terms_status") // DRAFT | PENDING | APPROVED | REJECTED
   ptFinanceBy   String?         @map("pt_finance_by")
@@ -836,6 +874,7 @@ model PurchaseContract {
   orders        PurchaseOrder[]
   items         PurchaseContractItem[]
   paymentRequests PaymentRequest[]
+  goodsReceipts GoodsReceipt[]
 
   @@index([projectId])
   @@index([vendorId])

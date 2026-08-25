@@ -19,6 +19,8 @@ interface Contract {
   logistics?: { vendorCountry: string | null; exportPort: string | null; lcDate: string | null; cifDate: string | null; paymentDate: string | null; customsDate: string | null; arrivedDate: string | null; qcInvitationDate: string | null }
   paymentTerms?: string | null
   paymentApproval?: { status: string; financeAt: string | null; ktktAt: string | null; bodAt: string | null; rejectReason: string | null }
+  mtcStatus?: string
+  mtcRejectReason?: string | null
 }
 interface Summary { total: number; draft: number; active: number; completed: number; cancelled: number; totalValue: number }
 
@@ -104,6 +106,19 @@ export default function HopDongPage() {
     if (result === 'FAIL' && !await confirmDialog('Ghi nghiệm thu KHÔNG ĐẠT cho dòng này?')) return
     const r = await apiFetch(`/api/purchase-contracts/${id}/qc`, { method: 'POST', body: JSON.stringify({ action: 'inspect', contractItemId, result }) })
     if (r.ok) { notify(r.message || 'Đã ghi nghiệm thu', 'success'); fetchItems(id) } else notify(r.error || 'Lỗi', 'error')
+  }
+  // #5 — chấp nhận/từ chối MTC (QLCL).
+  const mtcAction = async (id: string, action: 'mtcAccept' | 'mtcReject') => {
+    let remarks: string | undefined
+    if (action === 'mtcReject') { const s = window.prompt('Lý do MTC không đạt:'); if (!s) return; remarks = s }
+    const r = await apiFetch(`/api/purchase-contracts/${id}/qc`, { method: 'POST', body: JSON.stringify({ action, remarks }) })
+    if (r.ok) { notify(r.message || 'Đã cập nhật MTC', 'success'); load() } else notify(r.error || 'Lỗi', 'error')
+  }
+  // #4 — lập phiếu nhận hàng QT25.
+  const [grnFor, setGrnFor] = useState<Contract | null>(null)
+  const createGrn = async (contractId: string, payload: Record<string, unknown>) => {
+    const r = await apiFetch(`/api/purchase-contracts/${contractId}/goods-receipt`, { method: 'POST', body: JSON.stringify(payload) })
+    if (r.ok) { notify(r.message || 'Đã lập phiếu nhận hàng', 'success'); setGrnFor(null); load() } else notify(r.error || 'Lỗi', 'error')
   }
 
   const toggle = (id: string) => setExpanded(p => { const n = new Set(p); if (n.has(id)) { n.delete(id) } else { n.add(id); if (!items[id]) fetchItems(id) } return n })
@@ -240,7 +255,16 @@ export default function HopDongPage() {
                             <div>
                               <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
                                 <span className="text-[11px] font-semibold text-slate-600">Dòng chi tiết hợp đồng ({items[c.id]?.length ?? '…'})</span>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {/* #5 MTC */}
+                                  {(() => {
+                                    const m = c.mtcStatus || 'PENDING'
+                                    const mb: Record<string, { l: string; c: string }> = { PENDING: { l: 'MTC: chờ', c: '#b45309' }, ACCEPTED: { l: 'MTC: đạt ✓', c: '#166534' }, REJECTED: { l: 'MTC: không đạt', c: '#dc2626' } }
+                                    return <span className="text-[10px] font-bold" style={{ color: (mb[m] || mb.PENDING).c }} title={c.mtcRejectReason || 'Chứng chỉ nhà máy (MTC)'}>{(mb[m] || mb.PENDING).l}</span>
+                                  })()}
+                                  {canQc && c.mtcStatus !== 'ACCEPTED' && <button onClick={() => mtcAction(c.id, 'mtcAccept')} className="text-[11px] px-2 py-1 rounded font-semibold" style={{ border: '1px solid #166534', color: '#166534' }}>✓ Chấp nhận MTC</button>}
+                                  {canQc && c.mtcStatus !== 'REJECTED' && <button onClick={() => mtcAction(c.id, 'mtcReject')} className="text-[11px] px-2 py-1 rounded font-semibold" style={{ border: '1px solid #dc2626', color: '#dc2626' }}>MTC không đạt</button>}
+                                  <button onClick={() => setGrnFor(c)} className="text-[11px] px-2 py-1 rounded font-semibold" style={{ border: '1px solid #0e7490', color: '#0e7490', background: '#ecfeff' }} title="Lập phiếu nhận hàng theo QT25 (≤5 ngày làm việc)">📦 Phiếu nhận hàng</button>
                                   {canQc && <button onClick={() => qcInvite(c.id)} className="text-[11px] px-2 py-1 rounded font-semibold" style={{ border: '1px solid #9333ea', color: '#7e22ce', background: '#faf5ff' }} title={c.logistics?.qcInvitationDate ? `Đã mời QC: ${formatDate(c.logistics.qcInvitationDate)}` : 'Mời QC nghiệm thu HĐ'}>{c.logistics?.qcInvitationDate ? '🔬 Đã mời QC' : '🔬 Mời QC'}</button>}
                                   <label className="text-[11px] px-2 py-1 rounded cursor-pointer" style={{ border: '1px solid #16a34a', color: '#166534', background: '#f0fdf4' }} onClick={e => e.stopPropagation()} title='Cột: Mã VT · Mô tả · ĐVT · Quy cách · Mác · SL · KL · Đơn giá'>
                                     ⬆ Nhập dòng từ Excel
@@ -319,6 +343,31 @@ export default function HopDongPage() {
           </div>
         </div>
       )}
+      {grnFor && <GrnModal contract={grnFor} onClose={() => setGrnFor(null)} onCreate={createGrn} />}
+    </div>
+  )
+}
+
+// #4 — Modal lập phiếu nhận hàng QT25 (checklist 6 bước + giữ riêng hàng hư + SLA ≤5 ngày).
+function GrnModal({ contract, onClose, onCreate }: { contract: Contract; onClose: () => void; onCreate: (id: string, p: Record<string, unknown>) => void }) {
+  const [f, setF] = useState({ packingChecked: true, qtyChecked: true, hasDamage: false, damageHold: false, tagged: true, notifiedProd: true })
+  const [damageNote, setDamageNote] = useState('')
+  const [note, setNote] = useState('')
+  const CHK: Array<[keyof typeof f, string]> = [['packingChecked', 'Kiểm phiếu đóng gói & chứng từ giao'], ['qtyChecked', 'Kiểm số lượng'], ['hasDamage', 'Có hư hỏng'], ['damageHold', 'Giữ riêng hàng hư (tới khi xử lý)'], ['tagged', 'Đã đóng tem nhận hàng & nhận dạng'], ['notifiedProd', 'Đã báo QLSX / QLDA']]
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }} onClick={onClose}>
+      <div className="card p-5 space-y-3" style={{ maxWidth: 480, width: '100%' }} onClick={e => e.stopPropagation()}>
+        <h3 className="text-sm font-bold">Phiếu nhận hàng (QT25) — {contract.contractCode}</h3>
+        <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Hàng về: {contract.logistics?.arrivedDate ? formatDate(contract.logistics.arrivedDate) : '(chưa ghi — dùng hôm nay)'} · SLA lập phiếu ≤ 5 ngày làm việc.</div>
+        <div className="space-y-1.5">
+          {CHK.map(([k, l]) => (
+            <label key={k} className="text-xs flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={f[k]} onChange={e => setF({ ...f, [k]: e.target.checked })} />{l}</label>
+          ))}
+        </div>
+        {f.hasDamage && <input value={damageNote} onChange={e => setDamageNote(e.target.value)} placeholder="Mô tả hư hỏng…" className="input text-sm w-full" />}
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Ghi chú" className="input text-sm w-full" />
+        <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Huỷ</Button><Button variant="primary" onClick={() => onCreate(contract.id, { ...f, damageNote, note })}>Lập phiếu</Button></div>
+      </div>
     </div>
   )
 }

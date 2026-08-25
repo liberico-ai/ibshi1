@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
         id: true, contractCode: true, contractType: true, tradeType: true, title: true, value: true, currency: true,
         signedDate: true, effectiveDate: true, arrivedDate: true, status: true, createdAt: true,
         paymentTerms: true, paymentTermsStatus: true, ptFinanceBy: true, ptFinanceAt: true, ptKtktBy: true, ptKtktAt: true, ptBodBy: true, ptBodAt: true, ptRejectReason: true,
+        mtcStatus: true, mtcRejectReason: true,
         vendorCountry: true, exportPort: true, importLcDate: true, cifDate: true, paymentDate: true, customsDate: true, qcInvitationDate: true,
         vendor: { select: { name: true } },
         project: { select: { projectCode: true, projectName: true } },
@@ -53,6 +54,8 @@ export async function GET(req: NextRequest) {
       // B7 — duyệt điều kiện thanh toán (3 chữ ký).
       paymentTerms: c.paymentTerms || null,
       paymentApproval: { status: c.paymentTermsStatus, financeAt: c.ptFinanceAt, ktktAt: c.ptKtktAt, bodAt: c.ptBodAt, rejectReason: c.ptRejectReason },
+      // #5 MTC
+      mtcStatus: c.mtcStatus, mtcRejectReason: c.mtcRejectReason,
     }))
 
     const cnt = (s: string) => data.filter(d => d.status === s).length
