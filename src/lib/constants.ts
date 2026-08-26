@@ -243,6 +243,7 @@ export const MENU_ITEMS = [
   { key: 'hang-ve-qc', label: 'Hàng về & QC', labelEn: 'Arrivals & QC', icon: 'PackageCheck', href: '/dashboard/warehouse/hang-ve-qc', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a', 'R09', 'R09a', 'R10'], group: 'warehouse' },
   { key: 'de-nghi-thanh-toan', label: 'Đề nghị thanh toán', labelEn: 'Payment Requests', icon: 'Receipt', href: '/dashboard/warehouse/de-nghi-thanh-toan', roles: ['R01', 'R02', 'R02a', 'R07', 'R07a', 'R08', 'R08a', 'R10'], group: 'warehouse' },
   { key: 'danh-gia-ncc', label: 'Đánh giá & ASL NCC', labelEn: 'Supplier ASL', icon: 'ShieldCheck', href: '/dashboard/warehouse/danh-gia-ncc', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a', 'R09', 'R09a', 'R10'], group: 'warehouse' },
+  { key: 'anh-xa-ncc', label: 'Ánh xạ nhà cung cấp', labelEn: 'Vendor Mapping', icon: 'ArrowLeftRight', href: '/dashboard/warehouse/anh-xa-ncc', roles: ['R01', 'R07', 'R07a', 'R10'], group: 'warehouse' },
   { key: 'movements', label: 'Xuất Nhập', labelEn: 'Movements', icon: 'ArrowLeftRight', href: '/dashboard/warehouse/movements', roles: ['R01', 'R05', 'R05a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'grn', label: 'Hàng về', labelEn: 'GRN', icon: 'PackageCheck', href: '/dashboard/warehouse/grn', roles: ['R01', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'payment-schedule', label: 'Lịch thanh toán', labelEn: 'Payment', icon: 'CalendarCheck', href: '/dashboard/warehouse/payment-schedule', roles: ['R01', 'R02', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },
