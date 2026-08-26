@@ -265,6 +265,7 @@ export default function BiddingPage() {
 
           {tab === 'compare' ? <CompareTab detail={detail} onReload={reloadDetail} /> : <ApproveTab detail={detail} onReload={reloadDetail} activeStep={activeStep} />}
 
+          <QuoteFilesPanel bidId={detail.bid.id} />
           <MilestonesPanel bidId={detail.bid.id} />
         </div>
       )}
@@ -1078,6 +1079,61 @@ function MilestonesPanel({ bidId }: { bidId: string }) {
                 </span>
               </div>
             ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// #3 — Panel file báo giá NCC đính kèm cho BID (upload/list/xoá).
+interface QFile { id: string; fileName: string; fileUrl: string; fileSize: number | null; createdAt: string }
+function QuoteFilesPanel({ bidId }: { bidId: string }) {
+  const [open, setOpen] = useState(false)
+  const [files, setFiles] = useState<QFile[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [vendorName, setVendorName] = useState('')
+  const roleCode = useAuthStore(s => s.user?.roleCode)
+  const canEdit = ['R01', 'R07', 'R07a', 'R10'].includes(roleCode || '')
+  const load = useCallback(async () => {
+    const r = await apiFetch(`/api/procurement/bid-analyses/${bidId}/quote-files`)
+    if (r.ok) { setFiles(r.files || []); setLoaded(true) }
+  }, [bidId])
+  useEffect(() => { if (open && !loaded) load() }, [open, loaded, load])
+  const upload = async (file: File) => {
+    if (file.size > 25 * 1024 * 1024) { notify('File quá lớn (>25MB)', 'error'); return }
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
+    const fd = new FormData(); fd.append('file', file); if (vendorName.trim()) fd.append('vendorName', vendorName.trim())
+    const r = await fetch(`/api/procurement/bid-analyses/${bidId}/quote-files`, { method: 'POST', body: fd, headers: token ? { Authorization: `Bearer ${token}` } : {} }).then(x => x.json()).catch(() => ({ ok: false }))
+    if (r.ok) { notify('Đã đính kèm báo giá', 'success'); setVendorName(''); load() } else notify(r.error || 'Lỗi', 'error')
+  }
+  const del = async (fileId: string) => {
+    const r = await apiFetch(`/api/procurement/bid-analyses/${bidId}/quote-files?fileId=${fileId}`, { method: 'DELETE' })
+    if (r.ok) { notify('Đã gỡ', 'success'); load() } else notify(r.error || 'Lỗi', 'error')
+  }
+  return (
+    <div className="rounded-lg mt-3" style={{ border: '1px solid var(--border)' }}>
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+        <span>📎 File báo giá NCC (PDF/ảnh){loaded ? ` — ${files.length} file` : ''}</span><span>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-2">
+          {canEdit && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input value={vendorName} onChange={e => setVendorName(e.target.value)} placeholder="Tên NCC (gắn nhãn file, tùy chọn)" className="input text-xs" style={{ maxWidth: 220 }} />
+              <label className="text-[11px] px-2 py-1 rounded cursor-pointer font-semibold" style={{ border: '1px solid var(--accent)', color: 'var(--accent)' }}>
+                + Đính kèm báo giá
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls" hidden onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.currentTarget.value = '' }} />
+              </label>
+            </div>
+          )}
+          {!loaded ? <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Đang tải…</div>
+            : files.length === 0 ? <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Chưa có file báo giá. NCC gửi PDF/ảnh → đính kèm tại đây.</div>
+              : files.map(f => (
+                <div key={f.id} className="flex items-center justify-between gap-2 text-[11px]" style={{ borderTop: '1px dashed var(--border)', paddingTop: 4 }}>
+                  <a href={f.fileUrl} target="_blank" rel="noreferrer" className="font-semibold" style={{ color: 'var(--accent)' }}>{f.fileName}</a>
+                  {canEdit && <button onClick={() => del(f.id)} style={{ color: 'var(--danger)' }}>🗑 Gỡ</button>}
+                </div>
+              ))}
         </div>
       )}
     </div>
