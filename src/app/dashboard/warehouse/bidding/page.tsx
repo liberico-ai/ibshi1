@@ -112,6 +112,36 @@ export default function BiddingPage() {
     if (r.ok) { notify(r.message || `Đã tạo ${r.bids?.length || 0} RFQ theo nhóm`, 'success'); setShowCreate(false); loadBids() }
     else notify(r.error || 'Lỗi tạo RFQ hàng loạt', 'error')
   }
+  // #4 — Import RFQ batch: Excel [Mã VT · Nhóm RFQ] → gom theo Nhóm RFQ → mỗi nhóm 1 BID (tái dùng from-pr).
+  const importRfqBatch = async (file: File) => {
+    if (!projectId) { notify('Chọn dự án trước', 'error'); return }
+    try {
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+      const pick = (r: Record<string, unknown>, ...ks: string[]) => { for (const k of ks) if (r[k] !== undefined && r[k] !== '') return String(r[k]).trim(); return '' }
+      const byCode = new Map(prItems.map(p => [(p.itemCode || '').toLowerCase(), p.id]))
+      const groups = new Map<string, string[]>()
+      let unmatched = 0
+      for (const row of raw) {
+        const code = pick(row, 'Mã VT', 'Mã', 'itemCode').toLowerCase()
+        const grp = pick(row, 'Nhóm RFQ', 'Nhóm', 'group') || 'Mặc định'
+        const id = byCode.get(code)
+        if (!id) { unmatched++; continue }
+        if (!groups.has(grp)) groups.set(grp, [])
+        groups.get(grp)!.push(id)
+      }
+      if (groups.size === 0) { notify('Không khớp dòng nào với PR chưa vào BID của dự án (cần cột "Mã VT" + "Nhóm RFQ")', 'error'); return }
+      if (!await confirmDialog(`Tạo ${groups.size} RFQ theo cột "Nhóm RFQ" (${[...groups.values()].reduce((s, a) => s + a.length, 0)} dòng khớp${unmatched ? `, ${unmatched} dòng không khớp` : ''})?`)) return
+      let ok = 0; const errs: string[] = []
+      for (const [grp, ids] of groups) {
+        const r = await apiFetch('/api/procurement/bid-analyses/from-pr', { method: 'POST', body: JSON.stringify({ projectId, prItemIds: ids, subject: grp }) })
+        if (r.ok) ok++; else errs.push(`${grp}: ${r.error}`)
+      }
+      notify(`Import RFQ batch: tạo ${ok}/${groups.size} RFQ${errs.length ? `, ${errs.length} lỗi` : ''}`, errs.length ? 'error' : 'success')
+      if (errs.length) console.warn('[import-rfq-batch]', errs)
+      loadBids()
+    } catch (e) { console.error(e); notify('Không đọc được file Excel', 'error') }
+  }
   const openDetail = useCallback(async (id: string) => {
     const r = await apiFetch(`/api/procurement/bid-analyses/${id}`)
     if (r.ok) setDetail({ bid: r.bid, vendors: r.vendors, items: r.items, purchaseOrders: r.purchaseOrders || [] })
@@ -180,6 +210,9 @@ export default function BiddingPage() {
         </select>
         {projectId && <Button variant="primary" onClick={openCreate}>+ Tạo RFQ từ PR</Button>}
         {projectId && bids.length > 0 && <Button variant="outline" onClick={bulkCreatePo} disabled={bulkBusy}>{bulkBusy ? 'Đang cấp PO…' : '⚡ Cấp PO Hàng Loạt'}</Button>}
+        {projectId && <label className="text-sm px-3 py-1.5 rounded-lg font-semibold cursor-pointer" style={{ border: '1px solid var(--accent)', color: 'var(--accent)' }} title='Excel có cột "Mã VT" + "Nhóm RFQ" → mỗi nhóm 1 RFQ'>📥 Import RFQ batch
+          <input type="file" accept=".xlsx,.xls" hidden onChange={e => { const f = e.target.files?.[0]; if (f) importRfqBatch(f); e.currentTarget.value = '' }} />
+        </label>}
       </div>
 
       {projectId && (
