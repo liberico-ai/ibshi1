@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles, logAudit, getClientIP } from '@/lib/auth'
+import { notifyRole } from '@/lib/notify-role'
 
 export const dynamic = 'force-dynamic'
 // Nhận hàng: Kho (R05) + Thương mại (R07) + BGĐ/Admin.
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Đồng bộ ngày hàng về lên HĐ nếu chưa có.
     if (arrived && !contract.arrivedDate) await prisma.purchaseContract.update({ where: { id }, data: { arrivedDate: arrived } })
     await logAudit(user.userId, 'GOODS_RECEIPT_CREATE', 'PurchaseContract', id, { contractCode: contract.contractCode, code: gr.code, withinSla, damageHold: !!b.damageHold }, getClientIP(req))
+    await notifyRole(['R09', 'R09a'], { title: `Hàng về HĐ ${contract.contractCode} — mời nghiệm thu`, message: `Đã lập phiếu nhận hàng ${gr.code}. QC chấp nhận MTC + nghiệm thu.`, linkUrl: '/dashboard/warehouse/hang-ve-qc' })
     return successResponse({ id: gr.id, code: gr.code, withinSla: gr.withinSla }, `Đã lập phiếu nhận hàng ${gr.code}${withinSla === false ? ' (⚠ TRỄ hạn 5 ngày làm việc)' : ''}`)
   } catch (err) {
     console.error('POST goods-receipt error:', err)

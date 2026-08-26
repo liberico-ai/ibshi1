@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
 import { PT_SLOT_ROLES, PT_SLOT_LABEL, PT_SUBMIT_ROLES, type PtSlot } from '@/lib/purchase-contract-constants'
+import { notifyRole } from '@/lib/notify-role'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         },
       })
       await logAudit(payload.userId, 'CONTRACT_PT_SUBMIT', 'PurchaseContract', id, { contractCode: c.contractCode }, getClientIP(req))
+      await notifyRole(['R08', 'R08a', 'R03', 'R01'], { title: `HĐ ${c.contractCode} chờ ký điều kiện TT`, message: `Điều kiện thanh toán HĐ ${c.contractCode} cần Kế toán + Trưởng KTKT + BGĐ ký.`, linkUrl: `/dashboard/warehouse/hop-dong?contractNo=${encodeURIComponent(c.contractCode)}`, excludeUserId: payload.userId })
       return successResponse({ id, paymentTermsStatus: 'PENDING' }, 'Đã trình duyệt điều kiện thanh toán')
     }
 

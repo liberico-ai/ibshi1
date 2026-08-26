@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
+import { notifyRole } from '@/lib/notify-role'
 
 export const dynamic = 'force-dynamic'
 // QT19 bước 3: phê duyệt yêu cầu mua — TP Thương mại (R07) / GĐ dự án (R02) / BGĐ (R01) / Admin.
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (pr.status === 'APPROVED') return errorResponse('PR đã được duyệt', 409)
       await prisma.purchaseRequest.update({ where: { id }, data: { status: 'PENDING', submittedAt: new Date(), prRejectReason: null, prRejectedBy: null } })
       await logAudit(payload.userId, 'PR_SUBMIT', 'PurchaseRequest', id, { prCode: pr.prCode }, getClientIP(req))
+      await notifyRole(APPROVE_ROLES, { title: `PR ${pr.prCode} chờ duyệt`, message: `Yêu cầu mua ${pr.prCode} cần TP Thương mại / GĐ dự án duyệt.`, linkUrl: '/dashboard/warehouse/kiem-tra-ton-kho', excludeUserId: payload.userId })
       return successResponse({ id, status: 'PENDING' }, `Đã trình duyệt PR ${pr.prCode}`)
     }
     if (action === 'approve') {

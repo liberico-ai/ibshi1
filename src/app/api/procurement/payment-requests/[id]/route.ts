@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
+import { notifyRole } from '@/lib/notify-role'
 
 export const dynamic = 'force-dynamic'
 // 3 chốt ký (QT19 bước 11): QLDA kiểm → TP.TM/Kế toán trưởng soát → GĐ dự án duyệt.
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (p.status === 'APPROVED' || p.status === 'PAID') return errorResponse('Đề nghị đã duyệt/đã trả', 409)
       await prisma.paymentRequest.update({ where: { id }, data: { status: 'PENDING', qldaBy: null, qldaAt: null, tmkttBy: null, tmkttAt: null, gddaBy: null, gddaAt: null, rejectBy: null, rejectAt: null, rejectReason: null } })
       await logAudit(user.userId, 'PAYREQ_SUBMIT', 'PaymentRequest', id, { code: p.code }, getClientIP(req))
+      await notifyRole(['R02', 'R02a'], { title: `Đề nghị TT ${p.code} chờ QLDA kiểm`, message: `Đề nghị thanh toán ${p.code} — QLDA kiểm trước.`, linkUrl: '/dashboard/warehouse/de-nghi-thanh-toan', excludeUserId: user.userId })
       return successResponse({ id, status: 'PENDING' }, 'Đã trình duyệt thanh toán')
     }
 
@@ -61,6 +63,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (allSigned) data.status = 'APPROVED'
       await prisma.paymentRequest.update({ where: { id }, data })
       await logAudit(user.userId, allSigned ? 'PAYREQ_APPROVED_FULL' : 'PAYREQ_APPROVE', 'PaymentRequest', id, { code: p.code, slot }, getClientIP(req))
+      // Bàn giao chốt kế tiếp: qlda→tmktt→gdda→(chi trả).
+      const link = '/dashboard/warehouse/de-nghi-thanh-toan'
+      if (allSigned) await notifyRole(['R08', 'R08a'], { title: `Đề nghị TT ${p.code} đã duyệt — chờ chi trả`, message: `Đề nghị ${p.code} đủ 3 chữ ký, Tài chính ghi đã trả.`, linkUrl: link })
+      else if (slot === 'qlda') await notifyRole(['R07', 'R07a', 'R08'], { title: `Đề nghị TT ${p.code} chờ TP.TM/KTT soát`, message: `QLDA đã kiểm ${p.code}, chờ TP.TM/Kế toán trưởng soát.`, linkUrl: link, excludeUserId: user.userId })
+      else if (slot === 'tmktt') await notifyRole(['R01'], { title: `Đề nghị TT ${p.code} chờ GĐ dự án duyệt`, message: `${p.code} đã qua QLDA + TP.TM/KTT, chờ GĐ dự án duyệt.`, linkUrl: link, excludeUserId: user.userId })
       return successResponse({ id, status: allSigned ? 'APPROVED' : 'PENDING', slot }, allSigned ? 'Đã đủ 3 chữ ký — duyệt thanh toán' : `Đã ký (${SLOT_LABEL[slot]})`)
     }
 

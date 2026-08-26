@@ -147,8 +147,8 @@ export const FORM_EDIT_ROLES = {
   // + R05/R05a: Kho làm bước P2.3 (đề xuất vật tư tiêu hao) qua biểu mẫu BOM ở sidebar.
   BOM: ['R01', 'R04', 'R04a', 'R05', 'R05a'],
   SUPPLIER_QUOTE: QUOTE_EDIT_ROLES as unknown as string[],
-  // Bảng giao khoán nhân công lập ở bước dự toán (KTKT ký duyệt) — PM dự án cũng được sửa.
-  LABOR_CONTRACT: ['R01', 'R03', 'R03a', 'R02', 'R02a'],
+  // APL (Assembly Part List) — Thiết kế lập ở bước dựng bản vẽ; PM xem/sửa cùng.
+  APL: ['R01', 'R04', 'R04a', 'R02', 'R02a'],
 } as const
 
 export type FormKey = keyof typeof FORM_EDIT_ROLES
@@ -162,7 +162,7 @@ export const KEY_TO_FORM: Record<string, FormKey> = {
   weldData: 'WELD_PAINT', paintData: 'WELD_PAINT',
   bomItemsList: 'BOM',
   supplierQuotes: 'SUPPLIER_QUOTE', chosenVendorId: 'SUPPLIER_QUOTE',
-  laborContract: 'LABOR_CONTRACT', laborContractFileName: 'LABOR_CONTRACT',
+  aplImportId: 'APL', aplFileName: 'APL',
 }
 
 export function canEditForm(form: FormKey, roleCode: string): boolean {
@@ -235,6 +235,7 @@ export const MENU_ITEMS = [
   { key: 'lam-ro-ky-thuat', label: 'Làm rõ kỹ thuật', labelEn: 'Tech Clarify', icon: 'Wrench', href: '/dashboard/warehouse/lam-ro-ky-thuat', roles: ['R01', 'R02', 'R03', 'R03a', 'R04', 'R04a', 'R07', 'R07a', 'R10'], group: 'warehouse' },
   { key: 'lich-su-mua-hang', label: 'Lịch sử mua hàng', labelEn: 'Purchase History', icon: 'Clock', href: '/dashboard/warehouse/lich-su-mua-hang', roles: ['R01', 'R02', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a', 'R10'], group: 'warehouse' },
   { key: 'dashboard-mua-sam', label: 'Bảng điều khiển mua sắm', labelEn: 'Procurement Dashboard', icon: 'LayoutDashboard', href: '/dashboard/warehouse/dashboard-mua-sam', roles: ['R01', 'R02', 'R03', 'R03a', 'R07', 'R07a', 'R08', 'R08a', 'R10'], group: 'warehouse' },
+  { key: 'viec-cho-toi', label: 'Việc chờ tôi duyệt', labelEn: 'My Approvals', icon: 'Bell', href: '/dashboard/warehouse/viec-cho-toi', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R07', 'R07a', 'R08', 'R08a', 'R09', 'R09a', 'R10'], group: 'warehouse' },
   { key: 'yeu-cau-bao-gia', label: 'Yêu cầu báo giá', labelEn: 'RFQ Items', icon: 'Inbox', href: '/dashboard/warehouse/yeu-cau-bao-gia', roles: ['R01', 'R02', 'R07', 'R07a', 'R10'], group: 'warehouse' },
   { key: 'bidding', label: 'Báo giá (RFQ)', labelEn: 'Bidding', icon: 'ClipboardList', href: '/dashboard/warehouse/bidding', roles: ['R01', 'R02', 'R07', 'R07a'], group: 'warehouse' },
   { key: 'fab-categories', label: 'Hạng mục chế tạo', labelEn: 'Fab Items', icon: 'Layers', href: '/dashboard/warehouse/fab-categories', roles: ['R01', 'R02', 'R03', 'R03a', 'R07', 'R07a', 'R10'], group: 'warehouse' },
