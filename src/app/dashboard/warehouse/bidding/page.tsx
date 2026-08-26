@@ -269,7 +269,7 @@ export default function BiddingPage() {
         </div>
       )}
 
-      {showCreate && <CreateRfqModal items={prItems} picked={picked} setPicked={setPicked} subject={subject} setSubject={setSubject} onCancel={() => setShowCreate(false)} onCreate={createRfq} onCreateBulk={createRfqBulkByGroup} />}
+      {showCreate && <CreateRfqModal items={prItems} picked={picked} setPicked={setPicked} subject={subject} setSubject={setSubject} projectCode={projects.find(p => p.id === projectId)?.projectCode || ''} onCancel={() => setShowCreate(false)} onCreate={createRfq} onCreateBulk={createRfqBulkByGroup} />}
       {showQuote && detail && <EnterQuoteModal bidId={detail.bid.id} items={detail.items} onCancel={() => setShowQuote(false)} onSaved={() => { setShowQuote(false); reloadDetail() }} />}
     </div>
   )
@@ -786,18 +786,29 @@ function WeightedPanel({ detail, onReload }: { detail: BidDetail; onReload: () =
 }
 
 // ══ Modal: tạo RFQ từ PR item ══
-function CreateRfqModal({ items, picked, setPicked, subject, setSubject, onCancel, onCreate, onCreateBulk }: {
-  items: PrItem[]; picked: Set<string>; setPicked: (s: Set<string>) => void; subject: string; setSubject: (s: string) => void; onCancel: () => void; onCreate: () => void; onCreateBulk: () => void
+function CreateRfqModal({ items, picked, setPicked, subject, setSubject, projectCode, onCancel, onCreate, onCreateBulk }: {
+  items: PrItem[]; picked: Set<string>; setPicked: (s: Set<string>) => void; subject: string; setSubject: (s: string) => void; projectCode: string; onCancel: () => void; onCreate: () => void; onCreateBulk: () => void
 }) {
   const toggle = (id: string) => { const n = new Set(picked); if (n.has(id)) n.delete(id); else n.add(id); setPicked(n) }
   const allChecked = items.length > 0 && picked.size === items.length
   // Số nhóm vật tư trong tập sẽ gom (đã chọn, hoặc tất cả nếu chưa chọn) — để gợi ý nút bulk.
   const scope = picked.size ? items.filter(i => picked.has(i.id)) : items
   const groupCount = new Set(scope.map(i => i.materialGroupCode || 'KHAC')).size
+  // #6 — Preview mã BID dự kiến (mat = nhóm nếu tập chỉ 1 nhóm, else ALL).
+  const [previewCode, setPreviewCode] = useState('')
+  useEffect(() => {
+    if (!projectCode) return
+    const grps = new Set(scope.map(i => i.materialGroupCode || 'KHAC'))
+    const mat = grps.size === 1 ? [...grps][0] : 'ALL'
+    apiFetch(`/api/procurement/bid-analyses/preview-bidcode?projectCode=${encodeURIComponent(projectCode)}&materialGroupCode=${encodeURIComponent(mat)}`)
+      .then(r => { if (r.ok) setPreviewCode(r.bidCode) })
+  }, [projectCode, picked.size]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }} onClick={onCancel}>
       <div className="card p-5 space-y-3" style={{ maxWidth: 900, width: '100%', maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Tạo RFQ — chọn dòng PR cần báo giá</h3>
+        <h3 className="text-sm font-bold flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-primary)' }}>Tạo RFQ — chọn dòng PR cần báo giá
+          {previewCode && <span className="text-[11px] font-mono font-normal px-2 py-0.5 rounded" style={{ background: 'var(--surface-hover)', color: 'var(--accent)' }} title="Mã BID dự kiến (tạo 1 RFQ)">dự kiến: {previewCode}</span>}
+        </h3>
         <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Chủ đề (để trống → tự gợi ý)" className="input text-sm w-full" />
         {items.length === 0 ? (
           <p className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>Không còn PR item nào chưa đưa vào BID cho dự án này.</p>
