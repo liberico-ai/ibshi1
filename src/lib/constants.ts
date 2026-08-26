@@ -147,6 +147,8 @@ export const FORM_EDIT_ROLES = {
   // + R05/R05a: Kho làm bước P2.3 (đề xuất vật tư tiêu hao) qua biểu mẫu BOM ở sidebar.
   BOM: ['R01', 'R04', 'R04a', 'R05', 'R05a'],
   SUPPLIER_QUOTE: QUOTE_EDIT_ROLES as unknown as string[],
+  // Bảng giao khoán nhân công lập ở bước dự toán (KTKT ký duyệt) — PM dự án cũng được sửa.
+  LABOR_CONTRACT: ['R01', 'R03', 'R03a', 'R02', 'R02a'],
 } as const
 
 export type FormKey = keyof typeof FORM_EDIT_ROLES
@@ -160,6 +162,7 @@ export const KEY_TO_FORM: Record<string, FormKey> = {
   weldData: 'WELD_PAINT', paintData: 'WELD_PAINT',
   bomItemsList: 'BOM',
   supplierQuotes: 'SUPPLIER_QUOTE', chosenVendorId: 'SUPPLIER_QUOTE',
+  laborContract: 'LABOR_CONTRACT', laborContractFileName: 'LABOR_CONTRACT',
 }
 
 export function canEditForm(form: FormKey, roleCode: string): boolean {
@@ -237,6 +240,7 @@ export const MENU_ITEMS = [
   { key: 'fab-allocation', label: 'Phân bổ chế tạo', labelEn: 'Fab Allocation', icon: 'FileSpreadsheet', href: '/dashboard/warehouse/fab-allocation', roles: ['R01', 'R02', 'R03', 'R03a', 'R07', 'R07a', 'R10'], group: 'warehouse' },
   { key: 'purchase-orders', label: 'Đơn đặt hàng', labelEn: 'PO', icon: 'FileOutput', href: '/dashboard/warehouse/purchase-orders', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a'], group: 'warehouse' },
   { key: 'hop-dong', label: 'Hợp đồng', labelEn: 'Contracts', icon: 'FileSignature', href: '/dashboard/warehouse/hop-dong', roles: ['R01', 'R02', 'R03', 'R03a', 'R05', 'R05a', 'R07', 'R07a', 'R08', 'R08a', 'R10'], group: 'warehouse' },
+  { key: 'hang-ve-qc', label: 'Hàng về & QC', labelEn: 'Arrivals & QC', icon: 'PackageCheck', href: '/dashboard/warehouse/hang-ve-qc', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a', 'R09', 'R09a', 'R10'], group: 'warehouse' },
   { key: 'de-nghi-thanh-toan', label: 'Đề nghị thanh toán', labelEn: 'Payment Requests', icon: 'Receipt', href: '/dashboard/warehouse/de-nghi-thanh-toan', roles: ['R01', 'R02', 'R02a', 'R07', 'R07a', 'R08', 'R08a', 'R10'], group: 'warehouse' },
   { key: 'danh-gia-ncc', label: 'Đánh giá & ASL NCC', labelEn: 'Supplier ASL', icon: 'ShieldCheck', href: '/dashboard/warehouse/danh-gia-ncc', roles: ['R01', 'R02', 'R05', 'R05a', 'R07', 'R07a', 'R09', 'R09a', 'R10'], group: 'warehouse' },
   { key: 'movements', label: 'Xuất Nhập', labelEn: 'Movements', icon: 'ArrowLeftRight', href: '/dashboard/warehouse/movements', roles: ['R01', 'R05', 'R05a', 'R08', 'R08a'], group: 'warehouse' },
