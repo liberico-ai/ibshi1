@@ -130,6 +130,19 @@ export default function BiddingPage() {
       .then(x => x.json()).catch(() => ({ ok: false, error: 'Lỗi mạng' }))
     if (r.ok) { notify('Đã đính kèm giải trình', 'success'); reloadDetail() } else notify(r.error || 'Lỗi đính kèm', 'error')
   }
+  // Xuất RFQ ra Excel (bảng phân tích giá thầu) — tải file về máy.
+  const exportRfq = async () => {
+    if (!detail) return
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('ibs_token') : null
+    try {
+      const r = await fetch(`/api/procurement/bid-analyses/${detail.bid.id}/export-rfq`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      if (!r.ok) { notify('Lỗi xuất RFQ', 'error'); return }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = `RFQ-${detail.bid.bidCode}.xlsx`; a.click()
+      URL.revokeObjectURL(url)
+    } catch { notify('Lỗi mạng khi xuất RFQ', 'error') }
+  }
   const removeGiaiTrinh = async () => {
     if (!detail || !(await confirmDialog('Gỡ file giải trình khỏi đợt BID này?'))) return
     const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/source-file`, { method: 'DELETE' })
@@ -209,6 +222,7 @@ export default function BiddingPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" onClick={exportRfq} title="Xuất bảng phân tích giá thầu ra Excel (gửi NCC / lưu hồ sơ)">⬇ Xuất RFQ (Excel)</Button>
               <Button variant="primary" onClick={() => setShowQuote(true)}>+ Nhập báo giá NCC</Button>
               {detail.bid.status !== 'CONTRACTED' && detail.bid.status !== 'CANCELLED' && (
                 <Button variant="outline" onClick={async () => {
