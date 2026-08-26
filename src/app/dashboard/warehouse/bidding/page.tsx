@@ -148,6 +148,26 @@ export default function BiddingPage() {
     const r = await apiFetch(`/api/procurement/bid-analyses/${detail.bid.id}/source-file`, { method: 'DELETE' })
     if (r.ok) { notify('Đã gỡ giải trình', 'success'); reloadDetail() } else notify(r.error || 'Lỗi gỡ', 'error')
   }
+  // Cấp PO Hàng Loạt: lặp create-po cho mọi BID của dự án còn chưa ký HĐ (khớp Commerce).
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const bulkCreatePo = async () => {
+    const targets = bids.filter(b => b.status !== 'CONTRACTED' && b.status !== 'CANCELLED')
+    if (targets.length === 0) { notify('Không có BID nào để cấp PO', 'error'); return }
+    if (!await confirmDialog(`Cấp PO hàng loạt cho ${targets.length} đợt báo giá của dự án? (mỗi BID đã chọn NCC → tạo PO)`)) return
+    setBulkBusy(true)
+    let ok = 0, skip = 0
+    const errs: string[] = []
+    for (const b of targets) {
+      const r = await apiFetch(`/api/procurement/bid-analyses/${b.id}/create-po`, { method: 'POST', body: '{}' })
+      if (r.ok) ok++
+      else if (/chưa chọn NCC|dòng nào/i.test(r.error || '')) skip++
+      else errs.push(`${b.bidCode}: ${r.error}`)
+    }
+    setBulkBusy(false)
+    notify(`Cấp PO hàng loạt: ${ok} BID tạo PO, ${skip} bỏ qua (chưa chọn NCC)${errs.length ? `, ${errs.length} lỗi` : ''}`, errs.length ? 'error' : 'success')
+    if (errs.length) console.warn('[bulk PO]', errs)
+    reloadAll()
+  }
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -159,6 +179,7 @@ export default function BiddingPage() {
           {projects.map(p => <option key={p.id} value={p.id}>{p.projectCode} — {p.projectName}</option>)}
         </select>
         {projectId && <Button variant="primary" onClick={openCreate}>+ Tạo RFQ từ PR</Button>}
+        {projectId && bids.length > 0 && <Button variant="outline" onClick={bulkCreatePo} disabled={bulkBusy}>{bulkBusy ? 'Đang cấp PO…' : '⚡ Cấp PO Hàng Loạt'}</Button>}
       </div>
 
       {projectId && (
