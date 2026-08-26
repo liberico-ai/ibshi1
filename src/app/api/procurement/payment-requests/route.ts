@@ -46,22 +46,38 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
     if (!requireRoles(user.roleCode, CREATE_ROLES)) return errorResponse('Không có quyền lập đề nghị thanh toán', 403)
-    const b = await req.json().catch(() => ({})) as { vendorId?: string; projectId?: string; contractId?: string; amount?: number | string; currency?: string; description?: string; docs?: { contract?: boolean; invoice?: boolean; vendorReq?: boolean; handover?: boolean } }
-    if (!b.vendorId) return errorResponse('Thiếu nhà cung cấp', 400)
-    const amount = N(b.amount)
+    const b = await req.json().catch(() => ({})) as { vendorId?: string; projectId?: string; contractId?: string; amount?: number | string; currency?: string; description?: string }
+    // Chọn HĐ → tự kéo NCC / số tiền / dự án / loại tiền từ hợp đồng (đỡ nhập tay).
+    let ct: { id: string; vendorId: string; projectId: string | null; value: unknown; currency: string; contractCode: string; signedFileId: string | null } | null = null
+    if (b.contractId) {
+      ct = await prisma.purchaseContract.findUnique({ where: { id: b.contractId }, select: { id: true, vendorId: true, projectId: true, value: true, currency: true, contractCode: true, signedFileId: true } })
+      if (!ct) return errorResponse('Không tìm thấy hợp đồng', 404)
+    }
+    const vendorId = b.vendorId || ct?.vendorId
+    if (!vendorId) return errorResponse('Thiếu nhà cung cấp', 400)
+    const amount = N(b.amount) > 0 ? N(b.amount) : N(ct?.value)
     if (!(amount > 0)) return errorResponse('Số tiền phải > 0', 400)
     const count = await prisma.paymentRequest.count()
     const code = `DNTT-${new Date().getFullYear().toString().slice(2)}-${String(count + 1).padStart(4, '0')}`
+    // Nếu HĐ đã có file bản ký → coi như đã đủ chứng từ "hợp đồng" ngay khi lập.
+    const contractHasFile = !!ct?.signedFileId
     const pr = await prisma.paymentRequest.create({
       data: {
-        code, vendorId: b.vendorId, projectId: b.projectId || null, contractId: b.contractId || null,
-        amount, currency: b.currency || 'VND', description: b.description || null, status: 'DRAFT',
-        hasDocContract: !!b.docs?.contract, hasDocInvoice: !!b.docs?.invoice, hasDocVendorReq: !!b.docs?.vendorReq, hasDocHandover: !!b.docs?.handover,
+        code, vendorId, projectId: b.projectId || ct?.projectId || null, contractId: ct?.id || null,
+        amount, currency: b.currency || ct?.currency || 'VND', description: b.description || null, status: 'DRAFT',
+        hasDocContract: contractHasFile, hasDocInvoice: false, hasDocVendorReq: false, hasDocHandover: false,
         createdBy: user.userId,
       },
       select: { id: true, code: true },
     })
-    await logAudit(user.userId, 'CREATE', 'PaymentRequest', pr.id, { code: pr.code, amount }, getClientIP(req))
+    // Đính kèm luôn file HĐ đã ký vào phiếu (nhóm chứng từ "contract") để đi cùng sang Kế toán.
+    if (ct?.signedFileId) {
+      const src = await prisma.fileAttachment.findUnique({ where: { id: ct.signedFileId }, select: { fileName: true, fileUrl: true, fileSize: true, mimeType: true } })
+      if (src) {
+        await prisma.fileAttachment.create({ data: { entityType: 'PaymentRequest', entityId: `${pr.id}_contract`, fileName: src.fileName, fileUrl: src.fileUrl, fileSize: src.fileSize, mimeType: src.mimeType, uploadedBy: user.userId } })
+      }
+    }
+    await logAudit(user.userId, 'CREATE', 'PaymentRequest', pr.id, { code: pr.code, amount, contractCode: ct?.contractCode }, getClientIP(req))
     return successResponse({ id: pr.id, code: pr.code }, `Đã tạo đề nghị thanh toán ${pr.code}`, 201)
   } catch (err) {
     console.error('POST payment-requests error:', err)
