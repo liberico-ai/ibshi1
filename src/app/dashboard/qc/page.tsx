@@ -50,7 +50,7 @@ export default function QCPage() {
   const [page, setPage] = useState(1)
 
   const loadProjects = useCallback(async () => {
-    const res = await apiFetch('/api/projects')
+    const res = await apiFetch('/api/projects/options')
     if (res.ok) setProjects(res.projects)
   }, [])
 
@@ -93,10 +93,8 @@ export default function QCPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <SidebarStepLanding heading="Bước quy trình — Chất lượng" steps={[
-        { code: 'P5.1.1', title: 'Yêu cầu nghiệm thu chất lượng hạng mục', noTemplate: true },
-        { code: 'P5.3A', title: 'QAQC nghiệm thu chất lượng hạng mục', noTemplate: true },
-        { code: 'P5.3', title: 'Nghiệm thu khối lượng tuần (QC)', noTemplate: true },
-        { code: 'P5.4', title: 'Nghiệm thu khối lượng tuần (PM)', noTemplate: true },
+        { code: 'P5.3', title: 'TP QAQC nghiệm thu chất lượng & khối lượng', noTemplate: true },
+        { code: 'P5.4', title: 'PM nghiệm thu chất lượng & khối lượng', noTemplate: true },
         { code: 'P6.1', title: 'Tổng hợp hồ sơ chất lượng (Dossier)', noTemplate: true },
       ]} />
       <PageHeader

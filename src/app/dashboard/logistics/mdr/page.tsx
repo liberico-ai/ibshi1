@@ -37,7 +37,7 @@ export default function MDRPage() {
   const [releaseErr, setReleaseErr] = useState(false)
 
   useEffect(() => {
-    apiFetch('/api/projects').then(r => { if (r.ok) setProjects(r.projects) })
+    apiFetch('/api/projects/options').then(r => { if (r.ok) setProjects(r.projects) })
   }, [])
 
   const loadMdr = useCallback(() => {

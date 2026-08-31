@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
-import { ensureDailyReportTasks } from '@/lib/workflow-engine'
+import { ensureWeeklyReportTask } from '@/lib/workflow-engine'
 
 // POST /api/tasks/ensure-daily-report — Ensure P5.1 (+ P5.1A) daily-report tasks exist for a project.
 // Called when PM/QLSX phát hành LSX so material-less stages still open the daily report,
@@ -13,10 +13,10 @@ export async function POST(req: NextRequest) {
     const { projectId } = await req.json()
     if (!projectId) return errorResponse('projectId là bắt buộc', 400)
 
-    await ensureDailyReportTasks(projectId)
-    return successResponse({ ok: true }, 'Đã đảm bảo task báo cáo ngày tồn tại')
+    await ensureWeeklyReportTask(projectId)
+    return successResponse({ ok: true }, 'Đã đảm bảo task báo cáo tuần tồn tại')
   } catch (err) {
-    console.error('POST /api/tasks/ensure-daily-report error:', err)
-    return errorResponse('Lỗi hệ thống khi tạo task báo cáo ngày', 500)
+    console.error('POST /api/tasks/ensure-weekly-report error:', err)
+    return errorResponse('Lỗi hệ thống khi tạo task báo cáo tuần', 500)
   }
 }

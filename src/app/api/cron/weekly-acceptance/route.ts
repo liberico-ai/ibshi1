@@ -35,14 +35,18 @@ export async function GET() {
     let createdCount = 0
 
     for (const project of activeProjects) {
-      const weekLogs = await (prisma as any).dailyProductionLog.findMany({
+      // Nguồn khối lượng tuần là PHIẾU BÁO CÁO của xưởng (JobCard), không còn là nhật ký ngày:
+      // báo cáo theo ngày (P5.1/P5.1A) đã gỡ khỏi quy trình, bảng dailyProductionLog không còn được ghi.
+      const weekCards = await prisma.jobCard.findMany({
         where: {
-          projectId: project.id,
-          reportDate: { gte: thisMonday, lte: thisFriday },
+          workOrder: { projectId: project.id },
+          workDate: { gte: thisMonday, lte: thisFriday },
+          status: { not: 'CANCELLED' },
         },
+        select: { id: true },
       })
 
-      if (weekLogs.length === 0) continue
+      if (weekCards.length === 0) continue
 
       // Check if we already created P5.3 for this week+project (idempotent)
       const existingTask = await prisma.task.findFirst({
@@ -69,8 +73,11 @@ export async function GET() {
         projectName: project.projectName,
       }
 
-      const stepsToCreate: { code: 'P5.3' }[] = [
+      // Tạo CẢ HAI: TP QAQC và PM nghiệm thu song song, không ai chờ ai.
+      // Trước đây chỉ tạo P5.3, P5.4 sinh ra khi P5.3 hoàn thành (nối tiếp).
+      const stepsToCreate: { code: 'P5.3' | 'P5.4' }[] = [
         { code: 'P5.3' },
+        { code: 'P5.4' },
       ]
 
       const thisSaturday = new Date(thisMonday)
@@ -86,7 +93,8 @@ export async function GET() {
             projectId: project.id,
             level: 2,
             taskType: step.code,
-            title: `NGHIỆM THU KHỐI LƯỢNG TUẦN — W${weekNumber}`,
+            // Ghi rõ vai vì giờ có hai task song song cùng tuần, trùng tên là không phân biệt được
+            title: `NGHIỆM THU CHẤT LƯỢNG & KHỐI LƯỢNG TUẦN W${weekNumber} — ${step.code === 'P5.3' ? 'TP QAQC' : 'PM dự án'}`,
             priority: 'NORMAL',
             createdBy: 'SYSTEM',
             assignedAt: new Date(),

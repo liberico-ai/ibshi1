@@ -22,7 +22,7 @@ export default function PieceRatePage() {
   useEffect(() => {
     Promise.all([
       apiFetch('/api/hr/piece-rate-contracts'),
-      apiFetch('/api/projects?limit=100'),
+      apiFetch('/api/projects/options'),
     ]).then(([c, p]) => {
       if (c.ok) setContracts(c.contracts || [])
       if (p.ok) setProjects(p.projects || [])

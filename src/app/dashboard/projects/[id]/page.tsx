@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { WORKFLOW_RULES } from '@/lib/workflow-constants'
@@ -83,17 +83,35 @@ export default function ProjectDetailPage() {
   const [pms, setPms] = useState<{ id: string; fullName: string; username: string }[]>([])
   const [pmOpen, setPmOpen] = useState(false)
   const [newPm, setNewPm] = useState('')
+  const [pmList, setPmList] = useState<string[]>([])
+  const [projectPms, setProjectPms] = useState<{ id: string; fullName: string; username: string; isLead: boolean }[]>([])
   const [savingPm, setSavingPm] = useState(false)
   useEffect(() => { apiFetch('/api/users').then(r => { if (r.ok) setPms((r.users || []).filter((u: { roleCode: string }) => u.roleCode === 'R02')) }) }, [])
   const pmName = pms.find(u => u.id === project?.pmUserId)?.fullName
 
+  // Lưu cả DANH SÁCH PM (ngang quyền) + ai là đầu mối nhận việc tự sinh
   async function changePm() {
-    if (!newPm) return notify('Chọn PM phụ trách', 'error')
+    if (pmList.length === 0) return notify('Chọn ít nhất một PM phụ trách', 'error')
     setSavingPm(true)
-    const res = await apiFetch(`/api/projects/${params.id}/pm`, { method: 'PATCH', body: JSON.stringify({ pmUserId: newPm }) })
+    const res = await apiFetch(`/api/projects/${params.id}/pms`, {
+      method: 'PUT',
+      body: JSON.stringify({ userIds: pmList, leadUserId: newPm || pmList[0] }),
+    })
     setSavingPm(false)
-    if (res.ok) { notify(res.message || 'Đã gán PM', 'success'); setPmOpen(false); await reload() } else notify(res.error || 'Lỗi gán PM', 'error')
+    if (res.ok) { notify(res.message || 'Đã lưu PM phụ trách', 'success'); setPmOpen(false); await loadPms(); await reload() }
+    else notify(res.error || 'Lỗi lưu PM', 'error')
   }
+
+  // Danh sách PM hiện tại của dự án (hiện ở đầu trang + điền sẵn khi mở hộp thoại)
+  const loadPms = useCallback(async () => {
+    const r = await apiFetch(`/api/projects/${params.id}/pms`)
+    if (!r.ok) return
+    const ids = (r.pms || []).map((u: { id: string }) => u.id)
+    setProjectPms(r.pms || [])
+    setPmList(ids)
+    setNewPm(r.leadUserId || ids[0] || '')
+  }, [params.id])
+  useEffect(() => { void loadPms() }, [loadPms])
 
   async function reload() {
     const res = await apiFetch(`/api/projects/${params.id}`)
@@ -346,13 +364,14 @@ export default function ProjectDetailPage() {
           <p style={{ fontSize: '14px', opacity: 0.7, marginTop: '4px', color: '#ffffff' }}>{project.clientName}{project.description ? ` — ${project.description}` : ''}</p>
           <p style={{ fontSize: '13px', marginTop: '4px', color: '#ffffff' }}>
             <span style={{ opacity: 0.6 }}>PM phụ trách: </span>
-            {project.pmUserId
-              ? <b>{pmName || '…'}</b>
+            {projectPms.length > 0
+              ? <b>{projectPms.map(u => u.fullName + (u.isLead ? ' (đầu mối)' : '')).join(' · ')}</b>
+              : project.pmUserId ? <b>{pmName || '…'}</b>
               : <span style={{ fontWeight: 700, color: '#fca5a5' }}>⚠ Chưa gán</span>}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
             {canManageProject && (
-              <button onClick={() => { setNewPm(project.pmUserId || ''); setPmOpen(true) }} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 12px', borderRadius: '8px', background: project.pmUserId ? 'rgba(255,255,255,0.12)' : 'rgba(234,179,8,0.25)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', cursor: 'pointer' }}>{project.pmUserId ? '↔ Đổi PM' : '⚠ Gán PM'}</button>
+              <button onClick={() => setPmOpen(true)} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 12px', borderRadius: '8px', background: projectPms.length > 0 ? 'rgba(255,255,255,0.12)' : 'rgba(234,179,8,0.25)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', cursor: 'pointer' }}>{projectPms.length > 0 ? `↔ PM phụ trách (${projectPms.length})` : "⚠ Gán PM"}</button>
             )}
             {project.status === 'CLOSED' && (
               <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: 'rgba(22,163,74,0.2)', color: '#86efac' }}>ĐÃ ĐÓNG</span>
@@ -423,13 +442,32 @@ export default function ProjectDetailPage() {
       {pmOpen && (
         <div onClick={() => setPmOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-card, #fff)', borderRadius: '14px', padding: '22px', width: '440px', maxWidth: '100%', color: 'inherit' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '6px' }}>{project.pmUserId ? 'Đổi PM phụ trách' : 'Gán PM phụ trách'}</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', marginBottom: '14px' }}>Các việc đang mở của dự án (giao cho PM) sẽ được chuyển về PM mới.</p>
-            <label className="input-label">PM phụ trách *</label>
-            <select value={newPm} onChange={e => setNewPm(e.target.value)} style={{ width: '100%', padding: '9px 11px', borderRadius: '8px', border: '1px solid var(--border-light, #d3dbe4)', fontSize: '14px', background: 'var(--bg-primary, #fff)', color: 'inherit' }}>
-              <option value="">— Chọn PM (Quản lý dự án) —</option>
-              {pms.map(u => <option key={u.id} value={u.id}>{u.fullName} ({u.username})</option>)}
-            </select>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '6px' }}>PM phụ trách dự án</h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', marginBottom: '14px' }}>
+              Chọn được <b>nhiều PM</b> — họ ngang quyền nhau, ai thao tác và hoàn thành việc cũng được.
+              Riêng <b>đầu mối</b> là người nhận các việc do quy trình tự sinh; đổi đầu mối thì việc đang mở chuyển sang người mới.
+            </p>
+            <label className="input-label">Danh sách PM * (tick chọn, chấm tròn = đầu mối)</label>
+            <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border-light, #d3dbe4)', borderRadius: 8, padding: 6 }}>
+              {pms.map(u => {
+                const checked = pmList.includes(u.id)
+                return (
+                  <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 6 }}>
+                    <input type="checkbox" checked={checked}
+                      onChange={e => setPmList(prev => {
+                        const next = e.target.checked ? [...prev, u.id] : prev.filter(x => x !== u.id)
+                        if (!next.includes(newPm)) setNewPm(next[0] || '')
+                        return next
+                      })} />
+                    <span style={{ flex: 1, fontSize: 14 }}>{u.fullName} <span style={{ color: 'var(--text-muted, #64748b)', fontSize: 12 }}>({u.username})</span></span>
+                    <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, opacity: checked ? 1 : 0.35 }}>
+                      <input type="radio" name="pmLead" disabled={!checked} checked={newPm === u.id} onChange={() => setNewPm(u.id)} />
+                      đầu mối
+                    </label>
+                  </div>
+                )
+              })}
+            </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
               <button onClick={() => setPmOpen(false)} style={{ padding: '9px 18px', borderRadius: '9px', border: '1px solid var(--border-light, #d3dbe4)', background: 'transparent', color: 'inherit', cursor: 'pointer', fontWeight: 600 }}>Hủy</button>
               <button onClick={changePm} disabled={savingPm} style={{ padding: '9px 18px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', cursor: 'pointer', fontWeight: 600, opacity: savingPm ? 0.6 : 1 }}>{savingPm ? 'Đang lưu…' : 'Lưu'}</button>

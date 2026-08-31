@@ -20,7 +20,7 @@ export const REVISE_TYPE_MAP = {
   REV_CASHFLOW:        { entryStepCode: 'P2.1A', ownerRole: 'R08', label: 'Kế hoạch dòng tiền',             mode: 'process'  },
   REV_QUOTE:           { entryStepCode: 'P3.5',  ownerRole: 'R07', label: 'Giá / nhà cung cấp',             mode: 'process'  },
   REV_PRODPLAN:        { entryStepCode: 'P3.4',  ownerRole: 'R06', label: 'Phương án SX (tổng thể)',        mode: 'process'  },
-  REV_PROD_INPROGRESS: { entryStepCode: 'P5.1',  ownerRole: 'R06', label: 'Điều chỉnh khi đang chế tạo',    mode: 'process'  },
+  REV_PROD_INPROGRESS: { entryStepCode: 'P5.2',  ownerRole: 'R06', label: 'Điều chỉnh khi đang chế tạo',    mode: 'process'  },
   REV_QC_MATERIAL:     { entryStepCode: 'P4.3',  ownerRole: 'R09', label: 'QC vật tư',                      mode: 'process'  },
   REV_QC_FAB:          { entryStepCode: 'P5.3',  ownerRole: 'R09', label: 'Nghiệm thu chế tạo',             mode: 'process'  },
 } as const satisfies Record<string, ReviseTypeDef>

@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { buildWoMaterialLines, MR_STATUS } from '@/lib/wo-materials'
+import { getProjectIdsOfPm } from '@/lib/project-pm'
 
 // Hộp phiếu đề nghị cấp vật tư — dùng cho trang "Duyệt cấp vật tư".
 // Mỗi vai trò thấy phần của mình:
@@ -24,10 +25,10 @@ export async function GET(req: NextRequest) {
     let myRole: 'PM' | 'BOD' | 'WORKSHOP' | 'VIEWER' = 'VIEWER'
     if (['R02', 'R02a'].includes(user.roleCode)) {
       myRole = 'PM'
-      const myProjects = await prisma.project.findMany({ where: { pmUserId: user.userId }, select: { id: true } })
+      const myProjectIds = await getProjectIdsOfPm(user.userId)
       if (!all) {
         where.status = statusParam || MR_STATUS.PENDING_PM
-        where.projectId = { in: myProjects.map(p => p.id) }
+        where.projectId = { in: myProjectIds }
       }
     } else if (['R01', 'R10'].includes(user.roleCode)) {
       myRole = 'BOD'

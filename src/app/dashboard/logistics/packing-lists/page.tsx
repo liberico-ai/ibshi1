@@ -143,7 +143,7 @@ function CreatePLModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [error, setError] = useState('')
 
   useEffect(() => {
-    apiFetch('/api/projects').then(r => { if (r.ok) setProjects(r.projects) })
+    apiFetch('/api/projects/options').then(r => { if (r.ok) setProjects(r.projects) })
   }, [])
 
   useEffect(() => {

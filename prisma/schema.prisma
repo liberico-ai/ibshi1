@@ -33,20 +33,20 @@ model User {
 }
 
 model Department {
-  id        String       @id @default(cuid())
-  code      String       @unique
-  name      String
-  nameEn    String       @default("") @map("name_en")
-  parentId  String?      @map("parent_id")
-  parent    Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
-  children   Department[] @relation("DeptHierarchy")
-  employees            Employee[]
-  users                User[]
-  workOrders           WorkOrder[]
+  id                    String                 @id @default(cuid())
+  code                  String                 @unique
+  name                  String
+  nameEn                String                 @default("") @map("name_en")
+  parentId              String?                @map("parent_id")
+  parent                Department?            @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children              Department[]           @relation("DeptHierarchy")
+  employees             Employee[]
+  users                 User[]
+  workOrders            WorkOrder[]
   materialRequestOrders MaterialRequestOrder[]
-  equipment            Equipment[]
-  equipmentAssignments EquipmentAssignment[]
-  toolboxTalks         ToolboxTalk[]
+  equipment             Equipment[]
+  equipmentAssignments  EquipmentAssignment[]
+  toolboxTalks          ToolboxTalk[]
 
   @@index([parentId])
   @@map("departments")
@@ -62,70 +62,70 @@ model Role {
 }
 
 model Project {
-  id                 String                   @id @default(cuid())
-  projectCode        String                   @unique @map("project_code")
-  projectName        String                   @map("project_name")
-  clientName         String                   @map("client_name")
-  productType        String                   @map("product_type")
-  projectType        String                   @default("OTHER") @map("project_type") // EXTERNAL_PROD | INTERNAL_PROD | OTHER
-  contractValue      Decimal?                 @map("contract_value")
-  currency           String                   @default("VND")
-  status             String                   @default("ACTIVE")
-  startDate          DateTime?                @map("start_date")
-  endDate            DateTime?                @map("end_date")
+  id                    String                   @id @default(cuid())
+  projectCode           String                   @unique @map("project_code")
+  projectName           String                   @map("project_name")
+  clientName            String                   @map("client_name")
+  productType           String                   @map("product_type")
+  projectType           String                   @default("OTHER") @map("project_type") // EXTERNAL_PROD | INTERNAL_PROD | OTHER
+  contractValue         Decimal?                 @map("contract_value")
+  currency              String                   @default("VND")
+  status                String                   @default("ACTIVE")
+  startDate             DateTime?                @map("start_date")
+  endDate               DateTime?                @map("end_date")
   // PM ĐẦU MỐI — dùng làm người nhận mặc định khi chuỗi tự sinh task vai R02.
   // Danh sách PM ĐẦY ĐỦ nằm ở bảng project_pms; mọi PM trong đó NGANG QUYỀN nhau.
-  pmUserId           String?                  @map("pm_user_id")
-  description        String?
-  createdAt          DateTime                 @default(now()) @map("created_at")
-  updatedAt          DateTime                 @updatedAt @map("updated_at")
-  boms               BillOfMaterial[]
-  budgets            Budget[]
-  cashflows          CashflowEntry[]
-  changeEvents       ChangeEvent[]
-  deliveries         DeliveryRecord[]
-  packingLists       PackingList[]
-  shipments          Shipment[]
-  drawings           Drawing[]
-  ecos               EngineeringChangeOrder[]
-  itps               InspectionTestPlan[]
-  inspections        Inspection[]
-  invoices           Invoice[]
-  lessonLearns       LessonLearned[]
-  milestones         Milestone[]
-  ncrs               NonConformanceReport[]
-  pieceRateContracts PieceRateContract[]
-  purchaseOrders     PurchaseOrder[]
-  purchaseContracts  PurchaseContract[]
-  purchaseReqs       PurchaseRequest[]
-  safetyIncidents    SafetyIncident[]
-  hseManHours        HseManHours[]
-  workPermits        WorkPermit[]
-  subcontracts       SubcontractorContract[]
-  timesheets         Timesheet[]
-  wbsNodes           WbsNode[]
-  workOrders         WorkOrder[]
+  pmUserId              String?                  @map("pm_user_id")
+  description           String?
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
+  boms                  BillOfMaterial[]
+  budgets               Budget[]
+  cashflows             CashflowEntry[]
+  changeEvents          ChangeEvent[]
+  deliveries            DeliveryRecord[]
+  packingLists          PackingList[]
+  shipments             Shipment[]
+  drawings              Drawing[]
+  ecos                  EngineeringChangeOrder[]
+  itps                  InspectionTestPlan[]
+  inspections           Inspection[]
+  invoices              Invoice[]
+  lessonLearns          LessonLearned[]
+  milestones            Milestone[]
+  ncrs                  NonConformanceReport[]
+  pieceRateContracts    PieceRateContract[]
+  purchaseOrders        PurchaseOrder[]
+  purchaseContracts     PurchaseContract[]
+  purchaseReqs          PurchaseRequest[]
+  safetyIncidents       SafetyIncident[]
+  hseManHours           HseManHours[]
+  workPermits           WorkPermit[]
+  subcontracts          SubcontractorContract[]
+  timesheets            Timesheet[]
+  wbsNodes              WbsNode[]
+  workOrders            WorkOrder[]
   materialRequestOrders MaterialRequestOrder[]
-  dynamicTasks       Task[]                   @relation("ProjectDynamicTasks")
-  meetings           Meeting[]                @relation("ProjectMeetings")
-  loanContracts      LoanContract[]
-  financePlan        ProjectFinancePlan?
+  dynamicTasks          Task[]                   @relation("ProjectDynamicTasks")
+  meetings              Meeting[]                @relation("ProjectMeetings")
+  loanContracts         LoanContract[]
+  financePlan           ProjectFinancePlan?
 
-  saleCustomerId     String?                  @map("sale_customer_id")
-  baselines          ProjectBaseline[]
-  submission         ProjectSubmission?
-  mrbReleases        MrbRelease[]
-  settlement         ProjectSettlement?
-  quoteGroups        QuoteGroup[]
-  bidAnalyses        BidAnalysis[]
-  paymentSchedules   PaymentSchedule[]
-  documents          ProjectDocument[]
-  fabCategories      FabricationCategory[]
-  hardPeggings       HardPegging[]
-  paymentRequests    PaymentRequest[]
-  goodsReceipts      GoodsReceipt[]
+  saleCustomerId   String?               @map("sale_customer_id")
+  baselines        ProjectBaseline[]
+  submission       ProjectSubmission?
+  mrbReleases      MrbRelease[]
+  settlement       ProjectSettlement?
+  quoteGroups      QuoteGroup[]
+  bidAnalyses      BidAnalysis[]
+  paymentSchedules PaymentSchedule[]
+  documents        ProjectDocument[]
+  fabCategories    FabricationCategory[]
+  hardPeggings     HardPegging[]
+  paymentRequests  PaymentRequest[]
+  goodsReceipts    GoodsReceipt[]
 
-  projectPms         ProjectPm[]
+  projectPms ProjectPm[]
 
   @@index([status])
   @@index([pmUserId])
@@ -141,7 +141,7 @@ model ProjectPm {
   id         String   @id @default(cuid())
   projectId  String   @map("project_id")
   userId     String   @map("user_id")
-  isLead     Boolean  @default(false) @map("is_lead")   // đầu mối nhận task tự sinh
+  isLead     Boolean  @default(false) @map("is_lead") // đầu mối nhận task tự sinh
   assignedBy String?  @map("assigned_by")
   assignedAt DateTime @default(now()) @map("assigned_at")
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -154,19 +154,19 @@ model ProjectPm {
 }
 
 model ProjectSubmission {
-  id              String    @id @default(cuid())
-  externalRef     String    @unique @map("external_ref")
-  status          String    @default("UNDER_REVIEW") // UNDER_REVIEW | APPROVED | REJECTED
-  payload         Json
-  saleCustomerId  String?   @map("sale_customer_id")
-  projectId       String?   @unique @map("project_id")
-  projectCode     String?   @map("project_code")
-  reason          String?
-  reviewedBy      String?   @map("reviewed_by")
-  reviewedAt      DateTime? @map("reviewed_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  id             String    @id @default(cuid())
+  externalRef    String    @unique @map("external_ref")
+  status         String    @default("UNDER_REVIEW") // UNDER_REVIEW | APPROVED | REJECTED
+  payload        Json
+  saleCustomerId String?   @map("sale_customer_id")
+  projectId      String?   @unique @map("project_id")
+  projectCode    String?   @map("project_code")
+  reason         String?
+  reviewedBy     String?   @map("reviewed_by")
+  reviewedAt     DateTime? @map("reviewed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  project        Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@map("project_submissions")
@@ -299,37 +299,37 @@ model AuditLog {
 }
 
 model Vendor {
-  id             String                    @id @default(cuid())
-  vendorCode     String                    @unique @map("vendor_code")
-  name           String
-  contactName    String?                   @map("contact_name")
-  email          String?
-  phone          String?
-  address        String?
-  country        String                    @default("VN")
-  category       String
-  rating         Decimal?                  @default(0)
-  isActive       Boolean                   @default(true) @map("is_active")
-  notes          String?
+  id                String                    @id @default(cuid())
+  vendorCode        String                    @unique @map("vendor_code")
+  name              String
+  contactName       String?                   @map("contact_name")
+  email             String?
+  phone             String?
+  address           String?
+  country           String                    @default("VN")
+  category          String
+  rating            Decimal?                  @default(0)
+  isActive          Boolean                   @default(true) @map("is_active")
+  notes             String?
   // ── Bổ sung hồ sơ NCC (PORT Thương Mại — Module 1) — tất cả nullable, an toàn additive ──
-  shortName      String?                   @map("short_name")     // tên gọi tắt (VSAN, GNEE…)
-  taxCode        String?                   @map("tax_code")       // mã số thuế
-  city           String?
-  website        String?
-  contactTitle   String?                   @map("contact_title")  // chức danh người liên hệ
-  contactPhone   String?                   @map("contact_phone")
-  contactEmail   String?                   @map("contact_email")
-  vendorType     String?                   @default("DOMESTIC") @map("vendor_type") // DOMESTIC | IMPORT | MIXED
-  bank           String?                                          // ngân hàng
-  accountNo      String?                   @map("account_no")     // số TK (string vì có thể bắt đầu = 0)
-  blacklisted    Boolean                   @default(false)        // NCC bị chặn (bổ sung trạng thái BLACKLIST)
+  shortName         String?                   @map("short_name") // tên gọi tắt (VSAN, GNEE…)
+  taxCode           String?                   @map("tax_code") // mã số thuế
+  city              String?
+  website           String?
+  contactTitle      String?                   @map("contact_title") // chức danh người liên hệ
+  contactPhone      String?                   @map("contact_phone")
+  contactEmail      String?                   @map("contact_email")
+  vendorType        String?                   @default("DOMESTIC") @map("vendor_type") // DOMESTIC | IMPORT | MIXED
+  bank              String? // ngân hàng
+  accountNo         String?                   @map("account_no") // số TK (string vì có thể bắt đầu = 0)
+  blacklisted       Boolean                   @default(false) // NCC bị chặn (bổ sung trạng thái BLACKLIST)
   // WIP-09 — ASL (Approved Supplier List): NCC phải được duyệt vào ASL mới được mua.
-  aslStatus      String                    @default("NONE") @map("asl_status") // NONE | TRIAL | APPROVED | SUSPENDED | REMOVED
-  aslApprovedAt  DateTime?                 @map("asl_approved_at")
-  aslApprovedBy  String?                   @map("asl_approved_by")
-  trialCount     Int                       @default(0) @map("trial_count") // số lần mua thử (cần 3 để vào ASL)
-  createdAt      DateTime                  @default(now()) @map("created_at")
-  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  aslStatus         String                    @default("NONE") @map("asl_status") // NONE | TRIAL | APPROVED | SUSPENDED | REMOVED
+  aslApprovedAt     DateTime?                 @map("asl_approved_at")
+  aslApprovedBy     String?                   @map("asl_approved_by")
+  trialCount        Int                       @default(0) @map("trial_count") // số lần mua thử (cần 3 để vào ASL)
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
   invoices          Invoice[]
   millCerts         MillCertificate[]
   purchaseOrders    PurchaseOrder[]
@@ -348,23 +348,23 @@ model Vendor {
 
 // WIP-09 — Đánh giá NCC (8 tiêu chí) để xét vào ASL. Điểm 0-5 cho các tiêu chí định lượng.
 model SupplierEvaluation {
-  id                  String   @id @default(cuid())
-  vendorId            String   @map("vendor_id")
-  evaluatedBy         String   @map("evaluated_by")
-  evaluatedAt         DateTime @default(now()) @map("evaluated_at")
-  scoreContactPrice   Int      @default(0) @map("score_contact_price")   // liên hệ được & giá cạnh tranh
-  scoreQuality        Int      @default(0) @map("score_quality")         // chất lượng dịch vụ
-  scoreDelivery       Int      @default(0) @map("score_delivery")        // giao hàng & độ tin cậy
-  scoreExclusive      Int      @default(0) @map("score_exclusive")       // nguồn độc quyền
-  isCustomerDesignated Boolean @default(false) @map("is_customer_designated") // NCC do khách chỉ định
-  hasIso9001          Boolean  @default(false) @map("has_iso9001")       // có ISO 9001/tương đương
-  sampleEvalPassed    Boolean  @default(false) @map("sample_eval_passed")// đánh giá hàng mẫu đạt
-  scoreAttitude       Int      @default(0) @map("score_attitude")        // thái độ
-  overallResult       String   @default("PENDING") @map("overall_result") // PASS | FAIL | PENDING
-  decision            String?  // TO_ASL | REJECT
-  note                String?
-  createdAt           DateTime @default(now()) @map("created_at")
-  vendor              Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  vendorId             String   @map("vendor_id")
+  evaluatedBy          String   @map("evaluated_by")
+  evaluatedAt          DateTime @default(now()) @map("evaluated_at")
+  scoreContactPrice    Int      @default(0) @map("score_contact_price") // liên hệ được & giá cạnh tranh
+  scoreQuality         Int      @default(0) @map("score_quality") // chất lượng dịch vụ
+  scoreDelivery        Int      @default(0) @map("score_delivery") // giao hàng & độ tin cậy
+  scoreExclusive       Int      @default(0) @map("score_exclusive") // nguồn độc quyền
+  isCustomerDesignated Boolean  @default(false) @map("is_customer_designated") // NCC do khách chỉ định
+  hasIso9001           Boolean  @default(false) @map("has_iso9001") // có ISO 9001/tương đương
+  sampleEvalPassed     Boolean  @default(false) @map("sample_eval_passed") // đánh giá hàng mẫu đạt
+  scoreAttitude        Int      @default(0) @map("score_attitude") // thái độ
+  overallResult        String   @default("PENDING") @map("overall_result") // PASS | FAIL | PENDING
+  decision             String? // TO_ASL | REJECT
+  note                 String?
+  createdAt            DateTime @default(now()) @map("created_at")
+  vendor               Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([vendorId])
   @@map("supplier_evaluations")
@@ -372,18 +372,18 @@ model SupplierEvaluation {
 
 // WIP-09 (F09) — Sổ theo dõi NCC vi phạm.
 model SupplierViolation {
-  id          String   @id @default(cuid())
-  vendorId    String   @map("vendor_id")
-  occurredAt  DateTime @default(now()) @map("occurred_at")
+  id          String    @id @default(cuid())
+  vendorId    String    @map("vendor_id")
+  occurredAt  DateTime  @default(now()) @map("occurred_at")
   description String
-  severity    String   @default("MINOR") // MINOR | MAJOR | CRITICAL
-  status      String   @default("OPEN")  // OPEN | RESOLVED
+  severity    String    @default("MINOR") // MINOR | MAJOR | CRITICAL
+  status      String    @default("OPEN") // OPEN | RESOLVED
   resolvedAt  DateTime? @map("resolved_at")
   resolvedBy  String?   @map("resolved_by")
   note        String?
-  createdBy   String   @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  createdBy   String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  vendor      Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([vendorId])
   @@index([status])
@@ -392,38 +392,38 @@ model SupplierViolation {
 
 // QT19 bước 10-11 — Phiếu đề nghị thanh toán (FIN-F01) + duyệt 3 chữ ký (QLDA → TP.TM/KTT → GĐ dự án).
 model PaymentRequest {
-  id           String   @id @default(cuid())
-  code         String   @unique
-  projectId    String?  @map("project_id")
-  contractId   String?  @map("contract_id")
-  vendorId     String   @map("vendor_id")
-  amount       Decimal  @default(0)
-  currency     String   @default("VND")
-  description  String?
-  status       String   @default("DRAFT") // DRAFT | PENDING | APPROVED | REJECTED | PAID
+  id              String            @id @default(cuid())
+  code            String            @unique
+  projectId       String?           @map("project_id")
+  contractId      String?           @map("contract_id")
+  vendorId        String            @map("vendor_id")
+  amount          Decimal           @default(0)
+  currency        String            @default("VND")
+  description     String?
+  status          String            @default("DRAFT") // DRAFT | PENDING | APPROVED | REJECTED | PAID
   // Đủ 4 chứng từ (QT19 §bước 10). File đính kèm qua FileAttachment (entityId=paymentRequestId).
-  hasDocContract  Boolean @default(false) @map("has_doc_contract")   // đơn hàng/HĐ/báo giá
-  hasDocInvoice   Boolean @default(false) @map("has_doc_invoice")    // hoá đơn
-  hasDocVendorReq Boolean @default(false) @map("has_doc_vendor_req") // YCTT của NCC
-  hasDocHandover  Boolean @default(false) @map("has_doc_handover")   // biên bản/phiếu giao có ký
+  hasDocContract  Boolean           @default(false) @map("has_doc_contract") // đơn hàng/HĐ/báo giá
+  hasDocInvoice   Boolean           @default(false) @map("has_doc_invoice") // hoá đơn
+  hasDocVendorReq Boolean           @default(false) @map("has_doc_vendor_req") // YCTT của NCC
+  hasDocHandover  Boolean           @default(false) @map("has_doc_handover") // biên bản/phiếu giao có ký
   // 3 chữ ký duyệt.
-  qldaBy       String?  @map("qlda_by")
-  qldaAt       DateTime? @map("qlda_at")
-  tmkttBy      String?  @map("tmktt_by")
-  tmkttAt      DateTime? @map("tmktt_at")
-  gddaBy       String?  @map("gdda_by")
-  gddaAt       DateTime? @map("gdda_at")
-  rejectBy     String?  @map("reject_by")
-  rejectAt     DateTime? @map("reject_at")
-  rejectReason String?  @map("reject_reason")
-  paidAt       DateTime? @map("paid_at")
-  paidBy       String?  @map("paid_by")
-  createdBy    String   @map("created_by")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  vendor       Vendor            @relation(fields: [vendorId], references: [id])
-  project      Project?          @relation(fields: [projectId], references: [id])
-  contract     PurchaseContract? @relation(fields: [contractId], references: [id])
+  qldaBy          String?           @map("qlda_by")
+  qldaAt          DateTime?         @map("qlda_at")
+  tmkttBy         String?           @map("tmktt_by")
+  tmkttAt         DateTime?         @map("tmktt_at")
+  gddaBy          String?           @map("gdda_by")
+  gddaAt          DateTime?         @map("gdda_at")
+  rejectBy        String?           @map("reject_by")
+  rejectAt        DateTime?         @map("reject_at")
+  rejectReason    String?           @map("reject_reason")
+  paidAt          DateTime?         @map("paid_at")
+  paidBy          String?           @map("paid_by")
+  createdBy       String            @map("created_by")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  vendor          Vendor            @relation(fields: [vendorId], references: [id])
+  project         Project?          @relation(fields: [projectId], references: [id])
+  contract        PurchaseContract? @relation(fields: [contractId], references: [id])
 
   @@index([projectId])
   @@index([vendorId])
@@ -433,28 +433,28 @@ model PaymentRequest {
 
 // QT25 — Phiếu nhận hàng (LOG-F12): 6 bước nhận hàng + giữ riêng hàng hư + đóng tem + SLA ≤ 5 ngày làm việc.
 model GoodsReceipt {
-  id             String   @id @default(cuid())
-  code           String   @unique
-  contractId     String?  @map("contract_id")
-  projectId      String?  @map("project_id")
-  vendorName     String?  @map("vendor_name")
-  arrivedDate    DateTime? @map("arrived_date")   // hàng đến (mốc bắt đầu tính SLA)
-  receivedDate   DateTime @default(now()) @map("received_date")
-  receivedBy     String   @map("received_by")
+  id             String            @id @default(cuid())
+  code           String            @unique
+  contractId     String?           @map("contract_id")
+  projectId      String?           @map("project_id")
+  vendorName     String?           @map("vendor_name")
+  arrivedDate    DateTime?         @map("arrived_date") // hàng đến (mốc bắt đầu tính SLA)
+  receivedDate   DateTime          @default(now()) @map("received_date")
+  receivedBy     String            @map("received_by")
   // QT25 §3 các bước kiểm.
-  packingChecked Boolean  @default(false) @map("packing_checked") // kiểm phiếu đóng gói & chứng từ giao
-  qtyChecked     Boolean  @default(false) @map("qty_checked")     // kiểm số lượng
-  hasDamage      Boolean  @default(false) @map("has_damage")      // có hư hỏng
-  damageHold     Boolean  @default(false) @map("damage_hold")     // GIỮ RIÊNG tới khi xử lý
-  damageNote     String?  @map("damage_note")
-  tagged         Boolean  @default(false) @map("tagged")          // đóng tem nhận hàng & nhận dạng
-  notifiedProd   Boolean  @default(false) @map("notified_prod")   // báo QLSX/QLDA
-  slaDeadline    DateTime? @map("sla_deadline")                   // arrivedDate + 5 ngày làm việc
-  withinSla      Boolean? @map("within_sla")
-  status         String   @default("DRAFT") // DRAFT | COMPLETED
+  packingChecked Boolean           @default(false) @map("packing_checked") // kiểm phiếu đóng gói & chứng từ giao
+  qtyChecked     Boolean           @default(false) @map("qty_checked") // kiểm số lượng
+  hasDamage      Boolean           @default(false) @map("has_damage") // có hư hỏng
+  damageHold     Boolean           @default(false) @map("damage_hold") // GIỮ RIÊNG tới khi xử lý
+  damageNote     String?           @map("damage_note")
+  tagged         Boolean           @default(false) @map("tagged") // đóng tem nhận hàng & nhận dạng
+  notifiedProd   Boolean           @default(false) @map("notified_prod") // báo QLSX/QLDA
+  slaDeadline    DateTime?         @map("sla_deadline") // arrivedDate + 5 ngày làm việc
+  withinSla      Boolean?          @map("within_sla")
+  status         String            @default("DRAFT") // DRAFT | COMPLETED
   note           String?
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
   contract       PurchaseContract? @relation(fields: [contractId], references: [id])
   project        Project?          @relation(fields: [projectId], references: [id])
 
@@ -474,26 +474,26 @@ model MaterialGroup {
 }
 
 model Material {
-  id             String                @id @default(cuid())
-  materialCode   String                @unique @map("material_code")
+  id             String                     @id @default(cuid())
+  materialCode   String                     @unique @map("material_code")
   name           String
   unit           String
   category       String
-  groupCode      String?               @map("group_code")
-  minStock       Decimal               @default(0) @map("min_stock")
-  currentStock   Decimal               @default(0) @map("current_stock")
-  unitPrice      Decimal?              @map("unit_price")
-  currency       String                @default("VND")
-  createdAt      DateTime              @default(now()) @map("created_at")
-  updatedAt      DateTime              @updatedAt @map("updated_at")
+  groupCode      String?                    @map("group_code")
+  minStock       Decimal                    @default(0) @map("min_stock")
+  currentStock   Decimal                    @default(0) @map("current_stock")
+  unitPrice      Decimal?                   @map("unit_price")
+  currency       String                     @default("VND")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
   grade          String?
-  nameEn         String                @default("") @map("name_en")
-  reservedStock  Decimal               @default(0) @map("reserved_stock")
+  nameEn         String                     @default("") @map("name_en")
+  reservedStock  Decimal                    @default(0) @map("reserved_stock")
   specification  String?
-  status         String                @default("ACTIVE") // ACTIVE | ARCHIVE | OBSOLETE
-  isProvisional  Boolean               @default(false) @map("is_provisional") // mã tạm, chờ chuẩn hóa
-  createdByUnit  String?               @map("created_by_unit") // phòng/đơn vị tạo mã tạm
-  promotedToId   String?               @map("promoted_to_id") // link mã tạm → mã chuẩn sau promote
+  status         String                     @default("ACTIVE") // ACTIVE | ARCHIVE | OBSOLETE
+  isProvisional  Boolean                    @default(false) @map("is_provisional") // mã tạm, chờ chuẩn hóa
+  createdByUnit  String?                    @map("created_by_unit") // phòng/đơn vị tạo mã tạm
+  promotedToId   String?                    @map("promoted_to_id") // link mã tạm → mã chuẩn sau promote
   aliases        MaterialCodeAlias[]
   stocks         MaterialStock[]
   bomItems       BomItem[]
@@ -512,13 +512,13 @@ model Material {
 }
 
 model Warehouse {
-  id          String          @id @default(cuid())
-  code        String          @unique
-  name        String
-  projectCode String?         @map("project_code") // mã dự án nếu kho gắn dự án (vd 25-VPI-I-095)
-  kind        String          @default("OTHER") // PROJECT | CONSIGNED | COMMON | OTHER
-  isActive    Boolean         @default(true) @map("is_active")
-  createdAt   DateTime        @default(now()) @map("created_at")
+  id             String          @id @default(cuid())
+  code           String          @unique
+  name           String
+  projectCode    String?         @map("project_code") // mã dự án nếu kho gắn dự án (vd 25-VPI-I-095)
+  kind           String          @default("OTHER") // PROJECT | CONSIGNED | COMMON | OTHER
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
   stocks         MaterialStock[]
   stockMovements StockMovement[]
 
@@ -568,24 +568,24 @@ model MaterialCodeCounter {
 }
 
 model StockMovement {
-  id          String   @id @default(cuid())
-  materialId  String   @map("material_id")
-  projectId   String?  @map("project_id")
-  type        String
-  quantity    Decimal
-  reason      String
-  referenceNo String?  @map("reference_no")
-  performedBy String   @map("performed_by")
-  notes       String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  heatNumber  String?  @map("heat_number")
-  lotNumber   String?  @map("lot_number")
-  poItemId    String?    @map("po_item_id")
-  warehouseId String?    @map("warehouse_id")
-  millCertificateId String? @map("mill_certificate_id")
-  material    Material   @relation(fields: [materialId], references: [id])
-  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
-  millCertificate MillCertificate? @relation(fields: [millCertificateId], references: [id], onDelete: SetNull)
+  id                String           @id @default(cuid())
+  materialId        String           @map("material_id")
+  projectId         String?          @map("project_id")
+  type              String
+  quantity          Decimal
+  reason            String
+  referenceNo       String?          @map("reference_no")
+  performedBy       String           @map("performed_by")
+  notes             String?
+  createdAt         DateTime         @default(now()) @map("created_at")
+  heatNumber        String?          @map("heat_number")
+  lotNumber         String?          @map("lot_number")
+  poItemId          String?          @map("po_item_id")
+  warehouseId       String?          @map("warehouse_id")
+  millCertificateId String?          @map("mill_certificate_id")
+  material          Material         @relation(fields: [materialId], references: [id])
+  warehouse         Warehouse?       @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  millCertificate   MillCertificate? @relation(fields: [millCertificateId], references: [id], onDelete: SetNull)
 
   @@index([materialId, createdAt])
   @@index([projectId])
@@ -597,34 +597,34 @@ model StockMovement {
 }
 
 model PurchaseRequest {
-  id          String                @id @default(cuid())
-  prCode      String                @unique @map("pr_code")
-  projectId   String                @map("project_id")
-  requestedBy String                @map("requested_by")
-  status      String                @default("DRAFT")
-  urgency     String                @default("NORMAL")
-  notes       String?
-  approvedBy  String?               @map("approved_by")
-  approvedAt  DateTime?             @map("approved_at")
+  id             String                    @id @default(cuid())
+  prCode         String                    @unique @map("pr_code")
+  projectId      String                    @map("project_id")
+  requestedBy    String                    @map("requested_by")
+  status         String                    @default("DRAFT")
+  urgency        String                    @default("NORMAL")
+  notes          String?
+  approvedBy     String?                   @map("approved_by")
+  approvedAt     DateTime?                 @map("approved_at")
   // Đợt 2D — truy vết nguồn phát sinh PR (revise bản vẽ / sản xuất sai)
-  originType  String?               @map("origin_type") // 'ECO' | 'NCR'
-  originId    String?               @map("origin_id") // ECO: bomVersionId | NCR: ncr.id
-  originLabel String?               @map("origin_label") // mã hiển thị: ECO code / NCR code
+  originType     String?                   @map("origin_type") // 'ECO' | 'NCR'
+  originId       String?                   @map("origin_id") // ECO: bomVersionId | NCR: ncr.id
+  originLabel    String?                   @map("origin_label") // mã hiển thị: ECO code / NCR code
   // Nối luồng Task → PR. UNIQUE ⟹ 1 task sinh tối đa 1 PR (materialize idempotent,
   // chạy lại không nhân bản). @unique đã tự tạo index → không cần @@index riêng.
-  sourceTaskId String?              @unique @map("source_task_id")
+  sourceTaskId   String?                   @unique @map("source_task_id")
   // #5 — Rev PR (khớp Commerce docNo/revNo): mỗi lần task nguồn đổi & materialize lại → tăng revNo + lưu snapshot.
-  docNo       String?               @map("doc_no")   // số hiệu tài liệu/bản vẽ nguồn (nếu có)
-  revNo       Int                   @default(0) @map("rev_no")
+  docNo          String?                   @map("doc_no") // số hiệu tài liệu/bản vẽ nguồn (nếu có)
+  revNo          Int                       @default(0) @map("rev_no")
   // QT19 bước 3 — Phê duyệt yêu cầu mua: PR phải APPROVED mới được tách RFQ. status: DRAFT|PENDING|APPROVED|REJECTED.
-  submittedAt DateTime?             @map("submitted_at")
-  prRejectReason String?            @map("pr_reject_reason")
-  prRejectedBy String?              @map("pr_rejected_by")
-  createdAt   DateTime              @default(now()) @map("created_at")
-  updatedAt   DateTime              @updatedAt @map("updated_at")
-  items       PurchaseRequestItem[]
-  revisions   PurchaseRequestRevision[]
-  project     Project               @relation(fields: [projectId], references: [id])
+  submittedAt    DateTime?                 @map("submitted_at")
+  prRejectReason String?                   @map("pr_reject_reason")
+  prRejectedBy   String?                   @map("pr_rejected_by")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  items          PurchaseRequestItem[]
+  revisions      PurchaseRequestRevision[]
+  project        Project                   @relation(fields: [projectId], references: [id])
 
   @@index([projectId])
   @@index([status])
@@ -634,15 +634,15 @@ model PurchaseRequest {
 
 // #5 — Lịch sử phiên bản PR: snapshot dòng mỗi lần PR bị ghi đè (materialize lại từ task nguồn).
 model PurchaseRequestRevision {
-  id          String   @id @default(cuid())
-  prId        String   @map("pr_id")
-  revNo       Int      @map("rev_no")
-  itemsSnapshot Json   @map("items_snapshot") // ảnh chụp toàn bộ dòng tại thời điểm rev
-  lineCount   Int      @default(0) @map("line_count")
-  note        String?
-  changedBy   String?  @map("changed_by")
-  changedAt   DateTime @default(now()) @map("changed_at")
-  pr          PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+  id            String          @id @default(cuid())
+  prId          String          @map("pr_id")
+  revNo         Int             @map("rev_no")
+  itemsSnapshot Json            @map("items_snapshot") // ảnh chụp toàn bộ dòng tại thời điểm rev
+  lineCount     Int             @default(0) @map("line_count")
+  note          String?
+  changedBy     String?         @map("changed_by")
+  changedAt     DateTime        @default(now()) @map("changed_at")
+  pr            PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 
   @@unique([prId, revNo])
   @@index([prId])
@@ -650,47 +650,47 @@ model PurchaseRequestRevision {
 }
 
 model PurchaseRequestItem {
-  id              String          @id @default(cuid())
-  prId            String          @map("pr_id")
+  id                   String                             @id @default(cuid())
+  prId                 String                             @map("pr_id")
   // materialId NULLABLE + snapshot field — sao y PurchaseOrderItem.
   // Lý do: 1307/3017 dòng PR thật trong Task.resultData chưa khớp được mã vật tư
   // (materialId = null), và vật tư tiêu hao như "dây hàn E71T-1C" chưa có bản ghi
   // Material. Bắt buộc materialId thì không materialize được đúng ca đang lỗi.
-  materialId      String?         @map("material_id")
-  itemCode        String?         @map("item_code")
-  description     String?         @map("item_description")
-  profile         String?         @map("item_profile")
-  grade           String?         @map("item_grade")
-  unit            String?         @map("item_unit")
-  bomItemId       String?         @map("bom_item_id")
-  bomVersionId    String?         @map("bom_version_id")
-  quantity        Decimal
-  requiredDate    DateTime?       @map("required_date")
-  specification   String?
-  notes           String?
+  materialId           String?                            @map("material_id")
+  itemCode             String?                            @map("item_code")
+  description          String?                            @map("item_description")
+  profile              String?                            @map("item_profile")
+  grade                String?                            @map("item_grade")
+  unit                 String?                            @map("item_unit")
+  bomItemId            String?                            @map("bom_item_id")
+  bomVersionId         String?                            @map("bom_version_id")
+  quantity             Decimal
+  requiredDate         DateTime?                          @map("required_date")
+  specification        String?
+  notes                String?
   // ── Bổ sung cấu trúc PrDetail (PORT Thương Mại — Module 2) — nullable/default, additive an toàn ──
-  materialGroupCode    String?    @map("material_group_code")     // nhóm VT: VTC | VPK | VDK | VBP | VTH | VTS | VTP
-  materialSubGroupCode String?    @map("material_sub_group_code") // VTC01, VPK01…
-  unitWeight      Decimal?        @default(0) @map("unit_weight")  // kg/m² hoặc kg/m
-  netQty          Decimal?        @default(0) @map("net_qty")      // số lượng tinh (từ BOM)
-  netWeight       Decimal?        @default(0) @map("net_weight")   // = netQty * unitWeight
-  reqQty          Decimal?        @default(0) @map("req_qty")      // SL yêu cầu mua (có hệ số dự phòng)
-  reqWeight       Decimal?        @default(0) @map("req_weight")
-  remainQty       Decimal?        @default(0) @map("remain_qty")   // còn tồn kho từ trước
-  remainWeight    Decimal?        @default(0) @map("remain_weight")
-  toBuyQty        Decimal?        @default(0) @map("to_buy_qty")    // = reqQty - remainQty (CẦN MUA)
-  toBuyWeight     Decimal?        @default(0) @map("to_buy_weight")
-  statusFlag      String?         @default("Chờ báo giá") @map("status_flag") // trạng thái mua per-dòng
-  matCode         String?         @map("mat_code")        // "Mã kho" (anh Huyến) — mã tra tồn kho/kế toán
-  matCodeSource   String?         @map("mat_code_source") // NOI_MAY_CHUA_DUYET | PHONG_TM_DUYET
-  remarks         String?
-  material        Material?       @relation(fields: [materialId], references: [id])
-  bidQuoteItems   BidQuoteItem[]
-  fabAllocations  PurchaseRequestItemFabAllocation[]
-  techComments    TechComment[]
-  contractItems   PurchaseContractItem[]
-  hardPegging     HardPegging?
-  purchaseRequest PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+  materialGroupCode    String?                            @map("material_group_code") // nhóm VT: VTC | VPK | VDK | VBP | VTH | VTS | VTP
+  materialSubGroupCode String?                            @map("material_sub_group_code") // VTC01, VPK01…
+  unitWeight           Decimal?                           @default(0) @map("unit_weight") // kg/m² hoặc kg/m
+  netQty               Decimal?                           @default(0) @map("net_qty") // số lượng tinh (từ BOM)
+  netWeight            Decimal?                           @default(0) @map("net_weight") // = netQty * unitWeight
+  reqQty               Decimal?                           @default(0) @map("req_qty") // SL yêu cầu mua (có hệ số dự phòng)
+  reqWeight            Decimal?                           @default(0) @map("req_weight")
+  remainQty            Decimal?                           @default(0) @map("remain_qty") // còn tồn kho từ trước
+  remainWeight         Decimal?                           @default(0) @map("remain_weight")
+  toBuyQty             Decimal?                           @default(0) @map("to_buy_qty") // = reqQty - remainQty (CẦN MUA)
+  toBuyWeight          Decimal?                           @default(0) @map("to_buy_weight")
+  statusFlag           String?                            @default("Chờ báo giá") @map("status_flag") // trạng thái mua per-dòng
+  matCode              String?                            @map("mat_code") // "Mã kho" (anh Huyến) — mã tra tồn kho/kế toán
+  matCodeSource        String?                            @map("mat_code_source") // NOI_MAY_CHUA_DUYET | PHONG_TM_DUYET
+  remarks              String?
+  material             Material?                          @relation(fields: [materialId], references: [id])
+  bidQuoteItems        BidQuoteItem[]
+  fabAllocations       PurchaseRequestItemFabAllocation[]
+  techComments         TechComment[]
+  contractItems        PurchaseContractItem[]
+  hardPegging          HardPegging?
+  purchaseRequest      PurchaseRequest                    @relation(fields: [prId], references: [id], onDelete: Cascade)
 
   @@index([prId])
   @@index([materialId])
@@ -703,21 +703,21 @@ model PurchaseRequestItem {
 // Giữ tồn = tăng Material.reservedStock; tồn khả dụng = currentStock − reservedStock.
 // 1 dòng PR có tối đa 1 bản ghi (unique prItemId); release → status RELEASED, quantity 0, hoàn reserved.
 model HardPegging {
-  id           String   @id @default(cuid())
-  prItemId     String   @unique @map("pr_item_id")
-  materialId   String   @map("material_id")
-  projectId    String?  @map("project_id")
-  quantity     Decimal  @default(0) // đang giữ cứng (0 khi đã release)
-  status       String   @default("ACTIVE") // ACTIVE | RELEASED
-  note         String?
-  allocatedBy  String   @map("allocated_by")
-  allocatedAt  DateTime @default(now()) @map("allocated_at")
-  releasedBy   String?  @map("released_by")
-  releasedAt   DateTime? @map("released_at")
+  id          String    @id @default(cuid())
+  prItemId    String    @unique @map("pr_item_id")
+  materialId  String    @map("material_id")
+  projectId   String?   @map("project_id")
+  quantity    Decimal   @default(0) // đang giữ cứng (0 khi đã release)
+  status      String    @default("ACTIVE") // ACTIVE | RELEASED
+  note        String?
+  allocatedBy String    @map("allocated_by")
+  allocatedAt DateTime  @default(now()) @map("allocated_at")
+  releasedBy  String?   @map("released_by")
+  releasedAt  DateTime? @map("released_at")
 
-  prItem       PurchaseRequestItem @relation(fields: [prItemId], references: [id], onDelete: Cascade)
-  material     Material            @relation(fields: [materialId], references: [id])
-  project      Project?            @relation(fields: [projectId], references: [id])
+  prItem   PurchaseRequestItem @relation(fields: [prItemId], references: [id], onDelete: Cascade)
+  material Material            @relation(fields: [materialId], references: [id])
+  project  Project?            @relation(fields: [projectId], references: [id])
 
   @@index([materialId])
   @@index([projectId])
@@ -789,30 +789,30 @@ model TechComment {
 }
 
 model PurchaseOrder {
-  id           String              @id @default(cuid())
-  poCode       String              @unique @map("po_code")
-  projectId    String?             @map("project_id")
-  vendorId     String              @map("vendor_id")
-  status       String              @default("DRAFT")
-  totalValue   Decimal?            @map("total_value")
-  currency     String              @default("VND")
-  orderDate    DateTime?           @map("order_date")
-  deliveryDate DateTime?           @map("delivery_date")
-  paymentTerms String?             @map("payment_terms")
-  sourceTaskId String?             @map("source_task_id")
-  bidAnalysisId String?            @map("bid_analysis_id") // PORT TM: PO tạo từ BID nào (Đợt 3)
-  contractId   String?             @map("contract_id")
-  createdBy    String              @map("created_by")
-  notes        String?
-  createdAt    DateTime            @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
-  items        PurchaseOrderItem[]
-  invoices     Invoice[]
+  id               String              @id @default(cuid())
+  poCode           String              @unique @map("po_code")
+  projectId        String?             @map("project_id")
+  vendorId         String              @map("vendor_id")
+  status           String              @default("DRAFT")
+  totalValue       Decimal?            @map("total_value")
+  currency         String              @default("VND")
+  orderDate        DateTime?           @map("order_date")
+  deliveryDate     DateTime?           @map("delivery_date")
+  paymentTerms     String?             @map("payment_terms")
+  sourceTaskId     String?             @map("source_task_id")
+  bidAnalysisId    String?             @map("bid_analysis_id") // PORT TM: PO tạo từ BID nào (Đợt 3)
+  contractId       String?             @map("contract_id")
+  createdBy        String              @map("created_by")
+  notes            String?
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+  items            PurchaseOrderItem[]
+  invoices         Invoice[]
   paymentSchedules PaymentSchedule[]
-  project      Project?            @relation(fields: [projectId], references: [id])
-  vendor       Vendor              @relation(fields: [vendorId], references: [id])
-  bidAnalysis  BidAnalysis?        @relation(fields: [bidAnalysisId], references: [id])
-  contract     PurchaseContract?   @relation(fields: [contractId], references: [id])
+  project          Project?            @relation(fields: [projectId], references: [id])
+  vendor           Vendor              @relation(fields: [vendorId], references: [id])
+  bidAnalysis      BidAnalysis?        @relation(fields: [bidAnalysisId], references: [id])
+  contract         PurchaseContract?   @relation(fields: [contractId], references: [id])
 
   @@index([projectId])
   @@index([vendorId])
@@ -825,56 +825,56 @@ model PurchaseOrder {
 // Lớp bao bọc PO: 1 HĐ ký với NCC → nhiều PO/đợt giao. HĐ KHÔNG bắt buộc trước PO
 // (giữ nguyên luồng PO hiện tại). File ký lưu ở FileAttachment (FK mềm qua signedFileId).
 model PurchaseContract {
-  id            String          @id @default(cuid())
-  contractCode  String          @unique @map("contract_code") // số HĐ, vd HDMB-2025-HH-095
-  contractType  String          @default("HDMB") @map("contract_type") // HDMB | HDKT | KHAC
-  projectId     String?         @map("project_id")
-  vendorId      String          @map("vendor_id")
-  title         String
-  value         Decimal?
-  currency      String          @default("VND")
-  signedDate    DateTime?       @map("signed_date")
-  effectiveDate DateTime?       @map("effective_date")
-  paymentTerms  String?         @map("payment_terms")
-  deliveryTerms String?         @map("delivery_terms")
-  status        String          @default("DRAFT") // DRAFT | ACTIVE | COMPLETED | CANCELLED
-  signedFileId  String?         @map("signed_file_id") // FK mềm → FileAttachment.id
-  notes         String?
+  id                 String                 @id @default(cuid())
+  contractCode       String                 @unique @map("contract_code") // số HĐ, vd HDMB-2025-HH-095
+  contractType       String                 @default("HDMB") @map("contract_type") // HDMB | HDKT | KHAC
+  projectId          String?                @map("project_id")
+  vendorId           String                 @map("vendor_id")
+  title              String
+  value              Decimal?
+  currency           String                 @default("VND")
+  signedDate         DateTime?              @map("signed_date")
+  effectiveDate      DateTime?              @map("effective_date")
+  paymentTerms       String?                @map("payment_terms")
+  deliveryTerms      String?                @map("delivery_terms")
+  status             String                 @default("DRAFT") // DRAFT | ACTIVE | COMPLETED | CANCELLED
+  signedFileId       String?                @map("signed_file_id") // FK mềm → FileAttachment.id
+  notes              String?
   // Thương mại chi tiết (khớp Commerce): loại giao dịch + mốc logistics nhập khẩu.
-  tradeType        String?      @map("trade_type")       // DOMESTIC | IMPORT (tách khỏi contractType HDMB/HDKT)
-  vendorCountry    String?      @map("vendor_country")
-  exportPort       String?      @map("export_port")
-  importLcDate     DateTime?    @map("import_lc_date")   // ngày mở L/C
-  cifDate          DateTime?    @map("cif_date")         // CIF cảng đến
-  paymentDate      DateTime?    @map("payment_date")
-  customsDate      DateTime?    @map("customs_date")     // thông quan
-  arrivedDate      DateTime?    @map("arrived_date")     // hàng thực về
-  qcInvitationDate DateTime?    @map("qc_invitation_date") // mời QC
+  tradeType          String?                @map("trade_type") // DOMESTIC | IMPORT (tách khỏi contractType HDMB/HDKT)
+  vendorCountry      String?                @map("vendor_country")
+  exportPort         String?                @map("export_port")
+  importLcDate       DateTime?              @map("import_lc_date") // ngày mở L/C
+  cifDate            DateTime?              @map("cif_date") // CIF cảng đến
+  paymentDate        DateTime?              @map("payment_date")
+  customsDate        DateTime?              @map("customs_date") // thông quan
+  arrivedDate        DateTime?              @map("arrived_date") // hàng thực về
+  qcInvitationDate   DateTime?              @map("qc_invitation_date") // mời QC
   // #5 — Chấp nhận MTC (QT19 bước 6): QLCL duyệt MTC/chứng chỉ nhà máy đạt mới cho nghiệm thu/xuất.
-  mtcStatus        String       @default("PENDING") @map("mtc_status") // PENDING | ACCEPTED | REJECTED
-  mtcAcceptedBy    String?      @map("mtc_accepted_by")
-  mtcAcceptedAt    DateTime?    @map("mtc_accepted_at")
-  mtcRejectReason  String?      @map("mtc_reject_reason")
+  mtcStatus          String                 @default("PENDING") @map("mtc_status") // PENDING | ACCEPTED | REJECTED
+  mtcAcceptedBy      String?                @map("mtc_accepted_by")
+  mtcAcceptedAt      DateTime?              @map("mtc_accepted_at")
+  mtcRejectReason    String?                @map("mtc_reject_reason")
   // B7 — Duyệt điều kiện thanh toán HĐ: 3 chữ ký Kế toán (R08) + Trưởng KTKT/Mr Sâm (R03) + BGĐ (R01).
-  paymentTermsStatus String    @default("DRAFT") @map("payment_terms_status") // DRAFT | PENDING | APPROVED | REJECTED
-  ptFinanceBy   String?         @map("pt_finance_by")
-  ptFinanceAt   DateTime?       @map("pt_finance_at")
-  ptKtktBy      String?         @map("pt_ktkt_by")
-  ptKtktAt      DateTime?       @map("pt_ktkt_at")
-  ptBodBy       String?         @map("pt_bod_by")
-  ptBodAt       DateTime?       @map("pt_bod_at")
-  ptRejectBy    String?         @map("pt_reject_by")
-  ptRejectAt    DateTime?       @map("pt_reject_at")
-  ptRejectReason String?        @map("pt_reject_reason")
-  createdBy     String          @map("created_by")
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-  project       Project?        @relation(fields: [projectId], references: [id])
-  vendor        Vendor          @relation(fields: [vendorId], references: [id])
-  orders        PurchaseOrder[]
-  items         PurchaseContractItem[]
-  paymentRequests PaymentRequest[]
-  goodsReceipts GoodsReceipt[]
+  paymentTermsStatus String                 @default("DRAFT") @map("payment_terms_status") // DRAFT | PENDING | APPROVED | REJECTED
+  ptFinanceBy        String?                @map("pt_finance_by")
+  ptFinanceAt        DateTime?              @map("pt_finance_at")
+  ptKtktBy           String?                @map("pt_ktkt_by")
+  ptKtktAt           DateTime?              @map("pt_ktkt_at")
+  ptBodBy            String?                @map("pt_bod_by")
+  ptBodAt            DateTime?              @map("pt_bod_at")
+  ptRejectBy         String?                @map("pt_reject_by")
+  ptRejectAt         DateTime?              @map("pt_reject_at")
+  ptRejectReason     String?                @map("pt_reject_reason")
+  createdBy          String                 @map("created_by")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  project            Project?               @relation(fields: [projectId], references: [id])
+  vendor             Vendor                 @relation(fields: [vendorId], references: [id])
+  orders             PurchaseOrder[]
+  items              PurchaseContractItem[]
+  paymentRequests    PaymentRequest[]
+  goodsReceipts      GoodsReceipt[]
 
   @@index([projectId])
   @@index([vendorId])
@@ -884,27 +884,27 @@ model PurchaseContract {
 
 // Dòng chi tiết hợp đồng (khớp Commerce ContractDetail): vật tư · SL/KL · đơn giá · giao hàng.
 model PurchaseContractItem {
-  id              String   @id @default(cuid())
-  contractId      String   @map("contract_id")
-  prItemId        String?  @map("pr_item_id")
-  materialId      String?  @map("material_id")
-  itemCode        String?  @map("item_code")
+  id              String    @id @default(cuid())
+  contractId      String    @map("contract_id")
+  prItemId        String?   @map("pr_item_id")
+  materialId      String?   @map("material_id")
+  itemCode        String?   @map("item_code")
   description     String?
   unit            String?
-  actualProfile   String?  @map("actual_profile") // quy cách thực tế theo HĐ
-  actualGrade     String?  @map("actual_grade")
-  contractQty     Decimal  @default(0) @map("contract_qty")
-  contractWeight  Decimal  @default(0) @map("contract_weight")
-  unitPriceNoVat  Decimal  @default(0) @map("unit_price_no_vat")
-  currency        String   @default("VND")
-  vatRate         Decimal  @default(10) @map("vat_rate")
-  totalNoVat      Decimal  @default(0) @map("total_no_vat")
-  totalWithVat    Decimal  @default(0) @map("total_with_vat")
-  deliveredQty    Decimal  @default(0) @map("delivered_qty")
-  deliveredWeight Decimal  @default(0) @map("delivered_weight")
+  actualProfile   String?   @map("actual_profile") // quy cách thực tế theo HĐ
+  actualGrade     String?   @map("actual_grade")
+  contractQty     Decimal   @default(0) @map("contract_qty")
+  contractWeight  Decimal   @default(0) @map("contract_weight")
+  unitPriceNoVat  Decimal   @default(0) @map("unit_price_no_vat")
+  currency        String    @default("VND")
+  vatRate         Decimal   @default(10) @map("vat_rate")
+  totalNoVat      Decimal   @default(0) @map("total_no_vat")
+  totalWithVat    Decimal   @default(0) @map("total_with_vat")
+  deliveredQty    Decimal   @default(0) @map("delivered_qty")
+  deliveredWeight Decimal   @default(0) @map("delivered_weight")
   handoverDate    DateTime? @map("handover_date")
-  lineStatus      String   @default("PENDING") @map("line_status") // PENDING | PARTIAL_DELIVERY | DELIVERED
-  createdAt       DateTime @default(now()) @map("created_at")
+  lineStatus      String    @default("PENDING") @map("line_status") // PENDING | PARTIAL_DELIVERY | DELIVERED
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   contract    PurchaseContract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
   prItem      PurchaseRequestItem? @relation(fields: [prItemId], references: [id])
@@ -917,18 +917,18 @@ model PurchaseContractItem {
 
 // Nghiệm thu QC theo dòng hợp đồng (nội địa / nhập khẩu).
 model ContractInspection {
-  id              String   @id @default(cuid())
-  contractItemId  String   @map("contract_item_id")
-  inspectionType  String   @default("DOMESTIC") @map("inspection_type") // DOMESTIC | IMPORT
-  reportNo        String?  @map("report_no")
+  id              String    @id @default(cuid())
+  contractItemId  String    @map("contract_item_id")
+  inspectionType  String    @default("DOMESTIC") @map("inspection_type") // DOMESTIC | IMPORT
+  reportNo        String?   @map("report_no")
   inspectionDate  DateTime? @map("inspection_date")
-  inspectedQty    Decimal  @default(0) @map("inspected_qty")
-  inspectedWeight Decimal  @default(0) @map("inspected_weight")
-  acceptedQty     Decimal  @default(0) @map("accepted_qty")
-  acceptedWeight  Decimal  @default(0) @map("accepted_weight")
+  inspectedQty    Decimal   @default(0) @map("inspected_qty")
+  inspectedWeight Decimal   @default(0) @map("inspected_weight")
+  acceptedQty     Decimal   @default(0) @map("accepted_qty")
+  acceptedWeight  Decimal   @default(0) @map("accepted_weight")
   result          String?
   remarks         String?
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   contractItem PurchaseContractItem @relation(fields: [contractItemId], references: [id], onDelete: Cascade)
 
@@ -958,21 +958,21 @@ model PurchaseOrderItem {
 }
 
 model MillCertificate {
-  id              String   @id @default(cuid())
-  certNumber      String   @unique @map("cert_number")
-  materialId      String   @map("material_id")
-  vendorId        String   @map("vendor_id")
-  heatNumber      String   @map("heat_number")
+  id              String          @id @default(cuid())
+  certNumber      String          @unique @map("cert_number")
+  materialId      String          @map("material_id")
+  vendorId        String          @map("vendor_id")
+  heatNumber      String          @map("heat_number")
   grade           String?
   thickness       String?
-  chemComposition Json?    @map("chem_composition")
-  mechProperties  Json?    @map("mech_properties")
-  fileUrl         String?  @map("file_url")
-  isVerified      Boolean  @default(false) @map("is_verified")
-  verifiedBy      String?  @map("verified_by")
-  createdAt       DateTime @default(now()) @map("created_at")
-  material        Material @relation(fields: [materialId], references: [id])
-  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  chemComposition Json?           @map("chem_composition")
+  mechProperties  Json?           @map("mech_properties")
+  fileUrl         String?         @map("file_url")
+  isVerified      Boolean         @default(false) @map("is_verified")
+  verifiedBy      String?         @map("verified_by")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  material        Material        @relation(fields: [materialId], references: [id])
+  vendor          Vendor          @relation(fields: [vendorId], references: [id])
   stockMovements  StockMovement[]
 
   @@index([materialId])
@@ -993,50 +993,60 @@ model Workshop {
 }
 
 model WorkOrder {
-  id             String           @id @default(cuid())
-  woCode         String           @unique @map("wo_code")
-  projectId      String           @map("project_id")
-  description    String
-  teamCode       String           @map("team_code")
-  status         String           @default("PENDING_MATERIAL")
-  plannedStart   DateTime?        @map("planned_start")
-  plannedEnd     DateTime?        @map("planned_end")
-  actualStart    DateTime?        @map("actual_start")
-  actualEnd      DateTime?        @map("actual_end")
-  createdBy      String           @map("created_by")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
-  completedQty   Decimal?         @default(0) @map("completed_qty")
-  earnedQty      Decimal?         @default(0) @map("earned_qty")
-  quantity       Decimal?
-  woType         String           @default("INTERNAL") @map("wo_type")
-  needsReQc      Boolean          @default(false) @map("needs_re_qc")
-  reQcReason     String?          @map("re_qc_reason")
-  workshopId     String?          @map("workshop_id")
-  pieceMark      String?          @map("piece_mark")
-  bomVersionId   String?          @map("bom_version_id")
-  plannedWeight  Decimal?         @map("planned_weight")
-  departmentId   String?          @map("department_id")
-  deliveries            DeliveryRecord[]
-  jobCards              JobCard[]
-  materialIssues        MaterialIssue[]
-  materialRequests      WorkOrderMaterialRequest[]
-  weldJoints            WeldJoint[]
-  packingListItems      PackingListItem[]
-  equipmentAssignments  EquipmentAssignment[]
-  workPermits           WorkPermit[]
-  inspections           Inspection[]
-  itpCheckpoints        ITPCheckpoint[]
-  project               Project          @relation(fields: [projectId], references: [id])
-  workshop       Workshop?        @relation(fields: [workshopId], references: [id])
-  bomVersion     BomVersion?      @relation(fields: [bomVersionId], references: [id])
-  department     Department?      @relation(fields: [departmentId], references: [id])
+  id                   String                     @id @default(cuid())
+  woCode               String                     @unique @map("wo_code")
+  projectId            String                     @map("project_id")
+  description          String
+  teamCode             String                     @map("team_code")
+  status               String                     @default("PENDING_MATERIAL")
+  plannedStart         DateTime?                  @map("planned_start")
+  plannedEnd           DateTime?                  @map("planned_end")
+  actualStart          DateTime?                  @map("actual_start")
+  actualEnd            DateTime?                  @map("actual_end")
+  createdBy            String                     @map("created_by")
+  createdAt            DateTime                   @default(now()) @map("created_at")
+  updatedAt            DateTime                   @updatedAt @map("updated_at")
+  completedQty         Decimal?                   @default(0) @map("completed_qty")
+  earnedQty            Decimal?                   @default(0) @map("earned_qty")
+  quantity             Decimal?
+  woType               String                     @default("INTERNAL") @map("wo_type")
+  needsReQc            Boolean                    @default(false) @map("needs_re_qc")
+  reQcReason           String?                    @map("re_qc_reason")
+  workshopId           String?                    @map("workshop_id")
+  pieceMark            String?                    @map("piece_mark")
+  bomVersionId         String?                    @map("bom_version_id")
+  plannedWeight        Decimal?                   @map("planned_weight")
+  materials            String? // vật tư gom từ APL kèm kg cộng dồn, vd "PL10 SS400: 1.234 kg, ..."
+  // Từ 2026-08 giao theo ITEM: 1 ITEM = 1 WO = 1 xưởng. aplImportId + aplItem là liên kết CHÍNH.
+  // aplLineId giữ lại cho các WO cũ phát hành theo từng dòng vàng (assembly).
+  aplImportId          String?                    @map("apl_import_id")
+  aplItem              String?                    @map("apl_item")
+  aplLineId            String?                    @map("apl_line_id") // dòng cụm APL đã sinh ra WO này (cách cũ)
+  departmentId         String?                    @map("department_id")
+  deliveries           DeliveryRecord[]
+  jobCards             JobCard[]
+  materialIssues       MaterialIssue[]
+  materialRequests     WorkOrderMaterialRequest[]
+  weldJoints           WeldJoint[]
+  packingListItems     PackingListItem[]
+  equipmentAssignments EquipmentAssignment[]
+  workPermits          WorkPermit[]
+  inspections          Inspection[]
+  itpCheckpoints       ITPCheckpoint[]
+  itps                 InspectionTestPlan[]
+  project              Project                    @relation(fields: [projectId], references: [id])
+  workshop             Workshop?                  @relation(fields: [workshopId], references: [id])
+  bomVersion           BomVersion?                @relation(fields: [bomVersionId], references: [id])
+  department           Department?                @relation(fields: [departmentId], references: [id])
+  aplLine              AplLine?                   @relation(fields: [aplLineId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([workshopId])
   @@index([status])
   @@index([bomVersionId])
   @@index([departmentId])
+  @@index([aplLineId])
+  @@index([aplImportId, aplItem])
   @@index([pieceMark])
   @@map("work_orders")
 }
@@ -1052,8 +1062,8 @@ model MaterialRequestOrder {
   id            String    @id @default(cuid())
   code          String    @unique
   projectId     String    @map("project_id")
-  departmentId  String?   @map("department_id")   // xưởng lập phiếu
-  status        String    @default("DRAFT")       // DRAFT | PENDING_PM | PENDING_BOD | APPROVED | REJECTED
+  departmentId  String?   @map("department_id") // xưởng lập phiếu
+  status        String    @default("DRAFT") // DRAFT | PENDING_PM | PENDING_BOD | APPROVED | REJECTED
   notes         String?
   createdBy     String    @map("created_by")
   submittedAt   DateTime? @map("submitted_at")
@@ -1078,20 +1088,20 @@ model MaterialRequestOrder {
 }
 
 model WorkOrderMaterialRequest {
-  id          String    @id @default(cuid())
-  requestId   String?   @map("request_id")   // phiếu chứa dòng này (null = dữ liệu trước khi có phiếu)
-  workOrderId String    @map("work_order_id")
-  materialId  String    @map("material_id")
+  id          String                @id @default(cuid())
+  requestId   String?               @map("request_id") // phiếu chứa dòng này (null = dữ liệu trước khi có phiếu)
+  workOrderId String                @map("work_order_id")
+  materialId  String                @map("material_id")
   quantity    Decimal
   unit        String
-  source      String    @default("MANUAL") // BOM | MANUAL
+  source      String                @default("MANUAL") // BOM | MANUAL
   notes       String?
-  createdBy   String    @map("created_by")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String                @map("created_by")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
   request     MaterialRequestOrder? @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  material    Material  @relation(fields: [materialId], references: [id])
+  workOrder   WorkOrder             @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  material    Material              @relation(fields: [materialId], references: [id])
 
   // Cùng một mã vật tư có thể xin lại ở ĐỢT SAU cho cùng lệnh → khoá theo (phiếu, lệnh, vật tư)
   @@unique([requestId, workOrderId, materialId])
@@ -1149,30 +1159,30 @@ model JobCard {
 }
 
 model WeldJoint {
-  id            String                @id @default(cuid())
-  workOrderId   String                @map("work_order_id")
-  jointNo       String                @map("joint_no")
-  jointType     String                @default("BUTT") @map("joint_type")
-  wpsNo         String?               @map("wps_no")
-  welderId      String?               @map("welder_id")
-  welderCertId  String?               @map("welder_cert_id")
-  wpsCertId     String?               @map("wps_cert_id")
-  diameter      Decimal?
-  thickness     Decimal?
-  length        Decimal?
-  status        String                @default("PENDING")
-  weldedAt      DateTime?             @map("welded_at")
-  ndtStatus     String?               @default("PENDING") @map("ndt_status")
-  ndtMethod     String?               @map("ndt_method")
-  ncrId         String?               @map("ncr_id")
-  remarks       String?
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
-  workOrder     WorkOrder             @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  welder        User?                 @relation("WelderJoints", fields: [welderId], references: [id])
-  welderCert    CertificateRegistry?  @relation("WelderCertJoints", fields: [welderCertId], references: [id], onDelete: SetNull)
-  wpsCert       CertificateRegistry?  @relation("WpsCertJoints", fields: [wpsCertId], references: [id], onDelete: SetNull)
-  ncr           NonConformanceReport? @relation("WeldJointNCR", fields: [ncrId], references: [id])
+  id           String                @id @default(cuid())
+  workOrderId  String                @map("work_order_id")
+  jointNo      String                @map("joint_no")
+  jointType    String                @default("BUTT") @map("joint_type")
+  wpsNo        String?               @map("wps_no")
+  welderId     String?               @map("welder_id")
+  welderCertId String?               @map("welder_cert_id")
+  wpsCertId    String?               @map("wps_cert_id")
+  diameter     Decimal?
+  thickness    Decimal?
+  length       Decimal?
+  status       String                @default("PENDING")
+  weldedAt     DateTime?             @map("welded_at")
+  ndtStatus    String?               @default("PENDING") @map("ndt_status")
+  ndtMethod    String?               @map("ndt_method")
+  ncrId        String?               @map("ncr_id")
+  remarks      String?
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  workOrder    WorkOrder             @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  welder       User?                 @relation("WelderJoints", fields: [welderId], references: [id])
+  welderCert   CertificateRegistry?  @relation("WelderCertJoints", fields: [welderCertId], references: [id], onDelete: SetNull)
+  wpsCert      CertificateRegistry?  @relation("WpsCertJoints", fields: [wpsCertId], references: [id], onDelete: SetNull)
+  ncr          NonConformanceReport? @relation("WeldJointNCR", fields: [ncrId], references: [id])
 
   @@unique([workOrderId, jointNo])
   @@index([workOrderId])
@@ -1224,43 +1234,54 @@ model InspectionItem {
 }
 
 model InspectionTestPlan {
-  id          String          @id @default(cuid())
-  itpCode     String          @unique @map("itp_code")
-  projectId   String          @map("project_id")
-  name        String
-  revision    String          @default("R0")
-  status      String          @default("DRAFT")
-  approvedBy  String?         @map("approved_by")
-  approvedAt  DateTime?       @map("approved_at")
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-  project     Project         @relation(fields: [projectId], references: [id])
-  checkpoints ITPCheckpoint[]
+  id             String          @id @default(cuid())
+  itpCode        String          @unique @map("itp_code")
+  projectId      String          @map("project_id")
+  name           String
+  revision       String          @default("R0")
+  status         String          @default("DRAFT")
+  // ITP lập cho MỘT lệnh sản xuất đã báo xong khối lượng (xem phiếu JobCard của lệnh đó).
+  workOrderId    String?         @map("work_order_id")
+  inspectionDate DateTime?       @map("inspection_date")
+  approvedBy     String?         @map("approved_by")
+  approvedAt     DateTime?       @map("approved_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  project        Project         @relation(fields: [projectId], references: [id])
+  workOrder      WorkOrder?      @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  checkpoints    ITPCheckpoint[]
 
   @@index([projectId])
+  @@index([workOrderId])
   @@map("inspection_test_plans")
 }
 
 model ITPCheckpoint {
-  id             String             @id @default(cuid())
-  itpId          String             @map("itp_id")
-  checkpointNo   Int                @map("checkpoint_no")
+  id             String                @id @default(cuid())
+  itpId          String                @map("itp_id")
+  checkpointNo   Int                   @map("checkpoint_no")
   activity       String
   description    String
   standard       String?
-  acceptCriteria String?            @map("accept_criteria")
-  inspectionType String             @default("MONITOR") @map("inspection_type")
-  status         String             @default("PENDING")
-  inspectedBy    String?            @map("inspected_by")
-  inspectedAt    DateTime?          @map("inspected_at")
+  acceptCriteria String?               @map("accept_criteria")
+  inspectionType String                @default("MONITOR") @map("inspection_type")
+  status         String                @default("PENDING")
+  inspectedBy    String?               @map("inspected_by")
+  inspectedAt    DateTime?             @map("inspected_at")
+  // Nghiệm thu cần CẢ HAI bên xác nhận, độc lập và không phân thứ tự.
+  // Đủ cả hai thì status mới chuyển PASSED.
+  qcConfirmedBy  String?               @map("qc_confirmed_by")
+  qcConfirmedAt  DateTime?             @map("qc_confirmed_at")
+  pmConfirmedBy  String?               @map("pm_confirmed_by")
+  pmConfirmedAt  DateTime?             @map("pm_confirmed_at")
   remarks        String?
-  sortOrder      Int                @default(0) @map("sort_order")
-  ncrId          String?            @map("ncr_id")
-  workOrderId    String?            @map("work_order_id")
-  pieceMark      String?            @map("piece_mark")
-  itp            InspectionTestPlan @relation(fields: [itpId], references: [id], onDelete: Cascade)
+  sortOrder      Int                   @default(0) @map("sort_order")
+  ncrId          String?               @map("ncr_id")
+  workOrderId    String?               @map("work_order_id")
+  pieceMark      String?               @map("piece_mark")
+  itp            InspectionTestPlan    @relation(fields: [itpId], references: [id], onDelete: Cascade)
   ncr            NonConformanceReport? @relation(fields: [ncrId], references: [id], onDelete: SetNull)
-  workOrder      WorkOrder?         @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  workOrder      WorkOrder?            @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
 
   @@index([itpId])
   @@index([ncrId])
@@ -1269,26 +1290,26 @@ model ITPCheckpoint {
 }
 
 model NonConformanceReport {
-  id          String      @id @default(cuid())
-  ncrCode     String      @unique @map("ncr_code")
-  projectId   String      @map("project_id")
+  id          String          @id @default(cuid())
+  ncrCode     String          @unique @map("ncr_code")
+  projectId   String          @map("project_id")
   category    String
-  severity    String      @default("MINOR")
+  severity    String          @default("MINOR")
   description String
-  rootCause   String?     @map("root_cause")
+  rootCause   String?         @map("root_cause")
   disposition String?
-  reworkCount Int         @default(0) @map("rework_count")
-  status      String      @default("OPEN")
-  raisedBy    String      @map("raised_by")
-  closedBy    String?     @map("closed_by")
-  closedAt    DateTime?   @map("closed_at")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  taskId      String?     @map("task_id")
+  reworkCount Int             @default(0) @map("rework_count")
+  status      String          @default("OPEN")
+  raisedBy    String          @map("raised_by")
+  closedBy    String?         @map("closed_by")
+  closedAt    DateTime?       @map("closed_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  taskId      String?         @map("task_id")
   actions     NcrAction[]
   checkpoints ITPCheckpoint[]
-  weldJoints  WeldJoint[]    @relation("WeldJointNCR")
-  project     Project     @relation(fields: [projectId], references: [id])
+  weldJoints  WeldJoint[]     @relation("WeldJointNCR")
+  project     Project         @relation(fields: [projectId], references: [id])
 
   @@index([projectId])
   @@index([status])
@@ -1316,24 +1337,24 @@ model NcrAction {
 }
 
 model CertificateRegistry {
-  id         String   @id @default(cuid())
-  certType   String   @map("cert_type")
-  certNumber String   @map("cert_number")
-  holderName String   @map("holder_name")
-  holderId   String?  @map("holder_id")
-  issuedBy   String   @map("issued_by")
-  issueDate  DateTime @map("issue_date")
-  expiryDate DateTime @map("expiry_date")
-  standard   String?
-  scope      String?
-  fileUrl       String?              @map("file_url")
-  isActive      Boolean              @default(true) @map("is_active")
-  renewedFromId String?              @map("renewed_from_id")
-  createdAt     DateTime             @default(now()) @map("created_at")
-  renewedFrom   CertificateRegistry? @relation("CertRenewal", fields: [renewedFromId], references: [id], onDelete: SetNull)
-  renewals      CertificateRegistry[] @relation("CertRenewal")
-  welderCertJoints WeldJoint[] @relation("WelderCertJoints")
-  wpsCertJoints    WeldJoint[] @relation("WpsCertJoints")
+  id               String                @id @default(cuid())
+  certType         String                @map("cert_type")
+  certNumber       String                @map("cert_number")
+  holderName       String                @map("holder_name")
+  holderId         String?               @map("holder_id")
+  issuedBy         String                @map("issued_by")
+  issueDate        DateTime              @map("issue_date")
+  expiryDate       DateTime              @map("expiry_date")
+  standard         String?
+  scope            String?
+  fileUrl          String?               @map("file_url")
+  isActive         Boolean               @default(true) @map("is_active")
+  renewedFromId    String?               @map("renewed_from_id")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  renewedFrom      CertificateRegistry?  @relation("CertRenewal", fields: [renewedFromId], references: [id], onDelete: SetNull)
+  renewals         CertificateRegistry[] @relation("CertRenewal")
+  welderCertJoints WeldJoint[]           @relation("WelderCertJoints")
+  wpsCertJoints    WeldJoint[]           @relation("WpsCertJoints")
 
   @@unique([certType, certNumber])
   @@index([holderId])
@@ -1401,22 +1422,22 @@ model BillOfMaterial {
 }
 
 model BomVersion {
-  id               String                @id @default(cuid())
-  bomId            String                @map("bom_id")
-  versionNo        Int                   @map("version_no")
-  status           String                @default("DRAFT") // DRAFT | ACTIVE | SUPERSEDED
-  sourceRevisionId String?               @map("source_revision_id")
-  ecoId            String?               @map("eco_id")
+  id               String                  @id @default(cuid())
+  bomId            String                  @map("bom_id")
+  versionNo        Int                     @map("version_no")
+  status           String                  @default("DRAFT") // DRAFT | ACTIVE | SUPERSEDED
+  sourceRevisionId String?                 @map("source_revision_id")
+  ecoId            String?                 @map("eco_id")
   reason           String?
-  createdBy        String                @map("created_by")
-  approvedBy       String?               @map("approved_by")
-  approvedAt       DateTime?             @map("approved_at")
-  createdAt        DateTime              @default(now()) @map("created_at")
-  updatedAt        DateTime              @updatedAt @map("updated_at")
-  bom              BillOfMaterial        @relation(fields: [bomId], references: [id], onDelete: Cascade)
-  sourceRevision   DrawingRevision?      @relation(fields: [sourceRevisionId], references: [id])
+  createdBy        String                  @map("created_by")
+  approvedBy       String?                 @map("approved_by")
+  approvedAt       DateTime?               @map("approved_at")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  bom              BillOfMaterial          @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  sourceRevision   DrawingRevision?        @relation(fields: [sourceRevisionId], references: [id])
   eco              EngineeringChangeOrder? @relation(fields: [ecoId], references: [id])
-  lines            BomItem[]             @relation("VersionLines")
+  lines            BomItem[]               @relation("VersionLines")
   workOrders       WorkOrder[]
 
   @@unique([bomId, versionNo])
@@ -1432,7 +1453,7 @@ model BomItem {
   materialId    String         @map("material_id")
   parentId      String?        @map("parent_id")
   category      String         @default("MAIN") // MAIN | WELD | PAINT | AUX | CONSUMABLE
-  layer         String?        // HARD | NORM | STOCK
+  layer         String? // HARD | NORM | STOCK
   pieceMark     String?        @map("piece_mark")
   quantity      Decimal
   unit          String
@@ -1461,7 +1482,7 @@ model EngineeringChangeOrder {
   title          String
   description    String
   changeType     String       @map("change_type")
-  source         String?      // DESIGN | CUSTOMER | ENGINEERING_SHOPDRAWING | PRODUCTION_NCR | SUBSTITUTION | CORRECTION | SITE
+  source         String? // DESIGN | CUSTOMER | ENGINEERING_SHOPDRAWING | PRODUCTION_NCR | SUBSTITUTION | CORRECTION | SITE
   costBearer     String?      @map("cost_bearer") // INTERNAL | CUSTOMER | SUPPLIER | PRODUCTION_TEAM | SITE_TBD
   ncrId          String?      @map("ncr_id")
   impactCost     Decimal?     @map("impact_cost")
@@ -1484,18 +1505,18 @@ model EngineeringChangeOrder {
 }
 
 model Norm {
-  id          String   @id @default(cuid())
-  projectId   String?  @map("project_id")
-  category    String   // WELD | PAINT | CONSUMABLE
-  code        String   @unique
-  name        String
-  unit        String   // kg/m, L/m², kg/kg, etc.
-  rate        Decimal  // consumption rate
-  basisUnit   String   @map("basis_unit") // m (weld length), m² (surface area), kg (steel weight)
-  materialId  String?  @map("material_id")
-  notes       String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(cuid())
+  projectId  String?  @map("project_id")
+  category   String // WELD | PAINT | CONSUMABLE
+  code       String   @unique
+  name       String
+  unit       String // kg/m, L/m², kg/kg, etc.
+  rate       Decimal // consumption rate
+  basisUnit  String   @map("basis_unit") // m (weld length), m² (surface area), kg (steel weight)
+  materialId String?  @map("material_id")
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@index([category])
   @@index([projectId])
@@ -1804,27 +1825,27 @@ model HseManHours {
 }
 
 model Equipment {
-  id            String                @id @default(cuid())
-  equipmentCode String                @unique @map("equipment_code")
-  name          String
-  category      String                @default("OTHER")
-  model         String?
-  serialNo      String?               @map("serial_no")
-  manufacturer  String?
-  location      String?
-  departmentId  String?               @map("department_id")
-  status        String                @default("AVAILABLE")
-  condition     String                @default("GOOD")
-  purchaseDate  DateTime?             @map("purchase_date")
-  inspectionDue DateTime?             @map("inspection_due")
-  lastInspection DateTime?            @map("last_inspection")
-  notes         String?
-  createdBy     String                @map("created_by")
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
-  department    Department?           @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  id                 String                @id @default(cuid())
+  equipmentCode      String                @unique @map("equipment_code")
+  name               String
+  category           String                @default("OTHER")
+  model              String?
+  serialNo           String?               @map("serial_no")
+  manufacturer       String?
+  location           String?
+  departmentId       String?               @map("department_id")
+  status             String                @default("AVAILABLE")
+  condition          String                @default("GOOD")
+  purchaseDate       DateTime?             @map("purchase_date")
+  inspectionDue      DateTime?             @map("inspection_due")
+  lastInspection     DateTime?             @map("last_inspection")
+  notes              String?
+  createdBy          String                @map("created_by")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  department         Department?           @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   maintenanceRecords MaintenanceRecord[]
-  assignments   EquipmentAssignment[]
+  assignments        EquipmentAssignment[]
 
   @@index([departmentId])
   @@index([status])
@@ -1833,22 +1854,22 @@ model Equipment {
 }
 
 model MaintenanceRecord {
-  id            String     @id @default(cuid())
-  maintCode     String     @unique @map("maint_code")
-  equipmentId   String     @map("equipment_id")
-  type          String     @default("PREVENTIVE")
+  id            String    @id @default(cuid())
+  maintCode     String    @unique @map("maint_code")
+  equipmentId   String    @map("equipment_id")
+  type          String    @default("PREVENTIVE")
   description   String
-  scheduledDate DateTime?  @map("scheduled_date")
-  completedDate DateTime?  @map("completed_date")
+  scheduledDate DateTime? @map("scheduled_date")
+  completedDate DateTime? @map("completed_date")
   cost          Decimal?
-  performedBy   String?    @map("performed_by")
-  status        String     @default("SCHEDULED")
-  taskId        String?    @map("task_id")
+  performedBy   String?   @map("performed_by")
+  status        String    @default("SCHEDULED")
+  taskId        String?   @map("task_id")
   notes         String?
-  createdBy     String     @map("created_by")
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
-  equipment     Equipment  @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  equipment     Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
 
   @@index([equipmentId])
   @@index([status])
@@ -1857,18 +1878,18 @@ model MaintenanceRecord {
 }
 
 model EquipmentAssignment {
-  id           String     @id @default(cuid())
-  equipmentId  String     @map("equipment_id")
-  workOrderId  String?    @map("work_order_id")
-  departmentId String?    @map("department_id")
-  assignedFrom DateTime   @default(now()) @map("assigned_from")
-  assignedTo   DateTime?  @map("assigned_to")
-  status       String     @default("ACTIVE")
+  id           String      @id @default(cuid())
+  equipmentId  String      @map("equipment_id")
+  workOrderId  String?     @map("work_order_id")
+  departmentId String?     @map("department_id")
+  assignedFrom DateTime    @default(now()) @map("assigned_from")
+  assignedTo   DateTime?   @map("assigned_to")
+  status       String      @default("ACTIVE")
   notes        String?
-  createdBy    String     @map("created_by")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  equipment    Equipment  @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  workOrder    WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  createdBy    String      @map("created_by")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  equipment    Equipment   @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  workOrder    WorkOrder?  @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@index([equipmentId])
@@ -1878,28 +1899,28 @@ model EquipmentAssignment {
 }
 
 model WorkPermit {
-  id          String    @id @default(cuid())
-  permitCode  String    @unique @map("permit_code")
-  permitType  String    @default("HOT_WORK") @map("permit_type")
-  projectId   String?   @map("project_id")
-  workOrderId String?   @map("work_order_id")
+  id          String     @id @default(cuid())
+  permitCode  String     @unique @map("permit_code")
+  permitType  String     @default("HOT_WORK") @map("permit_type")
+  projectId   String?    @map("project_id")
+  workOrderId String?    @map("work_order_id")
   location    String?
   description String
   hazards     String?
   precautions String?
-  validFrom   DateTime  @map("valid_from")
-  validTo     DateTime  @map("valid_to")
-  status      String    @default("DRAFT")
-  requestedBy String    @map("requested_by")
-  approvedBy  String?   @map("approved_by")
-  approvedAt  DateTime? @map("approved_at")
-  closedBy    String?   @map("closed_by")
-  closedAt    DateTime? @map("closed_at")
+  validFrom   DateTime   @map("valid_from")
+  validTo     DateTime   @map("valid_to")
+  status      String     @default("DRAFT")
+  requestedBy String     @map("requested_by")
+  approvedBy  String?    @map("approved_by")
+  approvedAt  DateTime?  @map("approved_at")
+  closedBy    String?    @map("closed_by")
+  closedAt    DateTime?  @map("closed_at")
   notes       String?
-  taskId      String?   @map("task_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  taskId      String?    @map("task_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
@@ -1910,17 +1931,17 @@ model WorkPermit {
 }
 
 model ToolboxTalk {
-  id           String     @id @default(cuid())
-  talkCode     String     @unique @map("talk_code")
-  departmentId String?    @map("department_id")
-  talkDate     DateTime   @map("talk_date")
+  id           String      @id @default(cuid())
+  talkCode     String      @unique @map("talk_code")
+  departmentId String?     @map("department_id")
+  talkDate     DateTime    @map("talk_date")
   topic        String
   content      String?
-  attendees    Int        @default(0)
-  conductedBy  String     @map("conducted_by")
+  attendees    Int         @default(0)
+  conductedBy  String      @map("conducted_by")
   notes        String?
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@index([departmentId])
@@ -1975,20 +1996,20 @@ model DeliveryRecord {
 }
 
 model PackingList {
-  id          String            @id @default(cuid())
-  plCode      String            @unique @map("pl_code")
-  projectId   String            @map("project_id")
-  status      String            @default("DRAFT")
-  totalWeight Decimal?          @map("total_weight")
-  totalPieces Int               @default(0) @map("total_pieces")
-  dimensions  String?
-  notes       String?
-  createdBy   String            @map("created_by")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
-  items       PackingListItem[]
+  id            String            @id @default(cuid())
+  plCode        String            @unique @map("pl_code")
+  projectId     String            @map("project_id")
+  status        String            @default("DRAFT")
+  totalWeight   Decimal?          @map("total_weight")
+  totalPieces   Int               @default(0) @map("total_pieces")
+  dimensions    String?
+  notes         String?
+  createdBy     String            @map("created_by")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  items         PackingListItem[]
   shipmentItems ShipmentItem[]
-  project     Project           @relation(fields: [projectId], references: [id])
+  project       Project           @relation(fields: [projectId], references: [id])
 
   @@index([projectId])
   @@index([status])
@@ -2386,48 +2407,48 @@ model MisaSyncLog {
 // ── Dynamic Workflow (Phase 1) — Task động phân cấp, chạy song song WorkflowTask ──
 
 model Task {
-  id                   String              @id @default(cuid())
-  projectId            String?             @map("project_id")
-  parentId             String?             @map("parent_id")
-  level                Int                 @default(2)
-  taskType             String              @default("FREE") @map("task_type")
+  id                   String               @id @default(cuid())
+  projectId            String?              @map("project_id")
+  parentId             String?              @map("parent_id")
+  level                Int                  @default(2)
+  taskType             String               @default("FREE") @map("task_type")
   title                String
   description          String?
-  status               String              @default("OPEN") // OPEN | IN_PROGRESS | DONE | RETURNED | CANCELLED
-  priority             String              @default("NORMAL") // NORMAL | HIGH | URGENT
+  status               String               @default("OPEN") // OPEN | IN_PROGRESS | DONE | RETURNED | CANCELLED
+  priority             String               @default("NORMAL") // NORMAL | HIGH | URGENT
   deadline             DateTime?
-  createdBy            String              @map("created_by")
-  assignedAt           DateTime?           @map("assigned_at")
-  startedAt            DateTime?           @map("started_at")
-  submittedAt          DateTime?           @map("submitted_at")
-  completedAt          DateTime?           @map("completed_at")
-  completedBy          String?             @map("completed_by")
-  resultData           Json?               @map("result_data")
-  checklistTemplateKey String?             @map("checklist_template_key")
-  checklistState       Json?               @map("checklist_state")
-  hookKeys             String[]            @default([]) @map("hook_keys") // hook tự động chạy khi hoàn thành
-  templateStepId       String?             @map("template_step_id")
-  returnCount          Int                 @default(0) @map("return_count")
-  blocked              Boolean             @default(false)
-  escalated            Boolean             @default(false)
-  escalatedAt          DateTime?           @map("escalated_at")
-  escalatedBy          String?             @map("escalated_by")
-  externalRef          String?             @unique @map("external_ref")
-  externalSource       String?             @map("external_source")
-  forwardedFromId      String?             @map("forwarded_from_id") // việc này được "chuyển tiếp" từ task nào (truy vết)
-  bomVersionId         String?             @map("bom_version_id")
+  createdBy            String               @map("created_by")
+  assignedAt           DateTime?            @map("assigned_at")
+  startedAt            DateTime?            @map("started_at")
+  submittedAt          DateTime?            @map("submitted_at")
+  completedAt          DateTime?            @map("completed_at")
+  completedBy          String?              @map("completed_by")
+  resultData           Json?                @map("result_data")
+  checklistTemplateKey String?              @map("checklist_template_key")
+  checklistState       Json?                @map("checklist_state")
+  hookKeys             String[]             @default([]) @map("hook_keys") // hook tự động chạy khi hoàn thành
+  templateStepId       String?              @map("template_step_id")
+  returnCount          Int                  @default(0) @map("return_count")
+  blocked              Boolean              @default(false)
+  escalated            Boolean              @default(false)
+  escalatedAt          DateTime?            @map("escalated_at")
+  escalatedBy          String?              @map("escalated_by")
+  externalRef          String?              @unique @map("external_ref")
+  externalSource       String?              @map("external_source")
+  forwardedFromId      String?              @map("forwarded_from_id") // việc này được "chuyển tiếp" từ task nào (truy vết)
+  bomVersionId         String?              @map("bom_version_id")
   // Revise Flow36 (Phase 0 — additive, behavior-identical, default round 0). Dùng ở Phase 1.
-  revisionRound        Int                 @default(0) @map("revision_round")
-  revisionId           String?             @map("revision_id")
-  originStepCode       String?             @map("origin_step_code")
-  skipReason           String?             @map("skip_reason")
-  createdAt            DateTime            @default(now()) @map("created_at")
-  updatedAt            DateTime            @updatedAt @map("updated_at")
-  project              Project?            @relation("ProjectDynamicTasks", fields: [projectId], references: [id])
-  parent               Task?               @relation("TaskTree", fields: [parentId], references: [id])
-  children             Task[]              @relation("TaskTree")
-  forwardedFrom        Task?               @relation("TaskForward", fields: [forwardedFromId], references: [id])
-  forwards             Task[]              @relation("TaskForward")
+  revisionRound        Int                  @default(0) @map("revision_round")
+  revisionId           String?              @map("revision_id")
+  originStepCode       String?              @map("origin_step_code")
+  skipReason           String?              @map("skip_reason")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  project              Project?             @relation("ProjectDynamicTasks", fields: [projectId], references: [id])
+  parent               Task?                @relation("TaskTree", fields: [parentId], references: [id])
+  children             Task[]               @relation("TaskTree")
+  forwardedFrom        Task?                @relation("TaskForward", fields: [forwardedFromId], references: [id])
+  forwards             Task[]               @relation("TaskForward")
   assignees            TaskAssignee[]
   docs                 TaskDocRequirement[]
   history              TaskHistory[]
@@ -2452,7 +2473,7 @@ model TaskAssignee {
   done       Boolean   @default(false) // người này đã hoàn thành phần của mình chưa
   doneAt     DateTime? @map("done_at")
   doneBy     String?   @map("done_by") // user thực tế bấm hoàn thành (khi giao theo role)
-  outcome    String?   // RETURN_CREATOR | FORWARD — hướng người này chọn khi hoàn thành
+  outcome    String? // RETURN_CREATOR | FORWARD — hướng người này chọn khi hoàn thành
   createdAt  DateTime  @default(now()) @map("created_at")
   task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -2463,15 +2484,15 @@ model TaskAssignee {
 }
 
 model TaskDocRequirement {
-  id               String   @id @default(cuid())
-  taskId           String   @map("task_id")
+  id               String       @id @default(cuid())
+  taskId           String       @map("task_id")
   kind             String // MUST_READ | MUST_RETURN
   label            String
-  fileAttachmentId String?  @map("file_attachment_id")
-  note             String?  // nội dung trả lại (text) khi hoàn thành
-  fulfilled        Boolean  @default(false) // MUST_READ: tất cả người nhận đã đọc | MUST_RETURN: đã nộp
-  createdAt        DateTime @default(now()) @map("created_at")
-  task             Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fileAttachmentId String?      @map("file_attachment_id")
+  note             String? // nội dung trả lại (text) khi hoàn thành
+  fulfilled        Boolean      @default(false) // MUST_READ: tất cả người nhận đã đọc | MUST_RETURN: đã nộp
+  createdAt        DateTime     @default(now()) @map("created_at")
+  task             Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
   acks             TaskDocAck[]
 
   @@index([taskId])
@@ -2480,23 +2501,23 @@ model TaskDocRequirement {
 
 // ── Lịch họp (Meeting) ──
 model Meeting {
-  id            String          @id @default(cuid())
-  projectId     String?         @map("project_id")
-  taskId        String?         @map("task_id") // tạo trực tiếp từ 1 công việc (liên kết truy vết)
-  title         String
-  agenda        String?
-  location      String?
-  startsAt      DateTime        @map("starts_at")
-  endsAt        DateTime?       @map("ends_at")
-  momNumber     String?         @map("mom_number") // số biên bản
-  status        String          @default("SCHEDULED") // SCHEDULED | DONE | CANCELLED
-  minutesNote   String?         @map("minutes_note") // biên bản họp (tóm tắt/kết luận)
-  minutesData   Json?           @map("minutes_data") // MOM có cấu trúc: { preparedBy, place, items[] } — theo mẫu hệ cũ P1.2A
-  createdBy     String          @map("created_by")
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-  project       Project?        @relation("ProjectMeetings", fields: [projectId], references: [id])
-  invites       MeetingInvite[]
+  id          String          @id @default(cuid())
+  projectId   String?         @map("project_id")
+  taskId      String?         @map("task_id") // tạo trực tiếp từ 1 công việc (liên kết truy vết)
+  title       String
+  agenda      String?
+  location    String?
+  startsAt    DateTime        @map("starts_at")
+  endsAt      DateTime?       @map("ends_at")
+  momNumber   String?         @map("mom_number") // số biên bản
+  status      String          @default("SCHEDULED") // SCHEDULED | DONE | CANCELLED
+  minutesNote String?         @map("minutes_note") // biên bản họp (tóm tắt/kết luận)
+  minutesData Json?           @map("minutes_data") // MOM có cấu trúc: { preparedBy, place, items[] } — theo mẫu hệ cũ P1.2A
+  createdBy   String          @map("created_by")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  project     Project?        @relation("ProjectMeetings", fields: [projectId], references: [id])
+  invites     MeetingInvite[]
 
   @@index([projectId])
   @@index([taskId])
@@ -2585,16 +2606,16 @@ model WorkflowTemplate {
 model TemplateStep {
   id           String           @id @default(cuid())
   templateId   String           @map("template_id")
-  code         String                                 // vd P2.1
+  code         String // vd P2.1
   title        String
-  roleCode     String?          @map("role_code")     // role được giao mặc định
-  deptCode     String?          @map("dept_code")     // phòng (suy từ role)
+  roleCode     String?          @map("role_code") // role được giao mặc định
+  deptCode     String?          @map("dept_code") // phòng (suy từ role)
   orderIndex   Int              @default(0) @map("order_index")
   deadlineDays Int?             @map("deadline_days")
   taskType     String           @default("FREE") @map("task_type")
   hookKeys     String[]         @default([]) @map("hook_keys")
-  nextCodes    String[]         @default([]) @map("next_codes")   // bước kế tiếp (sinh theo chuỗi)
-  gateCodes    String[]         @default([]) @map("gate_codes")   // điều kiện: các bước phải xong trước
+  nextCodes    String[]         @default([]) @map("next_codes") // bước kế tiếp (sinh theo chuỗi)
+  gateCodes    String[]         @default([]) @map("gate_codes") // điều kiện: các bước phải xong trước
   parentCode   String?          @map("parent_code")
   template     WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
@@ -2618,15 +2639,15 @@ model ApiClient {
 }
 
 model BriefingSnapshot {
-  id             String    @id @default(cuid())
-  weekOf         DateTime  @map("week_of")
-  createdBy      String    @map("created_by")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  publishedAt    DateTime? @map("published_at")
-  kpi            Json
-  tasksSnapshot  Json      @map("tasks_snapshot")
-  decisions      Json
-  actionItems    Json      @map("action_items")
+  id            String    @id @default(cuid())
+  weekOf        DateTime  @map("week_of")
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  publishedAt   DateTime? @map("published_at")
+  kpi           Json
+  tasksSnapshot Json      @map("tasks_snapshot")
+  decisions     Json
+  actionItems   Json      @map("action_items")
 
   @@unique([weekOf])
   @@index([weekOf])
@@ -2667,17 +2688,17 @@ model SaleCustomer {
 }
 
 model LaborRate {
-  id             String    @id @default(cuid())
-  stage          String
-  stageName      String    @map("stage_name")
-  subItem        String    @map("sub_item")
-  unitPrice      Decimal   @map("unit_price")
-  unit           String
-  revision       String    @default("Rev2")
-  effectiveDate  DateTime  @default(now()) @map("effective_date")
-  projectId      String?   @map("project_id")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id            String   @id @default(cuid())
+  stage         String
+  stageName     String   @map("stage_name")
+  subItem       String   @map("sub_item")
+  unitPrice     Decimal  @map("unit_price")
+  unit          String
+  revision      String   @default("Rev2")
+  effectiveDate DateTime @default(now()) @map("effective_date")
+  projectId     String?  @map("project_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   @@unique([stage, subItem, revision])
   @@index([projectId])
@@ -2713,24 +2734,24 @@ model QuoteGroup {
 }
 
 model QuoteGroupItem {
-  id                 String              @id @default(cuid())
-  quoteGroupId       String              @map("quote_group_id")
-  name               String
-  code               String              @default("")
-  spec               String?
-  unit               String              @default("")
-  source             String              @default("")
-  quantity           String              @default("0")
-  requestedQty       Decimal             @default(0) @map("requested_qty")
-  inStock            Decimal             @default(0) @map("in_stock")
-  shortfall          Decimal             @default(0)
-  specMatch          Boolean             @default(false) @map("spec_match")
-  matchedMaterialJson Json?              @map("matched_material")
-  selectedQuoteIndex Int                 @default(0) @map("selected_quote_index")
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-  quoteGroup         QuoteGroup          @relation(fields: [quoteGroupId], references: [id], onDelete: Cascade)
-  quoteLines         SupplierQuoteLine[]
+  id                  String              @id @default(cuid())
+  quoteGroupId        String              @map("quote_group_id")
+  name                String
+  code                String              @default("")
+  spec                String?
+  unit                String              @default("")
+  source              String              @default("")
+  quantity            String              @default("0")
+  requestedQty        Decimal             @default(0) @map("requested_qty")
+  inStock             Decimal             @default(0) @map("in_stock")
+  shortfall           Decimal             @default(0)
+  specMatch           Boolean             @default(false) @map("spec_match")
+  matchedMaterialJson Json?               @map("matched_material")
+  selectedQuoteIndex  Int                 @default(0) @map("selected_quote_index")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  quoteGroup          QuoteGroup          @relation(fields: [quoteGroupId], references: [id], onDelete: Cascade)
+  quoteLines          SupplierQuoteLine[]
 
   @@index([quoteGroupId])
   @@map("quote_group_items")
@@ -2757,35 +2778,35 @@ model SupplierQuoteLine {
 // ══════════════════════════════════════════════════════════════
 
 model BidAnalysis {
-  id               String    @id @default(cuid())
-  projectId        String?   @map("project_id")
-  bidCode          String    @unique @map("bid_code") // BID-VPI095-2606-VTC-001
-  bidCodeProj      String?   @map("bid_code_proj")
-  bidCodeYymm      String?   @map("bid_code_yymm")
-  bidCodeMat       String?   @map("bid_code_mat")
-  bidCodeSeq       Int?      @map("bid_code_seq")
-  bidCodeVariant   String?   @map("bid_code_variant")
-  bidCodeUrgent    Boolean   @default(false) @map("bid_code_urgent")
-  subject          String?
-  bidDate          DateTime? @map("bid_date")
-  status           String    @default("OPEN") // OPEN|EVALUATING|SELECTED|CONTRACTED|CANCELLED
-  selectionMode    String    @default("PER_ITEM") @map("selection_mode") // PER_ITEM|PER_BID|PER_GROUP|AUTO_MIN_PRICE|MANUAL_WEIGHTED
-  selectedVendorId String?   @map("selected_vendor_id") // BidQuoteVendor.id được chọn (mode PER_BID)
-  sourceTaskId     String?   @map("source_task_id")     // nối task P3.5 (Đợt 6)
-  notes            String?
+  id                String    @id @default(cuid())
+  projectId         String?   @map("project_id")
+  bidCode           String    @unique @map("bid_code") // BID-VPI095-2606-VTC-001
+  bidCodeProj       String?   @map("bid_code_proj")
+  bidCodeYymm       String?   @map("bid_code_yymm")
+  bidCodeMat        String?   @map("bid_code_mat")
+  bidCodeSeq        Int?      @map("bid_code_seq")
+  bidCodeVariant    String?   @map("bid_code_variant")
+  bidCodeUrgent     Boolean   @default(false) @map("bid_code_urgent")
+  subject           String?
+  bidDate           DateTime? @map("bid_date")
+  status            String    @default("OPEN") // OPEN|EVALUATING|SELECTED|CONTRACTED|CANCELLED
+  selectionMode     String    @default("PER_ITEM") @map("selection_mode") // PER_ITEM|PER_BID|PER_GROUP|AUTO_MIN_PRICE|MANUAL_WEIGHTED
+  selectedVendorId  String?   @map("selected_vendor_id") // BidQuoteVendor.id được chọn (mode PER_BID)
+  sourceTaskId      String?   @map("source_task_id") // nối task P3.5 (Đợt 6)
+  notes             String?
   // Chấm điểm đa tiêu chí (MANUAL_WEIGHTED): trọng số {"price":0.5,"quality":0.3,"paymentTerms":0.2}
-  weightingCriteria Json?    @map("weighting_criteria")
-  approvedBy       String?   @map("approved_by")  // ai chốt NCC
-  approvedAt       DateTime? @map("approved_at")
+  weightingCriteria Json?     @map("weighting_criteria")
+  approvedBy        String?   @map("approved_by") // ai chốt NCC
+  approvedAt        DateTime? @map("approved_at")
   // Giải trình MSDT/đấu thầu (khớp Commerce): mã cũ tự do + file giải trình gốc (PDF/Excel) đã ký.
-  legacyBidCode    String?   @map("legacy_bid_code") // VD "MSDT 401 - VPI-113 - Bulong"
-  sourceFileName   String?   @map("source_file_name") // tên file gốc
-  sourceFilePath   String?   @map("source_file_path") // URL public để tải lại (/uploads/...)
-  createdBy        String?   @map("created_by")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  legacyBidCode     String?   @map("legacy_bid_code") // VD "MSDT 401 - VPI-113 - Bulong"
+  sourceFileName    String?   @map("source_file_name") // tên file gốc
+  sourceFilePath    String?   @map("source_file_path") // URL public để tải lại (/uploads/...)
+  createdBy         String?   @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  project         Project?             @relation(fields: [projectId], references: [id])
+  project         Project?               @relation(fields: [projectId], references: [id])
   vendors         BidQuoteVendor[]
   items           BidQuoteItem[]
   purchaseOrders  PurchaseOrder[]
@@ -2801,14 +2822,14 @@ model BidAnalysis {
 
 // #6 — Ghi nhận thời điểm 15 mốc quy trình mua sắm (record-only, KHÔNG enforce deadline).
 model ProcurementMilestone {
-  id             String   @id @default(cuid())
-  bidAnalysisId  String   @map("bid_analysis_id")
-  milestoneNo    Int      @map("milestone_no") // 1..15 theo QT19 PHA B
-  occurredAt     DateTime @map("occurred_at")
-  note           String?
-  recordedBy     String   @map("recorded_by")
-  createdAt      DateTime @default(now()) @map("created_at")
-  bidAnalysis    BidAnalysis @relation(fields: [bidAnalysisId], references: [id], onDelete: Cascade)
+  id            String      @id @default(cuid())
+  bidAnalysisId String      @map("bid_analysis_id")
+  milestoneNo   Int         @map("milestone_no") // 1..15 theo QT19 PHA B
+  occurredAt    DateTime    @map("occurred_at")
+  note          String?
+  recordedBy    String      @map("recorded_by")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  bidAnalysis   BidAnalysis @relation(fields: [bidAnalysisId], references: [id], onDelete: Cascade)
 
   @@unique([bidAnalysisId, milestoneNo])
   @@index([bidAnalysisId])
@@ -2886,24 +2907,24 @@ model BidQuoteVendor {
 }
 
 model BidQuoteItem {
-  id                    String   @id @default(cuid())
-  bidId                 String   @map("bid_id")
-  purchaseRequestItemId String?  @map("purchase_request_item_id") // → PurchaseRequestItem ERP (Module 2)
-  itemOrder             Int      @default(0) @map("item_order")
-  itemCode              String?  @map("item_code")
-  itemName              String?  @map("item_name")
+  id                    String    @id @default(cuid())
+  bidId                 String    @map("bid_id")
+  purchaseRequestItemId String?   @map("purchase_request_item_id") // → PurchaseRequestItem ERP (Module 2)
+  itemOrder             Int       @default(0) @map("item_order")
+  itemCode              String?   @map("item_code")
+  itemName              String?   @map("item_name")
   profile               String?
   grade                 String?
   uom                   String?
-  qtyPr                 Decimal  @default(0) @map("qty_pr")
-  qtyToBuy              Decimal  @default(0) @map("qty_to_buy")
-  estimateUnitPrice     Decimal  @default(0) @map("estimate_unit_price")
-  alreadyBoughtAmount   Decimal  @default(0) @map("already_bought_amount") // "Đã mua" (từ lịch sử/HĐ trước)
-  selectedVendorName    String?  @map("selected_vendor_name") // NCC chọn cho dòng này — NGUỒN SỰ THẬT cho create-po
+  qtyPr                 Decimal   @default(0) @map("qty_pr")
+  qtyToBuy              Decimal   @default(0) @map("qty_to_buy")
+  estimateUnitPrice     Decimal   @default(0) @map("estimate_unit_price")
+  alreadyBoughtAmount   Decimal   @default(0) @map("already_bought_amount") // "Đã mua" (từ lịch sử/HĐ trước)
+  selectedVendorName    String?   @map("selected_vendor_name") // NCC chọn cho dòng này — NGUỒN SỰ THẬT cho create-po
   selectedAt            DateTime? @map("selected_at")
-  selectedBy            String?  @map("selected_by")
+  selectedBy            String?   @map("selected_by")
   notes                 String?
-  createdAt             DateTime @default(now()) @map("created_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
 
   bid    BidAnalysis          @relation(fields: [bidId], references: [id], onDelete: Cascade)
   prItem PurchaseRequestItem? @relation(fields: [purchaseRequestItemId], references: [id])
@@ -3030,4 +3051,146 @@ model LedgerEntry {
   @@index([account])
   @@index([vuViec])
   @@map("ledger_entries")
+}
+
+// ── ASSEMBLY PART LIST (APL) — bảng chi tiết part do Thiết kế lập ──
+// Vì sao có bảng riêng: file APL thật ~25.000 dòng × 47 cột (~15 MB JSON). Nhét vào
+// Task.resultData như các biểu mẫu khác thì mỗi lần mở trang phải tải hết 15 MB. Đi theo
+// đúng khuôn ledger_import_batches/ledger_entries: header 1 bảng, dòng 1 bảng, nạp theo lô.
+// Không dùng lại bom_items được vì bảng đó BẮT BUỘC material_id — APL là part thiết kế,
+// khớp vào sẽ phải đẻ ra hàng vạn mã vật tư rác.
+model AplImport {
+  id                 String   @id @default(cuid())
+  projectId          String?  @map("project_id") // liên kết MỀM, không FK (giống ledger_entries)
+  taskId             String?  @map("task_id") // bước công việc đã upload
+  fileName           String   @map("file_name")
+  sheetName          String   @map("sheet_name")
+  title              String?
+  revision           String? // REV0, REV2… đoán từ tên file/tiêu đề
+  headerRow          Int      @map("header_row")
+  // Mô hình cột parser đọc được từ chính file (nhãn + vai + cột lạ) → render lại đúng bảng gốc
+  columns            Json
+  totalRows          Int      @default(0) @map("total_rows")
+  assemblyRows       Int      @default(0) @map("assembly_rows")
+  partRows           Int      @default(0) @map("part_rows")
+  distinctAssemblies Int      @default(0) @map("distinct_assemblies")
+  scopeUnits         Int      @default(1) @map("scope_units") // cột tổng thuộc phạm vi mấy UNIT
+  totalWeightKg      Float    @default(0) @map("total_weight_kg")
+  totalAreaM2        Float    @default(0) @map("total_area_m2")
+  byCategory         Json?    @map("by_category")
+  warnings           Json?
+  importedBy         String   @map("imported_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  lines      AplLine[]
+  linePrices AplLinePrice[]
+  itemPrices AplItemPrice[]
+  pricing    AplPricing?
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([createdAt])
+  @@map("apl_imports")
+}
+
+model AplLine {
+  id            String  @id @default(cuid())
+  importId      String  @map("import_id")
+  rowNo         Int     @map("row_no") // số dòng trong file gốc, để đối chiếu ngược
+  isAssembly    Boolean @default(false) @map("is_assembly") // dòng cụm (chưa có mã PART)
+  seq           String?
+  drawingNo     String? @map("drawing_no")
+  assembly      String?
+  pos           String?
+  part          String?
+  markCutting   String? @map("mark_cutting")
+  item          String? // cột ITEM — sản phẩm; 1 item gồm nhiều dòng vàng
+  description   String?
+  profile       String?
+  grade         String?
+  typeCutting   String? @map("type_cutting")
+  thicknessMm   Float?  @map("thickness_mm")
+  widthMm       Float?  @map("width_mm")
+  lengthMm      Float?  @map("length_mm")
+  qty           Float?
+  unitWeightKg  Float?  @map("unit_weight_kg")
+  totalWeightKg Float?  @map("total_weight_kg")
+  areaM2        Float?  @map("area_m2")
+  category      String?
+  remark        String?
+  extra         Json? // mọi cột riêng của dự án, theo nhãn gốc
+
+  // Gộp theo khối: dòng vàng + các dòng trắng của nó dùng chung blockNo.
+  // 4 trường dưới CHỈ có giá trị ở dòng vàng — tính sẵn lúc nhập để khỏi quét lại 25k dòng.
+  blockNo         Int    @default(0) @map("block_no")
+  rollupWeightKg  Float? @map("rollup_weight_kg") // cộng T.WEIGHT 2 UNIT của các dòng trắng
+  rollupMaterials Json?  @map("rollup_materials") // danh sách TÊN vật tư, không kèm khối lượng
+  childCount      Int    @default(0) @map("child_count")
+
+  aplImport  AplImport     @relation(fields: [importId], references: [id], onDelete: Cascade)
+  workOrders WorkOrder[]
+  price      AplLinePrice?
+
+  @@index([importId])
+  @@index([importId, assembly])
+  @@index([importId, part])
+  @@index([importId, markCutting])
+  @@index([importId, item])
+  @@index([importId, isAssembly, item])
+  @@map("apl_lines")
+}
+
+// ── Bảng đơn giá khoán theo dòng APL (KTKH nhập, dùng cho P5.5 tính lương khoán) ──
+// Đơn giá bám theo TỪNG DÒNG APL. Nhập ở dòng vàng thì áp cho cả khối; nhập riêng ở
+// một dòng trắng thì dòng đó thắng. Thành tiền = đơn giá × KHỐI LƯỢNG ĐÃ NGHIỆM THU.
+model AplLinePrice {
+  id        String   @id @default(cuid())
+  importId  String   @map("import_id")
+  aplLineId String   @unique @map("apl_line_id")
+  unitPrice Decimal  @map("unit_price") // đồng/kg
+  note      String?
+  updatedBy String   @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  aplImport AplImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  aplLine   AplLine   @relation(fields: [aplLineId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@map("apl_line_prices")
+}
+
+// Đầu bảng giá của một lần nhập APL: cho phép lưu dở (DRAFT) rồi chốt (COMPLETED).
+// Chỉ chốt được khi mọi dòng đã có đơn giá VÀ mọi WO của APL đã nghiệm thu xong.
+model AplPricing {
+  id          String    @id @default(cuid())
+  importId    String    @unique @map("import_id")
+  status      String    @default("DRAFT") // DRAFT | COMPLETED
+  totalAmount Decimal?  @map("total_amount") // chốt lại lúc hoàn thành, để về sau không tính lại lệch
+  completedBy String?   @map("completed_by")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  aplImport AplImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@map("apl_pricings")
+}
+
+// Đơn giá khoán theo ITEM — mức nhập CHÍNH từ 2026-08 (1 ITEM = 1 WO = 1 xưởng).
+// AplLinePrice vẫn dùng để đặt giá RIÊNG cho một dòng chi tiết khi cần, và luôn thắng giá ITEM.
+model AplItemPrice {
+  id        String   @id @default(cuid())
+  importId  String   @map("import_id")
+  item      String // '' = nhóm "(không có ITEM)" của bản APL cũ
+  unitPrice Decimal  @map("unit_price") // đồng/kg
+  note      String?
+  updatedBy String   @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  aplImport AplImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@unique([importId, item])
+  @@map("apl_item_prices")
 }

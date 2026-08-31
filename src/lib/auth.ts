@@ -117,9 +117,10 @@ export async function getUserProjectIds(user: TokenPayload): Promise<string[] | 
   // R01 (BGĐ) + R10 (Admin/IT) sees everything — return null = no filter
   if (user.roleCode === 'R01' || user.roleCode === 'R10') return null
 
-  // R02 (PM) sees projects they manage
+  // R02 (PM) sees projects they manage — MỘT dự án có thể có NHIỀU PM ngang quyền,
+  // nên lấy cả dự án gán qua bảng project_pms lẫn dự án còn ghi ở cột pm_user_id (đầu mối).
   const pmProjects = await prisma.project.findMany({
-    where: { pmUserId: user.userId },
+    where: { OR: [{ pmUserId: user.userId }, { projectPms: { some: { userId: user.userId } } }] },
     select: { id: true },
   })
 

@@ -78,10 +78,12 @@ export function ToastHost() {
 
   if (!mounted) return null
 
+  // z-index 100010 / 100000: PHẢI cao hơn mọi modal trong hệ (có modal đặt overlay 10050).
+  // Thông báo mà bị che thì người dùng bấm xong không biết thành công hay lỗi.
   return createPortal(
     <>
       {/* Toast stack — góc trên phải */}
-      <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 'min(92vw, 400px)', pointerEvents: 'none' }}>
+      <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 100010, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 'min(92vw, 400px)', pointerEvents: 'none' }}>
         {items.map(t => {
           const s = TYPE_STYLE[t.type]
           return (
@@ -102,7 +104,7 @@ export function ToastHost() {
 
       {/* Confirm dialog */}
       {confirmItem && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)', padding: 16 }}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)', padding: 16 }}
           onClick={() => closeConfirm(false)}>
           <div onClick={e => e.stopPropagation()}
             style={{ background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #0f172a)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', animation: 'ibsToastIn 0.18s ease-out' }}>

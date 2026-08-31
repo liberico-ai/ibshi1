@@ -31,7 +31,7 @@ export default function MRBPage() {
   const [tab, setTab] = useState<'overview' | 'inspections' | 'ncr'>('overview')
 
   useEffect(() => {
-    apiFetch('/api/projects?limit=100').then(res => {
+    apiFetch('/api/projects/options').then(res => {
       if (res.ok) setProjects(res.projects || [])
     })
   }, [])

@@ -7,7 +7,7 @@ import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { applyStockMovement } from '@/lib/stock-ledger'
 import { buildWoMaterialLines } from '@/lib/wo-materials'
-import { ensureDailyReportTasks } from '@/lib/workflow-engine'
+import { ensureWeeklyReportTask } from '@/lib/workflow-engine'
 
 // Kho cấp vật tư CHO MỘT LỆNH SẢN XUẤT — nhiều dòng một lần, cấp từng phần được.
 //
@@ -97,10 +97,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (fulfilled && wo.status === 'PENDING_MATERIAL') {
       await prisma.workOrder.update({ where: { id }, data: { status: 'OPEN' } })
       opened = true
-      // Mở WO = xưởng sắp làm → đảm bảo task báo cáo sản lượng ngày (P5.1/P5.1A) đã tồn tại.
+      // Mở WO = xưởng sắp làm → đảm bảo task báo cáo khối lượng tuần (P5.2) đã tồn tại.
       // Tương đương việc hoàn thành P4.5 ở luồng cũ.
-      await ensureDailyReportTasks(wo.projectId, user.userId).catch((e) =>
-        console.error('[material-issue] ensureDailyReportTasks:', e))
+      await ensureWeeklyReportTask(wo.projectId, user.userId).catch((e) =>
+        console.error('[material-issue] ensureWeeklyReportTask:', e))
     }
 
     await logAudit(user.userId, 'ISSUE_MATERIAL', 'WorkOrder', id,

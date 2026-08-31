@@ -35,10 +35,9 @@ const TRANSITIONS: Record<string, { next: string; label: string; color: string; 
     { next: 'ON_HOLD', label: 'Tạm dừng', color: '#7c3aed', bg: '#f5f3ff' },
   ],
   ON_HOLD: [{ next: 'IN_PROGRESS', label: '▶ Tiếp tục', color: '#2563eb', bg: '#eff6ff' }],
-  QC_PENDING: [
-    { next: 'QC_PASSED', label: '✓ QC Đạt', color: '#16a34a', bg: '#f0fdf4' },
-    { next: 'QC_FAILED', label: '✗ Không đạt', color: '#dc2626', bg: '#fef2f2' },
-  ],
+  // Không còn bấm Đạt/Không đạt ở đây: kết quả QC do màn Kế hoạch Kiểm tra (ITP) quyết định —
+  // đủ chữ ký TP QAQC + PM dự án thì WO tự sang QC_PASSED, có điểm kiểm lỗi thì tự sang QC_FAILED.
+  QC_PENDING: [],
   QC_FAILED: [{ next: 'IN_PROGRESS', label: 'Sửa lại', color: '#2563eb', bg: '#eff6ff' }],
   QC_PASSED: [{ next: 'COMPLETED', label: 'Hoàn thành', color: '#16a34a', bg: '#f0fdf4' }],
 }
@@ -98,6 +97,12 @@ export default function ProductionDetailPage() {
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{wo.description}</h1>
           </div>
           <div className="flex gap-2">
+            {/* Ở trạng thái chờ QC không còn nút bấm tay — nói rõ kết quả đến từ đâu, tránh tưởng là hỏng */}
+            {wo.status === 'QC_PENDING' && (
+              <span className="text-sm px-4 py-2 rounded-lg text-center" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', maxWidth: 320 }}>
+                Chờ nghiệm thu ở <b>Kế hoạch Kiểm tra (ITP)</b> — đủ chữ ký TP QAQC + PM dự án thì WO tự chuyển QC Đạt
+              </span>
+            )}
             {!showActionButtons && transitions.length > 0 && (
               <span className="text-sm px-4 py-2 flex items-center gap-1 rounded-lg" style={{ background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
                 Chỉ quyền SX/QC

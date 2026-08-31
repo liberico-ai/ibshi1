@@ -86,6 +86,18 @@ export async function DELETE(
       return errorResponse('Bạn không có quyền xóa file này', 403)
     }
 
+    // Điểm kiểm đã chấm rồi thì biên bản nghiệm thu là hồ sơ đã chốt — không gỡ được nữa,
+    // nếu không sẽ còn lại điểm "Đạt" mà chẳng có biên bản nào.
+    if (attachment.entityType === 'ITPCheckpoint') {
+      const cp = await prisma.iTPCheckpoint.findUnique({
+        where: { id: attachment.entityId },
+        select: { status: true },
+      })
+      if (cp && cp.status !== 'PENDING') {
+        return errorResponse('Điểm kiểm đã chấm — không gỡ được biên bản nghiệm thu', 400)
+      }
+    }
+
     // Xóa ở cả MinIO và disk (best-effort — file có thể nằm 1 trong 2 tuỳ đã migrate chưa)
     if (isMinioConfigured()) {
       try { await removeObject(keyFromFileUrl(attachment.fileUrl)) } catch { /* ignore */ }

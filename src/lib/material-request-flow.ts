@@ -1,5 +1,6 @@
 import prisma from './db'
 import { MR_STATUS } from './wo-materials'
+import { getProjectPmIds } from './project-pm'
 
 // Thông báo + việc trong Hộp việc cho luồng duyệt phiếu đề nghị cấp vật tư.
 //
@@ -76,18 +77,24 @@ async function openApprovalTask(opts: {
 export async function notifyMaterialRequestSubmitted(orderId: string, byUserId: string) {
   const o = await orderBrief(orderId)
   if (!o) return
-  // PM phụ trách dự án; dự án chưa gán PM thì rơi về trưởng phòng Dự án (R02) đầu tiên.
-  const pmId = o.project.pmUserId
-    || (await prisma.user.findFirst({ where: { roleCode: 'R02', isActive: true }, select: { id: true } }))?.id
-  if (!pmId) return
+  // MỌI PM phụ trách dự án đều nhận được việc duyệt — họ ngang quyền, ai duyệt trước cũng xong.
+  // Dự án chưa gán PM nào thì rơi về trưởng phòng Dự án (R02) đầu tiên.
+  let pmIds = await getProjectPmIds(o.projectId)
+  if (pmIds.length === 0) {
+    const fallback = await prisma.user.findFirst({ where: { roleCode: 'R02', isActive: true }, select: { id: true } })
+    pmIds = fallback ? [fallback.id] : []
+  }
+  if (pmIds.length === 0) return
 
   await closeMaterialRequestTasks(orderId, byUserId, [MR_TASK_BOD])
-  await openApprovalTask({
-    orderId, code: o.code, projectId: o.projectId, taskType: MR_TASK_PM,
-    userId: pmId, role: 'R02', byUserId,
-    title: `Duyệt cấp vật tư: ${o.code}`,
-    message: `${o.department?.name || 'Xưởng'} đề nghị cấp ${o._count.items} dòng vật tư — dự án ${o.project.projectCode}. Cần PM duyệt.`,
-  })
+  for (const pmId of pmIds) {
+    await openApprovalTask({
+      orderId, code: o.code, projectId: o.projectId, taskType: MR_TASK_PM,
+      userId: pmId, role: 'R02', byUserId,
+      title: `Duyệt cấp vật tư: ${o.code}`,
+      message: `${o.department?.name || 'Xưởng'} đề nghị cấp ${o._count.items} dòng vật tư — dự án ${o.project.projectCode}. Cần PM duyệt.`,
+    })
+  }
 }
 
 /** PM duyệt xong → BGĐ duyệt. */

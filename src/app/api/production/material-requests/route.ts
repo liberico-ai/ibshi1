@@ -2,6 +2,7 @@ import { isMissingTableError, MIGRATION_HINT } from '@/lib/db-missing-table'
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles, logAudit, getClientIP } from '@/lib/auth'
+import { indexCatalogue, matchAplMaterial, buildHistoryIndex, type IndexedMaterial } from '@/lib/apl-material-match'
 import {
   buildWoMaterialLines, suggestBomMaterialsForWo, setWoMaterialRequests, normalizeRequestItems,
   canWorkshopEditWo, WO_MATERIAL_REQUEST_ROLES, MR_STATUS, MR_EDITABLE, nextMaterialRequestCode,
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
       where: { id: { in: woIds } },
       select: {
         id: true, woCode: true, description: true, status: true, teamCode: true, departmentId: true,
-        pieceMark: true, projectId: true, bomVersionId: true, plannedWeight: true,
+        pieceMark: true, projectId: true, bomVersionId: true, plannedWeight: true, aplLineId: true, aplImportId: true, aplItem: true,
         project: { select: { projectCode: true, projectName: true } },
       },
     })
@@ -93,6 +94,101 @@ export async function GET(req: NextRequest) {
     }
     const pr = [...prMap.values()].filter(p => !p.materialId || !bomMap.has(p.materialId))
 
+    // ── APL: vật tư lấy từ CHÍNH dòng cụm đã sinh ra lệnh này ──
+    // BOM/PR là nguồn cũ; với lệnh phát hành từ APL thì vật tư nằm ngay ở các dòng chi tiết của
+    // cụm. Gộp theo (quy cách + mác) rồi khớp về mã kho qua 3 tầng luật/lịch sử/bí danh.
+    // Cặp CHƯA CÓ MÃ vẫn trả về nhưng đánh dấu needsCode — giao diện không cho gửi duyệt.
+    // WO mới giao theo ITEM (aplImportId + aplItem); WO cũ giao theo dòng vàng (aplLineId).
+    const aplWos = workOrders.filter(w => w.aplImportId || w.aplLineId)
+    const apl: {
+      key: string; materialId: string | null; materialCode: string; name: string
+      specification: string | null; unit: string; currentStock: number; available: number
+      perWo: Record<string, number>; needsCode: boolean; via: string | null
+      /** READY = có mã và còn tồn khả dụng · WAITING = có mã nhưng hết hàng, chờ mua
+       *  NO_CODE = kho chưa có mã, phải báo Kho/Thương mại lập mã */
+      state: 'READY' | 'WAITING' | 'NO_CODE'
+    }[] = []
+    if (aplWos.length > 0) {
+      // WO cũ trỏ vào một dòng vàng → suy ra (importId, item) của nó để dùng chung một đường tra.
+      const legacyIds = aplWos.filter(w => !w.aplImportId && w.aplLineId).map(w => w.aplLineId!)
+      const legacyHeads = legacyIds.length
+        ? await prisma.aplLine.findMany({
+            where: { id: { in: legacyIds } },
+            select: { id: true, importId: true, item: true },
+          })
+        : []
+      const legacyByLine = new Map(legacyHeads.map(h => [h.id, h]))
+
+      /** Mỗi WO ứng với một (bản APL, ITEM) — vật tư gom từ MỌI dòng chi tiết của ITEM đó. */
+      const scopeOf = (w: { aplImportId: string | null; aplItem: string | null; aplLineId: string | null }) => {
+        if (w.aplImportId) return { importId: w.aplImportId, item: w.aplItem || '' }
+        const h = w.aplLineId ? legacyByLine.get(w.aplLineId) : undefined
+        return h ? { importId: h.importId, item: h.item || '' } : null
+      }
+
+      const scopes = aplWos.map(scopeOf).filter((x): x is { importId: string; item: string } => !!x)
+      const kids = scopes.length
+        ? await prisma.aplLine.findMany({
+            where: {
+              isAssembly: false,
+              OR: scopes.map(s => ({
+                importId: s.importId,
+                ...(s.item ? { item: s.item } : { OR: [{ item: null }, { item: '' }] }),
+              })),
+            },
+            select: { importId: true, item: true, profile: true, grade: true, totalWeightKg: true },
+          })
+        : []
+      const [cat, aliasRows, prHist, bomHist] = await Promise.all([
+        prisma.material.findMany({ where: { status: 'ACTIVE' }, select: { id: true, materialCode: true, name: true, grade: true, specification: true, unit: true, currentStock: true, reservedStock: true } }),
+        prisma.materialCodeAlias.findMany({ where: { aliasCode: { startsWith: 'APL:' } }, select: { aliasCode: true, material: { select: { id: true, materialCode: true, name: true, grade: true, specification: true, unit: true } } } }),
+        prisma.purchaseRequestItem.findMany({ where: { materialId: { not: null }, profile: { not: null } }, select: { profile: true, grade: true, materialId: true } }),
+        prisma.bomItem.findMany({ where: { profile: { not: null } }, select: { profile: true, grade: true, materialId: true } }),
+      ])
+      const index = indexCatalogue(cat)
+      const stockById = new Map(cat.map(m => [m.id, m]))
+      const aliases = new Map<string, IndexedMaterial>(aliasRows.map(a => [a.aliasCode, indexCatalogue([a.material])[0]]))
+      const history = buildHistoryIndex([
+        ...prHist.map(x => ({ profile: x.profile, grade: x.grade, materialId: x.materialId! })),
+        ...bomHist.map(x => ({ profile: x.profile, grade: x.grade, materialId: x.materialId })),
+      ])
+
+      const acc = new Map<string, typeof apl[number]>()
+      for (const wo of aplWos) {
+        const sc = scopeOf(wo)
+        if (!sc) continue
+        for (const k of kids) {
+          if (k.importId !== sc.importId || (k.item || '') !== sc.item) continue
+          const label = [k.profile, k.grade].map(x => (x || '').trim()).filter(Boolean).join(' ')
+          if (!label) continue
+          const m = matchAplMaterial(k.grade, k.profile, index, aliases, history)
+          const key = m.materialId || `nocode:${label}`
+          const stock = m.materialId ? stockById.get(m.materialId) : null
+          const row = acc.get(key) || {
+            key,
+            materialId: m.materialId,
+            materialCode: m.materialCode || '(chưa có mã)',
+            name: m.materialName || label,
+            specification: label,
+            unit: stock?.unit || 'kg',
+            currentStock: Number(stock?.currentStock ?? 0),
+            // Tồn KHẢ DỤNG = tồn thực − phần đã giữ cho lệnh khác, tránh hai xưởng cùng
+            // nhìn thấy một lô hàng rồi cùng đề nghị.
+            available: Number(stock?.currentStock ?? 0) - Number(stock?.reservedStock ?? 0),
+            perWo: {} as Record<string, number>,
+            needsCode: !m.materialId,
+            via: m.via,
+            state: !m.materialId ? 'NO_CODE' as const
+              : (Number(stock?.currentStock ?? 0) - Number(stock?.reservedStock ?? 0)) > 0 ? 'READY' as const
+              : 'WAITING' as const,
+          }
+          row.perWo[wo.id] = (row.perWo[wo.id] || 0) + (k.totalWeightKg || 0)
+          acc.set(key, row)
+        }
+      }
+      apl.push(...acc.values())
+    }
+
     const userDept = await loadUserDept(user.userId)
 
     // ── Phiếu đang mở của xưởng cho nhóm lệnh này (nháp/bị trả lại) → điền sẵn để sửa tiếp ──
@@ -121,6 +217,7 @@ export async function GET(req: NextRequest) {
     return successResponse({
       workOrders: workOrders.map(w => ({ ...w, plannedWeight: w.plannedWeight ? Number(w.plannedWeight) : null })),
       bom: [...bomMap.values()],
+      apl,
       pr,
       existing,
       canEdit,

@@ -98,7 +98,7 @@ describe('activateTask', () => {
   })
 
   it('sets deadline to null when step has no deadlineDays', async () => {
-    await activateTask(PROJECT_ID, 'P5.1')
+    await activateTask(PROJECT_ID, 'P5.2')
 
     const call = prismaMock.task.updateMany.mock.calls[0][0]
     expect(call.data.deadline).toBeNull()

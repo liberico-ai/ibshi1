@@ -5,6 +5,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { MR_STATUS } from '@/lib/wo-materials'
+import { isProjectPm as isPm } from '@/lib/project-pm'
 import { notifyMaterialRequestPmApproved, notifyMaterialRequestClosed } from '@/lib/material-request-flow'
 
 // Duyệt / trả lại một phiếu đề nghị cấp vật tư.
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Chặng PM: chỉ PM PHỤ TRÁCH DỰ ÁN. Chặng BGĐ: R01 (Admin R10 hỗ trợ kỹ thuật).
     if (isPmStage) {
-      const isProjectPm = order.project.pmUserId === user.userId
+      const isProjectPm = await isPm(user.userId, order.projectId)
       if (!isProjectPm && user.roleCode !== 'R10') {
         return errorResponse(`Chỉ PM phụ trách dự án ${order.project.projectCode} được duyệt phiếu này`, 403)
       }

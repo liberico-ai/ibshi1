@@ -377,8 +377,8 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     }
   }
 
-  // For P5.1, P5.3, P5.4: dynamically load LSX data from parent P3.x task cellAssignments
-  if (task.stepCode === 'P5.1' || task.stepCode === 'P5.3' || task.stepCode === 'P5.4') {
+  // P5.2/P5.3/P5.4: nạp dữ liệu LSX từ task P3.x cha (cellAssignments)
+  if (task.stepCode === 'P5.2' || task.stepCode === 'P5.3' || task.stepCode === 'P5.4') {
     const rd = (task.resultData as Record<string, unknown>) || {}
     const sourceStep = rd.sourceStep as string || 'P3.4'
     const sourceP45TaskId = rd.sourceP45TaskId as string
@@ -505,27 +505,13 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     }
   }
 
-  if (task.stepCode === 'P5.2' || task.stepCode === 'P5.3') {
-    const p51Task = await fetchStepResult(task.projectId, 'P5.1')
-    previousStepData = { ...previousStepData, jobCardData: p51Task?.resultData || null }
-  }
-
-  // For P5.4: fetch P5.1 (job card data) + P5.2 (volume report with job cards) for PM review
-  if (task.stepCode === 'P5.4') {
-    const rd = (task.resultData as Record<string, unknown>) || {}
-
-    let p51Task: any = null;
-    if (rd.sourceP51TaskId) {
-      p51Task = await prisma.task.findUnique({ where: { id: String(rd.sourceP51TaskId) } });
-    } else {
-      p51Task = await fetchStepResult(task.projectId, 'P5.1');
-    }
-
+  // Cả hai bước nghiệm thu đọc CÙNG một nguồn: báo cáo khối lượng tuần P5.2 của xưởng.
+  // (Trước đây nguồn là P5.1 báo cáo theo ngày — bước đó đã gỡ khỏi quy trình.)
+  if (task.stepCode === 'P5.3' || task.stepCode === 'P5.4') {
     const p52Task = await fetchStepResult(task.projectId, 'P5.2')
-
     previousStepData = {
       ...previousStepData,
-      jobCardData: p51Task?.resultData || null,
+      jobCardData: p52Task?.resultData || null,
       volumeData: p52Task?.resultData || null,
     }
   }

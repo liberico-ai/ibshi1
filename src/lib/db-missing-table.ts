@@ -14,3 +14,38 @@ export function isMissingTableError(err: unknown): boolean {
 
 export const MIGRATION_HINT =
   'Tính năng này cần bảng dữ liệu mới chưa có trong CSDL. Chạy "npx prisma migrate deploy" rồi thử lại.'
+
+/**
+ * Máy chủ đang chạy Prisma Client CŨ (sinh trước khi thêm bảng) → `prisma.<model>` là undefined
+ * → "Cannot read properties of undefined". Code thì đúng, chỉ cần khởi động lại server.
+ * Hay gặp ngay sau khi thêm bảng mới, và rất dễ bị hiểu nhầm thành phần mềm hỏng.
+ */
+export function isStaleClientError(err: unknown): boolean {
+  if (!(err instanceof TypeError)) return false
+  const msg = err.message
+  // Bắt HẸP đúng dấu hiệu `prisma.<model>` là undefined: "Cannot read properties of undefined
+  // (reading 'create'|'findMany'|…)". Không bắt rộng kiểu "is not a function", nếu không một
+  // lỗi lập trình thật cũng bị chẩn đoán nhầm thành "khởi động lại server".
+  return /Cannot read properties of undefined \(reading '(create|createMany|find\w+|update\w*|delete\w*|count|aggregate|upsert)'\)/i.test(msg)
+    || /undefined is not an object \(evaluating '\w+\.(create|find\w+|update|delete|count)/i.test(msg)
+}
+
+export const STALE_CLIENT_HINT =
+  'Máy chủ đang chạy bản Prisma Client cũ (chưa biết bảng mới). Khởi động lại server rồi thử lại.'
+
+/**
+ * Thông báo lỗi CSDL nói rõ phải làm gì. Dùng ở khối catch của route thay cho "Lỗi hệ thống".
+ * Không lộ dữ liệu nhạy cảm: chỉ trả message của lỗi, không kèm stack.
+ */
+export function describeDbError(err: unknown, fallback: string): string {
+  if (isMissingTableError(err)) return MIGRATION_HINT
+  if (isStaleClientError(err)) return STALE_CLIENT_HINT
+  const msg = err instanceof Error ? err.message : String(err)
+  // "Unknown argument `item`" = client đã sinh KHÔNG có cột đó. Hai khả năng: server chạy client
+  // cũ, hoặc code gọi sai tên cột. Nêu CẢ HAI — đoán chắc một bên là dễ chỉ sai đường.
+  const unknownArg = msg.match(/Unknown argument `(\w+)`/)
+  if (unknownArg) {
+    return `Prisma không biết cột "${unknownArg[1]}". Nếu vừa thêm cột thì khởi động lại server; nếu không thì tên cột đang sai.`
+  }
+  return msg ? `${fallback}: ${msg}` : fallback
+}

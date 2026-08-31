@@ -56,6 +56,9 @@ export const createItpSchema = z.object({
   projectId: z.string().min(1, 'Dự án là bắt buộc'),
   name: z.string().min(1, 'Tên ITP là bắt buộc'),
   revision: z.string().default('R0'),
+  // ITP lập cho một lệnh sản xuất đã báo xong khối lượng
+  workOrderId: z.string().optional(),
+  inspectionDate: z.string().optional(),
   checkpoints: z.array(itpCheckpointSchema).optional().default([]),
 })
 
@@ -132,6 +135,9 @@ export const updateCheckpointSchema = z.object({
   status: z.enum(['PENDING', 'PASSED', 'FAILED']),
   remarks: z.string().optional(),
   createNcr: z.boolean().optional(),
+  // Xác nhận đạt theo vai nào. Bỏ trống thì server tự suy từ quyền của người bấm;
+  // chỉ cần khi một người giữ cả hai vai (BGĐ) và phải chọn rõ đang ký vai nào.
+  side: z.enum(['QC', 'PM']).optional(),
 })
 
 export type UpdateCheckpointInput = z.infer<typeof updateCheckpointSchema>

@@ -6,8 +6,9 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateQuery } from '@/lib/api-helpers'
 import { searchFilterSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
-import { canManageProjectWo, notProjectPmError } from '@/lib/project-access'
+import { canManageProject, notProjectPmMessage } from '@/lib/project-pm'
 import { WO_MATERIAL_REQUEST_ROLES } from '@/lib/wo-materials'
+import { reconcileWorkOrdersQc } from '@/lib/itp-wo-sync'
 
 // Vai trò bị giới hạn xem lệnh theo xưởng của mình (dùng chung danh sách với quyền đề nghị vật tư).
 const WORKSHOP_SCOPED_ROLES: string[] = WO_MATERIAL_REQUEST_ROLES
@@ -76,14 +77,22 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     }),
   ])
 
+  // Trạng thái QC do màn Kế hoạch Kiểm tra (ITP) quyết định, và màn WO không còn nút bấm tay.
+  // Nên so lại ngay lúc đọc danh sách: ITP đã đủ hai chữ ký mà WO còn "Chờ QC" thì tự sửa.
+  // Chỉ ghi khi thật sự lệch — bình thường đây chỉ là một truy vấn đọc thêm.
+  const fixed = await reconcileWorkOrdersQc(workOrders.map(w => w.id), payload.userId)
+  const fixedStatus = new Map(fixed.map(f => [f.woId, f.to]))
+
   const result = workOrders.map((wo) => ({
     id: wo.id,
     woCode: wo.woCode,
     projectId: wo.projectId,
     description: wo.description,
     teamCode: wo.teamCode,
-    status: wo.status,
+    status: fixedStatus.get(wo.id) ?? wo.status,
     pieceMark: wo.pieceMark,
+    materials: wo.materials,
+    aplLineId: wo.aplLineId,
     plannedWeight: wo.plannedWeight ? Number(wo.plannedWeight) : null,
     completedQty: wo.completedQty ? Number(wo.completedQty) : null,
     departmentId: wo.departmentId,
@@ -124,7 +133,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   // Chỉ PM phụ trách dự án (hoặc BGĐ) mới tạo được WO cho dự án đó.
   const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { pmUserId: true } })
   if (!proj) return errorResponse('Không tìm thấy dự án', 404)
-  if (!canManageProjectWo(payload.roleCode, payload.userId, proj.pmUserId)) return errorResponse(notProjectPmError(proj.pmUserId), 403)
+  if (!(await canManageProject(payload.roleCode, payload.userId, projectId))) return errorResponse(notProjectPmMessage(!!proj.pmUserId), 403)
 
   const existing = await prisma.workOrder.findUnique({ where: { woCode } })
   if (existing) return errorResponse(`Mã WO ${woCode} đã tồn tại`)

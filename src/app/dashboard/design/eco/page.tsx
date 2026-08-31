@@ -100,7 +100,7 @@ export default function ECOPage() {
   }, [filterStatus])
 
   const openForm = async () => {
-    const pRes = await apiFetch('/api/projects')
+    const pRes = await apiFetch('/api/projects/options')
     if (pRes.ok) setProjects(pRes.projects || [])
     setShowForm(true)
   }

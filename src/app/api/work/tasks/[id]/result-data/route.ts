@@ -14,6 +14,7 @@ const ALLOWED_KEYS = [
   'totalMaterial', 'totalLabor', 'totalService', 'totalOverhead', 'totalEstimate', 'dt02Detail', 'estimateFileName',
   'wbsItems', 'milestones', 'bomItemsList',
   'supplierQuotes', 'chosenVendorId',
+  'aplImportId', 'aplFileName',
 ]
 
 // POST /api/work/tasks/[id]/result-data  { key, value }

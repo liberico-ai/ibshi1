@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { WBS_STAGE_LABEL, woCodeFor, pieceMarkFor, unitTagForRow, allocTags, allocCellStr } from '@/lib/wbs-wo'
-import { canManageProjectWo, notProjectPmError } from '@/lib/project-access'
+import { canManageProject, notProjectPmMessage } from '@/lib/project-pm'
 import { stripWbsNotes } from '@/lib/wbs-parser'
 import { Prisma } from '@prisma/client'
 
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, projectCode: true, pmUserId: true } })
     if (!project) return errorResponse('Không tìm thấy dự án', 404)
-    if (!canManageProjectWo(payload.roleCode, payload.userId, project.pmUserId)) return errorResponse(notProjectPmError(project.pmUserId), 403)
+    if (!(await canManageProject(payload.roleCode, payload.userId, projectId))) return errorResponse(notProjectPmMessage(!!project.pmUserId), 403)
 
     const { planTask, fullRows, rows } = await readWbs(projectId)
     const row = rows[rowIndex] || null
@@ -176,7 +176,7 @@ export async function DELETE(req: NextRequest) {
 
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, pmUserId: true } })
     if (!project) return errorResponse('Không tìm thấy dự án', 404)
-    if (!canManageProjectWo(payload.roleCode, payload.userId, project.pmUserId)) return errorResponse(notProjectPmError(project.pmUserId), 403)
+    if (!(await canManageProject(payload.roleCode, payload.userId, projectId))) return errorResponse(notProjectPmMessage(!!project.pmUserId), 403)
     const { rows } = await readWbs(projectId)
     const row = rows[rowIndex]
     if (!row) return errorResponse('Không tìm thấy hạng mục WBS', 404)

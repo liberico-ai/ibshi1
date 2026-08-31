@@ -8,7 +8,12 @@ const ALLOWED_ENTITY_TYPES = new Set([
   'TaskDoc', 'TaskQuote', 'Project', 'ProjectDoc', 'ProjectDraft',
   'PO', 'PR', 'GRN', 'Meeting', 'General', 'Task', 'TaskEvidence',
   'PurchaseContract',
+  // Biên bản nghiệm thu đính vào một điểm kiểm tra ITP (entityId = id checkpoint)
+  'ITPCheckpoint',
 ])
+
+// Chỉ QC/BGĐ được đính biên bản nghiệm thu — cùng nhóm quyền chấm Đạt/Lỗi.
+const ITP_INSPECT_ROLES = ['R01', 'R09', 'R09a']
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 
@@ -31,6 +36,9 @@ export async function POST(req: NextRequest) {
     }
     if (entityType === 'PR' && !(await can(user, 'form.PR'))) {
       return errorResponse('Bạn không có quyền upload file PR', 403)
+    }
+    if (entityType === 'ITPCheckpoint' && !ITP_INSPECT_ROLES.includes(user.roleCode)) {
+      return errorResponse('Chỉ QC / BGĐ được đính biên bản nghiệm thu', 403)
     }
     if (entityType === 'TaskEvidence') {
       const taskId = entityId.replace(/_evidence$/, '')

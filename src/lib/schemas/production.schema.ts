@@ -35,7 +35,9 @@ export type UpdateWorkOrderInput = z.infer<typeof updateWorkOrderSchema>
 export const createJobCardSchema = z.object({
   workOrderId: z.string().min(1, 'Lệnh sản xuất là bắt buộc'),
   teamCode: z.string().optional(),
-  workType: z.string().min(1, 'Loại công việc là bắt buộc'),
+  // Bỏ chọn công đoạn ở màn báo cáo: APL không ghi công đoạn, và một WO được hiểu là
+  // việc của MỘT công đoạn mà xưởng nhận đã biết. Để trống thì lưu 'production'.
+  workType: z.string().optional(),
   description: z.string().optional(),
   plannedQty: z.number().positive().optional(),
   actualQty: z.number().min(0).optional(),

@@ -471,61 +471,12 @@ const P4_5: StepFormConfig = {
 
 // ── Phase 5: Sản xuất (BRD#26-31) ──
 
-const P5_1: StepFormConfig = {
-  stepCode: 'P5.1',
-  formType: 'input',
-  title: 'Yêu cầu nghiệm thu LSX',
-  description: 'Hiển thị Lệnh sản xuất tương ứng đã được đẩy xuống cho bộ phận và ghi nhận khối lượng hoàn thành.',
-  fields: [
-    { key: 'completedQuantity', label: 'Số lượng đã hoàn thành', labelEn: 'Completed Quantity', type: 'number', required: true },
-  ],
-  checklist: [
-    { key: 'volume_reported', label: 'Đã báo cáo SL hoàn thành', required: true }
-  ],
-  attachments: [],
-}
-
-const P5_1A: StepFormConfig = {
-  stepCode: 'P5.1A',
-  formType: 'input',
-  title: 'Báo cáo khối lượng của thầu phụ (theo ngày)',
-  description: 'Hiển thị Lệnh sản xuất tương ứng đã được đẩy xuống cho bộ phận và ghi nhận khối lượng hoàn thành.',
-  fields: [
-    { key: 'completedQuantity', label: 'Số lượng đã hoàn thành', labelEn: 'Completed Quantity', type: 'number', required: true },
-  ],
-  checklist: [
-    { key: 'volume_reported', label: 'Đã báo cáo SL hoàn thành', required: true }
-  ],
-  attachments: [],
-}
-
-const P5_1_1: StepFormConfig = {
-  stepCode: 'P5.1.1',
-  formType: 'input',
-  title: 'Yêu cầu nghiệm thu chất lượng hạng mục',
-  description: 'Ghi nhận kết quả nghiệm thu chất lượng hạng mục sau khi đi kiểm tra với chủ đầu tư / đơn vị thứ 3.',
-  fields: [
-    { key: 'projectName', label: 'Tên dự án', labelEn: 'Project Name', type: 'readonly', fullWidth: true },
-    { key: 'hangMucName', label: 'Hạng mục', labelEn: 'WBS Item', type: 'readonly', fullWidth: true },
-    { key: 'totalKL', label: 'Tổng khối lượng thiết kế', labelEn: 'Total Design Volume', type: 'readonly', fullWidth: true },
-    { key: 'ngayNghiemThu', label: 'Ngày nghiệm thu', labelEn: 'Acceptance Date', type: 'date', required: true },
-    { key: 'ketQua', label: 'Kết quả nghiệm thu', labelEn: 'Inspection Result', type: 'select', required: true, options: [
-      { value: 'PASS', label: 'Đạt (PASS)' },
-      { value: 'FAIL', label: 'Không đạt (FAIL)' },
-    ]},
-  ],
-  checklist: [
-    { key: 'result_verified', label: 'Đã xác nhận kết quả nghiệm thu thực tế', required: true },
-  ],
-  attachments: [
-    { key: 'itpFile', label: 'Upload biên bản ITP (Bắt buộc)', accept: ACCEPT.DOCS_PLUS, required: true },
-  ],
-}
+// P5_1 / P5_1A (báo cáo theo ngày) và P5_1_1 (yêu cầu nghiệm thu CL) đã gỡ 2026-08.
 
 const P5_2: StepFormConfig = {
   stepCode: 'P5.2',
   formType: 'input',
-  title: 'Tổ SX báo cáo khối lượng hoàn thành theo tuần',
+  title: 'Xưởng SX báo cáo khối lượng hoàn thành (theo tuần)',
   description: 'Mỗi tuần, R06b nhập KL hoàn thành: hạng mục, số lượng, đơn vị, job card. Dữ liệu là cơ sở tính lương khoán.',
   fields: [
     { key: 'weekNumber', label: 'Tuần báo cáo', labelEn: 'Report Week', type: 'number', required: true },
@@ -541,7 +492,7 @@ const P5_2: StepFormConfig = {
 const P5_3: StepFormConfig = {
   stepCode: 'P5.3',
   formType: 'input',
-  title: 'QC nghiệm thu sản phẩm trong quá trình SX',
+  title: 'TP QAQC nghiệm thu chất lượng & khối lượng',
   description: 'QC kiểm tra theo ITP tại Hold Point và Witness Point. Pass → tiếp, Fail → NCR, gắn WBS và job card.',
   fields: [
     // Multi QC inspection items form rendered dynamically in page.tsx
@@ -720,7 +671,7 @@ export const STEP_FORM_CONFIGS: Record<string, StepFormConfig> = {
   'P3.1': P3_1, 'P3.3': P3_3, 'P3.4': P3_4,
   'P3.5': P3_5, 'P3.6': P3_6, 'P3.7': P3_7,
   'P4.1': P4_1, 'P4.3': P4_3, 'P4.4': P4_4, 'P4.5': P4_5,
-  'P5.1': P5_1, 'P5.1A': P5_1A, 'P5.1.1': P5_1_1, 'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
+  'P5.2': P5_2, 'P5.3': P5_3, 'P5.4': P5_4, 'P5.5': P5_5,
   'P6.1': P6_1, 'P6.2': P6_2, 'P6.3': P6_3, 'P6.4': P6_4, 'P6.5': P6_5,
 }
 

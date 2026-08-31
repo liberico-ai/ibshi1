@@ -16,7 +16,7 @@ export type { WorkflowStep } from './workflow-constants'
 
 const DYNAMIC_STEPS = [
   // P4.3/P4.4 đã gỡ (chuyển sang sidebar theo PO)
-  'P5.1', 'P5.1A', 'P5.2', 'P5.3', 'P5.4', 'P5.1.1', 'P5.3A',
+  'P5.2', 'P5.3', 'P5.4',
   // P4.5 (tạo per-request bởi api/tasks/[id]/daily-report) và P5.5 (AUTO-OPEN
   // theo khối lượng lũy kế trong api/tasks/[id]/weekly-acceptance) cũng có
   // handler riêng — gate trong WORKFLOW_RULES chỉ phục vụ template engine
@@ -99,9 +99,9 @@ export async function completeTask(
   // Get workflow rule for this step
   const rule = WORKFLOW_RULES[task.taskType]
 
-  // Auto-create P5.1 when a dynamic P4.5 completes
+  // Sinh task báo cáo khối lượng theo tuần khi P4.5 hoàn thành
   if (task.taskType === 'P4.5') {
-    await checkAndCreateP51(taskId)
+    await checkAndCreateP52(taskId)
   }
 
   // ── P4.3 → P4.4 đã NGỪNG (retired) ──
@@ -110,48 +110,9 @@ export async function completeTask(
   // Không còn tự sinh task P4.4 khi P4.3 hoàn thành. Task P4.3/P4.4 legacy được huỷ mềm
   // bằng script scripts/cancel-legacy-qc-warehouse-tasks.ts.
 
-  // Auto-create P5.3A when P5.1.1 (Yêu cầu nghiệm thu CL) completes
-  if (task.taskType === 'P5.1.1') {
-    const rd = resultData || (task.resultData as Record<string, any>) || {}
-    const newP53a = await prisma.task.create({
-      data: {
-        projectId: projectId,
-        taskType: 'P5.3A',
-        title: `QAQC nghiệm thu CL: ${rd.hangMucName || 'Hạng mục'}`,
-        createdBy: userId,
-        status: TASK_STATUS.IN_PROGRESS,
-        resultData: rd,
-      }
-    })
-    const p53aRole = WORKFLOW_RULES['P5.3A']?.role || 'R09'
-    const p53aUser = await resolveRoleToUser(p53aRole, projectId)
-    await prisma.taskAssignee.create({ data: { taskId: newP53a.id, role: p53aRole, userId: p53aUser.id, isPrimary: true } })
-
-    // Notify for P5.3A
-    try {
-      const users = await prisma.user.findMany({ where: { roleCode: p53aRole, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
-      if (users.length > 0) {
-        const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
-        if (project) {
-          await prisma.notification.createMany({
-            data: users.map(u => ({
-              userId: u.id,
-              title: `Công việc mới: QAQC nghiệm thu CL`,
-              message: `Bước P5.3A của dự án ${project.projectCode} đã sẵn sàng.`,
-              type: 'task_assigned',
-              linkUrl: `/dashboard/work/${newP53a.id}`,
-            }))
-          })
-          await notifyTaskActivated({
-            stepCode: 'P5.3A', stepName: newP53a.title,
-            projectCode: project.projectCode, projectName: project.projectName,
-            assignedRole: p53aRole, deadline: null, taskId: newP53a.id,
-            mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId }))
-          }).catch(console.error)
-        }
-      }
-    } catch (e) { console.error(e) }
-  }
+  // ── P5.1.1 → P5.3A đã GỠ (2026-08) ──
+  // Nghiệm thu chất lượng không còn là cặp bước riêng (xưởng mời → QAQC duyệt). Chất lượng và
+  // khối lượng nay nghiệm thu MỘT LẦN ở màn Kế hoạch Kiểm tra (ITP), TP QAQC + PM dự án ký song song.
 
   if (!rule) return { nextSteps: [] }
 
@@ -241,108 +202,66 @@ export async function completeTask(
   return { nextSteps: activatedSteps }
 }
 
-// ── Ensure the persistent daily-report tasks (P5.1 + P5.1A) exist for a project ──
-// Idempotent: safe to call multiple times — only creates each task once.
-// Triggered by: (1) first P4.5 completion (Kho cấp VT xong); (2) PM/QLSX phát hành LSX
-// (api/tasks/ensure-daily-report) — so material-less stages still get a daily report.
-export async function ensureDailyReportTasks(projectId: string, createdByUserId?: string): Promise<void> {
-  const rule = WORKFLOW_RULES['P5.1']
+// ── Bảo đảm task báo cáo khối lượng THEO TUẦN (P5.2) tồn tại cho dự án ──
+// Trước 2026-08 đây là hai task báo cáo THEO NGÀY (P5.1 nội bộ + P5.1A thầu phụ). Quy trình rút gọn
+// bỏ báo cáo ngày: xưởng chỉ báo khối lượng theo tuần, rồi TP QAQC + PM nghiệm thu một lần.
+// Idempotent: gọi bao nhiêu lần cũng chỉ tạo một task.
+// Kích hoạt bởi: (1) P4.5 hoàn thành lần đầu (Kho cấp VT xong); (2) PM/QLSX phát hành LSX.
+export async function ensureWeeklyReportTask(projectId: string, createdByUserId?: string): Promise<void> {
+  const rule = WORKFLOW_RULES['P5.2']
   if (!rule) return
   const systemUser = createdByUserId || 'system'
+  const TITLE = 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO TUẦN)'
 
-  // P5.1 — single persistent "Daily Report" task
-  const existingDailyTask = await prisma.task.findFirst({
-    where: { projectId, taskType: 'P5.1', title: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' },
+  const existing = await prisma.task.findFirst({ where: { projectId, taskType: 'P5.2' } })
+  if (existing) return
+
+  const newP52 = await prisma.task.create({
+    data: {
+      projectId,
+      taskType: 'P5.2',
+      title: TITLE,
+      description: 'Weekly Production Volume Report',
+      createdBy: systemUser,
+      status: TASK_STATUS.IN_PROGRESS,
+      startedAt: new Date(),
+    },
   })
-  if (!existingDailyTask) {
-    const newP51 = await prisma.task.create({
-      data: {
-        projectId,
-        taskType: 'P5.1',
-        title: 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)',
-        description: 'Daily Production Volume Report',
-        createdBy: systemUser,
-        status: TASK_STATUS.IN_PROGRESS,
-        startedAt: new Date(),
-      },
-    })
-    const p51User = await resolveRoleToUser(rule.role, projectId)
-    await prisma.taskAssignee.create({ data: { taskId: newP51.id, role: rule.role, userId: p51User.id, isPrimary: true } })
-    try {
-      const users = await prisma.user.findMany({ where: { roleCode: rule.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
-      const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
-      if (users.length > 0 && project) {
-        await prisma.notification.createMany({
-          data: users.map(u => ({
-            userId: u.id, title: `Công việc mới: Báo cáo SX Hàng ngày`,
-            message: `Bước P5.1 của dự án ${project.projectCode} đã sẵn sàng.`,
-            type: 'task_assigned', linkUrl: `/dashboard/work/${newP51.id}`,
-          })),
-        })
-        await notifyTaskActivated({
-          stepCode: 'P5.1', stepName: newP51.title,
-          projectCode: project.projectCode, projectName: project.projectName,
-          assignedRole: rule.role, deadline: null, taskId: newP51.id,
-          mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
-        }).catch(console.error)
-      }
-    } catch (e) { console.error(e) }
-  }
+  const assignee = await resolveRoleToUser(rule.role, projectId)
+  await prisma.taskAssignee.create({ data: { taskId: newP52.id, role: rule.role, userId: assignee.id, isPrimary: true } })
 
-  // P5.1A — subcontractor daily report
-  const ruleP51A = WORKFLOW_RULES['P5.1A']
-  if (ruleP51A) {
-    const existingP51A = await prisma.task.findFirst({ where: { projectId, taskType: 'P5.1A' } })
-    if (!existingP51A) {
-      const newP51A = await prisma.task.create({
-        data: {
-          projectId,
-          taskType: 'P5.1A',
-          title: 'BÁO CÁO KHỐI LƯỢNG CỦA THẦU PHỤ (THEO NGÀY)',
-          description: 'Daily Subcontractor Production Report',
-          createdBy: systemUser,
-          status: TASK_STATUS.IN_PROGRESS,
-          startedAt: new Date(),
-        },
+  try {
+    const users = await prisma.user.findMany({ where: { roleCode: rule.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
+    if (users.length > 0 && project) {
+      await prisma.notification.createMany({
+        data: users.map(u => ({
+          userId: u.id, title: 'Công việc mới: Báo cáo khối lượng theo tuần',
+          message: `Bước P5.2 của dự án ${project.projectCode} đã sẵn sàng.`,
+          type: 'task_assigned', linkUrl: `/dashboard/work/${newP52.id}`,
+        })),
       })
-      const p51aUser = await resolveRoleToUser(ruleP51A.role, projectId)
-      await prisma.taskAssignee.create({ data: { taskId: newP51A.id, role: ruleP51A.role, userId: p51aUser.id, isPrimary: true } })
-      try {
-        const users = await prisma.user.findMany({ where: { roleCode: ruleP51A.role, isActive: true }, select: { id: true, username: true, telegramChatId: true } })
-        const project = await prisma.project.findUnique({ where: { id: projectId }, select: { projectCode: true, projectName: true } })
-        if (users.length > 0 && project) {
-          await prisma.notification.createMany({
-            data: users.map(u => ({
-              userId: u.id, title: `Công việc mới: Báo cáo SX Thầu phụ`,
-              message: `Bước P5.1A của dự án ${project.projectCode} đã sẵn sàng.`,
-              type: 'task_assigned', linkUrl: `/dashboard/work/${newP51A.id}`,
-            })),
-          })
-          await notifyTaskActivated({
-            stepCode: 'P5.1A', stepName: newP51A.title,
-            projectCode: project.projectCode, projectName: project.projectName,
-            assignedRole: ruleP51A.role, deadline: null, taskId: newP51A.id,
-            mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
-          }).catch(console.error)
-        }
-      } catch (e) { console.error(e) }
+      await notifyTaskActivated({
+        stepCode: 'P5.2', stepName: newP52.title,
+        projectCode: project.projectCode, projectName: project.projectName,
+        assignedRole: rule.role, deadline: null, taskId: newP52.id,
+        mentionUsers: users.map(u => ({ fullName: u.username, telegramChatId: u.telegramChatId })),
+      }).catch(console.error)
     }
-  }
+  } catch (e) { console.error(e) }
 }
-
-// ── Auto-create persistent P5.1 "Daily Report" task when first P4.5 completes ──
-// P5.1.1 (Yêu cầu nghiệm thu) is NOT handled here anymore.
-// It is triggered by /api/tasks/check-p511 when PM/QLSX Phát hành đủ 100% công đoạn.
-async function checkAndCreateP51(taskId: string) {
+// ── Sinh task báo cáo khối lượng theo tuần (P5.2) khi P4.5 đầu tiên hoàn thành ──
+async function checkAndCreateP52(taskId: string) {
   const task = await prisma.task.findUnique({ where: { id: taskId } })
   if (!task) return
   if (task.taskType !== 'P4.5') return
 
   const data = (task.resultData as Record<string, any>) || {}
+  // Cờ _p51Created giữ nguyên TÊN để dự án cũ đã sinh task không bị tạo trùng lần nữa.
   if (data._p51Created || !data.sourceStep) return
   if (task.status !== TASK_STATUS.DONE) return
 
-  await ensureDailyReportTasks(task.projectId!, task.completedBy || undefined)
+  await ensureWeeklyReportTask(task.projectId!, task.completedBy || undefined)
 
   // Mark P4.5 as processed
   await prisma.task.update({
@@ -716,19 +635,9 @@ async function runWorkflowHooks(
     }
 
     // P5.1: Packing → auto DeliveryRecord
-    if (stepCode === 'P5.1') {
-      const count = await prisma.deliveryRecord.count()
-      const deliveryCode = `DL-${projCode}-${String(count + 1).padStart(3, '0')}`
-      await prisma.deliveryRecord.create({
-        data: {
-          deliveryCode,
-          projectId,
-          status: 'PACKING',
-          createdBy: userId,
-          notes: `Auto: workflow P5.1 completed`,
-        },
-      })
-    }
+    // Hook cũ "P5.1 → tự tạo DeliveryRecord (PACKING)" đã gỡ cùng bước P5.1.
+    // Ghi chú của nó là "Packing" trong khi P5.1 là báo cáo sản lượng ngày — không khớp nhau,
+    // và giao hàng/đóng gói đã có luồng riêng ở Phase 6.
 
     // P5.3: PM Acceptance → forward week data to P5.4 + set deadline
     if (stepCode === 'P5.3' && resultData) {
@@ -970,7 +879,7 @@ export async function processP45PartialIssue(
       if (key.startsWith('actualQty_')) delete cleanedData[key]
     }
     await completeTask(taskId, userId, cleanedData)
-    // checkAndCreateP51 is now called inside completeTask
+    // checkAndCreateP52 is now called inside completeTask
     return { isPartial: false, issuedAccumulated }
   }
 

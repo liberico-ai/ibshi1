@@ -23,7 +23,7 @@ export default function FinancePlanUploader({ onUploaded }: { onUploaded?: (proj
 
   useEffect(() => {
     // Load projects to select
-    apiFetch('/api/projects').then(res => {
+    apiFetch('/api/projects/options').then(res => {
       if (res.ok) setProjects(res.projects || [])
     })
   }, [])

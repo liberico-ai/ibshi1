@@ -3,12 +3,13 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
+import { reconcileWorkOrdersQc } from '@/lib/itp-wo-sync'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
 import { applyStockMovement } from '@/lib/stock-ledger'
 import { WBS_STAGES, unitTagForRow, readAlloc, allocTags, allocCellStr } from '@/lib/wbs-wo'
-import { canManageProjectWo, notProjectPmError } from '@/lib/project-access'
+import { canManageProject, notProjectPmMessage } from '@/lib/project-pm'
 import { Prisma } from '@prisma/client'
 
 // GET /api/production/:id — Work order detail + material issues
@@ -31,9 +32,14 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
   if (!wo) return errorResponse('Không tìm thấy lệnh sản xuất', 404)
 
+  // Màn này không còn nút QC Đạt/Không đạt — kết quả đến từ ITP. So lại lúc mở để lệnh
+  // đã nghiệm thu xong không bị kẹt ở "Chờ QC" mà không có cách nào gỡ.
+  const [fix] = await reconcileWorkOrdersQc([wo.id], payload.userId)
+
   return successResponse({
     workOrder: {
       ...wo,
+      status: fix?.to ?? wo.status,
       materialIssues: wo.materialIssues.map((mi) => ({
         ...mi,
         quantity: Number(mi.quantity),
@@ -52,9 +58,9 @@ export const PATCH = withErrorHandler(async (req: NextRequest, { params }: { par
   if (!pResult.success) return pResult.response
   const { id } = pResult.data
 
-  const wo = await prisma.workOrder.findUnique({ where: { id }, select: { id: true, project: { select: { pmUserId: true } } } })
+  const wo = await prisma.workOrder.findUnique({ where: { id }, select: { id: true, projectId: true, project: { select: { pmUserId: true } } } })
   if (!wo) return errorResponse('Không tìm thấy lệnh sản xuất', 404)
-  if (!canManageProjectWo(payload.roleCode, payload.userId, wo.project?.pmUserId)) return errorResponse(notProjectPmError(wo.project?.pmUserId), 403)
+  if (!(await canManageProject(payload.roleCode, payload.userId, wo.projectId))) return errorResponse(notProjectPmMessage(!!wo.project?.pmUserId), 403)
 
   const body = await req.json().catch(() => ({})) as { description?: string; teamCode?: string; plannedWeight?: number | string; plannedStart?: string; plannedEnd?: string; pieceMark?: string }
   const toDate = (v: unknown) => { const s = String(v ?? '').trim(); if (!s) return null; const d = new Date(s); return Number.isNaN(d.getTime()) ? null : d }

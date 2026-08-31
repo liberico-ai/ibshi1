@@ -15,13 +15,25 @@ import { WORKFLOW_RULES } from '../workflow-constants'
 describe('WORKFLOW_RULES — gate cho 7 bước mồ côi (R2-2)', () => {
   // P4.3/P4.4 đã gỡ khỏi workflow (chuyển sang sidebar); P4.5 nay kích hoạt độc lập
   // qua /api/tasks/activate nên không còn gate ['P4.4'].
+  // Rút gọn 2026-08: P5.1/P5.1A (báo cáo ngày) và P5.1.1/P5.3A (nghiệm thu chất lượng riêng)
+  // đã gỡ. Xưởng chỉ báo khối lượng tuần (P5.2); TP QAQC (P5.3) và PM (P5.4) nghiệm thu song song,
+  // P5.5 chỉ mở khi ĐỦ CẢ HAI.
   const expectedGates: Record<string, string[]> = {
-    'P5.1': ['P4.5'],
-    'P5.1A': ['P4.5'],
-    'P5.1.1': ['P4.5'],
     'P5.2': ['P4.5'],
-    'P5.5': ['P5.4'],
+    'P5.5': ['P5.3', 'P5.4'],
   }
+
+  it('các bước đã gỡ khỏi quy trình không còn trong WORKFLOW_RULES', () => {
+    for (const code of ['P5.1', 'P5.1A', 'P5.1.1', 'P5.3A']) {
+      expect(WORKFLOW_RULES[code], `${code} phải đã bị gỡ`).toBeUndefined()
+    }
+  })
+
+  it('P5.3 và P5.4 chạy song song từ P5.2, không nối tiếp nhau', () => {
+    expect(WORKFLOW_RULES['P5.2'].next).toEqual(['P5.3', 'P5.4'])
+    expect(WORKFLOW_RULES['P5.3'].next).toEqual([])
+    expect(WORKFLOW_RULES['P5.4'].next).toEqual([])
+  })
 
   it.each(Object.entries(expectedGates))('%s có gate %j', (code, gate) => {
     const rule = WORKFLOW_RULES[code]

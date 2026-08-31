@@ -286,7 +286,6 @@ const STEP_VALIDATION_MAP: Record<string, (projectId: string, resultData?: Recor
   },
   'P3.4': validateLSXBOMLink,       // TC-04-02
   'P4.5': validateSufficientStock,  // Strict stock check to prevent negative inventory
-  'P5.1.1': makeAttachmentValidator('P5.1.1', [{ key: 'itpFile', label: 'Biên bản ITP' }]),
   'P6.1': async (projectId) => {
     return makeAttachmentValidator('P6.1', [{ key: 'qcDossier', label: 'File QC Dossier tổng hợp' }])(projectId)
   },

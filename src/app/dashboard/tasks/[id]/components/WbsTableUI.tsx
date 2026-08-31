@@ -135,7 +135,7 @@ export default function WbsTableUI({ isWbsEditable, wbsItemsData, onChange, mode
   // ── Định tuyến P3.3 vs P3.4 theo giá trị ô công đoạn (nơi làm việc) ──
   // Ô chứa "IBS" (kể cả "IBS TP Giang Sơn" = thầu phụ làm TẠI xưởng IBS) → thuộc P3.4;
   // ô ghi tên thầu phụ khác (mang ra ngoài làm) → thuộc P3.3. "N/A" = công đoạn không áp dụng.
-  // Cùng quy tắc này được dùng lại ở báo cáo ngày (ô IBS → P5.1, còn lại → P5.1A).
+  // (Quy tắc này trước đây còn dùng cho báo cáo ngày P5.1/P5.1A — hai bước đó đã gỡ 2026-08.)
   const _isIBS = (val: string) => (val || '').trim().toUpperCase().includes('IBS');
   const _isEmpty = (val: string) => !(val || '').trim();
   const _isNA = (val: string) => (val || '').trim().toUpperCase() === 'N/A';

@@ -10,9 +10,10 @@ import BomItemsUploadUI from '@/components/BomItemsUploadUI'
 import BomPrUploadUI from '@/app/dashboard/tasks/[id]/components/BomPrUploadUI'
 import WeldPaintUploadUI from '@/app/dashboard/tasks/[id]/components/WeldPaintUploadUI'
 import SupplierQuoteUI from '@/components/SupplierQuoteUI'
+import AplUploadUI from '@/components/AplUploadUI'
 import { useAuthStore } from '@/hooks/useAuth'
 
-export type TemplateType = 'ESTIMATE' | 'PR' | 'BBH' | 'WBS' | 'WELD_PAINT' | 'BOM' | 'SUPPLIER_QUOTE' | null
+export type TemplateType = 'ESTIMATE' | 'PR' | 'BBH' | 'WBS' | 'WELD_PAINT' | 'BOM' | 'SUPPLIER_QUOTE' | 'APL' | null
 
 export const TEMPLATES: { value: NonNullable<TemplateType>; label: string; icon: string; desc: string }[] = [
   { value: 'ESTIMATE', label: 'Dự toán thi công', icon: 'DT', desc: 'Upload Excel dự toán (DT01-DT07), parse tổng hợp chi phí' },
@@ -22,6 +23,7 @@ export const TEMPLATES: { value: NonNullable<TemplateType>; label: string; icon:
   { value: 'WELD_PAINT', label: 'Vật tư hàn / sơn', icon: 'HS', desc: 'Upload danh sách vật tư hàn, sơn' },
   { value: 'BOM', label: 'BOM vật tư phụ', icon: 'BM', desc: 'Upload danh mục vật tư phụ (BOM)' },
   { value: 'SUPPLIER_QUOTE', label: 'Báo giá nhà cung cấp', icon: 'BG', desc: 'Tìm NCC, đính kèm báo giá/hợp đồng, so sánh & chọn' },
+  { value: 'APL', label: 'Assembly Part List (APL)', icon: 'AP', desc: 'Upload APL thiết kế, tra cứu part theo cụm / mã cắt / bản vẽ' },
 ]
 
 interface Props {
@@ -40,7 +42,7 @@ interface Props {
 // Màu nhận diện từng biểu mẫu (chip + viền)
 const TPL_COLOR: Record<string, string> = {
   ESTIMATE: '#2563eb', PR: '#c2410c', BBH: '#7c3aed', WBS: '#0891b2',
-  WELD_PAINT: '#dc2626', BOM: '#059669', SUPPLIER_QUOTE: '#d97706',
+  WELD_PAINT: '#dc2626', BOM: '#059669', SUPPLIER_QUOTE: '#d97706', APL: '#4338ca',
 }
 
 // Biểu mẫu đã có dữ liệu chưa? (dựa trên các key trong resultData — khớp logic auto-detect)
@@ -53,6 +55,7 @@ function templateHasData(v: NonNullable<TemplateType>, rd: Record<string, unknow
     case 'WELD_PAINT': return !!(rd.weldData || rd.paintData)
     case 'BOM': return !!(rd.bomItemsList)
     case 'SUPPLIER_QUOTE': return !!(rd.supplierQuotes)
+    case 'APL': return !!(rd.aplImportId)
     default: return false
   }
 }
@@ -103,6 +106,7 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
             : (rd.wbsItems || rd.milestones) ? 'WBS'
             : (rd.weldData || rd.paintData) ? 'WELD_PAINT'
             : rd.bomItemsList ? 'BOM'
+            : rd.aplImportId ? 'APL'
             : initialTemplate ?? null
           if (detected) setSelected(detected)
         }
@@ -287,6 +291,19 @@ export default function TemplateSelector({ taskId, isEditable, projectCode, proj
             bomData={bomItems || undefined}
             onChange={(val) => { setBomItems(val); saveField('bomItemsList', val) }}
             projectCode={projectCode}
+          />
+        </div>
+      )}
+
+      {selected === 'APL' && (
+        <div style={{ marginTop: 12 }}>
+          <AplUploadUI
+            isEditable={isEditable && canEditForm('APL', roleCode)}
+            taskId={taskId}
+            projectId={projectId}
+            importId={resultData.aplImportId ? String(resultData.aplImportId) : undefined}
+            fileName={resultData.aplFileName ? String(resultData.aplFileName) : undefined}
+            onFieldChange={saveField}
           />
         </div>
       )}

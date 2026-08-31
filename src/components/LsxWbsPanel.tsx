@@ -13,7 +13,7 @@ import type { CellAssignMap, LsxIssuedMap, MaterialReqItem, MaterialReqMap, Team
 //   • trang Công việc bản cũ /dashboard/tasks/[id] (giữ làm đường lùi)
 //
 // Mọi thao tác đều ghi thẳng vào task.resultData qua PUT /api/tasks/[id] {action:'save'} —
-// P5.1 (báo cáo ngày) và check-p511 đọc lại đúng các khoá cellAssignments / lsxIssuedDetails.
+// P5.2 (báo cáo khối lượng tuần) đọc lại đúng các khoá cellAssignments / lsxIssuedDetails.
 
 interface Props {
   taskId: string
@@ -52,17 +52,8 @@ export default function LsxWbsPanel({ taskId, projectId, stepCode, wbsItems, ini
     return next
   }
 
-  /** Hạng mục đã phát hành đủ 100% công đoạn → tự sinh P5.1.1 (yêu cầu nghiệm thu CL). */
-  const checkP511 = async (rowIdx: number) => {
-    try {
-      const res = await apiFetch('/api/tasks/check-p511', {
-        method: 'POST',
-        body: JSON.stringify({ projectId, sourceStep: stepCode, rowIdx, taskId }),
-      })
-      // apiFetch trả JSON đã parse, successResponse trải phẳng data → đọc thẳng res.created
-      if (res?.created) flash(res.reason || 'Đã tạo yêu cầu nghiệm thu chất lượng', 6000)
-    } catch { /* silent */ }
-  }
+  // Bỏ 2026-08: phát hành đủ 100% công đoạn không còn tự sinh P5.1.1 (yêu cầu nghiệm thu CL).
+  // Nghiệm thu chất lượng nay đi cùng khối lượng trên màn Kế hoạch Kiểm tra (ITP).
 
   const cellAssignments = parseMap<CellAssignMap>(formData.cellAssignments)
   const lsxIssuedDetails = parseMap<LsxIssuedMap>(formData.lsxIssuedDetails)
@@ -107,8 +98,7 @@ export default function LsxWbsPanel({ taskId, projectId, stepCode, wbsItems, ini
           }
           await patch({ lsxStatus: JSON.stringify(newStatus), lsxIssuedDetails: JSON.stringify(issued) })
           flash(`Đã phát hành LSX cho hạng mục: ${row.hangMuc || '#' + (ri + 1)}`)
-          await apiFetch('/api/tasks/ensure-daily-report', { method: 'POST', body: JSON.stringify({ projectId }) }).catch(() => {})
-          await checkP511(ri)
+          await apiFetch('/api/tasks/ensure-weekly-report', { method: 'POST', body: JSON.stringify({ projectId }) }).catch(() => {})
         }}
 
         // Phát hành LSX cho MỘT xưởng của một công đoạn.
@@ -119,10 +109,9 @@ export default function LsxWbsPanel({ taskId, projectId, stepCode, wbsItems, ini
           }
           await patch({ lsxIssuedDetails: JSON.stringify(updated) })
           flash(`Đã phát hành LSX cho xưởng #${teamIdx + 1} — ${colKey}`)
-          // Mở sẵn task báo cáo ngày (P5.1/P5.1A) — công đoạn không cần vật tư vẫn báo được,
+          // Mở sẵn task báo cáo khối lượng tuần (P5.2) — công đoạn không cần vật tư vẫn báo được,
           // không phải chờ Kho hoàn thành P4.5.
-          await apiFetch('/api/tasks/ensure-daily-report', { method: 'POST', body: JSON.stringify({ projectId }) }).catch(() => {})
-          await checkP511(ri)
+          await apiFetch('/api/tasks/ensure-weekly-report', { method: 'POST', body: JSON.stringify({ projectId }) }).catch(() => {})
         }}
 
         onRequestMaterial={!editable ? undefined : async (ri, row) => {

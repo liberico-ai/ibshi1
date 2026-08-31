@@ -11,11 +11,12 @@ describe('isFlowGeneratedTask', () => {
   it('task hệ thống sinh — activateTask/cron (createdBy system/SYSTEM) → true', () => {
     // vd P3.5 "Lên báo giá" do activateTask sinh (createdBy='system', không templateStepId)
     expect(isFlowGeneratedTask({ taskType: 'P3.5', templateStepId: null, createdBy: 'system' })).toBe(true)
-    expect(isFlowGeneratedTask({ taskType: 'P5.1.1', templateStepId: null, createdBy: 'SYSTEM' })).toBe(true)
+    expect(isFlowGeneratedTask({ taskType: 'P5.3', templateStepId: null, createdBy: 'SYSTEM' })).toBe(true)
   })
 
-  it('task auto-handler (P3.6/P4.3/P4.4/P4.5/P5.1/P5.1A/P5.1.1/P5.3A) không có templateStepId → true', () => {
-    for (const tt of ['P3.6', 'P4.3', 'P4.4', 'P4.5', 'P5.1', 'P5.1A', 'P5.1.1', 'P5.3A']) {
+  // P5.1/P5.1A/P5.1.1/P5.3A đã gỡ khỏi quy trình 2026-08; P5.2 nay là task hệ thống tự sinh.
+  it('task auto-handler (P3.6/P4.3/P4.4/P4.5/P5.2) không có templateStepId → true', () => {
+    for (const tt of ['P3.6', 'P4.3', 'P4.4', 'P4.5', 'P5.2']) {
       expect(isFlowGeneratedTask({ taskType: tt, templateStepId: null, createdBy: 'u-real' })).toBe(true)
     }
   })

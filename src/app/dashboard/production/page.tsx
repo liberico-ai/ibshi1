@@ -15,13 +15,14 @@ import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Factory, Pencil } from 'lucide-react'
 import { notify } from '@/components/ui/Toast'
 import SidebarStepLanding from '@/components/SidebarStepLanding'
-import WoFromWbsModal from './WoFromWbsModal'
+import WoFromAplModal from './WoFromAplModal'
 import WoMaterialRequestModal from './WoMaterialRequestModal'
 
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
   teamCode: string; status: string; pieceMark: string | null;
   plannedWeight: number | null; completedQty: number | null;
+  materials: string | null;
   departmentId: string | null;
   department: { code: string; name: string } | null;
   project: { projectCode: string; projectName: string } | null;
@@ -74,7 +75,7 @@ export default function ProductionPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [showFromBom, setShowFromBom] = useState(false)
-  const [showFromWbs, setShowFromWbs] = useState(false)
+  const [showFromApl, setShowFromApl] = useState(false)
   const [editWO, setEditWO] = useState<WorkOrder | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -106,6 +107,9 @@ export default function ProductionPage() {
   const selectedWos = workOrders.filter(w => selected.includes(w.id))
   const multiProject = new Set(selectedWos.map(w => w.project?.projectCode)).size > 1
 
+  // Dropdown dự án dùng /api/projects/options (mọi dự án đang mở) chứ KHÔNG dùng
+  // /api/projects — cái đó lọc theo quyền dự án nên xưởng trưởng thấy rỗng, trong khi bảng WO
+  // lại lọc theo xưởng ⇒ hiện được lệnh của dự án không có trong dropdown.
   const loadData = useCallback(async () => {
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
@@ -128,27 +132,29 @@ export default function ProductionPage() {
   }, [statusFilter, search, page, filterProjectId])
 
   const openCreate = async () => {
-    const res = await apiFetch('/api/projects')
+    const res = await apiFetch('/api/projects/options')
     if (res.ok) setProjects(res.projects)
     setShowCreate(true)
   }
 
   const openFromBom = async () => {
-    const res = await apiFetch('/api/projects')
+    const res = await apiFetch('/api/projects/options')
     if (res.ok) setProjects(res.projects)
     setShowFromBom(true)
   }
 
-  const openFromWbs = async () => {
-    const res = await apiFetch('/api/projects')
+  // Phát hành WO nay đi từ APL (Assembly Part List) thay cho WBS — mỗi dòng cụm trong APL
+  // là một lệnh sản xuất. Các WO đã tạo từ WBS trước đây vẫn giữ nguyên trong dữ liệu.
+  const openFromApl = async () => {
+    const res = await apiFetch('/api/projects/options')
     if (res.ok) setProjects(res.projects)
-    setShowFromWbs(true)
+    setShowFromApl(true)
   }
 
   useEffect(() => { setPage(1) }, [search, statusFilter, filterProjectId])
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => {
-    apiFetch('/api/projects').then(r => {
+    apiFetch('/api/projects/options').then(r => {
       if (r.ok) setProjects(r.projects || [])
       // Mở từ thông báo bước quy trình (?project=…&step=P3.4) → chọn sẵn dự án để vùng làm việc
       // LSX hiện ra ngay, khỏi phải chọn lại trong dropdown.
@@ -164,16 +170,14 @@ export default function ProductionPage() {
       <SidebarStepLanding heading="Bước quy trình — Sản xuất" steps={[
         { code: 'P3.3', title: 'Lập lệnh SX thầu phụ + đề nghị cấp VT', noTemplate: true },
         { code: 'P3.4', title: 'Lập lệnh sản xuất nội bộ & thầu phụ', noTemplate: true },
-        { code: 'P5.1', title: 'Báo cáo khối lượng nội bộ theo ngày', noTemplate: true },
-        { code: 'P5.1A', title: 'Báo cáo khối lượng thầu phụ theo ngày', noTemplate: true },
-        { code: 'P5.2', title: 'Báo cáo khối lượng hoàn thành theo tuần', noTemplate: true },
+        { code: 'P5.2', title: 'Xưởng SX báo cáo khối lượng hoàn thành (theo tuần)', noTemplate: true },
       ]} />
       <PageHeader
         title="Quản lý Sản xuất"
         subtitle={`${pagination.total} lệnh sản xuất`}
         actions={(canCreate || canGenerateFromBom) ? (
           <div className="flex gap-2">
-            {canGenerateFromBom && <Button variant="outline" onClick={openFromWbs}>Tạo WO từ WBS</Button>}
+            {canGenerateFromBom && <Button variant="outline" onClick={openFromApl}>Tạo WO từ APL</Button>}
             {canGenerateFromBom && <Button variant="outline" onClick={openFromBom}>Sinh WO từ BOM</Button>}
             {canCreate && <Button variant="primary" onClick={openCreate}>+ Tạo WO</Button>}
           </div>
@@ -286,16 +290,17 @@ export default function ProductionPage() {
               <th>Mô tả</th>
               <th>Xưởng</th>
               <th>Dự án</th>
+              <th>Vật tư</th>
               <th>Trọng lượng</th>
               <th>Trạng thái</th>
               <th>Ngày</th>
-              {canRequestMaterial && <th className="text-center">Vật tư</th>}
+              {canRequestMaterial && <th className="text-center">ĐN cấp VT</th>}
               {canCreate && <th className="text-center">Sửa</th>}
             </tr>
           </thead>
           <tbody>
             {workOrders.length === 0 ? (
-              <tr><td colSpan={11}><EmptyState icon={<Factory />} title="Chưa có WO" /></td></tr>
+              <tr><td colSpan={12}><EmptyState icon={<Factory />} title="Chưa có WO" /></td></tr>
             ) : workOrders.map(wo => {
               const weightPct = wo.plannedWeight && wo.completedQty ? Math.round((wo.completedQty / wo.plannedWeight) * 100) : 0
               return (
@@ -315,6 +320,11 @@ export default function ProductionPage() {
                     {wo.department && <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>{wo.department.name}</span>}
                   </td>
                   <td className="text-xs font-mono">{wo.project?.projectCode || '—'}</td>
+                  <td className="text-xs max-w-[170px] truncate" title={wo.materials || ''}>
+                    {wo.materials
+                      ? <span style={{ color: '#4338ca' }}>{wo.materials}</span>
+                      : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
                   <td>
                     {wo.plannedWeight ? (
                       <div className="text-xs">
@@ -373,10 +383,10 @@ export default function ProductionPage() {
         onDone={() => { setShowFromBom(false); loadData() }}
       />
 
-      <WoFromWbsModal
-        open={showFromWbs}
+      <WoFromAplModal
+        open={showFromApl}
         projects={projects}
-        onClose={() => setShowFromWbs(false)}
+        onClose={() => setShowFromApl(false)}
         onIssued={loadData}
       />
 

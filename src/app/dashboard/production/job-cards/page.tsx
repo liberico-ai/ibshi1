@@ -2,67 +2,47 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatNumber } from '@/lib/utils'
 import {
-  PageHeader, Button, FilterBar, StatusBadge, EmptyState,
+  PageHeader, Button, EmptyState,
   KPICard, Modal, InputField, SelectField, TextareaField,
 } from '@/components/ui'
-import { ClipboardList, Scissors, Flame, Wrench, Paintbrush, Wind, Cog, Search, Calendar, BarChart3, CheckCircle2 } from 'lucide-react'
+import { ClipboardList, Calendar, BarChart3, CheckCircle2 } from 'lucide-react'
 import { notify } from '@/components/ui/Toast'
 
 interface JobCard {
   id: string; jobCode: string; workOrderId: string; teamCode: string; workType: string;
   description: string | null; plannedQty: number | null; actualQty: number | null; unit: string;
   workDate: string; manpower: number | null; status: string; notes: string | null; createdAt: string;
-  workOrder: { woCode: string; description: string; projectId: string };
+  workOrder: { woCode: string; description: string; projectId: string; plannedWeight?: number | null };
 }
 
-interface WO { id: string; woCode: string; description: string; status: string; teamCode: string }
+interface WO { id: string; woCode: string; description: string; status: string; teamCode: string; plannedWeight: number | null }
 
-const WORK_TYPE_ICONS: Record<string, React.ReactNode> = {
-  cutting: <Scissors size={16} />,
-  welding: <Flame size={16} />,
-  assembly: <Wrench size={16} />,
-  painting: <Paintbrush size={16} />,
-  blasting: <Wind size={16} />,
-  machining: <Cog size={16} />,
-  inspection: <Search size={16} />,
-}
-const WORK_TYPES: Record<string, { label: string; color: string }> = {
-  cutting: { label: 'Cắt', color: '#dc2626' },
-  welding: { label: 'Hàn', color: '#ea580c' },
-  assembly: { label: 'Lắp ráp', color: '#2563eb' },
-  painting: { label: 'Sơn', color: '#7c3aed' },
-  blasting: { label: 'Phun bi', color: '#64748b' },
-  machining: { label: 'Gia công', color: '#0891b2' },
-  inspection: { label: 'Kiểm tra', color: '#16a34a' },
-}
 
-const WORK_TYPE_FILTERS = [
-  { value: '', label: 'Tất cả' },
-  ...Object.entries(WORK_TYPES).map(([key, val]) => ({
-    value: key,
-    label: val.label,
-  })),
-]
 
 export default function JobCardsPage() {
   const [jobCards, setJobCards] = useState<JobCard[]>([])
   const [workOrders, setWorkOrders] = useState<WO[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [filterType, setFilterType] = useState('')
+  // WO chọn sẵn khi mở phiếu bằng cách bấm vào thẻ trong danh sách ('' = tạo mới từ đầu)
+  const [openWoId, setOpenWoId] = useState('')
+  const [filterType] = useState('')
   const user = useAuthStore(s => s.user)
 
   const loadData = async () => {
     setLoading(true)
-    const params = filterType ? `?workType=${filterType}` : ''
+    // Lấy rộng: trang này gom phiếu theo WO và phải biết ĐỦ lịch sử của từng lệnh
+    // (tổng đã báo, KL còn lại, cảnh báo "lệnh đã được báo cáo"). Mặc định API chỉ trả 20 phiếu
+    // gần nhất — lệnh cũ sẽ bị hiểu nhầm là chưa báo lần nào.
+    const params = `?limit=500${filterType ? `&workType=${filterType}` : ''}`
     const res = await apiFetch(`/api/production/job-cards${params}`)
     if (res.ok) setJobCards(res.jobCards || [])
     setLoading(false)
   }
 
-  const openForm = async () => {
+  const openForm = async (woId = '') => {
     // Reset state before loading to avoid accumulating WOs (race condition fix)
     setWorkOrders([])
     const woRes = await apiFetch('/api/production?status=IN_PROGRESS&limit=100')
@@ -71,6 +51,7 @@ export default function JobCardsPage() {
     const woOpen = await apiFetch('/api/production?status=OPEN&limit=100')
     const openWOs = woOpen.ok ? (woOpen.workOrders || []) : []
     setWorkOrders([...inProgressWOs, ...openWOs])
+    setOpenWoId(woId)
     setShowForm(true)
   }
 
@@ -78,6 +59,35 @@ export default function JobCardsPage() {
   useEffect(() => { loadData() }, [filterType])
 
   const canCreate = ['R01', 'R06', 'R06a', 'R06b'].includes(user?.roleCode || '')
+
+  // Gom theo LỆNH SX: một thẻ = một WO, chạy suốt dòng đời của lệnh đó.
+  // Mỗi lần báo là một dòng lịch sử bên trong thẻ; khối lượng cộng dồn.
+  const groups = (() => {
+    const m = new Map<string, {
+      woId: string; woCode: string; woDesc: string; teamCode: string
+      planned: number; reported: number; done: boolean; entries: JobCard[]
+    }>()
+    for (const j of jobCards) {
+      const g = m.get(j.workOrderId) || {
+        woId: j.workOrderId,
+        woCode: j.workOrder.woCode,
+        woDesc: j.workOrder.description,
+        teamCode: j.teamCode,
+        // Kế hoạch lấy từ WO; lệnh cũ chưa có thì lùi về số kế hoạch ghi trên phiếu.
+        planned: j.workOrder.plannedWeight ?? j.plannedQty ?? 0,
+        reported: 0, done: false, entries: [],
+      }
+      g.reported += j.actualQty || 0
+      g.entries.push(j)
+      m.set(j.workOrderId, g)
+    }
+    for (const g of m.values()) {
+      g.entries.sort((a, b) => new Date(b.workDate).getTime() - new Date(a.workDate).getTime())
+      g.done = g.planned > 0 && g.reported >= g.planned * 0.9   // ±10% là xong
+    }
+    return [...m.values()].sort((a, b) =>
+      new Date(b.entries[0].workDate).getTime() - new Date(a.entries[0].workDate).getTime())
+  })()
 
   // Stats
   const todayCount = jobCards.filter(j => new Date(j.workDate).toDateString() === new Date().toDateString()).length
@@ -96,69 +106,66 @@ export default function JobCardsPage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Phiếu Công Việc"
-        subtitle="Tổ trưởng nhập khối lượng hàng ngày"
-        actions={canCreate ? <Button variant="primary" onClick={openForm}>+ Nhập KL</Button> : undefined}
+        subtitle="Xưởng báo khối lượng đã làm — báo theo đợt cũng được, chọn đúng ngày báo cáo"
+        actions={canCreate ? <Button variant="primary" onClick={() => openForm()}>+ Nhập KL</Button> : undefined}
       />
 
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-4 stagger-children">
-        <KPICard label="Hôm nay" value={todayCount} accentColor="var(--info, #2D6CB5)" icon={<Calendar size={20} />} />
+        <KPICard label="Báo hôm nay" value={todayCount} accentColor="var(--info, #2D6CB5)" icon={<Calendar size={20} />} />
         <KPICard label="Tổng KL" value={totalQty.toLocaleString()} accentColor="var(--success, #1E8E5A)" icon={<BarChart3 size={20} />} />
         <KPICard label="Hoàn thành" value={completedCount} accentColor="#059669" icon={<CheckCircle2 size={20} />} />
       </div>
-
-      {/* Work type filters */}
-      <FilterBar
-        filters={WORK_TYPE_FILTERS}
-        value={filterType}
-        onChange={setFilterType}
-      />
 
       {/* Job Card list */}
       <div className="space-y-2">
         {jobCards.length === 0 && (
           <EmptyState icon={<ClipboardList />} title="Chưa có phiếu công việc" description="Nhập khối lượng hàng ngày để tạo phiếu mới" />
         )}
-        {jobCards.map(jc => {
-          const wt = WORK_TYPES[jc.workType] || { label: jc.workType, color: '#64748b' }
-          const progress = jc.plannedQty && jc.actualQty ? Math.min(100, Math.round((jc.actualQty / jc.plannedQty) * 100)) : null
+        {groups.map(g => {
+          const pct = g.planned > 0 ? Math.min(100, Math.round((g.reported / g.planned) * 100)) : 0
           return (
-            <div key={jc.id} className="card p-4 transition-all hover:shadow-md">
+            <div key={g.woId} className="card p-4 transition-all hover:shadow-md"
+              style={{ cursor: canCreate ? 'pointer' : 'default' }}
+              title={canCreate ? 'Bấm để báo tiếp khối lượng' : undefined}
+              onClick={() => canCreate && openForm(g.woId)}>
               <div className="flex items-center gap-4">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center"
-                  style={{ background: 'var(--bg-secondary, #f1f5f9)', color: wt.color }}>{WORK_TYPE_ICONS[jc.workType] || <ClipboardList size={16} />}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{jc.jobCode}</span>
-                    <StatusBadge category="jobCard" status={jc.status} />
-                    <span className="badge" style={{ background: 'var(--bg-secondary, #f8fafc)', color: wt.color }}>{wt.label}</span>
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <span className="text-sm font-mono font-bold" style={{ color: 'var(--accent)' }}>{g.woCode}</span>
+                    {g.done
+                      ? <span className="badge" style={{ background: '#dcfce7', color: '#047857' }}>✓ Đã xong</span>
+                      : <span className="badge" style={{ background: '#fef3c7', color: '#b45309' }}>Đang làm</span>}
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Xưởng {g.teamCode}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <span>WO: <span className="font-mono">{jc.workOrder.woCode}</span></span>
-                    <span>Xưởng: {jc.teamCode}</span>
-                    {jc.manpower && <span>{jc.manpower} CN</span>}
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{g.woDesc}</p>
+                </div>
+                <div className="text-right min-w-[190px]">
+                  <p className="text-lg font-mono font-bold" style={{ color: g.done ? '#047857' : 'var(--success, #16a34a)' }}>
+                    {formatNumber(Math.round(g.reported))}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}> / {formatNumber(Math.round(g.planned))} kg</span>
+                  </p>
+                  <div className="h-1.5 rounded-full overflow-hidden mt-1" style={{ background: 'var(--border, #e2e8f0)' }}>
+                    <div className="h-full rounded-full" style={{ width: pct + '%', background: g.done ? '#16a34a' : 'var(--warning, #f59e0b)' }} />
                   </div>
-                </div>
-                <div className="text-right min-w-[100px]">
-                  {jc.actualQty != null && (
-                    <p className="text-lg font-mono font-bold" style={{ color: 'var(--success, #16a34a)' }}>
-                      {jc.actualQty.toLocaleString()} <span className="text-xs font-normal">{jc.unit}</span>
-                    </p>
-                  )}
-                  {progress != null && (
-                    <div className="mt-1">
-                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border, #e2e8f0)', width: '80px', marginLeft: 'auto' }}>
-                        <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: progress >= 100 ? 'var(--success, #16a34a)' : 'var(--warning, #f59e0b)' }} />
-                      </div>
-                      <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>{progress}% kế hoạch</p>
-                    </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                    {formatDate(jc.workDate)}
+                  <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {pct}% · còn {formatNumber(Math.max(0, Math.round((g.planned - g.reported) * 100) / 100))} kg
                   </p>
                 </div>
+              </div>
+
+              {/* Lịch sử báo cáo của lệnh này — mỗi lần báo một dòng */}
+              <div className="mt-3" style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>Lịch sử báo cáo ({g.entries.length})</p>
+                {g.entries.map(e => (
+                  <div key={e.id} className="flex items-center gap-3 text-xs py-1" style={{ borderBottom: '1px dashed var(--border)' }}>
+                    <span className="font-mono" style={{ minWidth: 88 }}>{formatDate(e.workDate)}</span>
+                    <span style={{ minWidth: 54 }}>{e.teamCode}</span>
+                    <span className="font-mono font-bold" style={{ color: 'var(--success, #16a34a)', minWidth: 90 }}>{formatNumber(e.actualQty || 0)} {e.unit}</span>
+                    <span style={{ color: 'var(--text-muted)', minWidth: 54 }}>{e.manpower ? e.manpower + ' CN' : ''}</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="truncate">{e.notes || ''}</span>
+                    <span className="font-mono ml-auto" style={{ color: 'var(--text-muted)' }}>{e.jobCode}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )
@@ -166,8 +173,11 @@ export default function JobCardsPage() {
       </div>
 
       <CreateJobCardModal
+        key={showForm ? (openWoId || 'new') : 'closed'}
+        initialWoId={openWoId}
         open={showForm}
         workOrders={workOrders}
+        jobCards={jobCards}
         onClose={() => setShowForm(false)}
         onCreated={() => { setShowForm(false); loadData() }}
       />
@@ -175,27 +185,47 @@ export default function JobCardsPage() {
   )
 }
 
-function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
-  open: boolean; workOrders: WO[]; onClose: () => void; onCreated: () => void
+function CreateJobCardModal({ open, workOrders, jobCards, initialWoId, onClose, onCreated }: {
+  open: boolean; workOrders: WO[]; jobCards: JobCard[]; initialWoId?: string
+  onClose: () => void; onCreated: () => void
 }) {
+  // Trang gắn `key` theo WO nên mỗi lần mở là một lần dựng mới → khởi tạo thẳng ở đây,
+  // không cần effect đồng bộ (tránh setState trong effect gây render lồng).
   const [form, setForm] = useState({
-    workOrderId: '', workType: 'welding', description: '',
-    plannedQty: '', actualQty: '', unit: 'kg',
+    workOrderId: initialWoId || '', description: '',
+    actualQty: '', unit: 'kg',
     workDate: new Date().toISOString().split('T')[0],
     manpower: '', notes: '',
   })
   const [submitting, setSubmitting] = useState(false)
 
+  const selectedWo = workOrders.find(w => w.id === form.workOrderId)
+  // Tra nhanh lệnh nào đã có phiếu — dùng để gắn dấu ngay trong dropdown.
+  const reportedByWo = jobCards.reduce<Record<string, { count: number; qty: number }>>((acc, j) => {
+    const cur = acc[j.workOrderId] || { count: 0, qty: 0 }
+    acc[j.workOrderId] = { count: cur.count + 1, qty: cur.qty + (j.actualQty || 0) }
+    return acc
+  }, {})
+  // Một phiếu đại diện cả dòng đời của WO: gom mọi lần đã báo của chính lệnh đang chọn.
+  const historyOfWo = jobCards.filter(j => j.workOrderId === form.workOrderId)
+    .sort((a, b) => new Date(b.workDate).getTime() - new Date(a.workDate).getTime())
+  const reported = historyOfWo.reduce((sum, j) => sum + (j.actualQty || 0), 0)
+  const plannedOfWo = selectedWo?.plannedWeight || 0
+  const remaining = Math.max(0, Math.round((plannedOfWo - reported) * 100) / 100)
+  // Đạt ≥90% kế hoạch là TỰ xong — không cần bấm nút (biên ±10% do cắt lẻ, hao hụt).
+  const done = plannedOfWo > 0 && reported >= plannedOfWo * 0.9
+
   const update = (field: string, value: string) => setForm({ ...form, [field]: value })
 
   const submit = async () => {
-    if (!form.workOrderId || !form.workType || !form.workDate) return notify('Chọn WO, loại việc, và ngày')
+    // Công đoạn đã bỏ khỏi form — server tự đặt workType='production' cho phiếu báo khối lượng.
+    if (!form.workOrderId || !form.workDate) return notify('Chọn lệnh sản xuất và ngày báo cáo')
     setSubmitting(true)
     const res = await apiFetch('/api/production/job-cards', {
       method: 'POST',
       body: JSON.stringify({
         ...form,
-        plannedQty: form.plannedQty ? parseFloat(form.plannedQty) : undefined,
+        plannedQty: plannedOfWo > 0 ? plannedOfWo : undefined,
         actualQty: form.actualQty ? parseFloat(form.actualQty) : undefined,
         manpower: form.manpower ? parseInt(form.manpower) : undefined,
       }),
@@ -206,7 +236,7 @@ function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Nhập Khối Lượng Hàng Ngày" size="lg"
+    <Modal open={open} onClose={onClose} title={initialWoId ? 'Báo tiếp khối lượng' : 'Nhập khối lượng hoàn thành'} size="lg"
       actions={
         <div className="flex gap-3 w-full justify-end">
           <Button variant="outline" onClick={onClose}>Hủy</Button>
@@ -215,47 +245,68 @@ function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
       }
     >
       <div className="space-y-4">
-        {/* WO selector */}
+        {/* WO selector — đánh dấu ngay trong danh sách lệnh nào đã có phiếu, để khỏi tưởng là báo lần đầu */}
         <SelectField
           label="Lệnh SX (WO) *"
           value={form.workOrderId}
           onChange={e => update('workOrderId', e.target.value)}
           options={[
             { value: '', label: 'Chọn WO...' },
-            ...workOrders.map(wo => ({ value: wo.id, label: `${wo.woCode} — ${wo.description}` })),
+            ...workOrders.map(wo => {
+              const r = reportedByWo[wo.id]
+              const mark = r ? ` ✓ đã báo ${formatNumber(Math.round(r.qty))} kg` : ''
+              return { value: wo.id, label: `${wo.woCode} — ${wo.description}${mark}` }
+            }),
           ]}
         />
 
-        {/* Work type - keep specialized grid UI as-is */}
-        <div>
-          <label className="input-label">Loại công việc *</label>
-          <div className="grid grid-cols-4 gap-2">
-            {Object.entries(WORK_TYPES).map(([key, val]) => (
-              <button key={key} onClick={() => update('workType', key)}
-                className="py-2 rounded-lg text-xs font-semibold transition-all"
-                style={{
-                  background: form.workType === key ? 'var(--accent-bg, #e0e7ff)' : 'var(--bg-primary)',
-                  color: form.workType === key ? val.color : 'var(--text-muted)',
-                  border: form.workType === key ? `1px solid ${val.color}` : '1px solid transparent',
-                }}>
-                {val.label}
-              </button>
-            ))}
+        {/* Chọn phải lệnh đã báo rồi → nói rõ, kèm số liệu và lần gần nhất. Không chặn: báo tiếp là hợp lệ. */}
+        {historyOfWo.length > 0 && (
+          <div
+            className="rounded-lg px-3 py-2 text-sm"
+            style={{
+              border: `1px solid ${done ? 'var(--success, #16a34a)' : 'var(--warning, #f59e0b)'}`,
+              background: done ? 'rgba(22, 163, 74, 0.08)' : 'rgba(245, 158, 11, 0.10)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <p className="font-semibold">
+              Lệnh này đã được báo cáo {historyOfWo.length} lần — {formatNumber(Math.round(reported))} / {formatNumber(Math.round(plannedOfWo))} kg
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              {done
+                ? 'Đã đạt kế hoạch — lệnh coi như xong, không nhập thêm khối lượng.'
+                : `Còn ${formatNumber(remaining)} kg. Phiếu này sẽ cộng tiếp vào lệnh, không thay thế các lần đã báo.`}
+            </p>
+            <p className="text-xs mt-1 font-mono" style={{ color: 'var(--text-muted)' }}>
+              Gần nhất: {historyOfWo[0].jobCode} · {formatDate(historyOfWo[0].workDate)} — {formatNumber(historyOfWo[0].actualQty || 0)} {historyOfWo[0].unit}
+            </p>
           </div>
-        </div>
+        )}
 
-        {/* Qty + Unit */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* KHÔNG chọn công đoạn: APL không ghi công đoạn nào cả (đã soi hết 47 cột), và một WO
+            được hiểu là việc của MỘT công đoạn mà xưởng nhận đã biết. Xưởng chỉ báo khối lượng. */}
+
+        {/* Thứ tự đọc: kế hoạch → còn lại → nhập thực tế. Hai ô đầu CHỈ ĐỌC, xưởng chỉ gõ ô thứ ba. */}
+        <div className="grid grid-cols-4 gap-3">
+          {/* Lấy thẳng từ lệnh, không cho sửa — kế hoạch là do PM phát hành WO quyết. */}
           <InputField
             label="KL kế hoạch"
-            type="number"
-            value={form.plannedQty}
-            onChange={e => update('plannedQty', e.target.value)}
-            placeholder="0"
+            value={selectedWo ? `${formatNumber(Math.round(plannedOfWo))} ${form.unit}` : '—'}
+            readOnly
+            helperText={selectedWo?.plannedWeight ? 'Theo lệnh sản xuất' : 'Lệnh chưa có khối lượng kế hoạch'}
+          />
+          {/* Hệ tự tính = kế hoạch − đã báo. */}
+          <InputField
+            label="KL còn lại"
+            value={selectedWo ? `${formatNumber(remaining)} ${form.unit}` : '—'}
+            readOnly
+            helperText={selectedWo ? `Đã báo ${formatNumber(Math.round(reported))} / ${formatNumber(Math.round(plannedOfWo))}` : undefined}
           />
           <InputField
-            label="KL thực tế *"
+            label={done ? 'Đã xong — không nhập nữa' : 'KL thực tế *'}
             type="number"
+            disabled={done}
             value={form.actualQty}
             onChange={e => update('actualQty', e.target.value)}
             placeholder="0"
@@ -277,7 +328,7 @@ function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
         {/* Date + Manpower */}
         <div className="grid grid-cols-2 gap-3">
           <InputField
-            label="Ngày làm *"
+            label="Ngày báo cáo *"
             type="date"
             value={form.workDate}
             onChange={e => update('workDate', e.target.value)}
@@ -299,6 +350,7 @@ function CreateJobCardModal({ open, workOrders, onClose, onCreated }: {
           rows={2}
           placeholder="Ghi chú..."
         />
+
       </div>
     </Modal>
   )

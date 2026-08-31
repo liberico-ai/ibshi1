@@ -51,7 +51,7 @@ export const ACTION_TO_RBAC: Record<string, string> = {
 const FORM_LABELS: Record<string, string> = {
   ESTIMATE: 'Sửa dự toán', PR: 'Sửa đề nghị mua hàng', BBH: 'Sửa biên bản họp',
   WBS: 'Sửa WBS / cột mốc', WELD_PAINT: 'Sửa dữ liệu hàn & sơn', BOM: 'Sửa BOM',
-  SUPPLIER_QUOTE: 'Sửa báo giá NCC',
+  SUPPLIER_QUOTE: 'Sửa báo giá NCC', APL: 'Nhập Assembly Part List (APL)',
 }
 export const FORM_CAPABILITIES: Capability[] = Object.keys(FORM_EDIT_ROLES).map((f) => ({
   key: `form.${f}`,

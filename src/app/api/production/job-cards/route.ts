@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
+import { rollUpWorkOrder } from '@/lib/production-weights'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { validateBody } from '@/lib/api-helpers'
 import { createJobCardSchema } from '@/lib/schemas'
@@ -18,18 +19,22 @@ export async function GET(req: NextRequest) {
 
   const workType = url.searchParams.get('workType') || undefined
 
+  const projectId = url.searchParams.get('projectId') || undefined
+
   const where: Record<string, unknown> = {}
   if (woId) where.workOrderId = woId
   if (teamCode) where.teamCode = teamCode
   if (status) where.status = status
   if (workType) where.workType = workType
+  // Lọc theo dự án: dùng cho màn ITP (chỉ kiểm tra lệnh của dự án đang chọn)
+  if (projectId) where.workOrder = { projectId }
 
   const [total, jobCards] = await Promise.all([
     prisma.jobCard.count({ where }),
     prisma.jobCard.findMany({
       where,
       include: {
-        workOrder: { select: { woCode: true, description: true, projectId: true } },
+        workOrder: { select: { woCode: true, description: true, projectId: true, plannedWeight: true, teamCode: true, pieceMark: true, status: true } },
       },
       orderBy: { workDate: 'desc' },
       skip: (page - 1) * limit,
@@ -41,6 +46,7 @@ export async function GET(req: NextRequest) {
     ...jc,
     plannedQty: jc.plannedQty ? Number(jc.plannedQty) : null,
     actualQty: jc.actualQty ? Number(jc.actualQty) : null,
+    workOrder: { ...jc.workOrder, plannedWeight: jc.workOrder.plannedWeight ? Number(jc.workOrder.plannedWeight) : null },
   }))
 
   return successResponse({
@@ -59,7 +65,10 @@ export async function POST(req: NextRequest) {
 
   const result = await validateBody(req, createJobCardSchema)
   if (!result.success) return result.response
-  const { workOrderId, workType, description, plannedQty, actualQty, unit, workDate, manpower, notes } = result.data
+  const { workOrderId, workType: rawType, description, plannedQty, actualQty, unit, workDate, manpower, notes } = result.data
+
+  // 'production' = báo khối lượng cho cả WO, không phân công đoạn.
+  const workType = (rawType || '').trim() || 'production'
 
   const wo = await prisma.workOrder.findUnique({ where: { id: workOrderId } })
   if (!wo) return errorResponse('Không tìm thấy WO')
@@ -78,7 +87,7 @@ export async function POST(req: NextRequest) {
       workOrderId,
       teamCode: wo.teamCode,
       workType,
-      description: description || `${workType} — ${wo.woCode}`,
+      description: description || `Báo khối lượng — ${wo.woCode}`,
       plannedQty: plannedQty || null,
       actualQty: actualQty ?? null,
       unit: unit || 'kg',
@@ -92,6 +101,9 @@ export async function POST(req: NextRequest) {
       workOrder: { select: { woCode: true } },
     },
   })
+
+  // Cập nhật tiến độ WO ngay khi báo — cộng dồn kg thực tế, đạt ≥90% kế hoạch thì tự xong.
+  await rollUpWorkOrder(workOrderId)
 
   return successResponse({
     jobCard: { ...jobCard, plannedQty: Number(jobCard.plannedQty), actualQty: Number(jobCard.actualQty) },

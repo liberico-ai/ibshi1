@@ -120,39 +120,27 @@ export const WORKFLOW_RULES: Record<string, WorkflowStep> = {
   },
 
   // ── Phase 5: Sản xuất (BRD#26-31) ──
-  'P5.1': {
-    code: 'P5.1', name: 'Báo cáo khối lượng nội bộ (tổ thi công) theo ngày', nameEn: 'Daily Internal Production Report',
+  // Rút gọn 2026-08: bỏ báo cáo THEO NGÀY (P5.1/P5.1A) và cặp nghiệm thu chất lượng riêng
+  // (P5.1.1 mời nghiệm thu → P5.3A QAQC duyệt). Chất lượng và khối lượng nay nghiệm thu MỘT LẦN
+  // trên màn Kế hoạch Kiểm tra (ITP), do TP QAQC và PM dự án ký song song.
+  //
+  //   P4.5 → P5.2 (xưởng báo KL tuần) → P5.3 (QAQC) ∥ P5.4 (PM) → P5.5 (lương khoán)
+  'P5.2': {
+    code: 'P5.2', name: 'Xưởng SX báo cáo khối lượng hoàn thành (theo tuần)', nameEn: 'Weekly Production Volume Report',
     role: 'R06b', gate: ['P4.5'], next: ['P5.3', 'P5.4'], phase: 5,
   },
-  'P5.1A': {
-    code: 'P5.1A', name: 'Báo cáo khối lượng của thầu phụ theo ngày', nameEn: 'Daily Subcontractor Production Report',
-    role: 'R02', gate: ['P4.5'], next: ['P5.3', 'P5.4'], phase: 5,
-  },
-  'P5.1.1': {
-    code: 'P5.1.1', name: 'Yêu cầu nghiệm thu chất lượng hạng mục', nameEn: 'Item Quality Acceptance Request',
-    role: 'R06b', gate: ['P4.5'], next: ['P5.3A'], phase: 5,
-  },
-  'P5.3A': {
-    code: 'P5.3A', name: 'QAQC nghiệm thu chất lượng hạng mục', nameEn: 'QAQC Item Quality Acceptance',
+  'P5.3': {
+    code: 'P5.3', name: 'QAQC nghiệm thu chất lượng & khối lượng', nameEn: 'QAQC Quality & Volume Acceptance',
     role: 'R09', next: [], phase: 5,
   },
-  'P5.2': {
-    code: 'P5.2', name: 'Tổ SX báo cáo khối lượng hoàn thành theo tuần', nameEn: 'Weekly Production Volume Report',
-    role: 'R06b', gate: ['P4.5'], next: ['P5.3'], phase: 5,
-  },
-  'P5.3': {
-    code: 'P5.3', name: 'Nghiệm thu khối lượng tuần (QC)', nameEn: 'Weekly Volume Acceptance (QC)',
-    role: 'R09', next: ['P5.4'], phase: 5,
-    // Created by CronJob Saturday morning -> leads to P5.4 when submitted
-  },
   'P5.4': {
-    code: 'P5.4', name: 'Nghiệm thu khối lượng tuần (PM)', nameEn: 'Weekly Volume Acceptance (PM)',
+    code: 'P5.4', name: 'PM nghiệm thu chất lượng & khối lượng', nameEn: 'PM Quality & Volume Acceptance',
     role: 'R02', next: [], phase: 5,
-    // Created by CronJob Saturday morning — identical content to P5.3
   },
   'P5.5': {
+    // Chỉ tính lương khi ĐỦ cả hai chữ ký — khớp đúng luật hai chữ ký ở màn ITP.
     code: 'P5.5', name: 'Tổng hợp và tính lương khoán', nameEn: 'Piece-rate Salary Calculation',
-    role: 'R03', gate: ['P5.4'], next: ['P6.1', 'P6.2', 'P6.3', 'P6.4'], phase: 5,
+    role: 'R03', gate: ['P5.3', 'P5.4'], next: ['P6.1', 'P6.2', 'P6.3', 'P6.4'], phase: 5,
   },
 
   // ── Phase 6: Đóng Dự án (BRD P6.1-P6.5) ──

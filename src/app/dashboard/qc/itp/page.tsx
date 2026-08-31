@@ -3,20 +3,37 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, StatusBadge, Button, EmptyState, Modal, InputField, SelectField, KPICard } from '@/components/ui'
+import { formatDate, formatNumber } from '@/lib/utils'
 import { STATUS_COLORS, SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { ClipboardList } from 'lucide-react'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 
+interface Attachment { id: string; fileName: string; fileUrl: string; createdAt: string }
+
 interface Checkpoint {
   id: string; checkpointNo: number; activity: string; description: string;
   inspectionType: string; status: string; remarks: string | null; ncrId: string | null;
+  // Biên bản nghiệm thu — bắt buộc có ít nhất 1 file mới chấm Đạt được
+  attachments: Attachment[];
+  // Hai chữ ký song song; đủ cả hai thì status mới là PASSED
+  qcConfirmedAt: string | null; qcConfirmedName: string | null;
+  pmConfirmedAt: string | null; pmConfirmedName: string | null;
 }
 
 interface ITP {
   id: string; itpCode: string; projectId: string; name: string; revision: string;
   status: string; createdAt: string; totalCheckpoints: number;
   passedCheckpoints: number; failedCheckpoints: number;
+  inspectionDate: string | null;
+  // Người đang xem ký được vai nào (server quyết, FE không tự suy theo role).
+  // canFlagFail rộng hơn canQcSign: kiểm tra viên chấm được Lỗi nhưng không ký nghiệm thu.
+  canQcSign: boolean; canPmSign: boolean; canFlagFail: boolean;
   project: { projectCode: string; projectName: string };
+  // Lệnh sản xuất mà ITP này kiểm tra (ITP cũ chưa gắn lệnh → null)
+  workOrder: {
+    id: string; woCode: string; description: string; pieceMark: string | null; teamCode: string;
+    plannedWeight: number | null; reportedQty: number; lastReportDate: string | null; reportCount: number;
+  } | null;
   checkpoints: Checkpoint[];
 }
 
@@ -29,28 +46,13 @@ const INSP_TYPE: Record<string, { label: string; color: string }> = {
   REVIEW:  { label: 'R', color: SEMANTIC_COLORS.neutral.solid },
 }
 
-const ACTIVITY_OPTIONS = [
-  { value: 'welding', label: 'Hàn' },
-  { value: 'ndt', label: 'NDT' },
-  { value: 'pressure_test', label: 'Thử áp' },
-  { value: 'dimensional', label: 'Kích thước' },
-  { value: 'painting', label: 'Sơn' },
-  { value: 'visual', label: 'Ngoại quan' },
-]
-
-const INSP_TYPE_OPTIONS = [
-  { value: 'HOLD', label: 'Hold (H)' },
-  { value: 'WITNESS', label: 'Witness (W)' },
-  { value: 'MONITOR', label: 'Monitor (M)' },
-  { value: 'REVIEW', label: 'Review (R)' },
-]
-
 export default function ITPPage() {
   const [itps, setItps] = useState<ITP[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [uploadingCp, setUploadingCp] = useState<string | null>(null)
   const user = useAuthStore(s => s.user)
 
   const loadData = useCallback(async () => {
@@ -61,7 +63,7 @@ export default function ITPPage() {
   }, [])
 
   const openForm = async () => {
-    const pRes = await apiFetch('/api/projects')
+    const pRes = await apiFetch('/api/projects/options')
     if (pRes.ok) setProjects(pRes.projects || [])
     setShowForm(true)
   }
@@ -71,17 +73,51 @@ export default function ITPPage() {
   const canInspect = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
   const canCreate = canInspect
 
-  const updateCheckpoint = async (itpId: string, cpId: string, status: 'PASSED' | 'FAILED', createNcr?: boolean) => {
+  // Đính biên bản nghiệm thu vào một điểm kiểm. Dùng fetch thô vì apiFetch ép JSON,
+  // còn upload phải gửi multipart/form-data.
+  const uploadMinutes = async (cpId: string, file: File) => {
+    setUploadingCp(cpId)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('entityType', 'ITPCheckpoint')
+    fd.append('entityId', cpId)
+    const token = sessionStorage.getItem('ibs_token')
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: fd,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then(r => r.json()).catch(() => ({ ok: false, error: 'Lỗi tải file lên' }))
+    setUploadingCp(null)
+    if (res.ok) { notify(`Đã đính ${res.attachment.fileName}`); loadData() }
+    else notify(res.error || 'Lỗi tải file lên')
+  }
+
+  const removeMinutes = async (attId: string, fileName: string) => {
+    if (!(await confirmDialog(`Gỡ biên bản "${fileName}"?`))) return
+    const res = await apiFetch(`/api/upload/${attId}`, { method: 'DELETE' })
+    if (res.ok) loadData()
+    else notify(res.error || 'Không gỡ được file')
+  }
+
+  const updateCheckpoint = async (
+    itpId: string, cpId: string, status: 'PASSED' | 'FAILED',
+    createNcr?: boolean, side?: 'QC' | 'PM',
+  ) => {
     const remarks = status === 'FAILED' ? prompt('Ghi chú lỗi:') : null
     if (status === 'FAILED' && remarks === null) return
 
     const res = await apiFetch(`/api/qc/itp/${itpId}/checkpoints/${cpId}`, {
       method: 'PUT',
-      body: JSON.stringify({ status, remarks: remarks || undefined, createNcr }),
+      body: JSON.stringify({ status, remarks: remarks || undefined, createNcr, side }),
     })
     if (res.ok) {
       loadData()
       if (res.ncrId) notify(`Đã tạo NCR tự động (${res.ncrId.slice(0, 8)}…)`)
+      else if (res.waitingFor) notify(`Đã ghi xác nhận ${res.side === 'QC' ? 'TP QAQC' : 'PM'} — còn chờ ${res.waitingFor === 'PM' ? 'PM dự án' : 'TP QAQC'} xác nhận`)
+      else if (res.bothConfirmed) notify('Đủ hai chữ ký PM + TP QAQC — điểm kiểm đã Đạt')
+      // Nghiệm thu xong thì lệnh sản xuất tự đổi trạng thái — báo để khỏi phải sang màn WO kiểm lại
+      if (res.woSync) notify(`Lệnh ${res.woSync.woCode} tự chuyển ${res.woSync.to === 'QC_PASSED' ? 'QC Đạt' : 'QC Không đạt'}`)
+      else if (res.woBlocked) notify(`Đủ chữ ký nhưng lệnh chưa chuyển QC Đạt: ${res.woBlocked}`)
     } else {
       notify(res.error || 'Lỗi cập nhật')
     }
@@ -139,6 +175,19 @@ export default function ITPPage() {
                     </div>
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{itp.name}</p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>DA: <span className="font-mono">{itp.project.projectCode}</span></p>
+                    {/* ITP gắn với lệnh nào, xưởng đã báo bao nhiêu, kiểm ngày nào */}
+                    {itp.workOrder && (
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        <span className="font-mono">{itp.workOrder.woCode}</span>
+                        {itp.workOrder.pieceMark ? ` · ${itp.workOrder.pieceMark}` : ''}
+                        {' · '}
+                        <span className="font-mono" style={{ color: SEMANTIC_COLORS.success.solid }}>
+                          {formatNumber(Math.round(itp.workOrder.reportedQty))} kg
+                        </span>
+                        {itp.workOrder.lastReportDate ? ` · xong ${formatDate(itp.workOrder.lastReportDate)}` : ''}
+                        {itp.inspectionDate ? ` · kiểm ${formatDate(itp.inspectionDate)}` : ''}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>
                     <p><span className="font-mono">{itp.totalCheckpoints}</span> điểm kiểm</p>
@@ -154,8 +203,14 @@ export default function ITPPage() {
                     {itp.checkpoints.map(cp => {
                       const ins = INSP_TYPE[cp.inspectionType] || INSP_TYPE.MONITOR
                       const isPending = cp.status === 'PENDING'
+                      // Không có biên bản nghiệm thu thì không cho chấm Đạt (server cũng chặn).
+                      const hasMinutes = cp.attachments.length > 0
+                      const canSignQc = itp.canQcSign
+                      const canSignPm = itp.canPmSign
+                      const canFlagFail = itp.canFlagFail
                       return (
-                        <div key={cp.id} className="flex items-center gap-3 py-2 px-3 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
+                        <div key={cp.id} className="py-2 px-3 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
+                        <div className="flex items-center gap-3">
                           <span className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white" style={{ background: ins.color }}>{ins.label}</span>
                           <span className="font-mono text-xs w-6" style={{ color: 'var(--text-muted)' }}>#{cp.checkpointNo}</span>
                           <span className="text-xs flex-1" style={{ color: 'var(--text-primary)' }}>
@@ -164,26 +219,118 @@ export default function ITPPage() {
                           </span>
                           {cp.ncrId && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: SEMANTIC_COLORS.danger.bg, color: SEMANTIC_COLORS.danger.solid }}>NCR</span>}
                           <StatusBadge category="qc" status={cp.status === 'PENDING' ? 'PENDING' : cp.status === 'PASSED' ? 'PASSED' : 'FAILED'} />
-                          {isPending && canInspect && (
+                          {isPending && (canSignQc || canSignPm || canFlagFail) && (
                             <div className="flex gap-1">
-                              <button
-                                className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                                style={{ background: SEMANTIC_COLORS.success.solid }}
-                                onClick={(e) => { e.stopPropagation(); updateCheckpoint(itp.id, cp.id, 'PASSED') }}
-                              >Đạt</button>
-                              <button
-                                className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                                style={{ background: SEMANTIC_COLORS.danger.solid }}
-                                onClick={async (e) => {
-                                  e.stopPropagation()
-                                  const wantNcr = (cp.inspectionType === 'HOLD' || cp.inspectionType === 'WITNESS')
-                                    ? await confirmDialog('Tạo NCR tự động cho lỗi này?')
-                                    : false
-                                  updateCheckpoint(itp.id, cp.id, 'FAILED', wantNcr)
-                                }}
-                              >Lỗi</button>
+                              {/* Hai vai ký độc lập, không phân thứ tự — ai xong trước bấm trước */}
+                              {canSignQc && !cp.qcConfirmedAt && (
+                                <button
+                                  className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                                  title={hasMinutes ? 'Trưởng phòng QAQC xác nhận đạt' : 'Phải đính biên bản nghiệm thu trước'}
+                                  style={{
+                                    background: SEMANTIC_COLORS.success.solid,
+                                    opacity: hasMinutes ? 1 : 0.4,
+                                    cursor: hasMinutes ? 'pointer' : 'not-allowed',
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (!hasMinutes) return notify('Phải đính kèm biên bản nghiệm thu trước khi chấm Đạt')
+                                    updateCheckpoint(itp.id, cp.id, 'PASSED', undefined, 'QC')
+                                  }}
+                                >TP QAQC xác nhận</button>
+                              )}
+                              {canSignPm && !cp.pmConfirmedAt && (
+                                <button
+                                  className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                                  title={hasMinutes ? 'PM phụ trách dự án xác nhận đạt' : 'Phải đính biên bản nghiệm thu trước'}
+                                  style={{
+                                    background: SEMANTIC_COLORS.info.solid,
+                                    opacity: hasMinutes ? 1 : 0.4,
+                                    cursor: hasMinutes ? 'pointer' : 'not-allowed',
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (!hasMinutes) return notify('Phải đính kèm biên bản nghiệm thu trước khi chấm Đạt')
+                                    updateCheckpoint(itp.id, cp.id, 'PASSED', undefined, 'PM')
+                                  }}
+                                >PM dự án xác nhận</button>
+                              )}
+                              {canFlagFail && (
+                                <button
+                                  className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                                  style={{ background: SEMANTIC_COLORS.danger.solid }}
+                                  onClick={async (e) => {
+                                    e.stopPropagation()
+                                    const wantNcr = (cp.inspectionType === 'HOLD' || cp.inspectionType === 'WITNESS')
+                                      ? await confirmDialog('Tạo NCR tự động cho lỗi này?')
+                                      : false
+                                    updateCheckpoint(itp.id, cp.id, 'FAILED', wantNcr)
+                                  }}
+                                >Lỗi</button>
+                              )}
                             </div>
                           )}
+                        </div>
+
+                        {/* Hai chữ ký song song — đủ cả hai thì điểm kiểm mới Đạt */}
+                        <div className="flex items-center gap-2 flex-wrap mt-2 pl-9">
+                          <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Xác nhận:</span>
+                          {([
+                            { key: 'TP QAQC', at: cp.qcConfirmedAt, who: cp.qcConfirmedName },
+                            { key: 'PM dự án', at: cp.pmConfirmedAt, who: cp.pmConfirmedName },
+                          ] as const).map(s => (
+                            <span key={s.key} className="text-[10px] px-2 py-0.5 rounded font-medium"
+                              style={s.at
+                                ? { background: SEMANTIC_COLORS.success.bg, color: SEMANTIC_COLORS.success.solid }
+                                : { background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px dashed var(--border)' }}>
+                              {/* Có mốc mà không có tên = điểm kiểm cũ, chấm trước khi có quy định hai chữ ký */}
+                              {s.at
+                                ? `✓ ${s.key} · ${s.who || 'dữ liệu cũ'} · ${formatDate(s.at)}`
+                                : `○ ${s.key} chưa xác nhận`}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Biên bản nghiệm thu — hồ sơ gốc của lần chấm này */}
+                        <div className="flex items-center gap-2 flex-wrap mt-2 pl-9">
+                          <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Biên bản nghiệm thu:</span>
+                          {cp.attachments.map(a => (
+                            <span key={a.id} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
+                              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                              <a href={`/api/upload/${a.id}`} target="_blank" rel="noopener noreferrer"
+                                className="font-mono hover:underline" style={{ color: 'var(--accent)' }}
+                                onClick={e => e.stopPropagation()}>{a.fileName}</a>
+                              {canInspect && isPending && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); removeMinutes(a.id, a.fileName) }}
+                                  style={{ color: SEMANTIC_COLORS.danger.solid }}
+                                  title="Gỡ file"
+                                >&#10005;</button>
+                              )}
+                            </span>
+                          ))}
+                          {cp.attachments.length === 0 && (
+                            <span className="text-[10px] italic" style={{ color: SEMANTIC_COLORS.warning.solid }}>
+                              chưa có — chưa chấm Đạt được
+                            </span>
+                          )}
+                          {canInspect && isPending && (
+                            <label className="text-[10px] px-2 py-0.5 rounded cursor-pointer font-semibold"
+                              style={{ border: '1px dashed var(--border)', color: 'var(--text-secondary)' }}
+                              onClick={e => e.stopPropagation()}>
+                              {uploadingCp === cp.id ? 'Đang tải...' : '+ Đính file'}
+                              <input
+                                type="file"
+                                className="hidden"
+                                disabled={uploadingCp === cp.id}
+                                onChange={e => {
+                                  const f = e.target.files?.[0]
+                                  e.target.value = ''
+                                  if (f) uploadMinutes(cp.id, f)
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
                         </div>
                       )
                     })}
@@ -205,16 +352,25 @@ export default function ITPPage() {
   )
 }
 
-interface WOOption { id: string; woCode: string; pieceMark: string | null; status: string }
+
+interface WOOption {
+  id: string; woCode: string; description: string; pieceMark: string | null
+  teamCode: string; status: string; plannedWeight: number | null
+}
+
+/** Phiếu xưởng đã báo cho một lệnh — nguồn để QC biết đã làm xong bao nhiêu, ngày nào. */
+interface JCOption {
+  id: string; jobCode: string; workOrderId: string; actualQty: number | null
+  unit: string; workDate: string; teamCode: string; notes: string | null
+  workOrder: {
+    woCode: string; description: string; pieceMark: string | null
+    teamCode: string; status: string; plannedWeight: number | null
+  }
+}
 
 const WO_STATUS_LABEL: Record<string, string> = {
   OPEN: 'Mở', IN_PROGRESS: 'Đang SX', QC_PENDING: 'Chờ QC', QC_PASSED: 'QC Đạt',
   QC_FAILED: 'QC Lỗi', COMPLETED: 'Xong', ON_HOLD: 'Tạm dừng', PENDING_MATERIAL: 'Chờ VT',
-}
-
-interface CPForm {
-  activity: string; description: string; standard: string; inspectionType: string;
-  workOrderId: string; pieceMark: string;
 }
 
 function CreateITPModal({ open, projects, onClose, onCreated }: {
@@ -222,80 +378,87 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
 }) {
   const [projectId, setProjectId] = useState('')
   const [name, setName] = useState('')
-  const [defaultWoId, setDefaultWoId] = useState('')
-  const [workOrders, setWorkOrders] = useState<WOOption[]>([])
+  const [workOrderId, setWorkOrderId] = useState('')
+  const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0])
+  const [jobCards, setJobCards] = useState<JCOption[]>([])
   const [loadingWO, setLoadingWO] = useState(false)
-  const [checkpoints, setCheckpoints] = useState<CPForm[]>([
-    { activity: 'welding', description: '', standard: '', inspectionType: 'MONITOR', workOrderId: '', pieceMark: '' },
-  ])
   const [submitting, setSubmitting] = useState(false)
 
   async function onProjectChange(pid: string) {
     setProjectId(pid)
-    setDefaultWoId('')
-    setWorkOrders([])
-    setCheckpoints(cps => cps.map(cp => ({ ...cp, workOrderId: '', pieceMark: '' })))
+    setWorkOrderId('')
+    setJobCards([])
     if (!pid) return
     setLoadingWO(true)
-    const res = await apiFetch(`/api/production?projectId=${pid}&limit=500`)
-    if (res.ok) setWorkOrders((res.workOrders || []).map((wo: { id: string; woCode: string; pieceMark: string | null; status: string }) => ({
-      id: wo.id, woCode: wo.woCode, pieceMark: wo.pieceMark, status: wo.status,
-    })))
+    // Chỉ cần phiếu báo cáo: mỗi phiếu đã kèm thông tin lệnh của nó. Không gọi /api/production
+    // vì API đó chặn limit tối đa 100 — dự án nhiều lệnh (sinh từ APL) sẽ trả lỗi, dropdown rỗng.
+    const jcRes = await apiFetch(`/api/production/job-cards?projectId=${pid}&limit=500`)
+    if (jcRes.ok) setJobCards(jcRes.jobCards || [])
     setLoadingWO(false)
   }
 
-  function onDefaultWoChange(woId: string) {
-    setDefaultWoId(woId)
-    const wo = workOrders.find(w => w.id === woId)
-    setCheckpoints(cps => cps.map(cp =>
-      !cp.workOrderId ? { ...cp, workOrderId: woId, pieceMark: wo?.pieceMark || '' } : cp
-    ))
-  }
+  // Chỉ những lệnh ĐÃ có phiếu báo cáo mới đem đi kiểm tra được — chưa làm thì chưa có gì để kiểm.
+  const cardsByWo = jobCards.reduce<Record<string, JCOption[]>>((acc, jc) => {
+    (acc[jc.workOrderId] ||= []).push(jc)
+    return acc
+  }, {})
+  const reportedWOs: WOOption[] = Object.entries(cardsByWo).map(([woId, cards]) => ({
+    id: woId,
+    woCode: cards[0].workOrder.woCode,
+    description: cards[0].workOrder.description,
+    pieceMark: cards[0].workOrder.pieceMark,
+    teamCode: cards[0].workOrder.teamCode,
+    status: cards[0].workOrder.status,
+    plannedWeight: cards[0].workOrder.plannedWeight,
+  })).sort((a, b) => a.woCode.localeCompare(b.woCode))
 
-  function onCpWoChange(index: number, woId: string) {
-    const wo = workOrders.find(w => w.id === woId)
-    const n = [...checkpoints]
-    n[index] = { ...n[index], workOrderId: woId, pieceMark: wo?.pieceMark || '' }
-    setCheckpoints(n)
-  }
+  const selectedWo = reportedWOs.find(w => w.id === workOrderId)
+  const selectedCards = (cardsByWo[workOrderId] || [])
+    .slice()
+    .sort((a, b) => new Date(b.workDate).getTime() - new Date(a.workDate).getTime())
+  const reportedQty = selectedCards.reduce((s, c) => s + (c.actualQty || 0), 0)
+  const lastDate = selectedCards[0]?.workDate
+  const plannedQty = selectedWo?.plannedWeight || 0
+  const pct = plannedQty > 0 ? Math.round((reportedQty / plannedQty) * 100) : 0
 
-  const addCheckpoint = () => {
-    const wo = workOrders.find(w => w.id === defaultWoId)
-    setCheckpoints([...checkpoints, {
-      activity: 'welding', description: '', standard: '', inspectionType: 'MONITOR',
-      workOrderId: defaultWoId, pieceMark: wo?.pieceMark || '',
-    }])
+  function onWoChange(id: string) {
+    setWorkOrderId(id)
+    // Tên ITP điền sẵn theo lệnh cho đỡ gõ; vẫn sửa được.
+    const wo = reportedWOs.find(w => w.id === id)
+    if (wo && !name.trim()) setName(`Kiểm tra ${wo.woCode}`)
   }
-
-  const woOptions = [
-    { value: '', label: projectId ? 'Không gắn WO' : 'Chọn dự án trước' },
-    ...workOrders.map(wo => ({
-      value: wo.id,
-      label: `${wo.woCode}${wo.pieceMark ? ` — ${wo.pieceMark}` : ''} [${WO_STATUS_LABEL[wo.status] || wo.status}]`,
-    })),
-  ]
 
   const submit = async () => {
-    if (!projectId || !name) return notify('Chọn dự án và nhập tên ITP')
-    const validCPs = checkpoints
-      .filter(c => c.description)
-      .map(c => ({
-        activity: c.activity,
-        description: c.description,
-        standard: c.standard || undefined,
-        inspectionType: c.inspectionType,
-        workOrderId: c.workOrderId || undefined,
-        pieceMark: c.pieceMark || undefined,
-      }))
+    if (!projectId) return notify('Chọn dự án')
+    if (!workOrderId) return notify('Chọn lệnh sản xuất cần kiểm tra')
+    if (!name.trim()) return notify('Nhập tên ITP')
+    if (!inspectionDate) return notify('Chọn ngày kiểm tra')
     setSubmitting(true)
     const res = await apiFetch('/api/qc/itp', {
       method: 'POST',
-      body: JSON.stringify({ projectId, name, checkpoints: validCPs.length > 0 ? validCPs : undefined }),
+      body: JSON.stringify({ projectId, name: name.trim(), workOrderId, inspectionDate }),
     })
     setSubmitting(false)
     if (res.ok) onCreated()
     else notify(res.error || 'Lỗi tạo ITP')
   }
+
+  const woOptions = [
+    {
+      value: '',
+      label: !projectId ? 'Chọn dự án trước'
+        : loadingWO ? 'Đang tải...'
+        : reportedWOs.length === 0 ? 'Dự án chưa có lệnh nào được báo khối lượng'
+        : 'Chọn lệnh...',
+    },
+    ...reportedWOs.map(wo => {
+      const qty = (cardsByWo[wo.id] || []).reduce((s, c) => s + (c.actualQty || 0), 0)
+      return {
+        value: wo.id,
+        label: `${wo.woCode}${wo.pieceMark ? ` — ${wo.pieceMark}` : ''} · đã báo ${formatNumber(Math.round(qty))} kg`,
+      }
+    }),
+  ]
 
   return (
     <Modal open={open} onClose={onClose} title="Tạo ITP mới" size="lg">
@@ -308,70 +471,87 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
             options={[{ value: '', label: 'Chọn...' }, ...projects.map(p => ({ value: p.id, label: `${p.projectCode} — ${p.projectName}` }))]}
           />
           <InputField
-            label="Tên ITP *"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="VD: Pressure Vessel ITP"
+            label="Ngày kiểm tra *"
+            type="date"
+            value={inspectionDate}
+            onChange={e => setInspectionDate(e.target.value)}
           />
         </div>
 
         <SelectField
-          label={`Work Order mặc định${loadingWO ? ' (đang tải...)' : ''}`}
-          value={defaultWoId}
-          onChange={e => onDefaultWoChange(e.target.value)}
+          label={`Lệnh sản xuất cần kiểm tra *${loadingWO ? ' (đang tải...)' : ''}`}
+          value={workOrderId}
+          onChange={e => onWoChange(e.target.value)}
           options={woOptions}
         />
-        {defaultWoId && (
+        {projectId && !loadingWO && reportedWOs.length === 0 && (
           <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: -8 }}>
-            Checkpoint mới sẽ kế thừa WO này. Có thể đổi riêng mỗi checkpoint.
+            Chỉ hiện lệnh đã có phiếu báo khối lượng của xưởng — dự án này chưa có lệnh nào được báo.
           </p>
         )}
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="input-label">Điểm kiểm tra</label>
-            <Button type="button" variant="ghost" size="sm" onClick={addCheckpoint}>+ Thêm</Button>
-          </div>
-          {checkpoints.map((cp, i) => (
-            <div key={i} className="mb-2 p-2 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
-              <div className="grid grid-cols-4 gap-2">
-                <SelectField
-                  value={cp.activity}
-                  onChange={e => { const n = [...checkpoints]; n[i].activity = e.target.value; setCheckpoints(n) }}
-                  options={ACTIVITY_OPTIONS}
-                />
-                <div className="col-span-2">
-                  <input
-                    className="input w-full"
-                    value={cp.description}
-                    onChange={e => { const n = [...checkpoints]; n[i].description = e.target.value; setCheckpoints(n) }}
-                    placeholder="Mô tả..."
-                  />
-                </div>
-                <SelectField
-                  value={cp.inspectionType}
-                  onChange={e => { const n = [...checkpoints]; n[i].inspectionType = e.target.value; setCheckpoints(n) }}
-                  options={INSP_TYPE_OPTIONS}
-                />
+        {/* Chọn xong thì QC thấy ngay xưởng đã làm được gì, ngày nào — không phải mở màn khác để tra */}
+        {selectedWo && (
+          <div className="rounded-lg p-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-mono font-bold text-sm" style={{ color: 'var(--accent)' }}>{selectedWo.woCode}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{selectedWo.description}</p>
               </div>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <SelectField
-                  value={cp.workOrderId}
-                  onChange={e => onCpWoChange(i, e.target.value)}
-                  options={woOptions}
-                />
-                <input
-                  className="input w-full"
-                  value={cp.pieceMark}
-                  readOnly={!!cp.workOrderId}
-                  placeholder="Piece Mark"
-                  onChange={e => { if (!cp.workOrderId) { const n = [...checkpoints]; n[i].pieceMark = e.target.value; setCheckpoints(n) } }}
-                  style={cp.workOrderId ? { background: 'var(--bg-primary)', cursor: 'not-allowed', opacity: 0.7 } : undefined}
-                />
+              <span className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
+                {WO_STATUS_LABEL[selectedWo.status] || selectedWo.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3 mt-3">
+              <div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>KL hoàn thành</p>
+                <p className="font-mono font-bold" style={{ color: 'var(--success, #16a34a)' }}>
+                  {formatNumber(Math.round(reportedQty))} kg
+                </p>
+              </div>
+              <div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Kế hoạch</p>
+                <p className="font-mono" style={{ color: 'var(--text-primary)' }}>
+                  {plannedQty > 0 ? `${formatNumber(Math.round(plannedQty))} kg (${pct}%)` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Ngày hoàn thành</p>
+                <p className="font-mono" style={{ color: 'var(--text-primary)' }}>{lastDate ? formatDate(lastDate) : '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Xưởng · Piece Mark</p>
+                <p className="font-mono" style={{ color: 'var(--text-primary)' }}>
+                  {selectedWo.teamCode}{selectedWo.pieceMark ? ` · ${selectedWo.pieceMark}` : ''}
+                </p>
               </div>
             </div>
-          ))}
-        </div>
+
+            <div className="mt-3" style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+                Phiếu báo cáo ({selectedCards.length})
+              </p>
+              {selectedCards.map(c => (
+                <div key={c.id} className="flex items-center gap-3 text-xs py-1" style={{ borderBottom: '1px dashed var(--border)' }}>
+                  <span className="font-mono" style={{ color: 'var(--text-muted)', minWidth: 80 }}>{c.jobCode}</span>
+                  <span style={{ color: 'var(--text-secondary)', minWidth: 90 }}>{formatDate(c.workDate)}</span>
+                  <span className="font-mono font-bold" style={{ color: 'var(--success, #16a34a)', minWidth: 80 }}>
+                    {formatNumber(c.actualQty || 0)} {c.unit}
+                  </span>
+                  <span className="truncate" style={{ color: 'var(--text-muted)' }}>{c.notes || ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <InputField
+          label="Tên ITP *"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="VD: Kiểm tra WO-26-001"
+        />
       </div>
       <div className="flex gap-3 mt-5">
         <Button variant="outline" className="flex-1" onClick={onClose}>Hủy</Button>

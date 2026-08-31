@@ -13,9 +13,7 @@ import BomPrUploadUI from './components/BomPrUploadUI'
 import WeldPaintUploadUI from './components/WeldPaintUploadUI'
 import QuickCreateMaterialDialog from './components/QuickCreateMaterialDialog'
 import { resolveCodes } from './components/material-resolve-client'
-import DailyProductionUI from './components/DailyProductionUI'
 import WeeklyAcceptanceUI from './components/WeeklyAcceptanceUI'
-import QualityAcceptanceUI from './components/QualityAcceptanceUI'
 import P3_5CommercialGroupUI from './components/P3_5CommercialGroupUI'
 import P3_6ApprovalUI from './components/P3_6ApprovalUI'
 import FlexibleFeatures from './components/FlexibleFeatures'
@@ -1230,78 +1228,17 @@ export default function TaskDetailPage() {
               </>
             ) : (
               <>
-            {/* P5.1: BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY) - Persistent Task */}
-            {/* P5.1A: BÁO CÁO KHỐI LƯỢNG THẦU PHỤ (THEO NGÀY) - Persistent Task */}
-            {(task.stepCode === 'P5.1' || task.stepCode === 'P5.1A') && (
-              <DailyProductionUI task={task} isActive={isActive} />
-            )}
-
+            {/* P5.1/P5.1A (báo cáo khối lượng theo ngày) đã gỡ khỏi quy trình 2026-08 */}
             {/* P5.3 / P5.4: NGHIỆM THU KHỐI LƯỢNG TUẦN — CronJob Saturday */}
             {(task.stepCode === 'P5.3' || task.stepCode === 'P5.4') && (
               <WeeklyAcceptanceUI task={task} isActive={isActive} />
             )}
 
-            {/* P5.1.1: YÊU CẦU NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC (SX) */}
-            {task.stepCode === 'P5.1.1' && (() => {
-              const rd = (task.resultData as Record<string, any>) || {}
-              return (
-                <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderTop: '4px solid #0ea5e9' }}>
-                  <h3 style={{ marginTop: 0, fontSize: '1.2rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    YÊU CẦU NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC
-                  </h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>
-                    Hạng mục này đã hoàn thành 100% khối lượng nghiệm thu. Gửi yêu cầu nghiệm thu chất lượng để QAQC tiến hành kiểm tra.
-                  </p>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
-                    <tbody>
-                      <tr>
-                        <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600, width: '30%' }}>Dự án</td>
-                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{rd.projectName || task.project?.projectCode || ''}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600 }}>Hạng mục</td>
-                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0', fontWeight: 600, color: '#0369a1' }}>{rd.hangMucName || ''}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: '10px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', fontWeight: 600 }}>Tổng KL thiết kế</td>
-                        <td style={{ padding: '10px 16px', border: '1px solid #e2e8f0' }}>{formatNumber(rd.totalKL || 0)} kg</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  {isActive && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        className="btn-primary"
-                        onClick={async () => {
-                          if (!await confirmDialog(`Xác nhận gửi yêu cầu nghiệm thu chất lượng cho hạng mục "${rd.hangMucName}"?`)) return
-                          try {
-                            await apiFetch(`/api/tasks/${task.id}/complete`, {
-                              method: 'POST',
-                              body: JSON.stringify({ userId: currentUser?.id, resultData: { ...rd, requestedAt: new Date().toISOString() } })
-                            })
-                            notify('Đã gửi yêu cầu nghiệm thu chất lượng. Task QAQC sẽ được tạo tự động.')
-                            window.location.reload()
-                          } catch (err) {
-                            notify('Lỗi gửi yêu cầu: ' + (err as Error).message)
-                          }
-                        }}
-                        style={{ padding: '10px 24px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: '1rem' }}
-                      >
-                        Gửi yêu cầu nghiệm thu
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
+            {/* P5.1.1 + P5.3A (nghiệm thu chất lượng riêng) đã gỡ 2026-08 —
+                chất lượng nghiệm thu cùng khối lượng ở màn Kế hoạch Kiểm tra (ITP). */}
 
-            {/* P5.3A: QAQC NGHIỆM THU CHẤT LƯỢNG HẠNG MỤC */}
-            {task.stepCode === 'P5.3A' && (
-              <QualityAcceptanceUI task={task} isActive={isActive} project={task.project} currentUser={currentUser} />
-            )}
-
-            {/* P5.1: Thông tin Lệnh sản xuất from P3.3/P3.4 (dynamic) */}
-            {task.stepCode === 'P5.1' && task.stepName !== 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO NGÀY)' && (() => {
+            {/* P5.2: Thông tin Lệnh sản xuất from P3.3/P3.4 (dynamic) */}
+            {task.stepCode === 'P5.2' && task.stepName !== 'BÁO CÁO KHỐI LƯỢNG HOÀN THÀNH (THEO TUẦN)' && (() => {
               const STAGE_LABELS: Record<string, string> = {
                 cutting: 'Pha cắt', fitup: 'Gá lắp', welding: 'Hàn',
                 machining: 'Gia công cơ khí', tryAssembly: 'Thử lắp ráp',
@@ -1392,8 +1329,8 @@ export default function TaskDetailPage() {
             })()}
 
             {/* Form Fields — skip for steps with dynamic tables */}
-            {!['P5.1', 'P5.3', 'P5.4', 'P1.2', 'P2.1A', 'P2.1B', 'P2.1C', 'P2.4', 'P3.3', 'P3.4'].includes(task.stepCode) && (
-            <div className="card" style={{ padding: '1.5rem', marginTop: task.stepCode === 'P5.1' ? '1rem' : undefined }}>
+            {!['P5.2', 'P5.3', 'P5.4', 'P1.2', 'P2.1A', 'P2.1B', 'P2.1C', 'P2.4', 'P3.3', 'P3.4'].includes(task.stepCode) && (
+            <div className="card" style={{ padding: '1.5rem', marginTop: task.stepCode === 'P5.2' ? '1rem' : undefined }}>
               <h3 style={{ marginTop: 0, fontSize: '1.1rem', borderBottom: '2px solid var(--accent)', paddingBottom: 8, marginBottom: 16 }}>
                 Thông tin nhập liệu
               </h3>
@@ -3763,7 +3700,7 @@ export default function TaskDetailPage() {
                 </span>
               </h3>
               {config.checklist
-                .filter(item => !(task.stepCode === 'P5.1' && item.key.startsWith('fab_')))
+                .filter(item => !(task.stepCode === 'P5.2' && item.key.startsWith('fab_')))
                 .map(item => (
                 <label key={item.key} style={{
                   display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)',
