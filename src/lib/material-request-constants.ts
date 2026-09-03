@@ -17,5 +17,29 @@ export const MR_STATUS_LABEL: Record<string, string> = {
 /** Phiếu đang sửa được (xưởng): nháp hoặc bị trả lại. */
 export const MR_EDITABLE: string[] = [MR_STATUS.DRAFT, MR_STATUS.REJECTED]
 
-/** Vai trò được lập đề nghị: XƯỞNG tự lo vật tư cho lệnh của mình (PM chỉ phát hành WO). */
-export const WO_MATERIAL_REQUEST_ROLES = ['R06', 'R06a', 'R06b']
+/** Xưởng nội bộ: tự lo vật tư cho lệnh của xưởng mình. */
+export const WORKSHOP_MATERIAL_ROLES = ['R06', 'R06a', 'R06b']
+
+/**
+ * PM: lập đề nghị cho lệnh GIAO THẦU PHỤ — lệnh làm ngoài không thuộc xưởng nào nên
+ * không ai trong xưởng đứng ra lo được. Chốt với nghiệp vụ 09/2026: thầu phụ do PM
+ * phát hành WO và lập luôn đề nghị vật tư.
+ */
+export const PM_MATERIAL_ROLES = ['R02', 'R02a']
+
+/** Mọi vai lập được đề nghị (còn lập cho lệnh NÀO thì xem canRequestMaterialForWo). */
+export const WO_MATERIAL_REQUEST_ROLES = [...WORKSHOP_MATERIAL_ROLES, ...PM_MATERIAL_ROLES]
+
+/** Mã tổ quy ước cho lệnh giao ngoài. */
+export const SUBCONTRACT_TEAM_CODE = 'THAUPHU'
+
+/**
+ * Lệnh có phải giao thầu phụ không.
+ *
+ * KHÔNG suy từ việc thiếu departmentId: lệnh nội bộ nhập thiếu phòng cũng không có
+ * departmentId, mà đó là lỗi dữ liệu chứ không phải giao ngoài. Chỉ căn cứ dấu hiệu
+ * do người lập chủ động đặt: woType EXTERNAL hoặc tổ THAUPHU.
+ */
+export function isSubcontractWo(wo: { woType?: string | null; teamCode?: string | null }): boolean {
+  return wo.woType === 'EXTERNAL' || (wo.teamCode || '').toUpperCase() === SUBCONTRACT_TEAM_CODE
+}

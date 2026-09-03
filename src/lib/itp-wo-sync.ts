@@ -1,6 +1,7 @@
 import prisma from './db'
 import { isWorkOrderQcPassed } from './qc-gate'
 import { logAudit } from './auth'
+import { getWoAcceptance, type WoAcceptance } from './wo-acceptance'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Đồng bộ kết quả nghiệm thu ITP → trạng thái QC của lệnh sản xuất.
@@ -11,7 +12,10 @@ import { logAudit } from './auth'
 // đường gỡ. Hàm dưới đây tự so lại và tự sửa, gọi bao nhiêu lần cũng cho cùng kết quả.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const OPEN_STATUSES = ['OPEN', 'IN_PROGRESS', 'QC_PENDING', 'QC_FAILED', 'ON_HOLD', 'PENDING_MATERIAL']
+// QC_PASSED nằm trong danh sách vì nghiệm thu theo ĐỢT: lệnh đã ký trọn phần cũ mà xưởng báo
+// thêm khối lượng thì phần mới CHƯA ai ký — phải mở lại, không thì lệnh đứng ở 'QC Đạt' vĩnh viễn
+// và không còn đường mời nghiệm thu tiếp. COMPLETED thì thôi: đã đóng sổ thì không tự mở lại.
+const OPEN_STATUSES = ['OPEN', 'IN_PROGRESS', 'QC_PENDING', 'QC_FAILED', 'ON_HOLD', 'PENDING_MATERIAL', 'QC_PASSED']
 
 export interface WoQcSyncResult {
   woId: string
@@ -21,17 +25,36 @@ export interface WoQcSyncResult {
 }
 
 /**
- * Trạng thái QC mà ITP đang chỉ định cho một WO:
- *   • có điểm kiểm FAILED  → QC_FAILED
- *   • mọi ITP đã COMPLETED → QC_PASSED
- *   • còn lại              → null (không đụng vào WO)
+ * Trạng thái QC mà kết quả nghiệm thu đang chỉ định cho một WO:
+ *   • có đợt bị chấm lỗi        → QC_FAILED
+ *   • đã nghiệm thu TRỌN lệnh   → QC_PASSED
+ *   • còn lại                   → null (không đụng vào WO)
+ *
+ * Nghiệm thu từng đợt nên đợt đầu ĐẠT KHÔNG có nghĩa là xong lệnh: lệnh 50 tấn nghiệm thu
+ * 20 tấn thì vẫn đang sản xuất, phải chờ nghiệm thu đủ (biên 90% như lúc báo khối lượng)
+ * mới được coi là xong.
  */
-function verdictFrom(itps: { status: string; checkpoints: { status: string }[] }[]): 'QC_PASSED' | 'QC_FAILED' | null {
-  if (itps.length === 0) return null
-  const cps = itps.flatMap(i => i.checkpoints)
-  if (cps.length === 0) return null
-  if (cps.some(c => c.status === 'FAILED')) return 'QC_FAILED'
-  if (cps.every(c => c.status === 'PASSED')) return 'QC_PASSED'
+function verdictFrom(acc: WoAcceptance | undefined, current: string): 'QC_PASSED' | 'QC_FAILED' | 'QC_PENDING' | 'IN_PROGRESS' | null {
+  if (!acc) return null
+  if (acc.hasFailed) return 'QC_FAILED'
+
+  // Đã nghiệm thu trọn lệnh?
+  const done = acc.plannedKg > 0
+    ? acc.fullyAccepted
+    : acc.acceptedKg > 0 && acc.pendingKg <= 0 && acc.availableKg <= 0
+  if (done) return 'QC_PASSED'
+
+  // Chưa trọn lệnh mà đang mang nhãn 'QC Đạt' / 'Chờ QC' → trả về đúng chỗ nó đang đứng,
+  // nếu không thì ký xong đợt này là lệnh kẹt luôn, không còn đường mời đợt sau.
+  if (current === 'QC_PENDING' || current === 'QC_PASSED') {
+    // Còn đợt chưa đủ hai chữ ký → vẫn đang chờ nghiệm thu.
+    if (acc.pendingKg > 0) return 'QC_PENDING'
+    // 'Chờ QC' CÒN khối lượng chưa nghiệm thu = lời mời còn nguyên giá trị (QAQC chưa kịp lập
+    // ITP cho đợt đó). Hạ xuống lúc này là rút lại lời mời ngay khi xưởng vừa bấm.
+    if (current === 'QC_PENDING' && acc.availableKg > 0) return null
+    // Hết phần chờ nghiệm thu mà lệnh chưa xong → xưởng làm tiếp, báo tiếp rồi mời đợt sau.
+    return 'IN_PROGRESS'
+  }
   return null
 }
 
@@ -48,25 +71,16 @@ export async function reconcileWorkOrdersQc(woIds: string[], actorId?: string): 
   })
   if (wos.length === 0) return []
 
-  const itps = await prisma.inspectionTestPlan.findMany({
-    where: { workOrderId: { in: wos.map(w => w.id) } },
-    select: { workOrderId: true, status: true, checkpoints: { select: { status: true } } },
-  })
-
-  const byWo = new Map<string, { status: string; checkpoints: { status: string }[] }[]>()
-  for (const i of itps) {
-    if (!i.workOrderId) continue
-    const arr = byWo.get(i.workOrderId) || []
-    arr.push({ status: i.status, checkpoints: i.checkpoints })
-    byWo.set(i.workOrderId, arr)
-  }
+  const accMap = await getWoAcceptance(wos.map(w => w.id))
 
   const changed: WoQcSyncResult[] = []
   for (const wo of wos) {
-    const want = verdictFrom(byWo.get(wo.id) || [])
+    const want = verdictFrom(accMap.get(wo.id), wo.status)
     if (!want || want === wo.status) continue
 
-    if (want === 'QC_PASSED') {
+    if (want === 'QC_PENDING' || want === 'IN_PROGRESS') {
+      await prisma.workOrder.update({ where: { id: wo.id }, data: { status: want } })
+    } else if (want === 'QC_PASSED') {
       // Hai chữ ký không xoá được các ràng buộc QC khác (NDT lỗi, NCR chưa đóng…).
       const gate = await isWorkOrderQcPassed(wo.id, { ignoreReQcFlag: true })
       if (!gate.passed) continue

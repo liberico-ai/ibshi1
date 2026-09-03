@@ -29,51 +29,75 @@ export async function GET(req: NextRequest) {
 
   const acceptance = await getAcceptanceByItem(imp.id)
 
-  // ── Xổ dòng chi tiết của MỘT ITEM ──
+  // ── Xổ một ITEM: hiện CÁC XƯỞNG ĐƯỢC GIAO ──
+  //
+  // Trước đây xổ ra hàng nghìn dòng cụm/chi tiết. Từ khi một ITEM giao được cho nhiều xưởng,
+  // thứ KTKH cần nhìn là xưởng nào làm tới đâu — báo bao nhiêu, nghiệm thu bao nhiêu, ra tiền
+  // bao nhiêu — chứ không phải danh sách chi tiết bản vẽ.
   const rawItem = url.searchParams.get('item')
   if (rawItem !== null) {
     const item = rawItem.trim()
-    const itemWhere = item ? { item } : { OR: [{ item: null }, { item: '' }] }
-    const childPage = Math.max(1, parseInt(url.searchParams.get('childPage') || '1'))
 
-    const [childTotal, children, itemPrice] = await Promise.all([
-      prisma.aplLine.count({ where: { importId: imp.id, isAssembly: false, ...itemWhere } }),
-      prisma.aplLine.findMany({
-        where: { importId: imp.id, isAssembly: false, ...itemWhere },
-        orderBy: { rowNo: 'asc' },
-        skip: (childPage - 1) * CHILD_PAGE,
-        take: CHILD_PAGE,
-        select: {
-          id: true, drawingNo: true, assembly: true, pos: true, part: true,
-          totalWeightKg: true, category: true, item: true, profile: true, grade: true,
-          price: { select: { unitPrice: true } },
-        },
-      }),
-      prisma.aplItemPrice.findUnique({
-        where: { importId_item: { importId: imp.id, item } },
-        select: { unitPrice: true },
-      }),
-    ])
-
+    const itemPrice = await prisma.aplItemPrice.findUnique({
+      where: { importId_item: { importId: imp.id, item } },
+      select: { unitPrice: true },
+    })
     const base = itemPrice ? Number(itemPrice.unitPrice) : null
-    const ratio = acceptance.get(item)?.ratio ?? 0
+    const acc = acceptance.get(item)
+
+    // Từng ĐỢT nghiệm thu của mỗi lệnh — xưởng báo nhiều lần thì mỗi lần một phiếu ITP.
+    const woCodes = (acc?.wos ?? []).map(w => w.woCode)
+    const itps = woCodes.length
+      ? await prisma.inspectionTestPlan.findMany({
+          where: { workOrder: { woCode: { in: woCodes } } },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            itpCode: true, status: true, acceptedQty: true, inspectionDate: true, createdAt: true,
+            workOrder: { select: { woCode: true } },
+            checkpoints: { select: { status: true } },
+          },
+        })
+      : []
+    const batchesByWo = new Map<string, { itpCode: string; qty: number; date: Date | null; signed: boolean; failed: boolean }[]>()
+    for (const i of itps) {
+      const code = i.workOrder?.woCode
+      if (!code) continue
+      const cps = i.checkpoints
+      const arr = batchesByWo.get(code) || []
+      arr.push({
+        itpCode: i.itpCode,
+        qty: i.acceptedQty !== null ? Number(i.acceptedQty) : 0,
+        date: i.inspectionDate ?? i.createdAt,
+        signed: cps.length > 0 && cps.every(c => c.status === 'PASSED'),
+        failed: cps.some(c => c.status === 'FAILED'),
+      })
+      batchesByWo.set(code, arr)
+    }
 
     return successResponse({
-      children: children.map(c => {
-        const own = c.price ? Number(c.price.unitPrice) : null
-        const unit = effectiveUnitPrice(own, base)
-        const plannedKg = Number(c.totalWeightKg) || 0
-        const acceptedKg = plannedKg * ratio
-        return {
-          id: c.id, drawingNo: c.drawingNo, assembly: c.assembly, pos: c.pos, part: c.part,
-          category: c.category, item: c.item, profile: c.profile, grade: c.grade,
-          plannedKg, acceptedKg,
-          unitPrice: own,                       // giá RIÊNG của dòng (null = đang ăn theo giá ITEM)
-          effectiveUnitPrice: unit,
-          amount: unit === null ? null : Math.round(acceptedKg * unit),
-        }
-      }),
-      childPagination: { page: childPage, limit: CHILD_PAGE, total: childTotal, totalPages: Math.ceil(childTotal / CHILD_PAGE) },
+      workshops: (acc?.wos ?? []).map(w => ({
+        batches: (batchesByWo.get(w.woCode) || []).map(b => ({
+          ...b,
+          date: b.date ? b.date.toISOString() : null,
+          amount: base === null ? null : Math.round((b.signed ? b.qty : 0) * base),
+        })),
+        woCode: w.woCode,
+        teamCode: w.teamCode,
+        status: w.status,
+        plannedKg: w.plannedKg,
+        reportedKg: w.reportedKg,
+        acceptedKg: w.acceptedKg,
+        ratio: w.ratio,
+        // Tiền của phần xưởng này đã được nghiệm thu, theo đơn giá của ITEM.
+        // Cộng các dòng này lại ĐÚNG BẰNG Thành tiền của ITEM — tiền tính theo việc đã làm
+        // và cộng dồn (xem ghi chú trong apl-pricing.ts).
+        amount: base === null ? null : Math.round(w.acceptedKg * base),
+      })),
+      itemUnitPrice: base,
+      // ITEM xong tới đâu = xưởng chậm nhất tới đó
+      itemRatio: acc?.ratio ?? 0,
+      itemAcceptedKg: acc?.acceptedKg ?? 0,
+      itemPlannedKg: acc?.plannedKg ?? 0,
     })
   }
 
@@ -125,6 +149,8 @@ export async function GET(req: NextRequest) {
       woCode: a.woCode,
       woStatus: a.woStatus,
       teamCode: a.teamCode,
+      // Một ITEM giao được cho nhiều xưởng — dòng ITEM phải nói ĐỦ, không lấy một lệnh đại diện.
+      shops: a.wos.map(w => ({ teamCode: w.teamCode, woCode: w.woCode, status: w.status })),
       unitPrice: unit,
       overrides: overrideByItem.get(item) || 0,
       // Thành tiền cộng theo dòng chi tiết (giống hệt cách tính Tổng tiền) để dòng đặt giá

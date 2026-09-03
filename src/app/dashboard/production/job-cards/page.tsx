@@ -9,6 +9,7 @@ import {
 } from '@/components/ui'
 import { ClipboardList, Calendar, BarChart3, CheckCircle2 } from 'lucide-react'
 import { notify } from '@/components/ui/Toast'
+import { WO_REPORTABLE_STATUSES, WO_STATUS_LABEL } from '@/lib/wo-status'
 
 interface JobCard {
   id: string; jobCode: string; workOrderId: string; teamCode: string; workType: string;
@@ -45,12 +46,11 @@ export default function JobCardsPage() {
   const openForm = async (woId = '') => {
     // Reset state before loading to avoid accumulating WOs (race condition fix)
     setWorkOrders([])
-    const woRes = await apiFetch('/api/production?status=IN_PROGRESS&limit=100')
-    const inProgressWOs = woRes.ok ? (woRes.workOrders || []) : []
-    // Also load OPEN ones
-    const woOpen = await apiFetch('/api/production?status=OPEN&limit=100')
-    const openWOs = woOpen.ok ? (woOpen.workOrders || []) : []
-    setWorkOrders([...inProgressWOs, ...openWOs])
+    // Lấy MỌI lệnh còn báo cáo được, không riêng OPEN/IN_PROGRESS: từ khi cắt cổng vật tư,
+    // lệnh nằm nguyên ở 'Chờ vật tư' mà xưởng vẫn báo cáo, và lệnh đã nghiệm thu vẫn báo tiếp được.
+    // Danh sách trạng thái dùng chung với API tạo phiếu (wo-status.ts) để hai bên không lệch nhau.
+    const woRes = await apiFetch(`/api/production?status=${WO_REPORTABLE_STATUSES.join(',')}&limit=100`)
+    setWorkOrders(woRes.ok ? (woRes.workOrders || []) : [])
     setOpenWoId(woId)
     setShowForm(true)
   }
@@ -214,6 +214,8 @@ function CreateJobCardModal({ open, workOrders, jobCards, initialWoId, onClose, 
   const remaining = Math.max(0, Math.round((plannedOfWo - reported) * 100) / 100)
   // Đạt ≥90% kế hoạch là TỰ xong — không cần bấm nút (biên ±10% do cắt lẻ, hao hụt).
   const done = plannedOfWo > 0 && reported >= plannedOfWo * 0.9
+  // Lệnh đã nghiệm thu trọn mà báo thêm thì phần thêm là ĐỢT MỚI, phải mời nghiệm thu lại.
+  const alreadyAccepted = selectedWo?.status === 'QC_PASSED'
 
   const update = (field: string, value: string) => setForm({ ...form, [field]: value })
 
@@ -255,10 +257,21 @@ function CreateJobCardModal({ open, workOrders, jobCards, initialWoId, onClose, 
             ...workOrders.map(wo => {
               const r = reportedByWo[wo.id]
               const mark = r ? ` ✓ đã báo ${formatNumber(Math.round(r.qty))} kg` : ''
-              return { value: wo.id, label: `${wo.woCode} — ${wo.description}${mark}` }
+              const st = WO_STATUS_LABEL[wo.status] || wo.status
+              return { value: wo.id, label: `${wo.woCode} [${st}] — ${wo.description}${mark}` }
             }),
           ]}
         />
+
+        {alreadyAccepted && (
+          <div className="rounded-lg px-3 py-2 text-sm"
+            style={{ border: '1px solid var(--info, #2563eb)', background: 'rgba(37, 99, 235, 0.08)', color: 'var(--text-primary)' }}>
+            <p className="font-semibold">Lệnh này đã nghiệm thu xong khối lượng đã báo</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              Báo thêm vẫn được — phần thêm là một đợt mới, QAQC và PM phải nghiệm thu lại đợt đó.
+            </p>
+          </div>
+        )}
 
         {/* Chọn phải lệnh đã báo rồi → nói rõ, kèm số liệu và lần gần nhất. Không chặn: báo tiếp là hợp lệ. */}
         {historyOfWo.length > 0 && (

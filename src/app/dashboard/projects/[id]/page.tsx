@@ -42,6 +42,14 @@ interface Phase {
   pct: number
 }
 
+/** Việc tạo tay / chuyển tiếp mang nhãn mã bước nhưng KHÔNG thuộc quy trình 32 bước */
+interface AdhocTask {
+  id: string; taskType: string; title: string; status: string
+  assignee: { fullName: string } | null
+  deadline: string | null
+  completedAt: string | null
+}
+
 interface ProjectDetail {
   id: string; projectCode: string; projectName: string; clientName: string;
   productType: string; status: string; contractValue: string; currency: string;
@@ -50,6 +58,7 @@ interface ProjectDetail {
   progress: { total: number; completed: number; inProgress: number; percentage: number; currentPhase: number };
   tasks: Task[];
   phases?: Phase[];
+  adhocTasks?: AdhocTask[];
 }
 
 const COLUMNS = [
@@ -801,6 +810,43 @@ export default function ProjectDetailPage() {
               </div>
             )
           })}
+
+          {/* ── Việc ngoài quy trình ──
+              Màn "Tạo việc" mượn mã bước làm nhãn loại việc (P2.1 = đề xuất vật tư, P1.1B =
+              yêu cầu phê duyệt…), nên việc tạo tay mang cùng nhãn với bước quy trình. Trước
+              đây chúng nhảy vào khung 32 bước, hiện "Xong" dù chưa ai làm bước đó và lấy
+              tiêu đề tự do thay tên bước. Giờ tách hẳn ra đây. */}
+          {(project.adhocTasks?.length ?? 0) > 0 && (
+            <div className="card" style={{ overflow: 'hidden' }}>
+              <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                <span className="font-semibold text-sm" style={{ color: 'var(--text-heading)' }}>
+                  Việc ngoài quy trình ({project.adhocTasks!.length})
+                </span>
+                <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Việc giao tay hoặc chuyển tiếp, có mượn nhãn loại việc trùng mã bước nhưng không thuộc 32 bước —
+                  không tính vào tiến độ quy trình.
+                </span>
+              </div>
+              <div>
+                {project.adhocTasks!.map(t => (
+                  <div key={t.id} onClick={() => { window.location.href = `/dashboard/work/${t.id}` }}
+                    className="px-4 py-2 flex items-center gap-3 cursor-pointer hover:bg-[var(--bg-hover)]"
+                    style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded"
+                      style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>{t.taskType}</span>
+                    <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{t.title}</span>
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t.assignee?.fullName || '—'}</span>
+                    <span className="text-xs font-medium" style={{
+                      color: t.status === 'DONE' ? '#16a34a' : 'var(--text-secondary)',
+                    }}>{t.status === 'DONE' ? 'Xong' : t.status === 'IN_PROGRESS' ? 'Đang làm' : 'Chờ'}</span>
+                    <span className="text-xs font-mono" style={{ color: 'var(--text-muted)', minWidth: 78, textAlign: 'right' }}>
+                      {t.completedAt ? formatDate(t.completedAt) : t.deadline ? formatDate(t.deadline) : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 

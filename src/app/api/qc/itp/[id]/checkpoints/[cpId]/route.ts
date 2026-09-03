@@ -4,6 +4,7 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { isProjectPm } from '@/lib/project-pm'
 import { isWorkOrderQcPassed } from '@/lib/qc-gate'
 import { syncWorkOrdersOfItp } from '@/lib/itp-wo-sync'
+import { itpMinutesGate } from '@/lib/process-gates'
 import { validateBody } from '@/lib/api-helpers'
 import { updateCheckpointSchema } from '@/lib/schemas'
 import { createModuleTask } from '@/lib/module-tasks'
@@ -48,9 +49,10 @@ export async function PUT(
       if (actingSide === 'PM' && !canPm) return errorResponse('Bạn không phải PM phụ trách dự án này', 403)
     }
 
-    // Chấm ĐẠT phải có biên bản nghiệm thu đính kèm — không có hồ sơ thì không nghiệm thu.
-    // Chấm LỖI thì không bắt buộc: lỗi còn phải mở NCR, chưa có biên bản là chuyện thường.
-    if (status === 'PASSED') {
+    // Cổng biên bản nghiệm thu: khi BẬT thì phải đính kèm mới chấm Đạt được (luật gốc).
+    // Khi TẮT (mặc định từ 09/2026) thì ký Đạt được luôn, đính biên bản sau cũng được.
+    // Chấm LỖI chưa bao giờ bắt buộc: lỗi còn phải mở NCR, chưa có biên bản là chuyện thường.
+    if (status === 'PASSED' && await itpMinutesGate.enabled()) {
       const evidence = await prisma.fileAttachment.count({
         where: { entityType: 'ITPCheckpoint', entityId: cpId },
       })

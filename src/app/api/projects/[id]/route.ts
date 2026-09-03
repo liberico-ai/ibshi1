@@ -142,14 +142,20 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       })
     }
 
-    // Find matching tasks (could be multiple for dynamic steps like P4.3).
-    // ĐỒNG BỘ: nếu có task TEMPLATE THẬT (templateStepId != null) thì CHỈ dùng chúng làm đại diện
-    // bước — để ấn vào bước ở trang Dự án luôn mở đúng task giữ biểu mẫu/dữ liệu, không bị task
-    // cùng nhãn taskType (tạo tay / giao ngoài quy trình) đè lên. Bước động (không có template
-    // task, vd P4.3 sinh theo PO) vẫn giữ nguyên: dùng toàn bộ task khớp nhãn.
+    // ── Task nào ĐẠI DIỆN cho một bước của quy trình ──
+    //
+    // Màn "Tạo việc" cố tình mượn mã bước làm nhãn loại việc (P2.1 = "Đề xuất/yêu cầu vật tư",
+    // P1.1B = "Yêu cầu phê duyệt", P3.5 = "Tìm nhà cung cấp"…) để việc tạo tay thừa hưởng
+    // định tuyến và biểu mẫu. Hệ quả: việc tạo tay mang cùng nhãn với bước quy trình, rồi
+    // nhảy vào khung 32 bước — hiện "Xong" dù chưa ai làm bước đó, và tiêu đề tự do của nó
+    // thay luôn tên bước.
+    //
+    // Chỉ task GẮN QUY TRÌNH (templateStepId != null) mới được đại diện bước. Dự án cũ chưa
+    // có template (hasTemplateTasks = false) thì giữ nguyên cách cũ, không thì cả 32 bước
+    // hoá trống.
     const allMatches = tasks.filter(t => t.stepCode === stepCode)
     const templateMatches = allMatches.filter(t => t.templateStepId)
-    const matchingTasks = templateMatches.length > 0 ? templateMatches : allMatches
+    const matchingTasks = hasTemplateTasks ? templateMatches : allMatches
 
     // Determine step status
     let status: 'DONE' | 'IN_PROGRESS' | 'RETURNED' | 'PENDING' = 'PENDING'
@@ -177,7 +183,9 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
     phaseMap.get(phase)!.steps.push({
       stepCode,
-      stepName: bestTask?.stepName || tplStep?.title || rule?.name || stepCode,
+      // Tên bước LUÔN lấy từ quy trình, không lấy tiêu đề task — tiêu đề là chữ người dùng
+      // tự gõ nên bước sẽ mang tên sai. Dự án cũ không có template thì đành lấy tiêu đề.
+      stepName: tplStep?.title || rule?.name || bestTask?.stepName || stepCode,
       status,
       assignedRole,
       roleName,
@@ -202,12 +210,16 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
     })
 
   // ── Overall progress (denominator = template steps, not spawned tasks) ──
+  //
+  // Đếm trên task THUỘC QUY TRÌNH thôi. Đếm cả việc tạo tay thì "hoàn thành" vượt cả tổng số
+  // bước (đã gặp 37/32) vì một bước có thể kèm nhiều việc tạo tay cùng nhãn.
+  const flowTasks = hasTemplateTasks ? tasks.filter(t => t.templateStepId) : tasks
   const totalStepCount = allStepCodes.length
-  const completed = tasks.filter(t => t.status === 'DONE').length
-  const inProgress = tasks.filter(t => ACTIVE.includes(t.status)).length
+  const completed = new Set(flowTasks.filter(t => t.status === 'DONE').map(t => t.stepCode)).size
+  const inProgress = new Set(flowTasks.filter(t => ACTIVE.includes(t.status)).map(t => t.stepCode)).size
 
   let currentPhase = 1
-  const activeTask = tasks.find(t => ACTIVE.includes(t.status))
+  const activeTask = flowTasks.find(t => ACTIVE.includes(t.status))
   if (activeTask) {
     const rule = WORKFLOW_RULES[activeTask.stepCode]
     if (rule) currentPhase = rule.phase
@@ -215,7 +227,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
 
   // Count completed by unique step codes (not task count, for template-based denominator)
   const doneStepCodes = new Set(
-    tasks.filter(t => t.status === 'DONE').map(t => t.stepCode)
+    flowTasks.filter(t => t.status === 'DONE').map(t => t.stepCode)
   )
   const completedUniqueSteps = allStepCodes.filter(c => doneStepCodes.has(c)).length
 
@@ -226,6 +238,18 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       ...projectData,
       tasks,
       hasTemplateTasks,
+      // Việc tạo tay/chuyển tiếp mang nhãn mã bước nhưng KHÔNG thuộc quy trình — tách ra
+      // để trang Dự án hiện thành mục riêng, thay vì lẫn vào khung 32 bước.
+      adhocTasks: hasTemplateTasks
+        ? tasks
+            .filter(t => !t.templateStepId && WORKFLOW_RULES[t.stepCode])
+            .map(t => ({
+              id: t.id, taskType: t.stepCode, title: t.stepName, status: t.status,
+              assignee: t.assignee ? { fullName: t.assignee.fullName } : null,
+              deadline: t.deadline?.toISOString() || null,
+              completedAt: t.completedAt?.toISOString() || null,
+            }))
+        : [],
       contractValue: project.contractValue?.toString(),
       progress: {
         total: totalStepCount,

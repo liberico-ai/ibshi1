@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { rollUpWorkOrder } from '@/lib/production-weights'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
+import { isWoReportable } from '@/lib/wo-status'
+import { createWithCode } from '@/lib/next-code'
+import { getWorkshopScope } from '@/lib/workshop-scope'
 import { validateBody } from '@/lib/api-helpers'
 import { createJobCardSchema } from '@/lib/schemas'
 
@@ -26,8 +29,15 @@ export async function GET(req: NextRequest) {
   if (teamCode) where.teamCode = teamCode
   if (status) where.status = status
   if (workType) where.workType = workType
+  // Xưởng chỉ thấy phiếu của lệnh thuộc xưởng mình — cùng luật với màn Sản xuất.
+  // QAQC/PM/BGĐ không bị giới hạn: màn tạo ITP phải thấy phiếu của mọi xưởng.
+  const { scope, scopeMissing, woWhere } = await getWorkshopScope(user.userId, user.roleCode)
+
   // Lọc theo dự án: dùng cho màn ITP (chỉ kiểm tra lệnh của dự án đang chọn)
-  if (projectId) where.workOrder = { projectId }
+  const woFilter: Record<string, unknown> = {}
+  if (projectId) woFilter.projectId = projectId
+  if (woWhere) Object.assign(woFilter, woWhere)
+  if (Object.keys(woFilter).length > 0) where.workOrder = woFilter
 
   const [total, jobCards] = await Promise.all([
     prisma.jobCard.count({ where }),
@@ -51,6 +61,7 @@ export async function GET(req: NextRequest) {
 
   return successResponse({
     jobCards: result,
+    scope, scopeMissing,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   })
 }
@@ -72,16 +83,20 @@ export async function POST(req: NextRequest) {
 
   const wo = await prisma.workOrder.findUnique({ where: { id: workOrderId } })
   if (!wo) return errorResponse('Không tìm thấy WO')
-  if (['COMPLETED', 'CANCELLED'].includes(wo.status)) {
+  if (!isWoReportable(wo.status)) {
     return errorResponse('WO đã hoàn thành hoặc hủy')
   }
 
-  // Auto-generate job code
+  // Mã phiếu: lấy số lớn nhất đang có +1, đụng thì thử tiếp — ba xưởng cùng báo một ngày
+  // là chuyện thường từ khi một ITEM giao được cho nhiều xưởng.
   const year = new Date().getFullYear().toString().slice(-2)
-  const count = await prisma.jobCard.count()
-  const jobCode = `JC-${year}-${String(count + 1).padStart(3, '0')}`
-
-  const jobCard = await prisma.jobCard.create({
+  const jobCard = await createWithCode({
+    prefix: `JC-${year}-`,
+    findLatest: async prefix => (await prisma.jobCard.findFirst({
+      where: { jobCode: { startsWith: prefix } },
+      orderBy: { jobCode: 'desc' }, select: { jobCode: true },
+    }))?.jobCode ?? null,
+  }, jobCode => prisma.jobCard.create({
     data: {
       jobCode,
       workOrderId,
@@ -100,13 +115,13 @@ export async function POST(req: NextRequest) {
     include: {
       workOrder: { select: { woCode: true } },
     },
-  })
+  }))
 
   // Cập nhật tiến độ WO ngay khi báo — cộng dồn kg thực tế, đạt ≥90% kế hoạch thì tự xong.
   await rollUpWorkOrder(workOrderId)
 
   return successResponse({
     jobCard: { ...jobCard, plannedQty: Number(jobCard.plannedQty), actualQty: Number(jobCard.actualQty) },
-    message: `Đã tạo phiếu ${jobCode}`,
+    message: `Đã tạo phiếu ${jobCard.jobCode}`,
   })
 }

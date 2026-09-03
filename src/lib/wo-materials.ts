@@ -1,5 +1,5 @@
 import prisma from './db'
-import { MR_STATUS } from './material-request-constants'
+import { MR_STATUS, WORKSHOP_MATERIAL_ROLES, isSubcontractWo } from './material-request-constants'
 
 // Vật tư của một lệnh sản xuất (WO): đề nghị cấp ↔ đã cấp ↔ còn thiếu.
 //
@@ -67,19 +67,45 @@ export async function isWoMaterialFulfilled(workOrderId: string): Promise<boolea
 
 // ── Quyền lập đề nghị: XƯỞNG tự lo vật tư cho lệnh của mình ──
 // PM chỉ phát hành WO; BGĐ/Admin không lập hộ (chốt nghiệp vụ 2026-08).
-export const WO_MATERIAL_REQUEST_ROLES = ['R06', 'R06a', 'R06b']
+export { WO_MATERIAL_REQUEST_ROLES, WORKSHOP_MATERIAL_ROLES, PM_MATERIAL_ROLES, isSubcontractWo, SUBCONTRACT_TEAM_CODE } from './material-request-constants'
+
+export interface MaterialRequestActor {
+  roleCode: string
+  /** Phòng của tài khoản (User.departmentId) */
+  departmentId: string | null
+  /** Có phải PM phụ trách CHÍNH dự án của lệnh này không */
+  isProjectPm: boolean
+}
+
+export type WoForMaterialPerm = {
+  departmentId: string | null
+  woType?: string | null
+  teamCode?: string | null
+}
 
 /**
- * Xưởng của user có được đụng vào WO này không.
+ * Ai được lập đề nghị vật tư cho một lệnh.
  *
- * GIAI ĐOẠN 1 — CHỈ XƯỞNG NỘI BỘ: WO phải gắn đúng xưởng của tài khoản.
- * WO giao thầu phụ làm ngoài (không gắn xưởng, teamCode = THAUPHU) NẰM NGOÀI luồng này —
- * chờ chốt hướng xử lý riêng. Khi chốt, sửa đúng hàm này là cả danh sách lẫn quyền đề nghị
- * vật tư đổi theo (hai nơi dùng chung).
+ *   • Lệnh GIAO THẦU PHỤ  → PM phụ trách dự án (BGĐ/Admin hỗ trợ). Lệnh làm ngoài không
+ *     thuộc xưởng nào, không ai trong xưởng đứng ra lo được.
+ *   • Lệnh của XƯỞNG      → đúng xưởng của tài khoản, như cũ.
+ *   • Lệnh nội bộ CHƯA GẮN XƯỞNG → không ai, vì không biết là của xưởng nào. Đây là lỗi
+ *     dữ liệu; sửa bằng cách gắn xưởng cho lệnh, không phải nới quyền.
  */
-export function canWorkshopEditWo(userDepartmentId: string | null, wo: { departmentId: string | null }): boolean {
+export function canRequestMaterialForWo(actor: MaterialRequestActor, wo: WoForMaterialPerm): boolean {
+  if (isSubcontractWo(wo)) {
+    return actor.isProjectPm || ['R01', 'R10'].includes(actor.roleCode)
+  }
   if (!wo.departmentId) return false
-  return !!userDepartmentId && wo.departmentId === userDepartmentId
+  if (!WORKSHOP_MATERIAL_ROLES.includes(actor.roleCode)) return false
+  return !!actor.departmentId && wo.departmentId === actor.departmentId
+}
+
+/** Vì sao không lập được — để API trả câu người đọc hiểu thay vì '403'. */
+export function whyCannotRequestMaterial(actor: MaterialRequestActor, wo: WoForMaterialPerm & { woCode: string }): string {
+  if (isSubcontractWo(wo)) return `${wo.woCode} là lệnh giao thầu phụ — chỉ PM phụ trách dự án lập được đề nghị vật tư`
+  if (!wo.departmentId) return `${wo.woCode} chưa gắn xưởng — PM cần gán xưởng cho lệnh trước khi đề nghị vật tư`
+  return `${wo.woCode} không thuộc xưởng của bạn`
 }
 
 export interface RequestItemInput { materialId: string; quantity: number; unit?: string; source?: string; notes?: string | null }
@@ -209,4 +235,63 @@ export async function suggestBomMaterialsForWo(wo: {
     })
   }
   return [...merged.values()]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tóm tắt tình trạng vật tư cho NHIỀU lệnh cùng lúc — dùng cho cột "Vật tư" ở danh sách SX.
+//
+// Vì sao cần: từ khi cổng vật tư không còn chặn "Bắt đầu SX", trạng thái WO chuyển sang
+// "Đang chạy" là mất dấu vết đã cấp hay chưa. Cột này giữ tín hiệu đó suốt vòng đời lệnh.
+//
+// Gọi buildWoMaterialLines cho từng lệnh sẽ tốn 2 truy vấn × số dòng trong trang, nên
+// gộp lại còn ĐÚNG 2 truy vấn cho cả trang.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WoMaterialSummary {
+  /** số dòng vật tư đã duyệt của lệnh */
+  total: number
+  /** số dòng đã cấp đủ (cấp ≥ yêu cầu) */
+  done: number
+  /** 'NONE' chưa cấp gì · 'PARTIAL' cấp một phần · 'FULL' đủ cả · null chưa có danh mục */
+  state: 'NONE' | 'PARTIAL' | 'FULL' | null
+}
+
+export async function summarizeWoMaterials(
+  workOrderIds: string[],
+): Promise<Map<string, WoMaterialSummary>> {
+  const out = new Map<string, WoMaterialSummary>()
+  if (workOrderIds.length === 0) return out
+
+  const [reqs, issues] = await Promise.all([
+    prisma.workOrderMaterialRequest.groupBy({
+      by: ['workOrderId', 'materialId'],
+      where: { workOrderId: { in: workOrderIds }, request: { status: MR_STATUS.APPROVED } },
+      _sum: { quantity: true },
+    }),
+    prisma.materialIssue.groupBy({
+      by: ['workOrderId', 'materialId'],
+      where: { workOrderId: { in: workOrderIds } },
+      _sum: { quantity: true },
+    }),
+  ])
+
+  const issuedBy = new Map<string, number>()
+  for (const i of issues) {
+    if (!i.workOrderId || !i.materialId) continue
+    issuedBy.set(`${i.workOrderId}|${i.materialId}`, Number(i._sum.quantity) || 0)
+  }
+
+  for (const r of reqs) {
+    const cur = out.get(r.workOrderId) || { total: 0, done: 0, state: null as WoMaterialSummary['state'] }
+    const need = Number(r._sum.quantity) || 0
+    const got = issuedBy.get(`${r.workOrderId}|${r.materialId}`) || 0
+    cur.total++
+    if (got >= need) cur.done++
+    out.set(r.workOrderId, cur)
+  }
+
+  for (const [, s] of out) {
+    s.state = s.total === 0 ? null : s.done === 0 ? 'NONE' : s.done < s.total ? 'PARTIAL' : 'FULL'
+  }
+  return out
 }

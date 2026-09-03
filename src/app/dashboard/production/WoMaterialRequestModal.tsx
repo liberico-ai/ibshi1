@@ -36,11 +36,12 @@ interface PrRow {
   key: string; materialId: string | null; materialCode: string; name: string
   specification: string | null; unit: string; currentStock: number; prQuantity: number; needsCode: boolean
 }
-interface AplRow {
-  key: string; materialId: string | null; materialCode: string; name: string
-  specification: string | null; unit: string; currentStock: number
-  perWo: Record<string, number>; needsCode: boolean; via: string | null
-  available: number; state: 'READY' | 'WAITING' | 'NO_CODE'
+/** Vật tư trong APL — CHỈ ĐỂ XEM. Đây là CẤU KIỆN cần làm ra, không phải nguyên liệu để lĩnh. */
+interface AplRow { key: string; profile: string; grade: string; label: string; unit: string; weightKg: number }
+/** Một dòng trong danh mục kho, trả từ /api/materials?search= */
+interface StockHit {
+  id: string; materialCode: string; name: string; unit: string
+  specification?: string | null; grade?: string | null; currentStock?: number
 }
 interface ExistingLine { materialId: string; materialCode: string; name: string; unit: string; requested: number; issued: number }
 
@@ -79,7 +80,6 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
 }) {
   const [wos, setWos] = useState<WoInfo[]>([])
   const [rows, setRows] = useState<DraftRow[]>([])
-  const [bom, setBom] = useState<BomRow[]>([])
   const [pr, setPr] = useState<PrRow[]>([])
   const [apl, setApl] = useState<AplRow[]>([])
   const [canEdit, setCanEdit] = useState(true)
@@ -89,6 +89,10 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
   const [saving, setSaving] = useState(false)
   const [matrix, setMatrix] = useState(false)
   const [showPicker, setShowPicker] = useState<PrRow | 'new' | null>(null)
+  // Tra danh mục kho — đây là cách nhập CHÍNH: gõ tên/mã/quy cách, chọn, rồi điền số lượng.
+  const [q, setQ] = useState('')
+  const [hits, setHits] = useState<StockHit[]>([])
+  const [searching, setSearching] = useState(false)
 
   const ids = useMemo(() => wos.map(w => w.id), [wos])
 
@@ -98,7 +102,7 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
     const list: WoInfo[] = r.workOrders || []
     const bomRows: BomRow[] = r.bom || []
     const existing: Record<string, ExistingLine[]> = r.existing || {}
-    setWos(list); setBom(bomRows); setPr(r.pr || []); setApl(r.apl || [])
+    setWos(list); setPr(r.pr || []); setApl(r.apl || [])
     setCanEdit(r.canEdit !== false); setOutOfScope(r.outOfScope || []); setOrder(r.order || null)
 
     // Dựng sẵn danh mục: ưu tiên những gì ĐÃ lập; chưa có gì thì lấy trọn gợi ý BOM.
@@ -119,15 +123,6 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
         row.perWo[woId] = l.requested
         row.issued[woId] = l.issued
         draft.set(l.materialId, row)
-      }
-    }
-    if (draft.size === 0) {
-      for (const b of bomRows) {
-        draft.set(b.materialId, recalc({
-          materialId: b.materialId, materialCode: b.materialCode, name: b.name, unit: b.unit,
-          currentStock: b.currentStock, origin: 'BOM', bomPerWo: b.perWo, mode: 'BOM', input: '',
-          perWo: {}, issued: Object.fromEntries(woIdList.map(id => [id, 0])),
-        }, woIdList))
       }
     }
     setRows([...draft.values()])
@@ -156,6 +151,20 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
       return [...rs, recalc(base, ids)]
     })
   }
+
+  // Tra danh mục kho theo từ khoá. Hết hàng VẪN chọn được: đề nghị là nói mình cần gì,
+  // còn hàng hay không là việc của Kho và Thương mại.
+  useEffect(() => {
+    const key = q.trim()
+    const t = setTimeout(async () => {
+      if (key.length < 2) { setHits([]); setSearching(false); return }
+      setSearching(true)
+      const r = await apiFetch(`/api/materials?search=${encodeURIComponent(key)}&limit=20&status=ACTIVE`)
+      setHits(r.ok ? (r.materials || []) : [])
+      setSearching(false)
+    }, key.length < 2 ? 0 : 300)
+    return () => clearTimeout(t)
+  }, [q])
 
   // submit=false → lưu nháp (sửa tiếp được); submit=true → gửi PM duyệt, khoá sửa.
   const save = async (submit: boolean) => {
@@ -189,12 +198,8 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
 
   const woLabel = (w: WoInfo) => `${w.pieceMark || w.woCode} · ${w.teamCode || 'Thầu phụ'}`
   const usedIds = new Set(rows.map(r => r.materialId))
-  const bomLeft = bom.filter(b => !usedIds.has(b.materialId))
   const prLeft = pr.filter(p => !p.materialId || !usedIds.has(p.materialId))
-  // Dòng CHƯA CÓ MÃ vẫn hiện để biết còn thiếu gì, nhưng không lấy vào phiếu được.
-  const aplLeft = apl.filter(a => !a.materialId || !usedIds.has(a.materialId))
-  const aplReady = aplLeft.filter(a => a.state === 'READY')
-  const aplMissing = aplLeft.filter(a => a.state !== 'READY')
+  const aplTotalKg = apl.reduce((s, a) => s + a.weightKg, 0)
 
   return (
     <Modal open onClose={onClose} size="lg" overlayZIndex={10050}
@@ -240,11 +245,69 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
               </Button>
             </div>
 
+            {/* ── Chọn vật tư từ kho: cách nhập CHÍNH ── */}
+            {editable && (
+              <div className="card p-3">
+                <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                  Tìm vật tư trong kho
+                </label>
+                <input
+                  className="input w-full"
+                  value={q}
+                  onChange={e => setQ(e.target.value)}
+                  placeholder="Gõ tên, mã hoặc quy cách vật tư… (từ 2 ký tự)"
+                />
+                {q.trim().length >= 2 && (
+                  <div className="mt-2" style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                    {searching ? (
+                      <p className="text-xs p-3 text-center" style={{ color: 'var(--text-muted)' }}>Đang tìm…</p>
+                    ) : hits.length === 0 ? (
+                      <p className="text-xs p-3 text-center" style={{ color: 'var(--text-muted)' }}>
+                        Kho không có vật tư nào khớp &ldquo;{q.trim()}&rdquo;.
+                      </p>
+                    ) : (
+                      <table className="data-table">
+                        <tbody>
+                          {hits.map(m => {
+                            const taken = usedIds.has(m.id)
+                            const stock = Number(m.currentStock ?? 0)
+                            return (
+                              <tr key={m.id}>
+                                <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{m.materialCode}</td>
+                                <td className="text-xs">
+                                  {m.name}
+                                  {(m.specification || m.grade) && (
+                                    <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>
+                                      {[m.specification, m.grade].filter(Boolean).join(' · ')}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="text-xs text-right" style={{ color: stock > 0 ? '#047857' : '#b45309' }}>
+                                  {stock > 0 ? `tồn ${formatNumber(Math.round(stock))} ${m.unit}` : 'hết hàng'}
+                                </td>
+                                <td className="text-right">
+                                  <Button variant="outline" size="sm" disabled={taken}
+                                    title={taken ? 'Đã có trong danh mục' : stock > 0 ? 'Thêm vào phiếu' : 'Hết hàng — vẫn đề nghị được, Kho sẽ lo'}
+                                    onClick={() => addRow({ materialId: m.id, materialCode: m.materialCode, name: m.name, unit: m.unit, currentStock: stock, origin: 'MANUAL' })}>
+                                    {taken ? 'Đã lấy' : 'Chọn'}
+                                  </Button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ── Bảng chính ── */}
             <div className="card overflow-x-auto">
               {rows.length === 0 ? (
                 <p className="text-sm p-4 text-center" style={{ color: 'var(--text-muted)' }}>
-                  Chưa có vật tư nào — lấy từ gợi ý bên dưới.
+                  Chưa có vật tư nào — tìm trong kho ở ô trên, hoặc lấy từ PR của dự án bên dưới.
                 </p>
               ) : (
                 <table className="data-table">
@@ -258,14 +321,13 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
                     ) : (
                       <tr>
                         <th>Mã VT</th><th>Tên</th><th className="text-right">Tồn kho</th>
-                        <th>Cách áp</th><th className="text-right">Số lượng</th><th>Phân bổ từng lệnh</th><th />
+                        <th>Cách áp</th><th className="text-right">Số lượng</th><th>Tổng</th><th />
                       </tr>
                     )}
                   </thead>
                   <tbody>
                     {rows.map(r => {
                       const total = ids.reduce((s, id) => s + (r.perWo[id] || 0), 0)
-                      const overStock = total > r.currentStock
                       return (
                         <tr key={r.materialId}>
                           <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>
@@ -273,7 +335,7 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
                             <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{r.origin === 'BOM' ? 'BOM' : r.origin === 'PR' ? 'PR' : 'thêm tay'}</div>
                           </td>
                           <td className="text-xs">{r.name}</td>
-                          <td className="text-right text-xs" style={{ color: r.currentStock > 0 ? '#16a34a' : '#dc2626' }}>{formatNumber(r.currentStock)}</td>
+                          <td className="text-right text-xs" style={{ color: r.currentStock > 0 ? '#16a34a' : 'var(--text-muted)' }}>{formatNumber(r.currentStock)}</td>
 
                           {matrix ? (
                             <>
@@ -285,7 +347,7 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
                                   {r.issued[id] > 0 && <div style={{ fontSize: '0.6rem', color: '#0ea5e9' }}>đã cấp {formatNumber(r.issued[id])}</div>}
                                 </td>
                               ))}
-                              <td className="text-right text-xs" style={{ fontWeight: 700, color: overStock ? '#b45309' : undefined }}>{formatNumber(total)} {r.unit}</td>
+                              <td className="text-right text-xs" style={{ fontWeight: 700 }}>{formatNumber(total)} {r.unit}</td>
                             </>
                           ) : (
                             <>
@@ -310,10 +372,11 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
                                     style={{ width: 100, textAlign: 'right', padding: '4px 8px', fontSize: '0.82rem' }} />
                                 )}
                               </td>
-                              <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                                {ids.map(id => formatNumber(r.perWo[id] || 0)).join(' · ')}
-                                <b style={{ marginLeft: 8, color: overStock ? '#b45309' : 'var(--text-primary)' }}>= {formatNumber(total)} {r.unit}</b>
-                                {overStock && <span style={{ color: '#b45309' }}> (vượt tồn)</span>}
+                              {/* Chỉ còn tổng kèm đơn vị. Phân bổ ra từng lệnh xem ở "bảng đầy đủ";
+                                  cảnh báo vượt tồn đã bỏ — đề nghị là nói mình cần gì, còn hàng hay
+                                  không là việc của Kho và Thương mại. */}
+                              <td className="text-xs" style={{ color: 'var(--text-primary)' }}>
+                                <b>{formatNumber(total)} {r.unit}</b>
                               </td>
                             </>
                           )}
@@ -332,107 +395,52 @@ export default function WoMaterialRequestModal({ woIds, onClose, onSaved }: {
               )}
             </div>
 
-            {/* ── Gợi ý ── */}
+            {/* ── Vật tư trong APL: CHỈ ĐỂ XEM ──
+                APL ghi CẤU KIỆN phải làm ra, còn thứ lĩnh về kho là NGUYÊN LIỆU để làm ra nó —
+                hai cái khác cấp nhau. Nên bảng này không có nút lấy: nó chỉ trả lời "lệnh này
+                phải làm ra những gì" để xưởng tự suy ra cần lĩnh nguyên liệu gì. */}
+            {apl.length > 0 && (
+              <div className="card overflow-hidden">
+                <div className="p-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 className="text-sm font-semibold">Vật tư trong APL ({apl.length}) — chỉ để xem</h4>
+                    <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                      tổng {formatNumber(Math.round(aplTotalKg))} kg
+                    </span>
+                  </div>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    Đây là cấu kiện lệnh phải làm ra, gộp theo quy cách. Nguyên liệu để làm ra chúng thì
+                    tìm ở ô tra kho phía trên.
+                  </p>
+                </div>
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Quy cách</th>
+                        <th>Mác thép</th>
+                        <th className="text-right">Khối lượng cần</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {apl.map(a => (
+                        <tr key={a.key}>
+                          <td className="font-mono text-xs">{a.profile || '—'}</td>
+                          <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{a.grade || '—'}</td>
+                          <td className="text-xs text-right font-mono">
+                            {formatNumber(Math.round(a.weightKg))} {a.unit}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ── Gợi ý duy nhất: PR của dự án ── */}
             {editable && (
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
-                {/* Vật tư của lệnh, chia HAI BÊN theo tình trạng kho.
-                    SẴN SÀNG = có mã kho và còn tồn khả dụng → lấy vào phiếu rồi gửi duyệt.
-                    CHƯA CÓ  = hết hàng (chờ Thương mại mua, Kho nhập xong TỰ chuyển sang sẵn
-                               sàng vì phân loại theo tồn ngay lúc mở) hoặc kho chưa có mã.
-                    Xưởng KHÔNG có quyền tạo mã (MATERIAL_CODE_ADMIN không gồm R06*), nên ở đây
-                    chỉ nhắc báo Kho/Thương mại — báo miệng, chưa nối vào hệ thống. */}
-                {apl.length > 0 && (
-                  <div className="card overflow-hidden" style={{ borderColor: '#a7f3d0' }}>
-                    <div className="p-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)', background: '#ecfdf5' }}>
-                      <h4 className="text-sm font-semibold" style={{ color: '#047857' }}>Vật tư sẵn sàng ({aplReady.length})</h4>
-                      {aplReady.length > 0 && <Button variant="outline" size="sm"
-                        onClick={() => aplReady.forEach(a => addRow({ ...a, materialId: a.materialId!, origin: 'BOM', bomPerWo: a.perWo }))}>Lấy tất cả</Button>}
-                    </div>
-                    <div style={{ maxHeight: 190, overflowY: 'auto' }}>
-                      {aplReady.length === 0 ? <p className="text-xs p-3 text-center" style={{ color: 'var(--text-muted)' }}>{apl.some(x => x.state === 'READY') ? 'Đã lấy hết.' : 'Chưa có vật tư nào sẵn trong kho.'}</p> : (
-                        <table className="data-table">
-                          <tbody>
-                            {aplReady.map(a => {
-                              const need = Object.values(a.perWo).reduce((s, v) => s + v, 0)
-                              return (
-                                <tr key={a.key}>
-                                  <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{a.materialCode}</td>
-                                  <td className="text-xs">
-                                    {a.specification}
-                                    {a.via === 'history' && <span className="text-[10px] block" style={{ color: '#0369a1' }}>khớp từ PR/BOM cũ</span>}
-                                    {a.via === 'alias' && <span className="text-[10px] block" style={{ color: '#047857' }}>đã chỉ tay</span>}
-                                  </td>
-                                  <td className="text-xs text-right">
-                                    {formatNumber(Math.round(need))} {a.unit}
-                                    <span className="text-[10px] block" style={{ color: a.available >= need ? '#047857' : '#b45309' }}>
-                                      kho có {formatNumber(Math.round(a.available))}
-                                    </span>
-                                  </td>
-                                  <td className="text-right"><Button variant="outline" size="sm"
-                                    onClick={() => addRow({ ...a, materialId: a.materialId!, origin: 'BOM', bomPerWo: a.perWo })}>Lấy</Button></td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {aplMissing.length > 0 && (
-                  <div className="card overflow-hidden" style={{ borderColor: '#fde68a' }}>
-                    <div className="p-3" style={{ borderBottom: '1px solid var(--border)', background: '#fffbeb' }}>
-                      <h4 className="text-sm font-semibold" style={{ color: '#92400e' }}>Vật tư chưa có ({aplMissing.length})</h4>
-                      <p className="text-[11px] mt-0.5" style={{ color: '#92400e' }}>
-                        Mua hàng xong và Kho nhập kho xong thì tự chuyển sang bên sẵn sàng.
-                      </p>
-                    </div>
-                    <div style={{ maxHeight: 190, overflowY: 'auto' }}>
-                      <table className="data-table">
-                        <tbody>
-                          {aplMissing.map(a => (
-                            <tr key={a.key}>
-                              <td className="font-mono text-xs" style={{ color: a.state === 'NO_CODE' ? '#b45309' : 'var(--accent)' }}>{a.materialCode}</td>
-                              <td className="text-xs">
-                                {a.specification}
-                                <span className="text-[10px] block" style={{ color: '#92400e' }}>
-                                  {a.state === 'NO_CODE' ? 'kho chưa có mã — báo Kho / Thương mại lập mã' : 'hết hàng — chờ mua'}
-                                </span>
-                              </td>
-                              <td className="text-xs text-right">{formatNumber(Math.round(Object.values(a.perWo).reduce((s, v) => s + v, 0)))} {a.unit}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                <div className="card overflow-hidden">
-                  <div className="p-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
-                    <h4 className="text-sm font-semibold">Từ BOM ({bomLeft.length})</h4>
-                    {bomLeft.length > 0 && <Button variant="outline" size="sm"
-                      onClick={() => bomLeft.forEach(b => addRow({ ...b, origin: 'BOM', bomPerWo: b.perWo }))}>Lấy tất cả</Button>}
-                  </div>
-                  <div style={{ maxHeight: 190, overflowY: 'auto' }}>
-                    {bomLeft.length === 0 ? <p className="text-xs p-3 text-center" style={{ color: 'var(--text-muted)' }}>Đã lấy hết.</p> : (
-                      <table className="data-table">
-                        <tbody>
-                          {bomLeft.map(b => (
-                            <tr key={b.materialId}>
-                              <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{b.materialCode}</td>
-                              <td className="text-xs">{b.name}</td>
-                              <td className="text-xs text-right">{formatNumber(Object.values(b.perWo).reduce((s, v) => s + v, 0))} {b.unit}</td>
-                              <td className="text-right"><Button variant="outline" size="sm" onClick={() => addRow({ ...b, origin: 'BOM', bomPerWo: b.perWo })}>Lấy</Button></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-
                 <div className="card overflow-hidden">
                   <div className="p-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
                     <h4 className="text-sm font-semibold">Từ PR của dự án ({prLeft.length})</h4>

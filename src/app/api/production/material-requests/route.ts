@@ -2,12 +2,13 @@ import { isMissingTableError, MIGRATION_HINT } from '@/lib/db-missing-table'
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles, logAudit, getClientIP } from '@/lib/auth'
-import { indexCatalogue, matchAplMaterial, buildHistoryIndex, type IndexedMaterial } from '@/lib/apl-material-match'
 import {
   buildWoMaterialLines, suggestBomMaterialsForWo, setWoMaterialRequests, normalizeRequestItems,
-  canWorkshopEditWo, WO_MATERIAL_REQUEST_ROLES, MR_STATUS, MR_EDITABLE, nextMaterialRequestCode,
+  canRequestMaterialForWo, whyCannotRequestMaterial, isSubcontractWo,
+  WO_MATERIAL_REQUEST_ROLES, MR_STATUS, MR_EDITABLE, nextMaterialRequestCode,
 } from '@/lib/wo-materials'
 import { notifyMaterialRequestSubmitted } from '@/lib/material-request-flow'
+import { isProjectPm } from '@/lib/project-pm'
 
 // Xưởng lập PHIẾU đề nghị cấp vật tư cho một hoặc nhiều lệnh sản xuất.
 //   GET  ?woIds=a,b,c[&requestId=] → gợi ý BOM (định mức từng WO) + vật tư PR của dự án + phiếu đang mở
@@ -100,16 +101,15 @@ export async function GET(req: NextRequest) {
     // Cặp CHƯA CÓ MÃ vẫn trả về nhưng đánh dấu needsCode — giao diện không cho gửi duyệt.
     // WO mới giao theo ITEM (aplImportId + aplItem); WO cũ giao theo dòng vàng (aplLineId).
     const aplWos = workOrders.filter(w => w.aplImportId || w.aplLineId)
-    const apl: {
-      key: string; materialId: string | null; materialCode: string; name: string
-      specification: string | null; unit: string; currentStock: number; available: number
-      perWo: Record<string, number>; needsCode: boolean; via: string | null
-      /** READY = có mã và còn tồn khả dụng · WAITING = có mã nhưng hết hàng, chờ mua
-       *  NO_CODE = kho chưa có mã, phải báo Kho/Thương mại lập mã */
-      state: 'READY' | 'WAITING' | 'NO_CODE'
-    }[] = []
+    // Vật tư của APL — CHỈ ĐỂ XEM, không so khớp sang kho nữa.
+    //
+    // APL ghi CẤU KIỆN đã thành hình (GR32*1187 SS400, CHS48.3*5.1 A53GRB), còn thứ xưởng
+    // lĩnh về để LÀM RA cấu kiện đó là nguyên liệu trong kho. Hai cái khác cấp nhau, nên
+    // việc so khớp cũ vốn khớp nhầm cấp và đẻ ra hàng chục dòng "kho chưa có mã" oan cho
+    // Kho/Thương mại. Bỏ đi; xưởng nhìn bảng này rồi tự chọn nguyên liệu từ kho.
+    // Hàm so khớp vẫn giữ nguyên trong apl-material-match.ts, chưa xoá.
+    const apl: { key: string; profile: string; grade: string; label: string; unit: string; weightKg: number }[] = []
     if (aplWos.length > 0) {
-      // WO cũ trỏ vào một dòng vàng → suy ra (importId, item) của nó để dùng chung một đường tra.
       const legacyIds = aplWos.filter(w => !w.aplImportId && w.aplLineId).map(w => w.aplLineId!)
       const legacyHeads = legacyIds.length
         ? await prisma.aplLine.findMany({
@@ -139,54 +139,29 @@ export async function GET(req: NextRequest) {
             select: { importId: true, item: true, profile: true, grade: true, totalWeightKg: true },
           })
         : []
-      const [cat, aliasRows, prHist, bomHist] = await Promise.all([
-        prisma.material.findMany({ where: { status: 'ACTIVE' }, select: { id: true, materialCode: true, name: true, grade: true, specification: true, unit: true, currentStock: true, reservedStock: true } }),
-        prisma.materialCodeAlias.findMany({ where: { aliasCode: { startsWith: 'APL:' } }, select: { aliasCode: true, material: { select: { id: true, materialCode: true, name: true, grade: true, specification: true, unit: true } } } }),
-        prisma.purchaseRequestItem.findMany({ where: { materialId: { not: null }, profile: { not: null } }, select: { profile: true, grade: true, materialId: true } }),
-        prisma.bomItem.findMany({ where: { profile: { not: null } }, select: { profile: true, grade: true, materialId: true } }),
-      ])
-      const index = indexCatalogue(cat)
-      const stockById = new Map(cat.map(m => [m.id, m]))
-      const aliases = new Map<string, IndexedMaterial>(aliasRows.map(a => [a.aliasCode, indexCatalogue([a.material])[0]]))
-      const history = buildHistoryIndex([
-        ...prHist.map(x => ({ profile: x.profile, grade: x.grade, materialId: x.materialId! })),
-        ...bomHist.map(x => ({ profile: x.profile, grade: x.grade, materialId: x.materialId })),
-      ])
 
-      const acc = new Map<string, typeof apl[number]>()
+      // Gộp theo profile + mác thép, cộng dồn kg. Mỗi (bản APL, ITEM) chỉ tính MỘT lần dù
+      // nhiều lệnh cùng trỏ vào nó — đây là bảng tham khảo, không phải số để cấp.
+      const seen = new Set<string>()
+      const acc = new Map<string, (typeof apl)[number]>()
       for (const wo of aplWos) {
         const sc = scopeOf(wo)
         if (!sc) continue
+        const scopeKey = `${sc.importId}::${sc.item}`
+        if (seen.has(scopeKey)) continue
+        seen.add(scopeKey)
         for (const k of kids) {
           if (k.importId !== sc.importId || (k.item || '') !== sc.item) continue
-          const label = [k.profile, k.grade].map(x => (x || '').trim()).filter(Boolean).join(' ')
+          const profile = (k.profile || '').trim()
+          const grade = (k.grade || '').trim()
+          const label = [profile, grade].filter(Boolean).join(' ')
           if (!label) continue
-          const m = matchAplMaterial(k.grade, k.profile, index, aliases, history)
-          const key = m.materialId || `nocode:${label}`
-          const stock = m.materialId ? stockById.get(m.materialId) : null
-          const row = acc.get(key) || {
-            key,
-            materialId: m.materialId,
-            materialCode: m.materialCode || '(chưa có mã)',
-            name: m.materialName || label,
-            specification: label,
-            unit: stock?.unit || 'kg',
-            currentStock: Number(stock?.currentStock ?? 0),
-            // Tồn KHẢ DỤNG = tồn thực − phần đã giữ cho lệnh khác, tránh hai xưởng cùng
-            // nhìn thấy một lô hàng rồi cùng đề nghị.
-            available: Number(stock?.currentStock ?? 0) - Number(stock?.reservedStock ?? 0),
-            perWo: {} as Record<string, number>,
-            needsCode: !m.materialId,
-            via: m.via,
-            state: !m.materialId ? 'NO_CODE' as const
-              : (Number(stock?.currentStock ?? 0) - Number(stock?.reservedStock ?? 0)) > 0 ? 'READY' as const
-              : 'WAITING' as const,
-          }
-          row.perWo[wo.id] = (row.perWo[wo.id] || 0) + (k.totalWeightKg || 0)
-          acc.set(key, row)
+          const row = acc.get(label) || { key: label, profile, grade, label, unit: 'kg', weightKg: 0 }
+          row.weightKg += k.totalWeightKg || 0
+          acc.set(label, row)
         }
       }
-      apl.push(...acc.values())
+      apl.push(...[...acc.values()].sort((a, b) => b.weightKg - a.weightKg))
     }
 
     const userDept = await loadUserDept(user.userId)
@@ -212,7 +187,15 @@ export async function GET(req: NextRequest) {
     }
 
     const canEdit = requireRoles(user.roleCode, WO_MATERIAL_REQUEST_ROLES)
-    const outOfScope = workOrders.filter(w => !canWorkshopEditWo(userDept, w)).map(w => w.woCode)
+    // Quyền xét theo TỪNG lệnh: xưởng lo lệnh của xưởng mình, PM lo lệnh giao thầu phụ.
+    const pmOfProject = new Map<string, boolean>()
+    for (const pid of [...new Set(workOrders.map(w => w.projectId))]) {
+      pmOfProject.set(pid, await isProjectPm(user.userId, pid))
+    }
+    const outOfScope = workOrders
+      .filter(w => !canRequestMaterialForWo(
+        { roleCode: user.roleCode, departmentId: userDept, isProjectPm: !!pmOfProject.get(w.projectId) }, w))
+      .map(w => w.woCode)
 
     return successResponse({
       workOrders: workOrders.map(w => ({ ...w, plannedWeight: w.plannedWeight ? Number(w.plannedWeight) : null })),
@@ -236,7 +219,7 @@ export async function POST(req: NextRequest) {
     const user = await authenticateRequest(req)
     if (!user) return unauthorizedResponse()
     if (!requireRoles(user.roleCode, WO_MATERIAL_REQUEST_ROLES)) {
-      return errorResponse('Chỉ Xưởng sản xuất (quản đốc/nhân viên/tổ trưởng) được lập đề nghị cấp vật tư', 403)
+      return errorResponse('Chỉ Xưởng sản xuất hoặc PM phụ trách dự án (lệnh thầu phụ) được lập đề nghị cấp vật tư', 403)
     }
 
     const body = await req.json().catch(() => ({}))
@@ -247,7 +230,7 @@ export async function POST(req: NextRequest) {
 
     const workOrders = await prisma.workOrder.findMany({
       where: { id: { in: woIds } },
-      select: { id: true, woCode: true, status: true, departmentId: true, projectId: true },
+      select: { id: true, woCode: true, status: true, departmentId: true, projectId: true, woType: true, teamCode: true },
     })
     if (workOrders.length !== woIds.length) return errorResponse('Có lệnh sản xuất không tồn tại', 404)
 
@@ -255,10 +238,15 @@ export async function POST(req: NextRequest) {
     if (projectIds.length > 1) return errorResponse('Chỉ lập chung cho các lệnh CÙNG một dự án')
 
     const userDept = await loadUserDept(user.userId)
+    const actorIsProjectPm = await isProjectPm(user.userId, projectIds[0])
+    const actor = { roleCode: user.roleCode, departmentId: userDept, isProjectPm: actorIsProjectPm }
     for (const wo of workOrders) {
       if (['COMPLETED', 'CANCELLED'].includes(wo.status)) return errorResponse(`${wo.woCode} đã hoàn thành/hủy — không sửa được đề nghị vật tư`)
-      if (!canWorkshopEditWo(userDept, wo)) return errorResponse(`${wo.woCode} không thuộc xưởng của bạn (lệnh thầu phụ chưa mở luồng này)`, 403)
+      if (!canRequestMaterialForWo(actor, wo)) return errorResponse(whyCannotRequestMaterial(actor, wo), 403)
     }
+    // Phiếu do PM lập cho lệnh thầu phụ đã MANG SẴN chữ ký PM — bắt PM tự duyệt phiếu của
+    // chính mình thì chặng duyệt đó không còn tác dụng gì. Đẩy thẳng lên BGĐ.
+    const pmSelfSigned = actorIsProjectPm && workOrders.every(w => isSubcontractWo(w))
 
     // Phiếu: dùng lại phiếu đang mở nếu có, không thì tạo mới
     let order = body?.requestId
@@ -311,7 +299,9 @@ export async function POST(req: NextRequest) {
     const submitted = await prisma.materialRequestOrder.update({
       where: { id: order.id },
       data: {
-        status: MR_STATUS.PENDING_PM, submittedAt: new Date(),
+        status: pmSelfSigned ? MR_STATUS.PENDING_BOD : MR_STATUS.PENDING_PM,
+        submittedAt: new Date(),
+        ...(pmSelfSigned ? { pmApprovedBy: user.userId, pmApprovedAt: new Date() } : {}),
         rejectReason: null, rejectedAt: null, rejectedBy: null,
       },
     })
@@ -320,7 +310,7 @@ export async function POST(req: NextRequest) {
       { code: order.code, lines: totalLines, workOrders: saved.map(s => s.woCode) }, getClientIP(req))
 
     return successResponse({ order: submitted, saved },
-      `Đã gửi phiếu ${submitted.code} cho PM duyệt (${totalLines} dòng, ${saved.length} lệnh)`)
+      `Đã gửi phiếu ${submitted.code} cho ${pmSelfSigned ? 'BGĐ' : 'PM'} duyệt (${totalLines} dòng, ${saved.length} lệnh)`)
   } catch (err) {
     console.error('POST /api/production/material-requests error:', err)
     if (isMissingTableError(err)) return errorResponse(MIGRATION_HINT, 503)

@@ -312,6 +312,8 @@ export const MENU_ITEMS = [
   { key: 'reports', label: 'Báo cáo', labelEn: 'Reports', icon: 'BarChart3', href: '/dashboard/reports', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R05', 'R05a', 'R06', 'R06a', 'R07', 'R07a', 'R08', 'R08a', 'R09', 'R09a', 'R13', 'R13a'], group: 'reports' },
   { key: 'report-catalog', label: 'Danh mục báo cáo QT', labelEn: 'Report Catalog', icon: 'ClipboardList', href: '/dashboard/reports/danh-muc', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R07', 'R07a', 'R08', 'R08a', 'R10'], group: 'reports' },
   { key: 'ledger-cost', label: 'Chi phí theo vụ việc', labelEn: 'Cost by Project', icon: 'DollarSign', href: '/dashboard/reports/chi-phi-vu-viec', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R08', 'R08a', 'R10'], group: 'reports' },
+  // Khoán theo xưởng: R06b (tổ trưởng) được thêm riêng ở ĐÂY, các mục báo cáo khác giữ nguyên.
+  { key: 'khoan-theo-xuong', label: 'Khoán theo xưởng', labelEn: 'Piece Rate by Workshop', icon: 'Hammer', href: '/dashboard/reports/khoan-theo-xuong', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R06b', 'R08', 'R08a', 'R10'], group: 'reports' },
   { key: 'audit-log', label: 'Nhật ký', labelEn: 'Audit Log', icon: 'ScrollText', href: '/dashboard/audit-log', roles: ['R01', 'R10'], group: 'reports' },
   { key: 'error-logs', label: 'Error Logs', labelEn: 'Error Logs', icon: 'AlertTriangle', href: '/dashboard/admin/error-logs', roles: ['R01', 'R10'], group: 'reports' },
 

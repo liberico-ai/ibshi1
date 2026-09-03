@@ -1,4 +1,5 @@
 import prisma from './db'
+import { getWoAcceptance } from './wo-acceptance'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Đơn giá khoán theo APL → thành tiền cho bước P5.5 (tổng hợp & tính lương khoán).
@@ -8,24 +9,42 @@ import prisma from './db'
 //     Cần chi tiết hơn thì đặt giá riêng cho một dòng chi tiết; dòng đó thắng giá ITEM.
 //   • Thành tiền = đơn giá × KHỐI LƯỢNG ĐÃ NGHIỆM THU (không phải KL thiết kế).
 //     Chưa làm / chưa đủ hai chữ ký → thành tiền = 0.
+//   • Nghiệm thu theo ĐỢT (09/2026): lệnh 50 tấn nghiệm thu 20 tấn thì trả tiền 20 tấn ngay,
+//     không chờ trọn lệnh. KL nghiệm thu lấy theo tổng các đợt đã ký, không theo trạng thái WO.
 //   • Nhập được bất cứ lúc nào, không cần APL xong 100%.
 //   • Chỉ CHỐT (Hoàn thành) khi: mọi ITEM đã có đơn giá VÀ mọi ITEM đã nghiệm thu xong.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** WO coi là đã nghiệm thu khi đủ hai chữ ký → trạng thái đã sang QC_PASSED (hoặc đã đóng). */
+/** Lệnh đã đóng sổ nghiệm thu — giữ lại cho các chỗ chỉ cần biết lệnh đã xong hay chưa. */
 export const ACCEPTED_WO_STATUS = ['QC_PASSED', 'COMPLETED']
 
 export interface ItemAcceptance {
   /** KL thiết kế của ITEM (tổng rollup các cụm bên trong) */
   plannedKg: number
-  /** KL đã nghiệm thu — 0 nếu WO chưa đủ hai chữ ký, hoặc ITEM chưa phát hành WO */
+  /** KL đã nghiệm thu — CỘNG DỒN phần đã ký của MỌI xưởng (xem ghi chú ở dưới) */
   acceptedKg: number
-  /** acceptedKg / plannedKg — dùng để chia KL nghiệm thu xuống từng dòng chi tiết */
+  /**
+   * acceptedKg / plannedKg — dùng để chia KL nghiệm thu xuống từng dòng chi tiết.
+   * KHÔNG chặn trần ở 1: ITEM giao cho ba xưởng, cả ba nghiệm thu trọn thì tỉ lệ là 3.
+   */
   ratio: number
+  /** Mọi xưởng của ITEM đều đã nghiệm thu xong — dùng cho điều kiện chốt bảng. */
+  allShopsDone: boolean
   blocks: number
   woCode: string | null
   woStatus: string | null
   teamCode: string | null
+  /** Các lệnh của ITEM này — một ITEM giao cho nhiều xưởng thì có nhiều dòng */
+  wos: {
+    woCode: string; teamCode: string | null; status: string
+    /** KL xưởng đã báo cộng dồn */
+    reportedKg: number
+    /** KL đã đủ hai chữ ký */
+    acceptedKg: number
+    /** KL kế hoạch của lệnh — bằng KL của ITEM, vì mỗi xưởng nhận trọn */
+    plannedKg: number
+    ratio: number
+  }[]
 }
 
 /**
@@ -47,8 +66,8 @@ export async function getAcceptanceByItem(importId: string): Promise<Map<string,
       ],
     },
     select: {
-      aplLineId: true, aplImportId: true, aplItem: true,
-      woCode: true, status: true, teamCode: true, completedQty: true,
+      id: true, aplLineId: true, aplImportId: true, aplItem: true,
+      woCode: true, status: true, teamCode: true, completedQty: true, createdAt: true,
     },
   })
   const itemOfLine = new Map(heads.map(h => [h.id, h.item || '']))
@@ -66,21 +85,47 @@ export async function getAcceptanceByItem(importId: string): Promise<Map<string,
   for (const h of heads) {
     const key = h.item || ''
     const cur = out.get(key) || {
-      plannedKg: 0, acceptedKg: 0, ratio: 0, blocks: 0,
-      woCode: null, woStatus: null, teamCode: null,
+      plannedKg: 0, acceptedKg: 0, ratio: 0, blocks: 0, allShopsDone: false,
+      woCode: null, woStatus: null, teamCode: null, wos: [],
     }
     cur.plannedKg += Number(h.rollupWeightKg) || 0
     cur.blocks += 1
     out.set(key, cur)
   }
 
+  // KL nghiệm thu lấy từ các ĐỢT đã ký — không dùng trạng thái WO, vì lệnh nghiệm thu dở dang
+  // vẫn đang ở 'Đang SX' mà phần đã ký thì phải được trả tiền.
+  const accByWo = await getWoAcceptance(wos.map(w => w.id))
+
+  // ── Một ITEM giao cho NHIỀU xưởng ──
+  // Xưởng cắt cắt trọn 93.671 kg, xưởng hàn hàn trọn 93.671 kg — mỗi lệnh mang TRỌN khối
+  // lượng ITEM, không chia nhỏ.
+  //
+  // Tiền tính theo VIỆC ĐÃ LÀM và CỘNG DỒN (chốt 09/2026): mỗi lần một xưởng được nghiệm thu
+  // thêm khối lượng nào thì cộng ngay khối lượng đó × đơn giá vào Thành tiền của ITEM. Xưởng
+  // làm bao nhiêu trả bấy nhiêu, không chờ xưởng cuối cùng xong mới trả một cục.
+  //
+  // Hệ quả: KL nghiệm thu và tỉ lệ của ITEM có thể VƯỢT khối lượng thiết kế — ba xưởng cùng
+  // làm trọn thì tỉ lệ là 3. Đó là đúng chứ không phải lỗi: ba lượt việc trên cùng khối lượng.
+  // Vì vậy KHÔNG chặn trần ở 1.
   for (const [key, acc] of out) {
     const list = byItem.get(key) || []
-    const accepted = list.filter(w => ACCEPTED_WO_STATUS.includes(w.status))
-    // completedQty đã bị chặn trần ở plannedWeight trong rollUpWorkOrder nên không vượt kế hoạch.
-    acc.acceptedKg = accepted.reduce((s, w) => s + (Number(w.completedQty) || 0), 0)
-    acc.ratio = acc.plannedKg > 0 ? Math.min(1, acc.acceptedKg / acc.plannedKg) : 0
-    // Ưu tiên hiện WO đã nghiệm thu; chưa có thì hiện WO đang chạy để biết đang ở đâu
+    acc.wos = [...list].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map(w => {
+      const a = accByWo.get(w.id)
+      const accepted = a?.acceptedKg || 0
+      const planned = a?.plannedKg || 0
+      return {
+        woCode: w.woCode, teamCode: w.teamCode, status: w.status,
+        reportedKg: a?.reportedKg || 0, acceptedKg: accepted, plannedKg: planned,
+        ratio: planned > 0 ? Math.min(1, accepted / planned) : 0,
+      }
+    })
+    acc.acceptedKg = Math.round(acc.wos.reduce((s, w) => s + w.acceptedKg, 0) * 100) / 100
+    acc.ratio = acc.plannedKg > 0 ? acc.acceptedKg / acc.plannedKg : 0
+    // Chốt bảng thì vẫn đợi MỌI xưởng xong — trả dần không có nghĩa là kết thúc sớm.
+    acc.allShopsDone = acc.wos.length > 0 && acc.wos.every(w => w.ratio >= 1)
+    // Ưu tiên hiện WO đã nghiệm thu ít nhiều; chưa có thì hiện WO đang chạy để biết đang ở đâu
+    const accepted = list.filter(w => (accByWo.get(w.id)?.acceptedKg || 0) > 0)
     const show = accepted[0] || list[0]
     acc.woCode = show?.woCode ?? null
     acc.woStatus = show?.status ?? null
@@ -180,7 +225,7 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
   for (const [key, a] of acceptance) {
     plannedKg += a.plannedKg
     acceptedKg += a.acceptedKg
-    if (a.acceptedKg > 0) itemsAccepted++
+    if (a.allShopsDone) itemsAccepted++
     if (priceOfItem.has(key)) itemsPriced++
   }
 
@@ -194,7 +239,7 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
     itemsPriced,
     itemsAccepted,
     linesWithoutPrice,
-    // Đủ cả hai: không còn dòng thiếu giá, và mọi ITEM đã nghiệm thu xong.
+    // Đủ cả hai: không còn dòng thiếu giá, và mọi ITEM đã nghiệm thu xong ở MỌI xưởng.
     canComplete: itemsTotal > 0 && linesWithoutPrice === 0 && itemsAccepted === itemsTotal,
     byItem,
   }

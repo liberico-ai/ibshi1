@@ -50,25 +50,35 @@ export async function GET(req: NextRequest) {
       _count: { _all: true },
       _sum: { rollupWeightKg: true },
     })
-    // ITEM nào đã phát hành lệnh rồi thì báo ngay ở danh sách — một ITEM chỉ có một lệnh,
-    // không nói trước thì PM bấm vào mới biết là trùng.
+    // Một ITEM giao được cho NHIỀU xưởng (xưởng cắt, xưởng hàn, xưởng sơn…), nên danh sách
+    // phải nói rõ ĐÃ giao cho những xưởng nào — PM còn biết thiếu xưởng nào để giao tiếp.
     const issued = await prisma.workOrder.findMany({
       where: { aplImportId: imp.id },
       select: { woCode: true, aplItem: true, teamCode: true, status: true },
     })
-    const issuedByItem = new Map(issued.map(w => [w.aplItem || '', w]))
+    const issuedByItem = new Map<string, typeof issued>()
+    for (const w of issued) {
+      const k = w.aplItem || ''
+      const arr = issuedByItem.get(k) || []
+      arr.push(w)
+      issuedByItem.set(k, arr)
+    }
 
     const items = grouped
       .map(g => {
         const key = g.item || ''
-        const wo = issuedByItem.get(key)
+        const wos = issuedByItem.get(key) || []
+        const wo = wos[0]
         return {
           item: key,
           blocks: g._count._all,
           weightKg: g._sum.rollupWeightKg || 0,
+          // Ba trường cũ giữ nguyên cho chỗ nào còn đọc một lệnh; issuedWos mới là đủ.
           issuedWoCode: wo?.woCode ?? null,
           issuedTeamCode: wo?.teamCode || null,
           issuedStatus: wo?.status ?? null,
+          issuedWos: wos.map(w => ({ woCode: w.woCode, teamCode: w.teamCode || null, status: w.status })),
+          issuedTeams: wos.map(w => w.teamCode).filter(Boolean),
         }
       })
       .sort((a, b) => b.blocks - a.blocks)

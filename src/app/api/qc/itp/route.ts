@@ -4,6 +4,9 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { validateBody } from '@/lib/api-helpers'
 import { createItpSchema } from '@/lib/schemas'
 import { getProjectIdsOfPm } from '@/lib/project-pm'
+import { itpMinutesGate } from '@/lib/process-gates'
+import { createWithCode } from '@/lib/next-code'
+import { getWoAcceptance, getWoAcceptanceOne, blockReason } from '@/lib/wo-acceptance'
 
 // GET /api/qc/itp — List ITPs
 export async function GET(req: NextRequest) {
@@ -62,9 +65,14 @@ export async function GET(req: NextRequest) {
   // Người đang xem ký được vai nào — giao diện dựa vào đây để hiện nút, không tự đoán theo role.
   // Ký nghiệm thu: CHỈ Trưởng phòng QAQC (R09) và PM phụ trách dự án.
   // Chấm lỗi: kiểm tra viên (R09a) cũng được — phát hiện lỗi là việc của họ.
+  // Biên bản nghiệm thu có bắt buộc không — giao diện đọc cờ từ server, không tự đoán.
+  const requireMinutes = await itpMinutesGate.enabled()
   const canQcSign = user.roleCode === 'R09'
   const canFlagFail = ['R09', 'R09a'].includes(user.roleCode)
   const pmProjectIds = new Set(await getProjectIdsOfPm(user.userId))
+
+  // Tình hình nghiệm thu của các lệnh có ITP — để thẻ nói rõ đã nghiệm thu bao nhiêu / còn bao nhiêu.
+  const accMap = await getWoAcceptance([...new Set(itps.map(i => i.workOrderId).filter(Boolean) as string[])])
 
   const result = itps.map(itp => {
     const wo = itp.workOrder
@@ -84,6 +92,9 @@ export async function GET(req: NextRequest) {
       totalCheckpoints: itp.checkpoints.length,
       passedCheckpoints: itp.checkpoints.filter(cp => cp.status === 'PASSED').length,
       failedCheckpoints: itp.checkpoints.filter(cp => cp.status === 'FAILED').length,
+      // KL của riêng đợt này
+      acceptedQty: itp.acceptedQty !== null ? Number(itp.acceptedQty) : null,
+      acceptance: wo ? accMap.get(wo.id) ?? null : null,
       workOrder: wo ? {
         id: wo.id, woCode: wo.woCode, description: wo.description,
         pieceMark: wo.pieceMark, teamCode: wo.teamCode,
@@ -96,7 +107,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return successResponse({ itps: result })
+  return successResponse({ itps: result, requireMinutes })
 }
 
 // POST /api/qc/itp — Create ITP
@@ -109,7 +120,7 @@ export async function POST(req: NextRequest) {
 
   const result = await validateBody(req, createItpSchema)
   if (!result.success) return result.response
-  const { projectId, name, workOrderId, inspectionDate, checkpoints } = result.data
+  const { projectId, name, workOrderId, inspectionDate, checkpoints, acceptedQty } = result.data
 
   // ITP gắn với một lệnh sản xuất: lệnh phải thuộc đúng dự án đang chọn.
   let woOfItp: { id: string; woCode: string; pieceMark: string | null; description: string; projectId: string } | null = null
@@ -124,9 +135,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ĐỢT nghiệm thu: chỉ nghiệm thu được phần đã báo mà chưa nghiệm thu và chưa nằm trong đợt đang chờ ký.
+  // Bỏ trống thì lấy trọn phần còn lại — QAQC nghiệm thu ít hơn thì tự điền số nhỏ hơn.
+  let batchQty: number | null = null
+  if (woOfItp) {
+    const acc = await getWoAcceptanceOne(woOfItp.id)
+    if (acc) {
+      const blocked = blockReason(acc)
+      if (blocked) return errorResponse(blocked, 422)
+      batchQty = acceptedQty ?? acc.availableKg
+      if (batchQty > acc.availableKg) {
+        return errorResponse(
+          `Chỉ còn ${acc.availableKg.toLocaleString('vi-VN')} kg chưa nghiệm thu — không nghiệm thu quá phần xưởng đã báo`, 422)
+      }
+    }
+  }
+
   const year = new Date().getFullYear().toString().slice(-2)
-  const count = await prisma.inspectionTestPlan.count()
-  const itpCode = `ITP-${year}-${String(count + 1).padStart(3, '0')}`
 
   const woIds = [...new Set(checkpoints?.map(cp => cp.workOrderId).filter(Boolean) as string[] || [])]
   const woMap = new Map<string, string | null>()
@@ -151,10 +176,19 @@ export async function POST(req: NextRequest) {
       }]
     : null
 
-  const itp = await prisma.inspectionTestPlan.create({
+  // Mã ITP: cùng lý do với mã phiếu công việc — mỗi xưởng một đợt nghiệm thu riêng nên
+  // nhiều ITP sinh ra sát nhau.
+  const itp = await createWithCode({
+    prefix: `ITP-${year}-`,
+    findLatest: async prefix => (await prisma.inspectionTestPlan.findFirst({
+      where: { itpCode: { startsWith: prefix } },
+      orderBy: { itpCode: 'desc' }, select: { itpCode: true },
+    }))?.itpCode ?? null,
+  }, itpCode => prisma.inspectionTestPlan.create({
     data: {
       itpCode, projectId, name,
       workOrderId: workOrderId || null,
+      acceptedQty: batchQty,
       inspectionDate: inspectionDate ? new Date(inspectionDate) : null,
       checkpoints: checkpoints && checkpoints.length > 0 ? {
         create: checkpoints.map((cp, i) => ({
@@ -171,7 +205,7 @@ export async function POST(req: NextRequest) {
       } : autoCheckpoint ? { create: autoCheckpoint } : undefined,
     },
     include: { checkpoints: true },
-  })
+  }))
 
   return successResponse({ itp, message: 'Đã tạo ITP' })
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatDate, formatDateTime, formatNumber } from '@/lib/utils'
 import { RBAC } from '@/lib/rbac-rules'
 import { notify } from '@/components/ui/Toast'
 
@@ -14,6 +14,12 @@ interface WorkOrderDetail {
   actualStart: string | null; actualEnd: string | null;
   createdAt: string;
   materialIssues: { id: string; materialId: string; quantity: number; issuedBy: string; issuedAt: string; notes: string | null }[];
+  // Nghiệm thu theo đợt — đã ký bao nhiêu kg, còn bao nhiêu chờ mời nghiệm thu
+  acceptance?: {
+    plannedKg: number; reportedKg: number; acceptedKg: number
+    pendingKg: number; availableKg: number; fullyAccepted: boolean
+    blockReason: string | null
+  } | null;
 }
 
 const STATUS_CFG: Record<string, { label: string; bg: string; color: string; border: string }> = {
@@ -29,11 +35,17 @@ const STATUS_CFG: Record<string, { label: string; bg: string; color: string; bor
 
 // Valid transitions matching the API FSM
 const TRANSITIONS: Record<string, { next: string; label: string; color: string; bg: string }[]> = {
-  OPEN: [{ next: 'IN_PROGRESS', label: '▶ Bắt đầu SX', color: '#2563eb', bg: '#eff6ff' }],
-  IN_PROGRESS: [
-    { next: 'QC_PENDING', label: 'Gửi QC', color: '#d97706', bg: '#fffbeb' },
-    { next: 'ON_HOLD', label: 'Tạm dừng', color: '#7c3aed', bg: '#f5f3ff' },
+  // Chờ vật tư vẫn bắt đầu SX được — cổng vật tư đang TẮT (ff_wo_require_material).
+  // Bật cờ lên thì server trả 422 và nút này báo lỗi, không cần sửa lại giao diện.
+  // Vẫn giữ nút "Mở WO" để Kho/SX xác nhận đủ vật tư theo đường cũ.
+  PENDING_MATERIAL: [
+    { next: 'IN_PROGRESS', label: '▶ Bắt đầu SX', color: '#2563eb', bg: '#eff6ff' },
+    { next: 'OPEN', label: 'Đã đủ vật tư', color: '#64748b', bg: '#f1f5f9' },
   ],
+  OPEN: [{ next: 'IN_PROGRESS', label: '▶ Bắt đầu SX', color: '#2563eb', bg: '#eff6ff' }],
+  // 'Mời nghiệm thu' không nằm ở đây: nó chỉ hiện khi thật sự có khối lượng đã báo mà chưa
+  // nghiệm thu, nên dựng riêng bên dưới theo số liệu chứ không theo trạng thái.
+  IN_PROGRESS: [{ next: 'ON_HOLD', label: 'Tạm dừng', color: '#7c3aed', bg: '#f5f3ff' }],
   ON_HOLD: [{ next: 'IN_PROGRESS', label: '▶ Tiếp tục', color: '#2563eb', bg: '#eff6ff' }],
   // Không còn bấm Đạt/Không đạt ở đây: kết quả QC do màn Kế hoạch Kiểm tra (ITP) quyết định —
   // đủ chữ ký TP QAQC + PM dự án thì WO tự sang QC_PASSED, có điểm kiểm lỗi thì tự sang QC_FAILED.
@@ -65,7 +77,8 @@ export default function ProductionDetailPage() {
     const res = await apiFetch(`/api/production/${id}/transition`, {
       method: 'POST', body: JSON.stringify({ nextStatus }),
     })
-    if (res.ok) loadWO()
+    // Báo rõ đã ăn — trước đây bấm xong im lặng, không biết là chạy hay hỏng.
+    if (res.ok) { notify(res.message || 'Đã cập nhật trạng thái', 'success'); loadWO() }
     else notify(res.error || 'Lỗi chuyển trạng thái')
     setTransitioning(false)
   }
@@ -78,6 +91,11 @@ export default function ProductionDetailPage() {
   
   // Conditionally show buttons if user role is in RBAC list
   const showActionButtons = RBAC.PRODUCTION_ACTION.includes(roleCode) || RBAC.QC_ACTION.includes(roleCode)
+
+  // Mời nghiệm thu: chỉ có nghĩa khi xưởng đã báo khối lượng mà chưa ai ký. Nghiệm thu theo ĐỢT
+  // nên lệnh đang 'QC Đạt' của đợt trước vẫn mời tiếp được cho phần vừa báo thêm.
+  const acc = wo.acceptance
+  const canInvite = !!acc && acc.availableKg > 0 && wo.status !== 'QC_PENDING' && wo.status !== 'COMPLETED'
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -97,6 +115,18 @@ export default function ProductionDetailPage() {
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{wo.description}</h1>
           </div>
           <div className="flex gap-2">
+            {/* Xưởng báo xong thì tự mời QAQC + PM vào nghiệm thu ĐỢT đó — không chờ xong cả lệnh */}
+            {showActionButtons && canInvite && (
+              <button
+                onClick={() => handleTransition('QC_PENDING')}
+                disabled={transitioning}
+                className="text-sm px-4 py-2 rounded-lg font-medium"
+                style={{ background: '#fffbeb', color: '#d97706', border: '1px solid #d9770630', opacity: transitioning ? 0.5 : 1 }}
+                title={`Mời nghiệm thu ${formatNumber(acc!.availableKg)} kg đã báo`}
+              >
+                Mời nghiệm thu {formatNumber(acc!.availableKg)} kg
+              </button>
+            )}
             {/* Ở trạng thái chờ QC không còn nút bấm tay — nói rõ kết quả đến từ đâu, tránh tưởng là hỏng */}
             {wo.status === 'QC_PENDING' && (
               <span className="text-sm px-4 py-2 rounded-lg text-center" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', maxWidth: 320 }}>
@@ -121,6 +151,38 @@ export default function ProductionDetailPage() {
             ))}
           </div>
         </div>
+
+        {/* Nghiệm thu theo ĐỢT: nhìn là biết đã ký bao nhiêu, còn bao nhiêu phải mời tiếp */}
+        {acc && acc.reportedKg > 0 && (
+          <div className="grid grid-cols-4 gap-4 mt-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
+            <div>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Kế hoạch</span>
+              <p className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>
+                {acc.plannedKg > 0 ? `${formatNumber(acc.plannedKg)} kg` : '—'}
+              </p>
+            </div>
+            <div>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Xưởng đã báo</span>
+              <p className="font-mono font-medium" style={{ color: '#16a34a' }}>{formatNumber(acc.reportedKg)} kg</p>
+            </div>
+            <div>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Đã nghiệm thu</span>
+              <p className="font-mono font-bold" style={{ color: '#2563eb' }}>{formatNumber(acc.acceptedKg)} kg</p>
+              {acc.pendingKg > 0 && (
+                <p className="text-[11px] font-mono" style={{ color: '#d97706' }}>{formatNumber(acc.pendingKg)} kg đang chờ ký</p>
+              )}
+            </div>
+            <div>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Chờ mời nghiệm thu</span>
+              <p className="font-mono font-medium" style={{ color: acc.availableKg > 0 ? '#d97706' : 'var(--text-muted)' }}>
+                {acc.availableKg > 0 ? `${formatNumber(acc.availableKg)} kg` : '—'}
+              </p>
+              {acc.blockReason && (
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{acc.blockReason}</p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-5 gap-4 mt-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
           <div><span className="text-xs" style={{ color: 'var(--text-muted)' }}>Xưởng</span><p className="font-medium" style={{ color: 'var(--text-primary)' }}>{wo.teamCode}</p></div>

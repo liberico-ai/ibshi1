@@ -56,8 +56,10 @@ export const createItpSchema = z.object({
   projectId: z.string().min(1, 'Dự án là bắt buộc'),
   name: z.string().min(1, 'Tên ITP là bắt buộc'),
   revision: z.string().default('R0'),
-  // ITP lập cho một lệnh sản xuất đã báo xong khối lượng
+  // ITP lập cho một lệnh sản xuất đã báo khối lượng
   workOrderId: z.string().optional(),
+  // Khối lượng của ĐỢT nghiệm thu này (kg). Bỏ trống = nghiệm thu hết phần đã báo mà chưa nghiệm thu.
+  acceptedQty: z.number().positive('Khối lượng nghiệm thu phải lớn hơn 0').optional(),
   inspectionDate: z.string().optional(),
   checkpoints: z.array(itpCheckpointSchema).optional().default([]),
 })

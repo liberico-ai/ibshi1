@@ -7,11 +7,11 @@ import { validateQuery } from '@/lib/api-helpers'
 import { searchFilterSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
 import { canManageProject, notProjectPmMessage } from '@/lib/project-pm'
-import { WO_MATERIAL_REQUEST_ROLES } from '@/lib/wo-materials'
+import { summarizeWoMaterials } from '@/lib/wo-materials'
+import { getWorkshopScope } from '@/lib/workshop-scope'
+import { SUBCONTRACT_TEAM_CODE } from '@/lib/material-request-constants'
 import { reconcileWorkOrdersQc } from '@/lib/itp-wo-sync'
-
-// Vai trò bị giới hạn xem lệnh theo xưởng của mình (dùng chung danh sách với quyền đề nghị vật tư).
-const WORKSHOP_SCOPED_ROLES: string[] = WO_MATERIAL_REQUEST_ROLES
+import { getWoAcceptance } from '@/lib/wo-acceptance'
 
 // GET /api/production — List work orders
 export const GET = withErrorHandler(async (req: NextRequest) => {
@@ -26,7 +26,12 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   const departmentId = new URL(req.url).searchParams.get('departmentId')
 
   const where: Record<string, unknown> = {}
-  if (status) where.status = status
+  // status nhận một mã hoặc danh sách ngăn bằng dấu phẩy (vd 'OPEN,IN_PROGRESS') —
+  // để màn phiếu công việc lấy đủ lệnh trong MỘT lần gọi thay vì gọi từng trạng thái.
+  if (status) {
+    const codes = status.split(',').map(x => x.trim()).filter(Boolean)
+    where.status = codes.length > 1 ? { in: codes } : codes[0]
+  }
   if (projectId) where.projectId = projectId
   if (departmentId) where.departmentId = departmentId
   if (search) {
@@ -37,28 +42,10 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     ]
   }
 
-  // ── Xưởng chỉ thấy LỆNH CỦA XƯỞNG MÌNH ──
-  // Quản đốc/nhân viên/tổ trưởng (R06/R06a/R06b) bị giới hạn theo phòng của tài khoản.
-  // Lệnh giao thầu phụ làm ngoài (không gắn xưởng) VẪN HIỆN để xưởng theo dõi; riêng phần đề nghị
-  // vật tư cho thầu phụ thì chưa mở (xem canWorkshopEditWo) — chờ chốt hướng xử lý.
-  // BGĐ / PM / KTKH / Admin vẫn thấy toàn bộ.
-  let scope: { departmentId: string; code: string; name: string } | null = null
-  let scopeMissing = false
-  if (WORKSHOP_SCOPED_ROLES.includes(payload.roleCode)) {
-    const me = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: { department: { select: { id: true, code: true, name: true } } },
-    })
-    if (me?.department) {
-      scope = { departmentId: me.department.id, code: me.department.code, name: me.department.name }
-      where.AND = [{ OR: [{ departmentId: me.department.id }, { departmentId: null }] }]
-    } else {
-      // Tài khoản xưởng chưa gắn phòng → chỉ còn thấy lệnh không thuộc xưởng nào, kèm cờ báo để
-      // giao diện nhắc gắn phòng (im lặng cho thấy hết là hở quyền).
-      scopeMissing = true
-      where.AND = [{ departmentId: null }]
-    }
-  }
+  // Xưởng chỉ thấy việc của xưởng mình — luật khai chung ở workshop-scope.ts để màn Sản xuất
+  // và màn Phiếu công việc không lệch nhau. BGĐ / PM / KTKH / Admin vẫn thấy toàn bộ.
+  const { scope, scopeMissing, woWhere } = await getWorkshopScope(payload.userId, payload.roleCode)
+  if (woWhere) where.AND = [woWhere]
 
   const [total, workOrders] = await Promise.all([
     prisma.workOrder.count({ where }),
@@ -83,6 +70,12 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   const fixed = await reconcileWorkOrdersQc(workOrders.map(w => w.id), payload.userId)
   const fixedStatus = new Map(fixed.map(f => [f.woId, f.to]))
 
+  // Tình trạng vật tư — cột riêng, không gộp vào trạng thái. Trạng thái WO chỉ nói lệnh
+  // đang ở đâu trong sản xuất; cấp vật tư tới đâu là chuyện khác, và sau khi lệnh chạy
+  // thì trạng thái không còn mang tin đó nữa. Gộp cả trang trong 2 truy vấn.
+  const matSummary = await summarizeWoMaterials(workOrders.map(w => w.id))
+  const accSummary = await getWoAcceptance(workOrders.map(w => w.id))
+
   const result = workOrders.map((wo) => ({
     id: wo.id,
     woCode: wo.woCode,
@@ -92,6 +85,7 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     status: fixedStatus.get(wo.id) ?? wo.status,
     pieceMark: wo.pieceMark,
     materials: wo.materials,
+    woType: wo.woType,
     aplLineId: wo.aplLineId,
     plannedWeight: wo.plannedWeight ? Number(wo.plannedWeight) : null,
     completedQty: wo.completedQty ? Number(wo.completedQty) : null,
@@ -103,6 +97,9 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     actualStart: wo.actualStart,
     actualEnd: wo.actualEnd,
     materialIssueCount: wo.materialIssues.length,
+    material: matSummary.get(wo.id) ?? { total: 0, done: 0, state: null },
+    // Nghiệm thu theo đợt: đã ký bao nhiêu kg, còn bao nhiêu chờ mời nghiệm thu.
+    acceptance: accSummary.get(wo.id) ?? null,
     createdAt: wo.createdAt,
   }))
 
@@ -141,8 +138,11 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   // teamCode = mã Xưởng (XPC/XCT1/…) từ dropdown. departmentId là FK tuỳ chọn: nếu FE không
   // gửi (dropdown đọc từ hằng số PRODUCTION_WORKSHOPS), tự tra Department theo teamCode — có
   // thì nối, DB chưa migrate tạo phòng xưởng thì để null (schema cho phép, WO vẫn tạo được).
-  let resolvedDeptId: string | null = departmentId || null
-  if (!resolvedDeptId) {
+  // Lệnh GIAO THẦU PHỤ: không thuộc xưởng nào — đánh dấu bằng woType EXTERNAL để phân biệt
+  // với lệnh nội bộ lỡ thiếu phòng (lỗi dữ liệu). Vật tư cho lệnh này do PM lo.
+  const isSub = (teamCode || '').toUpperCase() === SUBCONTRACT_TEAM_CODE
+  let resolvedDeptId: string | null = isSub ? null : (departmentId || null)
+  if (!isSub && !resolvedDeptId) {
     const dept = await prisma.department.findFirst({ where: { code: teamCode }, select: { id: true } })
     resolvedDeptId = dept?.id ?? null
   }
@@ -152,7 +152,8 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
       woCode,
       projectId,
       description,
-      teamCode,
+      teamCode: isSub ? SUBCONTRACT_TEAM_CODE : teamCode,
+      woType: isSub ? 'EXTERNAL' : 'INTERNAL',
       plannedStart: plannedStart ? new Date(plannedStart) : null,
       plannedEnd: plannedEnd ? new Date(plannedEnd) : null,
       pieceMark: pieceMark || null,

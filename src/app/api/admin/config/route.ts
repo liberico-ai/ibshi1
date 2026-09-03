@@ -9,6 +9,7 @@ import {
   logAudit,
   getClientIP,
 } from '@/lib/auth'
+import { ALL_PROCESS_GATES, PROCESS_GATE_KEYS } from '@/lib/process-gates'
 
 // GET /api/admin/config — Read system config
 export async function GET(req: NextRequest) {
@@ -46,6 +47,9 @@ export async function PUT(req: NextRequest) {
       'company_name', 'company_address', 'company_phone', 'company_email', 'company_logo_url',
       'password_min_length', 'session_timeout_hours',
       'email_notifications_enabled', 'system_maintenance_mode',
+      // Cổng vật tư của lệnh SX: 'true' = phải cấp đủ vật tư mới được Bắt đầu SX.
+      // Vắng hoặc 'false' = cho bắt đầu ngay (đang đặt như vậy từ 09/2026).
+      ...PROCESS_GATE_KEYS,
     ]
 
     const updates: { key: string; value: string }[] = []
@@ -61,6 +65,9 @@ export async function PUT(req: NextRequest) {
         create: { key: u.key, value: u.value },
       })
     }
+
+    // Đổi cờ xong phải xoá cache, không thì phải chờ hết 60 giây mới có hiệu lực.
+    for (const g of ALL_PROCESS_GATES) if (updates.some(u => u.key === g.key)) g.invalidate()
 
     await logAudit(payload.userId, 'UPDATE', 'SystemConfig', 'global', {
       updatedKeys: updates.map(u => u.key),

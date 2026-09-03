@@ -20,11 +20,21 @@ interface Checkpoint {
   pmConfirmedAt: string | null; pmConfirmedName: string | null;
 }
 
+interface Acceptance {
+  plannedKg: number; reportedKg: number; acceptedKg: number
+  pendingKg: number; availableKg: number; fullyAccepted: boolean; hasFailed: boolean
+  blockReason: string | null
+}
+
 interface ITP {
   id: string; itpCode: string; projectId: string; name: string; revision: string;
   status: string; createdAt: string; totalCheckpoints: number;
   passedCheckpoints: number; failedCheckpoints: number;
   inspectionDate: string | null;
+  // KL của riêng ĐỢT nghiệm thu này (ITP cũ chưa ghi đợt → null)
+  acceptedQty: number | null;
+  // Tình hình nghiệm thu cộng dồn của cả lệnh
+  acceptance: Acceptance | null;
   // Người đang xem ký được vai nào (server quyết, FE không tự suy theo role).
   // canFlagFail rộng hơn canQcSign: kiểm tra viên chấm được Lỗi nhưng không ký nghiệm thu.
   canQcSign: boolean; canPmSign: boolean; canFlagFail: boolean;
@@ -48,6 +58,8 @@ const INSP_TYPE: Record<string, { label: string; color: string }> = {
 
 export default function ITPPage() {
   const [itps, setItps] = useState<ITP[]>([])
+  // Biên bản có bắt buộc hay không do server quyết (cổng ff_itp_require_minutes), FE không tự đoán.
+  const [requireMinutes, setRequireMinutes] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -58,7 +70,10 @@ export default function ITPPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const res = await apiFetch('/api/qc/itp')
-    if (res.ok) setItps(res.itps || [])
+    if (res.ok) {
+      setItps(res.itps || [])
+      setRequireMinutes(!!res.requireMinutes)
+    }
     setLoading(false)
   }, [])
 
@@ -182,10 +197,30 @@ export default function ITPPage() {
                         {itp.workOrder.pieceMark ? ` · ${itp.workOrder.pieceMark}` : ''}
                         {' · '}
                         <span className="font-mono" style={{ color: SEMANTIC_COLORS.success.solid }}>
-                          {formatNumber(Math.round(itp.workOrder.reportedQty))} kg
+                          {formatNumber(Math.round(itp.workOrder.reportedQty))} kg đã báo
                         </span>
-                        {itp.workOrder.lastReportDate ? ` · xong ${formatDate(itp.workOrder.lastReportDate)}` : ''}
+                        {itp.workOrder.lastReportDate ? ` · báo ${formatDate(itp.workOrder.lastReportDate)}` : ''}
                         {itp.inspectionDate ? ` · kiểm ${formatDate(itp.inspectionDate)}` : ''}
+                      </p>
+                    )}
+                    {/* ĐỢT nghiệm thu này bao nhiêu, và cả lệnh đã nghiệm thu tới đâu */}
+                    {itp.acceptedQty !== null && itp.acceptedQty !== undefined && (
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        Đợt này: <span className="font-mono font-bold" style={{ color: 'var(--accent)' }}>
+                          {formatNumber(Math.round(itp.acceptedQty))} kg
+                        </span>
+                        {itp.acceptance && (
+                          <>
+                            {' · lệnh đã nghiệm thu '}
+                            <span className="font-mono">
+                              {formatNumber(Math.round(itp.acceptance.acceptedKg))}
+                              {itp.acceptance.plannedKg > 0 ? `/${formatNumber(Math.round(itp.acceptance.plannedKg))}` : ''} kg
+                            </span>
+                            {itp.acceptance.availableKg > 0
+                              ? ` · còn ${formatNumber(Math.round(itp.acceptance.availableKg))} kg chờ mời`
+                              : itp.acceptance.fullyAccepted ? ' · đã nghiệm thu trọn lệnh' : ''}
+                          </>
+                        )}
                       </p>
                     )}
                   </div>
@@ -203,8 +238,9 @@ export default function ITPPage() {
                     {itp.checkpoints.map(cp => {
                       const ins = INSP_TYPE[cp.inspectionType] || INSP_TYPE.MONITOR
                       const isPending = cp.status === 'PENDING'
-                      // Không có biên bản nghiệm thu thì không cho chấm Đạt (server cũng chặn).
+                      // Biên bản nghiệm thu chỉ CHẶN khi cổng đang bật; tắt thì ký Đạt trước, đính sau.
                       const hasMinutes = cp.attachments.length > 0
+                      const minutesOk = hasMinutes || !requireMinutes
                       const canSignQc = itp.canQcSign
                       const canSignPm = itp.canPmSign
                       const canFlagFail = itp.canFlagFail
@@ -225,15 +261,15 @@ export default function ITPPage() {
                               {canSignQc && !cp.qcConfirmedAt && (
                                 <button
                                   className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                                  title={hasMinutes ? 'Trưởng phòng QAQC xác nhận đạt' : 'Phải đính biên bản nghiệm thu trước'}
+                                  title={minutesOk ? 'Trưởng phòng QAQC xác nhận đạt' : 'Phải đính biên bản nghiệm thu trước'}
                                   style={{
                                     background: SEMANTIC_COLORS.success.solid,
-                                    opacity: hasMinutes ? 1 : 0.4,
-                                    cursor: hasMinutes ? 'pointer' : 'not-allowed',
+                                    opacity: minutesOk ? 1 : 0.4,
+                                    cursor: minutesOk ? 'pointer' : 'not-allowed',
                                   }}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    if (!hasMinutes) return notify('Phải đính kèm biên bản nghiệm thu trước khi chấm Đạt')
+                                    if (!minutesOk) return notify('Phải đính kèm biên bản nghiệm thu trước khi chấm Đạt')
                                     updateCheckpoint(itp.id, cp.id, 'PASSED', undefined, 'QC')
                                   }}
                                 >TP QAQC xác nhận</button>
@@ -241,15 +277,15 @@ export default function ITPPage() {
                               {canSignPm && !cp.pmConfirmedAt && (
                                 <button
                                   className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                                  title={hasMinutes ? 'PM phụ trách dự án xác nhận đạt' : 'Phải đính biên bản nghiệm thu trước'}
+                                  title={minutesOk ? 'PM phụ trách dự án xác nhận đạt' : 'Phải đính biên bản nghiệm thu trước'}
                                   style={{
                                     background: SEMANTIC_COLORS.info.solid,
-                                    opacity: hasMinutes ? 1 : 0.4,
-                                    cursor: hasMinutes ? 'pointer' : 'not-allowed',
+                                    opacity: minutesOk ? 1 : 0.4,
+                                    cursor: minutesOk ? 'pointer' : 'not-allowed',
                                   }}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    if (!hasMinutes) return notify('Phải đính kèm biên bản nghiệm thu trước khi chấm Đạt')
+                                    if (!minutesOk) return notify('Phải đính kèm biên bản nghiệm thu trước khi chấm Đạt')
                                     updateCheckpoint(itp.id, cp.id, 'PASSED', undefined, 'PM')
                                   }}
                                 >PM dự án xác nhận</button>
@@ -309,8 +345,9 @@ export default function ITPPage() {
                             </span>
                           ))}
                           {cp.attachments.length === 0 && (
-                            <span className="text-[10px] italic" style={{ color: SEMANTIC_COLORS.warning.solid }}>
-                              chưa có — chưa chấm Đạt được
+                            <span className="text-[10px] italic"
+                              style={{ color: requireMinutes ? SEMANTIC_COLORS.warning.solid : 'var(--text-muted)' }}>
+                              {requireMinutes ? 'chưa có — chưa chấm Đạt được' : 'chưa có (không bắt buộc)'}
                             </span>
                           )}
                           {canInspect && isPending && (
@@ -381,6 +418,9 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
   const [workOrderId, setWorkOrderId] = useState('')
   const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0])
   const [jobCards, setJobCards] = useState<JCOption[]>([])
+  // Tình hình nghiệm thu từng lệnh: đã ký bao nhiêu, còn mời được bao nhiêu.
+  const [acceptance, setAcceptance] = useState<Record<string, Acceptance>>({})
+  const [batchQty, setBatchQty] = useState('')
   const [loadingWO, setLoadingWO] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -392,8 +432,12 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
     setLoadingWO(true)
     // Chỉ cần phiếu báo cáo: mỗi phiếu đã kèm thông tin lệnh của nó. Không gọi /api/production
     // vì API đó chặn limit tối đa 100 — dự án nhiều lệnh (sinh từ APL) sẽ trả lỗi, dropdown rỗng.
-    const jcRes = await apiFetch(`/api/production/job-cards?projectId=${pid}&limit=500`)
+    const [jcRes, accRes] = await Promise.all([
+      apiFetch(`/api/production/job-cards?projectId=${pid}&limit=500`),
+      apiFetch(`/api/production/acceptance?projectId=${pid}`),
+    ])
     if (jcRes.ok) setJobCards(jcRes.jobCards || [])
+    setAcceptance(accRes.ok ? (accRes.acceptance || {}) : {})
     setLoadingWO(false)
   }
 
@@ -420,9 +464,16 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
   const lastDate = selectedCards[0]?.workDate
   const plannedQty = selectedWo?.plannedWeight || 0
   const pct = plannedQty > 0 ? Math.round((reportedQty / plannedQty) * 100) : 0
+  const acc = workOrderId ? acceptance[workOrderId] : undefined
+  // Còn mời nghiệm thu được bao nhiêu — server chốt lại lần nữa lúc tạo.
+  const availableKg = acc?.availableKg ?? 0
+  const blocked = acc?.blockReason ?? null
 
   function onWoChange(id: string) {
     setWorkOrderId(id)
+    // Mặc định nghiệm thu trọn phần xưởng đã báo mà chưa nghiệm thu; sửa nhỏ hơn nếu chỉ nhận một phần.
+    const a = acceptance[id]
+    setBatchQty(a && a.availableKg > 0 ? String(a.availableKg) : '')
     // Tên ITP điền sẵn theo lệnh cho đỡ gõ; vẫn sửa được.
     const wo = reportedWOs.find(w => w.id === id)
     if (wo && !name.trim()) setName(`Kiểm tra ${wo.woCode}`)
@@ -433,10 +484,14 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
     if (!workOrderId) return notify('Chọn lệnh sản xuất cần kiểm tra')
     if (!name.trim()) return notify('Nhập tên ITP')
     if (!inspectionDate) return notify('Chọn ngày kiểm tra')
+    if (blocked) return notify(blocked)
+    const qty = parseFloat(batchQty)
+    if (!(qty > 0)) return notify('Nhập khối lượng nghiệm thu đợt này')
+    if (qty > availableKg) return notify(`Chỉ còn ${formatNumber(availableKg)} kg chưa nghiệm thu`)
     setSubmitting(true)
     const res = await apiFetch('/api/qc/itp', {
       method: 'POST',
-      body: JSON.stringify({ projectId, name: name.trim(), workOrderId, inspectionDate }),
+      body: JSON.stringify({ projectId, name: name.trim(), workOrderId, inspectionDate, acceptedQty: qty }),
     })
     setSubmitting(false)
     if (res.ok) onCreated()
@@ -453,9 +508,16 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
     },
     ...reportedWOs.map(wo => {
       const qty = (cardsByWo[wo.id] || []).reduce((s, c) => s + (c.actualQty || 0), 0)
+      const a = acceptance[wo.id]
+      // Nói ngay trong danh sách còn bao nhiêu để mời — khỏi chọn xong mới biết là hết.
+      const tail = a
+        ? a.availableKg > 0
+          ? ` · còn ${formatNumber(Math.round(a.availableKg))} kg chờ nghiệm thu`
+          : ' · đã nghiệm thu hết phần đã báo'
+        : ` · đã báo ${formatNumber(Math.round(qty))} kg`
       return {
         value: wo.id,
-        label: `${wo.woCode}${wo.pieceMark ? ` — ${wo.pieceMark}` : ''} · đã báo ${formatNumber(Math.round(qty))} kg`,
+        label: `${wo.woCode}${wo.pieceMark ? ` — ${wo.pieceMark}` : ''}${tail}`,
       }
     }),
   ]
@@ -505,19 +567,27 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
 
             <div className="grid grid-cols-4 gap-3 mt-3">
               <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>KL hoàn thành</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Xưởng đã báo</p>
                 <p className="font-mono font-bold" style={{ color: 'var(--success, #16a34a)' }}>
                   {formatNumber(Math.round(reportedQty))} kg
                 </p>
-              </div>
-              <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Kế hoạch</p>
-                <p className="font-mono" style={{ color: 'var(--text-primary)' }}>
-                  {plannedQty > 0 ? `${formatNumber(Math.round(plannedQty))} kg (${pct}%)` : '—'}
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  KH {plannedQty > 0 ? `${formatNumber(Math.round(plannedQty))} kg (${pct}%)` : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Ngày hoàn thành</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Đã nghiệm thu</p>
+                <p className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
+                  {formatNumber(Math.round(acc?.acceptedKg ?? 0))} kg
+                </p>
+                {(acc?.pendingKg ?? 0) > 0 && (
+                  <p className="text-[10px]" style={{ color: SEMANTIC_COLORS.warning.solid }}>
+                    {formatNumber(Math.round(acc!.pendingKg))} kg đang chờ ký
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Ngày báo gần nhất</p>
                 <p className="font-mono" style={{ color: 'var(--text-primary)' }}>{lastDate ? formatDate(lastDate) : '—'}</p>
               </div>
               <div>
@@ -545,6 +615,32 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
             </div>
           </div>
         )}
+
+        {/* ĐỢT nghiệm thu — nghiệm thu phần đã báo, không phải chờ trọn lệnh */}
+        {selectedWo && (blocked ? (
+          <div className="rounded-lg px-3 py-2 text-sm"
+            style={{ border: `1px solid ${SEMANTIC_COLORS.warning.solid}`, background: SEMANTIC_COLORS.warning.bg, color: 'var(--text-primary)' }}>
+            <p className="font-semibold">Chưa mời nghiệm thu được</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{blocked}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <InputField
+              label="KL nghiệm thu đợt này (kg) *"
+              type="number"
+              value={batchQty}
+              onChange={e => setBatchQty(e.target.value)}
+              placeholder={String(availableKg)}
+            />
+            <div className="flex flex-col justify-center">
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Còn chờ nghiệm thu</p>
+              <p className="font-mono font-bold" style={{ color: 'var(--accent)' }}>{formatNumber(availableKg)} kg</p>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                Nhận một phần thì sửa nhỏ lại; phần còn lại mời đợt sau.
+              </p>
+            </div>
+          </div>
+        ))}
 
         <InputField
           label="Tên ITP *"

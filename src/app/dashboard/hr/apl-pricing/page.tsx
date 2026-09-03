@@ -2,29 +2,41 @@
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { PageHeader, Button, EmptyState, SelectField, InputField, KPICard } from '@/components/ui'
+import { PageHeader, Button, EmptyState, SelectField, InputField, KPICard, StatusBadge } from '@/components/ui'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Calculator } from 'lucide-react'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 
 // Bảng tổng hợp & thanh toán lương khoán.
-// Nhập đơn giá theo ITEM — cùng cấp với lệnh sản xuất (1 ITEM = 1 WO = 1 xưởng).
-// Xổ một ITEM ra để đặt giá RIÊNG cho dòng chi tiết khi cần; dòng đó thắng giá ITEM.
-// Thành tiền luôn tính trên KHỐI LƯỢNG ĐÃ NGHIỆM THU, không phải KL thiết kế.
+// Nhập đơn giá theo ITEM. Một ITEM giao được cho NHIỀU xưởng — mỗi xưởng một lệnh, mỗi lệnh
+// mang TRỌN khối lượng của ITEM (xưởng cắt cắt hết, xưởng hàn hàn hết).
+// Dòng ITEM KHÔNG hiện KL đã nghiệm thu: một ITEM qua nhiều công đoạn nên con số đó là tổng
+// cộng dồn, vượt KL thiết kế và gây hiểu nhầm. Xổ ITEM ra mới thấy KL nghiệm thu của TỪNG
+// công đoạn — đó mới là con số đọc được.
+// Thành tiền luôn tính trên KHỐI LƯỢNG ĐÃ NGHIỆM THU, không phải KL thiết kế, và CỘNG DỒN
+// qua mọi xưởng — nghiệm thu tới đâu tính tiền tới đó.
 
 interface Row {
   item: string; blocks: number; detailLines: number
   plannedKg: number; acceptedKg: number
   woCode: string | null; woStatus: string | null; teamCode: string | null
+  shops: { teamCode: string | null; woCode: string; status: string }[]
   unitPrice: number | null; overrides: number; amount: number | null
 }
 
-interface Child {
-  id: string; drawingNo: string | null; assembly: string | null; pos: string | null; part: string | null
-  category: string | null; item: string | null; profile: string | null; grade: string | null
-  plannedKg: number; acceptedKg: number
-  unitPrice: number | null; effectiveUnitPrice: number | null; amount: number | null
+/** Một ĐỢT nghiệm thu của một lệnh — xưởng báo nhiều lần thì nhiều đợt */
+interface Batch {
+  itpCode: string; qty: number; date: string | null
+  signed: boolean; failed: boolean; amount: number | null
+}
+
+/** Một xưởng được giao ITEM này */
+interface Shop {
+  woCode: string; teamCode: string | null; status: string
+  plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
+  amount: number | null
+  batches: Batch[]
 }
 
 interface Totals {
@@ -54,10 +66,8 @@ export default function AplPricingPage() {
   const [draft, setDraft] = useState<Record<string, string>>({})
   // ITEM đang xổ ra dòng chi tiết
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [children, setChildren] = useState<Child[]>([])
-  const [childPage, setChildPage] = useState(1)
-  const [childPages, setChildPages] = useState(1)
-  const [childTotal, setChildTotal] = useState(0)
+  // Xổ một ITEM ra = danh sách XƯỞNG được giao, không còn dòng cụm/chi tiết.
+  const [shops, setShops] = useState<Shop[]>([])
   const [loadingChildren, setLoadingChildren] = useState(false)
 
   const user = useAuthStore(s => s.user)
@@ -87,26 +97,22 @@ export default function AplPricingPage() {
   // Không dùng effect đồng bộ: mỗi thao tác tự gọi load với tham số của chính nó,
   // tránh setState trong effect gây render lồng.
   const onProject = (pid: string) => {
-    setProjectId(pid); setDraft({}); setExpanded(null); setChildren([]); setSearch('')
+    setProjectId(pid); setDraft({}); setExpanded(null); setShops([]); setSearch('')
     if (pid) load(pid, '')
   }
   const onSearch = (v: string) => { setSearch(v); setExpanded(null); load(projectId, v) }
 
-  const loadChildren = async (item: string, page: number) => {
+  const loadShops = async (item: string) => {
     setLoadingChildren(true)
-    const res = await apiFetch(`/api/hr/apl-pricing?projectId=${projectId}&item=${encodeURIComponent(item)}&childPage=${page}`)
-    if (res.ok) {
-      setChildren(res.children || [])
-      setChildPages(res.childPagination?.totalPages || 1)
-      setChildTotal(res.childPagination?.total || 0)
-    }
+    const res = await apiFetch(`/api/hr/apl-pricing?projectId=${projectId}&item=${encodeURIComponent(item)}`)
+    setShops(res.ok ? (res.workshops || []) : [])
     setLoadingChildren(false)
   }
 
   const toggleItem = async (item: string) => {
-    if (expanded === item) { setExpanded(null); setChildren([]); return }
-    setExpanded(item); setChildren([]); setChildPage(1)
-    await loadChildren(item, 1)
+    if (expanded === item) { setExpanded(null); setShops([]); return }
+    setExpanded(item); setShops([])
+    await loadShops(item)
   }
 
   const dirtyCount = Object.keys(draft).length
@@ -130,7 +136,7 @@ export default function AplPricingPage() {
       notify(res.message || 'Đã lưu')
       setDraft({})
       await load(projectId, search)
-      if (expanded !== null) await loadChildren(expanded, childPage)
+      if (expanded !== null) await loadShops(expanded)
     } else notify(res.error || 'Lỗi lưu đơn giá')
   }
 
@@ -203,7 +209,7 @@ export default function AplPricingPage() {
       {totals && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KPICard label="KL thiết kế" value={`${formatNumber(Math.round(totals.plannedKg))} kg`} accentColor={SEMANTIC_COLORS.neutral.solid} />
-          <KPICard label="KL đã nghiệm thu" value={`${formatNumber(Math.round(totals.acceptedKg))} kg`} accentColor={SEMANTIC_COLORS.success.solid} />
+          <KPICard label="KL đã nghiệm thu (cộng dồn các công đoạn)" value={`${formatNumber(Math.round(totals.acceptedKg))} kg`} accentColor={SEMANTIC_COLORS.success.solid} />
           <KPICard label="ITEM đã có đơn giá" value={`${totals.itemsPriced}/${totals.itemsTotal}`} accentColor={SEMANTIC_COLORS.info.solid} />
           <KPICard label="ITEM đã nghiệm thu" value={`${totals.itemsAccepted}/${totals.itemsTotal}`} accentColor={SEMANTIC_COLORS.warning.solid} />
         </div>
@@ -228,14 +234,13 @@ export default function AplPricingPage() {
                   <th className="px-2 py-2 text-left">ITEM</th>
                   <th className="px-2 py-2 text-left">Lệnh SX · Xưởng</th>
                   <th className="px-2 py-2 text-right">KL thiết kế</th>
-                  <th className="px-2 py-2 text-right">KL nghiệm thu</th>
                   <th className="px-2 py-2 text-right" style={{ minWidth: 120 }}>Đơn giá (đ/kg)</th>
                   <th className="px-2 py-2 text-right">Thành tiền</th>
                 </tr>
               </thead>
               <tbody>
-                {loading && <tr><td colSpan={7} className="px-2 py-6 text-center" style={{ color: 'var(--text-muted)' }}>Đang tải...</td></tr>}
-                {!loading && rows.length === 0 && <tr><td colSpan={7} className="px-2 py-6 text-center" style={{ color: 'var(--text-muted)' }}>Không có ITEM nào khớp</td></tr>}
+                {loading && <tr><td colSpan={6} className="px-2 py-6 text-center" style={{ color: 'var(--text-muted)' }}>Đang tải...</td></tr>}
+                {!loading && rows.length === 0 && <tr><td colSpan={6} className="px-2 py-6 text-center" style={{ color: 'var(--text-muted)' }}>Không có ITEM nào khớp</td></tr>}
                 {rows.map(r => {
                   const key = `item:${r.item}`
                   // ITEM có dòng đặt giá riêng thì KHÔNG xem trước theo công thức được — số đúng
@@ -258,21 +263,26 @@ export default function AplPricingPage() {
                             {r.overrides > 0 && <span style={{ color: SEMANTIC_COLORS.info.solid }}> · {r.overrides} dòng đặt giá riêng</span>}
                           </span>
                         </td>
+                        {/* Một ITEM giao cho nhiều xưởng → liệt kê ĐỦ, không lấy một lệnh đại diện.
+                            Chi tiết từng lệnh xem khi xổ ITEM ra. */}
                         <td className="px-2 py-1.5">
-                          {r.woCode
-                            ? <>
-                                <span className="font-mono text-[10px]">{r.woCode}</span>
-                                <span className="block text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                                  {r.teamCode || '—'} · {WO_LABEL[r.woStatus || ''] || r.woStatus}
-                                </span>
-                              </>
-                            : <span style={{ color: 'var(--text-muted)' }}>chưa phát hành</span>}
+                          {(r.shops?.length ?? 0) === 0
+                            ? <span style={{ color: 'var(--text-muted)' }}>chưa phát hành</span>
+                            : r.shops.length === 1
+                              ? <>
+                                  <span className="font-mono text-[10px]">{r.shops[0].woCode}</span>
+                                  <span className="block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                    {r.shops[0].teamCode || '—'} · {WO_LABEL[r.shops[0].status] || r.shops[0].status}
+                                  </span>
+                                </>
+                              : <>
+                                  <span className="font-semibold text-[11px]">{r.shops.length} xưởng</span>
+                                  <span className="block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                    {r.shops.map(w => w.teamCode || '—').join(' · ')}
+                                  </span>
+                                </>}
                         </td>
                         <td className="px-2 py-1.5 text-right font-mono">{formatNumber(Math.round(r.plannedKg))}</td>
-                        <td className="px-2 py-1.5 text-right font-mono font-bold"
-                          style={{ color: r.acceptedKg > 0 ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
-                          {formatNumber(Math.round(r.acceptedKg))}
-                        </td>
                         <td className="px-2 py-1.5 text-right">
                           <input
                             type="number" min="0" className="input text-right text-xs" style={{ width: 110, padding: '2px 6px' }}
@@ -293,74 +303,95 @@ export default function AplPricingPage() {
 
                       {isOpen && (
                         <tr>
-                          <td colSpan={7} style={{ padding: 0, background: 'var(--bg-primary)' }}>
-                            {loadingChildren && <div className="px-4 py-3 text-center" style={{ color: 'var(--text-muted)' }}>Đang tải chi tiết...</div>}
+                          <td colSpan={6} style={{ padding: 0, background: 'var(--bg-primary)' }}>
+                            {loadingChildren && <div className="px-4 py-3 text-center" style={{ color: 'var(--text-muted)' }}>Đang tải các xưởng…</div>}
                             {!loadingChildren && (
                               <div className="overflow-x-auto">
                                 <table className="w-full text-xs">
                                   <thead>
                                     <tr style={{ color: 'var(--text-muted)' }}>
-                                      <th className="px-2 py-1 text-left pl-8">DWG NUMBER</th>
-                                      <th className="px-2 py-1 text-left">ASSEMBLY</th>
-                                      <th className="px-2 py-1 text-left">POS</th>
-                                      <th className="px-2 py-1 text-left">PART</th>
-                                      <th className="px-2 py-1 text-right">KL thiết kế</th>
-                                      <th className="px-2 py-1 text-right">KL nghiệm thu</th>
-                                      <th className="px-2 py-1 text-left">PHÂN LOẠI</th>
-                                      <th className="px-2 py-1 text-left">Quy cách</th>
-                                      <th className="px-2 py-1 text-right" style={{ minWidth: 120 }}>Đơn giá riêng</th>
-                                      <th className="px-2 py-1 text-right">Thành tiền</th>
+                                      <th className="px-2 py-1 text-left pl-8">XƯỞNG</th>
+                                      <th className="px-2 py-1 text-left">LỆNH SX</th>
+                                      <th className="px-2 py-1 text-left">TRẠNG THÁI</th>
+                                      <th className="px-2 py-1 text-right">KL GIAO</th>
+                                      <th className="px-2 py-1 text-right">ĐÃ BÁO</th>
+                                      <th className="px-2 py-1 text-right">ĐÃ NGHIỆM THU</th>
+                                      <th className="px-2 py-1 text-right">THÀNH TIỀN</th>
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {children.map(c => {
-                                      const camt = liveAmount(c.id, c.unitPrice ?? c.effectiveUnitPrice, c.acceptedKg)
-                                      const inherited = c.unitPrice === null
-                                      return (
-                                        <tr key={c.id} style={{ borderTop: '1px dashed var(--border)' }}>
-                                          <td className="px-2 py-1 font-mono pl-8" style={{ color: 'var(--text-muted)' }}>{c.drawingNo || '—'}</td>
-                                          <td className="px-2 py-1 font-mono" style={{ color: 'var(--text-muted)' }}>{c.assembly || '—'}</td>
-                                          <td className="px-2 py-1 font-mono">{c.pos || '—'}</td>
-                                          <td className="px-2 py-1 font-mono">{c.part || '—'}</td>
-                                          <td className="px-2 py-1 text-right font-mono">{formatNumber(c.plannedKg)}</td>
-                                          <td className="px-2 py-1 text-right font-mono"
-                                            style={{ color: c.acceptedKg > 0 ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
-                                            {formatNumber(Math.round(c.acceptedKg))}
+                                    {shops.map(w => (
+                                      <Fragment key={w.woCode}>
+                                      <tr style={{ borderTop: '1px dashed var(--border)' }}>
+                                        <td className="px-2 py-1 pl-8 font-semibold">
+                                          {w.teamCode || <span style={{ color: 'var(--text-muted)' }}>chưa giao xưởng</span>}
+                                        </td>
+                                        <td className="px-2 py-1 font-mono" style={{ color: 'var(--text-muted)' }}>{w.woCode}</td>
+                                        <td className="px-2 py-1"><StatusBadge category="production" status={w.status} /></td>
+                                        <td className="px-2 py-1 text-right font-mono">{formatNumber(Math.round(w.plannedKg))}</td>
+                                        <td className="px-2 py-1 text-right font-mono"
+                                          style={{ color: w.reportedKg > 0 ? SEMANTIC_COLORS.info.solid : 'var(--text-muted)' }}>
+                                          {formatNumber(Math.round(w.reportedKg))}
+                                        </td>
+                                        <td className="px-2 py-1 text-right font-mono"
+                                          style={{ color: w.acceptedKg > 0 ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
+                                          {formatNumber(Math.round(w.acceptedKg))}
+                                          <span className="ml-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                            {Math.round(w.ratio * 100)}%
+                                          </span>
+                                        </td>
+                                        <td className="px-2 py-1 text-right font-mono">
+                                          {w.amount === null
+                                            ? <span style={{ color: 'var(--text-muted)' }}>chưa có đơn giá</span>
+                                            : formatCurrency(w.amount)}
+                                        </td>
+                                      </tr>
+                                      {/* Từng phiếu nghiệm thu của công đoạn này */}
+                                      {w.batches.map(b => (
+                                        <tr key={b.itpCode} style={{ background: 'var(--bg-secondary)' }}>
+                                          <td className="px-2 py-0.5 pl-12 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                            {b.date ? new Date(b.date).toLocaleDateString('vi-VN') : '—'}
                                           </td>
-                                          <td className="px-2 py-1">{c.category || '—'}</td>
-                                          <td className="px-2 py-1 truncate" style={{ maxWidth: 170, color: 'var(--text-muted)' }}>
-                                            {[c.profile, c.grade].filter(Boolean).join(' ') || '—'}
+                                          <td className="px-2 py-0.5 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>{b.itpCode}</td>
+                                          <td className="px-2 py-0.5 text-[11px]" style={{
+                                            color: b.failed ? SEMANTIC_COLORS.danger.solid
+                                              : b.signed ? SEMANTIC_COLORS.success.solid : SEMANTIC_COLORS.warning.solid,
+                                          }}>
+                                            {b.failed ? 'lỗi' : b.signed ? 'đủ hai chữ ký' : 'chờ ký'}
                                           </td>
-                                          <td className="px-2 py-1 text-right">
-                                            <input
-                                              type="number" min="0" className="input text-right text-xs" style={{ width: 110, padding: '2px 6px' }}
-                                              disabled={!editable}
-                                              value={cellValue(c.id, c.unitPrice)}
-                                              onChange={e => setDraft(d => ({ ...d, [c.id]: e.target.value }))}
-                                              placeholder={c.effectiveUnitPrice !== null ? String(c.effectiveUnitPrice) : '0'}
-                                              title={inherited ? 'Đang lấy theo đơn giá của ITEM — gõ để đặt riêng' : 'Đơn giá riêng của dòng này'}
-                                            />
+                                          <td />
+                                          <td />
+                                          <td className="px-2 py-0.5 text-right font-mono text-[11px]"
+                                            style={{ color: b.signed ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
+                                            {formatNumber(Math.round(b.qty))}
                                           </td>
-                                          <td className="px-2 py-1 text-right font-mono">
-                                            {camt === null ? <span style={{ color: 'var(--text-muted)' }}>—</span> : formatCurrency(camt)}
+                                          <td className="px-2 py-0.5 text-right font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                            {b.amount === null ? '—' : formatCurrency(b.amount)}
                                           </td>
                                         </tr>
-                                      )
-                                    })}
-                                    {children.length === 0 && (
-                                      <tr><td colSpan={10} className="px-2 py-3 text-center" style={{ color: 'var(--text-muted)' }}>ITEM này không có dòng chi tiết</td></tr>
+                                      ))}
+                                      {w.batches.length === 0 && (
+                                        <tr style={{ background: 'var(--bg-secondary)' }}>
+                                          <td colSpan={7} className="px-2 py-0.5 pl-12 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                            chưa có phiếu nghiệm thu nào
+                                          </td>
+                                        </tr>
+                                      )}
+                                      </Fragment>
+                                    ))}
+                                    {shops.length === 0 && (
+                                      <tr><td colSpan={6} className="px-2 py-3 text-center" style={{ color: 'var(--text-muted)' }}>
+                                        ITEM này chưa phát hành lệnh cho xưởng nào
+                                      </td></tr>
                                     )}
                                   </tbody>
                                 </table>
-                                {childPages > 1 && (
-                                  <div className="px-3 py-2 flex items-center justify-center gap-2 text-[11px]" style={{ borderTop: '1px solid var(--border-light)' }}>
-                                    <Button variant="outline" size="sm" disabled={childPage <= 1}
-                                      onClick={() => { const p = childPage - 1; setChildPage(p); loadChildren(r.item, p) }}>Trước</Button>
-                                    <span style={{ color: 'var(--text-muted)' }}>
-                                      Trang {childPage}/{childPages} · {formatNumber(childTotal)} dòng chi tiết
-                                    </span>
-                                    <Button variant="outline" size="sm" disabled={childPage >= childPages}
-                                      onClick={() => { const p = childPage + 1; setChildPage(p); loadChildren(r.item, p) }}>Sau</Button>
+                                {shops.length > 0 && (
+                                  <div className="px-3 py-2 text-[11px]" style={{ borderTop: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
+                                    Mỗi xưởng làm một khâu và nhận trọn khối lượng của ITEM; dòng nhỏ bên dưới mỗi
+                                    xưởng là <b>từng phiếu nghiệm thu</b> của công đoạn đó. Nghiệm thu tới đâu tính
+                                    tiền tới đó — Thành tiền của ITEM là <b>tổng</b> các dòng xưởng.
+                                    Riêng việc <b>chốt bảng</b> vẫn đợi mọi xưởng nghiệm thu xong.
                                   </div>
                                 )}
                               </div>

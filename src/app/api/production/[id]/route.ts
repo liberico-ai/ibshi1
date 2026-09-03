@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { reconcileWorkOrdersQc } from '@/lib/itp-wo-sync'
+import { getWoAcceptanceOne, blockReason } from '@/lib/wo-acceptance'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
 import { withErrorHandler } from '@/lib/with-error-handler'
@@ -36,10 +37,14 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
   // đã nghiệm thu xong không bị kẹt ở "Chờ QC" mà không có cách nào gỡ.
   const [fix] = await reconcileWorkOrdersQc([wo.id], payload.userId)
 
+  // Nghiệm thu theo đợt: màn này phải nói được đã ký bao nhiêu, còn bao nhiêu chờ mời.
+  const acceptance = await getWoAcceptanceOne(wo.id)
+
   return successResponse({
     workOrder: {
       ...wo,
       status: fix?.to ?? wo.status,
+      acceptance: acceptance ? { ...acceptance, blockReason: blockReason(acceptance) } : null,
       materialIssues: wo.materialIssues.map((mi) => ({
         ...mi,
         quantity: Number(mi.quantity),

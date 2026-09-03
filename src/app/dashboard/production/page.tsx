@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatNumber } from '@/lib/utils'
+import { WORKSHOP_MATERIAL_ROLES, PM_MATERIAL_ROLES, isSubcontractWo, SUBCONTRACT_TEAM_CODE } from '@/lib/material-request-constants'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 import { SearchBar } from '@/components/SearchPagination'
 import {
@@ -18,11 +19,22 @@ import SidebarStepLanding from '@/components/SidebarStepLanding'
 import WoFromAplModal from './WoFromAplModal'
 import WoMaterialRequestModal from './WoMaterialRequestModal'
 
+// Chip tình trạng cấp vật tư — độc lập với trạng thái lệnh.
+const MAT_CHIP: Record<'NONE' | 'PARTIAL' | 'FULL', { dot: string; label: string; color: string }> = {
+  NONE:    { dot: '●', label: 'Chưa cấp VT', color: '#C8372B' },
+  PARTIAL: { dot: '◐', label: 'Thiếu VT',    color: '#C97A0E' },
+  FULL:    { dot: '●', label: 'Đủ VT',       color: '#1E8E5A' },
+}
+
 interface WorkOrder {
   id: string; woCode: string; projectId: string; description: string;
   teamCode: string; status: string; pieceMark: string | null;
   plannedWeight: number | null; completedQty: number | null;
+  woType?: string | null;
   materials: string | null;
+  material?: { total: number; done: number; state: 'NONE' | 'PARTIAL' | 'FULL' | null };
+  // Nghiệm thu theo đợt — đã ký bao nhiêu kg, còn bao nhiêu chờ mời
+  acceptance?: { acceptedKg: number; pendingKg: number; availableKg: number; fullyAccepted: boolean } | null;
   departmentId: string | null;
   department: { code: string; name: string } | null;
   project: { projectCode: string; projectName: string } | null;
@@ -85,23 +97,32 @@ export default function ProductionPage() {
   // Tạo LSX: chỉ PM (R02) + BGĐ (R01) — QLSX/Tổ trưởng không còn tạo
   const canCreate = ['R01', 'R02'].includes(user?.roleCode || '')
   const canGenerateFromBom = ['R01', 'R02'].includes(user?.roleCode || '')
-  // Đề nghị cấp vật tư là việc của XƯỞNG (PM chỉ phát hành WO) — khớp WO_MATERIAL_REQUEST_ROLES ở server
-  const canRequestMaterial = ['R06', 'R06a', 'R06b'].includes(user?.roleCode || '')
+  // Đề nghị cấp vật tư: XƯỞNG lo lệnh của xưởng mình, PM lo lệnh giao THẦU PHỤ.
+  // Khớp WORKSHOP_MATERIAL_ROLES / PM_MATERIAL_ROLES ở server; server vẫn chốt lại theo từng lệnh.
+  const isWorkshopRole = WORKSHOP_MATERIAL_ROLES.includes(user?.roleCode || '')
+  const isPmRole = PM_MATERIAL_ROLES.includes(user?.roleCode || '')
+  const canRequestMaterial = isWorkshopRole || isPmRole
 
   const [selected, setSelected] = useState<string[]>([])
   const [matWoIds, setMatWoIds] = useState<string[] | null>(null)
   // Máy chủ giới hạn danh sách theo xưởng của tài khoản (R06/R06a/R06b) — hiện lại cho người dùng biết
   const [scope, setScope] = useState<{ departmentId: string; code: string; name: string } | null>(null)
   const [scopeMissing, setScopeMissing] = useState(false)
-  // Đặt vật tư được khi: lệnh chưa hoàn thành/hủy VÀ thuộc một xưởng nội bộ.
-  // Lệnh giao thầu phụ làm ngoài (không gắn xưởng) vẫn hiện để theo dõi, nhưng chưa mở đề nghị
-  // vật tư — chờ chốt hướng riêng.
-  const isSubcontract = (wo: WorkOrder) => !wo.departmentId
-  const canSelect = (wo: WorkOrder) => !['COMPLETED', 'CANCELLED'].includes(wo.status) && !isSubcontract(wo)
+  // Lệnh giao thầu phụ do PM lo vật tư; lệnh của xưởng do xưởng lo. Lệnh nội bộ CHƯA GẮN XƯỞNG
+  // thì không ai lo được — đó là lỗi dữ liệu, phải gắn xưởng cho lệnh chứ không nới quyền.
+  const isSubcontract = (wo: WorkOrder) => isSubcontractWo(wo)
+  const isOrphan = (wo: WorkOrder) => !isSubcontract(wo) && !wo.departmentId
+  const canSelect = (wo: WorkOrder) => {
+    if (['COMPLETED', 'CANCELLED'].includes(wo.status)) return false
+    if (isSubcontract(wo)) return isPmRole
+    return isWorkshopRole && !!wo.departmentId
+  }
   const matHint = (wo: WorkOrder) =>
-    isSubcontract(wo) ? 'Lệnh thầu phụ — chưa mở đề nghị vật tư'
-      : ['COMPLETED', 'CANCELLED'].includes(wo.status) ? 'Lệnh đã hoàn thành/hủy'
-        : 'Đề nghị cấp vật tư cho lệnh này'
+    ['COMPLETED', 'CANCELLED'].includes(wo.status) ? 'Lệnh đã hoàn thành/hủy'
+      : isSubcontract(wo) ? (isPmRole ? 'Lệnh thầu phụ — PM đề nghị cấp vật tư' : 'Lệnh thầu phụ — do PM phụ trách dự án đề nghị vật tư')
+        : isOrphan(wo) ? 'Lệnh chưa gắn xưởng — PM cần gán xưởng cho lệnh trước'
+          : isPmRole ? 'Lệnh của xưởng — xưởng tự đề nghị vật tư'
+            : 'Đề nghị cấp vật tư cho lệnh này'
   const selectable = workOrders.filter(canSelect)
   // Gợi ý BOM/PR lấy theo dự án ⟹ chỉ gộp được các lệnh cùng một dự án
   const selectedWos = workOrders.filter(w => selected.includes(w.id))
@@ -332,10 +353,36 @@ export default function ProductionPage() {
                         <div className="w-16 h-1.5 rounded-full mt-0.5" style={{ background: 'var(--border-light)' }}>
                           <div className="h-full rounded-full" style={{ width: `${weightPct}%`, background: SEMANTIC_COLORS.success.solid }} />
                         </div>
+                        {/* Đã báo chưa phải là đã được trả tiền — chỉ phần hai chữ ký đã ký mới tính. */}
+                        {!!wo.acceptance && wo.acceptance.acceptedKg > 0 && (
+                          <span className="block mt-0.5 font-mono text-[10px]" style={{ color: SEMANTIC_COLORS.info.solid }}
+                            title="Khối lượng đã đủ chữ ký QAQC + PM">
+                            đã nghiệm thu {formatNumber(Math.round(wo.acceptance.acceptedKg))} kg
+                          </span>
+                        )}
+                        {!!wo.acceptance && wo.acceptance.availableKg > 0 && (
+                          <span className="block font-mono text-[10px]" style={{ color: SEMANTIC_COLORS.warning.solid }}
+                            title="Đã báo nhưng chưa mời nghiệm thu">
+                            chờ mời {formatNumber(Math.round(wo.acceptance.availableKg))} kg
+                          </span>
+                        )}
                       </div>
                     ) : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
-                  <td><StatusBadge category="production" status={wo.status} /></td>
+                  <td>
+                    <StatusBadge category="production" status={wo.status} />
+                    {/* Tình trạng cấp vật tư đứng riêng: trạng thái ở trên chỉ nói lệnh đang ở đâu
+                        trong sản xuất, và một khi lệnh đã chạy thì nó không còn mang tin này nữa. */}
+                    {wo.material?.state && (
+                      <span className="block mt-1 text-[10px] font-semibold whitespace-nowrap"
+                        style={{ color: MAT_CHIP[wo.material.state].color }}
+                        title={`Đã cấp đủ ${wo.material.done}/${wo.material.total} dòng vật tư`}>
+                        {MAT_CHIP[wo.material.state].dot} {wo.material.state === 'PARTIAL'
+                          ? `Thiếu ${wo.material.total - wo.material.done}/${wo.material.total}`
+                          : MAT_CHIP[wo.material.state].label}
+                      </span>
+                    )}
+                  </td>
                   <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(wo.createdAt)}</td>
                   {canRequestMaterial && (
                     <td className="text-center" onClick={e => e.stopPropagation()}>
@@ -343,7 +390,7 @@ export default function ProductionPage() {
                         title={matHint(wo)}
                         className="text-[11px] px-2 py-1 rounded font-semibold"
                         style={{ border: '1px solid #8b5cf6', background: '#f5f3ff', color: '#6d28d9', opacity: canSelect(wo) ? 1 : 0.4, cursor: canSelect(wo) ? 'pointer' : 'not-allowed' }}>
-                        {isSubcontract(wo) ? 'Thầu phụ' : 'Vật tư'}
+                        {isSubcontract(wo) ? 'Thầu phụ' : isOrphan(wo) ? 'Chưa gắn xưởng' : 'Vật tư'}
                       </button>
                     </td>
                   )}
@@ -524,7 +571,7 @@ function CreateWOModal({ open, projects, teams, onClose, onCreated }: {
               departmentId cho FK; chưa có thì để trống, server tự tra theo teamCode. */}
           <SelectField label="Xưởng *" value={form.teamCode}
             onChange={e => { const code = e.target.value; const x = teams.find(t => t.code === code); setForm(f => ({ ...f, teamCode: code, departmentId: x?.id || '' })) }}
-            options={[{ value: '', label: 'Chọn xưởng...' }, ...PRODUCTION_WORKSHOPS.map(w => ({ value: w.code, label: `${w.code} — ${w.name}` }))]} />
+            options={[{ value: '', label: 'Chọn xưởng...' }, ...PRODUCTION_WORKSHOPS.map(w => ({ value: w.code, label: `${w.code} — ${w.name}` })), { value: SUBCONTRACT_TEAM_CODE, label: 'THẦU PHỤ — giao ngoài (PM lo vật tư)' }]} />
         </div>
         <TextareaField label="Mô tả *" rows={2} value={form.description} onChange={e => update('description', e.target.value)} />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

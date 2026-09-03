@@ -1242,6 +1242,10 @@ model InspectionTestPlan {
   status         String          @default("DRAFT")
   // ITP lập cho MỘT lệnh sản xuất đã báo xong khối lượng (xem phiếu JobCard của lệnh đó).
   workOrderId    String?         @map("work_order_id")
+  // ĐỢT nghiệm thu: khối lượng (kg) mà riêng ITP này nghiệm thu. Một lệnh nghiệm thu nhiều đợt:
+  // xưởng báo 20 tấn → mời nghiệm thu 20 tấn, báo tiếp 10 tấn → ITP mới cho 10 tấn.
+  // KL đã nghiệm thu của lệnh = tổng acceptedQty của các ITP đã đủ hai chữ ký.
+  acceptedQty    Decimal?        @map("accepted_qty")
   inspectionDate DateTime?       @map("inspection_date")
   approvedBy     String?         @map("approved_by")
   approvedAt     DateTime?       @map("approved_at")
