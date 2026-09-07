@@ -42,15 +42,20 @@ interface ItemRow {
   item: string; blocks: number; weightKg: number
   issuedWoCode: string | null; issuedTeamCode: string | null; issuedStatus: string | null
   /** Mọi lệnh đã phát hành của ITEM — một ITEM giao được cho nhiều xưởng */
-  issuedWos?: { woCode: string; teamCode: string | null; status: string }[]
+  issuedWos?: IssuedWo[]
   issuedTeams?: string[]
+}
+/** Một lệnh đã phát hành của ITEM này, kèm công đoạn đã giao cho xưởng đó */
+interface IssuedWo {
+  woCode: string; teamCode: string | null; status: string
+  stages?: { stageCode: string; categoryCode: string | null; name: string; category: string | null }[]
 }
 interface MatRow { label: string; weightKg: number; lines: number }
 interface Preview {
   item: string; blocks: number; detailLines: number; weightKg: number
   materials: MatRow[]
   alreadyIssued: { woCode: string; teamCode: string; status: string } | null
-  issuedWos?: { woCode: string; teamCode: string | null; status: string }[]
+  issuedWos?: IssuedWo[]
 }
 
 export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
@@ -238,15 +243,34 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
   // Các lệnh đã phát hành của ITEM đang xem — để nhắc PM khỏi giao trùng xưởng, KHÔNG chặn.
   const issuedWos = preview?.issuedWos ?? []
   const issuedTeams = issuedWos.map(w => w.teamCode).filter(Boolean) as string[]
+  // Phần việc đã giao: cùng một xưởng nhận nhiều lệnh được, miễn khác công đoạn + chủng loại.
+  const issuedStages = issuedWos.flatMap(w =>
+    (w.stages ?? []).map(st => ({ teamCode: w.teamCode || '', stageCode: st.stageCode, categoryCode: st.categoryCode ?? '' })))
   // Cùng một xưởng không nhận hai lệnh cho cùng ITEM — server chặn, ở đây chặn trước cho êm.
   // Chặn cả trùng NGAY TRONG form: hai dòng cùng chọn một xưởng thì dòng sau chắc chắn hỏng.
+  /** Khoá nhận diện phần việc: xưởng + công đoạn + chủng loại. */
+  const khoaViec = (teamCode: string, st?: { stageCode: string; categoryCode: string }) =>
+    `${teamCode}::${st?.stageCode ?? ''}::${st?.categoryCode ?? ''}`
+  // Chọn cùng một xưởng ở hai dòng là HỢP LỆ, miễn hai dòng khác công đoạn.
   const takenInForm = (i: number, code: string) =>
-    !!code && assigns.some((a, k) => k !== i && a.teamCode === code)
+    !!code && assigns.some((a, k) =>
+      k !== i && a.teamCode === code && khoaViec(code, a.stages[0]) === khoaViec(code, assigns[i].stages[0]))
   const rowBad = (i: number) => {
     const a = assigns[i]
     const code = a.teamCode
-    if (issuedTeams.includes(code)) return `${code} đã có lệnh cho ITEM này`
-    if (takenInForm(i, code)) return `${code} bị chọn hai lần`
+    // Cùng một xưởng nhận nhiều lệnh của cùng ITEM được, miễn KHÁC phần việc.
+    // Đã giao Xưởng Hàn "Hàn · Kết cấu" rồi thì lần sau chỉ giao được hàn thứ khác.
+    const cd = a.stages[0]
+    const khoa = (st?: { stageCode: string; categoryCode: string }) =>
+      `${st?.stageCode ?? ''}::${st?.categoryCode ?? ''}`
+    if (issuedTeams.includes(code) && !cd?.stageCode) {
+      return `${code} đã có lệnh cho ITEM này — khai công đoạn để giao thêm phần việc khác`
+    }
+    const daGiaoCD = issuedStages.some(x => x.teamCode === code && khoa(x) === khoa(cd))
+    if (cd?.stageCode && daGiaoCD) {
+      return `${code} đã nhận công đoạn này của ITEM — chọn công đoạn hoặc chủng loại khác`
+    }
+    if (takenInForm(i, code)) return `${code} bị giao trùng công đoạn ở hai dòng`
     if (!code && assigns.length > 1) return 'Chọn xưởng cho dòng này'
     if (!code && issuedWos.length > 0) return 'ITEM đã giao cho xưởng khác — chọn xưởng nhận'
     // kg suy được từ khối lượng ITEM; đơn vị khác thì không có hệ số quy đổi nào đúng
@@ -423,8 +447,10 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                       { value: '', label: issuedWos.length > 0 || assigns.length > 1 ? '— Chọn xưởng —' : '— Chưa giao —' },
                       ...PRODUCTION_WORKSHOPS.map(w => ({
                         value: w.code,
-                        label: issuedTeams.includes(w.code) ? `${w.name} (đã giao)`
-                          : takenInForm(i, w.code) ? `${w.name} (đã chọn ở dòng khác)`
+                        // Xưởng đã nhận việc vẫn giao thêm được, miễn khác công đoạn —
+                        // nên chỉ ghi chú số lệnh đã có, không chặn.
+                        label: issuedTeams.filter(t => t === w.code).length > 0
+                          ? `${w.name} (đã có ${issuedTeams.filter(t => t === w.code).length} lệnh)`
                           : w.name,
                       })),
                     ]} />
@@ -504,20 +530,26 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                         style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 700 }}>&times;</button>
                     </div>
                   ))}
+                  {/* MỖI LỆNH ĐÚNG MỘT CÔNG ĐOẠN. Gộp nhiều công đoạn vào một lệnh thì không tách
+                      được tiến độ, nghiệm thu và tiền của từng phần việc — giao thêm phần việc
+                      khác thì thêm một DÒNG XƯỞNG nữa, chọn lại cùng xưởng đó cũng được. */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 2 }}>
-                    <button type="button" onClick={() => addStage(i)}
-                      style={{
-                        padding: '3px 9px', borderRadius: 6, fontSize: '0.74rem', fontWeight: 600,
-                        border: '1px dashed var(--border)', background: 'none', color: 'var(--primary)', cursor: 'pointer',
-                      }}>+ Công đoạn</button>
+                    {a.stages.length === 0 && (
+                      <>
+                        <button type="button" onClick={() => addStage(i)}
+                          style={{
+                            padding: '3px 9px', borderRadius: 6, fontSize: '0.74rem', fontWeight: 600,
+                            border: '1px dashed var(--border)', background: 'none', color: 'var(--primary)', cursor: 'pointer',
+                          }}>+ Công đoạn</button>
+                        <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                          Không khai công đoạn cũng được — lệnh chạy nguyên khối
+                        </span>
+                      </>
+                    )}
                     {a.stages.length > 0 && (
                       <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                        {a.stages.length} công đoạn — mỗi công đoạn chạy qua trọn khối lượng của lệnh
-                      </span>
-                    )}
-                    {a.stages.length === 0 && (
-                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                        Không khai công đoạn cũng được — lệnh chạy nguyên khối
+                        Mỗi lệnh một công đoạn — giao thêm phần việc khác thì bấm <b>+ Xưởng</b> rồi
+                        chọn lại xưởng này với công đoạn khác
                       </span>
                     )}
                   </div>

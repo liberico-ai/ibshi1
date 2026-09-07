@@ -38,7 +38,12 @@ export async function GET(req: NextRequest) {
       // trọn danh sách lệnh đã phát hành, không phải một cái.
       prisma.workOrder.findMany({
         where: { aplImportId: importId, aplItem: item || null },
-        select: { woCode: true, teamCode: true, status: true },
+        // Kèm công đoạn: cùng một xưởng nhận nhiều lệnh được, miễn khác phần việc — màn phát
+        // hành phải biết xưởng đó ĐÃ nhận công đoạn nào để không cho giao lại.
+        select: {
+          woCode: true, teamCode: true, status: true,
+          stages: { select: { stageCode: true, categoryCode: true, name: true, category: true } },
+        },
         orderBy: { createdAt: 'asc' },
       }),
     ])
@@ -106,22 +111,12 @@ export async function POST(req: NextRequest) {
     })
     if (heads.length === 0) return errorResponse('ITEM này không có cụm nào trong bản APL đã chọn')
 
-    // Một ITEM giao cho NHIỀU xưởng: xưởng cắt, xưởng hàn, xưởng sơn… mỗi xưởng một lệnh,
-    // và MỖI LỆNH MANG TRỌN khối lượng của ITEM (xưởng cắt cắt hết 71.504 kg, xưởng hàn hàn
-    // hết 71.504 kg) — không chia nhỏ theo tỉ lệ.
-    // Chỉ chặn trùng ĐÚNG cặp (ITEM, xưởng): cùng một xưởng thì không phát hành hai lần.
+    // Một ITEM giao cho NHIỀU xưởng, và CÙNG một xưởng nhiều lần — mỗi lần một phần việc khác.
+    // Mỗi lệnh MANG TRỌN khối lượng của ITEM (xưởng cắt cắt hết 71.504 kg, xưởng hàn hàn hết
+    // 71.504 kg) — không chia nhỏ theo tỉ lệ.
+    // Luật chặn trùng nằm ở dưới, sau khi đọc công đoạn: khoá là (ITEM, xưởng, công đoạn,
+    // chủng loại) chứ không phải (ITEM, xưởng).
     const team = (body.teamCode || '').trim()
-    const existing = await prisma.workOrder.findFirst({
-      where: { aplImportId: body.importId, aplItem: item || null, teamCode: team },
-      select: { woCode: true },
-    })
-    if (existing) {
-      return errorResponse(
-        team
-          ? `ITEM này đã phát hành lệnh ${existing.woCode} cho xưởng ${team} rồi — chọn xưởng khác`
-          : `ITEM này đã phát hành lệnh ${existing.woCode} (chưa gán xưởng) rồi`,
-        409)
-    }
 
     const weightKg = heads.reduce((s, h) => s + (Number(h.rollupWeightKg) || 0), 0)
 
@@ -132,17 +127,6 @@ export async function POST(req: NextRequest) {
       select: { profile: true, grade: true, totalWeightKg: true },
     })
     const mats = rollupItemMaterials(details)
-
-    // Mã WO trùng (tên ITEM khác nhau nhưng chuẩn hoá về cùng chuỗi) thì thêm số thứ tự.
-    // Cùng một ITEM giờ có nhiều lệnh → mã phải phân biệt được. Gắn mã xưởng vào tên ITEM;
-    // trùng nữa mới thêm số thứ tự.
-    const itemForCode = team ? `${item}-${team}` : item
-    let woCode = aplItemWoCode(project.projectCode, itemForCode)
-    for (let n = 2; n <= 50; n++) {
-      const dup = await prisma.workOrder.findUnique({ where: { woCode }, select: { id: true } })
-      if (!dup) break
-      woCode = aplItemWoCode(project.projectCode, itemForCode, n)
-    }
 
     const unit = isValidUnit(body.unit) ? String(body.unit) : DEFAULT_WO_UNIT
     const rawQty = Number(body.plannedQty)
@@ -183,13 +167,52 @@ export async function POST(req: NextRequest) {
         qty, note: st?.note ? String(st.note).trim() : null,
       })
     }
-    if (stages.length > 0) {
-      // Trùng = cùng công đoạn VÀ cùng chủng loại. Một công đoạn nhiều chủng loại khác nhau
-      // là hợp lệ (Sơn · Block và Sơn · Khung kiện là hai phần việc khác nhau).
-      const trung = stages.map(s => `${s.stageCode}::${s.categoryCode ?? ''}`)
-      if (new Set(trung).size !== trung.length) {
-        return errorResponse('Một công đoạn + chủng loại bị khai hai lần trong cùng một lệnh', 422)
+    // MỖI LỆNH ĐÚNG MỘT CÔNG ĐOẠN. Gộp nhiều công đoạn vào một lệnh thì không tách được
+    // tiến độ, nghiệm thu và tiền của từng phần việc — giao thành nhiều lệnh thay vì gộp.
+    if (stages.length > 1) {
+      return errorResponse(
+        'Mỗi lệnh chỉ nhận MỘT công đoạn + một chủng loại. Giao thêm phần việc khác thì phát hành lệnh riêng.',
+        422)
+    }
+    const cd = stages[0] ?? null
+
+    // ── Chặn trùng ──
+    // Cùng một xưởng nhận được NHIỀU lệnh của cùng ITEM, miễn là khác phần việc.
+    // Đã giao Xưởng Hàn "Hàn · Kết cấu" rồi thì lần sau chỉ giao được hàn thứ khác.
+    const cungXuong = await prisma.workOrder.findMany({
+      where: { aplImportId: body.importId, aplItem: item || null, teamCode: team },
+      select: { woCode: true, stages: { select: { stageCode: true, categoryCode: true, name: true, category: true } } },
+    })
+    if (cd) {
+      const trung = cungXuong.find(w =>
+        w.stages.some(x => x.stageCode === cd.stageCode && (x.categoryCode ?? '') === (cd.categoryCode ?? '')))
+      if (trung) {
+        return errorResponse(
+          `Xưởng ${team || '(chưa gán)'} đã nhận "${cd.name}${cd.category ? ' · ' + cd.category : ''}"`
+          + ` của hạng mục này ở lệnh ${trung.woCode} — chọn công đoạn hoặc chủng loại khác`,
+          409)
       }
+    } else {
+      // Lệnh chạy nguyên khối (không khai công đoạn): vẫn giữ luật cũ — một lệnh cho một xưởng.
+      const trung = cungXuong.find(w => w.stages.length === 0)
+      if (trung) {
+        return errorResponse(
+          team
+            ? `ITEM này đã phát hành lệnh ${trung.woCode} cho xưởng ${team} rồi — khai công đoạn để giao thêm phần việc khác`
+            : `ITEM này đã phát hành lệnh ${trung.woCode} (chưa gán xưởng) rồi`,
+          409)
+      }
+    }
+
+    // Mã WO: gắn xưởng và CÔNG ĐOẠN vào tên ITEM để nhiều lệnh cùng xưởng phân biệt được;
+    // trùng nữa mới thêm số thứ tự.
+    const itemForCode = [item, team || null, cd ? cd.stageCode : null, cd?.categoryCode || null]
+      .filter(Boolean).join('-')
+    let woCode = aplItemWoCode(project.projectCode, itemForCode)
+    for (let n = 2; n <= 50; n++) {
+      const dup = await prisma.workOrder.findUnique({ where: { woCode }, select: { id: true } })
+      if (!dup) break
+      woCode = aplItemWoCode(project.projectCode, itemForCode, n)
     }
 
     const dept = team
