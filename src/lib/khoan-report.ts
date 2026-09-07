@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { getWorkshopScope } from '@/lib/workshop-scope'
 import { getAcceptanceByItem, shopKey } from '@/lib/apl-pricing'
+import type { KhoangNgay } from '@/lib/wo-acceptance'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,6 +46,26 @@ export interface KhoanWorkshop {
   projects: KhoanProject[]
 }
 
+/**
+ * Bộ lọc của báo cáo. Màn hình và file Excel dùng CHUNG bộ này, nên xuất ra luôn khớp
+ * với thứ đang nhìn thấy.
+ */
+export interface KhoanFilter {
+  /** Mã xưởng, vd 'XPC'. Bỏ trống = mọi xưởng người dùng được xem. */
+  teamCode?: string
+  /** Id dự án. Bỏ trống = mọi dự án. */
+  projectId?: string
+  /** Chỉ tính phần báo cáo / nghiệm thu trong khoảng này. Bỏ trống = từ đầu tới giờ. */
+  tuNgay?: Date
+  denNgay?: Date
+  /**
+   * Chuỗi ngày người dùng gõ (yyyy-mm-dd) — CHỈ để hiển thị.
+   * Đừng lấy Date rồi toISOString(): mốc giờ VN quy về UTC sẽ tụt mất một ngày.
+   */
+  tuNgayText?: string
+  denNgayText?: string
+}
+
 export interface KhoanReport {
   workshops: KhoanWorkshop[]
   totals: { plannedKg: number; reportedKg: number; acceptedKg: number; workloadKg: number }
@@ -56,7 +77,13 @@ export interface KhoanReport {
  * Dựng toàn bộ báo cáo cho một người dùng. Xưởng chỉ thấy xưởng mình — luật lấy từ
  * workshop-scope, dùng chung với màn Sản xuất và Phiếu công việc.
  */
-export async function buildKhoanReport(userId: string, roleCode: string): Promise<KhoanReport> {
+export async function buildKhoanReport(
+  userId: string,
+  roleCode: string,
+  loc: KhoanFilter = {},
+): Promise<KhoanReport> {
+  const khoang: KhoangNgay | undefined =
+    loc.tuNgay || loc.denNgay ? { tu: loc.tuNgay, den: loc.denNgay } : undefined
   const { scope, scopeMissing } = await getWorkshopScope(userId, roleCode)
   if (scopeMissing) {
     return {
@@ -66,10 +93,17 @@ export async function buildKhoanReport(userId: string, roleCode: string): Promis
     }
   }
 
+  // Lọc theo xưởng do người dùng chọn — CHỒNG lên phạm vi của tài khoản, không thay thế:
+  // xưởng trưởng chọn xưởng khác cũng chỉ ra rỗng, không lấy được dữ liệu ngoài phạm vi.
+  const locXuong = loc.teamCode
+    ? { OR: [{ department: { code: loc.teamCode } }, { teamCode: loc.teamCode }] }
+    : {}
   const wos = await prisma.workOrder.findMany({
     where: {
       status: { not: 'CANCELLED' },
       ...(scope ? { OR: [{ departmentId: scope.departmentId }, { teamCode: scope.code }] } : {}),
+      ...(loc.projectId ? { projectId: loc.projectId } : {}),
+      ...(loc.teamCode ? { AND: [locXuong] } : {}),
     },
     select: {
       id: true, woCode: true, status: true, teamCode: true, departmentId: true,
@@ -87,7 +121,7 @@ export async function buildKhoanReport(userId: string, roleCode: string): Promis
   }>()
   for (const importId of importIds) {
     const [acceptance, shopPrices] = await Promise.all([
-      getAcceptanceByItem(importId),
+      getAcceptanceByItem(importId, khoang),
       prisma.aplItemWorkshopPrice.findMany({
         // Đơn giá đặt theo CÔNG ĐOẠN — thiếu stageCode ở đây thì khoá tra luôn là công đoạn
         // rỗng, và mọi công đoạn đều đọc ra 'chưa có đơn giá'.

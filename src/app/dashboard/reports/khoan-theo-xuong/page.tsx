@@ -75,8 +75,34 @@ export default function KhoanTheoXuongPage() {
   const [openShop, setOpenShop] = useState<string | null>(null)
   const [openProject, setOpenProject] = useState<string | null>(null)
 
+  // ── Bộ lọc ──
+  // Màn hình và file Excel dùng CHUNG bộ này: nút Xuất Excel gửi đúng tham số đang lọc,
+  // nên file tải về luôn khớp với thứ đang nhìn thấy.
+  const [xuong, setXuong] = useState('')
+  const [duAn, setDuAn] = useState('')
+  const [tuNgay, setTuNgay] = useState('')
+  const [denNgay, setDenNgay] = useState('')
+
+  const queryLoc = useCallback(() => {
+    const q = new URLSearchParams()
+    if (xuong) q.set('xuong', xuong)
+    if (duAn) q.set('duAn', duAn)
+    if (tuNgay) q.set('tuNgay', tuNgay)
+    if (denNgay) q.set('denNgay', denNgay)
+    return q.toString()
+  }, [xuong, duAn, tuNgay, denNgay])
+
+  const coLoc = !!(xuong || duAn || tuNgay || denNgay)
+
+  // Danh mục cho hai ô chọn. Lấy từ lần nạp KHÔNG lọc đầu tiên — nếu lấy từ dữ liệu đã lọc
+  // thì chọn xong một xưởng là danh sách chỉ còn xưởng đó, không quay lại được.
+  const [dsXuong, setDsXuong] = useState<{ code: string; name: string }[]>([])
+  const [dsDuAn, setDsDuAn] = useState<{ id: string; code: string; name: string }[]>([])
+
   const load = useCallback(async () => {
-    const res = await apiFetch('/api/reports/khoan-theo-xuong')
+    setLoading(true)
+    const qs = queryLoc()
+    const res = await apiFetch(`/api/reports/khoan-theo-xuong${qs ? '?' + qs : ''}`)
     if (res.ok) {
       const list: Shop[] = res.workshops || []
       setShops(list)
@@ -85,9 +111,18 @@ export default function KhoanTheoXuongPage() {
       setScopeMissing(!!res.scopeMissing)
       // Chỉ có một xưởng (tài khoản xưởng) thì mở sẵn, khỏi bắt bấm thêm một lần.
       if (list.length === 1) setOpenShop(list[0].teamCode)
+      // Chỉ dựng danh mục từ lần nạp KHÔNG có bộ lọc nào.
+      if (!qs) {
+        setDsXuong(list.map(w => ({ code: w.teamCode, name: w.teamName })))
+        const m = new Map<string, { id: string; code: string; name: string }>()
+        for (const w of list) for (const pr of w.projects) {
+          if (!m.has(pr.projectId)) m.set(pr.projectId, { id: pr.projectId, code: pr.projectCode, name: pr.projectName })
+        }
+        setDsDuAn([...m.values()].sort((a, b) => a.code.localeCompare(b.code)))
+      }
     }
     setLoading(false)
-  }, [])
+  }, [queryLoc])
 
   useEffect(() => {
     // Gọi trong microtask để không setState thẳng trong thân effect (gây render dây chuyền).
@@ -95,17 +130,15 @@ export default function KhoanTheoXuongPage() {
     return () => clearTimeout(t)
   }, [load])
 
-  // Xuất Excel — chọn được mức chi tiết vì mỗi vai cần một kiểu: BGĐ xem tổng theo xưởng,
-  // KTKH cần tới từng công đoạn để đối chiếu đơn giá.
-  const [xuatMuc, setXuatMuc] = useState<string | null>(null)
-  const [moMenu, setMoMenu] = useState(false)
+  // Xuất Excel — xuất ĐÚNG phần đang lọc, cùng tham số với danh sách trên màn hình.
+  const [dangXuat, setDangXuat] = useState(false)
 
-  const xuatExcel = async (muc: string) => {
-    setMoMenu(false)
-    setXuatMuc(muc)
+  const xuatExcel = async () => {
+    setDangXuat(true)
     try {
       const token = sessionStorage.getItem('ibs_token')
-      const res = await fetch(`/api/reports/khoan-theo-xuong/export?muc=${muc}`, {
+      const qs = queryLoc()
+      const res = await fetch(`/api/reports/khoan-theo-xuong/export${qs ? '?' + qs : ''}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (!res.ok) {
@@ -127,7 +160,7 @@ export default function KhoanTheoXuongPage() {
     } catch {
       notify('Không xuất được báo cáo')
     } finally {
-      setXuatMuc(null)
+      setDangXuat(false)
     }
   }
 
@@ -145,37 +178,10 @@ export default function KhoanTheoXuongPage() {
         title="Khoán theo xưởng"
         subtitle="Bốn tầng: Xưởng → Dự án → Lệnh → Công đoạn. Bấm mũi tên ở xưởng để xổ danh sách dự án, bấm tiếp ở dự án để xem từng lệnh và công đoạn được giao"
         actions={
-          <div style={{ position: 'relative' }}>
-            <Button variant="outline" disabled={shops.length === 0 || xuatMuc !== null}
-              onClick={() => setMoMenu(v => !v)}>
-              {xuatMuc !== null ? 'Đang xuất…' : 'Xuất Excel ▾'}
-            </Button>
-            {moMenu && (
-              <>
-                {/* Bấm ra ngoài thì đóng menu */}
-                <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setMoMenu(false)} />
-                <div style={{
-                  position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 41, minWidth: 260,
-                  background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden',
-                }}>
-                  {[
-                    { muc: 'tat-ca', ten: 'Toàn bộ', mo: 'Cả ba mức, mỗi mức một sheet' },
-                    { muc: 'xuong', ten: 'Theo xưởng', mo: 'Mỗi xưởng một dòng' },
-                    { muc: 'lenh', ten: 'Theo lệnh', mo: 'Tới từng lệnh sản xuất' },
-                    { muc: 'cong-doan', ten: 'Theo công đoạn', mo: 'Tới từng công đoạn, kèm đơn giá' },
-                  ].map(x => (
-                    <button key={x.muc} type="button" onClick={() => xuatExcel(x.muc)}
-                      className="w-full text-left px-3 py-2"
-                      style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <div className="text-sm font-medium">{x.ten}</div>
-                      <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{x.mo}</div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <Button variant="outline" disabled={shops.length === 0 || dangXuat} onClick={xuatExcel}
+            title="Xuất ra Excel đúng phần đang lọc">
+            {dangXuat ? 'Đang xuất…' : 'Xuất Excel'}
+          </Button>
         }
       />
 
@@ -195,6 +201,49 @@ export default function KhoanTheoXuongPage() {
         <KPICard label="KL giao (mỗi ITEM 1 lần)" value={`${formatNumber(Math.round(totalPlanned))} kg`} accentColor={SEMANTIC_COLORS.info.solid} />
         <KPICard label="KL đã nghiệm thu" value={`${formatNumber(Math.round(totalAccepted))} kg`} accentColor={SEMANTIC_COLORS.success.solid} />
         <KPICard label="Giá trị khoán" value={formatCurrency(totalAmount)} accentColor={SEMANTIC_COLORS.warning.solid} />
+      </div>
+
+      {/* ── Bộ lọc ──
+          Danh sách bên dưới và nút Xuất Excel đều chạy theo đúng bộ này, nên xuất ra
+          luôn khớp với thứ đang nhìn thấy. */}
+      <div className="card p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div style={{ minWidth: 170 }}>
+            <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>Xưởng</label>
+            <select className="input-field text-sm w-full" value={xuong} onChange={e => setXuong(e.target.value)}>
+              <option value="">Tất cả xưởng</option>
+              {dsXuong.map(x => <option key={x.code} value={x.code}>{x.code} — {x.name}</option>)}
+            </select>
+          </div>
+          <div style={{ minWidth: 240, flex: 1 }}>
+            <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>Dự án</label>
+            <select className="input-field text-sm w-full" value={duAn} onChange={e => setDuAn(e.target.value)}>
+              <option value="">Tất cả dự án</option>
+              {dsDuAn.map(x => <option key={x.id} value={x.id}>{x.code} — {x.name}</option>)}
+            </select>
+          </div>
+          <div style={{ minWidth: 150 }}>
+            <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>Từ ngày</label>
+            <input type="date" className="input-field text-sm w-full" value={tuNgay} onChange={e => setTuNgay(e.target.value)} />
+          </div>
+          <div style={{ minWidth: 150 }}>
+            <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>Đến ngày</label>
+            <input type="date" className="input-field text-sm w-full" value={denNgay} onChange={e => setDenNgay(e.target.value)} />
+          </div>
+          <Button variant="primary" onClick={() => { void load() }} disabled={loading}>
+            {loading ? 'Đang lọc…' : 'Lọc'}
+          </Button>
+          {coLoc && (
+            <Button variant="outline" onClick={() => { setXuong(''); setDuAn(''); setTuNgay(''); setDenNgay('') }}>
+              Bỏ lọc
+            </Button>
+          )}
+        </div>
+        <p className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>
+          Khoảng ngày lọc theo <b>ngày báo</b> của phiếu công việc và <b>ngày kiểm</b> của đợt nghiệm thu —
+          dùng để chốt khoán theo kỳ. Khối lượng <b>giao</b> không đổi theo ngày.
+          {coLoc && <span style={{ color: SEMANTIC_COLORS.info.solid }}> · Nút Xuất Excel sẽ xuất đúng phần đang lọc.</span>}
+        </p>
       </div>
 
       {workloadKg > totalPlanned && (

@@ -86,8 +86,25 @@ export interface WoAcceptance {
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
+/**
+ * Khoảng ngày để lọc — dùng cho báo cáo khoán theo kỳ ("khoán tháng 9").
+ * Bỏ trống = tính từ đầu tới giờ, đúng như mọi màn đang chạy.
+ *
+ * Áp vào NGÀY BÁO của phiếu công việc và NGÀY KIỂM của đợt nghiệm thu. Khối lượng KẾ HOẠCH
+ * không lọc theo ngày — lệnh giao bao nhiêu vẫn là bấy nhiêu, không phụ thuộc kỳ đang xem.
+ */
+export interface KhoangNgay { tu?: Date; den?: Date }
+
+const trongKhoang = (d: Date | null | undefined, k?: KhoangNgay) => {
+  if (!k || (!k.tu && !k.den)) return true
+  if (!d) return false
+  if (k.tu && d < k.tu) return false
+  if (k.den && d > k.den) return false
+  return true
+}
+
 /** Tính tình hình nghiệm thu cho một loạt lệnh — 2 truy vấn cho cả danh sách. */
-export async function getWoAcceptance(woIds: string[]): Promise<Map<string, WoAcceptance>> {
+export async function getWoAcceptance(woIds: string[], khoang?: KhoangNgay): Promise<Map<string, WoAcceptance>> {
   const out = new Map<string, WoAcceptance>()
   if (woIds.length === 0) return out
 
@@ -112,10 +129,28 @@ export async function getWoAcceptance(woIds: string[]): Promise<Map<string, WoAc
     arr.push(st)
     stagesByWo.set(st.workOrderId, arr)
   }
+  // Lệnh KHÔNG chia công đoạn: chỉ cần phiếu khi lọc theo kỳ (bình thường dùng completedQty).
+  const woNguyenKhoi = woIds.filter(id => !stagesByWo.has(id))
+  const cardsNguyenKhoi = (khoang?.tu || khoang?.den) && woNguyenKhoi.length > 0
+    ? await prisma.jobCard.findMany({
+      where: {
+        workOrderId: { in: woNguyenKhoi }, status: { not: 'CANCELLED' },
+        workDate: { ...(khoang.tu ? { gte: khoang.tu } : {}), ...(khoang.den ? { lte: khoang.den } : {}) },
+      },
+      select: { workOrderId: true, actualQty: true },
+    })
+    : []
+
   const woCoCongDoan = [...stagesByWo.keys()]
   const cards = woCoCongDoan.length > 0
     ? await prisma.jobCard.findMany({
-      where: { workOrderId: { in: woCoCongDoan }, status: { not: 'CANCELLED' } },
+      where: {
+        workOrderId: { in: woCoCongDoan }, status: { not: 'CANCELLED' },
+        // Lọc theo kỳ: chỉ đếm phiếu báo trong khoảng ngày đang xem.
+        ...(khoang?.tu || khoang?.den
+          ? { workDate: { ...(khoang.tu ? { gte: khoang.tu } : {}), ...(khoang.den ? { lte: khoang.den } : {}) } }
+          : {}),
+      },
       select: { workOrderId: true, stageId: true, actualQty: true },
     })
     : []
@@ -124,6 +159,7 @@ export async function getWoAcceptance(woIds: string[]): Promise<Map<string, WoAc
     where: { workOrderId: { in: woIds } },
     select: {
       workOrderId: true, stageId: true, status: true, acceptedQty: true,
+      inspectionDate: true, createdAt: true,
       // MỘT ITP cho cả lệnh, bên trong mỗi công đoạn một DÒNG mang khối lượng riêng và ký riêng.
       checkpoints: { select: { status: true, stageId: true, acceptedQty: true } },
     },
@@ -132,6 +168,8 @@ export async function getWoAcceptance(woIds: string[]): Promise<Map<string, WoAc
   const byWo = new Map<string, typeof itps>()
   for (const i of itps) {
     if (!i.workOrderId) continue
+    // Lọc theo kỳ: đợt nghiệm thu tính theo NGÀY KIỂM; đợt cũ không ghi ngày thì lấy ngày lập.
+    if (!trongKhoang(i.inspectionDate ?? i.createdAt, khoang)) continue
     const arr = byWo.get(i.workOrderId) || []
     arr.push(i)
     byWo.set(i.workOrderId, arr)
@@ -230,7 +268,13 @@ export async function getWoAcceptance(woIds: string[]): Promise<Map<string, WoAc
     }
 
     // Lệnh chạy nguyên khối — y như trước khi có công đoạn.
-    const reportedQty = Number(wo.completedQty) || 0
+    // completedQty là số cộng dồn TỪ ĐẦU nên không lọc theo kỳ được; có khoảng ngày thì
+    // cộng lại từ phiếu công việc trong kỳ.
+    const reportedQty = (khoang?.tu || khoang?.den)
+      ? round2(Math.min(plannedQty || Infinity, cardsNguyenKhoi
+        .filter(c => c.workOrderId === wo.id)
+        .reduce((s, c) => s + (Number(c.actualQty) || 0), 0)))
+      : Number(wo.completedQty) || 0
     const { daKy, choKy } = dotCua(null, reportedQty)
     const acceptedQty = round2(Math.min(daKy, Math.max(reportedQty, plannedQty)))
     const pendingQty = round2(choKy)

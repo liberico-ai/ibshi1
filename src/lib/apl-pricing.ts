@@ -1,5 +1,5 @@
 import prisma from './db'
-import { getWoAcceptance } from './wo-acceptance'
+import { getWoAcceptance, type KhoangNgay } from './wo-acceptance'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Đơn giá khoán theo APL → thành tiền cho bước P5.5 (tổng hợp & tính lương khoán).
@@ -61,7 +61,10 @@ export interface ItemAcceptance {
  * KL đã nghiệm thu của từng ITEM trong một lần nhập APL.
  * Khoá của Map là tên ITEM ('' cho nhóm "(không có ITEM)" của bản APL cũ).
  */
-export async function getAcceptanceByItem(importId: string): Promise<Map<string, ItemAcceptance>> {
+export async function getAcceptanceByItem(
+  importId: string,
+  khoang?: KhoangNgay,
+): Promise<Map<string, ItemAcceptance>> {
   const heads = await prisma.aplLine.findMany({
     where: { importId, isAssembly: true },
     select: { id: true, item: true, rollupWeightKg: true },
@@ -105,7 +108,7 @@ export async function getAcceptanceByItem(importId: string): Promise<Map<string,
 
   // KL nghiệm thu lấy từ các ĐỢT đã ký — không dùng trạng thái WO, vì lệnh nghiệm thu dở dang
   // vẫn đang ở 'Đang SX' mà phần đã ký thì phải được trả tiền.
-  const accByWo = await getWoAcceptance(wos.map(w => w.id))
+  const accByWo = await getWoAcceptance(wos.map(w => w.id), khoang)
 
   // ── Một ITEM giao cho NHIỀU xưởng ──
   // Xưởng cắt cắt trọn 93.671 kg, xưởng hàn hàn trọn 93.671 kg — mỗi lệnh mang TRỌN khối
