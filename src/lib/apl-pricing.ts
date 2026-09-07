@@ -41,9 +41,19 @@ export interface ItemAcceptance {
     reportedKg: number
     /** KL đã đủ hai chữ ký */
     acceptedKg: number
-    /** KL kế hoạch của lệnh — bằng KL của ITEM, vì mỗi xưởng nhận trọn */
+    /** KL kế hoạch của lệnh — theo ĐƠN VỊ CỦA LỆNH, không nhất thiết là kg */
     plannedKg: number
+    /** Đơn vị đo của lệnh: kg, m², mét… */
+    unit: string
     ratio: number
+    /**
+     * Công đoạn của lệnh — ĐƠN GIÁ KHOÁN đặt ở đây. Rỗng = lệnh chạy nguyên khối,
+     * giá đặt cho cả lệnh của xưởng đó.
+     */
+    stages: {
+      id: string; stageCode: string; name: string; category: string | null; unit: string
+      plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
+    }[]
   }[]
 }
 
@@ -112,12 +122,23 @@ export async function getAcceptanceByItem(importId: string): Promise<Map<string,
     const list = byItem.get(key) || []
     acc.wos = [...list].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map(w => {
       const a = accByWo.get(w.id)
-      const accepted = a?.acceptedKg || 0
-      const planned = a?.plannedKg || 0
+      // acceptedQty ở cấp lệnh đã là công đoạn CHẬM NHẤT, nên lệnh chia 2 công đoạn ký xong
+      // cả hai chỉ được trả TRỌN một lần khối lượng hạng mục — không phải hai lần.
+      const accepted = a?.acceptedQty || 0
+      const planned = a?.plannedQty || 0
       return {
         woCode: w.woCode, teamCode: w.teamCode, status: w.status,
-        reportedKg: a?.reportedKg || 0, acceptedKg: accepted, plannedKg: planned,
+        // Đơn vị của LỆNH — có thể khác kg (sơn tính m²). Ba số dưới theo đơn vị đó.
+        unit: a?.unit || 'kg',
+        reportedKg: a?.reportedQty || 0, acceptedKg: accepted, plannedKg: planned,
         ratio: planned > 0 ? Math.min(1, accepted / planned) : 0,
+        // Công đoạn của lệnh — đơn giá khoán đặt ở đây, không đặt cho cả hạng mục.
+        stages: (a?.stages ?? []).map(st => ({
+          id: st.id, stageCode: st.stageCode, name: st.name, category: st.category,
+          unit: st.unit, plannedKg: st.plannedQty, reportedKg: st.reportedQty,
+          acceptedKg: st.acceptedQty,
+          ratio: st.plannedQty > 0 ? Math.min(1, st.acceptedQty / st.plannedQty) : 0,
+        })),
       }
     })
     acc.acceptedKg = Math.round(acc.wos.reduce((s, w) => s + w.acceptedKg, 0) * 100) / 100
@@ -125,7 +146,7 @@ export async function getAcceptanceByItem(importId: string): Promise<Map<string,
     // Chốt bảng thì vẫn đợi MỌI xưởng xong — trả dần không có nghĩa là kết thúc sớm.
     acc.allShopsDone = acc.wos.length > 0 && acc.wos.every(w => w.ratio >= 1)
     // Ưu tiên hiện WO đã nghiệm thu ít nhiều; chưa có thì hiện WO đang chạy để biết đang ở đâu
-    const accepted = list.filter(w => (accByWo.get(w.id)?.acceptedKg || 0) > 0)
+    const accepted = list.filter(w => (accByWo.get(w.id)?.acceptedQty || 0) > 0)
     const show = accepted[0] || list[0]
     acc.woCode = show?.woCode ?? null
     acc.woStatus = show?.status ?? null
@@ -144,6 +165,17 @@ export function effectiveUnitPrice(
   return null
 }
 
+/** Đơn giá khoán của từng xưởng trong một ITEM: khoá "item::teamCode". */
+export type WorkshopPriceMap = Map<string, number>
+
+/**
+ * Khoá tra ĐƠN GIÁ KHOÁN. Từ 07/09/2026 giá đặt theo CÔNG ĐOẠN của lệnh, không đặt cho cả
+ * hạng mục nữa: pha cắt và bảo ôn là hai phần việc khác nhau, đơn giá khác nhau.
+ * stageCode '' = lệnh chạy nguyên khối (giá cho cả lệnh của xưởng đó).
+ */
+export const shopKey = (item: string, teamCode: string | null, stageCode = '') =>
+  `${item}::${teamCode || ''}::${stageCode}`
+
 export interface PricingTotals {
   /** Tổng KL thiết kế của cả APL */
   plannedKg: number
@@ -151,12 +183,14 @@ export interface PricingTotals {
   acceptedKg: number
   /** Tổng tiền = Σ (đơn giá hiệu lực × KL nghiệm thu của dòng chi tiết) */
   totalAmount: number
-  /** Giá trị khoán theo kế hoạch — để đối chiếu, không phải số thực trả */
+  /** TRẦN của cả bản APL = tổng (đơn giá ITEM × KL thiết kế ITEM) */
   plannedAmount: number
   itemsTotal: number
   itemsPriced: number
   itemsAccepted: number
-  /** Số dòng chi tiết chưa có đơn giá hiệu lực */
+  /** Số ITEM đã nghiệm thu xong mà tiền vượt trần */
+  itemsOverCap: number
+  /** Số XƯỞNG đã có khối lượng nghiệm thu nhưng chưa đặt đơn giá (tiền của họ = 0) */
   linesWithoutPrice: number
   /** Đủ điều kiện bấm Hoàn thành chưa */
   canComplete: boolean
@@ -165,7 +199,10 @@ export interface PricingTotals {
    * đặt giá riêng vẫn được tính. Nếu lấy `KL nghiệm thu × giá ITEM` thì cộng các dòng lại
    * sẽ không khớp Tổng tiền khi có dòng đặt giá riêng.
    */
-  byItem: Map<string, { amount: number; plannedAmount: number; linesWithoutPrice: number }>
+  byItem: Map<string, {
+    amount: number; plannedAmount: number; linesWithoutPrice: number
+    cap: number | null; overCap: boolean; shopsWithoutPrice: number
+  }>
 }
 
 /**
@@ -173,60 +210,97 @@ export interface PricingTotals {
  * trên TẤT CẢ dòng chứ không chỉ trang đang xem.
  */
 export async function computePricingTotals(importId: string): Promise<PricingTotals> {
-  const [details, linePrices, itemPrices, acceptance] = await Promise.all([
-    prisma.aplLine.findMany({
-      where: { importId, isAssembly: false },
-      select: { id: true, item: true, totalWeightKg: true },
-    }),
-    prisma.aplLinePrice.findMany({ where: { importId }, select: { aplLineId: true, unitPrice: true } }),
-    prisma.aplItemPrice.findMany({ where: { importId }, select: { item: true, unitPrice: true } }),
+  // Không còn quét 49.000 dòng chi tiết: tiền giờ tính theo XƯỞNG, chỉ cần đơn giá ITEM,
+  // đơn giá xưởng và kết quả nghiệm thu.
+  const [acceptance, shopPrices] = await Promise.all([
     getAcceptanceByItem(importId),
+    prisma.aplItemWorkshopPrice.findMany({
+      where: { importId }, select: { item: true, teamCode: true, stageCode: true, unitPrice: true },
+    }),
   ])
 
-  const priceOfLine = new Map(linePrices.map(p => [p.aplLineId, Number(p.unitPrice)]))
-  const priceOfItem = new Map(itemPrices.map(p => [p.item, Number(p.unitPrice)]))
+  const priceOfShop: WorkshopPriceMap = new Map(
+    shopPrices.map(p => [shopKey(p.item, p.teamCode, p.stageCode), Number(p.unitPrice)]))
 
+  // ── Tiền tính theo ĐƠN GIÁ CỦA TỪNG CÔNG ĐOẠN (chốt 07/09/2026) ──
+  //
+  //   tiền(công đoạn) = KL đã nghiệm thu của công đoạn × đơn giá của công đoạn
+  //   tiền(xưởng)     = tổng các công đoạn của lệnh đó
+  //   Thành tiền ITEM = tổng các xưởng
+  //   Tổng (giá trị khoán) = tổng (đơn giá công đoạn × KL GIAO của công đoạn)
+  //
+  // KHÔNG còn đơn giá cho cả hạng mục: pha cắt và bảo ôn là hai phần việc khác nhau, không có
+  // một đơn giá chung nào nói đúng cả hai. Vì vậy cũng không còn "trần của hạng mục".
+  //
+  // Công đoạn đã có KL nghiệm thu mà CHƯA đặt đơn giá thì tiền = 0 và được đếm là thiếu giá —
+  // đọc ra 0 đồng dễ tưởng làm không công, nên phải nêu rõ ở giao diện.
+  //
+  // Lệnh KHÔNG chia công đoạn: giá đặt cho cả lệnh của xưởng đó (stageCode '') như trước.
+  //
+  // Giá theo DÒNG CHI TIẾT (AplLinePrice) không còn tham gia. Bảng vẫn giữ, chưa xoá.
   let totalAmount = 0
   let plannedAmount = 0
-  let linesWithoutPrice = 0
-  const byItem = new Map<string, { amount: number; plannedAmount: number; linesWithoutPrice: number }>()
+  let shopsWithoutPrice = 0
+  const byItem = new Map<string, {
+    amount: number; plannedAmount: number; linesWithoutPrice: number
+    /** Trần của hạng mục = đơn giá ITEM × KL thiết kế */
+    cap: number | null
+    /** Đã nghiệm thu xong ở mọi xưởng và tiền vượt trần */
+    overCap: boolean
+    shopsWithoutPrice: number
+  }>()
 
-  for (const d of details) {
-    const key = d.item || ''
-    const bucket = byItem.get(key) || { amount: 0, plannedAmount: 0, linesWithoutPrice: 0 }
-    const unit = effectiveUnitPrice(priceOfLine.get(d.id), priceOfItem.get(key))
-    if (unit === null) {
-      linesWithoutPrice++
-      bucket.linesWithoutPrice++
-      byItem.set(key, bucket)
-      continue
+  for (const [key, acc] of acceptance) {
+    let amount = 0        // đã làm: theo KL đã nghiệm thu
+    let khoan = 0         // giá trị khoán: theo KL giao
+    let missing = 0
+    for (const w of acc.wos) {
+      if (w.stages.length > 0) {
+        for (const st of w.stages) {
+          const unit = priceOfShop.get(shopKey(key, w.teamCode, st.stageCode))
+          if (unit === undefined) {
+            if (st.acceptedKg > 0) { missing++; shopsWithoutPrice++ }
+            continue
+          }
+          amount += st.acceptedKg * unit
+          khoan += st.plannedKg * unit
+        }
+        continue
+      }
+      // Lệnh chạy nguyên khối — giá đặt cho cả lệnh.
+      const unit = priceOfShop.get(shopKey(key, w.teamCode))
+      if (unit === undefined) {
+        if (w.acceptedKg > 0) { missing++; shopsWithoutPrice++ }
+        continue
+      }
+      amount += w.acceptedKg * unit
+      khoan += w.plannedKg * unit
     }
+    amount = Math.round(amount)
+    const cap = Math.round(khoan)
+    // Không còn đơn giá hạng mục nên không còn khái niệm vượt trần.
+    const overCap = false
 
-    const plannedKg = Number(d.totalWeightKg) || 0
-    // KL nghiệm thu của dòng chi tiết = KL thiết kế × tỉ lệ nghiệm thu của ITEM, nên
-    // cộng các dòng chi tiết lại đúng bằng KL nghiệm thu của lệnh.
-    const acceptedKg = plannedKg * (acceptance.get(key)?.ratio ?? 0)
-
-    totalAmount += acceptedKg * unit
-    plannedAmount += plannedKg * unit
-    bucket.amount += acceptedKg * unit
-    bucket.plannedAmount += plannedKg * unit
-    byItem.set(key, bucket)
-  }
-  for (const b of byItem.values()) {
-    b.amount = Math.round(b.amount)
-    b.plannedAmount = Math.round(b.plannedAmount)
+    totalAmount += amount
+    plannedAmount += cap
+    byItem.set(key, {
+      amount, plannedAmount: cap ?? 0, linesWithoutPrice: missing,
+      cap, overCap, shopsWithoutPrice: missing,
+    })
   }
 
   let plannedKg = 0
   let acceptedKg = 0
   let itemsPriced = 0
   let itemsAccepted = 0
+  let itemsOverCap = 0
   for (const [key, a] of acceptance) {
     plannedKg += a.plannedKg
     acceptedKg += a.acceptedKg
     if (a.allShopsDone) itemsAccepted++
-    if (priceOfItem.has(key)) itemsPriced++
+    // "Đã có đơn giá" = mọi phần việc đang có khối lượng nghiệm thu đều đã được đặt giá.
+    if (byItem.get(key)?.shopsWithoutPrice === 0) itemsPriced++
+    if (byItem.get(key)?.overCap) itemsOverCap++
   }
 
   const itemsTotal = acceptance.size
@@ -238,9 +312,11 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
     itemsTotal,
     itemsPriced,
     itemsAccepted,
-    linesWithoutPrice,
-    // Đủ cả hai: không còn dòng thiếu giá, và mọi ITEM đã nghiệm thu xong ở MỌI xưởng.
-    canComplete: itemsTotal > 0 && linesWithoutPrice === 0 && itemsAccepted === itemsTotal,
+    itemsOverCap,
+    linesWithoutPrice: shopsWithoutPrice,
+    // Chốt bảng khi mọi ITEM đã nghiệm thu xong ở mọi xưởng và không còn xưởng nào có
+    // khối lượng mà thiếu đơn giá. VƯỢT TRẦN chỉ báo đỏ, KHÔNG chặn — để KTKH tự tính lại.
+    canComplete: itemsTotal > 0 && shopsWithoutPrice === 0 && itemsAccepted === itemsTotal,
     byItem,
   }
 }

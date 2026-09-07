@@ -21,11 +21,83 @@ describe('STAGE_WEIGHTS', () => {
   })
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Lệnh CÓ công đoạn: mỗi công đoạn chạy qua TRỌN khối lượng của lệnh (Pha cắt 1000 kg,
+// Hàn 1000 kg — hai lượt việc trên cùng khối thép). Nên tiến độ lệnh = công đoạn CHẬM NHẤT,
+// tuyệt đối không cộng các công đoạn lại: cộng vào sẽ ra 200% khối lượng thật.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('rollUpWorkOrder — lệnh chia công đoạn', () => {
+  const wo = (planned: number) =>
+    prismaMock.workOrder.findUnique.mockResolvedValue({ id: 'wo1', plannedWeight: planned as never, status: 'IN_PROGRESS' } as never)
+  const congDoan = (...qty: number[]) =>
+    prismaMock.workOrderStage.findMany.mockResolvedValue(
+      qty.map((q, i) => ({ id: 'st' + i, qty: q })) as never)
+  const phieu = (rows: { stageId: string | null; actualQty: number }[]) =>
+    prismaMock.jobCard.findMany.mockResolvedValue(
+      rows.map(r => ({ workType: 'production', status: 'IN_PROGRESS', ...r })) as never)
+
+  beforeEach(() => {
+    prismaMock.workOrder.findUnique.mockReset()
+    prismaMock.jobCard.findMany.mockReset()
+    prismaMock.workOrder.update.mockReset()
+    prismaMock.workOrderStage.findMany.mockReset()
+    prismaMock.workOrder.update.mockResolvedValue({} as never)
+  })
+
+  it('báo đủ MỘT công đoạn, công đoạn kia chưa làm → lệnh vẫn 0', async () => {
+    wo(1000); congDoan(1000, 1000)
+    phieu([{ stageId: 'st0', actualQty: 1000 }])
+    const r = await rollUpWorkOrder('wo1')
+    expect(r?.completedQty).toBe(0)
+    expect(r?.earnedQty).toBe(0)
+  })
+
+  it('báo đủ CẢ HAI công đoạn → lệnh đủ 1000, KHÔNG phải 2000', async () => {
+    wo(1000); congDoan(1000, 1000)
+    phieu([{ stageId: 'st0', actualQty: 1000 }, { stageId: 'st1', actualQty: 1000 }])
+    const r = await rollUpWorkOrder('wo1')
+    expect(r?.completedQty).toBe(1000)
+    expect(r?.earnedQty).toBe(1000)
+  })
+
+  it('tiến độ chạy theo công đoạn chậm nhất (100% và 40% → 40%)', async () => {
+    wo(1000); congDoan(1000, 1000)
+    phieu([{ stageId: 'st0', actualQty: 1000 }, { stageId: 'st1', actualQty: 400 }])
+    const r = await rollUpWorkOrder('wo1')
+    expect(r?.completedQty).toBe(400)
+    expect(r?.earnedQty).toBe(0)
+  })
+
+  it('mọi công đoạn ≥90% → lệnh coi như xong (biên ±10%)', async () => {
+    wo(1000); congDoan(1000, 1000)
+    phieu([{ stageId: 'st0', actualQty: 1000 }, { stageId: 'st1', actualQty: 900 }])
+    const r = await rollUpWorkOrder('wo1')
+    expect(r?.earnedQty).toBe(1000)
+  })
+
+  it('phiếu cũ không gắn công đoạn được tính cho MỌI công đoạn (không tụt về 0)', async () => {
+    wo(1000); congDoan(1000, 1000)
+    phieu([{ stageId: null, actualQty: 1000 }])
+    const r = await rollUpWorkOrder('wo1')
+    expect(r?.completedQty).toBe(1000)
+  })
+
+  it('không vượt quá khối lượng kế hoạch dù báo dư', async () => {
+    wo(1000); congDoan(1000, 1000)
+    phieu([{ stageId: 'st0', actualQty: 1500 }, { stageId: 'st1', actualQty: 1400 }])
+    const r = await rollUpWorkOrder('wo1')
+    expect(r?.completedQty).toBe(1000)
+  })
+})
+
 describe('rollUpWorkOrder', () => {
   beforeEach(() => {
     prismaMock.workOrder.findUnique.mockReset()
     prismaMock.jobCard.findMany.mockReset()
     prismaMock.workOrder.update.mockReset()
+    // Mặc định: lệnh KHÔNG khai công đoạn → chạy nhánh cũ (trọng số / cộng dồn kg).
+    prismaMock.workOrderStage.findMany.mockReset()
+    prismaMock.workOrderStage.findMany.mockResolvedValue([] as never)
   })
 
   it('returns undefined if WO not found', async () => {

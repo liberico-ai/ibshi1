@@ -41,6 +41,13 @@ export const createJobCardSchema = z.object({
   description: z.string().optional(),
   plannedQty: z.number().positive().optional(),
   actualQty: z.number().min(0).optional(),
+  // Lệnh có khai công đoạn thì xưởng báo theo TỪNG công đoạn — mỗi công đoạn một phiếu.
+  // Gửi kèm 'lines' để lưu nhiều công đoạn trong một lần bấm; bỏ trống thì dùng actualQty
+  // như cũ (lệnh chạy nguyên khối).
+  lines: z.array(z.object({
+    stageId: z.string().min(1),
+    actualQty: z.number().positive(),
+  })).optional(),
   unit: z.string().default('kg'),
   workDate: z.string().min(1, 'Ngày làm việc là bắt buộc'),
   startTime: z.string().optional(),

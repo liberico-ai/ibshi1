@@ -10,6 +10,7 @@ import { canManageProject, notProjectPmMessage } from '@/lib/project-pm'
 import { summarizeWoMaterials } from '@/lib/wo-materials'
 import { getWorkshopScope } from '@/lib/workshop-scope'
 import { SUBCONTRACT_TEAM_CODE } from '@/lib/material-request-constants'
+import { DEFAULT_WO_UNIT, isValidUnit } from '@/lib/wo-units'
 import { reconcileWorkOrdersQc } from '@/lib/itp-wo-sync'
 import { getWoAcceptance } from '@/lib/wo-acceptance'
 
@@ -56,6 +57,8 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
           select: { id: true, materialId: true, quantity: true },
         },
         department: { select: { code: true, name: true } },
+        // Công đoạn bên trong lệnh — danh sách hiện lệnh kèm các công đoạn của nó.
+        stages: { orderBy: { sortOrder: 'asc' }, select: { id: true, stageCode: true, name: true, categoryCode: true, category: true, qty: true, unit: true } },
         project: { select: { projectCode: true, projectName: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -88,6 +91,12 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     woType: wo.woType,
     aplLineId: wo.aplLineId,
     plannedWeight: wo.plannedWeight ? Number(wo.plannedWeight) : null,
+    unit: wo.unit,
+    stages: wo.stages.map(st => ({
+      id: st.id, stageCode: st.stageCode, name: st.name,
+      categoryCode: st.categoryCode, category: st.category,
+      qty: Number(st.qty), unit: st.unit,
+    })),
     completedQty: wo.completedQty ? Number(wo.completedQty) : null,
     departmentId: wo.departmentId,
     department: wo.department,
@@ -121,7 +130,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   }
 
   const body = await req.json()
-  const { woCode, projectId, description, teamCode, plannedStart, plannedEnd, pieceMark, bomVersionId, plannedWeight, departmentId } = body
+  const { woCode, projectId, description, teamCode, plannedStart, plannedEnd, pieceMark, bomVersionId, plannedWeight, departmentId, unit } = body
 
   if (!woCode || !projectId || !description || !teamCode) {
     return errorResponse('Thiếu: mã WO, dự án, mô tả, tổ SX')
@@ -159,6 +168,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
       pieceMark: pieceMark || null,
       bomVersionId: bomVersionId || null,
       plannedWeight: plannedWeight || null,
+      unit: isValidUnit(unit) ? String(unit) : DEFAULT_WO_UNIT,
       departmentId: resolvedDeptId,
       createdBy: payload.userId,
     },

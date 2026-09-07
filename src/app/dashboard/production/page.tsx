@@ -31,10 +31,13 @@ interface WorkOrder {
   teamCode: string; status: string; pieceMark: string | null;
   plannedWeight: number | null; completedQty: number | null;
   woType?: string | null;
+  unit?: string;
+  /** Công đoạn bên trong lệnh — hiện gọn dưới mã lệnh */
+  stages?: { id: string; name: string; qty: number; unit: string }[];
   materials: string | null;
   material?: { total: number; done: number; state: 'NONE' | 'PARTIAL' | 'FULL' | null };
   // Nghiệm thu theo đợt — đã ký bao nhiêu kg, còn bao nhiêu chờ mời
-  acceptance?: { acceptedKg: number; pendingKg: number; availableKg: number; fullyAccepted: boolean } | null;
+  acceptance?: { acceptedQty: number; pendingQty: number; availableQty: number; fullyAccepted: boolean } | null;
   departmentId: string | null;
   department: { code: string; name: string } | null;
   project: { projectCode: string; projectName: string } | null;
@@ -354,16 +357,18 @@ export default function ProductionPage() {
                           <div className="h-full rounded-full" style={{ width: `${weightPct}%`, background: SEMANTIC_COLORS.success.solid }} />
                         </div>
                         {/* Đã báo chưa phải là đã được trả tiền — chỉ phần hai chữ ký đã ký mới tính. */}
-                        {!!wo.acceptance && wo.acceptance.acceptedKg > 0 && (
+                        {!!wo.acceptance && wo.acceptance.acceptedQty > 0 && (
                           <span className="block mt-0.5 font-mono text-[10px]" style={{ color: SEMANTIC_COLORS.info.solid }}
                             title="Khối lượng đã đủ chữ ký QAQC + PM">
-                            đã nghiệm thu {formatNumber(Math.round(wo.acceptance.acceptedKg))} kg
+                            {/* acceptedQty ở cấp lệnh là công đoạn CHẬM NHẤT, nên không bao giờ
+                                đọc ra lớn hơn khối lượng của lệnh. */}
+                            đã nghiệm thu {formatNumber(Math.round(wo.acceptance.acceptedQty))} kg
                           </span>
                         )}
-                        {!!wo.acceptance && wo.acceptance.availableKg > 0 && (
+                        {!!wo.acceptance && wo.acceptance.availableQty > 0 && (
                           <span className="block font-mono text-[10px]" style={{ color: SEMANTIC_COLORS.warning.solid }}
                             title="Đã báo nhưng chưa mời nghiệm thu">
-                            chờ mời {formatNumber(Math.round(wo.acceptance.availableKg))} kg
+                            chờ mời {formatNumber(Math.round(wo.acceptance.availableQty))} kg
                           </span>
                         )}
                       </div>

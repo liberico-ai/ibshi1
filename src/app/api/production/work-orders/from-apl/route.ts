@@ -4,6 +4,8 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { describeDbError } from '@/lib/db-missing-table'
 import { canManageProject, notProjectPmMessage } from '@/lib/project-pm'
 import { aplItemWoCode, aplItemWoDescription, rollupItemMaterials, formatMaterialsColumn } from '@/lib/apl-wo'
+import { DEFAULT_WO_UNIT, isValidUnit } from '@/lib/wo-units'
+import { findStage, categoriesOf } from '@/lib/work-catalog'
 import { ensureWeeklyReportTask } from '@/lib/workflow-engine'
 
 export const dynamic = 'force-dynamic'
@@ -73,6 +75,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null) as {
       projectId?: string; importId?: string; item?: string
       teamCode?: string; plannedStart?: string; plannedEnd?: string
+      unit?: string; plannedQty?: number
+      /** Công đoạn bên trong lệnh — tổng khối lượng không được vượt plannedQty */
+      stages?: { stageCode?: string; categoryCode?: string; qty?: number; note?: string }[]
     } | null
     if (!body?.projectId) return errorResponse('Thiếu dự án')
     if (!body.importId) return errorResponse('Thiếu bản APL')
@@ -139,6 +144,54 @@ export async function POST(req: NextRequest) {
       woCode = aplItemWoCode(project.projectCode, itemForCode, n)
     }
 
+    const unit = isValidUnit(body.unit) ? String(body.unit) : DEFAULT_WO_UNIT
+    const rawQty = Number(body.plannedQty)
+    const givenQty = Number.isFinite(rawQty) && rawQty > 0 ? rawQty : null
+    // kg: mặc định lấy khối lượng thiết kế của ITEM. Đơn vị khác: chỉ nhận số PM nhập.
+    const plannedQty = givenQty ?? (unit === DEFAULT_WO_UNIT && weightKg > 0 ? weightKg : null)
+    // Giao diện đã chặn, server chặn lại: đơn vị khác kg thì không suy được số lượng từ khối
+    // lượng ITEM. Để lệnh trống khối lượng thì nghiệm thu và tính tiền đều hỏng về sau.
+    if (unit !== DEFAULT_WO_UNIT && !givenQty) {
+      return errorResponse(`Lệnh đo bằng ${unit} thì phải nhập số lượng — không quy đổi được từ kg`, 422)
+    }
+
+    // ── Công đoạn bên trong lệnh ──
+    // MỖI công đoạn chạy qua TRỌN khối lượng đã giao cho xưởng, giống như mỗi xưởng nhận trọn
+    // khối lượng của ITEM. Lệnh 24.784 kg giao ba công đoạn thì cả ba đều là 24.784 kg —
+    // đó là ba lượt việc trên cùng khối thép, KHÔNG phải chia nhỏ ra để cộng lại.
+    // Vì vậy KHÔNG chặn theo tổng.
+    // Công đoạn phải nằm trong DANH MỤC công việc; chủng loại phải thuộc đúng công đoạn đó.
+    // Nhận cả mã lẫn nhãn để báo cáo cũ vẫn đọc được khi danh mục đổi tên về sau.
+    const rawStages = Array.isArray(body.stages) ? body.stages : []
+    const stages: {
+      stageCode: string; name: string; categoryCode: string | null; category: string | null
+      qty: number; note: string | null
+    }[] = []
+    for (const st of rawStages) {
+      const def = findStage(String(st?.stageCode ?? '').trim())
+      const qty = Number(st?.qty)
+      if (!def) return errorResponse(`Công đoạn "${st?.stageCode ?? ''}" không có trong danh mục công việc`, 422)
+      if (!Number.isFinite(qty) || qty <= 0) return errorResponse(`Công đoạn ${def.code} phải có khối lượng lớn hơn 0`, 422)
+      const catCode = String(st?.categoryCode ?? '').trim()
+      const cats = categoriesOf(def.code)
+      const cat = catCode ? cats.find(c => c.code === catCode) : null
+      if (catCode && !cat) return errorResponse(`Chủng loại "${catCode}" không thuộc công đoạn ${def.code}`, 422)
+      if (!catCode && cats.length > 0) return errorResponse(`Công đoạn ${def.code} phải chọn chủng loại`, 422)
+      stages.push({
+        stageCode: def.code, name: def.label,
+        categoryCode: cat?.code ?? null, category: cat?.label ?? null,
+        qty, note: st?.note ? String(st.note).trim() : null,
+      })
+    }
+    if (stages.length > 0) {
+      // Trùng = cùng công đoạn VÀ cùng chủng loại. Một công đoạn nhiều chủng loại khác nhau
+      // là hợp lệ (Sơn · Block và Sơn · Khung kiện là hai phần việc khác nhau).
+      const trung = stages.map(s => `${s.stageCode}::${s.categoryCode ?? ''}`)
+      if (new Set(trung).size !== trung.length) {
+        return errorResponse('Một công đoạn + chủng loại bị khai hai lần trong cùng một lệnh', 422)
+      }
+    }
+
     const dept = team
       ? await prisma.department.findFirst({ where: { code: team }, select: { id: true } })
       : null
@@ -158,13 +211,26 @@ export async function POST(req: NextRequest) {
         teamCode: team,
         departmentId: dept?.id || null,
         woType: 'INTERNAL',
-        plannedWeight: weightKg > 0 ? weightKg : null,
+        // Đơn vị của lệnh: kg thì lấy thẳng khối lượng ITEM; đơn vị khác (m², mét…) thì
+        // KHÔNG quy đổi được từ kg — phải dùng số lượng PM nhập, thiếu thì để trống.
+        unit,
+        plannedWeight: plannedQty !== null && plannedQty > 0 ? plannedQty : null,
         plannedStart: toDate(body.plannedStart),
         plannedEnd: toDate(body.plannedEnd),
         createdBy: user.userId,
       },
       select: { id: true, woCode: true },
     })
+
+    if (stages.length > 0) {
+      await prisma.workOrderStage.createMany({
+        data: stages.map((st, i) => ({
+          workOrderId: wo.id, stageCode: st.stageCode, name: st.name,
+          categoryCode: st.categoryCode, category: st.category,
+          qty: st.qty, unit, sortOrder: i, note: st.note, createdBy: user.userId,
+        })),
+      })
+    }
 
     // Phát hành WO = xưởng sắp làm → mở sẵn bước báo cáo khối lượng tuần (P5.2).
     // Trước đây bước này chỉ sinh khi Kho cấp ĐỦ vật tư; từ khi cổng vật tư không còn chặn

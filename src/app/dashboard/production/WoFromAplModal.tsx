@@ -6,6 +6,8 @@ import { notify } from '@/components/ui/Toast'
 import { Modal, Button, SelectField } from '@/components/ui'
 import { formatNumber } from '@/lib/utils'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
+import { WO_UNITS, DEFAULT_WO_UNIT, unitLabel } from '@/lib/wo-units'
+import { WORK_STAGES, categoriesOf } from '@/lib/work-catalog'
 
 // Phát hành lệnh sản xuất từ APL.
 //   chọn dự án → danh sách ITEM → chọn 1 ITEM → giao xưởng + thời gian → phát hành.
@@ -18,7 +20,23 @@ import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 
 interface ProjectOption { id: string; projectCode: string; projectName: string }
 interface AplInfo { id: string; fileName: string; sheetName: string; revision: string | null; totalRows: number }
-interface Assign { teamCode: string; plannedStart: string; plannedEnd: string }
+/** Một công đoạn bên trong lệnh của một xưởng — chọn từ danh mục công việc.
+ *  vd công đoạn "S - Sơn", chủng loại "BL - Block", 10.240 kg */
+interface Stage { stageCode: string; categoryCode: string; qty: string }
+
+interface Assign {
+  teamCode: string
+  /** Đơn vị đo phần việc của xưởng này — pha cắt/hàn tính kg, sơn tính m², lắp tính mét */
+  unit: string
+  /** Số lượng giao cho xưởng. Điền sẵn bằng khối lượng ITEM khi đơn vị là kg. */
+  qty: string
+  /** Các công đoạn phải làm. MỖI công đoạn chạy qua trọn qty ở trên. Rỗng = không chia. */
+  stages: Stage[]
+  plannedStart: string
+  plannedEnd: string
+}
+
+
 
 interface ItemRow {
   item: string; blocks: number; weightKg: number
@@ -55,12 +73,40 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
   // Giao MỘT LƯỢT cho nhiều xưởng: mỗi dòng là một lệnh, xưởng nào làm khâu nào thì đặt
   // ngày riêng của khâu đó (cắt trước, hàn sau) — không bắt PM hôm nay giao một xưởng,
   // mai mở lại giao thêm xưởng nữa.
-  const [assigns, setAssigns] = useState<Assign[]>([{ teamCode: '', plannedStart: '', plannedEnd: '' }])
+  const blankAssign = (): Assign => ({ teamCode: '', unit: DEFAULT_WO_UNIT, qty: '', stages: [], plannedStart: '', plannedEnd: '' })
+  const [assigns, setAssigns] = useState<Assign[]>([blankAssign()])
   const setAssign = (i: number, patch: Partial<Assign>) =>
     setAssigns(rs => rs.map((r, k) => (k === i ? { ...r, ...patch } : r)))
-  const addAssign = () => setAssigns(rs => [...rs, { teamCode: '', plannedStart: '', plannedEnd: '' }])
+  const addAssign = () => setAssigns(rs => {
+    const kg = Math.round(preview?.weightKg || 0)
+    return [...rs, { ...blankAssign(), qty: kg > 0 ? String(kg) : '' }]
+  })
   const removeAssign = (i: number) => setAssigns(rs => (rs.length === 1 ? rs : rs.filter((_, k) => k !== i)))
-  const resetAssigns = () => setAssigns([{ teamCode: '', plannedStart: '', plannedEnd: '' }])
+  const resetAssigns = () => setAssigns([blankAssign()])
+
+  // ── Công đoạn bên trong một dòng giao ──
+  const setStage = (i: number, j: number, patch: Partial<Stage>) =>
+    setAssigns(rs => rs.map((r, k) => (k === i ? { ...r, stages: r.stages.map((st, m) => (m === j ? { ...st, ...patch } : st)) } : r)))
+  // Để trống qty: ô sẽ tự hiện khối lượng của lệnh và chạy theo nếu PM sửa khối lượng đó.
+  const addStage = (i: number) =>
+    setAssigns(rs => rs.map((r, k) => (k === i
+      ? { ...r, stages: [...r.stages, { stageCode: '', categoryCode: '', qty: '' }] }
+      : r)))
+  const removeStage = (i: number, j: number) =>
+    setAssigns(rs => rs.map((r, k) => (k === i ? { ...r, stages: r.stages.filter((_, m) => m !== j) } : r)))
+
+  /** Khối lượng giao thực tế của một dòng — ô để trống thì lấy khối lượng ITEM (chỉ với kg). */
+  const rowQty = (a: Assign) => {
+    const n = Number(a.qty)
+    if (Number.isFinite(n) && n > 0) return n
+    return a.unit === DEFAULT_WO_UNIT ? Math.round(preview?.weightKg ?? 0) : 0
+  }
+  // Mỗi công đoạn chạy qua TRỌN khối lượng của lệnh, nên ô để trống nghĩa là bằng khối
+  // lượng đó. Suy lúc hiển thị thay vì chỉ điền lúc bấm thêm — dòng tạo từ trước, hoặc
+  // khối lượng lệnh đổi sau, thì ô vẫn hiện đúng số.
+  const stageQty = (a: Assign, st: Stage) => (st.qty === '' ? rowQty(a) : Number(st.qty) || 0)
+  const stageQtyText = (a: Assign, st: Stage) => (st.qty !== '' ? st.qty : String(rowQty(a) || ''))
+
   const [issuing, setIssuing] = useState(false)
 
   const reset = () => {
@@ -93,7 +139,16 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
     setItem(it.item); setPreview(null); setLoadingPreview(true)
     try {
       const r = await apiFetch(`/api/production/work-orders/from-apl?importId=${apl.id}&item=${encodeURIComponent(it.item)}`)
-      if (r?.ok) setPreview(r as unknown as Preview)
+      if (r?.ok) {
+        const pv = r as unknown as Preview
+        setPreview(pv)
+        // Điền sẵn khối lượng giao = khối lượng thiết kế của ITEM. PM sửa lại nếu xưởng
+        // chỉ nhận một phần, hoặc đổi đơn vị thì tự nhập số khác.
+        const kg = Math.round(pv.weightKg || 0)
+        if (kg > 0) {
+          setAssigns(rs => rs.map(a => (a.unit === DEFAULT_WO_UNIT && !a.qty ? { ...a, qty: String(kg) } : a)))
+        }
+      }
       else notify(r?.error || 'Không xem trước được ITEM', 'error')
     } finally {
       setLoadingPreview(false)
@@ -158,6 +213,10 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
           body: JSON.stringify({
             projectId, importId: apl.id, item,
             teamCode: a.teamCode || undefined,
+            unit: a.unit,
+            plannedQty: a.qty ? Number(a.qty) : undefined,
+            stages: a.stages.filter(st => st.stageCode && stageQty(a, st) > 0)
+              .map(st => ({ stageCode: st.stageCode, categoryCode: st.categoryCode || undefined, qty: stageQty(a, st) })),
             plannedStart: a.plannedStart || undefined,
             plannedEnd: a.plannedEnd || undefined,
           }),
@@ -184,11 +243,27 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
   const takenInForm = (i: number, code: string) =>
     !!code && assigns.some((a, k) => k !== i && a.teamCode === code)
   const rowBad = (i: number) => {
-    const code = assigns[i].teamCode
+    const a = assigns[i]
+    const code = a.teamCode
     if (issuedTeams.includes(code)) return `${code} đã có lệnh cho ITEM này`
     if (takenInForm(i, code)) return `${code} bị chọn hai lần`
     if (!code && assigns.length > 1) return 'Chọn xưởng cho dòng này'
     if (!code && issuedWos.length > 0) return 'ITEM đã giao cho xưởng khác — chọn xưởng nhận'
+    // kg suy được từ khối lượng ITEM; đơn vị khác thì không có hệ số quy đổi nào đúng
+    // cho mọi cấu kiện, nên bắt buộc nhập tay.
+    if (a.unit !== DEFAULT_WO_UNIT && !(Number(a.qty) > 0)) {
+      return `Nhập số lượng theo ${unitLabel(a.unit)} — không quy đổi được từ kg`
+    }
+    if (a.qty !== '' && !(Number(a.qty) > 0)) return 'Số lượng phải lớn hơn 0'
+    // Công đoạn: phải đủ tên và khối lượng, và tổng không vượt phần giao cho xưởng.
+    if (a.stages.some(st => !st.stageCode)) return 'Chọn công đoạn cho mọi dòng đã thêm'
+    if (a.stages.some(st => categoriesOf(st.stageCode).length > 0 && !st.categoryCode)) {
+      return 'Công đoạn có chủng loại thì phải chọn chủng loại'
+    }
+    if (a.stages.some(st => !(stageQty(a, st) > 0))) return 'Công đoạn phải có khối lượng lớn hơn 0'
+    // Trùng = cùng công đoạn VÀ cùng chủng loại; một công đoạn nhiều chủng loại là hợp lệ.
+    const ten = a.stages.map(st => `${st.stageCode}::${st.categoryCode}`)
+    if (new Set(ten).size !== ten.length) return 'Một công đoạn + chủng loại bị khai hai lần'
     return null
   }
   const badRows = assigns.map((_, i) => rowBad(i)).filter(Boolean) as string[]
@@ -332,7 +407,8 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
           <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: 8, color: 'var(--text-secondary)' }}>
             Giao cho những xưởng nào, làm khi nào{' '}
             <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
-              — mỗi dòng là một lệnh, đều nhận trọn {formatNumber(Math.round(preview.weightKg))} kg của ITEM
+              — mỗi dòng là một lệnh. Để trống khối lượng thì lấy trọn {formatNumber(Math.round(preview.weightKg))} kg
+              của ITEM; xưởng đo bằng đơn vị khác (sơn tính m², lắp tính mét) thì chọn đơn vị và nhập số lượng.
             </span>
           </div>
 
@@ -340,7 +416,7 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
             const bad = rowBad(i)
             return (
               <div key={i} style={{ marginBottom: 8 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 34px', gap: 10, alignItems: 'end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.85fr 0.7fr 0.9fr 0.9fr 34px', gap: 8, alignItems: 'end' }}>
                   <SelectField label={i === 0 ? 'Xưởng nhận' : ''} value={a.teamCode}
                     onChange={e => setAssign(i, { teamCode: e.target.value })}
                     options={[
@@ -352,6 +428,28 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                           : w.name,
                       })),
                     ]} />
+                  <div>
+                    {i === 0 && <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Khối lượng giao</label>}
+                    <input type="number" min="0" step="any" className="input-field text-sm" value={a.qty}
+                      placeholder={a.unit === DEFAULT_WO_UNIT ? String(Math.round(preview.weightKg)) : 'nhập tay'}
+                      title={a.unit === DEFAULT_WO_UNIT
+                        ? 'Để trống thì lấy trọn khối lượng thiết kế của ITEM'
+                        : 'Đơn vị khác kg không quy đổi được từ khối lượng — phải nhập'}
+                      onChange={e => setAssign(i, { qty: e.target.value })} />
+                  </div>
+                  <div>
+                    {i === 0 && <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Đơn vị</label>}
+                    <select className="input-field text-sm" value={a.unit}
+                      onChange={e => {
+                        const u = e.target.value
+                        // Sang kg thì điền lại khối lượng ITEM; sang đơn vị khác thì xoá,
+                        // vì con số kg không còn nghĩa gì với m² hay mét.
+                        const kg = Math.round(preview?.weightKg || 0)
+                        setAssign(i, { unit: u, qty: u === DEFAULT_WO_UNIT && kg > 0 ? String(kg) : '' })
+                      }}>
+                      {WO_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                    </select>
+                  </div>
                   <div>
                     {i === 0 && <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Bắt đầu</label>}
                     <input type="date" className="input-field text-sm" value={a.plannedStart}
@@ -372,6 +470,58 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                     }}>&times;</button>
                 </div>
                 {bad && <div style={{ fontSize: '0.72rem', color: '#b45309', marginTop: 2 }}>{bad}</div>}
+
+                {/* Phân giao công đoạn bên trong lệnh của xưởng này.
+                    Xưởng Hoàn thiện nhận 71.504 kg → tách "Sơn lớp 1" 10.240, "Sơn lớp 2" 46.123.
+                    Không chia thì bỏ trống, lệnh chạy nguyên khối như trước. */}
+                <div style={{ marginLeft: 12, marginTop: 4, paddingLeft: 10, borderLeft: '2px solid var(--border)' }}>
+                  {a.stages.map((st, j) => (
+                    <div key={j} style={{ display: 'grid', gridTemplateColumns: '1.15fr 1.35fr 0.8fr 52px 30px', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                      {j === 0 && <span className="text-[10px] font-semibold" style={{ gridColumn: '1 / -1', color: 'var(--text-muted)' }}>
+                        Công đoạn · Chủng loại · Khối lượng (mỗi công đoạn chạy qua trọn khối lượng của lệnh)
+                      </span>}
+                      <select className="input-field text-sm" value={st.stageCode}
+                        onChange={e => setStage(i, j, { stageCode: e.target.value, categoryCode: '' })}>
+                        <option value="">— Công đoạn —</option>
+                        {WORK_STAGES.map(x => <option key={x.code} value={x.code}>{x.code} - {x.label}</option>)}
+                      </select>
+                      <select className="input-field text-sm" value={st.categoryCode}
+                        disabled={categoriesOf(st.stageCode).length === 0}
+                        title={!st.stageCode ? 'Chọn công đoạn trước'
+                          : categoriesOf(st.stageCode).length === 0 ? 'Công đoạn này không chia chủng loại' : 'Chủng loại'}
+                        onChange={e => setStage(i, j, { categoryCode: e.target.value })}>
+                        <option value="">
+                          {!st.stageCode ? '— Chọn công đoạn trước —'
+                            : categoriesOf(st.stageCode).length === 0 ? '— Không có chủng loại —' : '— Chủng loại —'}
+                        </option>
+                        {categoriesOf(st.stageCode).map(c => <option key={c.code} value={c.code}>{c.code} - {c.label}</option>)}
+                      </select>
+                      <input className="input-field text-sm" type="number" min="0" step="any" placeholder="Khối lượng"
+                        title="Mặc định bằng khối lượng của lệnh; sửa nếu công đoạn này chỉ làm một phần"
+                        value={stageQtyText(a, st)} onChange={e => setStage(i, j, { qty: e.target.value })} />
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{unitLabel(a.unit)}</span>
+                      <button type="button" onClick={() => removeStage(i, j)} title="Bỏ công đoạn này"
+                        style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 700 }}>&times;</button>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 2 }}>
+                    <button type="button" onClick={() => addStage(i)}
+                      style={{
+                        padding: '3px 9px', borderRadius: 6, fontSize: '0.74rem', fontWeight: 600,
+                        border: '1px dashed var(--border)', background: 'none', color: 'var(--primary)', cursor: 'pointer',
+                      }}>+ Công đoạn</button>
+                    {a.stages.length > 0 && (
+                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        {a.stages.length} công đoạn — mỗi công đoạn chạy qua trọn khối lượng của lệnh
+                      </span>
+                    )}
+                    {a.stages.length === 0 && (
+                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        Không khai công đoạn cũng được — lệnh chạy nguyên khối
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             )
           })}
@@ -390,7 +540,13 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
             ? <span style={{ color: 'var(--text-muted)' }}>Chọn một ITEM để phát hành</span>
             : badRows.length > 0
               ? <span style={{ color: '#b45309' }}>{badRows[0]}</span>
-              : <>Phát hành <b>{willIssue}</b> lệnh · mỗi lệnh <b>{formatNumber(Math.round(preview.weightKg))}</b> kg · <b>{preview.materials.length}</b> loại vật tư</>}
+              : <>Phát hành <b>{willIssue}</b> lệnh ·{' '}
+                  {[...new Set(assigns.filter(a => assigns.length === 1 || a.teamCode).map(a =>
+                    `${formatNumber(Number(a.qty) || (a.unit === DEFAULT_WO_UNIT ? Math.round(preview.weightKg) : 0))} ${unitLabel(a.unit)}`))].join(' · ')}
+                  {' '}· <b>{preview.materials.length}</b> loại vật tư
+                  {assigns.some(a => a.stages.length > 0) && (
+                    <> · <b>{assigns.reduce((n, a) => n + a.stages.filter(st => st.stageCode && stageQty(a, st) > 0).length, 0)}</b> công đoạn</>
+                  )}</>}
         </span>
         <div style={{ flex: 1 }} />
         <Button variant="outline" onClick={close}>Đóng</Button>

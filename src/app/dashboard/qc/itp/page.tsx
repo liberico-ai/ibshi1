@@ -18,11 +18,25 @@ interface Checkpoint {
   // Hai chữ ký song song; đủ cả hai thì status mới là PASSED
   qcConfirmedAt: string | null; qcConfirmedName: string | null;
   pmConfirmedAt: string | null; pmConfirmedName: string | null;
+  // Dòng công đoạn: một ITP cho cả lệnh, bên trong mỗi công đoạn một dòng khối lượng riêng.
+  acceptedQty: number | null;
+  stage: { id: string; stageCode: string; name: string; category: string | null; unit: string } | null;
+}
+
+/** Nghiệm thu của MỘT công đoạn — mỗi công đoạn là một phần việc riêng, ký riêng */
+interface StageAcc {
+  id: string; stageCode: string; name: string; category: string | null; unit: string
+  plannedQty: number; reportedQty: number; acceptedQty: number
+  pendingQty: number; availableQty: number; invitedQty: number; needInviteQty: number
+  fullyAccepted: boolean
 }
 
 interface Acceptance {
-  plannedKg: number; reportedKg: number; acceptedKg: number
-  pendingKg: number; availableKg: number; fullyAccepted: boolean; hasFailed: boolean
+  unit?: string
+  plannedQty: number; reportedQty: number; acceptedQty: number
+  stages?: StageAcc[]
+  stageCount?: number
+  pendingQty: number; availableQty: number; fullyAccepted: boolean; hasFailed: boolean
   blockReason: string | null
 }
 
@@ -64,6 +78,9 @@ export default function ITPPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
+  // Nhóm dự án nào bị người dùng thu lại. Không lưu "đang mở" mà lưu "đã đóng": mặc định
+  // do dữ liệu quyết (dự án còn việc thì mở sẵn), bấm vào mới ghi đè.
+  const [closedProjects, setClosedProjects] = useState<Record<string, boolean>>({})
   const [uploadingCp, setUploadingCp] = useState<string | null>(null)
   const user = useAuthStore(s => s.user)
 
@@ -84,6 +101,32 @@ export default function ITPPage() {
   }
 
   useEffect(() => { loadData() }, [loadData])
+
+  // ── Gom ITP theo DỰ ÁN ──
+  // Để phẳng thì mọi dự án trộn lẫn nhau, nhìn không ra cái nào của ai. Mỗi dự án một khối,
+  // dự án CÒN VIỆC mở sẵn, dự án đã xong hết thì thu lại cho gọn.
+  const groups = (() => {
+    const m = new Map<string, {
+      projectId: string; projectCode: string; projectName: string
+      itps: ITP[]; dangLam: number; loi: number
+    }>()
+    for (const i of itps) {
+      const g = m.get(i.projectId) || {
+        projectId: i.projectId,
+        projectCode: i.project.projectCode,
+        projectName: i.project.projectName,
+        itps: [], dangLam: 0, loi: 0,
+      }
+      g.itps.push(i)
+      if (i.status !== 'COMPLETED') g.dangLam++
+      if (i.failedCheckpoints > 0) g.loi++
+      m.set(i.projectId, g)
+    }
+    return [...m.values()].sort((a, b) => a.projectCode.localeCompare(b.projectCode))
+  })()
+
+  const groupOpen = (g: (typeof groups)[number]) =>
+    closedProjects[g.projectId] === undefined ? g.dangLam > 0 : !closedProjects[g.projectId]
 
   const canInspect = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
   const canCreate = canInspect
@@ -163,11 +206,31 @@ export default function ITPPage() {
         />
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-5">
         {itps.length === 0 && (
           <EmptyState icon={<ClipboardList />} title="Chưa có ITP nào" description="Tạo ITP đầu tiên để bắt đầu quản lý kiểm tra" />
         )}
-        {itps.map(itp => {
+        {groups.map(g => {
+          const moRong = groupOpen(g)
+          return (
+          <div key={g.projectId} className="space-y-3">
+            {/* Đầu mỗi khối dự án — bấm để thu/mở. Dự án còn việc mở sẵn, xong hết thì thu lại. */}
+            <button type="button"
+              onClick={() => setClosedProjects(m => ({ ...m, [g.projectId]: moRong }))}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+              <span className="text-xs" style={{ color: 'var(--text-muted)', width: 12 }}>{moRong ? '▼' : '▶'}</span>
+              <span className="font-mono text-sm font-bold" style={{ color: 'var(--accent)' }}>{g.projectCode}</span>
+              <span className="text-sm truncate flex-1" style={{ color: 'var(--text-primary)' }}>{g.projectName}</span>
+              <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                {g.itps.length} ITP
+                {g.dangLam > 0 && <span style={{ color: SEMANTIC_COLORS.warning.solid }}> · {g.dangLam} đang làm</span>}
+                {g.loi > 0 && <span style={{ color: SEMANTIC_COLORS.danger.solid }}> · {g.loi} lỗi</span>}
+                {g.dangLam === 0 && g.loi === 0 && <span style={{ color: SEMANTIC_COLORS.success.solid }}> · xong</span>}
+              </span>
+            </button>
+
+            {moRong && g.itps.map(itp => {
           const progress = itp.totalCheckpoints ? Math.round((itp.passedCheckpoints / itp.totalCheckpoints) * 100) : 0
           const isExpanded = expanded === itp.id
           const itpColors = STATUS_COLORS.itp[itp.status as keyof typeof STATUS_COLORS.itp]
@@ -189,7 +252,6 @@ export default function ITPPage() {
                       <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>Rev {itp.revision}</span>
                     </div>
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{itp.name}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>DA: <span className="font-mono">{itp.project.projectCode}</span></p>
                     {/* ITP gắn với lệnh nào, xưởng đã báo bao nhiêu, kiểm ngày nào */}
                     {itp.workOrder && (
                       <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
@@ -203,26 +265,32 @@ export default function ITPPage() {
                         {itp.inspectionDate ? ` · kiểm ${formatDate(itp.inspectionDate)}` : ''}
                       </p>
                     )}
-                    {/* ĐỢT nghiệm thu này bao nhiêu, và cả lệnh đã nghiệm thu tới đâu */}
-                    {itp.acceptedQty !== null && itp.acceptedQty !== undefined && (
+                    {/* ĐỢT nghiệm thu này bao nhiêu, và cả lệnh đã nghiệm thu tới đâu.
+                        Lệnh chia công đoạn: kể TỪNG dòng — cộng hai công đoạn lại ra một khối
+                        lượng không có thật, và lệnh chỉ 100% khi MỌI công đoạn xong. */}
+                    {(itp.acceptedQty !== null && itp.acceptedQty !== undefined) || itp.checkpoints.some(cp => cp.stage) ? (
                       <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                         Đợt này: <span className="font-mono font-bold" style={{ color: 'var(--accent)' }}>
-                          {formatNumber(Math.round(itp.acceptedQty))} kg
+                          {itp.checkpoints.some(cp => cp.stage)
+                            ? itp.checkpoints.filter(cp => cp.stage)
+                              .map(cp => `${cp.stage!.stageCode} ${formatNumber(cp.acceptedQty ?? 0)} ${cp.stage!.unit}`).join(' · ')
+                            : `${formatNumber(Math.round(itp.acceptedQty ?? 0))} kg`}
                         </span>
                         {itp.acceptance && (
                           <>
                             {' · lệnh đã nghiệm thu '}
                             <span className="font-mono">
-                              {formatNumber(Math.round(itp.acceptance.acceptedKg))}
-                              {itp.acceptance.plannedKg > 0 ? `/${formatNumber(Math.round(itp.acceptance.plannedKg))}` : ''} kg
+                              {formatNumber(Math.round(itp.acceptance.acceptedQty))}
+                              {itp.acceptance.plannedQty > 0
+                                ? `/${formatNumber(Math.round(itp.acceptance.plannedQty))}` : ''} kg
                             </span>
-                            {itp.acceptance.availableKg > 0
-                              ? ` · còn ${formatNumber(Math.round(itp.acceptance.availableKg))} kg chờ mời`
+                            {itp.acceptance.availableQty > 0
+                              ? ` · còn ${formatNumber(Math.round(itp.acceptance.availableQty))} kg chờ mời`
                               : itp.acceptance.fullyAccepted ? ' · đã nghiệm thu trọn lệnh' : ''}
                           </>
                         )}
                       </p>
-                    )}
+                    ) : null}
                   </div>
                   <div className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>
                     <p><span className="font-mono">{itp.totalCheckpoints}</span> điểm kiểm</p>
@@ -250,7 +318,20 @@ export default function ITPPage() {
                           <span className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-white" style={{ background: ins.color }}>{ins.label}</span>
                           <span className="font-mono text-xs w-6" style={{ color: 'var(--text-muted)' }}>#{cp.checkpointNo}</span>
                           <span className="text-xs flex-1" style={{ color: 'var(--text-primary)' }}>
-                            {cp.description}
+                            {/* Dòng công đoạn: nói rõ công đoạn nào, khối lượng bao nhiêu — mỗi dòng
+                                ký riêng, nên phải đọc được ngay đang ký cho phần việc nào. */}
+                            {cp.stage ? (
+                              <>
+                                <span className="font-mono mr-1" style={{ color: 'var(--accent)' }}>{cp.stage.stageCode}</span>
+                                <b>{cp.stage.name}</b>
+                                {cp.stage.category && <span style={{ color: 'var(--text-muted)' }}> · {cp.stage.category}</span>}
+                                {cp.acceptedQty !== null && (
+                                  <span className="font-mono ml-2" style={{ color: 'var(--success, #16a34a)' }}>
+                                    {formatNumber(cp.acceptedQty)} {cp.stage.unit}
+                                  </span>
+                                )}
+                              </>
+                            ) : cp.description}
                             {cp.remarks && <span className="ml-2 italic" style={{ color: 'var(--text-muted)' }}>— {cp.remarks}</span>}
                           </span>
                           {cp.ncrId && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: SEMANTIC_COLORS.danger.bg, color: SEMANTIC_COLORS.danger.solid }}>NCR</span>}
@@ -376,6 +457,9 @@ export default function ITPPage() {
               )}
             </div>
           )
+            })}
+          </div>
+          )
         })}
       </div>
 
@@ -403,6 +487,8 @@ interface JCOption {
     woCode: string; description: string; pieceMark: string | null
     teamCode: string; status: string; plannedWeight: number | null
   }
+  /** Công đoạn của phiếu; null = phiếu báo cho cả lệnh */
+  stage: { id: string; stageCode: string; name: string; category: string | null } | null
 }
 
 const WO_STATUS_LABEL: Record<string, string> = {
@@ -457,24 +543,23 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
   })).sort((a, b) => a.woCode.localeCompare(b.woCode))
 
   const selectedWo = reportedWOs.find(w => w.id === workOrderId)
+  const acc = workOrderId ? acceptance[workOrderId] : undefined
+  // Các công đoạn CÒN chờ nghiệm thu — mỗi cái sẽ thành một dòng trong ITP.
+  const stages = (acc?.stages ?? []).filter(st => st.availableQty > 0)
+  const dv = acc?.unit || 'kg'
+
   const selectedCards = (cardsByWo[workOrderId] || [])
     .slice()
     .sort((a, b) => new Date(b.workDate).getTime() - new Date(a.workDate).getTime())
-  const reportedQty = selectedCards.reduce((s, c) => s + (c.actualQty || 0), 0)
   const lastDate = selectedCards[0]?.workDate
   const plannedQty = selectedWo?.plannedWeight || 0
-  const pct = plannedQty > 0 ? Math.round((reportedQty / plannedQty) * 100) : 0
-  const acc = workOrderId ? acceptance[workOrderId] : undefined
-  // Còn mời nghiệm thu được bao nhiêu — server chốt lại lần nữa lúc tạo.
-  const availableKg = acc?.availableKg ?? 0
+
   const blocked = acc?.blockReason ?? null
 
   function onWoChange(id: string) {
     setWorkOrderId(id)
-    // Mặc định nghiệm thu trọn phần xưởng đã báo mà chưa nghiệm thu; sửa nhỏ hơn nếu chỉ nhận một phần.
     const a = acceptance[id]
-    setBatchQty(a && a.availableKg > 0 ? String(a.availableKg) : '')
-    // Tên ITP điền sẵn theo lệnh cho đỡ gõ; vẫn sửa được.
+    setBatchQty(a && a.availableQty > 0 && !(a.stages?.length) ? String(a.availableQty) : '')
     const wo = reportedWOs.find(w => w.id === id)
     if (wo && !name.trim()) setName(`Kiểm tra ${wo.woCode}`)
   }
@@ -485,13 +570,23 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
     if (!name.trim()) return notify('Nhập tên ITP')
     if (!inspectionDate) return notify('Chọn ngày kiểm tra')
     if (blocked) return notify(blocked)
-    const qty = parseFloat(batchQty)
-    if (!(qty > 0)) return notify('Nhập khối lượng nghiệm thu đợt này')
-    if (qty > availableKg) return notify(`Chỉ còn ${formatNumber(availableKg)} kg chưa nghiệm thu`)
+    const coCongDoan = (acc?.stages?.length ?? 0) > 0
+    if (coCongDoan) {
+      if (stages.length === 0) return notify('Lệnh này không còn công đoạn nào chờ nghiệm thu')
+    } else {
+      const qty = parseFloat(batchQty)
+      if (!(qty > 0)) return notify('Nhập khối lượng nghiệm thu đợt này')
+      if (qty > (acc?.availableQty ?? 0)) return notify(`Chỉ còn ${formatNumber(acc?.availableQty ?? 0)} ${dv} chưa nghiệm thu`)
+    }
     setSubmitting(true)
     const res = await apiFetch('/api/qc/itp', {
       method: 'POST',
-      body: JSON.stringify({ projectId, name: name.trim(), workOrderId, inspectionDate, acceptedQty: qty }),
+      body: JSON.stringify({
+        projectId, name: name.trim(), workOrderId, inspectionDate,
+        // Lệnh chia công đoạn: bỏ trống stageLines thì server lấy TRỌN phần đang chờ của từng
+        // công đoạn, mỗi công đoạn một dòng ký riêng — không gộp khối lượng lại.
+        acceptedQty: coCongDoan ? undefined : parseFloat(batchQty),
+      }),
     })
     setSubmitting(false)
     if (res.ok) onCreated()
@@ -506,19 +601,26 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
         : reportedWOs.length === 0 ? 'Dự án chưa có lệnh nào được báo khối lượng'
         : 'Chọn lệnh...',
     },
+    // Một ITP cho cả LỆNH; nhãn kể ra các công đoạn đang chờ để phân biệt được lệnh nào với
+    // lệnh nào — mã lệnh chỉ khác nhau ở đuôi thì nhìn không ra.
     ...reportedWOs.map(wo => {
-      const qty = (cardsByWo[wo.id] || []).reduce((s, c) => s + (c.actualQty || 0), 0)
       const a = acceptance[wo.id]
-      // Nói ngay trong danh sách còn bao nhiêu để mời — khỏi chọn xong mới biết là hết.
+      const dau = `${wo.woCode}${wo.pieceMark ? ` — ${wo.pieceMark}` : ''}`
+      if (a?.stages?.length) {
+        const cho = a.stages.filter(st => st.availableQty > 0)
+        const tail = cho.length > 0
+          // Kể TỪNG công đoạn với khối lượng riêng — không cộng chung thành một số.
+          ? ' · chờ nghiệm thu: ' + cho.map(st => `${st.stageCode} ${st.name} ${formatNumber(st.availableQty)} ${st.unit}`).join(' + ')
+          : ' · ' + a.stages.map(st => `${st.stageCode} ${st.fullyAccepted ? '✓' : st.pendingQty > 0 ? 'chờ ký' : 'chưa báo'}`).join(', ')
+        return { value: wo.id, label: `${dau}${tail}` }
+      }
+      const qty = (cardsByWo[wo.id] || []).reduce((s, c) => s + (c.actualQty || 0), 0)
       const tail = a
-        ? a.availableKg > 0
-          ? ` · còn ${formatNumber(Math.round(a.availableKg))} kg chờ nghiệm thu`
+        ? a.availableQty > 0
+          ? ` · còn ${formatNumber(Math.round(a.availableQty))} ${a.unit || 'kg'} chờ nghiệm thu`
           : ' · đã nghiệm thu hết phần đã báo'
         : ` · đã báo ${formatNumber(Math.round(qty))} kg`
-      return {
-        value: wo.id,
-        label: `${wo.woCode}${wo.pieceMark ? ` — ${wo.pieceMark}` : ''}${tail}`,
-      }
+      return { value: wo.id, label: `${dau}${tail}` }
     }),
   ]
 
@@ -565,26 +667,12 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
               </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-3 mt-3">
+            <div className="grid grid-cols-3 gap-3 mt-3">
               <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Xưởng đã báo</p>
-                <p className="font-mono font-bold" style={{ color: 'var(--success, #16a34a)' }}>
-                  {formatNumber(Math.round(reportedQty))} kg
-                </p>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  KH {plannedQty > 0 ? `${formatNumber(Math.round(plannedQty))} kg (${pct}%)` : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Đã nghiệm thu</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Khối lượng lệnh</p>
                 <p className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
-                  {formatNumber(Math.round(acc?.acceptedKg ?? 0))} kg
+                  {plannedQty > 0 ? `${formatNumber(Math.round(plannedQty))} ${dv}` : '—'}
                 </p>
-                {(acc?.pendingKg ?? 0) > 0 && (
-                  <p className="text-[10px]" style={{ color: SEMANTIC_COLORS.warning.solid }}>
-                    {formatNumber(Math.round(acc!.pendingKg))} kg đang chờ ký
-                  </p>
-                )}
               </div>
               <div>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Ngày báo gần nhất</p>
@@ -606,6 +694,9 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
                 <div key={c.id} className="flex items-center gap-3 text-xs py-1" style={{ borderBottom: '1px dashed var(--border)' }}>
                   <span className="font-mono" style={{ color: 'var(--text-muted)', minWidth: 80 }}>{c.jobCode}</span>
                   <span style={{ color: 'var(--text-secondary)', minWidth: 90 }}>{formatDate(c.workDate)}</span>
+                  <span className="truncate" style={{ color: c.stage ? 'var(--text-secondary)' : 'var(--text-muted)', minWidth: 120 }}>
+                    {c.stage ? `${c.stage.stageCode} ${c.stage.name}` : '— cả lệnh —'}
+                  </span>
                   <span className="font-mono font-bold" style={{ color: 'var(--success, #16a34a)', minWidth: 80 }}>
                     {formatNumber(c.actualQty || 0)} {c.unit}
                   </span>
@@ -616,31 +707,47 @@ function CreateITPModal({ open, projects, onClose, onCreated }: {
           </div>
         )}
 
-        {/* ĐỢT nghiệm thu — nghiệm thu phần đã báo, không phải chờ trọn lệnh */}
+        {/* ── Nội dung nghiệm thu của ITP này ──
+            MỘT ITP cho cả lệnh, bên trong MỖI công đoạn một dòng mang khối lượng riêng và cặp
+            chữ ký riêng. Tách dòng chứ không gộp khối lượng: ký xong pha cắt không kéo theo bảo ôn. */}
         {selectedWo && (blocked ? (
           <div className="rounded-lg px-3 py-2 text-sm"
             style={{ border: `1px solid ${SEMANTIC_COLORS.warning.solid}`, background: SEMANTIC_COLORS.warning.bg, color: 'var(--text-primary)' }}>
-            <p className="font-semibold">Chưa mời nghiệm thu được</p>
+            <p className="font-semibold">Chưa mở đợt nghiệm thu được</p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{blocked}</p>
+          </div>
+        ) : stages.length > 0 ? (
+          <div className="rounded-lg px-3 py-2 text-sm"
+            style={{ border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>
+            {/* Công đoạn nào bao nhiêu kg đã đọc được ở bảng phiếu báo cáo bên trên — không bày
+                lại một bảng nhập nữa. ITP lấy trọn phần đang chờ của từng công đoạn, mỗi công
+                đoạn một dòng ký riêng. */}
+            <p className="font-semibold">
+              ITP này sẽ có {stages.length} dòng — mỗi công đoạn một dòng, QAQC và PM ký riêng từng dòng
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              {stages.map(st => `${st.stageCode} ${st.name} ${formatNumber(st.availableQty)} ${st.unit}`).join(' · ')}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <InputField
-              label="KL nghiệm thu đợt này (kg) *"
+              label={`KL nghiệm thu đợt này (${dv}) *`}
               type="number"
               value={batchQty}
               onChange={e => setBatchQty(e.target.value)}
-              placeholder={String(availableKg)}
+              placeholder={String(acc?.availableQty ?? 0)}
             />
             <div className="flex flex-col justify-center">
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Còn chờ nghiệm thu</p>
-              <p className="font-mono font-bold" style={{ color: 'var(--accent)' }}>{formatNumber(availableKg)} kg</p>
+              <p className="font-mono font-bold" style={{ color: 'var(--accent)' }}>{formatNumber(acc?.availableQty ?? 0)} {dv}</p>
               <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                 Nhận một phần thì sửa nhỏ lại; phần còn lại mời đợt sau.
               </p>
             </div>
           </div>
         ))}
+
 
         <InputField
           label="Tên ITP *"

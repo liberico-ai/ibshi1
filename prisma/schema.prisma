@@ -992,6 +992,47 @@ model Workshop {
   @@map("workshops")
 }
 
+// Công đoạn bên trong một lệnh sản xuất.
+//
+// Một ITEM giao cho nhiều xưởng (mỗi xưởng một WO). Trong WO của một xưởng lại có thể chia
+// nhỏ thành nhiều công đoạn: Xưởng Hoàn thiện nhận 71.504 kg thì tách "Sơn lớp 1" 10.240 kg
+// và "Sơn lớp 2" 46.123 kg. Tổng khối lượng các công đoạn KHÔNG được vượt khối lượng của WO.
+//
+// WO vẫn là đơn vị để nghiệm thu và tính tiền; công đoạn là cách chia việc bên trong.
+model WorkOrderStage {
+  id           String    @id @default(cuid())
+  workOrderId  String    @map("work_order_id")
+  // Công đoạn lấy từ danh mục công việc (work-catalog.ts, sinh từ Danh_muc_cong_viec.xlsx).
+  // Lưu cả mã lẫn nhãn: mã để đối chiếu chứng từ, nhãn để báo cáo cũ vẫn đọc được khi
+  // danh mục đổi tên về sau.
+  stageCode    String    @default("") @map("stage_code") // vd "S"
+  name         String // nhãn công đoạn, vd "Sơn"
+  categoryCode String?   @map("category_code") // vd "TB"; công đoạn không có chủng loại thì để trống
+  category     String? // nhãn chủng loại, vd "Sơn KC, Thiết bị"
+  qty          Decimal // khối lượng giao cho công đoạn này
+  unit         String    @default("kg") // theo đơn vị của WO
+  // Mời nghiệm thu theo TỪNG công đoạn. Trước đây mời ở cấp lệnh nên lệnh vào "Chờ QC" một lần
+  // rồi mọi công đoạn báo sau đều bị coi là đã mời — báo bảo ôn xong tự nhiên thành đã mời.
+  // Ghi lời mời ngay trên công đoạn: mời cái nào chỉ tính cái đó. QAQC lập ITP cho công đoạn
+  // nào thì lời mời của công đoạn đó coi như đã dùng, xoá đi.
+  qcInvitedQty Decimal?  @map("qc_invited_qty")
+  qcInvitedAt  DateTime? @map("qc_invited_at")
+  qcInvitedBy  String?   @map("qc_invited_by")
+  sortOrder    Int       @default(0) @map("sort_order")
+  note         String?
+  createdBy    String    @map("created_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  workOrder   WorkOrder            @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  jobCards    JobCard[]
+  itps        InspectionTestPlan[]
+  checkpoints ITPCheckpoint[]
+
+  @@index([workOrderId])
+  @@map("work_order_stages")
+}
+
 model WorkOrder {
   id                   String                     @id @default(cuid())
   woCode               String                     @unique @map("wo_code")
@@ -1016,6 +1057,10 @@ model WorkOrder {
   pieceMark            String?                    @map("piece_mark")
   bomVersionId         String?                    @map("bom_version_id")
   plannedWeight        Decimal?                   @map("planned_weight")
+  // Đơn vị của plannedWeight/completedQty. Một ITEM giao nhiều xưởng, mỗi xưởng làm một khâu
+  // và có thể đo bằng đơn vị khác: pha cắt/hàn tính kg, sơn tính m², lắp đặt tính mét.
+  // kg suy được từ khối lượng ITEM; đơn vị khác thì KHÔNG quy đổi được, PM phải tự nhập.
+  unit                 String                     @default("kg")
   materials            String? // vật tư gom từ APL kèm kg cộng dồn, vd "PL10 SS400: 1.234 kg, ..."
   // Từ 2026-08 giao theo ITEM: 1 ITEM = 1 WO = 1 xưởng. aplImportId + aplItem là liên kết CHÍNH.
   // aplLineId giữ lại cho các WO cũ phát hành theo từng dòng vàng (assembly).
@@ -1032,6 +1077,7 @@ model WorkOrder {
   equipmentAssignments EquipmentAssignment[]
   workPermits          WorkPermit[]
   inspections          Inspection[]
+  stages               WorkOrderStage[]
   itpCheckpoints       ITPCheckpoint[]
   itps                 InspectionTestPlan[]
   project              Project                    @relation(fields: [projectId], references: [id])
@@ -1130,28 +1176,33 @@ model MaterialIssue {
 }
 
 model JobCard {
-  id          String    @id @default(cuid())
-  jobCode     String    @unique @map("job_code")
-  workOrderId String    @map("work_order_id")
-  teamCode    String    @map("team_code")
-  workType    String    @map("work_type")
+  id          String          @id @default(cuid())
+  jobCode     String          @unique @map("job_code")
+  workOrderId String          @map("work_order_id")
+  // Công đoạn được báo. Lệnh có khai công đoạn thì xưởng báo theo TỪNG công đoạn,
+  // mỗi công đoạn một phiếu riêng. Để trống = phiếu cũ, hoặc lệnh chạy nguyên khối.
+  stageId     String?         @map("stage_id")
+  teamCode    String          @map("team_code")
+  workType    String          @map("work_type")
   description String?
-  plannedQty  Decimal?  @map("planned_qty")
-  actualQty   Decimal?  @map("actual_qty")
-  unit        String    @default("kg")
-  workDate    DateTime  @map("work_date")
-  startTime   DateTime? @map("start_time")
-  endTime     DateTime? @map("end_time")
+  plannedQty  Decimal?        @map("planned_qty")
+  actualQty   Decimal?        @map("actual_qty")
+  unit        String          @default("kg")
+  workDate    DateTime        @map("work_date")
+  startTime   DateTime?       @map("start_time")
+  endTime     DateTime?       @map("end_time")
   manpower    Int?
-  status      String    @default("OPEN")
-  reportedBy  String    @map("reported_by")
-  approvedBy  String?   @map("approved_by")
+  status      String          @default("OPEN")
+  reportedBy  String          @map("reported_by")
+  approvedBy  String?         @map("approved_by")
   notes       String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  workOrder   WorkOrder       @relation(fields: [workOrderId], references: [id])
+  stage       WorkOrderStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
 
   @@index([workOrderId])
+  @@index([stageId])
   @@index([teamCode])
   @@index([workDate])
   @@index([status])
@@ -1246,6 +1297,9 @@ model InspectionTestPlan {
   // xưởng báo 20 tấn → mời nghiệm thu 20 tấn, báo tiếp 10 tấn → ITP mới cho 10 tấn.
   // KL đã nghiệm thu của lệnh = tổng acceptedQty của các ITP đã đủ hai chữ ký.
   acceptedQty    Decimal?        @map("accepted_qty")
+  // Công đoạn được nghiệm thu trong đợt này. Lệnh chia công đoạn thì mỗi đợt ký cho MỘT công đoạn
+  // — ký xong pha cắt không có nghĩa là đã ký bảo ôn. Để trống = lệnh nguyên khối, hoặc đợt cũ.
+  stageId        String?         @map("stage_id")
   inspectionDate DateTime?       @map("inspection_date")
   approvedBy     String?         @map("approved_by")
   approvedAt     DateTime?       @map("approved_at")
@@ -1253,10 +1307,12 @@ model InspectionTestPlan {
   updatedAt      DateTime        @updatedAt @map("updated_at")
   project        Project         @relation(fields: [projectId], references: [id])
   workOrder      WorkOrder?      @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  stage          WorkOrderStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
   checkpoints    ITPCheckpoint[]
 
   @@index([projectId])
   @@index([workOrderId])
+  @@index([stageId])
   @@map("inspection_test_plans")
 }
 
@@ -1282,8 +1338,14 @@ model ITPCheckpoint {
   sortOrder      Int                   @default(0) @map("sort_order")
   ncrId          String?               @map("ncr_id")
   workOrderId    String?               @map("work_order_id")
+  // MỘT ITP cho cả lệnh, bên trong tách MỘT DÒNG cho mỗi công đoạn — mỗi dòng mang khối lượng
+  // riêng và ký riêng (QAQC + PM ký từng dòng). Ký xong pha cắt không kéo theo bảo ôn.
+  // Để trống = điểm kiểm cũ, khối lượng nằm ở cấp ITP.
+  stageId        String?               @map("stage_id")
+  acceptedQty    Decimal?              @map("accepted_qty")
   pieceMark      String?               @map("piece_mark")
   itp            InspectionTestPlan    @relation(fields: [itpId], references: [id], onDelete: Cascade)
+  stage          WorkOrderStage?       @relation(fields: [stageId], references: [id], onDelete: SetNull)
   ncr            NonConformanceReport? @relation(fields: [ncrId], references: [id], onDelete: SetNull)
   workOrder      WorkOrder?            @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
 
@@ -3086,10 +3148,11 @@ model AplImport {
   importedBy         String   @map("imported_by")
   createdAt          DateTime @default(now()) @map("created_at")
 
-  lines      AplLine[]
-  linePrices AplLinePrice[]
-  itemPrices AplItemPrice[]
-  pricing    AplPricing?
+  lines          AplLine[]
+  linePrices     AplLinePrice[]
+  itemPrices     AplItemPrice[]
+  workshopPrices AplItemWorkshopPrice[]
+  pricing        AplPricing?
 
   @@index([projectId])
   @@index([taskId])
@@ -3183,6 +3246,32 @@ model AplPricing {
 
 // Đơn giá khoán theo ITEM — mức nhập CHÍNH từ 2026-08 (1 ITEM = 1 WO = 1 xưởng).
 // AplLinePrice vẫn dùng để đặt giá RIÊNG cho một dòng chi tiết khi cần, và luôn thắng giá ITEM.
+// Đơn giá khoán của TỪNG XƯỞNG trong một ITEM.
+// Một ITEM giao nhiều xưởng, mỗi xưởng làm một khâu và nhận trọn khối lượng ITEM, nên mỗi
+// xưởng có đơn giá riêng: tiền của xưởng = KL đã nghiệm thu × đơn giá của xưởng.
+// Cộng tiền các xưởng lại không được vượt TRẦN của hạng mục = đơn giá ITEM × KL ITEM.
+model AplItemWorkshopPrice {
+  id        String   @id @default(cuid())
+  importId  String   @map("import_id")
+  item      String // '' = nhóm "(không có ITEM)" của bản APL cũ
+  teamCode  String   @map("team_code") // mã xưởng: XPC, XCT1, XHAN…
+  // Đơn giá đặt theo CÔNG ĐOẠN của lệnh (mã trong danh mục công việc: PC, H, BO…).
+  // '' = lệnh chạy nguyên khối, giá đặt cho cả lệnh của xưởng đó.
+  // Dùng '' chứ không NULL: Postgres coi hai NULL là khác nhau nên ràng buộc duy nhất
+  // sẽ không chặn được bản ghi trùng.
+  stageCode String   @default("") @map("stage_code")
+  unitPrice Decimal  @map("unit_price") // đồng trên đơn vị của lệnh (kg, m²…)
+  note      String?
+  updatedBy String   @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  aplImport AplImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@unique([importId, item, teamCode, stageCode])
+  @@map("apl_item_workshop_prices")
+}
+
 model AplItemPrice {
   id        String   @id @default(cuid())
   importId  String   @map("import_id")

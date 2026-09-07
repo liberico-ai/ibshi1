@@ -2,20 +2,17 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, unauthorizedResponse } from '@/lib/auth'
 import { getWorkshopScope } from '@/lib/workshop-scope'
-import { getAcceptanceByItem, computePricingTotals } from '@/lib/apl-pricing'
+import { getAcceptanceByItem, shopKey } from '@/lib/apl-pricing'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 
 // GET /api/reports/khoan-theo-xuong
 //
 // Báo cáo khối lượng hoàn thành & giá trị khoán theo XƯỞNG → DỰ ÁN → LỆNH.
 //
-// Tiền của MỘT LỆNH:
-//     tiền(lệnh) = KL đã nghiệm thu của lệnh ÷ KL thiết kế của ITEM × giá trị khoán của ITEM
+// Tiền của MỘT LỆNH = KL đã nghiệm thu của lệnh × ĐƠN GIÁ CỦA XƯỞNG nhận lệnh đó.
 //
-// Viết vậy để cộng các lệnh của một ITEM lại ĐÚNG BẰNG Thành tiền của ITEM ở màn đơn giá —
-// kể cả khi ITEM có dòng chi tiết đặt giá riêng, vì "giá trị khoán của ITEM" đã là tổng
-// (KL thiết kế của dòng × đơn giá hiệu lực của dòng). Lấy thẳng đơn giá ITEM nhân vào sẽ
-// lệch ở đúng những ITEM có giá riêng.
+// Mỗi xưởng làm một khâu nên có đơn giá riêng (KTKH nhập ở màn Đơn giá khoán). Xưởng chưa
+// có đơn giá thì tiền = 0. Lấy đúng cùng một phép tính với màn đơn giá để hai nơi không lệch.
 
 interface WoRow {
   woId: string; woCode: string; item: string | null; status: string
@@ -51,16 +48,17 @@ export async function GET(req: NextRequest) {
   const importIds = [...new Set(wos.map(w => w.aplImportId).filter(Boolean) as string[])]
   const priced = new Map<string, {
     acceptance: Awaited<ReturnType<typeof getAcceptanceByItem>>
-    plannedAmountOf: Map<string, number>
+    priceOfShop: Map<string, number>
   }>()
   for (const importId of importIds) {
-    const [acceptance, totals] = await Promise.all([
+    const [acceptance, shopPrices] = await Promise.all([
       getAcceptanceByItem(importId),
-      computePricingTotals(importId),
+      prisma.aplItemWorkshopPrice.findMany({
+        where: { importId }, select: { item: true, teamCode: true, unitPrice: true },
+      }),
     ])
-    const plannedAmountOf = new Map<string, number>()
-    for (const [item, b] of totals.byItem) plannedAmountOf.set(item, b.plannedAmount)
-    priced.set(importId, { acceptance, plannedAmountOf })
+    const priceOfShop = new Map(shopPrices.map(x => [shopKey(x.item, x.teamCode), Number(x.unitPrice)]))
+    priced.set(importId, { acceptance, priceOfShop })
   }
 
   /** Tra số của một lệnh trong bản APL của nó. */
@@ -71,12 +69,10 @@ export async function GET(req: NextRequest) {
     const acc = p?.acceptance.get(w.aplItem || '')
     const mine = acc?.wos.find(x => x.woCode === w.woCode)
     const acceptedKg = mine?.acceptedKg ?? 0
-    // ITEM chưa có đơn giá → chưa ra tiền được, để null chứ không ghi 0 (0 đọc như "làm không công").
-    const itemPlanned = acc?.plannedKg ?? 0
-    const itemAmount = p?.plannedAmountOf.get(w.aplItem || '')
-    const amount = !p || itemAmount === undefined || itemPlanned <= 0
-      ? null
-      : Math.round((acceptedKg / itemPlanned) * itemAmount)
+    // Xưởng chưa có đơn giá → để null (0 đọc như "làm không công"); màn đơn giá tính là 0.
+    const team = w.department?.code || w.teamCode || ''
+    const unit = p?.priceOfShop.get(shopKey(w.aplItem || '', team))
+    const amount = unit === undefined ? null : Math.round(acceptedKg * unit)
     return {
       woId: w.id, woCode: w.woCode, item: w.aplItem, status: w.status,
       plannedKg, reportedKg, acceptedKg,
@@ -118,7 +114,7 @@ export async function GET(req: NextRequest) {
         reportedKg: sum(p.wos, r => r.reportedKg),
         ratio: plannedKg > 0 ? acceptedKg / plannedKg : 0,
         amount: sum(p.wos, r => r.amount ?? 0),
-        // Còn ITEM chưa đặt đơn giá → tổng tiền chưa đủ, phải nói ra chứ không im lặng.
+        // Còn xưởng chưa đặt đơn giá → tổng tiền chưa đủ, phải nói ra chứ không im lặng.
         woWithoutPrice: p.wos.filter(r => r.amount === null).length,
       }
     }).sort((a, b) => b.amount - a.amount)

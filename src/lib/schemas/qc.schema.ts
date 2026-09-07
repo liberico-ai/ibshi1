@@ -59,6 +59,14 @@ export const createItpSchema = z.object({
   // ITP lập cho một lệnh sản xuất đã báo khối lượng
   workOrderId: z.string().optional(),
   // Khối lượng của ĐỢT nghiệm thu này (kg). Bỏ trống = nghiệm thu hết phần đã báo mà chưa nghiệm thu.
+  /**
+   * Các công đoạn được nghiệm thu trong ITP này — MỖI công đoạn một dòng, khối lượng riêng.
+   * Một ITP cho cả lệnh; bên trong tách dòng, không gộp khối lượng.
+   */
+  stageLines: z.array(z.object({
+    stageId: z.string().min(1),
+    qty: z.number().positive(),
+  })).optional(),
   acceptedQty: z.number().positive('Khối lượng nghiệm thu phải lớn hơn 0').optional(),
   inspectionDate: z.string().optional(),
   checkpoints: z.array(itpCheckpointSchema).optional().default([]),

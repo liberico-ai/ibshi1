@@ -93,16 +93,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Mời nghiệm thu: phải có khối lượng đã báo mà chưa nghiệm thu, không thì mời suông.
     if (nextStatus === 'QC_PENDING') {
       const acc = await getWoAcceptanceOne(id)
-      if (acc && acc.availableKg <= 0) {
+      if (acc && acc.availableQty <= 0) {
         return errorResponse(
-          acc.pendingKg > 0
-            ? `Đã mời nghiệm thu ${acc.pendingKg.toLocaleString('vi-VN')} kg, đang chờ chữ ký — báo thêm khối lượng thì mới mời đợt mới`
+          acc.pendingQty > 0
+            ? `Đã mời nghiệm thu ${acc.pendingQty.toLocaleString('vi-VN')} kg, đang chờ chữ ký — báo thêm khối lượng thì mới mời đợt mới`
             : 'Chưa có khối lượng nào chờ nghiệm thu — xưởng báo khối lượng trước',
           422)
       }
       // Đưa WO đã QC Đạt về nghiệm thu lại: xưởng làm được khi có khối lượng MỚI (đợt tiếp theo);
       // còn yêu cầu kiểm lại phần đã ký (ECO, phát hiện lỗi) thì vẫn chỉ QC/GĐ.
-      const newVolume = !!acc && acc.availableKg > 0
+      const newVolume = !!acc && acc.availableQty > 0
       const mayInvite = (await can(user, 'action.qc')) || (await can(user, 'action.production')) || newVolume
       if (currentStatus === 'QC_PASSED' && !mayInvite) {
         return errorResponse('Chỉ QC hoặc GĐ được yêu cầu kiểm tra lại', 403)

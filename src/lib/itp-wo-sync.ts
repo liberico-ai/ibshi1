@@ -39,19 +39,21 @@ function verdictFrom(acc: WoAcceptance | undefined, current: string): 'QC_PASSED
   if (acc.hasFailed) return 'QC_FAILED'
 
   // Đã nghiệm thu trọn lệnh?
-  const done = acc.plannedKg > 0
+  const done = acc.plannedQty > 0
     ? acc.fullyAccepted
-    : acc.acceptedKg > 0 && acc.pendingKg <= 0 && acc.availableKg <= 0
+    : acc.acceptedQty > 0 && acc.pendingQty <= 0 && acc.availableQty <= 0
   if (done) return 'QC_PASSED'
 
   // Chưa trọn lệnh mà đang mang nhãn 'QC Đạt' / 'Chờ QC' → trả về đúng chỗ nó đang đứng,
   // nếu không thì ký xong đợt này là lệnh kẹt luôn, không còn đường mời đợt sau.
   if (current === 'QC_PENDING' || current === 'QC_PASSED') {
     // Còn đợt chưa đủ hai chữ ký → vẫn đang chờ nghiệm thu.
-    if (acc.pendingKg > 0) return 'QC_PENDING'
-    // 'Chờ QC' CÒN khối lượng chưa nghiệm thu = lời mời còn nguyên giá trị (QAQC chưa kịp lập
-    // ITP cho đợt đó). Hạ xuống lúc này là rút lại lời mời ngay khi xưởng vừa bấm.
-    if (current === 'QC_PENDING' && acc.availableKg > 0) return null
+    if (acc.pendingQty > 0) return 'QC_PENDING'
+    // 'Chờ QC' còn lời mời chưa được QAQC lập đợt = lời mời còn nguyên giá trị. Hạ xuống lúc này
+    // là rút lại lời mời ngay khi xưởng vừa bấm.
+    // Lệnh chia công đoạn đếm theo LỜI MỜI của từng công đoạn, không đếm theo khối lượng đã báo:
+    // nếu không, xưởng báo thêm bảo ôn là công đoạn đó tự nhiên thành "đã mời" mà chưa ai bấm.
+    if (current === 'QC_PENDING' && (acc.stageCount > 0 ? acc.invitedQty > 0 : acc.availableQty > 0)) return null
     // Hết phần chờ nghiệm thu mà lệnh chưa xong → xưởng làm tiếp, báo tiếp rồi mời đợt sau.
     return 'IN_PROGRESS'
   }

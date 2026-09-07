@@ -5,6 +5,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, Button, EmptyState, SelectField, InputField, KPICard, StatusBadge } from '@/components/ui'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
+import { unitLabel } from '@/lib/wo-units'
 import { Calculator } from 'lucide-react'
 import { notify, confirmDialog } from '@/components/ui/Toast'
 
@@ -23,25 +24,50 @@ interface Row {
   woCode: string | null; woStatus: string | null; teamCode: string | null
   shops: { teamCode: string | null; woCode: string; status: string }[]
   unitPrice: number | null; overrides: number; amount: number | null
+  /** Trần của hạng mục = đơn giá ITEM × KL thiết kế */
+  cap: number | null
+  /** Đã nghiệm thu xong ở mọi xưởng mà tiền vượt trần */
+  overCap: boolean
+  /** Số xưởng đã có KL nghiệm thu nhưng chưa đặt đơn giá (tiền của họ đang là 0) */
+  shopsWithoutPrice: number
 }
 
 /** Một ĐỢT nghiệm thu của một lệnh — xưởng báo nhiều lần thì nhiều đợt */
 interface Batch {
   itpCode: string; qty: number; date: string | null
+  /** Công đoạn của dòng này; null = lệnh chạy nguyên khối */
+  stage: string | null
+  stageCode: string
   signed: boolean; failed: boolean; amount: number | null
 }
 
 /** Một xưởng được giao ITEM này */
 interface Shop {
   woCode: string; teamCode: string | null; status: string
+  /** Đơn vị đo của lệnh — kg, m², mét… Đơn giá xưởng tính trên đơn vị này, không phải đồng/kg. */
+  unit: string
   plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
+  /** Chỉ dùng cho lệnh KHÔNG chia công đoạn; lệnh có công đoạn thì giá nằm ở từng công đoạn */
+  unitPrice: number | null
   amount: number | null
+  /** Công đoạn của lệnh — ĐƠN GIÁ KHOÁN nhập ở đây */
+  stages: ShopStage[]
   batches: Batch[]
+}
+
+/** Một công đoạn trong lệnh của xưởng — đơn vị nhỏ nhất có đơn giá khoán */
+interface ShopStage {
+  id: string; stageCode: string; name: string; category: string | null; unit: string
+  plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
+  unitPrice: number | null
+  amount: number | null
+  plannedAmount: number | null
 }
 
 interface Totals {
   plannedKg: number; acceptedKg: number; totalAmount: number; plannedAmount: number
   itemsTotal: number; itemsPriced: number; itemsAccepted: number
+  itemsOverCap: number
   linesWithoutPrice: number; canComplete: boolean
 }
 
@@ -122,14 +148,26 @@ export default function AplPricingPage() {
     setSaving(true)
     const itemPrices: { item: string; unitPrice: number | null }[] = []
     const linePrices: { aplLineId: string; unitPrice: number | null }[] = []
+    const shopPrices: { item: string; teamCode: string; stageCode: string; unitPrice: number | null }[] = []
     for (const [key, v] of Object.entries(draft)) {
       const price = v.trim() === '' ? null : Number(v)
       if (key.startsWith('item:')) itemPrices.push({ item: key.slice(5), unitPrice: price })
+      // shop:<item>::<teamCode>::<stageCode> — đơn giá của MỘT công đoạn trong lệnh của xưởng.
+      // stageCode rỗng = lệnh chạy nguyên khối, giá đặt cho cả lệnh.
+      else if (key.startsWith('shop:')) {
+        const rest = key.slice(5)
+        const j = rest.lastIndexOf('::')
+        const i = rest.lastIndexOf('::', j - 1)
+        shopPrices.push({
+          item: rest.slice(0, i), teamCode: rest.slice(i + 2, j),
+          stageCode: rest.slice(j + 2), unitPrice: price,
+        })
+      }
       else linePrices.push({ aplLineId: key, unitPrice: price })
     }
     const res = await apiFetch('/api/hr/apl-pricing', {
       method: 'POST',
-      body: JSON.stringify({ projectId, itemPrices, linePrices }),
+      body: JSON.stringify({ projectId, itemPrices, linePrices, shopPrices }),
     })
     setSaving(false)
     if (res.ok) {
@@ -160,6 +198,10 @@ export default function AplPricingPage() {
     if (res.ok) { notify(res.message || 'Đã mở lại'); load(projectId, search) }
     else notify(res.error || 'Không mở lại được')
   }
+
+  // Tiền hiển thị: formatCurrency(0) trả '-', đọc ra như "chưa tính được" trong khi thật ra là
+  // ĐÃ tính và bằng 0 (chưa nghiệm thu đồng nào). Ở bảng khoán phải phân biệt hai chuyện đó.
+  const tienVND = (n: number) => formatNumber(Math.round(n)) + ' ₫'
 
   // Số hiển thị trong ô: ưu tiên bản nháp đang gõ
   const cellValue = (key: string, saved: number | null) =>
@@ -224,6 +266,14 @@ export default function AplPricingPage() {
         </div>
       )}
 
+      {totals && totals.itemsOverCap > 0 && (
+        <div className="card p-3 text-sm" style={{ borderLeft: `4px solid ${SEMANTIC_COLORS.danger.solid}`, color: 'var(--text-primary)' }}>
+          <b style={{ color: SEMANTIC_COLORS.danger.solid }}>{totals.itemsOverCap} hạng mục vượt trần khoán</b>
+          {' '}— tổng tiền các xưởng lớn hơn (đơn giá hạng mục × khối lượng thiết kế).
+          Xem dòng tô đỏ bên dưới và chỉnh lại đơn giá của từng xưởng.
+        </div>
+      )}
+
       {apl && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
@@ -235,23 +285,24 @@ export default function AplPricingPage() {
                   <th className="px-2 py-2 text-left">Lệnh SX · Xưởng</th>
                   <th className="px-2 py-2 text-right">KL thiết kế</th>
                   <th className="px-2 py-2 text-right" style={{ minWidth: 120 }}>Đơn giá (đ/kg)</th>
-                  <th className="px-2 py-2 text-right">Thành tiền</th>
+                  <th className="px-2 py-2 text-right" style={{ minWidth: 150 }}>Giá trị khoán</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && <tr><td colSpan={6} className="px-2 py-6 text-center" style={{ color: 'var(--text-muted)' }}>Đang tải...</td></tr>}
                 {!loading && rows.length === 0 && <tr><td colSpan={6} className="px-2 py-6 text-center" style={{ color: 'var(--text-muted)' }}>Không có ITEM nào khớp</td></tr>}
                 {rows.map(r => {
-                  const key = `item:${r.item}`
-                  // ITEM có dòng đặt giá riêng thì KHÔNG xem trước theo công thức được — số đúng
-                  // phải cộng theo từng dòng chi tiết, nên lấy số server đã tính (mới lại sau khi Lưu).
-                  const hasOverride = r.overrides > 0
-                  const amt = hasOverride ? r.amount : liveAmount(key, r.unitPrice, r.acceptedKg)
-                  const stale = hasOverride && draft[key] !== undefined
+                  // Thành tiền của ITEM = TỔNG tiền các xưởng, do server cộng. KHÔNG xem trước
+                  // bằng (KL nghiệm thu × đơn giá ITEM) — đó là cách tính cũ, giờ đơn giá ITEM
+                  // chỉ còn là TRẦN. Sửa đơn giá xưởng thì bấm Lưu để cộng lại.
+                  const amt = r.amount
                   const isOpen = expanded === r.item
                   return (
                     <Fragment key={r.item || '(trống)'}>
-                      <tr style={{ borderTop: '1px solid var(--border-light)', background: isOpen ? 'var(--bg-secondary)' : undefined }}>
+                      <tr style={{
+                        borderTop: '1px solid var(--border-light)',
+                        background: r.overCap ? SEMANTIC_COLORS.danger.bg : isOpen ? 'var(--bg-secondary)' : undefined,
+                      }}>
                         <td className="px-2 py-1.5">
                           <button onClick={() => toggleItem(r.item)} title={`${r.detailLines} dòng chi tiết`}
                             style={{ color: 'var(--text-muted)' }}>{isOpen ? '▼' : '▶'}</button>
@@ -283,21 +334,25 @@ export default function AplPricingPage() {
                                 </>}
                         </td>
                         <td className="px-2 py-1.5 text-right font-mono">{formatNumber(Math.round(r.plannedKg))}</td>
-                        <td className="px-2 py-1.5 text-right">
-                          <input
-                            type="number" min="0" className="input text-right text-xs" style={{ width: 110, padding: '2px 6px' }}
-                            disabled={!editable}
-                            value={cellValue(key, r.unitPrice)}
-                            onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
-                            placeholder="0"
-                          />
+                        {/* Không còn đơn giá cho cả hạng mục: pha cắt và bảo ôn là hai phần việc
+                            khác nhau, không có một đơn giá chung nào nói đúng cả hai. Giá nhập ở
+                            từng CÔNG ĐOẠN — xổ hạng mục ra là thấy. */}
+                        <td className="px-2 py-1.5 text-right text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          nhập theo công đoạn
                         </td>
-                        <td className="px-2 py-1.5 text-right font-mono font-bold">
-                          {amt === null
-                            ? <span style={{ color: 'var(--text-muted)' }}>—</span>
-                            : <span title={stale ? 'ITEM này có dòng đặt giá riêng — bấm Lưu để tính lại chính xác' : undefined}>
-                                {formatCurrency(amt)}{stale ? ' *' : ''}
-                              </span>}
+                        {/* Chỉ còn ĐÃ LÀM: Σ (đơn giá công đoạn × KL đã nghiệm thu của công đoạn). */}
+                        <td className="px-2 py-1.5 text-right font-mono">
+                          <div className="flex items-baseline justify-end gap-1.5">
+                            <span className="text-[9px] font-sans" style={{ color: 'var(--text-muted)' }}>Đã làm</span>
+                            <span className="font-bold" style={{ color: SEMANTIC_COLORS.success.solid }}>
+                              {amt === null ? '—' : tienVND(amt)}
+                            </span>
+                          </div>
+                          {r.shopsWithoutPrice > 0 && (
+                            <div className="text-[10px]" style={{ color: SEMANTIC_COLORS.warning.solid }}>
+                              {r.shopsWithoutPrice} công đoạn chưa có đơn giá
+                            </div>
+                          )}
                         </td>
                       </tr>
 
@@ -316,6 +371,7 @@ export default function AplPricingPage() {
                                       <th className="px-2 py-1 text-right">KL GIAO</th>
                                       <th className="px-2 py-1 text-right">ĐÃ BÁO</th>
                                       <th className="px-2 py-1 text-right">ĐÃ NGHIỆM THU</th>
+                                      <th className="px-2 py-1 text-right" style={{ minWidth: 118 }}>ĐƠN GIÁ CÔNG ĐOẠN</th>
                                       <th className="px-2 py-1 text-right">THÀNH TIỀN</th>
                                     </tr>
                                   </thead>
@@ -328,7 +384,10 @@ export default function AplPricingPage() {
                                         </td>
                                         <td className="px-2 py-1 font-mono" style={{ color: 'var(--text-muted)' }}>{w.woCode}</td>
                                         <td className="px-2 py-1"><StatusBadge category="production" status={w.status} /></td>
-                                        <td className="px-2 py-1 text-right font-mono">{formatNumber(Math.round(w.plannedKg))}</td>
+                                        <td className="px-2 py-1 text-right font-mono">
+                                          {formatNumber(Math.round(w.plannedKg))}
+                                          <span className="ml-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>{unitLabel(w.unit)}</span>
+                                        </td>
                                         <td className="px-2 py-1 text-right font-mono"
                                           style={{ color: w.reportedKg > 0 ? SEMANTIC_COLORS.info.solid : 'var(--text-muted)' }}>
                                           {formatNumber(Math.round(w.reportedKg))}
@@ -340,15 +399,132 @@ export default function AplPricingPage() {
                                             {Math.round(w.ratio * 100)}%
                                           </span>
                                         </td>
+                                        {/* Lệnh chia công đoạn: giá nhập ở TỪNG công đoạn bên dưới,
+                                            cấp lệnh không có giá riêng. */}
+                                        <td className="px-2 py-1 text-right">
+                                          {w.stages.length > 0
+                                            ? <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>theo công đoạn</span>
+                                            : <input
+                                              type="number" min="0" className="input text-right text-xs"
+                                              style={{ width: 108, padding: '2px 6px' }}
+                                              disabled={!editable}
+                                              value={cellValue(`shop:${r.item}::${w.teamCode || ''}::`, w.unitPrice)}
+                                              onChange={e => setDraft(d => ({ ...d, [`shop:${r.item}::${w.teamCode || ''}::`]: e.target.value }))}
+                                              placeholder="0"
+                                              title={`Lệnh chạy nguyên khối — đơn giá cho cả lệnh, đồng trên mỗi ${unitLabel(w.unit)}`}
+                                            />}
+                                        </td>
                                         <td className="px-2 py-1 text-right font-mono">
-                                          {w.amount === null
-                                            ? <span style={{ color: 'var(--text-muted)' }}>chưa có đơn giá</span>
-                                            : formatCurrency(w.amount)}
+                                          {w.stages.length > 0
+                                            ? tienVND(w.stages.reduce((sum, st) =>
+                                              sum + (liveAmount(`shop:${r.item}::${w.teamCode || ''}::${st.stageCode}`, st.unitPrice, st.acceptedKg) ?? 0), 0))
+                                            : liveAmount(`shop:${r.item}::${w.teamCode || ''}::`, w.unitPrice, w.acceptedKg) === null
+                                              ? <span style={{ color: SEMANTIC_COLORS.warning.solid }}>chưa có đơn giá</span>
+                                              : tienVND(liveAmount(`shop:${r.item}::${w.teamCode || ''}::`, w.unitPrice, w.acceptedKg)!)}
                                         </td>
                                       </tr>
-                                      {/* Từng phiếu nghiệm thu của công đoạn này */}
-                                      {w.batches.map(b => (
-                                        <tr key={b.itpCode} style={{ background: 'var(--bg-secondary)' }}>
+
+                                      {/* ── Công đoạn của lệnh ──
+                                          Nơi nhập ĐƠN GIÁ KHOÁN. Hiện đúng như lúc phát hành lệnh:
+                                          mã công đoạn, tên, chủng loại, khối lượng giao. */}
+                                      {w.stages.map(st => {
+                                        const k = `shop:${r.item}::${w.teamCode || ''}::${st.stageCode}`
+                                        const tien = liveAmount(k, st.unitPrice, st.acceptedKg)
+                                        // Phần xưởng đã báo mà CHƯA được nghiệm thu — chưa phải tiền phải trả.
+                                        const tamTinh = liveAmount(k, st.unitPrice, Math.max(0, st.reportedKg - st.acceptedKg))
+                                        return (
+                                        <Fragment key={st.id}>
+                                        <tr style={{ borderTop: '1px dotted var(--border)' }}>
+                                          <td className="px-2 py-1 pl-12 text-[11px]">
+                                            <span className="font-mono font-bold mr-1" style={{ color: 'var(--accent)' }}>{st.stageCode}</span>
+                                            <span className="font-semibold">{st.name}</span>
+                                          </td>
+                                          <td className="px-2 py-1 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                                            {st.category || <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                                          </td>
+                                          <td className="px-2 py-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                            {st.ratio >= 1 ? 'xong' : st.reportedKg > 0 ? 'đang làm' : 'chưa báo'}
+                                          </td>
+                                          <td className="px-2 py-1 text-right font-mono text-[11px]">
+                                            {formatNumber(Math.round(st.plannedKg))}
+                                            <span className="ml-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>{unitLabel(st.unit)}</span>
+                                          </td>
+                                          <td className="px-2 py-1 text-right font-mono text-[11px]"
+                                            style={{ color: st.reportedKg > 0 ? SEMANTIC_COLORS.info.solid : 'var(--text-muted)' }}>
+                                            {formatNumber(Math.round(st.reportedKg))}
+                                          </td>
+                                          <td className="px-2 py-1 text-right font-mono text-[11px]"
+                                            style={{ color: st.acceptedKg > 0 ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
+                                            {formatNumber(Math.round(st.acceptedKg))}
+                                            <span className="ml-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                              {Math.round(st.ratio * 100)}%
+                                            </span>
+                                          </td>
+                                          <td className="px-2 py-1 text-right">
+                                            <input
+                                              type="number" min="0" className="input text-right text-xs"
+                                              style={{ width: 108, padding: '2px 6px' }}
+                                              disabled={!editable}
+                                              value={cellValue(k, st.unitPrice)}
+                                              onChange={e => setDraft(d => ({ ...d, [k]: e.target.value }))}
+                                              placeholder="0"
+                                              title={`Đơn giá khoán của công đoạn ${st.stageCode} ${st.name} — đồng trên mỗi ${unitLabel(st.unit)}`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-1 text-right font-mono text-[11px]">
+                                            {/* Tiền chỉ tính trên phần ĐÃ NGHIỆM THU. Phần mới báo mà chưa
+                                                ai ký thì hiện riêng là "tạm tính" — nhìn thấy giá trị công
+                                                việc đang chờ ký, nhưng không cộng vào tiền phải trả. */}
+                                            {tien === null
+                                              ? <span style={{ color: SEMANTIC_COLORS.warning.solid }}>chưa có đơn giá</span>
+                                              : <>
+                                                <span style={{ color: tien > 0 ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
+                                                  {tienVND(tien)}
+                                                </span>
+                                                {tamTinh !== null && tamTinh > 0 && (
+                                                  <span className="block text-[10px]" style={{ color: SEMANTIC_COLORS.warning.solid }}>
+                                                    tạm tính {tienVND(tamTinh)} · chờ nghiệm thu
+                                                  </span>
+                                                )}
+                                              </>}
+                                          </td>
+                                        </tr>
+                                        {/* Đợt nghiệm thu của riêng công đoạn này */}
+                                        {(() => {
+                                          const dot = w.batches.filter(b => b.stageCode === st.stageCode)
+                                          return dot.map((b, bi) => (
+                                          <tr key={`${st.id}-${b.itpCode}-${bi}`} style={{ background: 'var(--bg-secondary)' }}>
+                                            <td className="px-2 py-0.5 pl-16 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                              {b.date ? new Date(b.date).toLocaleDateString('vi-VN') : '—'}
+                                            </td>
+                                            <td className="px-2 py-0.5 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                              {b.itpCode}
+                                              {/* Nhiều đợt thì mới cần tách rõ đợt nào bao nhiêu; một đợt thì
+                                                  số đã nằm ở dòng công đoạn rồi, ghi lại là thừa. */}
+                                              {dot.length > 1 && (
+                                                <span className="ml-1.5" style={{ color: 'var(--text-secondary)' }}>
+                                                  {formatNumber(Math.round(b.qty))} {unitLabel(st.unit)}
+                                                </span>
+                                              )}
+                                            </td>
+                                            <td className="px-2 py-0.5 text-[11px]" style={{
+                                              color: b.failed ? SEMANTIC_COLORS.danger.solid
+                                                : b.signed ? SEMANTIC_COLORS.success.solid : SEMANTIC_COLORS.warning.solid,
+                                            }}>
+                                              {b.failed ? 'lỗi' : b.signed ? 'đủ hai chữ ký' : 'chờ ký'}
+                                            </td>
+                                            {/* Số liệu chỉ điền ở dòng công đoạn — xem chú thích phía trên */}
+                                            <td /><td /><td /><td /><td />
+                                          </tr>
+                                          ))
+                                        })()}
+                                        </Fragment>
+                                        )
+                                      })}
+
+                                      {/* Lệnh chạy nguyên khối: đợt nghiệm thu nằm thẳng dưới lệnh */}
+                                      {w.stages.length === 0 && w.batches.map((b, bi) => (
+                                        <tr key={`${b.itpCode}-${bi}`} style={{ background: 'var(--bg-secondary)' }}>
                                           <td className="px-2 py-0.5 pl-12 text-[11px]" style={{ color: 'var(--text-muted)' }}>
                                             {b.date ? new Date(b.date).toLocaleDateString('vi-VN') : '—'}
                                           </td>
@@ -365,14 +541,15 @@ export default function AplPricingPage() {
                                             style={{ color: b.signed ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
                                             {formatNumber(Math.round(b.qty))}
                                           </td>
+                                          <td />
                                           <td className="px-2 py-0.5 text-right font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
                                             {b.amount === null ? '—' : formatCurrency(b.amount)}
                                           </td>
                                         </tr>
                                       ))}
-                                      {w.batches.length === 0 && (
+                                      {w.stages.length === 0 && w.batches.length === 0 && (
                                         <tr style={{ background: 'var(--bg-secondary)' }}>
-                                          <td colSpan={7} className="px-2 py-0.5 pl-12 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                          <td colSpan={8} className="px-2 py-0.5 pl-12 text-[11px]" style={{ color: 'var(--text-muted)' }}>
                                             chưa có phiếu nghiệm thu nào
                                           </td>
                                         </tr>
@@ -380,7 +557,7 @@ export default function AplPricingPage() {
                                       </Fragment>
                                     ))}
                                     {shops.length === 0 && (
-                                      <tr><td colSpan={6} className="px-2 py-3 text-center" style={{ color: 'var(--text-muted)' }}>
+                                      <tr><td colSpan={7} className="px-2 py-3 text-center" style={{ color: 'var(--text-muted)' }}>
                                         ITEM này chưa phát hành lệnh cho xưởng nào
                                       </td></tr>
                                     )}
@@ -388,10 +565,11 @@ export default function AplPricingPage() {
                                 </table>
                                 {shops.length > 0 && (
                                   <div className="px-3 py-2 text-[11px]" style={{ borderTop: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
-                                    Mỗi xưởng làm một khâu và nhận trọn khối lượng của ITEM; dòng nhỏ bên dưới mỗi
-                                    xưởng là <b>từng phiếu nghiệm thu</b> của công đoạn đó. Nghiệm thu tới đâu tính
-                                    tiền tới đó — Thành tiền của ITEM là <b>tổng</b> các dòng xưởng.
-                                    Riêng việc <b>chốt bảng</b> vẫn đợi mọi xưởng nghiệm thu xong.
+                                    Mỗi xưởng nhận trọn khối lượng của hạng mục và làm theo các công đoạn được giao.
+                                    <b> Đơn giá khoán đặt theo từng công đoạn</b>: tiền của công đoạn = KL ĐÃ NGHIỆM THU
+                                    × đơn giá của công đoạn đó. Phần xưởng mới báo mà chưa ai ký chỉ hiện là
+                                    <b> tạm tính</b>, chưa phải tiền phải trả. Dòng nhỏ dưới mỗi công đoạn là từng phiếu
+                                    nghiệm thu của công đoạn đó. Công đoạn chưa nhập đơn giá thì tiền tính bằng 0.
                                   </div>
                                 )}
                               </div>
@@ -411,14 +589,14 @@ export default function AplPricingPage() {
             <div className="p-4 flex flex-wrap items-center justify-between gap-3" style={{ borderTop: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
               <div>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Tổng tiền (toàn bộ {totals.itemsTotal} ITEM)
+                  Giá trị khoán ĐÃ LÀM (toàn bộ {totals.itemsTotal} hạng mục)
                 </p>
                 <p className="text-2xl font-mono font-bold" style={{ color: SEMANTIC_COLORS.success.solid }}>
                   {formatCurrency(totals.totalAmount)}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Theo kế hoạch (nếu nghiệm thu đủ 100%): <span className="font-mono">{formatCurrency(totals.plannedAmount)}</span>
-                  {totals.itemsPriced < totals.itemsTotal && <> · <span style={{ color: SEMANTIC_COLORS.warning.solid }}>{totals.itemsTotal - totals.itemsPriced} ITEM chưa có đơn giá</span></>}
+                  Chỉ tính phần đã nghiệm thu — phần mới báo chưa ký không cộng vào đây.
+                  {totals.itemsPriced < totals.itemsTotal && <> · <span style={{ color: SEMANTIC_COLORS.warning.solid }}>{totals.itemsTotal - totals.itemsPriced} hạng mục chưa có đủ đơn giá công đoạn</span></>}
                 </p>
               </div>
               <div className="flex items-center gap-2">

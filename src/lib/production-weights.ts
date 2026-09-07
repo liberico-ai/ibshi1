@@ -27,8 +27,35 @@ export async function rollUpWorkOrder(workOrderId: string) {
   // trang tiến độ và bảng điều khiển (đang đọc STAGE_WEIGHTS) không vỡ.
   const allCards = await prisma.jobCard.findMany({
     where: { workOrderId, status: { not: 'CANCELLED' } },
-    select: { workType: true, actualQty: true, status: true },
+    select: { workType: true, actualQty: true, status: true, stageId: true },
   })
+
+  // ── Lệnh CÓ khai công đoạn ──
+  // Mỗi công đoạn chạy qua TRỌN khối lượng của lệnh, nên KHÔNG được cộng các công đoạn lại:
+  // lệnh 24.784 kg có ba công đoạn báo đủ thì tổng phiếu là 74.352 kg mà lệnh vẫn chỉ 24.784 kg.
+  // Tiến độ của lệnh là tiến độ của công đoạn CHẬM NHẤT — chưa cắt xong thì không thể hàn xong.
+  const stages = await prisma.workOrderStage.findMany({
+    where: { workOrderId }, select: { id: true, qty: true },
+  })
+  if (stages.length > 0) {
+    // Phiếu không gắn công đoạn (báo trước khi lệnh được chia, hoặc báo cho cả lệnh)
+    // tính cho MỌI công đoạn — nếu không, lệnh cũ vừa chia công đoạn sẽ tụt về 0.
+    const chung = allCards.filter(c => !c.stageId).reduce((s, c) => s + (Number(c.actualQty) || 0), 0)
+    let thapNhat = 1
+    for (const st of stages) {
+      const qty = Number(st.qty) || 0
+      const rep = allCards.filter(c => c.stageId === st.id).reduce((s, c) => s + (Number(c.actualQty) || 0), 0) + chung
+      thapNhat = Math.min(thapNhat, qty > 0 ? rep / qty : 0)
+    }
+    const done = Math.min(Math.round(plannedKg * thapNhat * 100) / 100, plannedKg)
+    // Đạt từ 90% trở lên ở MỌI công đoạn thì lệnh coi như xong (biên ±10% do cắt lẻ, hao hụt).
+    const finished = thapNhat >= 0.9
+    await prisma.workOrder.update({
+      where: { id: workOrderId },
+      data: { completedQty: done, earnedQty: finished ? plannedKg : 0 },
+    })
+    return { completedQty: done, earnedQty: finished ? plannedKg : 0, weightedPct: thapNhat }
+  }
   // Có phiếu kiểu MỚI (báo thẳng kg, không gắn công đoạn) → chuyển cả WO sang tính kg lũy kế,
   // và cộng gộp CẢ phiếu cũ có công đoạn để không bỏ sót khối lượng đã báo.
   // Không phiếu nào kiểu mới → giữ nguyên cách tính theo bậc trọng số của dữ liệu cũ.

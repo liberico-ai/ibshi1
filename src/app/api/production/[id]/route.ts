@@ -28,6 +28,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
       materialIssues: {
         orderBy: { issuedAt: 'desc' },
       },
+      stages: { orderBy: { sortOrder: 'asc' } },
     },
   })
 
@@ -49,6 +50,7 @@ export const GET = withErrorHandler(async (req: NextRequest, { params }: { param
         ...mi,
         quantity: Number(mi.quantity),
       })),
+      stages: wo.stages.map(st => ({ ...st, qty: Number(st.qty) })),
     },
   })
 })

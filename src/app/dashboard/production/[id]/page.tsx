@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate, formatDateTime, formatNumber } from '@/lib/utils'
+import { unitLabel } from '@/lib/wo-units'
 import { RBAC } from '@/lib/rbac-rules'
 import { notify } from '@/components/ui/Toast'
 
@@ -13,11 +14,27 @@ interface WorkOrderDetail {
   plannedStart: string | null; plannedEnd: string | null;
   actualStart: string | null; actualEnd: string | null;
   createdAt: string;
+  unit?: string;
   materialIssues: { id: string; materialId: string; quantity: number; issuedBy: string; issuedAt: string; notes: string | null }[];
+  /** Công đoạn bên trong lệnh — rỗng nghĩa là lệnh chạy nguyên khối */
+  stages?: { id: string; stageCode: string; name: string; categoryCode: string | null; category: string | null; qty: number; unit: string; note: string | null }[];
   // Nghiệm thu theo đợt — đã ký bao nhiêu kg, còn bao nhiêu chờ mời nghiệm thu
   acceptance?: {
-    plannedKg: number; reportedKg: number; acceptedKg: number
-    pendingKg: number; availableKg: number; fullyAccepted: boolean
+    unit: string
+    plannedQty: number; reportedQty: number; acceptedQty: number
+    /** Số công đoạn của lệnh; 0 = lệnh chạy nguyên khối */
+    stageCount: number
+    /** Nghiệm thu của TỪNG công đoạn — không cộng lại với nhau */
+    stages: {
+      id: string; stageCode: string; name: string; category: string | null; unit: string
+      plannedQty: number; reportedQty: number; acceptedQty: number
+      pendingQty: number; availableQty: number; fullyAccepted: boolean
+      /** Đã bấm mời, QAQC chưa lập đợt */
+      invitedQty: number
+      /** Còn phải bấm mời */
+      needInviteQty: number
+    }[]
+    pendingQty: number; availableQty: number; fullyAccepted: boolean
     blockReason: string | null
   } | null;
 }
@@ -72,6 +89,16 @@ export default function ProductionDetailPage() {
     setLoading(false)
   }
 
+  // Mời nghiệm thu TỪNG công đoạn. Mời ở cấp lệnh thì lệnh vào 'Chờ QC' một lần rồi công đoạn
+  // nào báo sau cũng bị coi là đã mời — xưởng báo bảo ôn xong quay ra thấy tự nhiên đã mời.
+  async function handleInviteStage(stageId: string) {
+    setTransitioning(true)
+    const res = await apiFetch(`/api/production/${id}/stages/${stageId}/invite-qc`, { method: 'POST' })
+    if (res.ok) { notify(res.message || 'Đã mời nghiệm thu', 'success'); loadWO() }
+    else notify(res.error || 'Lỗi mời nghiệm thu')
+    setTransitioning(false)
+  }
+
   async function handleTransition(nextStatus: string) {
     setTransitioning(true)
     const res = await apiFetch(`/api/production/${id}/transition`, {
@@ -95,7 +122,11 @@ export default function ProductionDetailPage() {
   // Mời nghiệm thu: chỉ có nghĩa khi xưởng đã báo khối lượng mà chưa ai ký. Nghiệm thu theo ĐỢT
   // nên lệnh đang 'QC Đạt' của đợt trước vẫn mời tiếp được cho phần vừa báo thêm.
   const acc = wo.acceptance
-  const canInvite = !!acc && acc.availableKg > 0 && wo.status !== 'QC_PENDING' && wo.status !== 'COMPLETED'
+  // Lệnh chia công đoạn mời ngay trên dòng công đoạn, không mời ở cấp lệnh nữa.
+  const canInvite = !!acc && acc.stageCount === 0 && acc.availableQty > 0
+    && wo.status !== 'QC_PENDING' && wo.status !== 'COMPLETED'
+  // Đơn vị của lệnh — pha cắt/hàn tính kg, sơn tính m². Không hiện "kg" cứng nữa.
+  const dv = unitLabel(acc?.unit || wo.unit)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -116,15 +147,23 @@ export default function ProductionDetailPage() {
           </div>
           <div className="flex gap-2">
             {/* Xưởng báo xong thì tự mời QAQC + PM vào nghiệm thu ĐỢT đó — không chờ xong cả lệnh */}
+            {/* Lệnh chia công đoạn: nhãn nút nói rõ công đoạn nào, vì QAQC ký từng công đoạn một. */}
             {showActionButtons && canInvite && (
               <button
                 onClick={() => handleTransition('QC_PENDING')}
                 disabled={transitioning}
                 className="text-sm px-4 py-2 rounded-lg font-medium"
                 style={{ background: '#fffbeb', color: '#d97706', border: '1px solid #d9770630', opacity: transitioning ? 0.5 : 1 }}
-                title={`Mời nghiệm thu ${formatNumber(acc!.availableKg)} kg đã báo`}
+                title={(acc!.stages.filter(s => s.availableQty > 0).length > 0
+                  ? 'Mời nghiệm thu: ' + acc!.stages.filter(s => s.availableQty > 0)
+                    .map(s => `${s.stageCode} ${s.name} ${formatNumber(s.availableQty)} ${s.unit}`).join('; ')
+                  : `Mời nghiệm thu ${formatNumber(acc!.availableQty)} ${dv} đã báo`)}
               >
-                Mời nghiệm thu {formatNumber(acc!.availableKg)} kg
+                Mời nghiệm thu{' '}
+                {acc!.stageCount > 0
+                  ? acc!.stages.filter(s => s.availableQty > 0)
+                    .map(s => `${s.stageCode} ${formatNumber(s.availableQty)} ${s.unit}`).join(' · ')
+                  : `${formatNumber(acc!.availableQty)} ${dv}`}
               </button>
             )}
             {/* Ở trạng thái chờ QC không còn nút bấm tay — nói rõ kết quả đến từ đâu, tránh tưởng là hỏng */}
@@ -152,30 +191,126 @@ export default function ProductionDetailPage() {
           </div>
         </div>
 
-        {/* Nghiệm thu theo ĐỢT: nhìn là biết đã ký bao nhiêu, còn bao nhiêu phải mời tiếp */}
-        {acc && acc.reportedKg > 0 && (
+        {/* ── Công đoạn của lệnh ──
+            Mỗi công đoạn chạy qua TRỌN khối lượng của lệnh và được nghiệm thu RIÊNG — ký xong
+            pha cắt không có nghĩa là đã ký bảo ôn. Vì vậy mọi con số đứng theo TỪNG công đoạn;
+            cộng lại sẽ ra một khối lượng không có thật (lệnh 24.784 kg hai công đoạn vẫn là
+            24.784 kg, không phải 49.568 kg). */}
+      {(acc?.stageCount ?? 0) > 0 && (
+        <div className="card p-4">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="font-semibold text-sm" style={{ color: 'var(--text-heading)' }}>
+              Công đoạn ({acc!.stages.length})
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              mỗi công đoạn chạy qua trọn <span className="font-mono">{formatNumber(acc?.plannedQty || 0)} {dv}</span> của lệnh
+            </span>
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ color: 'var(--text-muted)' }}>
+                <th className="px-2 py-1 text-left">CÔNG ĐOẠN</th>
+                <th className="px-2 py-1 text-left">CHỦNG LOẠI</th>
+                <th className="px-2 py-1 text-right">KL GIAO</th>
+                <th className="px-2 py-1 text-right">XƯỞNG ĐÃ BÁO</th>
+                <th className="px-2 py-1 text-right">ĐÃ NGHIỆM THU</th>
+                <th className="px-2 py-1 text-right">CHỜ MỜI NGHIỆM THU</th>
+                <th className="px-2 py-1 text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {acc!.stages.map(st => (
+                <tr key={st.id} style={{ borderTop: '1px solid var(--border-light)' }}>
+                  <td className="px-2 py-1.5 font-medium">
+                    <span className="font-mono text-[10px] mr-1" style={{ color: 'var(--text-muted)' }}>{st.stageCode}</span>
+                    {st.name}
+                    {st.fullyAccepted && <span className="ml-1.5" style={{ color: '#047857' }}>✓</span>}
+                  </td>
+                  <td className="px-2 py-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    {st.category || <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono">
+                    {formatNumber(st.plannedQty)} <span style={{ color: 'var(--text-muted)' }}>{unitLabel(st.unit)}</span>
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono"
+                    style={{ color: st.reportedQty > 0 ? '#16a34a' : 'var(--text-muted)' }}>
+                    {st.reportedQty > 0 ? formatNumber(st.reportedQty) : '—'}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono"
+                    style={{ color: st.acceptedQty > 0 ? '#2563eb' : 'var(--text-muted)' }}>
+                    {st.acceptedQty > 0 ? formatNumber(st.acceptedQty) : '—'}
+                    {st.pendingQty > 0 && (
+                      <span className="block text-[11px]" style={{ color: '#d97706' }}>
+                        {formatNumber(st.pendingQty)} chờ ký
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono"
+                    style={{ color: st.needInviteQty > 0 ? '#d97706' : 'var(--text-muted)' }}>
+                    {st.needInviteQty > 0 ? formatNumber(st.needInviteQty) : '—'}
+                    {st.invitedQty > 0 && (
+                      <span className="block text-[11px]" style={{ color: '#2563eb' }}>
+                        đã mời {formatNumber(st.invitedQty)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 text-right" style={{ whiteSpace: 'nowrap' }}>
+                    {showActionButtons && st.needInviteQty > 0 && wo.status !== 'COMPLETED' && (
+                      <button
+                        onClick={() => handleInviteStage(st.id)}
+                        disabled={transitioning}
+                        className="text-xs px-2.5 py-1 rounded-md font-medium"
+                        title={`Mời QAQC + PM nghiệm thu ${formatNumber(st.needInviteQty)} ${unitLabel(st.unit)} của ${st.stageCode} ${st.name}`}
+                        style={{
+                          background: '#fffbeb', color: '#d97706', border: '1px solid #d9770630',
+                          opacity: transitioning ? 0.5 : 1,
+                        }}>
+                        Mời nghiệm thu
+                      </button>
+                    )}
+                    {st.needInviteQty <= 0 && st.invitedQty > 0 && (
+                      <span className="text-[11px]" style={{ color: '#2563eb' }}>chờ QAQC lập đợt</span>
+                    )}
+                    {st.needInviteQty <= 0 && st.invitedQty <= 0 && st.pendingQty > 0 && (
+                      <span className="text-[11px]" style={{ color: '#d97706' }}>chờ hai chữ ký</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>
+            Mỗi công đoạn nghiệm thu riêng. Xưởng báo xong công đoạn nào là mời nghiệm thu công đoạn đó,
+            không phải chờ các công đoạn còn lại.
+          </p>
+        </div>
+      )}
+
+      {/* Nghiệm thu theo ĐỢT: nhìn là biết đã ký bao nhiêu, còn bao nhiêu phải mời tiếp */}
+        {/* Lệnh chia công đoạn đã có bảng công đoạn ở trên, đầy đủ hơn — không lặp lại ở đây. */}
+        {acc && acc.stageCount === 0 && acc.reportedQty > 0 && (
           <div className="grid grid-cols-4 gap-4 mt-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
             <div>
               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Kế hoạch</span>
               <p className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>
-                {acc.plannedKg > 0 ? `${formatNumber(acc.plannedKg)} kg` : '—'}
+                {acc.plannedQty > 0 ? `${formatNumber(acc.plannedQty)} ${dv}` : '—'}
               </p>
             </div>
             <div>
               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Xưởng đã báo</span>
-              <p className="font-mono font-medium" style={{ color: '#16a34a' }}>{formatNumber(acc.reportedKg)} kg</p>
+              <p className="font-mono font-medium" style={{ color: '#16a34a' }}>{formatNumber(acc.reportedQty)} {dv}</p>
             </div>
             <div>
               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Đã nghiệm thu</span>
-              <p className="font-mono font-bold" style={{ color: '#2563eb' }}>{formatNumber(acc.acceptedKg)} kg</p>
-              {acc.pendingKg > 0 && (
-                <p className="text-[11px] font-mono" style={{ color: '#d97706' }}>{formatNumber(acc.pendingKg)} kg đang chờ ký</p>
+              <p className="font-mono font-bold" style={{ color: '#2563eb' }}>{formatNumber(acc.acceptedQty)} {dv}</p>
+              {acc.pendingQty > 0 && (
+                <p className="text-[11px] font-mono" style={{ color: '#d97706' }}>{formatNumber(acc.pendingQty)} {dv} đang chờ ký</p>
               )}
             </div>
             <div>
               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Chờ mời nghiệm thu</span>
-              <p className="font-mono font-medium" style={{ color: acc.availableKg > 0 ? '#d97706' : 'var(--text-muted)' }}>
-                {acc.availableKg > 0 ? `${formatNumber(acc.availableKg)} kg` : '—'}
+              <p className="font-mono font-medium" style={{ color: acc.availableQty > 0 ? '#d97706' : 'var(--text-muted)' }}>
+                {acc.availableQty > 0 ? `${formatNumber(acc.availableQty)} ${dv}` : '—'}
               </p>
               {acc.blockReason && (
                 <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{acc.blockReason}</p>
