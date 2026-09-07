@@ -11,10 +11,20 @@ import { Hammer } from 'lucide-react'
 // Ba tầng: Xưởng → Dự án → Lệnh sản xuất. Xưởng chỉ thấy xưởng mình (server chặn).
 // Tiền lấy đúng lõi của màn Đơn giá khoán (APL) — không tính lại theo công thức khác.
 
+/** Một công đoạn được giao cho xưởng trong lệnh — làm khâu gì, chủng loại nào, tới đâu */
+interface Stage {
+  id: string; stageCode: string; name: string; category: string | null; unit: string
+  plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
+  unitPrice: number | null
+  amount: number | null
+}
+
 interface Wo {
   woId: string; woCode: string; item: string | null; status: string
   plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
   amount: number | null
+  /** Công đoạn được giao. Rỗng = lệnh chạy nguyên khối. */
+  stages: Stage[]
 }
 interface Proj {
   projectId: string; projectCode: string; projectName: string
@@ -223,7 +233,8 @@ export default function KhoanTheoXuongPage() {
                             </tr>
 
                             {projOpen && p.wos.map(o => (
-                              <tr key={o.woId} style={{ background: 'var(--bg-secondary)' }}>
+                              <Fragment key={o.woId}>
+                              <tr style={{ background: 'var(--bg-secondary)' }}>
                                 <td />
                                 <td className="px-2 py-1">
                                   <div style={{ paddingLeft: 44 }}>
@@ -250,6 +261,44 @@ export default function KhoanTheoXuongPage() {
                                     : formatCurrency(o.amount)}
                                 </td>
                               </tr>
+
+                              {/* Công đoạn được giao trong chính lệnh này — xưởng làm khâu nào,
+                                  chủng loại gì, tới đâu. Mỗi công đoạn chạy qua TRỌN khối lượng
+                                  của lệnh nên phần trăm là của riêng nó, không cộng lại. */}
+                              {o.stages.map(st => (
+                                <tr key={st.id} style={{ background: 'var(--bg-primary)' }}>
+                                  <td />
+                                  <td className="px-2 py-1">
+                                    <div style={{ paddingLeft: 68 }}>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--accent)' }}>{st.stageCode}</span>
+                                        <span className="text-[11px] font-medium">{st.name}</span>
+                                      </div>
+                                      <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                                        {st.category || 'không chia chủng loại'}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-2 py-1 text-right font-mono text-[11px]">
+                                    {formatNumber(Math.round(st.plannedKg))}
+                                    <span className="ml-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>{st.unit}</span>
+                                  </td>
+                                  <td className="px-2 py-1 text-right font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                    {formatNumber(Math.round(st.reportedKg))}
+                                  </td>
+                                  <td className="px-2 py-1 text-right font-mono text-[11px]"
+                                    style={{ color: st.acceptedKg > 0 ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
+                                    {formatNumber(Math.round(st.acceptedKg))}
+                                  </td>
+                                  <td className="px-2 py-1"><Pct value={st.ratio} /></td>
+                                  <td className="px-2 py-1 text-right font-mono text-[11px]">
+                                    {st.unitPrice === null
+                                      ? <span style={{ color: SEMANTIC_COLORS.warning.solid }}>chưa có đơn giá</span>
+                                      : formatNumber(Math.round(st.amount ?? 0)) + ' ₫'}
+                                  </td>
+                                </tr>
+                              ))}
+                              </Fragment>
                             ))}
                           </Fragment>
                         )

@@ -9,15 +9,27 @@ import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 //
 // Báo cáo khối lượng hoàn thành & giá trị khoán theo XƯỞNG → DỰ ÁN → LỆNH.
 //
-// Tiền của MỘT LỆNH = KL đã nghiệm thu của lệnh × ĐƠN GIÁ CỦA XƯỞNG nhận lệnh đó.
+// Tiền của MỘT LỆNH = tổng tiền các CÔNG ĐOẠN của lệnh đó.
+// Tiền của một công đoạn = KL đã nghiệm thu của công đoạn × đơn giá của chính công đoạn đó
+// (KTKH nhập ở màn Đơn giá khoán). Công đoạn chưa có đơn giá thì tiền = 0.
+// Lệnh không chia công đoạn thì dùng đơn giá của cả lệnh, như trước.
 //
-// Mỗi xưởng làm một khâu nên có đơn giá riêng (KTKH nhập ở màn Đơn giá khoán). Xưởng chưa
-// có đơn giá thì tiền = 0. Lấy đúng cùng một phép tính với màn đơn giá để hai nơi không lệch.
+// Lấy đúng cùng một phép tính với màn đơn giá để hai nơi không nói hai số khác nhau.
+
+/** Một công đoạn được giao trong lệnh — xưởng làm gì, tới đâu, ra bao nhiêu tiền */
+interface StageRow {
+  id: string; stageCode: string; name: string; category: string | null; unit: string
+  plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
+  unitPrice: number | null
+  amount: number | null
+}
 
 interface WoRow {
   woId: string; woCode: string; item: string | null; status: string
   plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
   amount: number | null
+  /** Công đoạn được giao cho xưởng trong lệnh này. Rỗng = lệnh chạy nguyên khối. */
+  stages: StageRow[]
 }
 
 export async function GET(req: NextRequest) {
@@ -54,10 +66,12 @@ export async function GET(req: NextRequest) {
     const [acceptance, shopPrices] = await Promise.all([
       getAcceptanceByItem(importId),
       prisma.aplItemWorkshopPrice.findMany({
-        where: { importId }, select: { item: true, teamCode: true, unitPrice: true },
+        // Đơn giá đặt theo CÔNG ĐOẠN — thiếu stageCode ở đây thì khoá tra luôn là công đoạn
+        // rỗng, và mọi công đoạn đều đọc ra 'chưa có đơn giá'.
+        where: { importId }, select: { item: true, teamCode: true, stageCode: true, unitPrice: true },
       }),
     ])
-    const priceOfShop = new Map(shopPrices.map(x => [shopKey(x.item, x.teamCode), Number(x.unitPrice)]))
+    const priceOfShop = new Map(shopPrices.map(x => [shopKey(x.item, x.teamCode, x.stageCode), Number(x.unitPrice)]))
     priced.set(importId, { acceptance, priceOfShop })
   }
 
@@ -69,15 +83,40 @@ export async function GET(req: NextRequest) {
     const acc = p?.acceptance.get(w.aplItem || '')
     const mine = acc?.wos.find(x => x.woCode === w.woCode)
     const acceptedKg = mine?.acceptedKg ?? 0
-    // Xưởng chưa có đơn giá → để null (0 đọc như "làm không công"); màn đơn giá tính là 0.
+    // Chưa có đơn giá → để null (0 đọc như "làm không công"); màn đơn giá cũng tính là 0.
     const team = w.department?.code || w.teamCode || ''
-    const unit = p?.priceOfShop.get(shopKey(w.aplItem || '', team))
-    const amount = unit === undefined ? null : Math.round(acceptedKg * unit)
+    const giaCua = (stageCode = '') => {
+      const v = p?.priceOfShop.get(shopKey(w.aplItem || '', team, stageCode))
+      return v === undefined ? null : v
+    }
+
+    // Công đoạn được giao: xưởng làm khâu nào, chủng loại gì, tới đâu, ra bao nhiêu tiền.
+    const stages: StageRow[] = (mine?.stages ?? []).map(st => {
+      const gia = giaCua(st.stageCode)
+      return {
+        id: st.id, stageCode: st.stageCode, name: st.name, category: st.category,
+        unit: st.unit,
+        plannedKg: st.plannedKg, reportedKg: st.reportedKg, acceptedKg: st.acceptedKg,
+        ratio: st.ratio,
+        unitPrice: gia,
+        amount: gia === null ? null : Math.round(st.acceptedKg * gia),
+      }
+    })
+
+    // Lệnh chia công đoạn: tiền là tổng các công đoạn. Chỉ để null khi KHÔNG công đoạn nào
+    // có giá — còn một cái có giá thì vẫn ra tiền, không được nuốt mất phần đã làm.
+    const giaLenh = giaCua()
+    const amount = stages.length > 0
+      ? (stages.every(x => x.unitPrice === null)
+        ? null
+        : Math.round(stages.reduce((n, x) => n + (x.amount ?? 0), 0)))
+      : (giaLenh === null ? null : Math.round(acceptedKg * giaLenh))
+
     return {
       woId: w.id, woCode: w.woCode, item: w.aplItem, status: w.status,
       plannedKg, reportedKg, acceptedKg,
       ratio: plannedKg > 0 ? Math.min(1, acceptedKg / plannedKg) : 0,
-      amount,
+      amount, stages,
     }
   }
 
