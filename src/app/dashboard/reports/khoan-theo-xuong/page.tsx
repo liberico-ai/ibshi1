@@ -177,12 +177,6 @@ export default function KhoanTheoXuongPage() {
       <PageHeader
         title="Khoán theo xưởng"
         subtitle="Bốn tầng: Xưởng → Dự án → Lệnh → Công đoạn. Bấm mũi tên ở xưởng để xổ danh sách dự án, bấm tiếp ở dự án để xem từng lệnh và công đoạn được giao"
-        actions={
-          <Button variant="outline" disabled={shops.length === 0 || dangXuat} onClick={xuatExcel}
-            title="Xuất ra Excel đúng phần đang lọc">
-            {dangXuat ? 'Đang xuất…' : 'Xuất Excel'}
-          </Button>
-        }
       />
 
       {scope && (
@@ -238,6 +232,11 @@ export default function KhoanTheoXuongPage() {
               Bỏ lọc
             </Button>
           )}
+          {/* Đứng cạnh nút Lọc: xuất ra là xuất ĐÚNG phần vừa lọc, để xa thì đọc như hai việc rời nhau */}
+          <Button variant="outline" disabled={shops.length === 0 || dangXuat} onClick={xuatExcel}
+            title="Xuất ra Excel đúng phần đang lọc">
+            {dangXuat ? 'Đang xuất…' : 'Xuất Excel'}
+          </Button>
         </div>
         <p className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>
           Khoảng ngày lọc theo <b>ngày báo</b> của phiếu công việc và <b>ngày kiểm</b> của đợt nghiệm thu —
