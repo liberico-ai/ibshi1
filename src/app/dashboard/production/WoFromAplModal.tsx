@@ -58,6 +58,9 @@ interface Preview {
   issuedWos?: IssuedWo[]
 }
 
+/** Xưởng Pha cắt — khâu chuẩn bị vật tư cho mọi công đoạn sau, nên điền sẵn công đoạn PC. */
+const XUONG_PHA_CAT = 'XPC'
+
 export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
   open: boolean; projects: ProjectOption[]; onClose: () => void; onIssued: () => void
 }) {
@@ -442,7 +445,16 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
               <div key={i} style={{ marginBottom: 8 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.85fr 0.7fr 0.9fr 0.9fr 34px', gap: 8, alignItems: 'end' }}>
                   <SelectField label={i === 0 ? 'Xưởng nhận' : ''} value={a.teamCode}
-                    onChange={e => setAssign(i, { teamCode: e.target.value })}
+                    onChange={e => {
+                      const code = e.target.value
+                      // Xưởng Pha cắt luôn làm khâu Pha cắt — điền sẵn để PM khỏi chọn lại,
+                      // chỉ còn phải chọn chủng loại (tôn tấm / thép hình / khoan / sấn lốc…).
+                      if (code === XUONG_PHA_CAT && a.stages.length === 0) {
+                        setAssign(i, { teamCode: code, stages: [{ stageCode: 'PC', categoryCode: '', qty: '' }] })
+                        return
+                      }
+                      setAssign(i, { teamCode: code })
+                    }}
                     options={[
                       { value: '', label: issuedWos.length > 0 || assigns.length > 1 ? '— Chọn xưởng —' : '— Chưa giao —' },
                       ...PRODUCTION_WORKSHOPS.map(w => ({
@@ -548,8 +560,11 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                     )}
                     {a.stages.length > 0 && (
                       <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                        Mỗi lệnh một công đoạn — giao thêm phần việc khác thì bấm <b>+ Xưởng</b> rồi
-                        chọn lại xưởng này với công đoạn khác
+                        {a.teamCode === XUONG_PHA_CAT
+                          ? <>Pha cắt chuẩn bị vật tư cho mọi công đoạn sau — chọn chủng loại rồi
+                              bấm <b>+ Xưởng</b> nếu còn phần việc khác của xưởng này</>
+                          : <>Mỗi lệnh một công đoạn — giao thêm phần việc khác thì bấm <b>+ Xưởng</b> rồi
+                              chọn lại xưởng này với công đoạn khác</>}
                       </span>
                     )}
                   </div>

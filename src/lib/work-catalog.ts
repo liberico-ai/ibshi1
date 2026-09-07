@@ -4,6 +4,9 @@
 // Sinh từ "Danh_muc_cong_viec.xlsx" của nghiệp vụ (05/09/2026) — không gõ tay, không sửa
 // trực tiếp file này. Danh mục đổi thì xuất lại từ Excel để mã và nhãn luôn khớp chứng từ.
 //
+// NGOẠI LỆ: công đoạn PC (Pha cắt) có thêm hai chủng loại Khoan và Sấn lốc, thêm tay
+// 07/09/2026 theo yêu cầu nghiệp vụ. Xuất lại từ Excel thì nhớ giữ chúng.
+//
 // Dùng khi PM phân giao công đoạn bên trong lệnh sản xuất của một xưởng.
 // Công đoạn không có chủng loại nào (GEN, GH) thì bỏ trống ô chủng loại.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,6 +87,12 @@ export const WORK_STAGES: WorkStage[] = [
       { code: 'TT', label: 'Tôn tấm' },
       { code: 'TH', label: 'Thép hình' },
       { code: 'IN', label: 'Inox, hợp kim' },
+      // Hai chủng loại dưới đây THÊM TAY theo yêu cầu nghiệp vụ 07/09/2026, không có trong
+      // Danh_muc_cong_viec.xlsx. Xưởng Pha cắt chuẩn bị vật tư cho MỌI công đoạn sau, nên
+      // khoan và sấn lốc nằm luôn trong khâu pha cắt chứ không tách sang Gia công.
+      // Xuất lại danh mục từ Excel thì phải giữ hai dòng này.
+      { code: 'KH', label: 'Khoan' },
+      { code: 'SL', label: 'Sấn lốc' },
     ],
   },
   {
