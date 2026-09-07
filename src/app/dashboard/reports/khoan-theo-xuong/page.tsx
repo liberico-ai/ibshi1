@@ -2,7 +2,8 @@
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
-import { PageHeader, EmptyState, KPICard, StatusBadge } from '@/components/ui'
+import { PageHeader, EmptyState, KPICard, StatusBadge, Button } from '@/components/ui'
+import { notify } from '@/components/ui/Toast'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { Hammer } from 'lucide-react'
@@ -94,6 +95,42 @@ export default function KhoanTheoXuongPage() {
     return () => clearTimeout(t)
   }, [load])
 
+  // Xuất Excel — chọn được mức chi tiết vì mỗi vai cần một kiểu: BGĐ xem tổng theo xưởng,
+  // KTKH cần tới từng công đoạn để đối chiếu đơn giá.
+  const [xuatMuc, setXuatMuc] = useState<string | null>(null)
+  const [moMenu, setMoMenu] = useState(false)
+
+  const xuatExcel = async (muc: string) => {
+    setMoMenu(false)
+    setXuatMuc(muc)
+    try {
+      const token = sessionStorage.getItem('ibs_token')
+      const res = await fetch(`/api/reports/khoan-theo-xuong/export?muc=${muc}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) {
+        // Lỗi trả về dạng JSON, không phải file — đọc ra để nói đúng chỗ vướng.
+        const j = await res.json().catch(() => null)
+        notify(j?.error || 'Không xuất được báo cáo')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = decodeURIComponent(
+        (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'KhoanTheoXuong.xlsx')
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      notify('Không xuất được báo cáo')
+    } finally {
+      setXuatMuc(null)
+    }
+  }
+
   const totalAmount = shops.reduce((s, w) => s + w.amount, 0)
   const noPrice = shops.reduce((s, w) => s + w.woWithoutPrice, 0)
   // KL của dự án = cộng các dòng ITEM, mỗi ITEM MỘT lần. Một ITEM giao 5 xưởng vẫn là một
@@ -106,7 +143,40 @@ export default function KhoanTheoXuongPage() {
     <div className="space-y-4 animate-fade-in">
       <PageHeader
         title="Khoán theo xưởng"
-        subtitle="Ba tầng: Xưởng → Dự án → Lệnh. Bấm mũi tên ở xưởng để xổ danh sách dự án, bấm tiếp ở dự án để xem từng lệnh được giao"
+        subtitle="Bốn tầng: Xưởng → Dự án → Lệnh → Công đoạn. Bấm mũi tên ở xưởng để xổ danh sách dự án, bấm tiếp ở dự án để xem từng lệnh và công đoạn được giao"
+        actions={
+          <div style={{ position: 'relative' }}>
+            <Button variant="outline" disabled={shops.length === 0 || xuatMuc !== null}
+              onClick={() => setMoMenu(v => !v)}>
+              {xuatMuc !== null ? 'Đang xuất…' : 'Xuất Excel ▾'}
+            </Button>
+            {moMenu && (
+              <>
+                {/* Bấm ra ngoài thì đóng menu */}
+                <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setMoMenu(false)} />
+                <div style={{
+                  position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 41, minWidth: 260,
+                  background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden',
+                }}>
+                  {[
+                    { muc: 'tat-ca', ten: 'Toàn bộ', mo: 'Cả ba mức, mỗi mức một sheet' },
+                    { muc: 'xuong', ten: 'Theo xưởng', mo: 'Mỗi xưởng một dòng' },
+                    { muc: 'lenh', ten: 'Theo lệnh', mo: 'Tới từng lệnh sản xuất' },
+                    { muc: 'cong-doan', ten: 'Theo công đoạn', mo: 'Tới từng công đoạn, kèm đơn giá' },
+                  ].map(x => (
+                    <button key={x.muc} type="button" onClick={() => xuatExcel(x.muc)}
+                      className="w-full text-left px-3 py-2"
+                      style={{ borderBottom: '1px solid var(--border-light)' }}>
+                      <div className="text-sm font-medium">{x.ten}</div>
+                      <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{x.mo}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        }
       />
 
       {scope && (
