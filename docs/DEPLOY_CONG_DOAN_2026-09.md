@@ -6,6 +6,47 @@ lượng → mời nghiệm thu → QAQC/PM ký → tính tiền khoán.
 **9 migration, tất cả đều chỉ THÊM cột/bảng — không xoá, không sửa dữ liệu đang có.**
 Riêng migration cuối có đổi một ràng buộc duy nhất (nêu rõ ở mục 3).
 
+Tên 9 migration đều bắt đầu bằng `z` là **cố ý**: Prisma chạy theo thứ tự chữ cái của tên thư
+mục, và repo đang có sẵn nhiều migration tên `add_*` / `fix_*`. Đặt tên bắt đầu bằng chữ số
+thì đợt này chạy TRƯỚC các migration cũ và đổ ngay ở khoá ngoại — đã dính lỗi này một lần
+(xem mục 0).
+
+---
+
+## 0. Nếu đang kẹt lỗi P3009 (đã chạy hụt một lần)
+
+Bản đẩy lần đầu đặt tên migration sai thứ tự: Prisma chạy theo **thứ tự chữ cái** của tên thư
+mục, mà chữ số đứng trước chữ cái — nên `20260901000000_add_apl_item_workshop_price` chạy
+TRƯỚC `add_apl_import`, tạo khoá ngoại trỏ vào bảng `apl_imports` chưa tồn tại:
+
+```
+ERROR: relation "apl_imports" does not exist
+```
+
+Đã sửa: 9 migration đổi tên thành `z2026...` để chạy **sau** toàn bộ migration cũ.
+
+Prisma chạy mỗi migration trong một transaction nên lần hỏng đó **không để lại gì trong CSDL** —
+chỉ để lại một dòng đánh dấu "đã hỏng" khiến Prisma không cho chạy tiếp. Gỡ như sau:
+
+```sql
+-- 1. Xem cho chắc: dòng này phải có finished_at = NULL (hỏng, chưa xong)
+SELECT migration_name, started_at, finished_at, rolled_back_at
+FROM "_prisma_migrations"
+WHERE migration_name = '20260901000000_add_apl_item_workshop_price';
+
+-- 2. Bảng của migration đó phải KHÔNG tồn tại (transaction đã cuốn lại)
+--    Nếu có tồn tại cũng không sao: SQL mới dùng IF NOT EXISTS.
+SELECT to_regclass('public.apl_item_workshop_prices');
+
+-- 3. Xoá dòng đánh dấu hỏng. Tên cũ này không còn trong repo nữa nên
+--    `prisma migrate resolve` sẽ báo không tìm thấy — phải xoá thẳng.
+DELETE FROM "_prisma_migrations"
+WHERE migration_name = '20260901000000_add_apl_item_workshop_price'
+  AND finished_at IS NULL;
+```
+
+Xong bước 3 thì `git pull` rồi chạy tiếp **mục 1** như bình thường.
+
 ---
 
 ## 1. Cách chạy — chọn MỘT trong hai
@@ -33,15 +74,15 @@ database `ibshi` của prod. Chạy xong vẫn phải `npx prisma generate` + bu
 Sau khi chạy tay, đánh dấu cho Prisma biết là đã xong để lần sau không chạy lại:
 
 ```bash
-npx prisma migrate resolve --applied 20260901000000_add_apl_item_workshop_price
-npx prisma migrate resolve --applied 20260902000000_add_wo_unit
-npx prisma migrate resolve --applied 20260903000000_add_work_order_stage
-npx prisma migrate resolve --applied 20260904000000_add_stage_category
-npx prisma migrate resolve --applied 20260905000000_add_jobcard_stage
-npx prisma migrate resolve --applied 20260905010000_add_itp_stage
-npx prisma migrate resolve --applied 20260905020000_add_stage_qc_invite
-npx prisma migrate resolve --applied 20260905030000_add_checkpoint_stage
-npx prisma migrate resolve --applied 20260907000000_add_stage_price
+npx prisma migrate resolve --applied z20260901_add_apl_item_workshop_price
+npx prisma migrate resolve --applied z20260902_add_wo_unit
+npx prisma migrate resolve --applied z20260903_add_work_order_stage
+npx prisma migrate resolve --applied z20260904_add_stage_category
+npx prisma migrate resolve --applied z20260905a_add_jobcard_stage
+npx prisma migrate resolve --applied z20260905b_add_itp_stage
+npx prisma migrate resolve --applied z20260905c_add_stage_qc_invite
+npx prisma migrate resolve --applied z20260905d_add_checkpoint_stage
+npx prisma migrate resolve --applied z20260907_add_stage_price
 ```
 
 ---
