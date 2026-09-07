@@ -45,7 +45,40 @@ WHERE migration_name = '20260901000000_add_apl_item_workshop_price'
   AND finished_at IS NULL;
 ```
 
-Xong bước 3 thì `git pull` rồi chạy tiếp **mục 1** như bình thường.
+Xong bước 3 thì `git pull`, rồi **xem prod đang thiếu những migration nào**:
+
+```bash
+npx prisma migrate status
+```
+
+Sau đó chạy tiếp **mục 1**.
+
+### Nếu báo `relation "apl_imports" does not exist`
+
+Lỗi này KHÔNG phải do đợt migration này. Nó nói prod **thiếu cả migration cũ** — bảng
+`apl_imports` do `add_apl_import` tạo ra, và migration đó chưa từng chạy trên prod.
+
+Kiểm nhanh xem prod đang có gì:
+
+```sql
+SELECT to_regclass('public.apl_imports')           AS apl_imports,
+       to_regclass('public.apl_lines')             AS apl_lines,
+       to_regclass('public.work_orders')           AS work_orders,
+       to_regclass('public.job_cards')             AS job_cards,
+       to_regclass('public.inspection_test_plans') AS itp,
+       to_regclass('public.itp_checkpoints')       AS itp_checkpoints;
+
+SELECT count(*) FILTER (WHERE finished_at IS NOT NULL) AS da_chay_xong,
+       count(*) FILTER (WHERE finished_at IS NULL)     AS dang_danh_dau_hong
+FROM "_prisma_migrations";
+```
+
+Ô nào trả về `NULL` là bảng đó chưa có.
+
+**Cách xử lý: dùng `npx prisma migrate deploy` (mục 1 · cách A), đừng chạy tay khối SQL ở mục 2.**
+`migrate deploy` chạy đủ mọi migration còn thiếu theo đúng thứ tự — kể cả `add_apl_import` —
+rồi mới tới 9 migration của đợt này. Khối SQL ở mục 2 chỉ là phần RIÊNG của đợt này, nó giả
+định các migration cũ đã chạy hết nên sẽ đổ đúng ở chỗ khoá ngoại như trên.
 
 ---
 
@@ -69,7 +102,11 @@ pm2 restart ibs-erp      # hoặc lệnh restart đang dùng
 ### Cách B: chạy tay SQL
 
 Nếu không chạy `migrate deploy` được thì lấy nguyên khối SQL ở **mục 2**, chạy một lần trên
-database `ibshi` của prod. Chạy xong vẫn phải `npx prisma generate` + build + restart.
+database prod. Chạy xong vẫn phải `npx prisma generate` + build + restart.
+
+> **Chỉ dùng cách này khi prod ĐÃ chạy hết migration cũ.** Khối SQL ở mục 2 là phần riêng của
+> đợt này, không bao gồm các migration trước. Prod còn thiếu migration cũ thì nó đổ ngay ở
+> khoá ngoại (`relation "apl_imports" does not exist`) — xem mục 0.
 
 Sau khi chạy tay, đánh dấu cho Prisma biết là đã xong để lần sau không chạy lại:
 
@@ -87,10 +124,23 @@ npx prisma migrate resolve --applied z20260907_add_stage_price
 
 ---
 
-## 2. Toàn bộ SQL
+## 2. SQL riêng của đợt này
 
 Chạy **đúng thứ tự dưới đây** — các bảng sau tham chiếu bảng trước. Mọi câu đều có
 `IF NOT EXISTS` / bẫy trùng nên chạy lại lần hai không hỏng gì.
+
+Trước khi chạy, kiểm tra prod đã có các bảng gốc chưa — **cả 5 ô phải khác `NULL`**:
+
+```sql
+SELECT to_regclass('public.apl_imports')           AS apl_imports,
+       to_regclass('public.work_orders')           AS work_orders,
+       to_regclass('public.job_cards')             AS job_cards,
+       to_regclass('public.inspection_test_plans') AS itp,
+       to_regclass('public.itp_checkpoints')       AS itp_checkpoints;
+```
+
+Có ô `NULL` thì dừng lại, quay về **mục 0** — prod đang thiếu migration cũ, phải chạy
+`migrate deploy` chứ không chạy tay khối này.
 
 ```sql
 BEGIN;
