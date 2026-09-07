@@ -28,22 +28,47 @@ ERROR: relation "apl_imports" does not exist
 Prisma chạy mỗi migration trong một transaction nên lần hỏng đó **không để lại gì trong CSDL** —
 chỉ để lại một dòng đánh dấu "đã hỏng" khiến Prisma không cho chạy tiếp. Gỡ như sau:
 
+Phải xoá **cả 9 dòng tên cũ**, không riêng dòng báo hỏng. Lý do: những dòng còn lại có thể
+đang bị đánh dấu "đã xong" trong khi SQL chưa hề chạy (do `migrate resolve --applied` đánh
+dấu suông), và Prisma sẽ bỏ qua chúng vĩnh viễn.
+
 ```sql
--- 1. Xem cho chắc: dòng này phải có finished_at = NULL (hỏng, chưa xong)
+-- 1. Xem toàn bộ dấu vết của tên cũ: cái nào xong, cái nào hỏng
 SELECT migration_name, started_at, finished_at, rolled_back_at
 FROM "_prisma_migrations"
-WHERE migration_name = '20260901000000_add_apl_item_workshop_price';
+WHERE migration_name LIKE '2026090%_add_%'
+  AND migration_name IN (
+    '20260901000000_add_apl_item_workshop_price',
+    '20260902000000_add_wo_unit',
+    '20260903000000_add_work_order_stage',
+    '20260904000000_add_stage_category',
+    '20260905000000_add_jobcard_stage',
+    '20260905010000_add_itp_stage',
+    '20260905020000_add_stage_qc_invite',
+    '20260905030000_add_checkpoint_stage',
+    '20260907000000_add_stage_price')
+ORDER BY started_at;
 
--- 2. Bảng của migration đó phải KHÔNG tồn tại (transaction đã cuốn lại)
---    Nếu có tồn tại cũng không sao: SQL mới dùng IF NOT EXISTS.
-SELECT to_regclass('public.apl_item_workshop_prices');
-
--- 3. Xoá dòng đánh dấu hỏng. Tên cũ này không còn trong repo nữa nên
---    `prisma migrate resolve` sẽ báo không tìm thấy — phải xoá thẳng.
+-- 2. Xoá sạch. Tên cũ không còn trong repo nên `prisma migrate resolve` không nhận —
+--    phải xoá thẳng. An toàn: 9 migration mới đều dùng IF NOT EXISTS nên chạy lại
+--    trên bảng/cột đã có cũng không hỏng gì.
 DELETE FROM "_prisma_migrations"
-WHERE migration_name = '20260901000000_add_apl_item_workshop_price'
-  AND finished_at IS NULL;
+WHERE migration_name IN (
+  '20260901000000_add_apl_item_workshop_price',
+  '20260902000000_add_wo_unit',
+  '20260903000000_add_work_order_stage',
+  '20260904000000_add_stage_category',
+  '20260905000000_add_jobcard_stage',
+  '20260905010000_add_itp_stage',
+  '20260905020000_add_stage_qc_invite',
+  '20260905030000_add_checkpoint_stage',
+  '20260907000000_add_stage_price');
 ```
+
+> **Đừng dùng `migrate resolve --applied` cho 9 migration này khi SQL chưa thật sự chạy.**
+> Lệnh đó chỉ ghi "đã xong" vào sổ chứ không chạy SQL. Đánh dấu suông migration số 1 thì bảng
+> `apl_item_workshop_prices` không được tạo, và migration số 9 (thêm cột `stage_code` vào
+> chính bảng đó) sẽ đổ — đúng lỗi `20260907000000_add_stage_price ... failed`.
 
 Xong bước 3 thì `git pull`, rồi **xem prod đang thiếu những migration nào**:
 
@@ -108,7 +133,11 @@ database prod. Chạy xong vẫn phải `npx prisma generate` + build + restart.
 > đợt này, không bao gồm các migration trước. Prod còn thiếu migration cũ thì nó đổ ngay ở
 > khoá ngoại (`relation "apl_imports" does not exist`) — xem mục 0.
 
-Sau khi chạy tay, đánh dấu cho Prisma biết là đã xong để lần sau không chạy lại:
+Sau khi chạy tay, đánh dấu cho Prisma biết là đã xong để lần sau không chạy lại.
+
+> Chỉ chạy các lệnh dưới đây khi khối SQL ở mục 2 đã chạy XONG và KHÔNG lỗi. Lệnh này chỉ
+> ghi "đã xong" vào sổ chứ không chạy SQL — đánh dấu suông thì Prisma bỏ qua migration đó
+> vĩnh viễn, và những migration sau phụ thuộc vào nó sẽ đổ.
 
 ```bash
 npx prisma migrate resolve --applied z20260901_add_apl_item_workshop_price
