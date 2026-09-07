@@ -22,7 +22,9 @@ const DEPTS = [
   ['QLDA', 'Phòng Dự án'], ['TK', 'Phòng Thiết kế'],
   ['QAQC', 'Phòng QAQC'], ['TB', 'Phòng Trang thiết bị'],
   ['XPC', 'Xưởng Pha cắt'], ['XCT1', 'Xưởng Chế tạo số 1'], ['XCT2', 'Xưởng Chế tạo số 2'],
-  ['XH', 'Xưởng Hàn'], ['XHT', 'Xưởng Hoàn thiện'], ['SITEMGR', 'Site Manager'],
+  // Mã Xưởng Hàn đổi XH → XHAN từ 08/2026 (xem CLAUDE.md). Giữ 'XH' ở đây sẽ đẻ ra
+  // phòng thứ hai, tách đôi xưởng: người vào XH còn lệnh vẫn ở XHAN.
+  ['XHAN', 'Xưởng Hàn'], ['XHT', 'Xưởng Hoàn thiện'], ['SITEMGR', 'Site Manager'],
 ]
 // Đổi mã: QC→QAQC, TBCG→TB (rename record cũ để không mồ côi + user giữ departmentId).
 const RENAME = { QC: 'QAQC', TBCG: 'TB' }
@@ -32,7 +34,7 @@ const NAME_TO_CODE = {
   'phòng kinh tế kỹ thuật': 'KTKT', 'phòng tài chính kế toán': 'TCKT', 'phòng dự án': 'QLDA',
   'phòng thiết kế': 'TK', 'phòng chất lượng': 'QAQC', 'phòng trang thiết bị': 'TB',
   'xưởng pha cắt': 'XPC', 'xưởng chế tạo số 1': 'XCT1', 'xưởng chế tạo số 2': 'XCT2',
-  'xưởng hàn': 'XH', 'xưởng hoàn thiện': 'XHT', 'site manager': 'SITEMGR',
+  'xưởng hàn': 'XHAN', 'xưởng hoàn thiện': 'XHT', 'site manager': 'SITEMGR',
 }
 const norm = s => String(s || '').replace(/\s+/g, ' ').trim()
 
