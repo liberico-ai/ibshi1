@@ -81,6 +81,8 @@ export default function ITPPage() {
   // Nhóm dự án nào bị người dùng thu lại. Không lưu "đang mở" mà lưu "đã đóng": mặc định
   // do dữ liệu quyết (dự án còn việc thì mở sẵn), bấm vào mới ghi đè.
   const [closedProjects, setClosedProjects] = useState<Record<string, boolean>>({})
+  // Lọc theo dự án — danh sách ITP trải dài nhiều dự án, cuộn tìm rất lâu. '' = xem tất cả.
+  const [locDuAn, setLocDuAn] = useState('')
   const [uploadingCp, setUploadingCp] = useState<string | null>(null)
   const user = useAuthStore(s => s.user)
 
@@ -105,12 +107,28 @@ export default function ITPPage() {
   // ── Gom ITP theo DỰ ÁN ──
   // Để phẳng thì mọi dự án trộn lẫn nhau, nhìn không ra cái nào của ai. Mỗi dự án một khối,
   // dự án CÒN VIỆC mở sẵn, dự án đã xong hết thì thu lại cho gọn.
+  // Danh sách dự án cho ô lọc — lấy từ chính các ITP đang có, để không hiện dự án không có ITP nào.
+  const duAnCoItp = (() => {
+    const m = new Map<string, { id: string; code: string; name: string; soItp: number }>()
+    for (const i of itps) {
+      const g = m.get(i.projectId) || { id: i.projectId, code: i.project.projectCode, name: i.project.projectName, soItp: 0 }
+      g.soItp++
+      m.set(i.projectId, g)
+    }
+    return [...m.values()].sort((a, b) => a.code.localeCompare(b.code))
+  })()
+
+  // Đang lọc mà dự án đó không còn ITP nào (vừa xoá, hoặc đổi bộ dữ liệu) thì coi như xem tất cả,
+  // chứ không để màn hình trắng trơn không rõ vì sao.
+  const locHieuLuc = duAnCoItp.some(d => d.id === locDuAn) ? locDuAn : ''
+  const itpsHienThi = locHieuLuc ? itps.filter(i => i.projectId === locHieuLuc) : itps
+
   const groups = (() => {
     const m = new Map<string, {
       projectId: string; projectCode: string; projectName: string
       itps: ITP[]; dangLam: number; loi: number
     }>()
-    for (const i of itps) {
+    for (const i of itpsHienThi) {
       const g = m.get(i.projectId) || {
         projectId: i.projectId,
         projectCode: i.project.projectCode,
@@ -125,8 +143,10 @@ export default function ITPPage() {
     return [...m.values()].sort((a, b) => a.projectCode.localeCompare(b.projectCode))
   })()
 
+  // Mặc định: dự án còn việc thì mở, xong hết thì thu. Đang lọc riêng một dự án thì luôn mở sẵn —
+  // lọc xong mà vẫn phải bấm mở thêm một lần nữa thì lọc chẳng để làm gì.
   const groupOpen = (g: (typeof groups)[number]) =>
-    closedProjects[g.projectId] === undefined ? g.dangLam > 0 : !closedProjects[g.projectId]
+    closedProjects[g.projectId] === undefined ? (g.dangLam > 0 || !!locHieuLuc) : !closedProjects[g.projectId]
 
   const canInspect = ['R01', 'R09', 'R09a'].includes(user?.roleCode || '')
   const canCreate = canInspect
@@ -183,9 +203,10 @@ export default function ITPPage() {
 
   if (loading) return <div className="space-y-4 animate-fade-in">{[1,2,3].map(i => <div key={i} className="h-24 skeleton rounded-xl" />)}</div>
 
-  const totalCheckpoints = itps.reduce((s, i) => s + i.totalCheckpoints, 0)
-  const totalPassed = itps.reduce((s, i) => s + i.passedCheckpoints, 0)
-  const totalFailed = itps.reduce((s, i) => s + i.failedCheckpoints, 0)
+  // Bốn ô số đếm theo ĐÚNG phần đang xem: lọc một dự án mà số tổng vẫn của toàn bộ thì đọc sai.
+  const totalCheckpoints = itpsHienThi.reduce((s, i) => s + i.totalCheckpoints, 0)
+  const totalPassed = itpsHienThi.reduce((s, i) => s + i.passedCheckpoints, 0)
+  const totalFailed = itpsHienThi.reduce((s, i) => s + i.failedCheckpoints, 0)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -196,7 +217,7 @@ export default function ITPPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
-        <KPICard label="Tổng ITP" value={itps.length} accentColor={SEMANTIC_COLORS.info.solid} />
+        <KPICard label="Tổng ITP" value={itpsHienThi.length} accentColor={SEMANTIC_COLORS.info.solid} />
         <KPICard label="Tổng điểm kiểm" value={totalCheckpoints} accentColor={SEMANTIC_COLORS.neutral.solid} />
         <KPICard label="Đạt" value={totalPassed} accentColor={SEMANTIC_COLORS.success.solid} />
         <KPICard
@@ -206,9 +227,29 @@ export default function ITPPage() {
         />
       </div>
 
+      {/* Lọc theo dự án — ITP của mọi dự án nằm chung một màn, cuộn tìm rất lâu. */}
+      {duAnCoItp.length > 1 && (
+        <div className="flex flex-wrap items-end gap-3">
+          <div style={{ minWidth: 320 }}>
+            <SelectField label="Dự án" value={locHieuLuc} onChange={e => setLocDuAn(e.target.value)}
+              options={[
+                { value: '', label: `— Tất cả dự án (${itps.length} ITP) —` },
+                ...duAnCoItp.map(d => ({ value: d.id, label: `${d.code} — ${d.name} (${d.soItp} ITP)` })),
+              ]} />
+          </div>
+          {locHieuLuc && (
+            <Button variant="outline" onClick={() => setLocDuAn('')}>Bỏ lọc</Button>
+          )}
+        </div>
+      )}
+
       <div className="space-y-5">
         {itps.length === 0 && (
           <EmptyState icon={<ClipboardList />} title="Chưa có ITP nào" description="Tạo ITP đầu tiên để bắt đầu quản lý kiểm tra" />
+        )}
+        {itps.length > 0 && itpsHienThi.length === 0 && (
+          <EmptyState icon={<ClipboardList />} title="Dự án này chưa có ITP nào"
+            description="Bỏ lọc để xem ITP của các dự án khác" />
         )}
         {groups.map(g => {
           const moRong = groupOpen(g)
