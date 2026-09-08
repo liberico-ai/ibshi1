@@ -20,6 +20,25 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams
     const importId = (sp.get('importId') || '').trim()
     if (!importId) return errorResponse('Thiếu bản APL')
+    // Xem trước lệnh Pha cắt CẢ DỰ ÁN: không gắn hạng mục nào nên cũng không có ITEM.
+    // Chỉ cần biết những chủng loại đã giao, để màn phát hành khỏi cho giao lại.
+    if (sp.get('toanDuAn') === '1') {
+      const daGiao = await prisma.workOrder.findMany({
+        where: { aplImportId: importId, aplItem: null },
+        select: {
+          woCode: true, teamCode: true, status: true,
+          stages: { select: { stageCode: true, categoryCode: true, name: true, category: true, qty: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+      return successResponse({
+        issuedWos: daGiao.map(w => ({
+          ...w,
+          stages: w.stages.map(st => ({ ...st, qty: Number(st.qty) || 0 })),
+        })),
+      })
+    }
+
     const rawItem = sp.get('item')
     if (rawItem === null) return errorResponse('Thiếu ITEM')
     const item = rawItem.trim()
@@ -83,12 +102,23 @@ export async function POST(req: NextRequest) {
       unit?: string; plannedQty?: number
       /** Công đoạn bên trong lệnh — tổng khối lượng không được vượt plannedQty */
       stages?: { stageCode?: string; categoryCode?: string; qty?: number; note?: string }[]
+      /**
+       * Giao PHA CẮT cho CẢ DỰ ÁN, không gắn hạng mục nào.
+       * Pha cắt chuẩn bị vật tư cho mọi công đoạn sau nên giao một lần cho toàn dự án:
+       * một lệnh mang nhiều chủng loại (tôn tấm, thép hình, khoan, sấn lốc…), mỗi chủng loại
+       * một khối lượng RIÊNG do PM nhập — khác hẳn lệnh theo hạng mục, nơi các công đoạn
+       * chạy qua cùng một khối thép.
+       */
+      toanDuAn?: boolean
     } | null
     if (!body?.projectId) return errorResponse('Thiếu dự án')
     if (!body.importId) return errorResponse('Thiếu bản APL')
     // ITEM rỗng là hợp lệ: bản APL cũ dồn hết vào nhóm "(không có ITEM)".
     const item = String(body.item ?? '').trim()
-    if (body.item === undefined || body.item === null) return errorResponse('Chưa chọn ITEM để phát hành')
+    // Lệnh Pha cắt cả dự án cố tình KHÔNG gắn hạng mục — nó phục vụ mọi hạng mục trong APL.
+    if (body.toanDuAn !== true && (body.item === undefined || body.item === null)) {
+      return errorResponse('Chưa chọn ITEM để phát hành')
+    }
 
     const project = await prisma.project.findUnique({
       where: { id: body.projectId },
@@ -105,11 +135,16 @@ export async function POST(req: NextRequest) {
     // Khớp ITEM: chuỗi rỗng ứng với cả null lẫn '' trong DB.
     const itemWhere = item ? { item } : { OR: [{ item: null }, { item: '' }] }
 
-    const heads = await prisma.aplLine.findMany({
+    // Lệnh Pha cắt cả dự án KHÔNG đọc dòng APL: khối lượng do PM nhập theo từng chủng loại,
+    // còn vật tư thì gom cả bản APL (hàng trăm nghìn dòng) vừa chậm vừa vô nghĩa — cột vật
+    // tư chỉ hiện được 40 quy cách.
+    const heads = body.toanDuAn === true ? [] : await prisma.aplLine.findMany({
       where: { importId: body.importId, isAssembly: true, ...itemWhere },
       select: { id: true, rollupWeightKg: true },
     })
-    if (heads.length === 0) return errorResponse('ITEM này không có cụm nào trong bản APL đã chọn')
+    if (body.toanDuAn !== true && heads.length === 0) {
+      return errorResponse('ITEM này không có cụm nào trong bản APL đã chọn')
+    }
 
     // Một ITEM giao cho NHIỀU xưởng, và CÙNG một xưởng nhiều lần — mỗi lần một phần việc khác.
     // Mỗi lệnh MANG TRỌN khối lượng của ITEM (xưởng cắt cắt hết 71.504 kg, xưởng hàn hàn hết
@@ -122,7 +157,7 @@ export async function POST(req: NextRequest) {
 
     // Vật tư: quét MỌI dòng chi tiết của ITEM. Một ITEM tới ~3.200 dòng nên chỉ lấy đúng
     // ba cột cần dùng, không kéo cả bản ghi về.
-    const details = await prisma.aplLine.findMany({
+    const details = body.toanDuAn === true ? [] : await prisma.aplLine.findMany({
       where: { importId: body.importId, isAssembly: false, ...itemWhere },
       select: { profile: true, grade: true, totalWeightKg: true },
     })
@@ -135,7 +170,8 @@ export async function POST(req: NextRequest) {
     const plannedQty = givenQty ?? (unit === DEFAULT_WO_UNIT && weightKg > 0 ? weightKg : null)
     // Giao diện đã chặn, server chặn lại: đơn vị khác kg thì không suy được số lượng từ khối
     // lượng ITEM. Để lệnh trống khối lượng thì nghiệm thu và tính tiền đều hỏng về sau.
-    if (unit !== DEFAULT_WO_UNIT && !givenQty) {
+    // Lệnh cả dự án lấy số PM nhập cho từng chủng loại nên không cần số ở cấp lệnh.
+    if (body.toanDuAn !== true && unit !== DEFAULT_WO_UNIT && !givenQty) {
       return errorResponse(`Lệnh đo bằng ${unit} thì phải nhập số lượng — không quy đổi được từ kg`, 422)
     }
 
@@ -167,19 +203,44 @@ export async function POST(req: NextRequest) {
         qty, note: st?.note ? String(st.note).trim() : null,
       })
     }
-    // MỖI LỆNH ĐÚNG MỘT CÔNG ĐOẠN. Gộp nhiều công đoạn vào một lệnh thì không tách được
-    // tiến độ, nghiệm thu và tiền của từng phần việc — giao thành nhiều lệnh thay vì gộp.
-    if (stages.length > 1) {
+    // ── Pha cắt cho CẢ DỰ ÁN ──
+    // Một lệnh mang nhiều chủng loại, mỗi chủng loại một khối lượng riêng do PM nhập.
+    // Đây là ngoại lệ có chủ ý của luật "mỗi lệnh một công đoạn": các chủng loại ở đây là
+    // những khối lượng RỜI NHAU (tôn tấm ≠ thép hình), không phải nhiều lượt việc trên cùng
+    // khối thép — nên gộp một lệnh mới đúng, và tiến độ phải CỘNG chứ không lấy chậm nhất.
+    const toanDuAn = body.toanDuAn === true
+    if (toanDuAn) {
+      if (stages.length === 0) {
+        return errorResponse('Nhập khối lượng cho ít nhất một chủng loại của Pha cắt', 422)
+      }
+      if (stages.some(x => x.stageCode !== 'PC')) {
+        return errorResponse('Giao cả dự án chỉ áp dụng cho công đoạn Pha cắt', 422)
+      }
+      // Chủng loại nào đã giao rồi thì không giao lại — cùng luật với lệnh theo hạng mục.
+      const daCo = await prisma.workOrderStage.findMany({
+        where: { workOrder: { aplImportId: body.importId, aplItem: null, teamCode: team }, stageCode: 'PC' },
+        select: { categoryCode: true, category: true, workOrder: { select: { woCode: true } } },
+      })
+      const trung = stages.find(x => daCo.some(y => (y.categoryCode ?? '') === (x.categoryCode ?? '')))
+      if (trung) {
+        const cu = daCo.find(y => (y.categoryCode ?? '') === (trung.categoryCode ?? ''))!
+        return errorResponse(
+          `Chủng loại "${trung.category ?? trung.name}" đã giao ở lệnh ${cu.workOrder.woCode}`
+          + ' — bỏ dòng đó ra hoặc chọn chủng loại khác', 409)
+      }
+    } else if (stages.length > 1) {
+      // MỖI LỆNH ĐÚNG MỘT CÔNG ĐOẠN. Gộp nhiều công đoạn vào một lệnh theo hạng mục thì không
+      // tách được tiến độ, nghiệm thu và tiền của từng phần việc.
       return errorResponse(
         'Mỗi lệnh chỉ nhận MỘT công đoạn + một chủng loại. Giao thêm phần việc khác thì phát hành lệnh riêng.',
         422)
     }
-    const cd = stages[0] ?? null
+    const cd = toanDuAn ? null : (stages[0] ?? null)
 
     // ── Chặn trùng ──
     // Cùng một xưởng nhận được NHIỀU lệnh của cùng ITEM, miễn là khác phần việc.
     // Đã giao Xưởng Hàn "Hàn · Kết cấu" rồi thì lần sau chỉ giao được hàn thứ khác.
-    const cungXuong = await prisma.workOrder.findMany({
+    const cungXuong = toanDuAn ? [] : await prisma.workOrder.findMany({
       where: { aplImportId: body.importId, aplItem: item || null, teamCode: team },
       select: { woCode: true, stages: { select: { stageCode: true, categoryCode: true, name: true, category: true } } },
     })
@@ -206,8 +267,9 @@ export async function POST(req: NextRequest) {
 
     // Mã WO: gắn xưởng và CÔNG ĐOẠN vào tên ITEM để nhiều lệnh cùng xưởng phân biệt được;
     // trùng nữa mới thêm số thứ tự.
-    const itemForCode = [item, team || null, cd ? cd.stageCode : null, cd?.categoryCode || null]
-      .filter(Boolean).join('-')
+    const itemForCode = toanDuAn
+      ? ['PHA-CAT-CA-DU-AN', team || null].filter(Boolean).join('-')
+      : [item, team || null, cd ? cd.stageCode : null, cd?.categoryCode || null].filter(Boolean).join('-')
     let woCode = aplItemWoCode(project.projectCode, itemForCode)
     for (let n = 2; n <= 50; n++) {
       const dup = await prisma.workOrder.findUnique({ where: { woCode }, select: { id: true } })
@@ -220,24 +282,36 @@ export async function POST(req: NextRequest) {
       : null
     const toDate = (s?: string) => (s ? new Date(s) : null)
 
+    // Lệnh Pha cắt cả dự án: khối lượng = TỔNG các chủng loại PM nhập. Chúng là những khối
+    // lượng rời nhau (tôn tấm ≠ thép hình) nên cộng mới đúng — khác lệnh theo hạng mục, nơi
+    // các công đoạn cùng chạy qua một khối lượng.
+    const klLenh = toanDuAn
+      ? Math.round(stages.reduce((n, x) => n + x.qty, 0) * 100) / 100
+      : (plannedQty !== null && plannedQty > 0 ? plannedQty : null)
+
     const wo = await prisma.workOrder.create({
       data: {
         woCode,
         projectId: project.id,
-        description: aplItemWoDescription(item, heads.length),
+        description: toanDuAn
+          ? `Pha cắt — cả dự án (${stages.length} chủng loại)`
+          : aplItemWoDescription(item, heads.length),
         // Vật tư để CỘT RIÊNG, không nhét vào mô tả — nhét vào thì cắt ngắn là mất chữ,
         // mà lọc/tìm theo vật tư cũng không được.
         materials: formatMaterialsColumn(mats),
         aplImportId: body.importId,
-        aplItem: item || null,
-        pieceMark: item || null,
+        // Lệnh cả dự án KHÔNG gắn hạng mục — nó phục vụ mọi hạng mục trong bản APL.
+        aplItem: toanDuAn ? null : (item || null),
+        pieceMark: toanDuAn ? null : (item || null),
         teamCode: team,
         departmentId: dept?.id || null,
         woType: 'INTERNAL',
         // Đơn vị của lệnh: kg thì lấy thẳng khối lượng ITEM; đơn vị khác (m², mét…) thì
         // KHÔNG quy đổi được từ kg — phải dùng số lượng PM nhập, thiếu thì để trống.
         unit,
-        plannedWeight: plannedQty !== null && plannedQty > 0 ? plannedQty : null,
+        plannedWeight: klLenh,
+        // Công đoạn của lệnh này rời nhau hay chồng nhau — quyết định cách cộng tiến độ.
+        stagesDisjoint: toanDuAn,
         plannedStart: toDate(body.plannedStart),
         plannedEnd: toDate(body.plannedEnd),
         createdBy: user.userId,

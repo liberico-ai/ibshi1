@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/hooks/useAuth'
 import { notify } from '@/components/ui/Toast'
-import { Modal, Button, SelectField } from '@/components/ui'
+import { Modal, Button, SelectField, InputField } from '@/components/ui'
 import { formatNumber } from '@/lib/utils'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 import { WO_UNITS, DEFAULT_WO_UNIT, unitLabel } from '@/lib/wo-units'
@@ -116,6 +116,63 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
   const stageQtyText = (a: Assign, st: Stage) => (st.qty !== '' ? st.qty : String(rowQty(a) || ''))
 
   const [issuing, setIssuing] = useState(false)
+
+  // ── Giao Pha cắt cho CẢ DỰ ÁN ──
+  // Pha cắt chuẩn bị vật tư cho mọi công đoạn sau nên không giao theo từng hạng mục, mà giao
+  // một lượt cho toàn bộ dự án: mỗi chủng loại (tôn tấm, thép hình, khoan…) một khối lượng
+  // riêng do PM nhập. Chủng loại nào bỏ trống thì lần này không giao.
+  const [pcMo, setPcMo] = useState(false)
+  const [pcQty, setPcQty] = useState<Record<string, string>>({})
+  const [pcStart, setPcStart] = useState('')
+  const [pcEnd, setPcEnd] = useState('')
+  const [pcIssuing, setPcIssuing] = useState(false)
+  /** Chủng loại đã giao ở những lệnh cả dự án trước — không giao lại được. */
+  const [pcDaGiao, setPcDaGiao] = useState<{ woCode: string; categoryCode: string; category: string; qty: number }[]>([])
+
+  const loadPcDaGiao = useCallback(() => {
+    if (!apl) { setPcDaGiao([]); return }
+    apiFetch(`/api/production/work-orders/from-apl?importId=${apl.id}&toanDuAn=1`)
+      .then(r => {
+        if (!r?.ok) return
+        const ds = (r.issuedWos || []) as { woCode: string; stages?: { categoryCode: string | null; category: string | null; qty: number }[] }[]
+        setPcDaGiao(ds.flatMap(w => (w.stages ?? []).map(st => ({
+          woCode: w.woCode, categoryCode: st.categoryCode ?? '', category: st.category ?? '', qty: st.qty,
+        }))))
+      })
+      .catch(() => {})
+  }, [apl])
+  useEffect(() => { loadPcDaGiao() }, [loadPcDaGiao])
+
+  const pcChungLoai = categoriesOf('PC')
+  const pcDaGiaoCua = (code: string) => pcDaGiao.find(x => x.categoryCode === code)
+  /** Những dòng PM vừa nhập số — chỉ chủng loại có khối lượng mới được ghi nhận. */
+  const pcDongNhap = pcChungLoai
+    .filter(c => !pcDaGiaoCua(c.code) && Number(pcQty[c.code]) > 0)
+    .map(c => ({ stageCode: 'PC', categoryCode: c.code, qty: Number(pcQty[c.code]) }))
+  const pcTong = pcDongNhap.reduce((n, x) => n + x.qty, 0)
+
+  const issuePhaCat = async () => {
+    if (!apl || pcDongNhap.length === 0) return
+    setPcIssuing(true)
+    try {
+      const r = await apiFetch('/api/production/work-orders/from-apl', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId, importId: apl.id, toanDuAn: true,
+          teamCode: XUONG_PHA_CAT, unit: DEFAULT_WO_UNIT,
+          stages: pcDongNhap,
+          plannedStart: pcStart || undefined,
+          plannedEnd: pcEnd || undefined,
+        }),
+      })
+      if (!r?.ok) { notify(r?.error || 'Không phát hành được lệnh pha cắt', 'error'); return }
+      notify(`Đã phát hành ${r.workOrder?.woCode ?? ''} — pha cắt ${pcDongNhap.length} chủng loại cho cả dự án`, 'success')
+      setPcQty({}); setPcStart(''); setPcEnd('')
+      loadPcDaGiao(); loadItems(); onIssued()
+    } finally {
+      setPcIssuing(false)
+    }
+  }
 
   const reset = () => {
     setProjectId(''); setApl(null); setItems([]); setItem(null); setPreview(null); setMsg('')
@@ -330,6 +387,81 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
         )}
 
         {loadingItems && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Đang tải danh sách ITEM…</div>}
+
+        {/* ── Pha cắt: giao MỘT LẦN cho cả dự án, không chọn hạng mục ──
+            Khâu này cắt phôi cho mọi hạng mục về sau nên chia theo hạng mục là sai việc.
+            Mỗi chủng loại một khối lượng riêng, PM nhập cái nào thì giao cái đó. */}
+        {apl && item === null && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <button type="button" onClick={() => setPcMo(v => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+                background: 'var(--bg-subtle, #f8fafc)', border: 0, cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 600, flex: 1 }}>
+                Pha cắt — giao cho cả dự án
+                <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
+                  {' '}— không chọn hạng mục, nhập khối lượng từng chủng loại
+                </span>
+              </span>
+              {pcDaGiao.length > 0 && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>đã giao {pcDaGiao.length} chủng loại</span>
+              )}
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{pcMo ? '▲' : '▼'}</span>
+            </button>
+
+            {pcMo && (
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.74rem' }}>
+                      <th style={{ padding: '4px 6px', fontWeight: 600 }}>Chủng loại</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 600, width: 190 }}>Khối lượng giao (kg)</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 600 }}>Đã giao</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pcChungLoai.map(c => {
+                      const cu = pcDaGiaoCua(c.code)
+                      return (
+                        <tr key={c.code} style={{ borderTop: '1px solid var(--border)' }}>
+                          <td style={{ padding: '6px', fontWeight: 500 }}>{c.label}</td>
+                          <td style={{ padding: '4px 6px' }}>
+                            <input type="number" min={0} inputMode="numeric"
+                              value={cu ? '' : (pcQty[c.code] ?? '')}
+                              disabled={!!cu}
+                              placeholder={cu ? '—' : 'bỏ trống = không giao'}
+                              onChange={e => setPcQty(q => ({ ...q, [c.code]: e.target.value }))}
+                              style={{ width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.82rem',
+                                border: '1px solid var(--border)', background: cu ? 'var(--bg-subtle, #f8fafc)' : 'var(--bg)' }} />
+                          </td>
+                          <td style={{ padding: '6px', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
+                            {cu ? `${formatNumber(Math.round(cu.qty))} kg · ${cu.woCode}` : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ width: 170 }}>
+                    <InputField label="Bắt đầu" type="date" value={pcStart} onChange={e => setPcStart(e.target.value)} />
+                  </div>
+                  <div style={{ width: 170 }}>
+                    <InputField label="Kết thúc" type="date" value={pcEnd} onChange={e => setPcEnd(e.target.value)} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 180, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    {pcDongNhap.length > 0
+                      ? <>Giao {pcDongNhap.length} chủng loại · tổng <b>{formatNumber(Math.round(pcTong))} kg</b> cho Xưởng Pha cắt</>
+                      : 'Nhập khối lượng cho ít nhất một chủng loại'}
+                  </div>
+                  <Button onClick={issuePhaCat} disabled={pcIssuing || pcDongNhap.length === 0}>
+                    {pcIssuing ? 'Đang phát hành…' : 'Phát hành lệnh pha cắt'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Danh sách ITEM — mỗi ITEM là một lệnh sản xuất */}
         {!loadingItems && items.length > 0 && item === null && (

@@ -1061,6 +1061,15 @@ model WorkOrder {
   // và có thể đo bằng đơn vị khác: pha cắt/hàn tính kg, sơn tính m², lắp đặt tính mét.
   // kg suy được từ khối lượng ITEM; đơn vị khác thì KHÔNG quy đổi được, PM phải tự nhập.
   unit                 String                     @default("kg")
+  // Công đoạn trong lệnh này có CHỒNG khối lượng lên nhau không.
+  //
+  // false (mặc định) — lệnh theo HẠNG MỤC: mỗi công đoạn là một lượt việc trên CÙNG khối thép
+  //   (cắt 24.784 kg rồi hàn 24.784 kg). Tiến độ lấy công đoạn CHẬM NHẤT, không cộng.
+  // true — lệnh Pha cắt cho CẢ DỰ ÁN: mỗi chủng loại là một khối lượng RIÊNG BIỆT
+  //   (tôn tấm 500t + thép hình 300t + khoan 200t). Tiến độ CỘNG các công đoạn lại.
+  //
+  // Hai luật ngược nhau nên phải ghi rõ trên từng lệnh, không suy đoán từ số công đoạn.
+  stagesDisjoint Boolean @default(false) @map("stages_disjoint")
   materials            String? // vật tư gom từ APL kèm kg cộng dồn, vd "PL10 SS400: 1.234 kg, ..."
   // Từ 2026-08 giao theo ITEM: 1 ITEM = 1 WO = 1 xưởng. aplImportId + aplItem là liên kết CHÍNH.
   // aplLineId giữ lại cho các WO cũ phát hành theo từng dòng vàng (assembly).

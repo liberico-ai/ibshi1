@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { getWorkshopScope } from '@/lib/workshop-scope'
 import { getAcceptanceByItem, shopKey } from '@/lib/apl-pricing'
+import { ITEM_CA_DU_AN } from '@/lib/hang-muc'
 import type { KhoangNgay } from '@/lib/wo-acceptance'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
 
@@ -108,6 +109,8 @@ export async function buildKhoanReport(
     select: {
       id: true, woCode: true, status: true, teamCode: true, departmentId: true,
       aplImportId: true, aplItem: true, plannedWeight: true, completedQty: true,
+      // Lệnh giao cả dự án (Pha cắt) không thuộc hạng mục nào — xếp thành dòng riêng.
+      stagesDisjoint: true,
       projectId: true, project: { select: { projectCode: true, projectName: true } },
       department: { select: { code: true, name: true } },
     },
@@ -137,13 +140,15 @@ export async function buildKhoanReport(
     const plannedKg = Number(w.plannedWeight) || 0
     const reportedKg = Number(w.completedQty) || 0
     const p = w.aplImportId ? priced.get(w.aplImportId) : null
-    const acc = p?.acceptance.get(w.aplItem || '')
+    // Lệnh giao cả dự án gom vào một khoá riêng, không lẫn với hạng mục "(không có ITEM)".
+    const khoaHangMuc = w.stagesDisjoint ? ITEM_CA_DU_AN : (w.aplItem || '')
+    const acc = p?.acceptance.get(khoaHangMuc)
     const mine = acc?.wos.find(x => x.woCode === w.woCode)
     const acceptedKg = mine?.acceptedKg ?? 0
     // Chưa có đơn giá → để null (0 đọc như "làm không công"); màn đơn giá cũng tính là 0.
     const team = w.department?.code || w.teamCode || ''
     const giaCua = (stageCode = '') => {
-      const v = p?.priceOfShop.get(shopKey(w.aplItem || '', team, stageCode))
+      const v = p?.priceOfShop.get(shopKey(khoaHangMuc, team, stageCode))
       return v === undefined ? null : v
     }
 
@@ -170,7 +175,10 @@ export async function buildKhoanReport(
       : (giaLenh === null ? null : Math.round(acceptedKg * giaLenh))
 
     return {
-      woId: w.id, woCode: w.woCode, item: w.aplItem, status: w.status,
+      woId: w.id, woCode: w.woCode,
+      // Lệnh cả dự án không có mã ITEM — báo cáo hiện nó thành dòng riêng, tên nói rõ phạm vi.
+      item: w.stagesDisjoint ? 'Cả dự án' : w.aplItem,
+      status: w.status,
       plannedKg, reportedKg, acceptedKg,
       ratio: plannedKg > 0 ? Math.min(1, acceptedKg / plannedKg) : 0,
       amount, stages,
@@ -247,8 +255,9 @@ export async function buildKhoanReport(
     const team = w.department?.code || w.teamCode || ''
     if (!team) continue
     const n = woNumbers(w)
-    // Lệnh không gắn ITEM thì không chia sẻ khối lượng với ai — cộng thẳng.
-    if (!w.aplImportId || !w.aplItem) {
+    // Lệnh không gắn ITEM — và lệnh giao cả dự án — không chia sẻ khối lượng với hạng mục
+    // nào, nên cộng thẳng, không phải khử trùng theo ITEM.
+    if (!w.aplImportId || !w.aplItem || w.stagesDisjoint) {
       standalone.planned += n.plannedKg
       standalone.reported += n.reportedKg
       standalone.accepted += n.acceptedKg

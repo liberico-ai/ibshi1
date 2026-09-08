@@ -1,5 +1,9 @@
 import prisma from './db'
 import { getWoAcceptance, type KhoangNgay } from './wo-acceptance'
+// Khoá + tên hạng mục để ở file riêng vì các trang dashboard cũng đọc, mà chúng không nhập
+// được file này (kéo theo Prisma).
+import { ITEM_CA_DU_AN } from './hang-muc'
+export { ITEM_CA_DU_AN, tenHangMuc } from './hang-muc'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Đơn giá khoán theo APL → thành tiền cho bước P5.5 (tổng hợp & tính lương khoán).
@@ -81,13 +85,17 @@ export async function getAcceptanceByItem(
     select: {
       id: true, aplLineId: true, aplImportId: true, aplItem: true,
       woCode: true, status: true, teamCode: true, completedQty: true, createdAt: true,
+      // Lệnh giao cả dự án — không thuộc hạng mục nào, xếp vào khoá riêng.
+      stagesDisjoint: true, plannedWeight: true,
     },
   })
   const itemOfLine = new Map(heads.map(h => [h.id, h.item || '']))
 
   const byItem = new Map<string, typeof wos>()
   for (const w of wos) {
-    const key = w.aplImportId ? (w.aplItem || '') : itemOfLine.get(w.aplLineId || '')
+    const key = w.stagesDisjoint
+      ? ITEM_CA_DU_AN
+      : (w.aplImportId ? (w.aplItem || '') : itemOfLine.get(w.aplLineId || ''))
     if (key === undefined) continue
     const arr = byItem.get(key) || []
     arr.push(w)
@@ -95,6 +103,16 @@ export async function getAcceptanceByItem(
   }
 
   const out = new Map<string, ItemAcceptance>()
+  // Lệnh giao cả dự án không có dòng APL nào đứng sau, nên phải tự mở mục cho nó — khối lượng
+  // giao lấy thẳng từ các lệnh đó (các chủng loại là khối lượng rời nhau nên cộng lại).
+  const caDuAn = byItem.get(ITEM_CA_DU_AN) || []
+  if (caDuAn.length > 0) {
+    out.set(ITEM_CA_DU_AN, {
+      plannedKg: caDuAn.reduce((s, w) => s + (Number(w.plannedWeight) || 0), 0),
+      acceptedKg: 0, ratio: 0, blocks: 0, allShopsDone: false,
+      woCode: null, woStatus: null, teamCode: null, wos: [],
+    })
+  }
   for (const h of heads) {
     const key = h.item || ''
     const cur = out.get(key) || {

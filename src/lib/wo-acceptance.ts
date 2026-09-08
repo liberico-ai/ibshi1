@@ -110,7 +110,7 @@ export async function getWoAcceptance(woIds: string[], khoang?: KhoangNgay): Pro
 
   const wos = await prisma.workOrder.findMany({
     where: { id: { in: woIds } },
-    select: { id: true, plannedWeight: true, completedQty: true, unit: true },
+    select: { id: true, plannedWeight: true, completedQty: true, unit: true, stagesDisjoint: true },
   })
 
   // Công đoạn của lệnh + khối lượng đã báo cho từng công đoạn. Không dùng completedQty ở đây:
@@ -182,9 +182,12 @@ export async function getWoAcceptance(woIds: string[], khoang?: KhoangNgay): Pro
     const woItps = byWo.get(wo.id) || []
     let hasFailed = false
 
-    // Phiếu / đợt không gắn công đoạn được tính cho MỌI công đoạn — dữ liệu lập trước khi
-    // lệnh được chia công đoạn, bỏ đi thì lệnh đang chạy dở tự nhiên tụt về 0.
-    const chungBao = cards
+    // Phiếu / đợt không gắn công đoạn:
+    //   • lệnh có công đoạn CHỒNG nhau — tính cho MỌI công đoạn, vì dữ liệu lập trước khi
+    //     lệnh được chia công đoạn; bỏ đi thì lệnh đang chạy dở tự nhiên tụt về 0;
+    //   • lệnh có công đoạn RỜI nhau (Pha cắt cả dự án) — KHÔNG rải, vì mấy công đoạn này
+    //     được CỘNG lại, rải vào là nhân con số đó lên bằng số chủng loại.
+    const chungBao = wo.stagesDisjoint ? 0 : cards
       .filter(c => c.workOrderId === wo.id && !c.stageId)
       .reduce((s, c) => s + (Number(c.actualQty) || 0), 0)
 
@@ -249,13 +252,26 @@ export async function getWoAcceptance(woIds: string[], khoang?: KhoangNgay): Pro
     })
 
     if (stages.length > 0) {
-      // Cấp LỆNH đọc theo công đoạn CHẬM NHẤT — không cộng các công đoạn lại.
-      const tiLeThapNhat = Math.min(...stages.map(s => (s.plannedQty > 0 ? s.acceptedQty / s.plannedQty : 0)))
-      const tiLeBaoThapNhat = Math.min(...stages.map(s => (s.plannedQty > 0 ? s.reportedQty / s.plannedQty : 0)))
+      // Hai luật ngược nhau, phân biệt bằng cờ stagesDisjoint trên chính lệnh:
+      //   • CHỒNG nhau (lệnh theo hạng mục): cắt rồi hàn cùng một khối thép → lấy công đoạn
+      //     CHẬM NHẤT. Cộng vào là ra khối lượng không có thật.
+      //   • RỜI nhau (Pha cắt cả dự án): tôn tấm, thép hình, khoan… là những khối lượng khác
+      //     nhau → CỘNG lại. Lấy chậm nhất ở đây là bỏ mất phần đã làm của chủng loại khác.
+      const roiNhau = wo.stagesDisjoint
+      const tiLeThapNhat = roiNhau
+        ? 0
+        : Math.min(...stages.map(s => (s.plannedQty > 0 ? s.acceptedQty / s.plannedQty : 0)))
+      const tiLeBaoThapNhat = roiNhau
+        ? 0
+        : Math.min(...stages.map(s => (s.plannedQty > 0 ? s.reportedQty / s.plannedQty : 0)))
       out.set(wo.id, {
         unit, plannedQty, stages, stageCount: stages.length,
-        reportedQty: round2(plannedQty * tiLeBaoThapNhat),
-        acceptedQty: round2(plannedQty * tiLeThapNhat),
+        reportedQty: roiNhau
+          ? round2(stages.reduce((n, x) => n + x.reportedQty, 0))
+          : round2(plannedQty * tiLeBaoThapNhat),
+        acceptedQty: roiNhau
+          ? round2(stages.reduce((n, x) => n + x.acceptedQty, 0))
+          : round2(plannedQty * tiLeThapNhat),
         // Chờ ký / mời được: cộng của mọi công đoạn, vì đây là câu hỏi "còn việc gì phải ký".
         pendingQty: round2(stages.reduce((s, x) => s + x.pendingQty, 0)),
         availableQty: round2(stages.reduce((s, x) => s + x.availableQty, 0)),

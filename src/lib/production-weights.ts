@@ -13,7 +13,7 @@ export const STAGES_ORDERED = ['cutting', 'assembly', 'welding', 'painting', 'in
 export async function rollUpWorkOrder(workOrderId: string) {
   const wo = await prisma.workOrder.findUnique({
     where: { id: workOrderId },
-    select: { id: true, plannedWeight: true, status: true },
+    select: { id: true, plannedWeight: true, status: true, stagesDisjoint: true },
   })
   if (!wo) return
 
@@ -38,23 +38,35 @@ export async function rollUpWorkOrder(workOrderId: string) {
     where: { workOrderId }, select: { id: true, qty: true },
   })
   if (stages.length > 0) {
-    // Phiếu không gắn công đoạn (báo trước khi lệnh được chia, hoặc báo cho cả lệnh)
-    // tính cho MỌI công đoạn — nếu không, lệnh cũ vừa chia công đoạn sẽ tụt về 0.
     const chung = allCards.filter(c => !c.stageId).reduce((s, c) => s + (Number(c.actualQty) || 0), 0)
+    // Công đoạn RỜI nhau (Pha cắt cả dự án: tôn tấm, thép hình, khoan…) thì cộng lại;
+    // công đoạn CHỒNG nhau (cắt rồi hàn cùng khối thép) thì lấy cái chậm nhất.
+    const roiNhau = wo.stagesDisjoint
     let thapNhat = 1
+    let tongBao = 0
     for (const st of stages) {
       const qty = Number(st.qty) || 0
-      const rep = allCards.filter(c => c.stageId === st.id).reduce((s, c) => s + (Number(c.actualQty) || 0), 0) + chung
+      const rieng = allCards.filter(c => c.stageId === st.id).reduce((s, c) => s + (Number(c.actualQty) || 0), 0)
+      // Phiếu không gắn công đoạn (báo trước khi lệnh được chia, hoặc báo cho cả lệnh):
+      //   • công đoạn CHỒNG nhau — tính cho MỌI công đoạn, nếu không lệnh cũ vừa chia
+      //     công đoạn sẽ tụt về 0;
+      //   • công đoạn RỜI nhau — KHÔNG rải vào từng công đoạn, vì cộng lại là nhân số đó lên
+      //     bằng số công đoạn. Cộng đúng MỘT lần vào tổng ở dưới.
+      const rep = roiNhau ? rieng : rieng + chung
       thapNhat = Math.min(thapNhat, qty > 0 ? rep / qty : 0)
+      tongBao += Math.min(qty, rep)
     }
-    const done = Math.min(Math.round(plannedKg * thapNhat * 100) / 100, plannedKg)
-    // Đạt từ 90% trở lên ở MỌI công đoạn thì lệnh coi như xong (biên ±10% do cắt lẻ, hao hụt).
-    const finished = thapNhat >= 0.9
+    const tiLe = roiNhau
+      ? (plannedKg > 0 ? Math.min(1, (tongBao + chung) / plannedKg) : 0)
+      : thapNhat
+    const done = Math.min(Math.round(plannedKg * tiLe * 100) / 100, plannedKg)
+    // Đạt từ 90% trở lên thì lệnh coi như xong (biên ±10% do cắt lẻ, hao hụt).
+    const finished = tiLe >= 0.9
     await prisma.workOrder.update({
       where: { id: workOrderId },
       data: { completedQty: done, earnedQty: finished ? plannedKg : 0 },
     })
-    return { completedQty: done, earnedQty: finished ? plannedKg : 0, weightedPct: thapNhat }
+    return { completedQty: done, earnedQty: finished ? plannedKg : 0, weightedPct: tiLe }
   }
   // Có phiếu kiểu MỚI (báo thẳng kg, không gắn công đoạn) → chuyển cả WO sang tính kg lũy kế,
   // và cộng gộp CẢ phiếu cũ có công đoạn để không bỏ sót khối lượng đã báo.

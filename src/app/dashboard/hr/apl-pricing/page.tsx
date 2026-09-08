@@ -4,6 +4,8 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { PageHeader, Button, EmptyState, SelectField, InputField, KPICard, StatusBadge } from '@/components/ui'
 import { formatCurrency, formatNumber } from '@/lib/utils'
+// Lệnh giao cả dự án đứng thành dòng riêng, không mang mã ITEM nào.
+import { tenHangMuc } from '@/lib/hang-muc'
 import { SEMANTIC_COLORS } from '@/lib/design-tokens'
 import { unitLabel } from '@/lib/wo-units'
 import { Calculator } from 'lucide-react'
@@ -308,7 +310,7 @@ export default function AplPricingPage() {
                             style={{ color: 'var(--text-muted)' }}>{isOpen ? '▼' : '▶'}</button>
                         </td>
                         <td className="px-2 py-1.5">
-                          <span className="font-bold" style={{ color: 'var(--accent)' }}>{r.item || '(không có ITEM)'}</span>
+                          <span className="font-bold" style={{ color: 'var(--accent)' }}>{tenHangMuc(r.item)}</span>
                           <span className="block text-[10px]" style={{ color: 'var(--text-muted)' }}>
                             {formatNumber(r.blocks)} cụm · {formatNumber(r.detailLines)} chi tiết
                             {r.overrides > 0 && <span style={{ color: SEMANTIC_COLORS.info.solid }}> · {r.overrides} dòng đặt giá riêng</span>}
