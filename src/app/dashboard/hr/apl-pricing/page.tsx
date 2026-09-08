@@ -25,6 +25,10 @@ interface Row {
   plannedKg: number; acceptedKg: number
   woCode: string | null; woStatus: string | null; teamCode: string | null
   shops: { teamCode: string | null; woCode: string; status: string }[]
+  /** % hoàn thành của hạng mục — trung bình các phần việc ĐANG được giao */
+  ratio: number
+  /** Số phần việc đang giao — mẫu số của ratio, đổi khi giao thêm hoặc bớt xưởng */
+  woCount: number
   unitPrice: number | null; overrides: number; amount: number | null
   /** Trần của hạng mục = đơn giá ITEM × KL thiết kế */
   cap: number | null
@@ -330,8 +334,17 @@ export default function AplPricingPage() {
                                 </>
                               : <>
                                   <span className="font-semibold text-[11px]">{r.shops.length} xưởng</span>
+                                  {/* % tính trên ĐÚNG số phần việc đang giao — giao thêm xưởng
+                                      thì mẫu số tăng, % tụt xuống; bớt đi thì tính lại. */}
+                                  <span className="ml-1.5 text-[11px] font-semibold"
+                                    style={{ color: r.ratio >= 1 ? SEMANTIC_COLORS.success.solid : 'var(--text-muted)' }}>
+                                    {Math.round(r.ratio * 100)}%
+                                  </span>
                                   <span className="block text-[10px]" style={{ color: 'var(--text-muted)' }}>
                                     {r.shops.map(w => w.teamCode || '—').join(' · ')}
+                                  </span>
+                                  <span className="block text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                                    trung bình {r.woCount} phần việc đang giao
                                   </span>
                                 </>}
                         </td>

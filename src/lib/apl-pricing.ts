@@ -28,10 +28,19 @@ export interface ItemAcceptance {
   /** KL đã nghiệm thu — CỘNG DỒN phần đã ký của MỌI xưởng (xem ghi chú ở dưới) */
   acceptedKg: number
   /**
-   * acceptedKg / plannedKg — dùng để chia KL nghiệm thu xuống từng dòng chi tiết.
-   * KHÔNG chặn trần ở 1: ITEM giao cho ba xưởng, cả ba nghiệm thu trọn thì tỉ lệ là 3.
+   * % hoàn thành của hạng mục — tính trên ĐÚNG những phần việc đã giao, không phải trên
+   * khối lượng thiết kế.
+   *
+   * Giao cho 4 xưởng thì mẫu số là 4 phần việc đó; giao thêm xưởng thứ 5 thì mẫu số thành 5
+   * và số % tụt xuống tương ứng; rút bớt một xưởng thì lại tính trên phần còn lại. Chưa giao
+   * cho ai thì bằng 0 — chưa có việc nào để đo.
+   *
+   * Cách cũ lấy acceptedKg / KL thiết kế: mỗi lệnh mang TRỌN khối lượng hạng mục nên bốn
+   * xưởng làm xong đọc ra 400%.
    */
   ratio: number
+  /** Số phần việc (lệnh) đang được giao của hạng mục — chính là mẫu số của ratio. */
+  woCount: number
   /** Mọi xưởng của ITEM đều đã nghiệm thu xong — dùng cho điều kiện chốt bảng. */
   allShopsDone: boolean
   blocks: number
@@ -109,14 +118,14 @@ export async function getAcceptanceByItem(
   if (caDuAn.length > 0) {
     out.set(ITEM_CA_DU_AN, {
       plannedKg: caDuAn.reduce((s, w) => s + (Number(w.plannedWeight) || 0), 0),
-      acceptedKg: 0, ratio: 0, blocks: 0, allShopsDone: false,
+      acceptedKg: 0, ratio: 0, woCount: 0, blocks: 0, allShopsDone: false,
       woCode: null, woStatus: null, teamCode: null, wos: [],
     })
   }
   for (const h of heads) {
     const key = h.item || ''
     const cur = out.get(key) || {
-      plannedKg: 0, acceptedKg: 0, ratio: 0, blocks: 0, allShopsDone: false,
+      plannedKg: 0, acceptedKg: 0, ratio: 0, woCount: 0, blocks: 0, allShopsDone: false,
       woCode: null, woStatus: null, teamCode: null, wos: [],
     }
     cur.plannedKg += Number(h.rollupWeightKg) || 0
@@ -163,7 +172,20 @@ export async function getAcceptanceByItem(
       }
     })
     acc.acceptedKg = Math.round(acc.wos.reduce((s, w) => s + w.acceptedKg, 0) * 100) / 100
-    acc.ratio = acc.plannedKg > 0 ? acc.acceptedKg / acc.plannedKg : 0
+    // ── % hoàn thành của hạng mục: TRUNG BÌNH các phần việc ĐANG được giao ──
+    //
+    // Mẫu số đi theo phân giao thực tế, không phải một con số cố định: giao 4 xưởng thì chia
+    // cho 4, giao thêm xưởng nữa thì chia cho 5 và % tụt xuống, bớt đi thì tính lại trên phần
+    // còn lại. Ba xưởng xong hẳn + một xưởng mới nửa đường ⇒ (1+1+1+0,5)/4 = 87,5%.
+    //
+    // Chia theo phần việc chứ không cộng khối lượng: mỗi lệnh mang TRỌN khối lượng hạng mục
+    // (cộng vào là ra 400% cho bốn xưởng), mà đơn vị cũng khác nhau — xưởng sơn tính m²,
+    // xưởng hàn tính mét, không cộng chung được. Tỉ lệ của từng lệnh thì luôn so trong đơn vị
+    // của chính nó nên trung bình được.
+    acc.woCount = acc.wos.length
+    acc.ratio = acc.woCount > 0
+      ? acc.wos.reduce((s, w) => s + w.ratio, 0) / acc.woCount
+      : 0
     // Chốt bảng thì vẫn đợi MỌI xưởng xong — trả dần không có nghĩa là kết thúc sớm.
     acc.allShopsDone = acc.wos.length > 0 && acc.wos.every(w => w.ratio >= 1)
     // Ưu tiên hiện WO đã nghiệm thu ít nhiều; chưa có thì hiện WO đang chạy để biết đang ở đâu

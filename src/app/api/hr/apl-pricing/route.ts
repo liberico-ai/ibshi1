@@ -152,8 +152,9 @@ export async function GET(req: NextRequest) {
       itemCap: (acc?.wos ?? []).reduce((s, w) => s + (w.stages.length > 0
         ? w.stages.reduce((n, st) => n + st.plannedKg * (giaCua(w.teamCode, st.stageCode) ?? 0), 0)
         : w.plannedKg * (giaCua(w.teamCode) ?? 0)), 0),
-      // ITEM xong tới đâu = xưởng chậm nhất tới đó
+      // % của hạng mục = trung bình các phần việc đang giao (xem ghi chú ở ItemAcceptance)
       itemRatio: acc?.ratio ?? 0,
+      itemWoCount: acc?.woCount ?? 0,
       itemAcceptedKg: acc?.acceptedKg ?? 0,
       itemPlannedKg: acc?.plannedKg ?? 0,
     })
@@ -209,6 +210,10 @@ export async function GET(req: NextRequest) {
       teamCode: a.teamCode,
       // Một ITEM giao được cho nhiều xưởng — dòng ITEM phải nói ĐỦ, không lấy một lệnh đại diện.
       shops: a.wos.map(w => ({ teamCode: w.teamCode, woCode: w.woCode, status: w.status })),
+      // % hoàn thành tính trên ĐÚNG số phần việc đang giao — giao thêm hay bớt xưởng thì
+      // mẫu số đổi theo, không cố định.
+      ratio: a.ratio,
+      woCount: a.woCount,
       unitPrice: unit,
       overrides: overrideByItem.get(item) || 0,
       // Thành tiền = tổng tiền các xưởng (KL nghiệm thu của xưởng × đơn giá của xưởng).
