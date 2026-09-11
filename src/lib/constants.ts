@@ -210,6 +210,10 @@ export const MENU_ITEMS = [
   { key: 'work-overview', label: 'Tổng quan dự án', labelEn: 'Project Overview', icon: 'PieChart', href: '/dashboard/work/overview', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'management' },
   { key: 'work-briefing', label: 'Giao ban tuần', labelEn: 'Weekly Briefing', icon: 'FileBarChart', href: '/dashboard/work/briefing', roles: 'all', group: 'management' },
   { key: 'work-perf', label: 'Hiệu suất & KPI', labelEn: 'Performance', icon: 'BarChart3', href: '/dashboard/work/performance', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'], group: 'management' },
+  // Duyệt báo giá NCC — BGĐ làm việc Ở ĐÂY, Thương mại làm việc bên ibs-commerce (chốt 10/09/2026).
+  // Đặt trong nhóm Quản lý chứ không phải nhóm Kho & Mua hàng: nhóm kia sẽ gỡ dần khi cắt
+  // module Thương mại, mà việc duyệt thì vẫn ở lại ERP.
+  { key: 'commerce-approvals', label: 'Duyệt báo giá NCC', labelEn: 'Approve Supplier Quotes', icon: 'FileCheck', href: '/dashboard/management/duyet-bao-gia', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R10'], group: 'management' },
 
   // ── Project ──
   { key: 'projects', label: 'Dự án', labelEn: 'Projects', icon: 'FolderKanban', href: '/dashboard/projects', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R04', 'R04a', 'R06', 'R06a', 'R07'], group: 'project' },
