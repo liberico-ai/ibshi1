@@ -46,7 +46,7 @@ export interface GoiNCC {
 export async function nhanNCC(goi: GoiNCC): Promise<KetQuaNhan> {
   const code = chu(goi.code)
   const name = chu(goi.name)
-  if (!code || !name) return { ok: false, message: 'Nhà cung cấp thiếu mã hoặc tên' }
+  if (!code || !name) return { ok: false, ma: 400, message: 'Nhà cung cấp thiếu mã hoặc tên' }
 
   const chung = {
     name,
@@ -118,7 +118,7 @@ export async function nhanPO(goi: GoiPO): Promise<KetQuaNhan> {
   const poCode = chu(goi.poCode)
   const projectCode = chu(goi.projectCode)
   const vendorCode = chu(goi.vendorCode)
-  if (!poCode || !vendorCode) return { ok: false, message: 'PO thiếu mã PO hoặc mã NCC' }
+  if (!poCode || !vendorCode) return { ok: false, ma: 400, message: 'PO thiếu mã PO hoặc mã NCC' }
 
   const canhBao: string[] = []
 
@@ -226,13 +226,13 @@ export interface GoiHangVe {
 export async function nhanHangVe(goi: GoiHangVe): Promise<KetQuaNhan> {
   const poCode = chu(goi.poCode)
   const grnCode = chu(goi.grnCode)
-  if (!poCode || !grnCode) return { ok: false, message: 'Thiếu mã phiếu giao hàng hoặc mã PO' }
+  if (!poCode || !grnCode) return { ok: false, ma: 400, message: 'Thiếu mã phiếu giao hàng hoặc mã PO' }
 
   const po = await prisma.purchaseOrder.findUnique({
     where: { poCode },
     select: { id: true, items: { select: { id: true, itemCode: true, quantity: true, receivedQty: true } } },
   })
-  if (!po) return { ok: false, message: `Không tìm thấy PO ${poCode} trong ERP — đồng bộ PO trước` }
+  if (!po) return { ok: false, ma: 404, message: `Không tìm thấy PO ${poCode} trong ERP — đồng bộ PO trước` }
 
   const canhBao: string[] = []
   let capNhat = 0

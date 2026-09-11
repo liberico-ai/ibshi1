@@ -123,6 +123,19 @@ async function main() {
     const dungJson = await dung.json()
     kiem('chữ ký đúng thì nhận', dung.ok && dungJson.ok, dungJson.message || `HTTP ${dung.status}`)
 
+    // Gói tin thiếu trường phải ra 400 (sửa rồi gửi lại được), KHÔNG phải 409 (đụng
+    // trạng thái, gửi lại vô ích). Thương mại dựa vào mã này để quyết thử lại hay bỏ cuộc.
+    const thieu = JSON.stringify({ event: 'bid.submitted', data: {} })
+    const rThieu = await fetch(`${BASE}/api/integration/commerce/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Commerce-Signature': createHmac('sha256', BIMAT).update(thieu).digest('hex'),
+      },
+      body: thieu,
+    })
+    kiem('gói tin thiếu trường trả 400, không phải 409', rThieu.status === 400, `HTTP ${rThieu.status}`)
+
     const lai = await fetch(`${BASE}/api/integration/commerce/webhook`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Commerce-Signature': ky }, body: than,
     })

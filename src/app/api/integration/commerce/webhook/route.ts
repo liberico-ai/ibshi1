@@ -48,28 +48,28 @@ export async function POST(req: NextRequest) {
       // Thương mại so giá xong, chọn xong NCC → trình BGĐ duyệt trong ERP.
       case 'bid.submitted': {
         const kq = await nhanTrinhDuyet(body.data as GoiTrinhDuyet)
-        if (!kq.ok) return errorResponse(kq.message, 409)
+        if (!kq.ok) return errorResponse(kq.message, kq.ma ?? 400)
         return successResponse({ message: kq.message, approvalId: kq.id, warnings: kq.canhBao ?? [] })
       }
 
       // Hồ sơ nhà cung cấp — Thương mại giữ gốc, ERP nhận về để hiện tên trên PO/hợp đồng.
       case 'vendor.upserted': {
         const kq = await nhanNCC(body.data as GoiNCC)
-        if (!kq.ok) return errorResponse(kq.message, 400)
+        if (!kq.ok) return errorResponse(kq.message, kq.ma ?? 400)
         return successResponse({ message: kq.message, vendorId: kq.id })
       }
 
       // Đơn đặt hàng — ERP nhận để cộng vào ngân sách đã cam kết của dự án.
       case 'po.upserted': {
         const kq = await nhanPO(body.data as GoiPO)
-        if (!kq.ok) return errorResponse(kq.message, 400)
+        if (!kq.ok) return errorResponse(kq.message, kq.ma ?? 400)
         return successResponse({ message: kq.message, poId: kq.id, warnings: kq.canhBao ?? [] })
       }
 
       // NCC đã giao hàng — ERP ghi số đã nhận trên PO, CHƯA nhập kho (chờ QC nghiệm thu).
       case 'grn.received': {
         const kq = await nhanHangVe(body.data as GoiHangVe)
-        if (!kq.ok) return errorResponse(kq.message, 404)
+        if (!kq.ok) return errorResponse(kq.message, kq.ma ?? 404)
         return successResponse({ message: kq.message, poId: kq.id, warnings: kq.canhBao ?? [] })
       }
 

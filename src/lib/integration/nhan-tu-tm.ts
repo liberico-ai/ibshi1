@@ -31,6 +31,14 @@ export interface KetQuaNhan {
   message: string
   id?: string
   canhBao?: string[]
+  /**
+   * Mã HTTP nên trả khi hỏng. Phải phân biệt được hai loại hỏng, vì Thương mại xử lý khác nhau:
+   *   400 — gói tin thiếu/sai dữ liệu → sửa gói tin rồi gửi lại
+   *   404 — không tìm thấy bản ghi để gắn vào → đồng bộ thứ còn thiếu trước
+   *   409 — đụng trạng thái không cho ghi (đợt đã duyệt) → ĐỪNG gửi lại, phải trình đợt mới
+   * Trả 409 cho cả ba thì bên kia không biết nên thử lại hay bỏ cuộc.
+   */
+  ma?: number
 }
 
 // ── Đợt báo giá trình BGĐ duyệt ──────────────────────────────────────────────
@@ -78,7 +86,7 @@ export async function nhanTrinhDuyet(goi: GoiTrinhDuyet): Promise<KetQuaNhan> {
   const bidCode = chu(goi.bidCode)
   const projectCode = chu(goi.projectCode)
   if (!remoteId || !bidCode || !projectCode) {
-    return { ok: false, message: 'Thiếu remoteId / bidCode / projectCode' }
+    return { ok: false, ma: 400, message: 'Thiếu remoteId / bidCode / projectCode' }
   }
 
   const canhBao: string[] = []
@@ -93,7 +101,7 @@ export async function nhanTrinhDuyet(goi: GoiTrinhDuyet): Promise<KetQuaNhan> {
     where: { remoteId }, select: { id: true, status: true },
   })
   if (cu && cu.status !== 'PENDING') {
-    return { ok: false, message: `Đợt ${bidCode} đã ${cu.status === 'APPROVED' ? 'được duyệt' : 'bị từ chối'} — trình lại thì tạo đợt mới`, id: cu.id }
+    return { ok: false, ma: 409, message: `Đợt ${bidCode} đã ${cu.status === 'APPROVED' ? 'được duyệt' : 'bị từ chối'} — trình lại thì tạo đợt mới`, id: cu.id }
   }
 
   const dong = (goi.lines ?? []).map((l, i) => ({
