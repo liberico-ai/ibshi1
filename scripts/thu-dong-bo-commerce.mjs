@@ -171,6 +171,83 @@ async function main() {
       kiem('TM không ghi đè được đợt đã duyệt', lai2.status === 409, `HTTP ${lai2.status}`)
     }
 
+    // ── 4. Kết quả mua sắm từ Thương mại về ERP ──
+    console.log('\n4. Kết quả mua sắm Thương mại → ERP')
+    const goiVe = (event, data) => {
+      const t = JSON.stringify({ event, data })
+      return fetch(`${BASE}/api/integration/commerce/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Commerce-Signature': createHmac('sha256', BIMAT).update(t).digest('hex'),
+        },
+        body: t,
+      })
+    }
+
+    const MA_NCC = `TM-THU-${Date.now().toString().slice(-6)}`
+    const MA_PO = `PO-THU-${Date.now().toString().slice(-6)}`
+
+    const rNcc = await goiVe('vendor.upserted', {
+      remoteId: `v-${MA_NCC}`, code: MA_NCC, name: 'NCC Thử Đồng Bộ',
+      taxCode: '0101234567', phone: '0912345678', category: 'MATERIAL',
+    })
+    const jNcc = await rNcc.json()
+    kiem('nhận nhà cung cấp', rNcc.ok, jNcc.message)
+
+    const rPo = await goiVe('po.upserted', {
+      remoteId: `p-${MA_PO}`, poCode: MA_PO, projectCode: duAn.projectCode, vendorCode: MA_NCC,
+      status: 'ISSUED', currency: 'VND', orderDate: new Date().toISOString(),
+      lines: [
+        { itemCode: 'VT-001', itemName: 'Thép tấm SS400 10mm', uom: 'kg', quantity: 5000, unitPrice: 18000 },
+        { itemCode: 'VT-002', itemName: 'Thép hình H200', uom: 'kg', quantity: 2000, unitPrice: 17500 },
+      ],
+    })
+    const jPo = await rPo.json()
+    kiem('nhận đơn đặt hàng', rPo.ok, jPo.message)
+
+    const po = await prisma.purchaseOrder.findUnique({
+      where: { poCode: MA_PO },
+      select: { id: true, totalValue: true, projectId: true, status: true },
+    })
+    kiem('tự cộng tổng tiền từ các dòng', Math.round(Number(po?.totalValue)) === 125000000,
+      `${Math.round(Number(po?.totalValue)).toLocaleString('vi-VN')} đ`)
+    kiem('quy đổi trạng thái ISSUED → APPROVED', po?.status === 'APPROVED', po?.status)
+    kiem('PO gắn đúng dự án', !!po?.projectId, po?.projectId ? 'đã gắn' : 'chưa gắn')
+
+    const soPhieuKhoTruoc = await prisma.stockMovement.count()
+
+    const rGrn = await goiVe('grn.received', {
+      remoteId: `g-${MA_PO}`, grnCode: `GRN-${MA_PO}`, poCode: MA_PO,
+      receivedDate: new Date().toISOString(),
+      lines: [{ itemCode: 'VT-001', quantity: 3000 }],
+    })
+    const jGrn = await rGrn.json()
+    kiem('nhận hàng về', rGrn.ok, jGrn.message)
+
+    const sau = await prisma.purchaseOrder.findUnique({
+      where: { poCode: MA_PO }, select: { items: { select: { itemCode: true, receivedQty: true } } },
+    })
+    const d1 = sau?.items.find(i => i.itemCode === 'VT-001')
+    kiem('ghi số đã nhận lên dòng PO', Math.round(Number(d1?.receivedQty)) === 3000, `${Number(d1?.receivedQty)} kg`)
+
+    const soPhieuKhoSau = await prisma.stockMovement.count()
+    kiem('KHÔNG tự nhập kho (chờ QC nghiệm thu)', soPhieuKhoSau === soPhieuKhoTruoc,
+      `${soPhieuKhoTruoc} → ${soPhieuKhoSau} phiếu xuất nhập`)
+
+    const poLa = await goiVe('grn.received', {
+      remoteId: 'g-khong-co', grnCode: 'GRN-LA', poCode: 'PO-KHONG-TON-TAI', lines: [],
+    })
+    kiem('hàng về của PO lạ thì báo lỗi rõ', poLa.status === 404, `HTTP ${poLa.status}`)
+
+    const poXoa = await prisma.purchaseOrder.findUnique({ where: { poCode: MA_PO }, select: { id: true } })
+    if (poXoa) {
+      await prisma.purchaseOrderItem.deleteMany({ where: { poId: poXoa.id } })
+      await prisma.purchaseOrder.delete({ where: { id: poXoa.id } })
+    }
+    await prisma.integrationLink.deleteMany({ where: { refCode: { in: [MA_NCC, MA_PO, `GRN-${MA_PO}`] } } })
+    await prisma.vendor.deleteMany({ where: { vendorCode: MA_NCC } })
+
     console.log(`\nKết quả: ${dat} đạt · ${hong} hỏng`)
     if (hong > 0) process.exitCode = 1
   } finally {
