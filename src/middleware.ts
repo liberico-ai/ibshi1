@@ -112,6 +112,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Webhook của ibs-commerce — máy gọi máy, không có phiên đăng nhập nào để kiểm ở đây.
+  // Nó tự xác thực bằng chữ ký HMAC trong handler (xem lib/integration/nhan-tu-tm.ts),
+  // giống hệt cách webhook Telegram tự kiểm secret của nó.
+  // Vẫn chặn tần suất: đây là đường công khai, không giới hạn thì ai cũng nện được.
+  if (pathname.startsWith('/api/integration/commerce/webhook')) {
+    if (!checkRateLimit(`tm:${getClientIP(req)}`, 300, 60_000)) {
+      return NextResponse.json({ ok: false, error: 'Too many requests' }, { status: 429 })
+    }
+    return NextResponse.next()
+  }
+
   // External API — authenticated by api-auth in route handlers
   if (pathname.startsWith('/api/external')) {
     const ip = getClientIP(req)

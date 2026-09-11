@@ -81,6 +81,7 @@ model Project {
   updatedAt             DateTime                 @updatedAt @map("updated_at")
   boms                  BillOfMaterial[]
   budgets               Budget[]
+  commerceApprovals     CommerceApproval[]
   cashflows             CashflowEntry[]
   changeEvents          ChangeEvent[]
   deliveries            DeliveryRecord[]
@@ -3295,4 +3296,165 @@ model AplItemPrice {
 
   @@unique([importId, item])
   @@map("apl_item_prices")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TÍCH HỢP ERP ↔ ibs-commerce
+//
+// Từ 09/2026 toàn bộ nghiệp vụ mua sắm chuyển sang hệ Thương mại riêng
+// (github.com/liberico-ai/ibs-commerce). Hai hệ KHÔNG dùng chung cơ sở dữ liệu —
+// chỉ nói chuyện qua HTTP, mỗi loại dữ liệu chỉ MỘT hệ được sửa:
+//   ERP giữ  : dự án, dự toán, nhu cầu vật tư, danh mục vật tư, tồn kho, DUYỆT báo giá
+//   TM giữ   : nhà cung cấp, RFQ/báo giá, PO, hợp đồng, lịch thanh toán, hàng về
+// Ba bảng dưới đây là hạ tầng chung của đường đồng bộ, không mang nghiệp vụ nào.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Nối một bản ghi của ERP với bản ghi tương ứng bên hệ ngoài.
+/// Không nhét id của hệ kia vào bảng nghiệp vụ: hôm nay nối Thương mại, mai có hệ khác,
+/// mà bảng nghiệp vụ thì không nên phình theo số hệ tích hợp.
+model IntegrationLink {
+  id        String   @id @default(cuid())
+  /// Hệ bên kia — hiện chỉ có 'commerce'.
+  system    String
+  /// Loại dữ liệu: 'project' | 'material' | 'pr' | 'bid' | 'po' | 'contract' | ...
+  entity    String
+  /// Id bản ghi phía ERP.
+  localId   String   @map("local_id")
+  /// Id bản ghi phía hệ kia.
+  remoteId  String   @map("remote_id")
+  /// Mã nghiệp vụ dùng để đối chiếu bằng mắt (mã dự án, mã vật tư, mã PO…).
+  refCode   String?  @map("ref_code")
+  /// Dấu vân tay nội dung lần đồng bộ cuối — khác thì mới đẩy lại, giống thì bỏ qua.
+  checksum  String?
+  /// Thời điểm bản ghi bên kia được sửa lần cuối (theo hệ kia báo).
+  remoteAt  DateTime? @map("remote_at")
+  syncedAt  DateTime @default(now()) @map("synced_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([system, entity, localId])
+  @@unique([system, entity, remoteId])
+  @@index([system, entity, refCode])
+  @@map("integration_links")
+}
+
+/// Hộp thư đi: mọi thay đổi cần đẩy sang hệ ngoài ghi vào đây TRƯỚC, rồi tiến trình nền
+/// mới gửi đi. Gửi thẳng trong request thì hệ kia sập là mất thay đổi mà không ai biết —
+/// còn ghi vào bảng thì gửi lại được, và luôn biết còn tồn đọng bao nhiêu.
+model SyncOutbox {
+  id         String    @id @default(cuid())
+  system     String    @default("commerce")
+  /// Tên sự kiện: 'project.upserted' | 'estimate.upserted' | 'bid.decided' | ...
+  event      String
+  entity     String
+  entityId   String    @map("entity_id")
+  payload    Json
+  /// PENDING | SENT | FAILED | SKIPPED
+  status     String    @default("PENDING")
+  attempts   Int       @default(0)
+  lastError  String?   @map("last_error")
+  /// Khoá chống gửi trùng — hệ nhận thấy trùng thì cập nhật chứ không tạo bản mới.
+  idemKey    String    @unique @map("idem_key")
+  availableAt DateTime @default(now()) @map("available_at")
+  sentAt     DateTime? @map("sent_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([status, availableAt])
+  @@index([entity, entityId])
+  @@map("sync_outbox")
+}
+
+/// Nhật ký từng lượt đồng bộ — để khi số liệu hai bên vênh nhau còn biết vênh từ bao giờ.
+model SyncRun {
+  id         String    @id @default(cuid())
+  system     String    @default("commerce")
+  /// OUT = ERP đẩy đi · IN = ERP kéo về
+  direction  String
+  entity     String
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  ok         Boolean   @default(false)
+  /// Số bản ghi xử lý được / bỏ qua / lỗi.
+  processed  Int       @default(0)
+  skipped    Int       @default(0)
+  failed     Int       @default(0)
+  /// Mốc thời gian đã kéo tới (dùng cho lần kéo sau).
+  cursor     DateTime?
+  error      String?
+
+  @@index([system, entity, startedAt])
+  @@map("sync_runs")
+}
+
+/// Đợt báo giá Thương mại trình BGĐ duyệt — BẢN GƯƠNG, ERP không sửa nội dung.
+///
+/// Chốt 10/09/2026: Thương mại làm việc bên ibs-commerce, BGĐ làm việc bên ERP. Nên khi TM
+/// so giá xong và chọn xong NCC, Thương mại đẩy TRỌN bảng so sánh sang đây; BGĐ duyệt hoặc
+/// trả lại ngay trong ERP; ERP đẩy quyết định ngược về Thương mại.
+///
+/// Chỉ hai cột được ERP ghi: quyết định và lý do. Mọi cột còn lại là ảnh chụp từ Thương mại,
+/// sửa ở đây là số liệu hai bên lệch nhau mà không ai biết.
+model CommerceApproval {
+  id          String   @id @default(cuid())
+  /// Id đợt báo giá bên Thương mại — khoá chống trùng khi TM đẩy lại.
+  remoteId    String   @unique @map("remote_id")
+  bidCode     String   @map("bid_code")
+  projectCode String   @map("ref_project_code")
+  /// Dự án bên ERP, tra theo mã. Không tra ra thì để trống và báo lỗi đồng bộ.
+  projectId   String?  @map("project_id")
+  subject     String
+  /// Cách TM chọn NCC: PER_ITEM | PER_BID | AUTO_MIN_PRICE | PER_GROUP | MANUAL_WEIGHTED
+  selectionMode String? @map("selection_mode")
+  currency    String   @default("VND")
+  totalValue  Decimal  @default(0) @map("total_value")
+  /// Đường dẫn file giải trình / báo giá gốc bên Thương mại (ERP không giữ bản sao).
+  fileUrl     String?  @map("file_url")
+  /// Ảnh chụp nguyên văn bảng so sánh — để in hồ sơ và đối chiếu về sau.
+  snapshot    Json?
+  submittedBy String?  @map("submitted_by")
+  submittedAt DateTime @map("submitted_at")
+
+  /// PENDING | APPROVED | REJECTED
+  status      String   @default("PENDING")
+  decidedBy   String?  @map("decided_by")
+  decidedAt   DateTime? @map("decided_at")
+  reason      String?
+  /// Đã báo quyết định về Thương mại chưa.
+  notifiedAt  DateTime? @map("notified_at")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  lines       CommerceApprovalLine[]
+  project     Project? @relation(fields: [projectId], references: [id])
+
+  @@index([status, submittedAt])
+  @@index([projectId])
+  @@map("commerce_approvals")
+}
+
+/// Một dòng vật tư trong đợt báo giá đang trình duyệt — kèm NCC đã chọn và giá.
+model CommerceApprovalLine {
+  id           String  @id @default(cuid())
+  approvalId   String  @map("approval_id")
+  lineNo       Int     @map("line_no")
+  itemCode     String  @default("") @map("item_code")
+  itemName     String  @default("") @map("item_name")
+  profile      String?
+  grade        String?
+  uom          String  @default("")
+  quantity     Decimal @default(0)
+  /// NCC được TM chọn cho dòng này.
+  vendorName   String? @map("vendor_name")
+  unitPrice    Decimal @default(0) @map("unit_price")
+  totalPrice   Decimal @default(0) @map("total_price")
+  /// Giá dự toán tương ứng (TM gửi kèm) — BGĐ nhìn thấy vượt hay không ngay trên bảng.
+  estUnitPrice Decimal? @map("est_unit_price")
+  /// Báo giá của các NCC khác cho dòng này, để BGĐ đối chiếu chứ không phải tin một con số.
+  offers       Json?
+  notes        String?
+
+  approval     CommerceApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+
+  @@index([approvalId])
+  @@map("commerce_approval_lines")
 }
