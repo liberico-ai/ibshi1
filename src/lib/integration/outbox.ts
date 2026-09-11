@@ -84,13 +84,20 @@ export async function guiHangCho(gioiHan = 50): Promise<KetQuaGui> {
       daGui++
     } catch (e) {
       const lan = ban.attempts + 1
-      const het = lan >= SO_LAN_THU
+      // Lỗi 4xx là hệ kia TỪ CHỐI có lý do — dữ liệu sai, bản ghi không tồn tại, đợt đã
+      // duyệt rồi. Gửi lại y nguyên gói tin đó thì lần nào cũng hỏng y hệt, chỉ tổ lấp đầy
+      // nhật ký và che mất lỗi thật. Bỏ ngay, để người ta nhìn thấy mà xử lý.
+      // Riêng 408/429 là "bận, thử lại sau" nên vẫn thử tiếp.
+      const maLoi = Number(/HTTP (\d{3})/.exec((e as Error).message)?.[1] || 0)
+      const tuChoiHan = maLoi >= 400 && maLoi < 500 && maLoi !== 408 && maLoi !== 429
+      const het = tuChoiHan || lan >= SO_LAN_THU
       await prisma.syncOutbox.update({
         where: { id: ban.id },
         data: {
           status: het ? 'FAILED' : 'PENDING',
           attempts: lan,
-          lastError: (e as Error).message.slice(0, 500),
+          lastError: (tuChoiHan ? '[bị từ chối, không thử lại] ' : '')
+            + (e as Error).message.slice(0, 460),
           availableAt: het ? ban.availableAt : lanSau(lan),
         },
       })
