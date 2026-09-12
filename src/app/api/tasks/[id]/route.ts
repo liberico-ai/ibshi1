@@ -15,6 +15,7 @@ import {
   fetchPoData, fetchPlanData, fetchStepResult, fetchAllMaterials, fetchAvailableInventory
 } from '@/lib/data-fetchers'
 import { USE_QUOTE_TABLES, syncQuoteGroups } from '@/lib/quote-sync'
+import { duToanDaDoi, nhuCauDaDoi } from '@/lib/integration/kich-hoat'
 
 // GET /api/tasks/[id]
 export const GET = withErrorHandler(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -669,6 +670,13 @@ export const PUT = withErrorHandler(async (req: NextRequest, { params }: { param
       where: { id },
       data: { resultData: body.resultData ? JSON.parse(JSON.stringify(body.resultData)) : undefined },
     })
+    // Đường này lưu TRỌN resultData nên bảng DT03 (dự toán vật tư) và BOM đi lối này, không
+    // qua KEY_TO_FORM. Nhìn vào bước của task để biết vừa đổi thứ gì mà đẩy sang Thương mại.
+    // Chạy nền, không chặn: lưu dữ liệu không được hỏng vì hệ khác đang sập.
+    const buoc = updatedTask.taskType || ''
+    if (buoc === 'P1.2' || buoc === 'P2.1A') duToanDaDoi(updatedTask.projectId)
+    else if (['P2.1', 'P2.2', 'P2.3'].includes(buoc)) nhuCauDaDoi(updatedTask.projectId)
+
     return successResponse({ task: updatedTask }, 'Đã lưu dữ liệu')
   }
 

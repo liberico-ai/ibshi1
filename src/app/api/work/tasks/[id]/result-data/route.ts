@@ -5,6 +5,7 @@ import { KEY_TO_FORM } from '@/lib/constants'
 import { can } from '@/lib/permissions/can'
 import { materializePrSafe } from '@/lib/pr-materialize'
 import { maybeSyncEstimateToBudget } from '@/lib/work-hooks'
+import { duToanDaDoi, nhuCauDaDoi, KHOA_DU_TOAN, KHOA_BOM } from '@/lib/integration/kich-hoat'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,10 +68,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Re-propagate: sửa dữ liệu DỰ TOÁN (kể cả trong "amend mode" trên task đã DONE)
     // → đồng bộ lại Budget.planned ngay. Các bước sau đọc trực tiếp resultData nên tự cập nhật.
-    if (['totalMaterial', 'totalLabor', 'totalService', 'totalOverhead', 'totalEstimate'].includes(body.key)) {
+    const laDuToan = KHOA_DU_TOAN.includes(body.key)
+    const laBom = KHOA_BOM.includes(body.key)
+    if (laDuToan || laBom) {
       try {
         const t = await prisma.task.findUnique({ where: { id }, select: { projectId: true, resultData: true } })
-        await maybeSyncEstimateToBudget(t?.projectId || null, payload.userId, t?.resultData as Record<string, unknown>)
+        if (laDuToan) {
+          await maybeSyncEstimateToBudget(t?.projectId || null, payload.userId, t?.resultData as Record<string, unknown>)
+          // Đẩy sang hệ Thương mại NGAY — họ dùng đúng bộ số này làm trần mua hàng (Gate 1).
+          // Không chặn lời gọi: hàm tự chạy nền, hỏng thì cron gửi lại.
+          duToanDaDoi(t?.projectId)
+        }
+        if (laBom) nhuCauDaDoi(t?.projectId)
       } catch (e) { console.error('[result-data] re-sync estimate:', e) }
     }
 

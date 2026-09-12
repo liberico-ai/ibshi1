@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { xepHang } from '@/lib/integration/outbox'
+import { daXepHangMoi } from '@/lib/integration/kich-hoat'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +68,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         decidedAt: now.toISOString(),
       },
     })
+
+    // Thương mại đang chờ quyết định này để phát hành đơn hàng — gửi ngay, đừng bắt họ
+    // chờ tới lượt cron.
+    daXepHangMoi()
 
     return successResponse({
       message: status === 'APPROVED'
