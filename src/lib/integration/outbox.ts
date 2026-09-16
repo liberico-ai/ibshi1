@@ -115,17 +115,34 @@ async function guiMot(event: string, payload: Record<string, unknown>, idemKey: 
   // Tên sự kiện 'project.upserted' → đường dẫn '/sync/project-upserted'. Một quy ước duy nhất,
   // hệ kia khỏi phải tra bảng ánh xạ.
   const duong = `${goc}/sync/${event.replace(/\./g, '-')}`
-  const res = await fetch(duong, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${commerceApiKey()}`,
-      'Idempotency-Key': idemKey,
-      'X-IBS-Source': 'erp',
-    },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(20_000),
-  })
+
+  // Thử lại vài lần khi LỖI MẠNG trong CÙNG một lần gửi. Khi bắn liên tiếp nhiều bản tin,
+  // socket keep-alive cũ có thể bị đóng giữa chừng → undici ném "fetch failed". Đó là lỗi
+  // nhất thời, gửi lại trên socket mới là được — khác với lỗi HTTP (4xx/5xx) do hệ kia trả.
+  let res: Response | null = null
+  let loiMang: unknown = null
+  for (let lan = 0; lan < 3; lan++) {
+    try {
+      res = await fetch(duong, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${commerceApiKey()}`,
+          'Idempotency-Key': idemKey,
+          'X-IBS-Source': 'erp',
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(20_000),
+      })
+      break
+    } catch (e) {
+      loiMang = e
+      await new Promise(r => setTimeout(r, 300 * (lan + 1)))
+    }
+  }
+  if (!res) {
+    throw new Error(`fetch failed (mạng) sau 3 lần tới ${duong}: ${(loiMang as Error)?.message || loiMang}`)
+  }
   if (!res.ok) {
     const chiTiet = await res.text().catch(() => '')
     throw new Error(`HTTP ${res.status} ${duong} ${chiTiet.slice(0, 200)}`)

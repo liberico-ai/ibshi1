@@ -3,6 +3,7 @@ import { getWoAcceptance, type KhoangNgay } from './wo-acceptance'
 // Khoá + tên hạng mục để ở file riêng vì các trang dashboard cũng đọc, mà chúng không nhập
 // được file này (kéo theo Prisma).
 import { ITEM_CA_DU_AN } from './hang-muc'
+import { isCatalogCategory, KHAC_CATEGORY } from './work-catalog'
 export { ITEM_CA_DU_AN, tenHangMuc } from './hang-muc'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,7 +65,8 @@ export interface ItemAcceptance {
      * giá đặt cho cả lệnh của xưởng đó.
      */
     stages: {
-      id: string; stageCode: string; name: string; category: string | null; unit: string
+      id: string; stageCode: string; name: string
+      categoryCode: string | null; category: string | null; unit: string
       plannedKg: number; reportedKg: number; acceptedKg: number; ratio: number
     }[]
   }[]
@@ -164,7 +166,8 @@ export async function getAcceptanceByItem(
         ratio: planned > 0 ? Math.min(1, accepted / planned) : 0,
         // Công đoạn của lệnh — đơn giá khoán đặt ở đây, không đặt cho cả hạng mục.
         stages: (a?.stages ?? []).map(st => ({
-          id: st.id, stageCode: st.stageCode, name: st.name, category: st.category,
+          id: st.id, stageCode: st.stageCode, name: st.name,
+          categoryCode: st.categoryCode, category: st.category,
           unit: st.unit, plannedKg: st.plannedQty, reportedKg: st.reportedQty,
           acceptedKg: st.acceptedQty,
           ratio: st.plannedQty > 0 ? Math.min(1, st.acceptedQty / st.plannedQty) : 0,
@@ -208,16 +211,41 @@ export function effectiveUnitPrice(
   return null
 }
 
-/** Đơn giá khoán của từng xưởng trong một ITEM: khoá "item::teamCode". */
+/** Đơn giá khoán của từng xưởng trong một ITEM: khoá "item::teamCode::stageCode::categoryCode". */
 export type WorkshopPriceMap = Map<string, number>
 
 /**
- * Khoá tra ĐƠN GIÁ KHOÁN. Từ 07/09/2026 giá đặt theo CÔNG ĐOẠN của lệnh, không đặt cho cả
- * hạng mục nữa: pha cắt và bảo ôn là hai phần việc khác nhau, đơn giá khác nhau.
- * stageCode '' = lệnh chạy nguyên khối (giá cho cả lệnh của xưởng đó).
+ * Khoá tra ĐƠN GIÁ KHOÁN.
+ *  • 07/09/2026: giá đặt theo CÔNG ĐOẠN của lệnh (pha cắt ≠ bảo ôn).
+ *  • 2026-08 (mới): giá đặt tới CHỦNG LOẠI — Hàn kết cấu ≠ Hàn chi tiết, và cùng chủng loại
+ *    ở ITEM A ≠ ITEM B. Nên khoá thêm categoryCode.
+ * stageCode '' + categoryCode '' = lệnh chạy nguyên khối (giá cho cả lệnh của xưởng đó).
+ * categoryCode 'KHAC' = giá "Khác" chung của (ITEM × Xưởng) cho mọi chủng loại lạ.
  */
-export const shopKey = (item: string, teamCode: string | null, stageCode = '') =>
-  `${item}::${teamCode || ''}::${stageCode}`
+export const shopKey = (item: string, teamCode: string | null, stageCode = '', categoryCode = '') =>
+  `${item}::${teamCode || ''}::${stageCode}::${categoryCode}`
+
+/**
+ * Đơn giá hiệu lực của MỘT công đoạn×chủng loại của một xưởng:
+ *  1. Có giá đặt đúng chủng loại → dùng.
+ *  2. Chủng loại LẠ (ngoài danh mục công đoạn) → lấy giá "Khác" của (ITEM × Xưởng).
+ *  3. Còn lại (chủng loại trong danh mục nhưng chưa đặt giá) → null (thiếu giá).
+ * Lệnh nguyên khối gọi resolveShopPrice(map, item, team) — stageCode='' categoryCode=''.
+ */
+export function resolveShopPrice(
+  map: WorkshopPriceMap, item: string, teamCode: string | null,
+  stageCode = '', categoryCode = '',
+): number | null {
+  const exact = map.get(shopKey(item, teamCode, stageCode, categoryCode))
+  if (exact !== undefined) return exact
+  // Chỉ chủng loại CÓ TÊN nhưng LẠ (ngoài danh mục) mới ăn giá "Khác". Lệnh nguyên khối và
+  // công đoạn không chủng loại (categoryCode rỗng) thì KHÔNG fallback — thiếu giá là thiếu giá.
+  if (categoryCode && !isCatalogCategory(stageCode, categoryCode)) {
+    const khac = map.get(shopKey(item, teamCode, '', KHAC_CATEGORY))
+    if (khac !== undefined) return khac
+  }
+  return null
+}
 
 export interface PricingTotals {
   /** Tổng KL thiết kế của cả APL */
@@ -235,6 +263,8 @@ export interface PricingTotals {
   itemsOverCap: number
   /** Số XƯỞNG đã có khối lượng nghiệm thu nhưng chưa đặt đơn giá (tiền của họ = 0) */
   linesWithoutPrice: number
+  /** Số phần việc ĐÃ GIAO (theo kế hoạch) nhưng chưa có đơn giá — dùng cho điều kiện CHỐT */
+  plannedMissing: number
   /** Đủ điều kiện bấm Hoàn thành chưa */
   canComplete: boolean
   /**
@@ -245,6 +275,7 @@ export interface PricingTotals {
   byItem: Map<string, {
     amount: number; plannedAmount: number; linesWithoutPrice: number
     cap: number | null; overCap: boolean; shopsWithoutPrice: number
+    missingPlanned: number
   }>
 }
 
@@ -258,12 +289,12 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
   const [acceptance, shopPrices] = await Promise.all([
     getAcceptanceByItem(importId),
     prisma.aplItemWorkshopPrice.findMany({
-      where: { importId }, select: { item: true, teamCode: true, stageCode: true, unitPrice: true },
+      where: { importId }, select: { item: true, teamCode: true, stageCode: true, categoryCode: true, unitPrice: true },
     }),
   ])
 
   const priceOfShop: WorkshopPriceMap = new Map(
-    shopPrices.map(p => [shopKey(p.item, p.teamCode, p.stageCode), Number(p.unitPrice)]))
+    shopPrices.map(p => [shopKey(p.item, p.teamCode, p.stageCode, p.categoryCode), Number(p.unitPrice)]))
 
   // ── Tiền tính theo ĐƠN GIÁ CỦA TỪNG CÔNG ĐOẠN (chốt 07/09/2026) ──
   //
@@ -283,7 +314,8 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
   // Giá theo DÒNG CHI TIẾT (AplLinePrice) không còn tham gia. Bảng vẫn giữ, chưa xoá.
   let totalAmount = 0
   let plannedAmount = 0
-  let shopsWithoutPrice = 0
+  let shopsWithoutPrice = 0        // thiếu giá ở phần ĐÃ NGHIỆM THU (để báo tiền = 0)
+  let plannedMissing = 0          // thiếu giá ở phần ĐÃ GIAO (kế hoạch) — dùng cho điều kiện CHỐT
   const byItem = new Map<string, {
     amount: number; plannedAmount: number; linesWithoutPrice: number
     /** Trần của hạng mục = đơn giá ITEM × KL thiết kế */
@@ -291,18 +323,22 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
     /** Đã nghiệm thu xong ở mọi xưởng và tiền vượt trần */
     overCap: boolean
     shopsWithoutPrice: number
+    /** Số phần việc ĐÃ GIAO nhưng chưa đặt đơn giá (theo kế hoạch, chưa cần nghiệm thu). */
+    missingPlanned: number
   }>()
 
   for (const [key, acc] of acceptance) {
     let amount = 0        // đã làm: theo KL đã nghiệm thu
     let khoan = 0         // giá trị khoán: theo KL giao
     let missing = 0
+    let missingPlanned = 0
     for (const w of acc.wos) {
       if (w.stages.length > 0) {
         for (const st of w.stages) {
-          const unit = priceOfShop.get(shopKey(key, w.teamCode, st.stageCode))
-          if (unit === undefined) {
+          const unit = resolveShopPrice(priceOfShop, key, w.teamCode, st.stageCode, st.categoryCode ?? '')
+          if (unit === null) {
             if (st.acceptedKg > 0) { missing++; shopsWithoutPrice++ }
+            if (st.plannedKg > 0) { missingPlanned++; plannedMissing++ }
             continue
           }
           amount += st.acceptedKg * unit
@@ -314,6 +350,7 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
       const unit = priceOfShop.get(shopKey(key, w.teamCode))
       if (unit === undefined) {
         if (w.acceptedKg > 0) { missing++; shopsWithoutPrice++ }
+        if (w.plannedKg > 0) { missingPlanned++; plannedMissing++ }
         continue
       }
       amount += w.acceptedKg * unit
@@ -328,7 +365,7 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
     plannedAmount += cap
     byItem.set(key, {
       amount, plannedAmount: cap ?? 0, linesWithoutPrice: missing,
-      cap, overCap, shopsWithoutPrice: missing,
+      cap, overCap, shopsWithoutPrice: missing, missingPlanned,
     })
   }
 
@@ -341,8 +378,9 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
     plannedKg += a.plannedKg
     acceptedKg += a.acceptedKg
     if (a.allShopsDone) itemsAccepted++
-    // "Đã có đơn giá" = mọi phần việc đang có khối lượng nghiệm thu đều đã được đặt giá.
-    if (byItem.get(key)?.shopsWithoutPrice === 0) itemsPriced++
+    // "Đã có đơn giá" = mọi phần việc ĐÃ GIAO của hạng mục đều đã được đặt giá
+    // (theo KẾ HOẠCH — không cần đã nghiệm thu).
+    if ((byItem.get(key)?.missingPlanned ?? 0) === 0) itemsPriced++
     if (byItem.get(key)?.overCap) itemsOverCap++
   }
 
@@ -357,9 +395,11 @@ export async function computePricingTotals(importId: string): Promise<PricingTot
     itemsAccepted,
     itemsOverCap,
     linesWithoutPrice: shopsWithoutPrice,
-    // Chốt bảng khi mọi ITEM đã nghiệm thu xong ở mọi xưởng và không còn xưởng nào có
-    // khối lượng mà thiếu đơn giá. VƯỢT TRẦN chỉ báo đỏ, KHÔNG chặn — để KTKH tự tính lại.
-    canComplete: itemsTotal > 0 && shopsWithoutPrice === 0 && itemsAccepted === itemsTotal,
+    plannedMissing,
+    // Chốt bảng ngay khi mọi phần việc ĐÃ GIAO đều có đơn giá (theo KẾ HOẠCH) — KHÔNG
+    // cần đợi nghiệm thu. Đây là bước KTKT rà soát & chốt bảng đơn giá sau khi các xưởng
+    // import xong. VƯỢT TRẦN chỉ báo đỏ, KHÔNG chặn.
+    canComplete: itemsTotal > 0 && plannedMissing === 0,
     byItem,
   }
 }

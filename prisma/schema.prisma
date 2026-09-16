@@ -1052,6 +1052,8 @@ model WorkOrder {
   earnedQty            Decimal?                   @default(0) @map("earned_qty")
   quantity             Decimal?
   woType               String                     @default("INTERNAL") @map("wo_type")
+  // Tên thầu phụ khi giao ra ngoài (teamCode=THAUPHU, woType=EXTERNAL). PM tự nhập.
+  subcontractorName    String?                    @map("subcontractor_name")
   needsReQc            Boolean                    @default(false) @map("needs_re_qc")
   reQcReason           String?                    @map("re_qc_reason")
   workshopId           String?                    @map("workshop_id")
@@ -3244,6 +3246,13 @@ model AplPricing {
   importId    String    @unique @map("import_id")
   status      String    @default("DRAFT") // DRAFT | COMPLETED
   totalAmount Decimal?  @map("total_amount") // chốt lại lúc hoàn thành, để về sau không tính lại lệch
+  // Tổng giá trị giao khoán dự án — KTKT upload file, hệ lấy đúng con số; BGĐ (BOM) duyệt thì
+  // các Xưởng mới được tải/nhập file đơn giá. KHÔNG còn lấy từ dự toán DT06.
+  budgetTotal      Decimal?  @map("budget_total")
+  budgetFileId     String?   @map("budget_file_id") // FK mềm → FileAttachment (file gốc)
+  budgetStatus     String    @default("NONE") @map("budget_status") // NONE | PENDING | APPROVED
+  budgetApprovedBy String?   @map("budget_approved_by")
+  budgetApprovedAt DateTime? @map("budget_approved_at")
   completedBy String?   @map("completed_by")
   completedAt DateTime? @map("completed_at")
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -3270,6 +3279,10 @@ model AplItemWorkshopPrice {
   // Dùng '' chứ không NULL: Postgres coi hai NULL là khác nhau nên ràng buộc duy nhất
   // sẽ không chặn được bản ghi trùng.
   stageCode String   @default("") @map("stage_code")
+  // Chủng loại của công đoạn (mã trong work-catalog, vd 'KC','KK'). '' = công đoạn không có
+  // chủng loại / lệnh nguyên khối. 'KHAC' = đơn giá "Khác" dùng chung cho mọi chủng loại LẠ
+  // (ngoài danh mục) trong (ITEM × Xưởng) này.
+  categoryCode String @default("") @map("category_code")
   unitPrice Decimal  @map("unit_price") // đồng trên đơn vị của lệnh (kg, m²…)
   note      String?
   updatedBy String   @map("updated_by")
@@ -3278,7 +3291,7 @@ model AplItemWorkshopPrice {
 
   aplImport AplImport @relation(fields: [importId], references: [id], onDelete: Cascade)
 
-  @@unique([importId, item, teamCode, stageCode])
+  @@unique([importId, item, teamCode, stageCode, categoryCode])
   @@map("apl_item_workshop_prices")
 }
 

@@ -7,6 +7,8 @@ import { createWithCode } from '@/lib/next-code'
 import { getWorkshopScope } from '@/lib/workshop-scope'
 import { validateBody } from '@/lib/api-helpers'
 import { createJobCardSchema } from '@/lib/schemas'
+import { isSubcontractWo } from '@/lib/material-request-constants'
+import { isProjectPm } from '@/lib/project-pm'
 
 // GET /api/production/job-cards — List job cards
 export async function GET(req: NextRequest) {
@@ -87,7 +89,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
-  if (!requireRoles(user.roleCode, ['R01', 'R06', 'R06a', 'R06b'])) {
+  // Xưởng (R06*) + GĐ báo phiếu; PM (R02*) chỉ báo được cho lệnh THẦU PHỤ của dự án mình.
+  const isShopOrBod = requireRoles(user.roleCode, ['R01', 'R06', 'R06a', 'R06b'])
+  const isPmRole = ['R02', 'R02a'].includes(user.roleCode)
+  if (!isShopOrBod && !isPmRole) {
     return errorResponse('Không có quyền tạo phiếu công việc', 403)
   }
 
@@ -98,6 +103,12 @@ export async function POST(req: NextRequest) {
 
   const wo = await prisma.workOrder.findUnique({ where: { id: workOrderId } })
   if (!wo) return errorResponse('Không tìm thấy WO')
+  // PM chỉ được báo khối lượng cho lệnh thầu phụ của dự án mình.
+  if (!isShopOrBod) {
+    if (!(isSubcontractWo(wo) && await isProjectPm(user.userId, wo.projectId))) {
+      return errorResponse('PM chỉ báo khối lượng được cho lệnh thầu phụ của dự án mình', 403)
+    }
+  }
   if (!isWoReportable(wo.status)) {
     return errorResponse('WO đã hoàn thành hoặc hủy')
   }

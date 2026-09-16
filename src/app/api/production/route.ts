@@ -85,6 +85,7 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     projectId: wo.projectId,
     description: wo.description,
     teamCode: wo.teamCode,
+    subcontractorName: wo.subcontractorName,
     status: fixedStatus.get(wo.id) ?? wo.status,
     pieceMark: wo.pieceMark,
     materials: wo.materials,

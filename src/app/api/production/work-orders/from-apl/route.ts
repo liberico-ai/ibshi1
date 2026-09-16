@@ -5,7 +5,8 @@ import { describeDbError } from '@/lib/db-missing-table'
 import { canManageProject, notProjectPmMessage } from '@/lib/project-pm'
 import { aplItemWoCode, aplItemWoDescription, rollupItemMaterials, formatMaterialsColumn } from '@/lib/apl-wo'
 import { DEFAULT_WO_UNIT, isValidUnit } from '@/lib/wo-units'
-import { findStage, categoriesOf } from '@/lib/work-catalog'
+import { findStage, categoriesOf, KHAC_CATEGORY, WHOLE_PROJECT_STAGES, isWholeProjectWorkshop } from '@/lib/work-catalog'
+import { SUBCONTRACT_TEAM_CODE } from '@/lib/material-request-constants'
 import { ensureWeeklyReportTask } from '@/lib/workflow-engine'
 
 export const dynamic = 'force-dynamic'
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
         where: { aplImportId: importId, aplItem: null },
         select: {
           woCode: true, teamCode: true, status: true,
-          stages: { select: { stageCode: true, categoryCode: true, name: true, category: true, qty: true } },
+          stages: { select: { stageCode: true, categoryCode: true, name: true, category: true, qty: true, unit: true } },
         },
         orderBy: { createdAt: 'asc' },
       })
@@ -99,9 +100,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null) as {
       projectId?: string; importId?: string; item?: string
       teamCode?: string; plannedStart?: string; plannedEnd?: string
+      /** Tên thầu phụ khi teamCode = THAUPHU (giao ra ngoài). */
+      subcontractorName?: string
       unit?: string; plannedQty?: number
       /** Công đoạn bên trong lệnh — tổng khối lượng không được vượt plannedQty */
-      stages?: { stageCode?: string; categoryCode?: string; qty?: number; note?: string }[]
+      stages?: { stageCode?: string; categoryCode?: string; categoryLabel?: string; qty?: number; unit?: string; note?: string }[]
       /**
        * Giao PHA CẮT cho CẢ DỰ ÁN, không gắn hạng mục nào.
        * Pha cắt chuẩn bị vật tư cho mọi công đoạn sau nên giao một lần cho toàn dự án:
@@ -125,6 +128,11 @@ export async function POST(req: NextRequest) {
       select: { id: true, projectCode: true },
     })
     if (!project) return errorResponse('Không tìm thấy dự án', 404)
+
+    // XPC/XHT chỉ giao CẢ DỰ ÁN — chặn sớm việc giao theo hạng mục (trước cả kiểm tra ITEM).
+    if (body.toanDuAn !== true && isWholeProjectWorkshop((body.teamCode || '').trim())) {
+      return errorResponse(`Xưởng ${(body.teamCode || '').trim()} chỉ giao cả dự án, không giao theo hạng mục — dùng khối "giao cả dự án"`, 422)
+    }
 
     // Quyền: PM phụ trách dự án (nhiều PM ngang quyền) hoặc BGĐ
     if (!(await canManageProject(user.roleCode, user.userId, project.id))) {
@@ -152,6 +160,11 @@ export async function POST(req: NextRequest) {
     // Luật chặn trùng nằm ở dưới, sau khi đọc công đoạn: khoá là (ITEM, xưởng, công đoạn,
     // chủng loại) chứ không phải (ITEM, xưởng).
     const team = (body.teamCode || '').trim()
+    // Giao THẦU PHỤ ra ngoài: teamCode=THAUPHU, woType=EXTERNAL, PM tự nhập tên thầu phụ.
+    const isSub = team.toUpperCase() === SUBCONTRACT_TEAM_CODE
+    const subName = String(body.subcontractorName || '').trim()
+    if (isSub && !subName) return errorResponse('Chọn "Thầu phụ" thì phải nhập tên thầu phụ', 422)
+    if (isSub && body.toanDuAn === true) return errorResponse('Thầu phụ giao theo hạng mục, không giao cả dự án', 422)
 
     const weightKg = heads.reduce((s, h) => s + (Number(h.rollupWeightKg) || 0), 0)
 
@@ -185,22 +198,38 @@ export async function POST(req: NextRequest) {
     const rawStages = Array.isArray(body.stages) ? body.stages : []
     const stages: {
       stageCode: string; name: string; categoryCode: string | null; category: string | null
-      qty: number; note: string | null
+      qty: number; unit: string; note: string | null
     }[] = []
     for (const st of rawStages) {
       const def = findStage(String(st?.stageCode ?? '').trim())
       const qty = Number(st?.qty)
       if (!def) return errorResponse(`Công đoạn "${st?.stageCode ?? ''}" không có trong danh mục công việc`, 422)
       if (!Number.isFinite(qty) || qty <= 0) return errorResponse(`Công đoạn ${def.code} phải có khối lượng lớn hơn 0`, 422)
+      // Đơn vị riêng cho từng chủng loại (cả dự án: sơn m², hàn kg…); thiếu thì lấy đơn vị lệnh.
+      const stUnit = isValidUnit(st?.unit) ? String(st.unit) : unit
       const catCode = String(st?.categoryCode ?? '').trim()
       const cats = categoriesOf(def.code)
+      // "Khác" — chủng loại ngoài danh mục, PM/Xưởng tự gõ tên. Khi ra tiền, chủng loại lạ ăn
+      // đơn giá "Khác" của (ITEM × Xưởng). Lưu categoryCode = chính tên tự gõ để phân biệt các
+      // dòng "Khác" khác nhau (không đụng mã danh mục).
+      if (catCode === KHAC_CATEGORY) {
+        const label = String(st?.categoryLabel ?? '').trim()
+        if (!label) return errorResponse(`Công đoạn ${def.code}: chọn "Khác" thì phải nhập tên chủng loại`, 422)
+        if (cats.some(c => c.code === label)) return errorResponse(`"${label}" trùng mã chủng loại có sẵn — đặt tên khác cho mục Khác`, 422)
+        stages.push({
+          stageCode: def.code, name: def.label,
+          categoryCode: label.slice(0, 80), category: label.slice(0, 120),
+          qty, unit: stUnit, note: st?.note ? String(st.note).trim() : null,
+        })
+        continue
+      }
       const cat = catCode ? cats.find(c => c.code === catCode) : null
       if (catCode && !cat) return errorResponse(`Chủng loại "${catCode}" không thuộc công đoạn ${def.code}`, 422)
       if (!catCode && cats.length > 0) return errorResponse(`Công đoạn ${def.code} phải chọn chủng loại`, 422)
       stages.push({
         stageCode: def.code, name: def.label,
         categoryCode: cat?.code ?? null, category: cat?.label ?? null,
-        qty, note: st?.note ? String(st.note).trim() : null,
+        qty, unit: stUnit, note: st?.note ? String(st.note).trim() : null,
       })
     }
     // ── Pha cắt cho CẢ DỰ ÁN ──
@@ -210,24 +239,21 @@ export async function POST(req: NextRequest) {
     // khối thép — nên gộp một lệnh mới đúng, và tiến độ phải CỘNG chứ không lấy chậm nhất.
     const toanDuAn = body.toanDuAn === true
     if (toanDuAn) {
+      // Giao cả dự án chỉ áp dụng cho XƯỞNG whole-project (XPC pha cắt, XHT hoàn thiện) và chỉ
+      // các công đoạn của xưởng đó. Mỗi (công đoạn × chủng loại) là một khối lượng RỜI NHAU.
+      if (!isWholeProjectWorkshop(team)) {
+        return errorResponse('Giao cả dự án chỉ áp dụng cho Xưởng Pha cắt hoặc Xưởng Hoàn thiện', 422)
+      }
       if (stages.length === 0) {
-        return errorResponse('Nhập khối lượng cho ít nhất một chủng loại của Pha cắt', 422)
+        return errorResponse('Nhập khối lượng cho ít nhất một chủng loại', 422)
       }
-      if (stages.some(x => x.stageCode !== 'PC')) {
-        return errorResponse('Giao cả dự án chỉ áp dụng cho công đoạn Pha cắt', 422)
+      const allowed = WHOLE_PROJECT_STAGES[team] || []
+      const ngoai = stages.find(x => !allowed.includes(x.stageCode))
+      if (ngoai) {
+        return errorResponse(`Công đoạn "${ngoai.stageCode}" không thuộc phần giao cả dự án của xưởng ${team}`, 422)
       }
-      // Chủng loại nào đã giao rồi thì không giao lại — cùng luật với lệnh theo hạng mục.
-      const daCo = await prisma.workOrderStage.findMany({
-        where: { workOrder: { aplImportId: body.importId, aplItem: null, teamCode: team }, stageCode: 'PC' },
-        select: { categoryCode: true, category: true, workOrder: { select: { woCode: true } } },
-      })
-      const trung = stages.find(x => daCo.some(y => (y.categoryCode ?? '') === (x.categoryCode ?? '')))
-      if (trung) {
-        const cu = daCo.find(y => (y.categoryCode ?? '') === (trung.categoryCode ?? ''))!
-        return errorResponse(
-          `Chủng loại "${trung.category ?? trung.name}" đã giao ở lệnh ${cu.workOrder.woCode}`
-          + ' — bỏ dòng đó ra hoặc chọn chủng loại khác', 409)
-      }
+      // CHO GIAO NHIỀU LẦN: một chủng loại có thể phát hành nhiều đợt (Lần 1, Lần 2…) — mỗi lần
+      // là một lệnh cả-dự-án riêng, khối lượng CỘNG DỒN. Không chặn trùng như trước.
     } else if (stages.length > 1) {
       // MỖI LỆNH ĐÚNG MỘT CÔNG ĐOẠN. Gộp nhiều công đoạn vào một lệnh theo hạng mục thì không
       // tách được tiến độ, nghiệm thu và tiền của từng phần việc.
@@ -268,7 +294,7 @@ export async function POST(req: NextRequest) {
     // Mã WO: gắn xưởng và CÔNG ĐOẠN vào tên ITEM để nhiều lệnh cùng xưởng phân biệt được;
     // trùng nữa mới thêm số thứ tự.
     const itemForCode = toanDuAn
-      ? ['PHA-CAT-CA-DU-AN', team || null].filter(Boolean).join('-')
+      ? ['CA-DU-AN', team || null].filter(Boolean).join('-')
       : [item, team || null, cd ? cd.stageCode : null, cd?.categoryCode || null].filter(Boolean).join('-')
     let woCode = aplItemWoCode(project.projectCode, itemForCode)
     for (let n = 2; n <= 50; n++) {
@@ -289,13 +315,20 @@ export async function POST(req: NextRequest) {
       ? Math.round(stages.reduce((n, x) => n + x.qty, 0) * 100) / 100
       : (plannedQty !== null && plannedQty > 0 ? plannedQty : null)
 
+    // Lệnh cả-dự-án: đơn vị lấy theo stage (mọi chủng loại cùng đơn vị thì lệnh mang đơn vị đó,
+    // trộn nhiều đơn vị thì để mặc định). Mô tả theo đúng XƯỞNG được giao.
+    const caDuAnUnit = toanDuAn && stages.length > 0
+      ? (stages.every(s => s.unit === stages[0].unit) ? stages[0].unit : DEFAULT_WO_UNIT)
+      : unit
+    const caLabel = team === 'XPC' ? 'Pha cắt' : team === 'XHT' ? 'Hoàn thiện' : 'Cả dự án'
+
     const wo = await prisma.workOrder.create({
       data: {
         woCode,
         projectId: project.id,
         description: toanDuAn
-          ? `Pha cắt — cả dự án (${stages.length} chủng loại)`
-          : aplItemWoDescription(item, heads.length),
+          ? `${caLabel} — cả dự án (${stages.length} chủng loại)`
+          : aplItemWoDescription(item, heads.length) + (isSub ? ` — Thầu phụ: ${subName}` : ''),
         // Vật tư để CỘT RIÊNG, không nhét vào mô tả — nhét vào thì cắt ngắn là mất chữ,
         // mà lọc/tìm theo vật tư cũng không được.
         materials: formatMaterialsColumn(mats),
@@ -303,12 +336,13 @@ export async function POST(req: NextRequest) {
         // Lệnh cả dự án KHÔNG gắn hạng mục — nó phục vụ mọi hạng mục trong bản APL.
         aplItem: toanDuAn ? null : (item || null),
         pieceMark: toanDuAn ? null : (item || null),
-        teamCode: team,
-        departmentId: dept?.id || null,
-        woType: 'INTERNAL',
+        teamCode: isSub ? SUBCONTRACT_TEAM_CODE : team,
+        departmentId: isSub ? null : (dept?.id || null),
+        woType: isSub ? 'EXTERNAL' : 'INTERNAL',
+        subcontractorName: isSub ? subName : null,
         // Đơn vị của lệnh: kg thì lấy thẳng khối lượng ITEM; đơn vị khác (m², mét…) thì
         // KHÔNG quy đổi được từ kg — phải dùng số lượng PM nhập, thiếu thì để trống.
-        unit,
+        unit: caDuAnUnit,
         plannedWeight: klLenh,
         // Công đoạn của lệnh này rời nhau hay chồng nhau — quyết định cách cộng tiến độ.
         stagesDisjoint: toanDuAn,
@@ -324,7 +358,7 @@ export async function POST(req: NextRequest) {
         data: stages.map((st, i) => ({
           workOrderId: wo.id, stageCode: st.stageCode, name: st.name,
           categoryCode: st.categoryCode, category: st.category,
-          qty: st.qty, unit, sortOrder: i, note: st.note, createdBy: user.userId,
+          qty: st.qty, unit: st.unit || unit, sortOrder: i, note: st.note, createdBy: user.userId,
         })),
       })
     }

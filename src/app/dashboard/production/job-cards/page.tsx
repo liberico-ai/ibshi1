@@ -40,7 +40,7 @@ interface WO {
 
 /** Một lệnh gom lại: khối lượng, tiến độ, lịch sử báo và tiến độ từng công đoạn */
 interface WoGroup {
-  woId: string; woCode: string; woDesc: string; teamCode: string
+  woId: string; woCode: string; woDesc: string; teamCode: string; unit: string
   planned: number; reported: number; done: boolean; entries: JobCard[]
   /** Đã báo theo từng công đoạn — chỉ có khi lệnh được chia công đoạn */
   byStage: Map<string, { st: Stage; qty: number }>
@@ -88,7 +88,8 @@ export default function JobCardsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadData() }, [filterType])
 
-  const canCreate = ['R01', 'R06', 'R06a', 'R06b'].includes(user?.roleCode || '')
+  // Xưởng/GĐ báo mọi lệnh; PM (R02/R02a) chỉ báo lệnh THẦU PHỤ (server kiểm lại đúng dự án).
+  const canCreate = ['R01', 'R06', 'R06a', 'R06b', 'R02', 'R02a'].includes(user?.roleCode || '')
 
   // Gom theo LỆNH SX: một thẻ = một WO, chạy suốt dòng đời của lệnh đó.
   // Mỗi lần báo là một dòng lịch sử bên trong thẻ; khối lượng cộng dồn.
@@ -100,6 +101,8 @@ export default function JobCardsPage() {
         woCode: j.workOrder.woCode,
         woDesc: j.workOrder.description,
         teamCode: j.teamCode,
+        // Đơn vị của lệnh lấy theo phiếu báo (đã bằng đơn vị WO): kg/m²/mét…
+        unit: j.unit || DEFAULT_WO_UNIT,
         // Kế hoạch lấy từ WO; lệnh cũ chưa có thì lùi về số kế hoạch ghi trên phiếu.
         planned: j.workOrder.plannedWeight ?? j.plannedQty ?? 0,
         reported: 0, done: false, entries: [],
@@ -191,13 +194,13 @@ export default function JobCardsPage() {
                 </div>
                 <div className="text-right min-w-[190px]">
                   <p className="text-lg font-mono font-bold" style={{ color: g.done ? '#047857' : 'var(--success, #16a34a)' }}>
-                    {formatNumber(Math.round(g.reported))}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}> / {formatNumber(Math.round(g.planned))} kg</span>
+                    {formatNumber(Math.round(g.reported))}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}> / {formatNumber(Math.round(g.planned))} {unitLabel(g.unit)}</span>
                   </p>
                   <div className="h-1.5 rounded-full overflow-hidden mt-1" style={{ background: 'var(--border, #e2e8f0)' }}>
                     <div className="h-full rounded-full" style={{ width: pct + '%', background: g.done ? '#16a34a' : 'var(--warning, #f59e0b)' }} />
                   </div>
                   <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    {pct}% · còn {formatNumber(Math.max(0, Math.round((g.planned - g.reported) * 100) / 100))} kg
+                    {pct}% · còn {formatNumber(Math.max(0, Math.round((g.planned - g.reported) * 100) / 100))} {unitLabel(g.unit)}
                   </p>
                   {/* Lệnh chia công đoạn: con số trên là công đoạn CHẬM NHẤT, không phải tổng các
                       công đoạn cộng lại — nói thẳng ra để không ai tưởng hệ tính thiếu. */}
@@ -393,7 +396,7 @@ function CreateJobCardModal({ open, workOrders, jobCards, initialWoId, onClose, 
             { value: '', label: 'Chọn WO...' },
             ...workOrders.map(wo => {
               const r = reportedByWo[wo.id]
-              const mark = r ? ` ✓ đã báo ${formatNumber(Math.round(r.qty))} kg` : ''
+              const mark = r ? ` ✓ đã báo ${formatNumber(Math.round(r.qty))} ${unitLabel(wo.unit)}` : ''
               const st = WO_STATUS_LABEL[wo.status] || wo.status
               return { value: wo.id, label: `${wo.woCode} [${st}] — ${wo.description}${mark}` }
             }),
@@ -421,12 +424,12 @@ function CreateJobCardModal({ open, workOrders, jobCards, initialWoId, onClose, 
             }}
           >
             <p className="font-semibold">
-              Lệnh này đã được báo cáo {historyOfWo.length} lần — {formatNumber(Math.round(reported))} / {formatNumber(Math.round(plannedOfWo))} kg
+              Lệnh này đã được báo cáo {historyOfWo.length} lần — {formatNumber(Math.round(reported))} / {formatNumber(Math.round(plannedOfWo))} {unitLabel(form.unit)}
             </p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
               {done
                 ? 'Đã đạt kế hoạch — lệnh coi như xong, không nhập thêm khối lượng.'
-                : `Còn ${formatNumber(remaining)} kg. Phiếu này sẽ cộng tiếp vào lệnh, không thay thế các lần đã báo.`}
+                : `Còn ${formatNumber(remaining)} ${unitLabel(form.unit)}. Phiếu này sẽ cộng tiếp vào lệnh, không thay thế các lần đã báo.`}
             </p>
             <p className="text-xs mt-1 font-mono" style={{ color: 'var(--text-muted)' }}>
               Gần nhất: {historyOfWo[0].jobCode} · {formatDate(historyOfWo[0].workDate)} — {formatNumber(historyOfWo[0].actualQty || 0)} {historyOfWo[0].unit}

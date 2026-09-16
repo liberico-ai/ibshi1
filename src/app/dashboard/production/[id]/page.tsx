@@ -6,6 +6,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate, formatDateTime, formatNumber } from '@/lib/utils'
 import { unitLabel } from '@/lib/wo-units'
 import { RBAC } from '@/lib/rbac-rules'
+import { isSubcontractWo } from '@/lib/material-request-constants'
 import { notify } from '@/components/ui/Toast'
 
 interface WorkOrderDetail {
@@ -117,7 +118,9 @@ export default function ProductionDetailPage() {
   const transitions = TRANSITIONS[wo.status] || []
   
   // Conditionally show buttons if user role is in RBAC list
-  const showActionButtons = RBAC.PRODUCTION_ACTION.includes(roleCode) || RBAC.QC_ACTION.includes(roleCode)
+  // Lệnh THẦU PHỤ: PM (R02/R02a) thao tác thay xưởng (API kiểm PM đúng dự án).
+  const subByPm = isSubcontractWo({ teamCode: wo.teamCode }) && ['R02', 'R02a'].includes(roleCode)
+  const showActionButtons = RBAC.PRODUCTION_ACTION.includes(roleCode) || RBAC.QC_ACTION.includes(roleCode) || subByPm
 
   // Mời nghiệm thu: chỉ có nghĩa khi xưởng đã báo khối lượng mà chưa ai ký. Nghiệm thu theo ĐỢT
   // nên lệnh đang 'QC Đạt' của đợt trước vẫn mời tiếp được cho phần vừa báo thêm.

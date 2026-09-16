@@ -9,6 +9,8 @@ import { isWorkOrderQcPassed } from '@/lib/qc-gate'
 import { woMaterialGate } from '@/lib/process-gates'
 import { buildWoMaterialLines } from '@/lib/wo-materials'
 import { getWoAcceptanceOne } from '@/lib/wo-acceptance'
+import { isSubcontractWo } from '@/lib/material-request-constants'
+import { isProjectPm } from '@/lib/project-pm'
 
 // Valid WO transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -53,13 +55,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return errorResponse(`Không thể chuyển từ ${currentStatus} → ${nextStatus}. Cho phép: ${allowed.join(', ')}`)
     }
 
-    // Role check: only R06/R06b can start/progress, R09 for QC
-    if (['IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].includes(nextStatus) && !(await can(user, 'action.production'))) {
-      return errorResponse('Chỉ bộ phận SX hoặc GĐ được thao tác trạng thái này', 403)
+    // Lệnh THẦU PHỤ do PM phụ trách dự án chịu trách nhiệm (không có xưởng đứng ra): PM được
+    // thao tác trạng thái/mở lệnh y như bộ phận SX.
+    const subByPm = isSubcontractWo(wo) && await isProjectPm(user.userId, wo.projectId)
+
+    // Role check: only R06/R06b (hoặc PM cho lệnh thầu phụ) can start/progress, R09 for QC
+    if (['IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].includes(nextStatus) && !((await can(user, 'action.production')) || subByPm)) {
+      return errorResponse('Chỉ bộ phận SX / GĐ (hoặc PM với lệnh thầu phụ) được thao tác trạng thái này', 403)
     }
-    // Mở WO (đủ vật tư): SX hoặc Kho
-    if (nextStatus === 'OPEN' && !((await can(user, 'action.production')) || ['R05', 'R05a', 'R08', 'R08a'].includes(user.roleCode))) {
-      return errorResponse('Chỉ SX/Kho hoặc GĐ được mở WO', 403)
+    // Mở WO (đủ vật tư): SX hoặc Kho (hoặc PM cho lệnh thầu phụ)
+    if (nextStatus === 'OPEN' && !((await can(user, 'action.production')) || subByPm || ['R05', 'R05a', 'R08', 'R08a'].includes(user.roleCode))) {
+      return errorResponse('Chỉ SX/Kho/GĐ (hoặc PM với lệnh thầu phụ) được mở WO', 403)
     }
 
     // Cổng vật tư: khi BẬT thì giữ đúng luật cũ — chưa cấp đủ thì không được bắt đầu.

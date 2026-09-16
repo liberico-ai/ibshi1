@@ -182,7 +182,7 @@ const P1_3: StepFormConfig = {
 const P2_1: StepFormConfig = {
   stepCode: 'P2.1',
   formType: 'input',
-  title: 'Thiết kế xây dựng bản vẽ và đề xuất VT chính',
+  title: 'Thiết kế xây dựng bản vẽ, đề xuất VT chính và Assembly Part List',
   description: 'R04 phát hành bản vẽ IFR/IFC theo drawing register. Từ bản vẽ Tekla/Ship Constructor, hệ thống import BOM tự động hoặc R04 nhập BOM thủ công.',
   fields: [
     { key: 'drawingCount', label: 'Số lượng bản vẽ', labelEn: 'Drawing Count', type: 'number', min: 1 },

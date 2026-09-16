@@ -107,6 +107,10 @@ export const WORK_STAGES: WorkStage[] = [
       { code: 'TB', label: 'Sơn KC, Thiết bị (Sơn, sửa sơn nghiệm thu)' },
       { code: 'BL', label: 'Block' },
       { code: 'KK', label: 'Khung kiện' },
+      // Sơn theo LỚP — thêm 2026-08 cho Xưởng Hoàn thiện (giao cả dự án).
+      { code: 'SL1', label: 'Sơn lớp 1' },
+      { code: 'SL2', label: 'Sơn lớp 2' },
+      { code: 'SL3', label: 'Sơn lớp 3' },
     ],
   },
   {
@@ -131,6 +135,31 @@ export const WORK_STAGES: WorkStage[] = [
   },
 ]
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Bảng CÔNG ĐOẠN → XƯỞNG (chốt nghiệp vụ 2026-08). Dùng để dựng "sổ đơn giá" khi export
+// file đơn giá khoán: mỗi xưởng hiện MỌI hạng mục kèm ĐÚNG các công đoạn của xưởng đó (không
+// phụ thuộc đã giao lệnh hay chưa). XCT1 và XCT2 cùng làm Gá + Tổ hợp.
+// ─────────────────────────────────────────────────────────────────────────────
+// XƯỞNG GIAO THEO HẠNG MỤC (per-item). XPC + XHT KHÔNG ở đây — họ giao cả dự án, khai riêng ở
+// WHOLE_PROJECT_STAGES bên dưới.
+export const WORKSHOP_STAGES: Record<string, string[]> = {
+  XCT1: ['G', 'TH'],                             // Gá, Tổ hợp
+  XCT2: ['G', 'TH'],
+  XHAN: ['H'],                                   // Hàn
+}
+export const stagesOfWorkshop = (teamCode: string | null | undefined): string[] =>
+  WORKSHOP_STAGES[teamCode || ''] ?? []
+
+// Xưởng GIAO CẢ DỰ ÁN (không theo hạng mục) + các công đoạn của họ trong khối "giao cả dự án".
+// XPC chuẩn bị phôi cho mọi hạng mục; XHT (Hoàn thiện) sơn/bảo ôn/đóng kiện… cả dự án. Mỗi
+// (công đoạn × chủng loại) là một khối lượng RỜI NHAU do PM nhập.
+export const WHOLE_PROJECT_STAGES: Record<string, string[]> = {
+  XPC: ['PC'],
+  XHT: ['LS', 'S', 'BO', 'ĐK', 'TA', 'Ax', 'VH', 'GH'],
+}
+export const isWholeProjectWorkshop = (teamCode: string | null | undefined): boolean =>
+  !!WHOLE_PROJECT_STAGES[teamCode || '']
+
 /** Tra công đoạn theo mã. */
 export function findStage(code: string | null | undefined): WorkStage | undefined {
   return WORK_STAGES.find(s => s.code === code)
@@ -139,6 +168,23 @@ export function findStage(code: string | null | undefined): WorkStage | undefine
 /** Chủng loại của một công đoạn; công đoạn không có thì trả mảng rỗng. */
 export function categoriesOf(stageCode: string | null | undefined): WorkCategory[] {
   return findStage(stageCode)?.categories ?? []
+}
+
+/**
+ * Mã "Khác" — chủng loại tự nhập ngoài danh mục. Đơn giá của mọi chủng loại lạ trong một
+ * (ITEM × Xưởng) đều lấy MỘT giá "Khác" chung: item A khác 2000 thì mọi chủng loại lạ ở A là
+ * 2000, item B khác 2500 thì mọi chủng loại lạ ở B là 2500 (chốt nghiệp vụ 2026-08).
+ */
+export const KHAC_CATEGORY = 'KHAC'
+
+/**
+ * Chủng loại này có nằm trong DANH MỤC của công đoạn không?
+ * Không nằm trong danh mục = chủng loại "lạ" → ăn đơn giá "Khác".
+ * (KHAC là sentinel của chính mục "Khác", cũng coi là ngoài danh mục.)
+ */
+export function isCatalogCategory(stageCode: string | null | undefined, categoryCode: string | null | undefined): boolean {
+  if (!categoryCode || categoryCode === KHAC_CATEGORY) return false
+  return categoriesOf(stageCode).some(c => c.code === categoryCode)
 }
 
 /** Nhãn đầy đủ để hiển thị và lưu, vd "S - Sơn". */

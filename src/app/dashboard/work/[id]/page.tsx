@@ -20,7 +20,8 @@ import { isNotifyTask, notifyTaskInfo, isFlowGeneratedTask } from '@/lib/notify-
 interface DocFile { id: string; fileName: string; fileUrl: string }
 interface DocAck { userId: string; userName: string | null; createdAt: string }
 interface Assignee { id: string; role: string | null; userId: string | null; isPrimary: boolean; done?: boolean; doneAt?: string | null; userName?: string | null; roleName?: string | null; doneByName?: string | null }
-interface Doc { id: string; kind: string; label: string; fulfilled: boolean; note?: string | null; file?: DocFile | null; acks?: DocAck[] }
+interface ReturnFile { id: string; fileName: string; fileUrl: string; fileSize?: number | null; mimeType?: string | null; createdAt?: string }
+interface Doc { id: string; kind: string; label: string; fulfilled: boolean; note?: string | null; file?: DocFile | null; files?: ReturnFile[]; acks?: DocAck[] }
 interface Hist {
   id: string; action: string; byUserId: string; reason: string | null; createdAt: string
   toRole: string | null; toUserId?: string | null; fromUserId?: string | null
@@ -530,7 +531,16 @@ export default function WorkDetailPage() {
                 {d.fulfilled ? (
                   <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                     {d.note && <div>{d.note}</div>}
-                    {d.file && <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(d.file!.id, d.file!.fileName) }} style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{d.file.fileName} ↗</a>}
+                    {/* Hiện ĐỦ mọi tệp trả lại (không chỉ tệp cuối). */}
+                    {(d.files && d.files.length > 0 ? d.files : (d.file ? [d.file] : [])).map((f) => {
+                      const sz = (f as ReturnFile).fileSize
+                      return (
+                        <div key={f.id} className="flex items-center gap-2 mt-0.5">
+                          <a href="#" onClick={(e) => { e.preventDefault(); openAuthedFile(f.id, f.fileName) }} style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}>{f.fileName} ↗</a>
+                          {sz != null && sz > 0 && <span style={{ color: 'var(--text-muted)' }}>{sz < 1048576 ? `${Math.round(sz / 1024)} KB` : `${(sz / 1048576).toFixed(1)} MB`}</span>}
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : isAssignee && !myDone && task.status !== 'DONE' ? (
                   <div className="mt-1.5 space-y-1.5">

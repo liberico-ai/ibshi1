@@ -5,8 +5,9 @@ import { computePricingTotals } from '@/lib/apl-pricing'
 
 const PRICE_EDIT_ROLES = ['R01', 'R03', 'R03a']
 
-// POST /api/hr/apl-pricing/complete — chốt bảng đơn giá khoán.
-// Chỉ chốt được khi ĐỦ CẢ HAI: mọi dòng đã có đơn giá VÀ mọi khối đã nghiệm thu xong.
+// POST /api/hr/apl-pricing/complete — KTKT rà soát & chốt bảng đơn giá khoán.
+// Chốt được ngay khi mọi phần việc ĐÃ GIAO đều có đơn giá (theo KẾ HOẠCH) — KHÔNG cần
+// đợi nghiệm thu, vì đây là bước chốt đơn giá sau khi các xưởng import xong.
 export async function POST(req: NextRequest) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
@@ -27,12 +28,9 @@ export async function POST(req: NextRequest) {
     // Nói rõ còn thiếu gì thay vì chỉ báo "chưa đủ điều kiện"
     const missing: string[] = []
     if (totals.itemsPriced < totals.itemsTotal) {
-      missing.push(`${totals.itemsTotal - totals.itemsPriced}/${totals.itemsTotal} ITEM chưa có đơn giá`)
-    } else if (totals.linesWithoutPrice > 0) {
-      missing.push(`${totals.linesWithoutPrice} dòng chi tiết chưa có đơn giá`)
-    }
-    if (totals.itemsAccepted < totals.itemsTotal) {
-      missing.push(`${totals.itemsTotal - totals.itemsAccepted}/${totals.itemsTotal} ITEM chưa nghiệm thu xong`)
+      missing.push(`${totals.itemsTotal - totals.itemsPriced}/${totals.itemsTotal} ITEM chưa đủ đơn giá`)
+    } else if (totals.plannedMissing > 0) {
+      missing.push(`${totals.plannedMissing} phần việc đã giao chưa có đơn giá`)
     }
     return errorResponse(`Chưa chốt được: ${missing.join('; ')}`, 400)
   }

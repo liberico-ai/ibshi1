@@ -37,6 +37,8 @@ export interface WoStageAcceptance {
   id: string
   stageCode: string
   name: string
+  /** Mã chủng loại (work-catalog) — đơn giá khoán tra theo mã này. '' = không có chủng loại. */
+  categoryCode: string | null
   category: string | null
   unit: string
   /** KL giao cho công đoạn này — bằng trọn khối lượng của lệnh */
@@ -120,7 +122,7 @@ export async function getWoAcceptance(woIds: string[], khoang?: KhoangNgay): Pro
     where: { workOrderId: { in: woIds } }, orderBy: { sortOrder: 'asc' },
     select: {
       id: true, workOrderId: true, stageCode: true, name: true,
-      category: true, qty: true, unit: true, qcInvitedQty: true,
+      categoryCode: true, category: true, qty: true, unit: true, qcInvitedQty: true,
     },
   })
   const stagesByWo = new Map<string, typeof allStages>()
@@ -238,7 +240,8 @@ export async function getWoAcceptance(woIds: string[], khoang?: KhoangNgay): Pro
       // lời mời cũ hết giá trị, không được giữ lại làm lệnh treo ở "Chờ QC".
       const daMoi = round2(Math.min(conMoiDuoc, Number(st.qcInvitedQty) || 0))
       return {
-        id: st.id, stageCode: st.stageCode, name: st.name, category: st.category,
+        id: st.id, stageCode: st.stageCode, name: st.name,
+        categoryCode: st.categoryCode, category: st.category,
         unit: st.unit || unit,
         plannedQty: round2(giao),
         reportedQty: round2(bao),

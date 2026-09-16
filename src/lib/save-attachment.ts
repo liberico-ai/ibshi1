@@ -48,6 +48,8 @@ export interface SaveAttachmentResult {
   id: string
   fileName: string
   fileUrl: string
+  fileSize: number
+  mimeType: string
 }
 
 export function validateFileName(fileName: string): string | null {
@@ -95,5 +97,5 @@ export async function saveAttachmentFromBuffer(input: SaveAttachmentInput): Prom
     },
   })
 
-  return { id: attachment.id, fileName: attachment.fileName, fileUrl: attachment.fileUrl }
+  return { id: attachment.id, fileName: attachment.fileName, fileUrl: attachment.fileUrl, fileSize: buffer.length, mimeType }
 }

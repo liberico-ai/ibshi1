@@ -1,10 +1,12 @@
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit } from '@/lib/auth'
-import { computePricingTotals, getAcceptanceByItem } from '@/lib/apl-pricing'
+import { computePricingTotals, getAcceptanceByItem, shopKey, resolveShopPrice } from '@/lib/apl-pricing'
+import { saveWorkshopPrices } from '@/lib/apl-pricing-save'
 
-// KTKH nhập đơn giá khoán; BGĐ xem/sửa được. Vai khác chỉ đọc.
-const PRICE_EDIT_ROLES = ['R01', 'R03', 'R03a']
+// XƯỞNG tự nhập đơn giá khoán cho phần việc của mình (mỗi xưởng chỉ ghi công đoạn/chủng loại
+// của xưởng đó). KTKH/BGĐ chỉ XEM + CHỐT, không sửa đơn giá nữa (chốt nghiệp vụ 2026-08).
+const PRICE_EDIT_ROLES = ['R06', 'R06a', 'R06b', 'R10']
 
 
 // GET /api/hr/apl-pricing?projectId=[&item=&childPage=]
@@ -41,11 +43,11 @@ export async function GET(req: NextRequest) {
     // Đơn giá khoán đặt theo CÔNG ĐOẠN của từng lệnh. Không còn đơn giá cho cả hạng mục:
     // pha cắt và bảo ôn là hai phần việc khác nhau, không có một đơn giá chung nào đúng cả hai.
     const shopPrices = await prisma.aplItemWorkshopPrice.findMany({
-      where: { importId: imp.id, item }, select: { teamCode: true, stageCode: true, unitPrice: true },
+      where: { importId: imp.id, item }, select: { teamCode: true, stageCode: true, categoryCode: true, unitPrice: true },
     })
-    // Khoá "teamCode::stageCode"; stageCode '' = lệnh chạy nguyên khối.
-    const priceOfShop = new Map(shopPrices.map(x => [`${x.teamCode}::${x.stageCode}`, Number(x.unitPrice)]))
-    const giaCua = (team: string | null, stageCode = '') => priceOfShop.get(`${team || ''}::${stageCode}`) ?? null
+    // Đơn giá tra tới CHỦNG LOẠI; chủng loại lạ ăn giá "Khác" của (ITEM × Xưởng).
+    const priceOfShop = new Map(shopPrices.map(x => [shopKey(item, x.teamCode, x.stageCode, x.categoryCode), Number(x.unitPrice)]))
+    const giaCua = (team: string | null, stageCode = '', categoryCode = '') => resolveShopPrice(priceOfShop, item, team, stageCode, categoryCode)
 
     // Từng ĐỢT nghiệm thu của mỗi lệnh — xưởng báo nhiều lần thì mỗi lần một phiếu ITP.
     const woCodes = (acc?.wos ?? []).map(w => w.woCode)
@@ -60,7 +62,7 @@ export async function GET(req: NextRequest) {
               orderBy: { sortOrder: 'asc' },
               select: {
                 status: true, acceptedQty: true,
-                stage: { select: { stageCode: true, name: true, category: true, unit: true } },
+                stage: { select: { stageCode: true, categoryCode: true, name: true, category: true, unit: true } },
               },
             },
           },
@@ -69,7 +71,7 @@ export async function GET(req: NextRequest) {
     // Lệnh chia công đoạn: MỖI DÒNG công đoạn là một mục riêng, ký riêng — không gộp khối lượng
     // các công đoạn của cùng một ITP lại, vì đó là các lượt việc khác nhau trên cùng khối thép.
     const batchesByWo = new Map<string, {
-      itpCode: string; stageCode: string; stage: string | null; qty: number
+      itpCode: string; stageCode: string; categoryCode: string; stage: string | null; qty: number
       date: Date | null; signed: boolean; failed: boolean
     }[]>()
     for (const i of itps) {
@@ -83,6 +85,7 @@ export async function GET(req: NextRequest) {
           arr.push({
             itpCode: i.itpCode,
             stageCode: cp.stage!.stageCode,
+            categoryCode: cp.stage!.categoryCode ?? '',
             stage: `${cp.stage!.stageCode} ${cp.stage!.name}${cp.stage!.category ? ' · ' + cp.stage!.category : ''}`,
             qty: cp.acceptedQty !== null ? Number(cp.acceptedQty) : 0,
             date: i.inspectionDate ?? i.createdAt,
@@ -94,6 +97,7 @@ export async function GET(req: NextRequest) {
         arr.push({
           itpCode: i.itpCode,
           stageCode: '',
+          categoryCode: '',
           stage: null,
           qty: i.acceptedQty !== null ? Number(i.acceptedQty) : 0,
           date: i.inspectionDate ?? i.createdAt,
@@ -109,16 +113,16 @@ export async function GET(req: NextRequest) {
         batches: (batchesByWo.get(w.woCode) || []).map(b => ({
           ...b,
           date: b.date ? b.date.toISOString() : null,
-          // Tiền của ĐỢT tính theo đơn giá CỦA CÔNG ĐOẠN đó. Đợt chưa đủ hai chữ ký thì chưa tính.
-          amount: giaCua(w.teamCode, b.stageCode) === null
+          // Tiền của ĐỢT tính theo đơn giá CỦA CHỦNG LOẠI đó. Đợt chưa đủ hai chữ ký thì chưa tính.
+          amount: giaCua(w.teamCode, b.stageCode, b.categoryCode) === null
             ? null
-            : Math.round((b.signed ? b.qty : 0) * (giaCua(w.teamCode, b.stageCode) as number)),
+            : Math.round((b.signed ? b.qty : 0) * (giaCua(w.teamCode, b.stageCode, b.categoryCode) as number)),
         })),
         // Công đoạn của lệnh — nơi KTKH nhập đơn giá. Rỗng = lệnh chạy nguyên khối.
         stages: w.stages.map(st => {
-          const gia = giaCua(w.teamCode, st.stageCode)
+          const gia = giaCua(w.teamCode, st.stageCode, st.categoryCode ?? '')
           return {
-            id: st.id, stageCode: st.stageCode, name: st.name, category: st.category,
+            id: st.id, stageCode: st.stageCode, categoryCode: st.categoryCode, name: st.name, category: st.category,
             unit: st.unit,
             plannedKg: st.plannedKg, reportedKg: st.reportedKg, acceptedKg: st.acceptedKg,
             ratio: st.ratio,
@@ -143,14 +147,14 @@ export async function GET(req: NextRequest) {
         unitPrice: w.stages.length > 0 ? null : giaCua(w.teamCode),
         // Tiền của lệnh = tổng tiền các công đoạn; lệnh nguyên khối thì theo giá của lệnh.
         amount: w.stages.length > 0
-          ? Math.round(w.stages.reduce((s, st) => s + st.acceptedKg * (giaCua(w.teamCode, st.stageCode) ?? 0), 0))
+          ? Math.round(w.stages.reduce((s, st) => s + st.acceptedKg * (giaCua(w.teamCode, st.stageCode, st.categoryCode ?? '') ?? 0), 0))
           : Math.round(w.acceptedKg * (giaCua(w.teamCode) ?? 0)),
       })),
       // Không còn đơn giá cho cả hạng mục — giá đặt theo từng công đoạn.
       itemUnitPrice: null,
       // "Tổng" của hạng mục = giá trị khoán nếu làm xong hết: Σ (đơn giá công đoạn × KL giao).
       itemCap: (acc?.wos ?? []).reduce((s, w) => s + (w.stages.length > 0
-        ? w.stages.reduce((n, st) => n + st.plannedKg * (giaCua(w.teamCode, st.stageCode) ?? 0), 0)
+        ? w.stages.reduce((n, st) => n + st.plannedKg * (giaCua(w.teamCode, st.stageCode, st.categoryCode ?? '') ?? 0), 0)
         : w.plannedKg * (giaCua(w.teamCode) ?? 0)), 0),
       // % của hạng mục = trung bình các phần việc đang giao (xem ghi chú ở ItemAcceptance)
       itemRatio: acc?.ratio ?? 0,
@@ -233,10 +237,23 @@ export async function GET(req: NextRequest) {
   const { byItem: _byItem, ...totalsForClient } = totals
   void _byItem
 
+  // Tổng giá trị giao khoán dự án = con số KTKT tải từ file (BGĐ duyệt), KHÔNG lấy từ dự toán.
+  let budgetFileUrl: string | null = null
+  if (pricing?.budgetFileId) {
+    budgetFileUrl = (await prisma.fileAttachment.findUnique({ where: { id: pricing.budgetFileId }, select: { fileUrl: true } }))?.fileUrl ?? null
+  }
+  const budget = {
+    total: Number(pricing?.budgetTotal || 0),
+    status: pricing?.budgetStatus || 'NONE', // NONE | PENDING | APPROVED
+    fileUrl: budgetFileUrl,
+    approvedAt: pricing?.budgetApprovedAt || null,
+  }
+
   return successResponse({
     apl: { id: imp.id, fileName: imp.fileName, createdAt: imp.createdAt, totalWeightKg: imp.totalWeightKg },
     rows,
     totals: totalsForClient,
+    budget,
     pricing,
     canEdit: PRICE_EDIT_ROLES.includes(user.roleCode),
   })
@@ -249,7 +266,7 @@ export async function POST(req: NextRequest) {
   const user = await authenticateRequest(req)
   if (!user) return unauthorizedResponse()
   if (!PRICE_EDIT_ROLES.includes(user.roleCode)) {
-    return errorResponse('Chỉ Kinh tế Kỹ thuật (KTKH) hoặc BGĐ được nhập đơn giá khoán', 403)
+    return errorResponse('Chỉ Xưởng (tổ trưởng/nhân viên xưởng) được nhập đơn giá khoán phần việc của mình', 403)
   }
 
   const body = await req.json()
@@ -273,6 +290,10 @@ export async function POST(req: NextRequest) {
   const existing = await prisma.aplPricing.findUnique({ where: { importId: imp.id } })
   if (existing?.status === 'COMPLETED') {
     return errorResponse('Bảng đơn giá đã chốt — không sửa được nữa', 400)
+  }
+  // CHẶN: chưa được BGĐ duyệt Tổng giá trị giao khoán thì chưa nhập đơn giá.
+  if (existing?.budgetStatus !== 'APPROVED') {
+    return errorResponse('Chờ BGĐ duyệt Tổng giá trị giao khoán rồi mới nhập được đơn giá', 403)
   }
 
   const parsePrice = (raw: unknown): number | null | undefined => {
@@ -313,48 +334,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Đơn giá khoán của TỪNG XƯỞNG trong một ITEM ──
-  // Chỉ nhận cặp (ITEM, xưởng) có lệnh sản xuất thật, chặn ghi giá cho xưởng không được giao.
+  // ── Đơn giá khoán của TỪNG XƯỞNG trong một ITEM, theo CHỦNG LOẠI (helper dùng chung với import) ──
+  let rejectedOtherShop = 0
   if (shopPrices.length > 0) {
-    // Đơn giá đặt theo CÔNG ĐOẠN của lệnh. Chỉ nhận đúng cặp (hạng mục, xưởng, công đoạn) có
-    // thật trong các lệnh đã phát hành — gõ bừa một mã công đoạn thì không được ghi.
-    const wos = await prisma.workOrder.findMany({
-      where: { aplImportId: imp.id, status: { not: 'CANCELLED' } },
-      select: {
-        aplItem: true, teamCode: true, departmentId: true,
-        department: { select: { code: true } },
-        stages: { select: { stageCode: true } },
-      },
-    })
-    const known = new Set<string>()
-    for (const w of wos) {
-      const team = w.department?.code || w.teamCode || ''
-      const dau = `${w.aplItem || ''}::${team}`
-      // '' = lệnh chạy nguyên khối; lệnh có công đoạn thì chỉ nhận theo từng mã công đoạn.
-      if (w.stages.length === 0) known.add(`${dau}::`)
-      else for (const st of w.stages) known.add(`${dau}::${st.stageCode}`)
-    }
-    for (const p of shopPrices) {
-      const item = String(p.item ?? '')
-      const teamCode = String(p.teamCode ?? '')
-      const stageCode = String(p.stageCode ?? '')
-      if (!teamCode || !known.has(`${item}::${teamCode}::${stageCode}`)) continue
-      const price = parsePrice(p.unitPrice)
-      if (price === undefined) continue
-      if (price === null) {
-        const del = await prisma.aplItemWorkshopPrice.deleteMany({
-          where: { importId: imp.id, item, teamCode, stageCode },
-        })
-        cleared += del.count
-        continue
-      }
-      await prisma.aplItemWorkshopPrice.upsert({
-        where: { importId_item_teamCode_stageCode: { importId: imp.id, item, teamCode, stageCode } },
-        create: { importId: imp.id, item, teamCode, stageCode, unitPrice: price, updatedBy: user.userId },
-        update: { unitPrice: price, updatedBy: user.userId },
-      })
-      saved++
-    }
+    const me = await prisma.user.findUnique({ where: { id: user.userId }, select: { department: { select: { code: true } } } })
+    const res = await saveWorkshopPrices(
+      imp.id,
+      shopPrices.map((p: { item?: string; teamCode?: string; stageCode?: string; categoryCode?: string; unitPrice?: unknown }) => ({
+        item: String(p.item ?? ''), teamCode: String(p.teamCode ?? ''),
+        stageCode: String(p.stageCode ?? ''), categoryCode: String(p.categoryCode ?? ''),
+        unitPrice: p.unitPrice as number | null | undefined,
+      })),
+      { myTeam: me?.department?.code || '', isAdmin: user.roleCode === 'R10', userId: user.userId },
+    )
+    saved += res.saved; cleared += res.cleared; rejectedOtherShop += res.rejectedOtherShop
   }
 
   // ── Đơn giá riêng của dòng chi tiết (giữ cho dữ liệu cũ; không còn tham gia tính tiền) ──
@@ -391,7 +384,8 @@ export async function POST(req: NextRequest) {
   })
 
   const totals = await computePricingTotals(imp.id)
-  await logAudit(user.userId, 'UPDATE', 'AplPricing', imp.id, { saved, cleared, totalAmount: totals.totalAmount })
+  await logAudit(user.userId, 'UPDATE', 'AplPricing', imp.id, { saved, cleared, rejectedOtherShop, totalAmount: totals.totalAmount })
 
-  return successResponse({ saved, cleared, totals }, `Đã lưu ${saved} đơn giá${cleared ? `, xoá ${cleared}` : ''}`)
+  return successResponse({ saved, cleared, rejectedOtherShop, totals },
+    `Đã lưu ${saved} đơn giá${cleared ? `, xoá ${cleared}` : ''}${rejectedOtherShop ? ` — bỏ qua ${rejectedOtherShop} dòng của xưởng khác` : ''}`)
 }

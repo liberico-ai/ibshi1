@@ -6,8 +6,9 @@ import { notify } from '@/components/ui/Toast'
 import { Modal, Button, SelectField, InputField } from '@/components/ui'
 import { formatNumber } from '@/lib/utils'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
+import { SUBCONTRACT_TEAM_CODE } from '@/lib/material-request-constants'
 import { WO_UNITS, DEFAULT_WO_UNIT, unitLabel } from '@/lib/wo-units'
-import { WORK_STAGES, categoriesOf } from '@/lib/work-catalog'
+import { WORK_STAGES, categoriesOf, KHAC_CATEGORY, findStage, WHOLE_PROJECT_STAGES } from '@/lib/work-catalog'
 
 // Phát hành lệnh sản xuất từ APL.
 //   chọn dự án → danh sách ITEM → chọn 1 ITEM → giao xưởng + thời gian → phát hành.
@@ -22,7 +23,7 @@ interface ProjectOption { id: string; projectCode: string; projectName: string }
 interface AplInfo { id: string; fileName: string; sheetName: string; revision: string | null; totalRows: number }
 /** Một công đoạn bên trong lệnh của một xưởng — chọn từ danh mục công việc.
  *  vd công đoạn "S - Sơn", chủng loại "BL - Block", 10.240 kg */
-interface Stage { stageCode: string; categoryCode: string; qty: string }
+interface Stage { stageCode: string; categoryCode: string; categoryLabel?: string; qty: string }
 
 interface Assign {
   teamCode: string
@@ -34,6 +35,8 @@ interface Assign {
   stages: Stage[]
   plannedStart: string
   plannedEnd: string
+  /** Tên thầu phụ — chỉ dùng khi teamCode = THAUPHU (giao ra ngoài). */
+  subName?: string
 }
 
 
@@ -60,6 +63,16 @@ interface Preview {
 
 /** Xưởng Pha cắt — khâu chuẩn bị vật tư cho mọi công đoạn sau, nên điền sẵn công đoạn PC. */
 const XUONG_PHA_CAT = 'XPC'
+/** Xưởng Hoàn thiện — sơn/bảo ôn/đóng kiện… cũng giao CẢ DỰ ÁN (không theo hạng mục). */
+const XUONG_HOAN_THIEN = 'XHT'
+/** Các dòng (công đoạn × chủng loại) của một xưởng giao-cả-dự-án, để dựng bảng nhập KL. */
+const caDuAnRows = (teamCode: string): { key: string; stageCode: string; categoryCode: string; label: string }[] =>
+  (WHOLE_PROJECT_STAGES[teamCode] || []).flatMap(sc => {
+    const st = findStage(sc)
+    const cats = categoriesOf(sc)
+    if (cats.length === 0) return [{ key: `${sc}::`, stageCode: sc, categoryCode: '', label: st?.label || sc }]
+    return cats.map(c => ({ key: `${sc}::${c.code}`, stageCode: sc, categoryCode: c.code, label: `${st?.label || sc} · ${c.label}` }))
+  })
 
 export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
   open: boolean; projects: ProjectOption[]; onClose: () => void; onIssued: () => void
@@ -123,33 +136,50 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
   // riêng do PM nhập. Chủng loại nào bỏ trống thì lần này không giao.
   const [pcMo, setPcMo] = useState(false)
   const [pcQty, setPcQty] = useState<Record<string, string>>({})
+  const [pcUnit, setPcUnit] = useState<Record<string, string>>({}) // đơn vị riêng từng chủng loại
   const [pcStart, setPcStart] = useState('')
   const [pcEnd, setPcEnd] = useState('')
   const [pcIssuing, setPcIssuing] = useState(false)
-  /** Chủng loại đã giao ở những lệnh cả dự án trước — không giao lại được. */
-  const [pcDaGiao, setPcDaGiao] = useState<{ woCode: string; categoryCode: string; category: string; qty: number }[]>([])
+  /** Các đợt đã giao (cả-dự-án) theo xưởng — CÓ THỂ NHIỀU LẦN mỗi chủng loại. Khoá "stage::cat". */
+  const [pcDaGiao, setPcDaGiao] = useState<{ woCode: string; stageCode: string; categoryCode: string; category: string; qty: number; unit: string }[]>([])
+  // ── Giao Hoàn thiện cho CẢ DỰ ÁN (giống Pha cắt, nhưng nhiều công đoạn: sơn/bảo ôn/đóng kiện…) ──
+  const [xhtMo, setXhtMo] = useState(false)
+  const [xhtQty, setXhtQty] = useState<Record<string, string>>({})
+  const [xhtUnit, setXhtUnit] = useState<Record<string, string>>({})
+  const [xhtStart, setXhtStart] = useState('')
+  const [xhtEnd, setXhtEnd] = useState('')
+  const [xhtIssuing, setXhtIssuing] = useState(false)
+  const [xhtDaGiao, setXhtDaGiao] = useState<{ woCode: string; stageCode: string; categoryCode: string; category: string; qty: number; unit: string }[]>([])
 
-  const loadPcDaGiao = useCallback(() => {
-    if (!apl) { setPcDaGiao([]); return }
+  const loadCaDuAn = useCallback(() => {
+    if (!apl) { setPcDaGiao([]); setXhtDaGiao([]); return }
     apiFetch(`/api/production/work-orders/from-apl?importId=${apl.id}&toanDuAn=1`)
       .then(r => {
         if (!r?.ok) return
-        const ds = (r.issuedWos || []) as { woCode: string; stages?: { categoryCode: string | null; category: string | null; qty: number }[] }[]
-        setPcDaGiao(ds.flatMap(w => (w.stages ?? []).map(st => ({
-          woCode: w.woCode, categoryCode: st.categoryCode ?? '', category: st.category ?? '', qty: st.qty,
-        }))))
+        const ds = (r.issuedWos || []) as { woCode: string; teamCode: string | null; stages?: { stageCode: string; categoryCode: string | null; category: string | null; qty: number; unit?: string }[] }[]
+        const rows = (team: string) => ds.filter(w => (w.teamCode || '') === team).flatMap(w => (w.stages ?? []).map(st => ({
+          woCode: w.woCode, stageCode: st.stageCode, categoryCode: st.categoryCode ?? '', category: st.category ?? '', qty: st.qty, unit: st.unit || DEFAULT_WO_UNIT,
+        })))
+        setPcDaGiao(rows(XUONG_PHA_CAT)); setXhtDaGiao(rows(XUONG_HOAN_THIEN))
       })
       .catch(() => {})
   }, [apl])
-  useEffect(() => { loadPcDaGiao() }, [loadPcDaGiao])
+  useEffect(() => { loadCaDuAn() }, [loadCaDuAn])
 
   const pcChungLoai = categoriesOf('PC')
-  const pcDaGiaoCua = (code: string) => pcDaGiao.find(x => x.categoryCode === code)
-  /** Những dòng PM vừa nhập số — chỉ chủng loại có khối lượng mới được ghi nhận. */
+  // Các ĐỢT đã giao của 1 chủng loại (nhiều lần) — để hiện "Lần 1 / Lần 2…".
+  const pcDaGiaoList = (code: string) => pcDaGiao.filter(x => x.categoryCode === code)
+  /** Dòng PM vừa nhập số — GIAO NHIỀU LẦN được, không loại chủng loại đã giao. */
   const pcDongNhap = pcChungLoai
-    .filter(c => !pcDaGiaoCua(c.code) && Number(pcQty[c.code]) > 0)
-    .map(c => ({ stageCode: 'PC', categoryCode: c.code, qty: Number(pcQty[c.code]) }))
-  const pcTong = pcDongNhap.reduce((n, x) => n + x.qty, 0)
+    .filter(c => Number(pcQty[c.code]) > 0)
+    .map(c => ({ stageCode: 'PC', categoryCode: c.code, qty: Number(pcQty[c.code]), unit: pcUnit[c.code] || DEFAULT_WO_UNIT }))
+
+  // XHT: bảng phẳng (công đoạn × chủng loại), khoá "stage::cat".
+  const xhtRows = caDuAnRows(XUONG_HOAN_THIEN)
+  const xhtDaGiaoList = (key: string) => xhtDaGiao.filter(x => `${x.stageCode}::${x.categoryCode}` === key)
+  const xhtDongNhap = xhtRows
+    .filter(r => Number(xhtQty[r.key]) > 0)
+    .map(r => ({ stageCode: r.stageCode, categoryCode: r.categoryCode || undefined, qty: Number(xhtQty[r.key]), unit: xhtUnit[r.key] || DEFAULT_WO_UNIT }))
 
   const issuePhaCat = async () => {
     if (!apl || pcDongNhap.length === 0) return
@@ -167,10 +197,33 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
       })
       if (!r?.ok) { notify(r?.error || 'Không phát hành được lệnh pha cắt', 'error'); return }
       notify(`Đã phát hành ${r.workOrder?.woCode ?? ''} — pha cắt ${pcDongNhap.length} chủng loại cho cả dự án`, 'success')
-      setPcQty({}); setPcStart(''); setPcEnd('')
-      loadPcDaGiao(); loadItems(); onIssued()
+      setPcQty({}); setPcUnit({}); setPcStart(''); setPcEnd('')
+      loadCaDuAn(); loadItems(); onIssued()
     } finally {
       setPcIssuing(false)
+    }
+  }
+
+  const issueXht = async () => {
+    if (!apl || xhtDongNhap.length === 0) return
+    setXhtIssuing(true)
+    try {
+      const r = await apiFetch('/api/production/work-orders/from-apl', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId, importId: apl.id, toanDuAn: true,
+          teamCode: XUONG_HOAN_THIEN, unit: DEFAULT_WO_UNIT,
+          stages: xhtDongNhap,
+          plannedStart: xhtStart || undefined,
+          plannedEnd: xhtEnd || undefined,
+        }),
+      })
+      if (!r?.ok) { notify(r?.error || 'Không phát hành được lệnh hoàn thiện', 'error'); return }
+      notify(`Đã phát hành ${r.workOrder?.woCode ?? ''} — hoàn thiện ${xhtDongNhap.length} phần việc cho cả dự án`, 'success')
+      setXhtQty({}); setXhtUnit({}); setXhtStart(''); setXhtEnd('')
+      loadCaDuAn(); loadItems(); onIssued()
+    } finally {
+      setXhtIssuing(false)
     }
   }
 
@@ -278,10 +331,15 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
           body: JSON.stringify({
             projectId, importId: apl.id, item,
             teamCode: a.teamCode || undefined,
+            subcontractorName: a.teamCode === SUBCONTRACT_TEAM_CODE ? (a.subName || '').trim() : undefined,
             unit: a.unit,
             plannedQty: a.qty ? Number(a.qty) : undefined,
             stages: a.stages.filter(st => st.stageCode && stageQty(a, st) > 0)
-              .map(st => ({ stageCode: st.stageCode, categoryCode: st.categoryCode || undefined, qty: stageQty(a, st) })),
+              .map(st => ({
+                stageCode: st.stageCode, categoryCode: st.categoryCode || undefined,
+                categoryLabel: st.categoryCode === KHAC_CATEGORY ? (st.categoryLabel || '').trim() : undefined,
+                qty: stageQty(a, st),
+              })),
             plannedStart: a.plannedStart || undefined,
             plannedEnd: a.plannedEnd || undefined,
           }),
@@ -333,6 +391,7 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
     if (takenInForm(i, code)) return `${code} bị giao trùng công đoạn ở hai dòng`
     if (!code && assigns.length > 1) return 'Chọn xưởng cho dòng này'
     if (!code && issuedWos.length > 0) return 'ITEM đã giao cho xưởng khác — chọn xưởng nhận'
+    if (code === SUBCONTRACT_TEAM_CODE && !a.subName?.trim()) return 'Nhập tên thầu phụ'
     // kg suy được từ khối lượng ITEM; đơn vị khác thì không có hệ số quy đổi nào đúng
     // cho mọi cấu kiện, nên bắt buộc nhập tay.
     if (a.unit !== DEFAULT_WO_UNIT && !(Number(a.qty) > 0)) {
@@ -344,9 +403,13 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
     if (a.stages.some(st => categoriesOf(st.stageCode).length > 0 && !st.categoryCode)) {
       return 'Công đoạn có chủng loại thì phải chọn chủng loại'
     }
+    if (a.stages.some(st => st.categoryCode === KHAC_CATEGORY && !st.categoryLabel?.trim())) {
+      return 'Chọn "Khác" thì phải nhập tên chủng loại'
+    }
     if (a.stages.some(st => !(stageQty(a, st) > 0))) return 'Công đoạn phải có khối lượng lớn hơn 0'
     // Trùng = cùng công đoạn VÀ cùng chủng loại; một công đoạn nhiều chủng loại là hợp lệ.
-    const ten = a.stages.map(st => `${st.stageCode}::${st.categoryCode}`)
+    // Dòng "Khác" phân biệt nhau bằng tên tự gõ, không phải mã KHAC chung.
+    const ten = a.stages.map(st => `${st.stageCode}::${st.categoryCode === KHAC_CATEGORY ? (st.categoryLabel || '').trim() : st.categoryCode}`)
     if (new Set(ten).size !== ten.length) return 'Một công đoạn + chủng loại bị khai hai lần'
     return null
   }
@@ -414,27 +477,34 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                   <thead>
                     <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.74rem' }}>
                       <th style={{ padding: '4px 6px', fontWeight: 600 }}>Chủng loại</th>
-                      <th style={{ padding: '4px 6px', fontWeight: 600, width: 190 }}>Khối lượng giao (kg)</th>
-                      <th style={{ padding: '4px 6px', fontWeight: 600 }}>Đã giao</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 600, width: 130 }}>Khối lượng giao</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 600, width: 90 }}>Đơn vị</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 600 }}>Đã giao (các đợt)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pcChungLoai.map(c => {
-                      const cu = pcDaGiaoCua(c.code)
+                      const dot = pcDaGiaoList(c.code)
                       return (
                         <tr key={c.code} style={{ borderTop: '1px solid var(--border)' }}>
                           <td style={{ padding: '6px', fontWeight: 500 }}>{c.label}</td>
                           <td style={{ padding: '4px 6px' }}>
                             <input type="number" min={0} inputMode="numeric"
-                              value={cu ? '' : (pcQty[c.code] ?? '')}
-                              disabled={!!cu}
-                              placeholder={cu ? '—' : 'bỏ trống = không giao'}
+                              value={pcQty[c.code] ?? ''}
+                              placeholder="bỏ trống = không giao lần này"
                               onChange={e => setPcQty(q => ({ ...q, [c.code]: e.target.value }))}
-                              style={{ width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.82rem',
-                                border: '1px solid var(--border)', background: cu ? 'var(--bg-subtle, #f8fafc)' : 'var(--bg)' }} />
+                              style={{ width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid var(--border)', background: 'var(--bg)' }} />
+                          </td>
+                          <td style={{ padding: '4px 6px' }}>
+                            <select value={pcUnit[c.code] || DEFAULT_WO_UNIT} onChange={e => setPcUnit(u => ({ ...u, [c.code]: e.target.value }))}
+                              style={{ width: '100%', padding: '5px 4px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid var(--border)', background: 'var(--bg)' }}>
+                              {WO_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                            </select>
                           </td>
                           <td style={{ padding: '6px', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
-                            {cu ? `${formatNumber(Math.round(cu.qty))} kg · ${cu.woCode}` : '—'}
+                            {dot.length === 0 ? '—' : dot.map((d, i) => (
+                              <div key={i}>Lần {i + 1}: <b>{formatNumber(Math.round(d.qty))} {unitLabel(d.unit)}</b> <span style={{ opacity: .7 }}>· {d.woCode}</span></div>
+                            ))}
                           </td>
                         </tr>
                       )
@@ -451,11 +521,93 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                   </div>
                   <div style={{ flex: 1, minWidth: 180, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                     {pcDongNhap.length > 0
-                      ? <>Giao {pcDongNhap.length} chủng loại · tổng <b>{formatNumber(Math.round(pcTong))} kg</b> cho Xưởng Pha cắt</>
+                      ? <>Sẽ giao thêm <b>{pcDongNhap.length}</b> chủng loại (đợt mới) cho Xưởng Pha cắt</>
                       : 'Nhập khối lượng cho ít nhất một chủng loại'}
                   </div>
                   <Button onClick={issuePhaCat} disabled={pcIssuing || pcDongNhap.length === 0}>
                     {pcIssuing ? 'Đang phát hành…' : 'Phát hành lệnh pha cắt'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Hoàn thiện: giao MỘT LẦN cho cả dự án (giống Pha cắt) ──
+            Sơn (lớp 1/2/3), Bảo ôn, Đóng kiện, Thử áp… — mỗi (công đoạn × chủng loại) một
+            khối lượng riêng, PM nhập cái nào thì giao cái đó. */}
+        {apl && item === null && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <button type="button" onClick={() => setXhtMo(v => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+                background: 'var(--bg-subtle, #f8fafc)', border: 0, cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 600, flex: 1 }}>
+                Hoàn thiện — giao cho cả dự án
+                <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
+                  {' '}— không chọn hạng mục, nhập khối lượng từng công đoạn · chủng loại
+                </span>
+              </span>
+              {xhtDaGiao.length > 0 && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>đã giao {xhtDaGiao.length} phần việc</span>
+              )}
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{xhtMo ? '▲' : '▼'}</span>
+            </button>
+
+            {xhtMo && (
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.74rem' }}>
+                      <th style={{ padding: '4px 6px', fontWeight: 600 }}>Công đoạn · Chủng loại</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 600, width: 130 }}>Khối lượng giao</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 600, width: 90 }}>Đơn vị</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 600 }}>Đã giao (các đợt)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {xhtRows.map(r => {
+                      const dot = xhtDaGiaoList(r.key)
+                      return (
+                        <tr key={r.key} style={{ borderTop: '1px solid var(--border)' }}>
+                          <td style={{ padding: '6px', fontWeight: 500 }}>{r.label}</td>
+                          <td style={{ padding: '4px 6px' }}>
+                            <input type="number" min={0} inputMode="numeric"
+                              value={xhtQty[r.key] ?? ''}
+                              placeholder="bỏ trống = không giao lần này"
+                              onChange={e => setXhtQty(q => ({ ...q, [r.key]: e.target.value }))}
+                              style={{ width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid var(--border)', background: 'var(--bg)' }} />
+                          </td>
+                          <td style={{ padding: '4px 6px' }}>
+                            <select value={xhtUnit[r.key] || DEFAULT_WO_UNIT} onChange={e => setXhtUnit(u => ({ ...u, [r.key]: e.target.value }))}
+                              style={{ width: '100%', padding: '5px 4px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid var(--border)', background: 'var(--bg)' }}>
+                              {WO_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ padding: '6px', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
+                            {dot.length === 0 ? '—' : dot.map((d, i) => (
+                              <div key={i}>Lần {i + 1}: <b>{formatNumber(Math.round(d.qty))} {unitLabel(d.unit)}</b> <span style={{ opacity: .7 }}>· {d.woCode}</span></div>
+                            ))}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ width: 170 }}>
+                    <InputField label="Bắt đầu" type="date" value={xhtStart} onChange={e => setXhtStart(e.target.value)} />
+                  </div>
+                  <div style={{ width: 170 }}>
+                    <InputField label="Kết thúc" type="date" value={xhtEnd} onChange={e => setXhtEnd(e.target.value)} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 180, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    {xhtDongNhap.length > 0
+                      ? <>Sẽ giao thêm <b>{xhtDongNhap.length}</b> phần việc (đợt mới) cho Xưởng Hoàn thiện</>
+                      : 'Nhập khối lượng cho ít nhất một phần việc'}
+                  </div>
+                  <Button onClick={issueXht} disabled={xhtIssuing || xhtDongNhap.length === 0}>
+                    {xhtIssuing ? 'Đang phát hành…' : 'Phát hành lệnh hoàn thiện'}
                   </Button>
                 </div>
               </div>
@@ -589,7 +741,8 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                     }}
                     options={[
                       { value: '', label: issuedWos.length > 0 || assigns.length > 1 ? '— Chọn xưởng —' : '— Chưa giao —' },
-                      ...PRODUCTION_WORKSHOPS.map(w => ({
+                      // XPC/XHT chỉ giao CẢ DỰ ÁN (khối riêng ở trên) — không cho chọn ở giao theo hạng mục.
+                      ...PRODUCTION_WORKSHOPS.filter(w => !WHOLE_PROJECT_STAGES[w.code]).map(w => ({
                         value: w.code,
                         // Xưởng đã nhận việc vẫn giao thêm được, miễn khác công đoạn —
                         // nên chỉ ghi chú số lệnh đã có, không chặn.
@@ -597,6 +750,8 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                           ? `${w.name} (đã có ${issuedTeams.filter(t => t === w.code).length} lệnh)`
                           : w.name,
                       })),
+                      // Giao ra ngoài cho THẦU PHỤ — chọn xong nhập tên bên dưới.
+                      { value: SUBCONTRACT_TEAM_CODE, label: 'Thầu phụ (nhập tên)' },
                     ]} />
                   <div>
                     {i === 0 && <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--text-secondary)' }}>Khối lượng giao</label>}
@@ -641,6 +796,15 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                 </div>
                 {bad && <div style={{ fontSize: '0.72rem', color: '#b45309', marginTop: 2 }}>{bad}</div>}
 
+                {/* Thầu phụ: nhập tên đơn vị nhận việc bên ngoài. Công đoạn giữ nguyên như xưởng. */}
+                {a.teamCode === SUBCONTRACT_TEAM_CODE && (
+                  <div style={{ marginTop: 4 }}>
+                    <input className="input-field text-sm" type="text" placeholder="Tên thầu phụ (vd: Cty TNHH Cơ khí ABC)"
+                      value={a.subName ?? ''} onChange={e => setAssign(i, { subName: e.target.value })}
+                      style={{ maxWidth: 360 }} />
+                  </div>
+                )}
+
                 {/* Phân giao công đoạn bên trong lệnh của xưởng này.
                     Xưởng Hoàn thiện nhận 71.504 kg → tách "Sơn lớp 1" 10.240, "Sơn lớp 2" 46.123.
                     Không chia thì bỏ trống, lệnh chạy nguyên khối như trước. */}
@@ -659,13 +823,20 @@ export default function WoFromAplModal({ open, projects, onClose, onIssued }: {
                         disabled={categoriesOf(st.stageCode).length === 0}
                         title={!st.stageCode ? 'Chọn công đoạn trước'
                           : categoriesOf(st.stageCode).length === 0 ? 'Công đoạn này không chia chủng loại' : 'Chủng loại'}
-                        onChange={e => setStage(i, j, { categoryCode: e.target.value })}>
+                        onChange={e => setStage(i, j, { categoryCode: e.target.value, categoryLabel: '' })}>
                         <option value="">
                           {!st.stageCode ? '— Chọn công đoạn trước —'
                             : categoriesOf(st.stageCode).length === 0 ? '— Không có chủng loại —' : '— Chủng loại —'}
                         </option>
                         {categoriesOf(st.stageCode).map(c => <option key={c.code} value={c.code}>{c.code} - {c.label}</option>)}
+                        {/* "Khác" — chủng loại ngoài danh mục, tự gõ tên; giá ăn đơn giá "Khác" của hạng mục. */}
+                        {categoriesOf(st.stageCode).length > 0 && <option value={KHAC_CATEGORY}>Khác (tự nhập chủng loại)</option>}
                       </select>
+                      {st.categoryCode === KHAC_CATEGORY && (
+                        <input className="input-field text-sm" type="text" placeholder="Tên chủng loại Khác (vd: Hàn thép đen)"
+                          title="Chủng loại ngoài danh mục — tính theo đơn giá Khác của hạng mục"
+                          value={st.categoryLabel ?? ''} onChange={e => setStage(i, j, { categoryLabel: e.target.value })} />
+                      )}
                       <input className="input-field text-sm" type="number" min="0" step="any" placeholder="Khối lượng"
                         title="Mặc định bằng khối lượng của lệnh; sửa nếu công đoạn này chỉ làm một phần"
                         value={stageQtyText(a, st)} onChange={e => setStage(i, j, { qty: e.target.value })} />

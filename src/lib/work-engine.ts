@@ -1196,6 +1196,22 @@ export async function getTaskDetail(id: string) {
     orderBy: { createdAt: 'desc' },
   })
 
+  // (1d) File trả lại có thể NHIỀU tệp/1 tài liệu — file thật lưu ở entityId `${taskId}_${docId}`,
+  // model chỉ giữ 1 fileAttachmentId làm dấu "đã nộp". Lấy ĐỦ mọi tệp để người giao xem hết.
+  const returnDocEntityIds = task.docs.filter((d) => d.kind === 'MUST_RETURN').map((d) => `${id}_${d.id}`)
+  const returnFilesAll = returnDocEntityIds.length
+    ? await prisma.fileAttachment.findMany({
+        where: { entityType: 'TaskDoc', entityId: { in: returnDocEntityIds } },
+        select: { id: true, entityId: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
+    : []
+  const returnFilesByDoc = new Map<string, typeof returnFilesAll>()
+  for (const f of returnFilesAll) {
+    const arr = returnFilesByDoc.get(f.entityId) || []
+    arr.push(f); returnFilesByDoc.set(f.entityId, arr)
+  }
+
   // (2) Phân giải tên người cho từng dòng lịch sử (ai tạo / giao cho ai / ai đã đọc)
   const userIds = new Set<string>()
   if (task.createdBy) userIds.add(task.createdBy)
@@ -1229,6 +1245,8 @@ export async function getTaskDetail(id: string) {
   const docs = task.docs.map((d) => ({
     ...d,
     file: d.fileAttachmentId ? fileById.get(d.fileAttachmentId) || null : null,
+    // Mọi tệp trả lại của tài liệu này (MUST_RETURN có thể nhiều tệp).
+    files: d.kind === 'MUST_RETURN' ? (returnFilesByDoc.get(`${id}_${d.id}`) || []) : [],
     acks: d.acks.map((ak) => ({ userId: ak.userId, userName: nameOf(ak.userId), createdAt: ak.createdAt })),
   }))
 

@@ -301,7 +301,7 @@ export const MENU_ITEMS = [
   { key: 'piece-rate', label: 'Hợp đồng khoán', labelEn: 'Piece Rate', icon: 'Hammer', href: '/dashboard/hr/piece-rate', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a'], group: 'hr' },
   { key: 'piece-rate-output', label: 'Khối lượng khoán', labelEn: 'Output', icon: 'BarChart', href: '/dashboard/hr/piece-rate-output', roles: ['R01', 'R02', 'R02a', 'R06', 'R06a', 'R06b'], group: 'hr' },
   // Bảng đơn giá khoán theo dòng APL — nguồn số liệu cho bước P5.5
-  { key: 'apl-pricing', label: 'Đơn giá khoán (APL)', labelEn: 'APL Unit Prices', icon: 'Calculator', href: '/dashboard/hr/apl-pricing', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a'], group: 'hr' },
+  { key: 'apl-pricing', label: 'Đơn giá khoán (APL)', labelEn: 'APL Unit Prices', icon: 'Calculator', href: '/dashboard/hr/apl-pricing', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R06', 'R06a', 'R06b', 'R10'], group: 'hr' },
 
   // ── Finance ──
   { key: 'finance', label: 'Tài chính', labelEn: 'Finance', icon: 'Receipt', href: '/dashboard/finance', roles: ['R01', 'R02', 'R02a', 'R03', 'R03a', 'R07', 'R07a', 'R08', 'R08a'], group: 'finance' },

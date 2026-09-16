@@ -6,6 +6,7 @@ import { apiFetch, useAuthStore } from '@/hooks/useAuth'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { WORKSHOP_MATERIAL_ROLES, PM_MATERIAL_ROLES, isSubcontractWo, SUBCONTRACT_TEAM_CODE } from '@/lib/material-request-constants'
 import { PRODUCTION_WORKSHOPS } from '@/lib/org-map'
+import { unitLabel } from '@/lib/wo-units'
 import { SearchBar } from '@/components/SearchPagination'
 import {
   PageHeader, Button, FilterBar, StatusBadge,
@@ -31,6 +32,7 @@ interface WorkOrder {
   teamCode: string; status: string; pieceMark: string | null;
   plannedWeight: number | null; completedQty: number | null;
   woType?: string | null;
+  subcontractorName?: string | null;
   unit?: string;
   /** Công đoạn bên trong lệnh — hiện gọn dưới mã lệnh */
   stages?: { id: string; name: string; qty: number; unit: string }[];
@@ -340,8 +342,15 @@ export default function ProductionPage() {
                   <td>{wo.pieceMark ? <span className="font-mono text-xs">{wo.pieceMark}</span> : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                   <td className="text-xs max-w-[200px] truncate">{wo.description}</td>
                   <td>
-                    <span className="text-xs font-mono">{wo.department?.code || wo.teamCode}</span>
-                    {wo.department && <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>{wo.department.name}</span>}
+                    {isSubcontract(wo)
+                      ? <>
+                          <span className="text-xs font-mono" style={{ color: '#7c3aed' }}>Thầu phụ</span>
+                          {wo.subcontractorName && <span className="text-[10px] block" style={{ color: 'var(--text-secondary)' }}>{wo.subcontractorName}</span>}
+                        </>
+                      : <>
+                          <span className="text-xs font-mono">{wo.department?.code || wo.teamCode}</span>
+                          {wo.department && <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>{wo.department.name}</span>}
+                        </>}
                   </td>
                   <td className="text-xs font-mono">{wo.project?.projectCode || '—'}</td>
                   <td className="text-xs max-w-[170px] truncate" title={wo.materials || ''}>
@@ -352,7 +361,7 @@ export default function ProductionPage() {
                   <td>
                     {wo.plannedWeight ? (
                       <div className="text-xs">
-                        <span className="font-mono">{wo.completedQty || 0}/{wo.plannedWeight} kg</span>
+                        <span className="font-mono">{wo.completedQty || 0}/{wo.plannedWeight} {unitLabel(wo.unit)}</span>
                         <div className="w-16 h-1.5 rounded-full mt-0.5" style={{ background: 'var(--border-light)' }}>
                           <div className="h-full rounded-full" style={{ width: `${weightPct}%`, background: SEMANTIC_COLORS.success.solid }} />
                         </div>
@@ -362,13 +371,13 @@ export default function ProductionPage() {
                             title="Khối lượng đã đủ chữ ký QAQC + PM">
                             {/* acceptedQty ở cấp lệnh là công đoạn CHẬM NHẤT, nên không bao giờ
                                 đọc ra lớn hơn khối lượng của lệnh. */}
-                            đã nghiệm thu {formatNumber(Math.round(wo.acceptance.acceptedQty))} kg
+                            đã nghiệm thu {formatNumber(Math.round(wo.acceptance.acceptedQty))} {unitLabel(wo.unit)}
                           </span>
                         )}
                         {!!wo.acceptance && wo.acceptance.availableQty > 0 && (
                           <span className="block font-mono text-[10px]" style={{ color: SEMANTIC_COLORS.warning.solid }}
                             title="Đã báo nhưng chưa mời nghiệm thu">
-                            chờ mời {formatNumber(Math.round(wo.acceptance.availableQty))} kg
+                            chờ mời {formatNumber(Math.round(wo.acceptance.availableQty))} {unitLabel(wo.unit)}
                           </span>
                         )}
                       </div>
@@ -481,7 +490,7 @@ function EditWOModal({ wo, teams, onClose, onSaved }: { wo: WorkOrder; teams: Te
           <SelectField label="Xưởng *" value={form.teamCode}
             onChange={e => update('teamCode', e.target.value)}
             options={[{ value: '', label: 'Chọn xưởng...' }, ...PRODUCTION_WORKSHOPS.map(w => ({ value: w.code, label: `${w.code} — ${w.name}` })), ...(teams.some(t => t.code === form.teamCode) || PRODUCTION_WORKSHOPS.some(w => w.code === form.teamCode) ? [] : [{ value: form.teamCode, label: form.teamCode }])]} />
-          <InputField label="Trọng lượng (kg)" type="number" value={form.plannedWeight} onChange={e => update('plannedWeight', e.target.value)} />
+          <InputField label={`Khối lượng (${unitLabel(wo.unit)})`} type="number" value={form.plannedWeight} onChange={e => update('plannedWeight', e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <InputField label="Ngày BĐ" type="date" value={form.plannedStart} onChange={e => update('plannedStart', e.target.value)} />
