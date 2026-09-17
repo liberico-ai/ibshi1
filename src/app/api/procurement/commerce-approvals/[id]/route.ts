@@ -69,6 +69,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         decidedAt: a.decidedAt,
         reason: a.reason,
         daBaoVeTM: !!a.notifiedAt,
+        soLanTrinh: a.soLanTrinh,
+        lyDoTraLaiTruoc: a.lyDoTraLaiTruoc,
       },
       lines: dong,
       // Số dòng vượt dự toán — để giao diện nhấn cảnh báo ngay đầu trang.

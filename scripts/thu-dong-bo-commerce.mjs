@@ -160,6 +160,46 @@ async function main() {
       })
       kiem('trả lại mà không ghi lý do thì bị chặn', thieuLyDo.status === 400, `HTTP ${thieuLyDo.status}`)
 
+      // ── Vòng trả lại: BGĐ trả lại → TM chọn NCC khác → trình lại → BGĐ duyệt ──
+      // Vòng này phải khép được. Trước đây ERP chặn cả đợt đã trả lại, nên Thương mại
+      // sửa xong không trình lại được — việc đứng im giữa đường.
+      const traLai = await fetch(`${BASE}/api/procurement/commerce-approvals/${dot.id}/decide`, {
+        method: 'POST', headers: H(bgd),
+        body: JSON.stringify({ decision: 'REJECT', reason: 'Giá NCC A cao hơn dự toán, tìm nhà khác' }),
+      })
+      kiem('BGĐ trả lại được', traLai.ok, (await traLai.json()).message)
+
+      // Thương mại đổi NCC dòng 1 rồi trình lại CHÍNH đợt đó, không đẻ đợt mới.
+      const goiLai = JSON.parse(than)
+      goiLai.data.lines[0].vendorName = 'NCC B'
+      goiLai.data.lines[0].unitPrice = 16800
+      goiLai.data.lines[0].totalPrice = 84_000_000
+      goiLai.data.totalValue = 119_000_000
+      const thanLai = JSON.stringify(goiLai)
+      const rLai = await fetch(`${BASE}/api/integration/commerce/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Commerce-Signature': createHmac('sha256', BIMAT).update(thanLai).digest('hex'),
+        },
+        body: thanLai,
+      })
+      const jLai = await rLai.json()
+      kiem('đợt đã trả lại thì TM trình lại được', rLai.ok, jLai.message || `HTTP ${rLai.status}`)
+
+      const ct2 = await (await fetch(`${BASE}/api/procurement/commerce-approvals/${dot.id}`, { headers: H(bgd) })).json()
+      kiem('đợt quay về hàng chờ, xoá dấu quyết định cũ',
+        ct2.approval?.status === 'PENDING' && !ct2.approval?.decidedBy && !ct2.approval?.reason,
+        `${ct2.approval?.status} · người quyết ${ct2.approval?.decidedBy || '—'}`)
+      kiem('đếm đúng lần trình thứ hai', ct2.approval?.soLanTrinh === 2, `lần ${ct2.approval?.soLanTrinh}`)
+      kiem('giữ lý do trả lại lần trước cho BGĐ đọc',
+        (ct2.approval?.lyDoTraLaiTruoc || '').includes('tìm nhà khác'), ct2.approval?.lyDoTraLaiTruoc || '—')
+      kiem('nhận đúng NCC mới ở dòng 1',
+        ct2.lines?.find(l => l.lineNo === 1)?.vendorName === 'NCC B',
+        ct2.lines?.find(l => l.lineNo === 1)?.vendorName || '—')
+      const soDong = await prisma.commerceApprovalLine.count({ where: { approvalId: dot.id } })
+      kiem('thay dòng cũ chứ không chồng thêm', soDong === 2, `${soDong} dòng`)
+
       const duyet = await fetch(`${BASE}/api/procurement/commerce-approvals/${dot.id}/decide`, {
         method: 'POST', headers: H(bgd), body: JSON.stringify({ decision: 'APPROVE' }),
       })
@@ -171,8 +211,11 @@ async function main() {
       })
       kiem('duyệt rồi thì không quyết lại được', lan2.status === 409, `HTTP ${lan2.status}`)
 
+      // Đợt này có hai quyết định (trả lại rồi duyệt) nên phải lấy bản tin MỚI NHẤT,
+      // không thì bắt nhầm bản tin trả lại và tưởng là hỏng.
       const ban = await prisma.syncOutbox.findFirst({
         where: { event: 'approval.decided', entityId: dot.id },
+        orderBy: { createdAt: 'desc' },
         select: { payload: true, status: true },
       })
       kiem('quyết định đã xếp hàng đẩy về TM', !!ban && ban.payload?.decision === 'APPROVED',

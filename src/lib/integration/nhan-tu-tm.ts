@@ -98,11 +98,23 @@ export async function nhanTrinhDuyet(goi: GoiTrinhDuyet): Promise<KetQuaNhan> {
   if (!duAn) canhBao.push(`Không tìm thấy dự án mã "${projectCode}" trong ERP — đợt duyệt chưa gắn dự án`)
 
   const cu = await prisma.commerceApproval.findUnique({
-    where: { remoteId }, select: { id: true, status: true },
+    where: { remoteId },
+    select: { id: true, status: true, reason: true, soLanTrinh: true },
   })
-  if (cu && cu.status !== 'PENDING') {
-    return { ok: false, ma: 409, message: `Đợt ${bidCode} đã ${cu.status === 'APPROVED' ? 'được duyệt' : 'bị từ chối'} — trình lại thì tạo đợt mới`, id: cu.id }
+
+  // ĐÃ DUYỆT thì chặn: quyết định đã ký là dữ liệu gốc, ghi đè lên là mất dấu vết.
+  // Muốn đổi thì phát hành đợt mới.
+  if (cu && cu.status === 'APPROVED') {
+    return {
+      ok: false, ma: 409, id: cu.id,
+      message: `Đợt ${bidCode} đã được duyệt — muốn đổi thì trình đợt mới`,
+    }
   }
+
+  // ĐÃ TRẢ LẠI thì CHO trình lại — đó chính là việc phải xảy ra sau khi BGĐ trả lại.
+  // Giữ lý do trả lại lần trước để lần duyệt này BGĐ biết đã yêu cầu sửa gì, và đếm số
+  // lần trình: một đợt phải trình tới lần thứ ba là dấu hiệu hai bên chưa hiểu nhau.
+  const trinhLai = cu?.status === 'REJECTED'
 
   const dong = (goi.lines ?? []).map((l, i) => ({
     lineNo: l.lineNo ?? i + 1,
@@ -124,6 +136,8 @@ export async function nhanTrinhDuyet(goi: GoiTrinhDuyet): Promise<KetQuaNhan> {
 
   const chung = {
     bidCode,
+    soLanTrinh: trinhLai ? (cu!.soLanTrinh ?? 1) + 1 : (cu?.soLanTrinh ?? 1),
+    lyDoTraLaiTruoc: trinhLai ? cu!.reason : undefined,
     projectCode,
     projectId: duAn?.id ?? null,
     subject: chu(goi.subject) || bidCode,
@@ -141,7 +155,13 @@ export async function nhanTrinhDuyet(goi: GoiTrinhDuyet): Promise<KetQuaNhan> {
       await tx.commerceApprovalLine.deleteMany({ where: { approvalId: cu.id } })
       return tx.commerceApproval.update({
         where: { id: cu.id },
-        data: { ...chung, status: 'PENDING', lines: { create: dong } },
+        data: {
+          ...chung,
+          status: 'PENDING',
+          // Xoá dấu quyết định cũ: đợt quay về hàng chờ, chưa ai quyết lần này.
+          decidedBy: null, decidedAt: null, reason: null, notifiedAt: null,
+          lines: { create: dong },
+        },
         select: { id: true },
       })
     }
@@ -154,7 +174,11 @@ export async function nhanTrinhDuyet(goi: GoiTrinhDuyet): Promise<KetQuaNhan> {
   return {
     ok: true,
     id: ban.id,
-    message: cu ? `Đã cập nhật đợt ${bidCode} (${dong.length} dòng)` : `Đã nhận đợt ${bidCode} (${dong.length} dòng)`,
+    message: trinhLai
+      ? `Đã nhận đợt ${bidCode} trình lại lần ${chung.soLanTrinh} (${dong.length} dòng)`
+      : cu
+        ? `Đã cập nhật đợt ${bidCode} (${dong.length} dòng)`
+        : `Đã nhận đợt ${bidCode} (${dong.length} dòng)`,
     canhBao: canhBao.length ? canhBao : undefined,
   }
 }

@@ -24,6 +24,10 @@ interface Dot {
   submittedBy: string | null; submittedAt: string
   status: string; decidedBy: string | null; decidedAt: string | null; reason: string | null
   daBaoVeTM: boolean
+  /** Lần trình thứ mấy — BGĐ trả lại, TM sửa rồi trình lại thì tăng lên */
+  soLanTrinh: number
+  /** Lý do BGĐ trả lại ở lần trước, giữ để lần này biết đã yêu cầu sửa gì */
+  lyDoTraLaiTruoc: string | null
 }
 interface Dong {
   id: string; lineNo: number; itemCode: string; itemName: string
@@ -174,6 +178,12 @@ export default function DuyetBaoGiaPage() {
                     style={{ color: MAU_TRANG_THAI[d.status], border: `1px solid ${MAU_TRANG_THAI[d.status]}` }}>
                     {NHAN_TRANG_THAI[d.status] || d.status}
                   </span>
+                  {d.soLanTrinh > 1 && (
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                      style={{ color: SEMANTIC_COLORS.warning.solid, border: `1px solid ${SEMANTIC_COLORS.warning.solid}` }}>
+                      trình lại lần {d.soLanTrinh}
+                    </span>
+                  )}
                   {d.chuaGanDuAn && (
                     <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
                       style={{ color: SEMANTIC_COLORS.danger.solid, border: `1px solid ${SEMANTIC_COLORS.danger.solid}` }}>
@@ -203,6 +213,16 @@ export default function DuyetBaoGiaPage() {
 
                 {!dangTaiCT && chiTiet && (
                   <div className="p-4 space-y-4">
+                    {/* Đợt từng bị trả lại: nhắc lại yêu cầu lần trước, để lần này BGĐ
+                        kiểm đúng chỗ mình đã bắt sửa chứ không đọc lại từ đầu. */}
+                    {d.soLanTrinh > 1 && d.lyDoTraLaiTruoc && (
+                      <div className="rounded-lg px-3 py-2 text-sm"
+                        style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}>
+                        <b>Lần trước bạn đã trả lại đợt này</b> — lý do: {d.lyDoTraLaiTruoc}
+                        <div className="text-[11px] mt-0.5">Đây là lần trình thứ {d.soLanTrinh}. Kiểm xem Thương mại đã sửa đúng chưa.</div>
+                      </div>
+                    )}
+
                     {chiTiet.soDongVuotDuToan > 0 && (
                       <div className="rounded-lg px-3 py-2 text-sm"
                         style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>

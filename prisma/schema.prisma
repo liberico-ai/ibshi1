@@ -3434,6 +3434,12 @@ model CommerceApproval {
   /// Đã báo quyết định về Thương mại chưa.
   notifiedAt  DateTime? @map("notified_at")
 
+  /// Đợt này là lần trình thứ mấy. BGĐ trả lại, Thương mại sửa rồi trình lại thì tăng lên.
+  soLanTrinh  Int      @default(1) @map("so_lan_trinh")
+  /// Lý do BGĐ trả lại ở LẦN TRƯỚC — giữ lại để lần duyệt sau biết đã yêu cầu sửa gì.
+  /// Khác cột reason: reason là lý do của quyết định ĐANG hiệu lực.
+  lyDoTraLaiTruoc String? @map("ly_do_tra_lai_truoc")
+
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

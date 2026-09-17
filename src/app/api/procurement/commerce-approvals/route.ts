@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
         selectionMode: true, currency: true, totalValue: true, fileUrl: true,
         submittedBy: true, submittedAt: true,
         status: true, decidedBy: true, decidedAt: true, reason: true, notifiedAt: true,
+        soLanTrinh: true, lyDoTraLaiTruoc: true,
         project: { select: { projectCode: true, projectName: true } },
         _count: { select: { lines: true } },
       },
@@ -60,6 +61,8 @@ export async function GET(req: NextRequest) {
         decidedBy: a.decidedBy,
         decidedAt: a.decidedAt,
         reason: a.reason,
+        soLanTrinh: a.soLanTrinh,
+        lyDoTraLaiTruoc: a.lyDoTraLaiTruoc,
         /** Đã báo quyết định về Thương mại chưa — chưa thì đường đồng bộ đang tồn việc. */
         daBaoVeTM: !!a.notifiedAt,
       })),
