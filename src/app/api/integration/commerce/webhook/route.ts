@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server'
 import { successResponse, errorResponse } from '@/lib/auth'
 import { chuKyDung, nhanTrinhDuyet, type GoiTrinhDuyet } from '@/lib/integration/nhan-tu-tm'
 import {
-  nhanNCC, nhanPO, nhanHangVe,
-  type GoiNCC, type GoiPO, type GoiHangVe,
+  nhanNCC, nhanPO, nhanHangVe, nhanMoiQC,
+  type GoiNCC, type GoiPO, type GoiHangVe, type GoiMoiQC,
 } from '@/lib/integration/nhan-mua-hang'
 import { commerceWebhookSecret } from '@/lib/integration/config'
 
@@ -71,6 +71,14 @@ export async function POST(req: NextRequest) {
         const kq = await nhanHangVe(body.data as GoiHangVe)
         if (!kq.ok) return errorResponse(kq.message, kq.ma ?? 404)
         return successResponse({ message: kq.message, poId: kq.id, warnings: kq.canhBao ?? [] })
+      }
+
+      // Hàng đã về kho, Thương mại mời QC → ERP lập biên bản chờ QAQC nghiệm thu.
+      // Mời là việc của Thương mại (họ biết hàng tới), nghiệm thu là việc của QAQC bên ERP.
+      case 'qc.requested': {
+        const kq = await nhanMoiQC(body.data as GoiMoiQC)
+        if (!kq.ok) return errorResponse(kq.message, kq.ma ?? 400)
+        return successResponse({ message: kq.message, inspectionId: kq.id })
       }
 
       default:

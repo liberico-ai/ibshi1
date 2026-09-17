@@ -6,6 +6,8 @@ import { authenticateRequest, successResponse, errorResponse, unauthorizedRespon
 import { can } from '@/lib/permissions/can'
 import { validateParams } from '@/lib/api-helpers'
 import { idParamSchema } from '@/lib/schemas'
+import { xepHang } from '@/lib/integration/outbox'
+import { daXepHangMoi } from '@/lib/integration/kich-hoat'
 
 // GET /api/qc/:id — Inspection detail + checklist items
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -75,6 +77,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
       include: { checklistItems: true },
     })
+
+    // Biên bản do Thương mại mời → báo kết quả ngược về cho họ. Thiếu chỗ này thì bên đó
+    // treo mãi ở mốc "chờ QC", và tiền hàng không có căn cứ để thanh toán.
+    const moi = (inspection.resultData as { moiTuTM?: { remoteId?: string; poCode?: string } } | null)?.moiTuTM
+    if (inspection.type === 'material_incoming' && moi?.remoteId) {
+      try {
+        await xepHang({
+          event: 'qc.decided',
+          entity: 'inspection',
+          entityId: inspection.id,
+          payload: {
+            remoteId: moi.remoteId,
+            poCode: moi.poCode ?? null,
+            inspectionCode: inspection.inspectionCode,
+            result: status,
+            decidedBy: payload.userId,
+            decidedAt: new Date().toISOString(),
+            remarks: remarks || null,
+          },
+        })
+        daXepHangMoi()
+      } catch (e) {
+        console.error('[QC] báo kết quả về Thương mại hỏng:', (e as Error).message)
+      }
+    }
 
     // Nghiệm thu vật tư KHÔNG ĐẠT → trả về TM (R07/R07a) để tìm nhà cung cấp khác.
     if (status === 'FAILED' && inspection.type === 'material_incoming') {

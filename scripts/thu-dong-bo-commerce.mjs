@@ -54,6 +54,12 @@ async function main() {
   const donDep = async () => {
     await prisma.commerceApproval.deleteMany({ where: { remoteId: REMOTE_ID } })
     await prisma.syncOutbox.deleteMany({ where: { idemKey: { contains: REMOTE_ID } } })
+    const lien = await prisma.integrationLink.findMany({ where: { entity: 'qc-request', remoteId: { contains: REMOTE_ID } } })
+    for (const l of lien) {
+      await prisma.inspectionItem.deleteMany({ where: { inspectionId: l.localId } })
+      await prisma.inspection.deleteMany({ where: { id: l.localId } })
+    }
+    await prisma.integrationLink.deleteMany({ where: { entity: 'qc-request', remoteId: { contains: REMOTE_ID } } })
   }
 
   try {
@@ -288,18 +294,99 @@ async function main() {
     kiem('ghi số đã nhận lên dòng PO', Math.round(Number(d1?.receivedQty)) === 3000, `${Number(d1?.receivedQty)} kg`)
 
     const soPhieuKhoSau = await prisma.stockMovement.count()
-    kiem('KHÔNG tự nhập kho (chờ QC nghiệm thu)', soPhieuKhoSau === soPhieuKhoTruoc,
+    kiem('có ghi phiếu hàng về để Kho nhìn thấy lô hàng', soPhieuKhoSau > soPhieuKhoTruoc,
       `${soPhieuKhoTruoc} → ${soPhieuKhoSau} phiếu xuất nhập`)
+
+    const phieu = await prisma.stockMovement.findFirst({
+      where: { referenceNo: MA_PO, reason: 'po_receipt' },
+      select: { type: true, quantity: true, materialId: true },
+    })
+    kiem('phiếu ghi đúng loại HÀNG VỀ, đúng số lượng',
+      phieu?.type === 'RECEIPT' && Math.round(Number(phieu?.quantity)) === 3000,
+      `${phieu?.type} · ${Number(phieu?.quantity)}`)
+
+    // Đây mới là điều phải giữ: hàng về KHÔNG được cộng tồn. Tồn chỉ tăng khi Kho nhập,
+    // mà Kho chỉ nhập được sau khi QAQC nghiệm thu đạt.
+    const ton = phieu?.materialId
+      ? Number((await prisma.material.findUnique({ where: { id: phieu.materialId }, select: { currentStock: true } }))?.currentStock)
+      : -1
+    kiem('hàng về KHÔNG cộng tồn kho (chờ QC nghiệm thu)', ton === 0, `tồn ${ton}`)
 
     const poLa = await goiVe('grn.received', {
       remoteId: 'g-khong-co', grnCode: 'GRN-LA', poCode: 'PO-KHONG-TON-TAI', lines: [],
     })
     kiem('hàng về của PO lạ thì báo lỗi rõ', poLa.status === 404, `HTTP ${poLa.status}`)
 
+    // ── 5. Mời QC: Thương mại mời, QAQC bên ERP nghiệm thu ──
+    console.log('\n5. Mời QC — Thương mại mời, QAQC ERP nghiệm thu')
+    const qcUser = await prisma.user.findFirst({ where: { roleCode: { in: ['R09', 'R09a'] }, isActive: true }, select: SEL })
+    if (!qcUser) {
+      kiem('có tài khoản QAQC để nghiệm thu', false, 'dev chưa có user R09/R09a')
+    } else {
+      const laQC = `${REMOTE_ID}-lo1`
+      const rMoi = await goiVe('qc.requested', {
+        remoteId: laQC, poCode: MA_PO,
+        requestedBy: 'Lê Thị Khánh', note: 'Hàng về kho ngày hôm nay, mời QAQC nghiệm thu',
+        lines: [{ itemCode: 'VT-001', quantity: 3000, uom: 'kg' }],
+      })
+      const jMoi = await rMoi.json()
+      kiem('nhận lời mời QC, lập biên bản', rMoi.ok, jMoi.message || `HTTP ${rMoi.status}`)
+
+      const bb = await prisma.inspection.findUnique({
+        where: { id: jMoi.inspectionId },
+        select: { inspectionCode: true, type: true, stepCode: true, status: true, projectId: true, resultData: true, checklistItems: true },
+      })
+      kiem('biên bản đúng loại nghiệm thu vật tư, đang chờ',
+        bb?.type === 'material_incoming' && bb?.status === 'PENDING' && bb?.stepCode === 'P3.5',
+        `${bb?.inspectionCode} · ${bb?.type} · ${bb?.status}`)
+      kiem('biên bản trỏ đúng PO để Kho biết lô nào được nhập',
+        (bb?.resultData?.poIds || []).length === 1, `${(bb?.resultData?.poIds || []).length} PO`)
+      kiem('có sẵn hạng mục cần kiểm cho QAQC', (bb?.checklistItems || []).length >= 4,
+        `${(bb?.checklistItems || []).length} hạng mục`)
+
+      const rMoiLai = await goiVe(`qc.requested`, { remoteId: laQC, poCode: MA_PO })
+      const jLai = await rMoiLai.json()
+      kiem('mời lại cùng lô không đẻ thêm biên bản', jLai.inspectionId === jMoi.inspectionId, jLai.message)
+
+      const rLa = await goiVe('qc.requested', { remoteId: `${REMOTE_ID}-la`, poCode: 'PO-KHONG-TON-TAI' })
+      kiem('mời QC cho PO lạ thì báo lỗi rõ', rLa.status === 404, `HTTP ${rLa.status}`)
+
+      // QAQC nghiệm thu ĐẠT.
+      const rQuyet = await fetch(`${BASE}/api/qc/${jMoi.inspectionId}`, {
+        method: 'PUT', headers: H(qcUser),
+        body: JSON.stringify({ status: 'PASSED', remarks: 'Đủ số lượng, có Mill Cert' }),
+      })
+      kiem('QAQC nghiệm thu được', rQuyet.ok, (await rQuyet.json()).message || `HTTP ${rQuyet.status}`)
+
+      const banQC = await prisma.syncOutbox.findFirst({
+        where: { event: 'qc.decided', entityId: jMoi.inspectionId },
+        select: { payload: true, status: true },
+      })
+      kiem('kết quả nghiệm thu xếp hàng báo về Thương mại',
+        banQC?.payload?.result === 'PASSED' && banQC?.payload?.remoteId === laQC,
+        banQC ? `${banQC.payload?.inspectionCode} · ${banQC.payload?.result}` : 'không thấy bản tin')
+
+      // Kho chỉ được nhập khi đã nghiệm thu đạt.
+      const rKho = await fetch(`${BASE}/api/warehouse/grn-stockin`, { headers: H(bgd) })
+      const jKho = await rKho.json()
+      const thay = JSON.stringify(jKho).includes(MA_PO)
+      kiem('nghiệm thu đạt rồi thì PO hiện ở màn Kho chờ nhập', thay, thay ? 'đã hiện' : 'chưa hiện')
+    }
+
+    const phieuXoa = await prisma.stockMovement.findMany({
+      where: { referenceNo: MA_PO }, select: { id: true, materialId: true },
+    })
+    await prisma.stockMovement.deleteMany({ where: { referenceNo: MA_PO } })
+
     const poXoa = await prisma.purchaseOrder.findUnique({ where: { poCode: MA_PO }, select: { id: true } })
     if (poXoa) {
       await prisma.purchaseOrderItem.deleteMany({ where: { poId: poXoa.id } })
       await prisma.purchaseOrder.delete({ where: { id: poXoa.id } })
+    }
+
+    // Vật tư tạm xoá SAU CÙNG: dòng PO còn trỏ vào nó thì khoá ngoại chặn.
+    for (const f of phieuXoa) {
+      await prisma.material.deleteMany({ where: { id: f.materialId, isProvisional: true } })
     }
     await prisma.integrationLink.deleteMany({ where: { refCode: { in: [MA_NCC, MA_PO, `GRN-${MA_PO}`] } } })
     await prisma.vendor.deleteMany({ where: { vendorCode: MA_NCC } })

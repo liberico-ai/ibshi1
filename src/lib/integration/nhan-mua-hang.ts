@@ -1,6 +1,9 @@
+import { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import { ghiLien, timLocalId } from './link'
 import { syncPOtoBudget } from '@/lib/sync-engine'
+import { detectPrefixSubgroup } from '@/lib/bompr-enrich'
+import { generateMaterialCode } from '@/lib/material-code'
 import type { KetQuaNhan } from './nhan-tu-tm'
 
 // Nhận kết quả mua sắm từ ibs-commerce.
@@ -223,6 +226,56 @@ export interface GoiHangVe {
  * nhập kho. Nên ở đây CHỈ cập nhật số đã nhận trên dòng PO — KHÔNG cộng vào tồn kho.
  * Cộng tồn ở đây là hàng chưa nghiệm thu đã nằm trong kho, sản xuất lĩnh ra dùng luôn.
  */
+/**
+ * Tài khoản đứng tên cho phiếu kho sinh từ Thương mại.
+ *
+ * ERP bắt mọi biến động kho phải có người thực hiện — đúng, vì kho là nơi mất mát khó lần
+ * nhất. Việc này do máy ghi, nên mượn tên một tài khoản Kho; ghi chú trên phiếu nói rõ
+ * nguồn là Thương mại để sau này còn truy được.
+ */
+async function nguoiDungTen(): Promise<string | null> {
+  for (const vai of ['R05', 'R05a', 'R10', 'R01']) {
+    const u = await prisma.user.findFirst({
+      where: { roleCode: vai, isActive: true }, select: { id: true },
+    })
+    if (u) return u.id
+  }
+  return null
+}
+
+/**
+ * Mã vật tư ERP cho một dòng PO. Đơn hàng từ Thương mại không mang mã kho của ERP, nên lần
+ * đầu hàng về phải sinh một mã TẠM (isProvisional) — y như đường nhập hàng sẵn có của ERP.
+ * Không có mã thì không ghi được phiếu kho, mà không có phiếu thì Kho không thấy lô hàng.
+ */
+async function maVatTuCuaDong(dong: {
+  id: string; materialId: string | null; description: string | null;
+  profile: string | null; grade: string | null; unit: string | null;
+}): Promise<string> {
+  if (dong.materialId) return dong.materialId
+  const anh = { description: dong.description || '', profile: dong.profile || '' }
+  const { prefix, subgroup } = detectPrefixSubgroup(anh)
+  return prisma.$transaction(async tx => {
+    const ma = await generateMaterialCode(tx, prefix, subgroup)
+    const vt = await tx.material.create({
+      data: {
+        materialCode: ma,
+        name: (anh.description || anh.profile || 'Vật tư tạm').trim(),
+        unit: dong.unit || 'cái',
+        category: prefix,
+        specification: anh.profile || undefined,
+        grade: dong.grade || undefined,
+        status: 'PENDING',
+        isProvisional: true,
+        createdByUnit: 'TM',
+      },
+      select: { id: true },
+    })
+    await tx.purchaseOrderItem.update({ where: { id: dong.id }, data: { materialId: vt.id } })
+    return vt.id
+  })
+}
+
 export async function nhanHangVe(goi: GoiHangVe): Promise<KetQuaNhan> {
   const poCode = chu(goi.poCode)
   const grnCode = chu(goi.grnCode)
@@ -230,12 +283,22 @@ export async function nhanHangVe(goi: GoiHangVe): Promise<KetQuaNhan> {
 
   const po = await prisma.purchaseOrder.findUnique({
     where: { poCode },
-    select: { id: true, items: { select: { id: true, itemCode: true, quantity: true, receivedQty: true } } },
+    select: {
+      id: true, projectId: true, status: true,
+      items: {
+        select: {
+          id: true, itemCode: true, quantity: true, receivedQty: true,
+          materialId: true, description: true, profile: true, grade: true, unit: true,
+        },
+      },
+    },
   })
   if (!po) return { ok: false, ma: 404, message: `Không tìm thấy PO ${poCode} trong ERP — đồng bộ PO trước` }
 
   const canhBao: string[] = []
   let capNhat = 0
+  const nguoi = await nguoiDungTen()
+  if (!nguoi) canhBao.push('ERP chưa có tài khoản Kho đang hoạt động — chỉ cộng số đã nhận, chưa ghi phiếu hàng về')
   for (const l of goi.lines ?? []) {
     const ma = chu(l.itemCode)
     const sl = so(l.quantity)
@@ -248,7 +311,40 @@ export async function nhanHangVe(goi: GoiHangVe): Promise<KetQuaNhan> {
       canhBao.push(`Dòng "${ma}" nhận ${moi} vượt số đặt ${Number(dong.quantity)} — vẫn ghi, kiểm tra lại với NCC`)
     }
     await prisma.purchaseOrderItem.update({ where: { id: dong.id }, data: { receivedQty: moi } })
+
+    // Bản ghi "hàng về" — CHỈ GHI NHẬN, KHÔNG cộng tồn kho. Tồn chỉ tăng ở bước Kho nhập
+    // sau khi QAQC nghiệm thu đạt. Nhưng phải có bản ghi này thì màn Kho mới thấy lô hàng.
+    if (nguoi) {
+      const materialId = await maVatTuCuaDong(dong)
+      await prisma.stockMovement.create({
+        data: {
+          materialId,
+          projectId: po.projectId,
+          type: 'RECEIPT',
+          quantity: sl,
+          reason: 'po_receipt',
+          referenceNo: poCode,
+          poItemId: dong.id,
+          performedBy: nguoi,
+          notes: `Hàng về từ ${poCode} — phiếu ${grnCode} (Thương mại)`,
+        },
+      })
+    }
     capNhat++
+  }
+
+  // Trạng thái PO đi theo số đã nhận, để danh sách đơn hàng của ERP nói đúng sự thật.
+  if (capNhat > 0) {
+    const sau = await prisma.purchaseOrder.findUnique({
+      where: { id: po.id }, select: { items: { select: { quantity: true, receivedQty: true } } },
+    })
+    const ds = sau?.items ?? []
+    const duCa = ds.length > 0 && ds.every(i => Number(i.receivedQty) >= Number(i.quantity))
+    const coIt = ds.some(i => Number(i.receivedQty) > 0)
+    const moi = duCa ? 'RECEIVED' : coIt ? 'PARTIAL_RECEIVED' : null
+    if (moi && moi !== po.status) {
+      await prisma.purchaseOrder.update({ where: { id: po.id }, data: { status: moi } })
+    }
   }
 
   await ghiLien({ entity: 'grn', localId: po.id, remoteId: chu(goi.remoteId) || grnCode, refCode: grnCode })
@@ -258,6 +354,129 @@ export async function nhanHangVe(goi: GoiHangVe): Promise<KetQuaNhan> {
     id: po.id,
     message: `Đã ghi hàng về ${grnCode} cho PO ${poCode} (${capNhat} dòng) — chờ QC nghiệm thu rồi Kho nhập`,
     canhBao: canhBao.length ? canhBao : undefined,
+  }
+}
+
+// ── Mời QC nghiệm thu ────────────────────────────────────────────────────────
+
+/**
+ * Hàng về kho thì THƯƠNG MẠI là người mời QC — họ mới biết hàng đã tới, tới bao nhiêu.
+ * Nhưng NGHIỆM THU là việc của QAQC bên ERP. Hai vai tách hẳn: mời một nơi, nghiệm thu
+ * một nơi. Để cả hai cùng ghi kết quả thì chắc chắn lệch số, mà lúc đó không biết tin ai.
+ */
+export interface GoiMoiQC {
+  /** Id lô hàng bên Thương mại — dùng chống trùng và để bắn kết quả ngược về đúng lô. */
+  remoteId: string
+  poCode: string
+  requestedBy?: string | null
+  requestedAt?: string
+  note?: string | null
+  lines?: { itemCode?: string; itemName?: string; quantity?: number; uom?: string }[]
+}
+
+/** Việc QAQC phải xem khi nghiệm thu vật tư mua về. Thiếu hạng mục nào thì bổ sung ở đây. */
+const VIEC_KIEM_VAT_TU = [
+  { checkItem: 'Đúng chủng loại, quy cách so với đơn hàng', standard: 'Theo dòng PO' },
+  { checkItem: 'Số lượng thực giao khớp phiếu giao hàng', standard: 'Theo phiếu giao' },
+  { checkItem: 'Chứng chỉ vật liệu (CO / CQ / Mill Cert)', standard: 'Có và khớp mác thép' },
+  { checkItem: 'Tình trạng bề mặt: không móp, cong vênh, gỉ nặng', standard: 'Quan sát' },
+  { checkItem: 'Mã Heat / Lot truy xuất được', standard: 'Ghi lại khi nhập kho' },
+]
+
+/** Mã biên bản chưa ai dùng. Một PO giao nhiều đợt thì mỗi đợt một biên bản riêng. */
+async function maBienBanTrong(poCode: string): Promise<string> {
+  const goc = `NT-${poCode}`
+  for (let i = 0; i < 50; i++) {
+    const ma = i === 0 ? goc : `${goc}-${i + 1}`
+    const co = await prisma.inspection.findUnique({ where: { inspectionCode: ma }, select: { id: true } })
+    if (!co) return ma
+  }
+  return `${goc}-${Date.now()}`
+}
+
+/**
+ * Thương mại mời QC → ERP sinh biên bản nghiệm thu vật tư chờ QAQC.
+ *
+ * Trước đây QAQC phải tự lập biên bản bằng tay, nghĩa là phải có ai đó nhắn cho họ biết
+ * hàng đã về. Việc truyền miệng đó chính là chỗ rơi.
+ */
+export async function nhanMoiQC(goi: GoiMoiQC): Promise<KetQuaNhan> {
+  const remoteId = chu(goi.remoteId)
+  const poCode = chu(goi.poCode)
+  if (!remoteId || !poCode) return { ok: false, ma: 400, message: 'Thiếu remoteId hoặc mã PO' }
+
+  // Mời lại cùng một lô thì trả về đúng biên bản cũ, không đẻ thêm.
+  const daCo = await timLocalId('qc-request', remoteId)
+  if (daCo) {
+    const bb = await prisma.inspection.findUnique({
+      where: { id: daCo }, select: { id: true, inspectionCode: true, status: true },
+    })
+    if (bb) {
+      return {
+        ok: true, id: bb.id,
+        message: `Lô này đã mời QC rồi — biên bản ${bb.inspectionCode} (${bb.status})`,
+      }
+    }
+  }
+
+  const po = await prisma.purchaseOrder.findUnique({
+    where: { poCode },
+    select: { id: true, projectId: true, vendor: { select: { name: true } } },
+  })
+  if (!po) return { ok: false, ma: 404, message: `Không tìm thấy PO ${poCode} trong ERP — đồng bộ PO trước` }
+  // Biên bản QC buộc phải thuộc một dự án: QAQC lọc việc theo dự án, và kết quả nghiệm thu
+  // đi thẳng vào hồ sơ chất lượng của dự án đó.
+  if (!po.projectId) {
+    return { ok: false, ma: 409, message: `PO ${poCode} chưa gắn dự án trong ERP — gắn dự án rồi mời lại` }
+  }
+
+  const inspectionCode = await maBienBanTrong(poCode)
+  const bb = await prisma.inspection.create({
+    data: {
+      inspectionCode,
+      projectId: po.projectId,
+      type: 'material_incoming',
+      // P3.5 là bước nghiệm thu vật tư trong quy trình — xem QC_STEP_TYPE_MAP ở workflow-engine.
+      stepCode: 'P3.5',
+      status: 'PENDING',
+      // poIds là thứ màn Kho đọc để biết PO nào đã nghiệm thu đạt, được phép nhập.
+      resultData: {
+        poIds: [po.id],
+        moiTuTM: {
+          remoteId, poCode,
+          requestedBy: goi.requestedBy ?? null,
+          requestedAt: goi.requestedAt ?? new Date().toISOString(),
+          note: goi.note ?? null,
+          lines: goi.lines ?? [],
+        },
+      } as Prisma.InputJsonValue,
+      remarks: goi.note ?? null,
+      checklistItems: { create: VIEC_KIEM_VAT_TU },
+    },
+    select: { id: true },
+  })
+
+  await ghiLien({ entity: 'qc-request', localId: bb.id, remoteId, refCode: inspectionCode })
+
+  // Báo cho QAQC. Không báo thì biên bản nằm im trong danh sách, không ai biết mà mở.
+  const qaqc = await prisma.user.findMany({
+    where: { roleCode: { in: ['R09', 'R09a'] }, isActive: true }, select: { id: true },
+  })
+  if (qaqc.length > 0) {
+    await prisma.notification.createMany({
+      data: qaqc.map(u => ({
+        userId: u.id,
+        title: 'Thương mại mời nghiệm thu vật tư',
+        message: `PO ${poCode}${po.vendor?.name ? ` — ${po.vendor.name}` : ''} đã về kho. Biên bản ${inspectionCode} đang chờ nghiệm thu.`,
+        type: 'qc_requested',
+        linkUrl: '/dashboard/qc/inspections',
+      })),
+    })
+  }
+
+  return {
+    ok: true, id: bb.id,
+    message: `Đã lập biên bản ${inspectionCode} cho PO ${poCode} — chờ QAQC nghiệm thu`,
   }
 }
 
