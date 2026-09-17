@@ -81,6 +81,14 @@ export async function guiHangCho(gioiHan = 50): Promise<KetQuaGui> {
         where: { id: ban.id },
         data: { status: 'SENT', sentAt: new Date(), attempts: ban.attempts + 1, lastError: null },
       })
+      // Quyết định của BGĐ đi rồi thì đóng dấu lên chính đợt duyệt. Thiếu chỗ này thì màn
+      // BGĐ kêu "chưa báo được về Thương mại" mãi dù bản tin đã sang — cảnh báo sai còn
+      // tệ hơn không có cảnh báo, vì lần sau hỏng thật sẽ không ai buồn nhìn.
+      if (ban.event === 'approval.decided') {
+        await prisma.commerceApproval.updateMany({
+          where: { id: ban.entityId }, data: { notifiedAt: new Date() },
+        })
+      }
       daGui++
     } catch (e) {
       const lan = ban.attempts + 1
