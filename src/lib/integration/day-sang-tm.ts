@@ -192,9 +192,11 @@ export async function dayNhuCau(projectId: string): Promise<KetQuaDay> {
 
 /** Đẩy tồn kho hiện tại theo lô — Thương mại trừ tồn trước khi ra RFQ. */
 export async function dayTonKho(coLo = 500): Promise<KetQuaDay> {
+  // Lấy cả vật tư còn ở trạng thái tạm mà ĐANG CÓ TỒN. Hàng mua qua Thương mại sinh mã tạm
+  // lúc hàng về; bỏ qua nhóm này thì Thương mại không thấy đúng cái hàng họ vừa mua về.
   const ds = await prisma.material.findMany({
-    where: { status: 'ACTIVE' },
-    select: { materialCode: true, currentStock: true, reservedStock: true, unit: true },
+    where: { OR: [{ status: 'ACTIVE' }, { currentStock: { not: 0 } }] },
+    select: { materialCode: true, currentStock: true, reservedStock: true, unit: true, isProvisional: true },
     orderBy: { materialCode: 'asc' },
   })
   let dem = 0
@@ -206,6 +208,8 @@ export async function dayTonKho(coLo = 500): Promise<KetQuaDay> {
         uom: m.unit,
         onHand: Number(m.currentStock) || 0,
         reserved: Number(m.reservedStock) || 0,
+        // Mã tạm: Thương mại cần biết để đừng coi nó là mã kho chính thức.
+        provisional: m.isProvisional || undefined,
       })),
     }
     const vt = vanTay(payload)

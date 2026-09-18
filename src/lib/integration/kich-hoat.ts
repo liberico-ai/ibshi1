@@ -1,4 +1,4 @@
-import { dayDuAn, dayDuToan, dayNhuCau } from './day-sang-tm'
+import { dayDuAn, dayDuToan, dayNhuCau, dayTonKho } from './day-sang-tm'
 import { guiHangCho } from './outbox'
 import { sanSangGoiTM } from './config'
 
@@ -71,6 +71,24 @@ export function duAnDaDoi(projectId: string | null | undefined): void {
  */
 export function daXepHangMoi(): void {
   guiNgay()
+}
+
+/**
+ * Tồn kho vừa đổi — Kho nhập hàng, xuất vật tư, kiểm kê.
+ *
+ * Tồn kho của ERP là bản chuẩn: Kho là nơi có người đếm thật. Thương mại giữ một bản
+ * sao để biết còn hàng hay phải mua thêm, nên mỗi lần ERP đổi là đẩy lại ngay. Chờ tới
+ * lượt chạy định kỳ thì bên kia đi mua dựa trên số tồn đã cũ.
+ */
+export function tonKhoDaDoi(): void {
+  void (async () => {
+    try {
+      await dayTonKho()
+      guiNgay()
+    } catch (e) {
+      console.error('[đồng bộ TM] đẩy tồn kho hỏng:', (e as Error).message)
+    }
+  })()
 }
 
 /**

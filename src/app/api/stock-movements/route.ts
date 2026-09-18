@@ -1,6 +1,7 @@
 
 
 import { NextRequest } from 'next/server'
+import { tonKhoDaDoi } from '@/lib/integration/kich-hoat'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse } from '@/lib/auth'
 import { can } from '@/lib/permissions/can'
@@ -90,6 +91,8 @@ export async function POST(req: NextRequest) {
     // Invalidate warehouse cache after stock movement
     await cacheInvalidate(CACHE_KEYS.warehouse)
 
+    // Tồn kho vừa đổi → đẩy sang Thương mại (tồn kho ERP là bản chuẩn).
+    tonKhoDaDoi()
     return successResponse({ movement: result },
       type === 'IN' ? `Đã nhập ${qty} ${material.unit}` : `Đã xuất ${qty} ${material.unit}`,
       201)

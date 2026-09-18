@@ -373,6 +373,51 @@ async function main() {
       kiem('nghiệm thu đạt rồi thì PO hiện ở màn Kho chờ nhập', thay, thay ? 'đã hiện' : 'chưa hiện')
     }
 
+    // ── 6. Kho nhập hàng → tồn kho hai bên khớp nhau ──
+    console.log('\n6. Kho ERP nhập hàng — tồn kho ERP là bản chuẩn')
+    const thuKho = await prisma.user.findFirst({ where: { roleCode: { in: ['R05', 'R05a'] }, isActive: true }, select: SEL })
+    if (!thuKho) {
+      kiem('có tài khoản Kho để nhập hàng', false, 'dev chưa có user R05/R05a')
+    } else {
+      const dsKho = await (await fetch(`${BASE}/api/warehouse/grn-stockin`, { headers: H(thuKho) })).json()
+      const poKho = (dsKho.purchaseOrders || []).find(x => x.poCode === MA_PO)
+      kiem('Kho thấy lô hàng đã nghiệm thu đạt', !!poKho, poKho ? `${poKho.items.length} dòng chờ nhập` : 'không thấy')
+
+      if (poKho) {
+        const dong = poKho.items[0]
+        const rNhap = await fetch(`${BASE}/api/warehouse/grn-stockin`, {
+          method: 'POST', headers: H(thuKho),
+          body: JSON.stringify({ poId: poKho.poId, items: [{ receiptId: dong.receiptId, actualQty: dong.claimedQty }] }),
+        })
+        kiem('Kho nhập được', rNhap.ok, (await rNhap.json()).message || `HTTP ${rNhap.status}`)
+
+        const mv = await prisma.stockMovement.findFirst({
+          where: { referenceNo: MA_PO, type: 'IN' }, orderBy: { createdAt: 'desc' }, select: { materialId: true },
+        })
+        const vt = mv && await prisma.material.findUnique({
+          where: { id: mv.materialId }, select: { materialCode: true, currentStock: true, isProvisional: true },
+        })
+        kiem('nhập xong TỒN KHO mới tăng', Math.round(Number(vt?.currentStock)) === 3000,
+          `${vt?.materialCode} = ${Number(vt?.currentStock)}`)
+
+        // Chờ tiến trình nền dựng gói tin tồn kho.
+        await new Promise(r => setTimeout(r, 3500))
+        // Tồn kho đẩy theo LÔ 500 mã. Thêm một mã mới là mọi lô phía sau xê dịch theo, nên
+        // phải soi cả mẻ bản tin vừa dựng chứ không riêng cái mới nhất.
+        const dsKhoBan = await prisma.syncOutbox.findMany({
+          where: { event: 'stock.snapshot', createdAt: { gt: new Date(Date.now() - 60_000) } },
+          select: { status: true, payload: true },
+        })
+        const tongMa = dsKhoBan.reduce((n, b) => n + (b.payload?.items || []).length, 0)
+        kiem('tồn kho tự đẩy sang Thương mại ngay sau khi nhập', dsKhoBan.length > 0,
+          dsKhoBan.length ? `${dsKhoBan.length} lô · ${tongMa} mã vật tư` : 'không thấy bản tin')
+
+        const coMaTam = dsKhoBan.some(b => (b.payload?.items || []).some(i => i.code === vt?.materialCode))
+        kiem('gói tin có cả mã vật tư tạm vừa mua về', coMaTam,
+          coMaTam ? `có ${vt?.materialCode}` : `thiếu ${vt?.materialCode}`)
+      }
+    }
+
     const phieuXoa = await prisma.stockMovement.findMany({
       where: { referenceNo: MA_PO }, select: { id: true, materialId: true },
     })
@@ -383,6 +428,9 @@ async function main() {
       await prisma.purchaseOrderItem.deleteMany({ where: { poId: poXoa.id } })
       await prisma.purchaseOrder.delete({ where: { id: poXoa.id } })
     }
+
+    await prisma.integrationLink.deleteMany({ where: { entity: 'stock-batch' } })
+    await prisma.syncOutbox.deleteMany({ where: { event: 'stock.snapshot', status: 'PENDING' } })
 
     // Vật tư tạm xoá SAU CÙNG: dòng PO còn trỏ vào nó thì khoá ngoại chặn.
     for (const f of phieuXoa) {

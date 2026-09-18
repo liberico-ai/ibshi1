@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { tonKhoDaDoi } from '@/lib/integration/kich-hoat'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
 import { can } from '@/lib/permissions/can'
@@ -53,6 +54,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await logAudit(user.userId, 'ISSUE_MATERIAL', 'WorkOrder', id,
       { woCode: wo.woCode, materialCode: material.materialCode, quantity, heatNumber }, getClientIP(req))
 
+    // Tồn kho vừa đổi → đẩy sang Thương mại (tồn kho ERP là bản chuẩn).
+    tonKhoDaDoi()
     return successResponse({ movement }, `Đã cấp ${quantity} ${material.unit} cho ${wo.woCode}`, 201)
   } catch (err) {
     console.error('POST /api/production/[id]/issue-material error:', err)

@@ -1,4 +1,5 @@
 import { isMissingTableError, MIGRATION_HINT } from '@/lib/db-missing-table'
+import { tonKhoDaDoi } from '@/lib/integration/kich-hoat'
 import { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, logAudit, getClientIP } from '@/lib/auth'
@@ -111,6 +112,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       : fulfilled
         ? `Đã cấp đủ vật tư cho ${wo.woCode}`
         : `Đã cấp ${wanted.length} vật tư cho ${wo.woCode} — vẫn còn thiếu`
+    // Tồn kho vừa đổi → đẩy sang Thương mại (tồn kho ERP là bản chuẩn).
+    tonKhoDaDoi()
     return successResponse({ lines: after, fulfilled, opened }, msg)
   } catch (err) {
     console.error('POST /api/production/[id]/material-issue error:', err)

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { tonKhoDaDoi } from '@/lib/integration/kich-hoat'
 import prisma from '@/lib/db'
 import { authenticateRequest, successResponse, errorResponse, unauthorizedResponse, requireRoles } from '@/lib/auth'
 import { applyStockMovement } from '@/lib/stock-ledger'
@@ -171,6 +172,10 @@ export async function POST(req: NextRequest) {
     const newStatus = allReceived ? 'RECEIVED' : someReceived ? 'PARTIAL_RECEIVED' : po.status
     await tx.purchaseOrder.update({ where: { id: poId }, data: { status: newStatus } })
   })
+
+  // Kho vừa nhập → tồn kho ERP đã đổi → đẩy sang Thương mại. Tồn kho của ERP là bản chuẩn:
+  // Kho là nơi có người đếm thật. Không đẩy thì bên kia đi mua dựa trên số tồn đã cũ.
+  tonKhoDaDoi()
 
   if (po.projectId) {
     try { await recalcBudgetActual(po.projectId, user.userId) }
