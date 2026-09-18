@@ -9,7 +9,8 @@ export const dynamic = 'force-dynamic'
 
 // GET /api/cron/push-demand[?projectCode=...]
 //
-// Tự gom NHU CẦU (BOM) của các dự án đang chạy → xếp hàng → gửi sang Thương mại, KHÔNG cần ai
+// Tự gom NHU CẦU MUA của các dự án đang chạy — nguồn là phiếu yêu cầu mua chính thức,
+// dự án nào chưa có phiếu thì lùi về bảng vật tư thô của Thiết kế → xếp hàng → gửi sang Thương mại, KHÔNG cần ai
 // bấm nút. Bảo vệ bằng x-cron-secret (middleware). Dùng đúng dayDuAn + dayNhuCau nên có
 // change-detection: dự án nào không đổi thì bỏ qua, không spam.
 //
