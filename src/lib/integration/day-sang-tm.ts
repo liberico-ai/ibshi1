@@ -1,5 +1,5 @@
 import prisma from '@/lib/db'
-import { fetchEstimateData, aggregateBomItems } from '@/lib/data-fetchers'
+import { fetchEstimateData, aggregateBomItems, getProjectPrDemand } from '@/lib/data-fetchers'
 import type { Dt03Row } from '@/lib/types/cross-step-data'
 import { xepHang, vanTay } from './outbox'
 import { khongDoi, danhDauDaDay } from './link'
@@ -163,22 +163,60 @@ export async function dayNhuCau(projectId: string): Promise<KetQuaDay> {
   })
   if (!p) return { entity: 'demand', xepHang: 0, boQua: 1, lyDo: 'không thấy dự án' }
 
-  const bom = await aggregateBomItems(projectId)
-  if (bom.length === 0) return { entity: 'demand', xepHang: 0, boQua: 1, lyDo: 'dự án chưa có BOM' }
+  // NGUỒN: phiếu yêu cầu mua CHÍNH THỨC trước, bảng vật tư thô của Thiết kế sau.
+  //
+  // Phiếu chính thức là bản đã dọn: có mã kho, đã trừ tồn, ghi rõ còn phải mua bao nhiêu —
+  // và chính là thứ ERP dùng khi tự đi mua. Bảng thô là bản nháp bóc từ bản vẽ, mỗi người
+  // ghi một kiểu, hầu như không có mã. Trước đây đường này đọc bản nháp, nên dự án nào đã
+  // dọn xong vào phiếu chính thức thì gửi sang Thương mại một gói RỖNG.
+  const pr = await getProjectPrDemand(projectId)
 
-  const payload = {
-    projectCode: p.projectCode,
-    source: 'ERP-BOM',
-    lines: bom.map(b => ({
-      itemCode: chu(b.code),
-      itemName: chu(b.name),
-      profile: chu(b.spec) || null,
-      uom: chu(b.unit),
-      quantity: so(b.quantity),
-      sourceStep: b.source,
-    })).filter(l => l.itemCode || l.itemName),
+  let payload: {
+    projectCode: string
+    source: string
+    lines: Array<{
+      itemCode: string; itemName: string; profile: string | null; grade: string | null
+      uom: string; quantity: number; toBuyQty?: number
+      matCode?: string | null; materialGroupCode?: string | null; sourceStep?: string
+    }>
   }
-  if (payload.lines.length === 0) return { entity: 'demand', xepHang: 0, boQua: 1, lyDo: 'BOM không có dòng dùng được' }
+
+  if (pr.length > 0) {
+    payload = {
+      projectCode: p.projectCode,
+      source: 'ERP-PR',
+      lines: pr.map(r => ({
+        itemCode: chu(r.itemCode),
+        itemName: chu(r.description),
+        profile: chu(r.profile) || null,
+        grade: chu(r.grade) || null,
+        uom: chu(r.unit),
+        quantity: so(r.quantity),
+        // Số CÒN PHẢI MUA (đã trừ tồn kho) — đây mới là số Thương mại cần đi hỏi giá.
+        toBuyQty: so(r.toBuyQty),
+        // Chỉ điền khi dòng đã nối thật vào danh mục vật tư. Để trống còn hơn điền mã đoán.
+        matCode: r.matCode,
+        materialGroupCode: r.materialGroupCode,
+      })).filter(l => l.itemCode || l.itemName),
+    }
+  } else {
+    const bom = await aggregateBomItems(projectId)
+    if (bom.length === 0) return { entity: 'demand', xepHang: 0, boQua: 1, lyDo: 'dự án chưa có phiếu mua lẫn BOM' }
+    payload = {
+      projectCode: p.projectCode,
+      source: 'ERP-BOM',
+      lines: bom.map(b => ({
+        itemCode: chu(b.code),
+        itemName: chu(b.name),
+        profile: chu(b.spec) || null,
+        grade: chu(b.grade) || null,
+        uom: chu(b.unit),
+        quantity: so(b.quantity),
+        sourceStep: b.source,
+      })).filter(l => l.itemCode || l.itemName),
+    }
+  }
+  if (payload.lines.length === 0) return { entity: 'demand', xepHang: 0, boQua: 1, lyDo: 'không có dòng nhu cầu dùng được' }
 
   const vt = vanTay(payload)
   if (await khongDoi('demand', projectId, vt)) return { entity: 'demand', xepHang: 0, boQua: 1, lyDo: 'không đổi' }

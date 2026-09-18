@@ -10,6 +10,8 @@ export interface BomEntry {
   name: string
   code: string
   spec: string
+  /** Mác thép (SS400, A572-GR50…). Không phải dòng nào cũng có, vật tư tiêu hao thì không. */
+  grade?: string
   quantity: string
   unit: string
 }

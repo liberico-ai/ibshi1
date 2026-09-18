@@ -117,7 +117,10 @@ export async function aggregateBomItems(
         allItems.push({
           name: itemName,
           code: item.code || item.materialCode || '',
-          spec: item.spec || item.specification || '',
+          // Bảng vật tư của Thiết kế ghi quy cách vào ô "profile" (PL10x2000x11250).
+          // Chỉ tìm "spec" như trước là bỏ rơi 99% quy cách — đo được trên dữ liệu thật.
+          spec: item.spec || item.specification || item.profile || '',
+          grade: item.grade || '',
           quantity: item.quantity || item.qty || 0,
           unit: item.unit || '',
           source: labelMap[src.stepCode] as BomEntryWithSource['source'],
@@ -133,6 +136,8 @@ export async function aggregateBomItems(
 
 export interface PrDemandRow {
   itemCode: string
+  /** Mã kho ĐÃ GẮN THẬT vào danh mục vật tư — khác itemCode, vốn có thể chỉ chép từ bản vẽ. */
+  matCode: string | null
   description: string
   profile: string
   grade: string
@@ -152,7 +157,7 @@ export async function getProjectPrDemand(projectId: string): Promise<PrDemandRow
     where: { purchaseRequest: { projectId, status: { notIn: ['CANCELLED', 'REJECTED'] } } },
     select: {
       itemCode: true, description: true, profile: true, grade: true, unit: true,
-      quantity: true, toBuyQty: true, materialGroupCode: true,
+      quantity: true, toBuyQty: true, materialGroupCode: true, materialId: true,
       material: { select: { materialCode: true, name: true, unit: true } },
     },
   })
@@ -163,7 +168,12 @@ export async function getProjectPrDemand(projectId: string): Promise<PrDemandRow
     if (!itemCode.trim() && !description.trim()) continue
     const key = (itemCode || description).toLowerCase()
     const qty = Number(it.quantity) || 0
-    const toBuy = it.toBuyQty != null ? Number(it.toBuyQty) : qty
+    // Cột to_buy_qty mặc định 0 và trên thực tế chưa nơi nào điền — lấy nguyên thì mọi dòng
+    // đều thành "không cần mua gì". Trong khi quantity ĐÃ là số cần mua: bộ chuẩn hoá PR ưu
+    // tiên needToBuyQty (đã trừ tồn kho) khi dựng dòng. Nên 0 ở đây nghĩa là CHƯA TÍNH,
+    // không phải ĐÃ ĐỦ KHO.
+    const toBuyRaw = it.toBuyQty != null ? Number(it.toBuyQty) : 0
+    const toBuy = toBuyRaw > 0 ? toBuyRaw : qty
     const existing = map.get(key)
     if (existing) {
       existing.quantity += qty
@@ -171,6 +181,9 @@ export async function getProjectPrDemand(projectId: string): Promise<PrDemandRow
     } else {
       map.set(key, {
         itemCode,
+        // Chỉ coi là mã kho thật khi dòng đã nối vào bản ghi vật tư. itemCode có thể là
+        // mã người lập bóc từ bản vẽ, chưa ai đối chiếu với kho.
+        matCode: it.materialId ? (it.material?.materialCode ?? null) : null,
         description,
         profile: it.profile || '',
         grade: it.grade || '',
