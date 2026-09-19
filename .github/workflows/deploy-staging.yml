@@ -87,7 +87,7 @@ jobs:
 
       - name: Check containers
         run: |
-          cd /opt/apps/ibshi_tm-staging
+          cd /opt/apps/ibshi1
           docker compose ps
 
 # ════════════════════════════════════════════════════════════════════════════
