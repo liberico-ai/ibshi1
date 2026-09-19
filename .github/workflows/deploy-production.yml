@@ -1,0 +1,80 @@
+name: Deploy IBS ERP Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy, e.g. sha-5478fbd"
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Deploy Production
+
+    runs-on:
+      - self-hosted
+      - production
+      - ibshi
+
+    environment:
+      name: production
+
+    permissions:
+      contents: read
+      packages: read
+
+    concurrency:
+      group: production-ibs-erp
+      cancel-in-progress: false
+
+    steps:
+      - name: Show deployment information
+        run: |
+          echo "Application : ibs-erp"
+          echo "Environment : production"
+          echo "Image       : ${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}"
+          echo "Triggered by: ${{ github.actor }}"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify image exists
+        run: |
+          docker manifest inspect \
+            "${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}" \
+            > /dev/null
+
+          echo "✅ Image exists:"
+          echo "${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}"
+
+      - name: Deploy
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          cd /opt/apps/ibshi_tm
+
+          echo "🚀 Deploying ${IMAGE_TAG}"
+
+          docker compose pull
+          docker compose up -d --remove-orphans
+
+      - name: Check containers
+        run: |
+          cd /opt/apps/ibshi_tm
+
+          echo "── Docker Compose status ──"
+          docker compose  ps
+
+      - name: Show deployed images
+        run: |
+          cd /opt/apps/ibshi_tm
+          docker compose images

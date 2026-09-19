@@ -1,0 +1,124 @@
+name: Deploy IBS ERP Staging
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ════════════════════════════════════════════════════════════════════════════
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Buildx ────────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 3. Login ghcr.io ───────────────────────────────────────────────────
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 4. Metadata ────────────────────────────────────────────────────────
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=main
+            type=sha,format=short
+
+      # ── 5. Build & push ────────────────────────────────────────────────────
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: NEXT_PUBLIC_FF_REVISE_FLOW=true
+
+  # ════════════════════════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy Staging
+    needs: build
+
+    runs-on:
+      - self-hosted
+      - staging
+
+    environment:
+      name: staging
+
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy
+        run: |
+          cd /opt/apps/ibshi1
+          docker compose pull
+          docker compose up -d --remove-orphans
+
+      - name: Check containers
+        run: |
+          cd /opt/apps/ibshi_tm-staging
+          docker compose ps
+
+# ════════════════════════════════════════════════════════════════════════════
+#
+#   Bỏ bước Create github deployment vì không cần lấy deployment id để push vào webhook nữa
+#   notify:
+#     name: Trigger Deploy Webhook
+#     runs-on: ubuntu-latest
+#     needs: build
+#
+#     steps:
+#       - name: Send webhook to server
+#         env:
+#           WEBHOOK_SECRET: ${{ secrets.LAB_WEBHOOK_SECRET }}
+#           WEBHOOK_URL: ${{ vars.LAB_WEBHOOK_URL }}
+#           REPO_NAME: ${{ github.event.repository.name }}
+#           REF: ${{ github.ref }}
+#           DEPLOYMENT_ID: ${{ needs.build.outputs.deployment_id }}
+#         run: |
+#           PAYLOAD=$(printf '{"ref":"%s","repository":{"name":"%s"},"deployment_id":"%s"}' "$REF" "$REPO_NAME" "$DEPLOYMENT_ID")
+#           SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | sed 's/.* //')
+#
+#           HTTP_STATUS=$(curl -s -o /tmp/wh.txt -w "%{http_code}" \
+#             -X POST "$WEBHOOK_URL" \
+#             -H "Content-Type: application/json" \
+#             -H "X-Hub-Signature-256: sha256=$SIG" \
+#             -d "$PAYLOAD")
+#
+#           echo "── Webhook response (HTTP $HTTP_STATUS) ──"
+#           cat /tmp/wh.txt
+#
+#           [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]] \
+#             && echo "✅ Deploy triggered (deployment_id=$DEPLOYMENT_ID)" \
+#             || { echo "❌ Webhook failed ($HTTP_STATUS)"; exit 1; }
